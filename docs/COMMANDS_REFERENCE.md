@@ -240,12 +240,18 @@ cargo run -p perl-parser --example lsp_capabilities
 # Run LSP tests with performance optimizations (v0.8.9+)
 cargo test -p perl-parser lsp
 
+# Run LSP integration tests with controlled threading (recommended)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+
 # Run LSP integration tests with fast mode (99.5% timeout reduction)
 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp
 
-# Run specific performance-sensitive tests
-cargo test -p perl-lsp test_completion_detail_formatting
-cargo test -p perl-lsp test_workspace_symbol_search
+# Combine threading control with fast mode for optimal CI performance
+RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp -- --test-threads=2
+
+# Run specific performance-sensitive tests with threading control
+RUST_TEST_THREADS=2 cargo test -p perl-lsp test_completion_detail_formatting -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp test_workspace_symbol_search -- --test-threads=2
 
 # Run formatting capability tests (robust across environments)
 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test test_e2e_document_formatting
@@ -265,6 +271,26 @@ perl-lsp --stdio < test_requests.jsonrpc
 ```
 
 ### LSP Testing Environment Variables (*Diataxis: Reference* - Configuration options)
+
+**RUST_TEST_THREADS** (**Enhanced in v0.8.9+**):
+```bash
+# Control test thread concurrency for LSP test stability
+export RUST_TEST_THREADS=2                # Recommended for CI environments
+
+# Local testing with threading control
+RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_edge_cases_test -- --test-threads=2
+
+# Benefits of limited threading:
+# - Improved CI test reliability and predictability
+# - Reduced resource contention in containerized environments
+# - More consistent timing behavior for LSP protocol tests
+# - Better isolation of concurrent LSP server instances
+
+# Thread configuration examples:
+cargo test -p perl-lsp -- --test-threads=2              # Limit to 2 threads
+RUST_TEST_THREADS=1 cargo test -p perl-lsp              # Single-threaded execution
+RUST_TEST_THREADS=4 cargo test -p perl-lsp              # Higher concurrency (use with caution)
+```
 
 **LSP_TEST_FALLBACKS** (**NEW in v0.8.9**):
 ```bash
