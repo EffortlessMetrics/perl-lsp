@@ -199,7 +199,6 @@ sub world {
 // Test without incremental feature
 #[cfg(not(feature = "incremental"))]
 #[test]
-#[ignore = "S-expression format needs verification"]
 fn test_incremental_feature_disabled() {
     // Just verify the crate compiles without the feature
     use perl_parser::Parser;
@@ -207,5 +206,5 @@ fn test_incremental_feature_disabled() {
     let code = "my $x = 42;";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
-    assert!(ast.to_sexp().contains("scalar_variable"));
+    assert!(format!("{:?}", ast).contains("Variable"));
 }
