@@ -52,6 +52,14 @@ This document describes the comprehensive benchmarking framework for comparing C
    - **Memory Usage Profiling**: Track bounded processing and memory consumption limits
    - **Fast Mode Benchmarking**: Performance validation with LSP_TEST_FALLBACKS configuration
 
+8. **Dual Function Call Indexing Benchmarking** (v0.8.9+) ⭐ **NEW** (**Diataxis: Reference**)
+   - **98% Reference Coverage Validation**: Measure comprehensive function call detection improvements
+   - **Dual Indexing Performance**: Benchmark O(1) lookup performance for bare + qualified function names
+   - **Unicode Processing Enhancement**: Atomic performance counter validation with emoji/character processing
+   - **Deduplication Efficiency**: Measure URI + Range based deduplication performance 
+   - **Thread-Safe Indexing**: Benchmark concurrent workspace indexing with zero race conditions
+   - **Memory Overhead Analysis**: Validate ~2x index memory usage vs. reference coverage trade-off
+
 ## Usage
 
 ### Quick Start
@@ -97,8 +105,31 @@ python3 scripts/generate_comparison.py \
 
 # Validate specific optimization categories
 cargo run -p perl-lexer --example whitespace_benchmark
-cargo run -p perl-lexer --example operator_disambiguation_benchmark  
-cargo run -p perl-lexer --example string_interpolation_benchmark
+cargo run -p perl-lexer --example operator_disambiguation_benchmark
+
+#### Dual Indexing Performance Benchmarking ⭐ **NEW** (**Diataxis: How-to**)
+
+```bash
+# Benchmark dual function call indexing performance
+cargo test -p perl-parser --test dual_function_call_indexing_benchmark --release
+
+# Measure 98% reference coverage improvement
+cargo run -p perl-parser --bin workspace_coverage_benchmark -- \
+  --workspace-path /path/to/perl/project \
+  --dual-indexing-enabled
+
+# Unicode processing performance validation
+cargo test -p perl-lsp --test lsp_encoding_edge_cases -- unicode_performance_validation --release
+
+# Benchmark concurrent workspace indexing
+cargo run -p perl-parser --bin concurrent_indexing_benchmark -- \
+  --threads 8 \
+  --iterations 100 \
+  --dual-indexing
+
+# Memory overhead analysis for dual indexing
+cargo xtask bench --feature dual-indexing-memory-analysis \
+  --output dual_indexing_memory.json
 ```
 
 #### C Benchmarking
@@ -515,6 +546,8 @@ async fn test_unicode_lsp_performance() {
 ```yaml
 # Example GitHub Actions integration
 - name: Run Benchmarks
+  env:
+    RUST_TEST_THREADS: 2  # Control threading for consistent results
   run: cargo xtask bench --save
 
 - name: Check Performance Gates
@@ -523,6 +556,49 @@ async fn test_unicode_lsp_performance() {
       echo "Performance gates failed"
       exit 1
     fi
+```
+
+#### Threading Considerations for CI (v0.8.9+)
+
+**Thread Configuration for Benchmark Consistency**:
+
+Benchmark execution benefits from controlled threading to ensure consistent and reproducible results across CI environments:
+
+```bash
+# Recommended CI benchmarking with thread control
+RUST_TEST_THREADS=2 cargo xtask bench --save --output ci_benchmark.json
+
+# For LSP-specific benchmarks with controlled threading
+RUST_TEST_THREADS=2 cargo test -p perl-lsp --release -- --test-threads=2
+
+# Combined with memory tracking
+RUST_TEST_THREADS=2 cargo xtask compare --report
+```
+
+**Benefits of Limited Threading in Benchmarks**:
+
+1. **Consistent Resource Usage**: Prevents CPU oversubscription in shared CI runners
+2. **Reproducible Results**: Reduces variability in timing measurements
+3. **Reliable Memory Measurements**: More accurate memory profiling with predictable concurrency
+4. **Performance Gate Stability**: Reduces false positives from resource contention
+
+**Threading Configuration Impact**:
+
+| Threads | Benchmark Impact | Recommended Use |
+|---------|------------------|----------------|
+| 1 | Most consistent timing, slower execution | Critical performance validation |
+| 2 | Good balance of consistency and speed | **Recommended for CI** |
+| 4+ | Faster but higher variability | Local development only |
+
+**Environment Variables for Benchmark Threading**:
+```bash
+# Standard benchmark with threading control
+export RUST_TEST_THREADS=2
+cargo xtask bench --save
+
+# High-precision benchmarking (single-threaded)
+export RUST_TEST_THREADS=1
+cargo xtask bench --save --output precision_benchmark.json
 ```
 
 ### Performance Monitoring

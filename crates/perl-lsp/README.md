@@ -110,7 +110,7 @@ This LSP server is built on top of the [perl-parser](https://crates.io/crates/pe
 
 ### 🚧 Partial Implementation
 
-- **textDocument/codeLens**: ~85% functional (Preview - advertised in production builds only)
+- **textDocument/codeLens**: ~20% functional
 - **callHierarchy/**: ~15% functional
 
 See the [LSP Capability Documentation](https://github.com/EffortlessSteven/tree-sitter-perl-rs/blob/master/docs/LSP_ACTUAL_STATUS.md) for complete feature status.

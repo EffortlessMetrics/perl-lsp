@@ -227,7 +227,6 @@ struct FileIndex {
 }
 
 /// Thread-safe workspace index
-#[derive(Clone)]
 pub struct WorkspaceIndex {
     /// Index data per file URI (normalized key -> data)
     files: Arc<RwLock<HashMap<String, FileIndex>>>,
@@ -377,7 +376,16 @@ impl WorkspaceIndex {
         self.index_file(url, text.to_string())
     }
 
-    /// Find all references to a symbol
+    /// Find all references to a symbol using dual indexing strategy
+    ///
+    /// This function searches for both exact matches and bare name matches when
+    /// the symbol is qualified. For example, when searching for "Utils::process_data":
+    /// - First searches for exact "Utils::process_data" references
+    /// - Then searches for bare "process_data" references that might refer to the same function
+    ///
+    /// This dual approach handles cases where functions are called both as:
+    /// - Qualified: `Utils::process_data()`
+    /// - Unqualified: `process_data()` (when in the same package or imported)
     pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
         let mut locations = Vec::new();
         let files = self.files.read().unwrap();
@@ -436,83 +444,17 @@ impl WorkspaceIndex {
 
     /// Search for symbols by query
     pub fn search_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
-        self.search_symbols_with_limit(query, 1000) // Default limit for performance
-    }
-
-    /// Search symbols with result limit for better performance
-    pub fn search_symbols_with_limit(&self, query: &str, limit: usize) -> Vec<WorkspaceSymbol> {
         let query_lower = query.to_lowercase();
-
-        // Early return for empty query
-        if query.is_empty() {
-            return self.all_symbols().into_iter().take(limit).collect();
-        }
-
-        let mut exact_matches = Vec::new();
-        let mut prefix_matches = Vec::new();
-        let mut contains_matches = Vec::new();
-
-        let all_symbols = self.all_symbols();
-        let mut processed = 0;
-        const MAX_PROCESS: usize = 10000; // Limit processing for performance
-
-        for (i, symbol) in all_symbols.into_iter().enumerate() {
-            // Cooperative yield every 64 symbols
-            if i & 0x3f == 0 {
-                std::thread::yield_now();
-            }
-
-            processed += 1;
-            if processed >= MAX_PROCESS {
-                break;
-            }
-
-            let name_lower = symbol.name.to_lowercase();
-            let qualified_match =
-                symbol.qualified_name.as_ref().map(|qn| qn.to_lowercase()).unwrap_or_default();
-
-            let is_name_match = name_lower.contains(&query_lower);
-            let is_qualified_match =
-                !qualified_match.is_empty() && qualified_match.contains(&query_lower);
-
-            if is_name_match || is_qualified_match {
-                // Classify match type for better ranking
-                if name_lower == query_lower || qualified_match == query_lower {
-                    exact_matches.push(symbol);
-                } else if name_lower.starts_with(&query_lower)
-                    || qualified_match.starts_with(&query_lower)
-                {
-                    prefix_matches.push(symbol);
-                } else {
-                    contains_matches.push(symbol);
-                }
-
-                // Early exit if we have enough results
-                let total_found =
-                    exact_matches.len() + prefix_matches.len() + contains_matches.len();
-                if total_found >= limit * 2 {
-                    break;
-                }
-            }
-        }
-
-        // Combine results in order of relevance, respecting limit
-        let mut results = Vec::new();
-        results.extend(exact_matches.into_iter().take(limit));
-        let remaining = limit.saturating_sub(results.len());
-
-        if remaining > 0 {
-            results.extend(prefix_matches.into_iter().take(remaining));
-            let remaining = limit.saturating_sub(results.len());
-
-            if remaining > 0 {
-                results.extend(contains_matches.into_iter().take(remaining));
-            }
-        }
-
-        // Sort by name for consistency
-        results.sort_by(|a, b| a.name.cmp(&b.name));
-        results
+        self.all_symbols()
+            .into_iter()
+            .filter(|s| {
+                s.name.to_lowercase().contains(&query_lower)
+                    || s.qualified_name
+                        .as_ref()
+                        .map(|qn| qn.to_lowercase().contains(&query_lower))
+                        .unwrap_or(false)
+            })
+            .collect()
     }
 
     /// Find symbols by query (alias for search_symbols for compatibility)
@@ -618,7 +560,12 @@ impl WorkspaceIndex {
         self.find_definition(&qualified_name)
     }
 
-    /// Find all reference locations for a symbol key
+    /// Find all reference locations for a symbol key using enhanced dual indexing
+    ///
+    /// This function leverages the dual indexing strategy to find references under both
+    /// qualified and bare names, then deduplicates and excludes the definition itself.
+    /// The deduplication ensures each location appears only once even if indexed under
+    /// multiple name forms.
     pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
         let qualified_name = format!("{}::{}", key.pkg, key.name);
         let mut all_refs = self.find_references(&qualified_name);
@@ -812,6 +759,8 @@ impl IndexVisitor {
                 let qualified = format!("{}::{}", pkg, bare_name);
 
                 // Track as usage for both qualified and bare forms
+                // This dual indexing allows finding references whether the function is called
+                // as `process_data()` or `Utils::process_data()`
                 file_index.references.entry(bare_name.to_string()).or_default().push(
                     SymbolReference {
                         uri: self.uri.clone(),

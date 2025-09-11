@@ -38,11 +38,11 @@ Establish tree-sitter-perl as the definitive Perl parsing solution, enabling mod
   - Format selection
 
 #### Developer Experience
-- [x] **Code Lens** ✅ **IMPLEMENTED (v0.8.9+ Preview)**
-  - [x] Run tests inline (~85% functional)
-  - [x] Show reference counts (~85% functional)
-  - [ ] Display complexity metrics (planned)
-  - [ ] Debug shortcuts (planned)
+- [ ] **Code Lens**
+  - Run tests inline
+  - Show reference counts
+  - Display complexity metrics
+  - Debug shortcuts
 
 - [ ] **Quick Fixes**
   - Add missing `use` statements

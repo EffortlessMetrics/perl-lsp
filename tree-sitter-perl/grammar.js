@@ -88,7 +88,7 @@ module.exports = grammar({
   name: 'perl',
   supertypes: $ => [
     $.primitive,
-    $.variables,
+    // $.variables, // TODO - i don't know why, but these just went crazy
     $.postfix_deref,
     $.subscripted,
     $.slices,
@@ -168,7 +168,7 @@ module.exports = grammar({
     [$.return_expression],
     [$.function, $.bareword],
     [$.function, $.function_call_expression],
-    [$.variables, $.indirect_object],
+    [$._variables, $.indirect_object],
     [$.expression_statement, $._tricky_indirob_hashref],
     [$.autoquoted_bareword],
     // nameless params need extra lookahead
@@ -503,7 +503,7 @@ module.exports = grammar({
       $.command_heredoc_token,
       $.stub_expression,
       // all the variable handlings
-      $.variables,
+      $._variables,
       $.subscripted,
       $.slices,
       $.postfix_deref,
@@ -843,7 +843,7 @@ module.exports = grammar({
     )),
     method: $ => choice($._bareword, $.scalar),
 
-    variables: $ => choice(
+    _variables: $ => choice(
       $.scalar,
       $.array,
       $.hash,
