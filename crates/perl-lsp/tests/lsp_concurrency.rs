@@ -36,7 +36,7 @@ fn test_concurrent_document_modifications() {
 
     // Send rapid concurrent modifications (adaptive to thread constraints)
     let max_threads = max_concurrent_threads();
-    let thread_count = (max_threads * 2).min(18).max(2); // Scale between 2-18 based on available threads
+    let thread_count = (max_threads * 2).clamp(2, 18); // Scale between 2-18 based on available threads
 
     let handles: Vec<_> = (2..thread_count + 2)
         .map(|version| {
@@ -154,7 +154,7 @@ fn test_race_condition_open_close() {
     initialize_lsp(&mut server);
 
     // Rapidly open and close documents (adaptive count)
-    let document_count = (max_concurrent_threads()).min(10).max(2);
+    let document_count = (max_concurrent_threads()).clamp(2, 10);
     for i in 0..document_count {
         let uri = format!("file:///race{}.pl", i);
 
@@ -228,7 +228,7 @@ fn test_workspace_symbol_during_changes() {
     initialize_lsp(&mut server);
 
     // Open multiple documents (adaptive count)
-    let document_count = (max_concurrent_threads() / 2).min(5).max(2);
+    let document_count = (max_concurrent_threads() / 2).clamp(2, 5);
     for i in 0..document_count {
         send_notification(
             &mut server,
@@ -444,7 +444,7 @@ fn test_diagnostic_publishing_race() {
     let uri = "file:///diagnostic.pl";
 
     // Rapidly change document to trigger diagnostic updates (adaptive count)
-    let version_count = (max_concurrent_threads() * 2).min(20).max(5);
+    let version_count = (max_concurrent_threads() * 2).clamp(5, 20);
     for version in 1..version_count {
         let has_error = version % 3 == 0;
         let text = if has_error {
@@ -501,7 +501,7 @@ fn test_multi_file_rename_race() {
     initialize_lsp(&mut server);
 
     // Create multiple files with shared variable (adaptive count)
-    let file_count = (max_concurrent_threads() / 2).min(3).max(1);
+    let file_count = (max_concurrent_threads() / 2).clamp(1, 3);
     for i in 0..file_count {
         send_notification(
             &mut server,
@@ -675,7 +675,7 @@ fn test_semantic_tokens_consistency() {
     );
 
     // Request semantic tokens multiple times rapidly (adaptive count)
-    let request_count = max_concurrent_threads().min(5).max(2);
+    let request_count = max_concurrent_threads().clamp(2, 5);
     for id in 1..request_count {
         send_request(
             &mut server,

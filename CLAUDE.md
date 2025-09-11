@@ -96,6 +96,10 @@ cargo test -p perl-parser --test import_optimizer_tests -- handles_bare_imports_
 # Test enhanced cross-file navigation capabilities
 cargo test -p perl-parser test_cross_file_definition      # Package::subroutine resolution
 cargo test -p perl-parser test_cross_file_references      # Enhanced dual-pattern reference search
+
+# Thread-constrained environment testing (CI/low-resource environments)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp              # Adaptive timeout configuration for CI
+RUST_TEST_THREADS=1 cargo test --test lsp_comprehensive_e2e_test # Single-threaded testing mode
 ```
 
 ### Development
@@ -151,6 +155,7 @@ The scanner implementation uses a unified Rust-based architecture with C compati
 - **Enhanced Cross-File Navigation**: Dual indexing strategy with 98% reference coverage for both qualified (`Package::function`) and bare (`function`) function calls
 - **Advanced Workspace Indexing**: Revolutionary dual pattern matching for comprehensive LSP navigation across package boundaries
 - **Production-Ready LSP Server**: ~89% of LSP features functional with comprehensive workspace support and enhanced reference resolution
+- **Adaptive Threading Configuration**: Thread-aware timeout scaling and concurrency management for CI environments
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling
 - **Enterprise Security**: Path traversal prevention, file completion safeguards
@@ -179,6 +184,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[Variable Resolution](docs/VARIABLE_RESOLUTION_GUIDE.md)** - Scope analysis system
 - **[File Completion Guide](docs/FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
 - **[Import Optimizer Guide](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Comprehensive import analysis and optimization
+- **[Threading Configuration Guide](docs/THREADING_CONFIGURATION_GUIDE.md)** - Adaptive threading and concurrency management
 
 ## Development Guidelines
 
@@ -219,6 +225,23 @@ cd xtask && cargo run --no-default-features -- optimize-tests
 # - Excessive wait_for_idle calls (>500ms reduced to 200ms)  
 # - Inefficient polling patterns
 # - Potential savings up to 3+ seconds per test file
+```
+
+**xtask Rust 2024 Compatibility** - Enhanced tooling with modern Rust support:
+```bash
+# Core functionality (no external dependencies required)
+cd xtask && cargo check --no-default-features              # Clean compilation
+cd xtask && cargo run --no-default-features -- dev         # Development server
+cd xtask && cargo run --no-default-features -- optimize-tests  # Performance optimization
+
+# Advanced features (requires parser-tasks feature and optional libclang)
+cd xtask && cargo run --features parser-tasks -- highlight  # Tree-sitter highlight testing
+
+# Features:
+# - Rust 2024 edition compatibility with modern `let` expressions
+# - Conditional feature gates prevent dependency conflicts
+# - Optional tree-sitter integration without breaking core builds
+# - Maintains workspace exclusion strategy for clean CI/CD
 ```
 
 ## Dual Indexing Architecture Pattern
@@ -283,6 +306,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 - ✅ Workspace symbols, rename, code actions (including import optimization)
 - ✅ Import optimization: unused/duplicate removal, missing import detection, alphabetical sorting
 - ✅ Thread-safe semantic tokens (2.826µs average, zero race conditions)
+- ✅ **Adaptive Threading Configuration**: Automatic timeout scaling based on RUST_TEST_THREADS environment (15s for ≤2 threads, 10s for ≤4 threads)
 - ✅ **Enhanced cross-file navigation**: Package::subroutine patterns, multi-tier fallback system
 - ✅ **Advanced definition resolution**: 98% success rate with workspace+text search combining
 - ✅ **Dual-pattern reference search**: Enhanced find references with qualified/unqualified matching
@@ -297,8 +321,9 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 1. **Parser improvements** → `/crates/perl-parser/src/`
 2. **LSP features** → `/crates/perl-parser/src/` (provider logic)
 3. **CLI enhancements** → `/crates/perl-lsp/src/` (binary interface)
-4. **Testing** → Use existing comprehensive test infrastructure
+4. **Testing** → Use existing comprehensive test infrastructure with adaptive threading support
 5. **Security features** → Follow enterprise security practices
+6. **xtask improvements** → `/xtask/src/` (Rust 2024 compatible advanced testing tools)
 
 ### Coding Standards
 - Run `cargo clippy --workspace` before committing changes
