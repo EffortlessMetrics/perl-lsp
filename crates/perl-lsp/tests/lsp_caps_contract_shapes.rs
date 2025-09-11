@@ -243,7 +243,7 @@ fn test_capability_shapes_lsp_318_contract() {
             caps_json["typeHierarchyProvider"].is_boolean()
                 || caps_json["typeHierarchyProvider"].is_object()
                 || caps_json["typeHierarchyProvider"].is_null(),
-            "typeHierarchyProvider should be boolean, object, or null, got: {:?}", 
+            "typeHierarchyProvider should be boolean, object, or null, got: {:?}",
             caps_json["typeHierarchyProvider"]
         );
     }
