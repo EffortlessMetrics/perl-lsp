@@ -449,6 +449,27 @@ pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
         return false;
     }
 
+    // Special case: Identifier followed by :: (colon-colon)
+    // This is problematic because Perl treats A:: as a package identifier
+    // When we have "A ::" -> tokens are [Identifier("A"), Operator(":"), Operator(":")]
+    // But when we join "A::" -> it becomes [Identifier("A::")]
+    // So we must never remove whitespace between an identifier and a colon that might form a package name
+    if let (TokenType::Identifier(_), TokenType::Operator(op)) = (&left.kind, &right.kind)
+        && op.as_ref() == ":"
+    {
+        return false;
+    }
+
+    // Special case: Colon followed by colon (:: operator)
+    // This prevents sequences like "a : :" from becoming "a::" which would be lexed
+    // as a single package identifier instead of separate tokens
+    if let (TokenType::Operator(left_op), TokenType::Operator(right_op)) = (&left.kind, &right.kind)
+        && left_op.as_ref() == ":"
+        && right_op.as_ref() == ":"
+    {
+        return false;
+    }
+
     // Special case: compound tokens that should never be broken
     // These are tokens that only exist as a unit when in specific contexts
     // Dollar-brace tokens like ${, @{, %{ should never be separated from what follows

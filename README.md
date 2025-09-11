@@ -48,7 +48,6 @@ All parsers output tree-sitter compatible S-expressions for seamless integration
 ### 🚀 v0.8.9 - Breakthrough Cross-File Navigation with Dual Indexing Strategy
 
 **Revolutionary workspace indexing that dramatically improves LSP navigation accuracy**:
-
 - 🔍 **Dual Indexing Strategy**: Functions indexed under both qualified (`Package::function`) and bare (`function`) names
 - 📈 **98% Reference Coverage**: Enhanced find-references with qualified/bare function call detection
 - ⚡ **Zero Performance Impact**: Dual indexing with automatic deduplication and maintained search speeds
