@@ -183,7 +183,7 @@ impl BuildFlags {
             code_lens: false, // Only ~20% functional → don't advertise in GA-lock
             call_hierarchy: true, // Call hierarchy support (v0.8.9)
             type_hierarchy: true, // Type hierarchy support (v0.8.9)
-            linked_editing: true, // Implemented for paired delimiters
+            linked_editing: false, // Not GA yet
             inline_completion: false, // New feature, not GA yet
             inline_values: false, // New feature, not GA yet
             moniker: false, // New feature, not GA yet
@@ -419,14 +419,8 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
         caps.call_hierarchy_provider = Some(CallHierarchyServerCapability::Simple(true));
     }
 
-    // Type hierarchy not available in lsp-types 0.97
-    // if build.type_hierarchy {
-    //     caps.type_hierarchy_provider = Some(TypeHierarchyServerCapability::Options(
-    //         TypeHierarchyOptions {
-    //             work_done_progress_options: WorkDoneProgressOptions::default(),
-    //         }
-    //     ));
-    // }
+    // Placeholder for type hierarchy: always add to JSON in capabilities_json
+    // Type hierarchy not directly supported in current lsp-types
 
     caps
 }
@@ -436,9 +430,11 @@ pub fn capabilities_json(build: BuildFlags) -> Value {
     let caps = capabilities_for(build.clone());
     let mut json = serde_json::to_value(caps).unwrap();
 
-    // lsp-types 0.97 lacks typeHierarchyProvider, so add it manually
+    // Manually add typeHierarchyProvider for LSP compatibility
     if build.type_hierarchy {
-        json["typeHierarchyProvider"] = serde_json::json!(true);
+        json["typeHierarchyProvider"] = serde_json::json!({
+            "workDoneProgressOptions": {}
+        });
     }
 
     json

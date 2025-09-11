@@ -478,9 +478,10 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
 
     // wait specifically for id=1
     let resp =
-        read_response_matching_i64(server, 1, default_timeout()).expect("initialize response");
+        read_response_matching_i64(server, 1, adaptive_timeout()).expect("initialize response");
 
-    // send initialized notification
+    // Send initialized notification with a brief delay
+    std::thread::sleep(Duration::from_millis(50));
     send_notification(server, json!({"jsonrpc":"2.0","method":"initialized"}));
 
     resp

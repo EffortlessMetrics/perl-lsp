@@ -55,7 +55,6 @@
   "inlayHintProvider": {
     "resolveProvider": true
   },
-  "linkedEditingRangeProvider": true,
   "referencesProvider": true,
   "renameProvider": {
     "prepareProvider": true
@@ -114,7 +113,9 @@
     "change": 1,
     "openClose": true
   },
-  "typeHierarchyProvider": true,
+  "typeHierarchyProvider": {
+    "workDoneProgressOptions": {}
+  },
   "workspaceSymbolProvider": {
     "resolveProvider": true
   }

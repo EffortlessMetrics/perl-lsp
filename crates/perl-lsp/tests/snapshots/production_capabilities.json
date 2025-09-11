@@ -125,7 +125,9 @@
     "openClose": true
   },
   "typeDefinitionProvider": true,
-  "typeHierarchyProvider": true,
+  "typeHierarchyProvider": {
+    "workDoneProgressOptions": {}
+  },
   "workspaceSymbolProvider": {
     "resolveProvider": true
   }
