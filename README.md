@@ -17,7 +17,7 @@ This project provides a **complete Perl parsing ecosystem** with Tree-sitter com
 
 1. **perl-parser** ⭐ - Native Rust parser with ~100% Perl 5 coverage, 98% reference coverage improvement, and enhanced dual indexing LSP provider logic  
 2. **perl-lsp** 🔧 - Standalone Language Server binary with 99.5% performance optimization, Unicode enhancement, and production-ready CLI interface
-3. **perl-lexer** - Context-aware tokenizer with enhanced Unicode processing and atomic performance tracking
+3. **perl-lexer** - Context-aware tokenizer with enhanced Unicode processing, atomic performance tracking, and delimiter support
 4. **perl-corpus** - Comprehensive test corpus and property testing
 5. **perl-parser-pest** - Legacy Pest-based parser (use perl-parser for production)
 
