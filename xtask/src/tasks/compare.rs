@@ -941,82 +941,6 @@ fn extract_median_time(results: &serde_json::Value, bench_name: &str) -> Option<
     results.get(bench_name)?.get("median")?.get("estimate")?.as_f64()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_memory_measurement_basic() {
-        let (result, memory) = measure_memory_usage(|| {
-            let mut data = Vec::with_capacity(100);
-            for i in 0..100 {
-                data.push(format!("test {}", i));
-            }
-            data.len()
-        });
-
-        assert_eq!(result, 100);
-        // Memory should be measured (even if small)
-        assert!(memory >= 0.0);
-    }
-
-    #[test]
-    fn test_get_current_memory_usage() {
-        let memory = get_current_memory_usage().unwrap();
-        // Memory should be positive (process is using some memory)
-        assert!(memory > 0.0);
-    }
-
-    #[test]
-    fn test_estimate_subprocess_memory() {
-        // Test with a known file
-        let temp_file = "/tmp/test_memory_file.txt";
-        std::fs::write(temp_file, "test content").ok();
-
-        let estimated = estimate_subprocess_memory(temp_file);
-        assert!(estimated > 0.0);
-
-        // Clean up
-        std::fs::remove_file(temp_file).ok();
-    }
-
-    #[test]
-    fn test_estimate_subprocess_memory_missing_file() {
-        let estimated = estimate_subprocess_memory("/nonexistent/file.txt");
-        // Should return default estimate
-        assert_eq!(estimated, 0.5);
-    }
-
-    #[test]
-    fn test_memory_measurement_with_allocation() {
-        let (result, memory) = measure_memory_usage(|| {
-            // Allocate a larger amount of memory
-            let data: Vec<u8> = vec![0; 1_000_000]; // 1MB
-            data.len()
-        });
-
-        assert_eq!(result, 1_000_000);
-        // Should detect some memory usage
-        assert!(memory > 0.0);
-    }
-
-    #[test]
-    fn test_memory_statistics_json_structure() {
-        // Create a mock test result structure to validate JSON format
-        let mock_memories = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let _mock_times = vec![100.0, 200.0, 300.0, 400.0, 500.0];
-
-        // Calculate memory statistics like the real code
-        let avg_memory = mock_memories.iter().sum::<f64>() / mock_memories.len() as f64;
-        let min_memory = mock_memories[0];
-        let max_memory = mock_memories[mock_memories.len() - 1];
-
-        assert_eq!(avg_memory, 3.0);
-        assert_eq!(min_memory, 1.0);
-        assert_eq!(max_memory, 5.0);
-    }
-}
-
 #[allow(dead_code)]
 fn validate_results(
     c_results: &PathBuf,
@@ -1154,4 +1078,80 @@ fn display_summary(output_dir: &std::path::Path, _spinner: &ProgressBar) -> Resu
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_memory_measurement_basic() {
+        let (result, memory) = measure_memory_usage(|| {
+            let mut data = Vec::with_capacity(100);
+            for i in 0..100 {
+                data.push(format!("test {}", i));
+            }
+            data.len()
+        });
+
+        assert_eq!(result, 100);
+        // Memory should be measured (even if small)
+        assert!(memory >= 0.0);
+    }
+
+    #[test]
+    fn test_get_current_memory_usage() {
+        let memory = get_current_memory_usage().unwrap();
+        // Memory should be positive (process is using some memory)
+        assert!(memory > 0.0);
+    }
+
+    #[test]
+    fn test_estimate_subprocess_memory() {
+        // Test with a known file
+        let temp_file = "/tmp/test_memory_file.txt";
+        std::fs::write(temp_file, "test content").ok();
+
+        let estimated = estimate_subprocess_memory(temp_file);
+        assert!(estimated > 0.0);
+
+        // Clean up
+        std::fs::remove_file(temp_file).ok();
+    }
+
+    #[test]
+    fn test_estimate_subprocess_memory_missing_file() {
+        let estimated = estimate_subprocess_memory("/nonexistent/file.txt");
+        // Should return default estimate
+        assert_eq!(estimated, 0.5);
+    }
+
+    #[test]
+    fn test_memory_measurement_with_allocation() {
+        let (result, memory) = measure_memory_usage(|| {
+            // Allocate a larger amount of memory
+            let data: Vec<u8> = vec![0; 1_000_000]; // 1MB
+            data.len()
+        });
+
+        assert_eq!(result, 1_000_000);
+        // Should detect some memory usage
+        assert!(memory > 0.0);
+    }
+
+    #[test]
+    fn test_memory_statistics_json_structure() {
+        // Create a mock test result structure to validate JSON format
+        let mock_memories = [1.0, 2.0, 3.0, 4.0, 5.0];
+        let _mock_times = [100.0, 200.0, 300.0, 400.0, 500.0];
+
+        // Calculate memory statistics like the real code
+        let avg_memory = mock_memories.iter().sum::<f64>() / mock_memories.len() as f64;
+        let min_memory = mock_memories[0];
+        let max_memory = mock_memories[mock_memories.len() - 1];
+
+        assert_eq!(avg_memory, 3.0);
+        assert_eq!(min_memory, 1.0);
+        assert_eq!(max_memory, 5.0);
+    }
 }
