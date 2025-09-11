@@ -946,7 +946,8 @@ fn test_performance_large_file() {
 
     // Generate a smaller test file for faster processing
     let mut large_code = String::from("#!/usr/bin/perl\nuse strict;\nuse warnings;\n\n");
-    for i in 0..100 { // Reduced from 1000 to 100 functions
+    for i in 0..100 {
+        // Reduced from 1000 to 100 functions
         large_code.push_str(&format!(
             "sub function_{} {{\n    my ($x) = @_;\n    return $x * {};\n}}\n\n",
             i, i
@@ -982,7 +983,8 @@ fn test_concurrent_operations() {
     );
 
     // Perform reduced operations for faster testing
-    for i in 0..3 { // Reduced from 5 to 3 iterations
+    for i in 0..3 {
+        // Reduced from 5 to 3 iterations
         match i {
             0 => {
                 let _ = ctx.get_hover("file:///workspace/concurrent.pl", 2, 4);

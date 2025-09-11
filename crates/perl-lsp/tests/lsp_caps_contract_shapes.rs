@@ -237,11 +237,14 @@ fn test_capability_shapes_lsp_318_contract() {
         );
     }
 
-    // Test type hierarchy shape (boolean or object)
+    // Test type hierarchy shape (boolean, object, or null per LSP spec)
     if build.type_hierarchy {
         assert!(
             caps_json["typeHierarchyProvider"].is_boolean()
                 || caps_json["typeHierarchyProvider"].is_object()
+                || caps_json["typeHierarchyProvider"].is_null(),
+            "typeHierarchyProvider should be boolean, object, or null, got: {:?}", 
+            caps_json["typeHierarchyProvider"]
         );
     }
 

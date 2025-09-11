@@ -446,7 +446,7 @@ fn test_hover_enriched_information() {
             eprintln!("Warning: hover returned null in fast test mode, skipping validation");
             return;
         }
-        
+
         assert!(!result.is_null(), "Should return hover information");
 
         let contents = &result["contents"];
@@ -467,7 +467,9 @@ fn test_hover_enriched_information() {
 
         // Check for enriched information
         assert!(
-            hover_text.contains("Module") || hover_text.contains("package") || hover_text.contains("use"),
+            hover_text.contains("Module")
+                || hover_text.contains("package")
+                || hover_text.contains("use"),
             "Should show package/module information"
         );
     }

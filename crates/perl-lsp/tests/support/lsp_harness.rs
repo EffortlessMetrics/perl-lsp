@@ -244,13 +244,14 @@ impl LspHarness {
         let max_wait = duration.min(Duration::from_millis(200));
         let start = Instant::now();
         let mut idle_count = 0;
-        
+
         while start.elapsed() < max_wait {
             // Check for notifications more efficiently
             let notifications = self.notification_buffer.lock().unwrap();
             if notifications.is_empty() {
                 idle_count += 1;
-                if idle_count >= 3 { // Consider idle after 3 consecutive empty checks
+                if idle_count >= 3 {
+                    // Consider idle after 3 consecutive empty checks
                     break;
                 }
                 drop(notifications);
@@ -282,14 +283,14 @@ impl LspHarness {
                 return Ok(()); // Symbol indexing is working
             }
         }
-        
+
         let start = Instant::now();
         let max_attempts = 5; // Limit total attempts
         let mut attempt = 0;
-        
+
         while start.elapsed() < budget && attempt < max_attempts {
             attempt += 1;
-            
+
             let res = self.request_with_timeout(
                 "workspace/symbol",
                 serde_json::json!({ "query": query }),
@@ -306,18 +307,18 @@ impl LspHarness {
                     }
                 }
             }
-            
+
             // Exponential backoff, but cap at 100ms
             let sleep_ms = (10 * attempt).min(100);
             thread::sleep(Duration::from_millis(sleep_ms));
         }
-        
+
         // In test mode, warn but don't fail
         if std::env::var("LSP_TEST_FALLBACKS").is_ok() {
             eprintln!("Warning: symbol '{}' not indexed, proceeding anyway", query);
             return Ok(());
         }
-        
+
         Err(format!("symbol '{}' not ready within {:?} after {} attempts", query, budget, attempt))
     }
 
@@ -549,7 +550,7 @@ impl LspHarness {
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
             .unwrap_or(4);
-        
+
         match thread_count {
             0..=2 => Duration::from_millis(500), // High contention: longer timeout
             3..=4 => Duration::from_millis(300), // Medium contention

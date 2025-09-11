@@ -24,7 +24,7 @@ impl TestContext {
             // Use in-process server for faster tests
             return Self::new_in_process();
         }
-        
+
         // Start LSP server with optimized settings
         let mut server = std::process::Command::new("cargo")
             .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
@@ -56,13 +56,13 @@ impl TestContext {
         );
 
         ctx.send_notification("initialized", None);
-        
+
         // Give minimal time for initialization
         std::thread::sleep(std::time::Duration::from_millis(50));
 
         ctx
     }
-    
+
     /// Create in-process test context for faster testing
     fn new_in_process() -> Self {
         // For now, fall back to external process but with optimizations
@@ -81,7 +81,7 @@ impl TestContext {
         let writer = server.stdin.take().unwrap();
 
         let mut ctx = TestContext { server, reader, writer };
-        
+
         // Fast initialization
         ctx.send_request(
             "initialize",
