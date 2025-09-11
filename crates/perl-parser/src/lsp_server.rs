@@ -2883,7 +2883,6 @@ impl LspServer {
                                             }
                                         }
                                     }
-
                                 }
                                 break;
                             }
