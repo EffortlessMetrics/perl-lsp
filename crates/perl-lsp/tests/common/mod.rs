@@ -260,7 +260,23 @@ fn default_timeout() -> Duration {
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .map(Duration::from_millis)
-        .unwrap_or(Duration::from_secs(5))
+        .unwrap_or_else(|| {
+            // Use adaptive timeout based on thread constraints to handle
+            // slower initialization in thread-limited environments like CI
+            let base_timeout = Duration::from_secs(5);
+            let thread_count = max_concurrent_threads();
+            
+            if thread_count <= 2 {
+                // Significantly increase timeout for CI environments with RUST_TEST_THREADS=2
+                Duration::from_secs(15)
+            } else if thread_count <= 4 {
+                // Moderately increase for constrained environments
+                Duration::from_secs(10)
+            } else {
+                // Normal timeout for unconstrained environments
+                base_timeout
+            }
+        })
 }
 
 /// Short timeout for expected non-responses (malformed requests, etc)

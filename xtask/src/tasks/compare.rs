@@ -741,7 +741,9 @@ fn run_scanner_benchmarks(feature: &str) -> Result<serde_json::Value> {
         if let Ok(data) = serde_json::from_str::<serde_json::Value>(line) {
             if let Some(event) = data.get("event") {
                 if event == "bench" {
-                    if let (Some(name), Some(measurements)) = (data.get("name"), data.get("measurements")) {
+                    if let (Some(name), Some(measurements)) =
+                        (data.get("name"), data.get("measurements"))
+                    {
                         results.insert(name.as_str().unwrap().to_string(), measurements.clone());
                     }
                 }
@@ -1140,7 +1142,8 @@ fn display_summary(output_dir: &std::path::Path, _spinner: &ProgressBar) -> Resu
                         {
                             println!("  Mean Time Difference: {:.2}%", mean_diff);
                         }
-                        if let Some(mean_speedup) = overall.get("mean_speedup_factor").and_then(|v| v.as_f64())
+                        if let Some(mean_speedup) =
+                            overall.get("mean_speedup_factor").and_then(|v| v.as_f64())
                         {
                             println!("  Mean Speedup Factor: {:.3}x", mean_speedup);
                         }
