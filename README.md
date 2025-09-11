@@ -23,6 +23,20 @@ This project provides a **complete Perl parsing ecosystem** with Tree-sitter com
 
 All parsers output tree-sitter compatible S-expressions for seamless integration.
 
+## 📚 Documentation (Diataxis)
+
+Documentation is organized using the [Diataxis](https://diataxis.fr/) framework.
+Start with the [Documentation Guide](docs/DOCUMENTATION_GUIDE.md) for a complete map.
+
+- **Tutorials** – Quick start in this README and the
+  [Workspace Refactoring Tutorial](docs/WORKSPACE_REFACTORING_TUTORIAL.md)
+- **How-to guides** – [Commands Reference](docs/COMMANDS_REFERENCE.md) and the
+  [Workspace Refactoring Guide](docs/WORKSPACE_REFACTORING_GUIDE.md)
+- **Explanations** – [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md) and
+  [Modern Architecture](docs/MODERN_ARCHITECTURE.md)
+- **Reference** – [LSP_ACTUAL_STATUS.md](LSP_ACTUAL_STATUS.md) and the
+  [Workspace Refactor API Reference](docs/WORKSPACE_REFACTOR_API_REFERENCE.md)
+
 ---
 
 ## 📦 Latest Release: v0.8.9 GA (General Availability) - Dual Function Call Indexing & Unicode Enhancement Release ⚡
