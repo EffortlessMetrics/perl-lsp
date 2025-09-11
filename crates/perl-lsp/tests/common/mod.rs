@@ -320,9 +320,7 @@ pub fn max_concurrent_threads() -> usize {
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or_else(|| {
             // Try to detect system thread count, default to 8
-            std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(8)
+            std::thread::available_parallelism().map(|n| n.get()).unwrap_or(8)
         })
         .max(1) // Ensure at least 1 thread
 }
@@ -332,12 +330,12 @@ pub fn max_concurrent_threads() -> usize {
 pub fn adaptive_timeout() -> Duration {
     let base_timeout = default_timeout();
     let thread_count = max_concurrent_threads();
-    
+
     if thread_count <= 2 {
         // Increase timeout significantly for heavily constrained environments
         base_timeout * 3
     } else if thread_count <= 4 {
-        // Moderate increase for moderately constrained environments  
+        // Moderate increase for moderately constrained environments
         base_timeout * 2
     } else {
         // Normal timeout for unconstrained environments
@@ -349,7 +347,13 @@ pub fn adaptive_timeout() -> Duration {
 /// Use longer sleeps when threads are limited to reduce contention
 pub fn adaptive_sleep_ms(base_ms: u64) -> Duration {
     let thread_count = max_concurrent_threads();
-    let multiplier = if thread_count <= 2 { 3 } else if thread_count <= 4 { 2 } else { 1 };
+    let multiplier = if thread_count <= 2 {
+        3
+    } else if thread_count <= 4 {
+        2
+    } else {
+        1
+    };
     Duration::from_millis(base_ms * multiplier)
 }
 

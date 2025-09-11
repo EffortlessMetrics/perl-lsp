@@ -3,8 +3,8 @@ use std::thread;
 
 mod common;
 use common::{
-    adaptive_sleep_ms, initialize_lsp, max_concurrent_threads,
-    send_notification, send_request, start_lsp_server,
+    adaptive_sleep_ms, initialize_lsp, max_concurrent_threads, send_notification, send_request,
+    start_lsp_server,
 };
 
 /// Test suite for concurrent operations and race conditions
@@ -37,7 +37,7 @@ fn test_concurrent_document_modifications() {
     // Send rapid concurrent modifications (adaptive to thread constraints)
     let max_threads = max_concurrent_threads();
     let thread_count = (max_threads * 2).min(18).max(2); // Scale between 2-18 based on available threads
-    
+
     let handles: Vec<_> = (2..thread_count + 2)
         .map(|version| {
             thread::spawn(move || {
@@ -72,7 +72,7 @@ fn test_concurrent_document_modifications() {
 
     // Wait for system to stabilize before final request
     thread::sleep(adaptive_sleep_ms(50));
-    
+
     // Final request should see consistent state
     send_request(
         &mut server,
@@ -140,7 +140,7 @@ fn test_concurrent_requests() {
                 "params": params
             }),
         );
-        
+
         // Brief pause to prevent overwhelming the server under thread constraints
         if max_concurrent_threads() <= 4 {
             thread::sleep(adaptive_sleep_ms(10));
@@ -205,7 +205,7 @@ fn test_race_condition_open_close() {
         if max_concurrent_threads() <= 4 {
             thread::sleep(adaptive_sleep_ms(5));
         }
-        
+
         // Try to use after close (should fail gracefully)
         send_request(
             &mut server,
@@ -480,7 +480,7 @@ fn test_diagnostic_publishing_race() {
 
     // Allow system to stabilize before final verification
     thread::sleep(adaptive_sleep_ms(100));
-    
+
     // Final state should be consistent
     send_request(
         &mut server,
