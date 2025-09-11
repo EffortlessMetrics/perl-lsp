@@ -79,6 +79,84 @@ let refactor = WorkspaceRefactor::new(index);
 - ✅ Indexed multiple Perl files with their content
 - ✅ Initialized the WorkspaceRefactor system
 
+## Step 1.5: Understanding Dual Function Call Indexing (v0.8.8+) (**Diataxis: Tutorial**)
+
+Before diving into refactoring operations, let's understand the enhanced dual indexing strategy that makes comprehensive cross-file navigation possible:
+
+### How Dual Indexing Works
+
+When you index your workspace, the system now creates two index entries for every function call:
+
+```rust
+// Given this Perl code:
+// File: src/Utils.pm
+// package Utils;
+// sub validate_input { ... }
+
+// File: src/main.pl  
+// use Utils;
+// my $result = validate_input($data);  # Bare call
+// my $result2 = Utils::validate_input($data);  # Qualified call
+
+// The workspace index creates these entries:
+// 1. "validate_input" -> [reference at main.pl:3, reference at main.pl:4]
+// 2. "Utils::validate_input" -> [reference at main.pl:3, reference at main.pl:4]
+```
+
+### Testing Dual Indexing
+
+Let's verify that dual indexing is working for our example workspace:
+
+```rust
+// Test dual indexing functionality
+println!("=== Testing Dual Function Call Indexing ===");
+
+// Find references using bare name
+let bare_refs = index.find_references("create_processor");
+println!("References to 'create_processor': {}", bare_refs.len());
+
+// Find references using qualified name  
+let qualified_refs = index.find_references("Utils::create_processor");
+println!("References to 'Utils::create_processor': {}", qualified_refs.len());
+
+// Both should find the same call from main.pl:
+// Utils::create_processor($config)
+assert_eq!(bare_refs.len(), qualified_refs.len());
+```
+
+### Benefits for Refactoring
+
+This dual indexing strategy provides several advantages for workspace refactoring:
+
+1. **Complete Reference Detection**: Find all function calls whether they use bare names or qualified names
+2. **Safe Renaming**: When renaming functions, all call sites are updated automatically
+3. **Package-Aware Operations**: The system understands package contexts and handles qualified calls correctly
+4. **Deduplication**: References found via both indexing methods are automatically deduplicated
+
+### Verifying Index Quality
+
+```rust
+// Verify that your workspace is properly indexed
+let stats = index.get_statistics();
+println!("Workspace Index Statistics:");
+println!("  Files indexed: {}", stats.file_count);
+println!("  Total symbols: {}", stats.symbol_count);  
+println!("  Function calls: {}", stats.function_call_count);
+println!("  Dual index entries: {}", stats.dual_index_entries);
+
+// Check for common indexing issues
+if stats.dual_index_entries < stats.function_call_count {
+    println!("⚠️  Warning: Some function calls may not be dual-indexed");
+    println!("💡 This could affect refactoring accuracy");
+}
+```
+
+**What you've learned:**
+- ✅ Function calls are indexed both as bare names and qualified names
+- ✅ This enables comprehensive reference finding across packages
+- ✅ Refactoring operations benefit from complete call site detection
+- ✅ The system automatically handles deduplication and package contexts
+
 ## Step 2: Cross-File Symbol Renaming
 
 ### Rename a Variable Across Multiple Files

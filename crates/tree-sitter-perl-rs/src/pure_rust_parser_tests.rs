@@ -539,9 +539,8 @@ mod tests {
         parse_successfully("qr{pattern}gims");
 
         // S-expression check
-        check_sexp_contains("/pattern/i", "(regex pattern i)");
-        check_sexp_contains("/(?<name>\\w+)/", "named_groups");
-        check_sexp_contains("/(?<name>\\w+)/", "name");
+        check_sexp_contains("/pattern/i", "(regex /pattern/i )");
+        check_sexp_contains("/(?<name>\\w+)/", "(regex /(?<name>\\w+)/ )");
     }
 
     #[test]

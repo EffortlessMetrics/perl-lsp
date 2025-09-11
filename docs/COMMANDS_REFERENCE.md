@@ -162,6 +162,56 @@ cargo test -p perl-parser workspace_index workspace_rename
 cargo test -p perl-parser tdd_basic
 ```
 
+### Thread-Aware Testing (*Diataxis: How-to Guide* - CI and constrained environment testing)
+
+The testing infrastructure includes adaptive threading configuration that scales timeouts and concurrency based on system constraints. This ensures reliable test execution in both high-performance development environments and resource-constrained CI systems.
+
+```bash
+# CI environment testing with adaptive timeouts (recommended for GitHub Actions, GitLab CI)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp              # 15-second adaptive timeouts
+RUST_TEST_THREADS=2 cargo test -p perl-parser           # Extended timeouts for LSP tests
+
+# Single-threaded testing (maximum timeout extension for heavily constrained environments)
+RUST_TEST_THREADS=1 cargo test --test lsp_comprehensive_e2e_test  # Up to 45-second timeouts
+
+# Development environment (normal timeouts)
+cargo test -p perl-lsp                                   # 5-second timeouts for >4 threads
+cargo test                                               # Full workspace with standard timeouts
+
+# Custom timeout override (bypasses adaptive timeouts)
+LSP_TEST_TIMEOUT_MS=20000 cargo test -p perl-lsp        # Force 20-second timeouts regardless of threads
+LSP_TEST_SHORT_MS=1000 cargo test -p perl-lsp           # Custom short timeout (default 500ms)
+
+# Verbose thread debugging
+LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --nocapture
+```
+
+#### Thread Configuration Reference (*Diataxis: Reference* - Timeout scaling matrix)
+
+| Thread Count | Base Timeout | Adaptive Sleep | Use Case |
+|-------------|-------------|----------------|----------|
+| ≤2 threads  | 15 seconds  | 3x multiplier  | CI/GitHub Actions |
+| ≤4 threads  | 10 seconds  | 2x multiplier  | Constrained development |
+| >4 threads  | 5 seconds   | 1x multiplier  | Full development workstations |
+
+#### Thread-Aware Test Examples (*Diataxis: Tutorial* - Common testing patterns)
+
+```bash
+# GitHub Actions CI configuration
+- name: Run LSP tests
+  run: RUST_TEST_THREADS=2 cargo test -p perl-lsp
+  timeout-minutes: 10
+
+# Local development on limited hardware
+RUST_TEST_THREADS=4 cargo test -p perl-parser --test lsp_comprehensive_e2e_test
+
+# High-performance workstation (default behavior)
+cargo test  # Uses all available threads, standard 5-second timeouts
+
+# Debug timeout issues
+RUST_LOG=debug LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=1 cargo test -p perl-lsp --test specific_test
+```
+
 ## Parser Commands
 
 ### Native Parser (perl-parser)
@@ -190,12 +240,18 @@ cargo run -p perl-parser --example lsp_capabilities
 # Run LSP tests with performance optimizations (v0.8.9+)
 cargo test -p perl-parser lsp
 
+# Run LSP integration tests with controlled threading (recommended)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+
 # Run LSP integration tests with fast mode (99.5% timeout reduction)
 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp
 
-# Run specific performance-sensitive tests
-cargo test -p perl-lsp test_completion_detail_formatting
-cargo test -p perl-lsp test_workspace_symbol_search
+# Combine threading control with fast mode for optimal CI performance
+RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp -- --test-threads=2
+
+# Run specific performance-sensitive tests with threading control
+RUST_TEST_THREADS=2 cargo test -p perl-lsp test_completion_detail_formatting -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp test_workspace_symbol_search -- --test-threads=2
 
 # Run formatting capability tests (robust across environments)
 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test test_e2e_document_formatting
@@ -215,6 +271,26 @@ perl-lsp --stdio < test_requests.jsonrpc
 ```
 
 ### LSP Testing Environment Variables (*Diataxis: Reference* - Configuration options)
+
+**RUST_TEST_THREADS** (**Enhanced in v0.8.9+**):
+```bash
+# Control test thread concurrency for LSP test stability
+export RUST_TEST_THREADS=2                # Recommended for CI environments
+
+# Local testing with threading control
+RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_edge_cases_test -- --test-threads=2
+
+# Benefits of limited threading:
+# - Improved CI test reliability and predictability
+# - Reduced resource contention in containerized environments
+# - More consistent timing behavior for LSP protocol tests
+# - Better isolation of concurrent LSP server instances
+
+# Thread configuration examples:
+cargo test -p perl-lsp -- --test-threads=2              # Limit to 2 threads
+RUST_TEST_THREADS=1 cargo test -p perl-lsp              # Single-threaded execution
+RUST_TEST_THREADS=4 cargo test -p perl-lsp              # Higher concurrency (use with caution)
+```
 
 **LSP_TEST_FALLBACKS** (**NEW in v0.8.9**):
 ```bash

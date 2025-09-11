@@ -34,4 +34,26 @@ mod tests {
             other => panic!("expected substitution node, got {:?}", other),
         }
     }
+
+    #[test]
+    fn single_quote_delimiters() {
+        let cases = [
+            ("s'foo'bar';", "foo", "bar", ""),
+            ("s'foo'bar'gi;", "foo", "bar", "gi"),
+            ("s'it\\'s'it is';", "it\\'s", "it is", ""),
+            ("s''bar';", "", "bar", ""),
+            ("s'foo'';", "foo", "", ""),
+        ];
+
+        for (code, pat, repl, mods) in cases {
+            match parse_first_node(code) {
+                NodeKind::Substitution { pattern, replacement, modifiers } => {
+                    assert_eq!(pattern.as_ref(), pat, "pattern mismatch for {code}");
+                    assert_eq!(replacement.as_ref(), repl, "replacement mismatch for {code}");
+                    assert_eq!(modifiers.as_ref(), mods, "modifier mismatch for {code}");
+                }
+                other => panic!("expected substitution node, got {:?}", other),
+            }
+        }
+    }
 }

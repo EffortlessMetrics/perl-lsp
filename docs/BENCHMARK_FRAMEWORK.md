@@ -45,6 +45,21 @@ This document describes the comprehensive benchmarking framework for comparing C
    - **Multi-implementation Analysis**: Compare performance characteristics across different parser versions
    - **Regression Detection**: Automated detection of performance degradation across parser implementations
 
+7. **LSP Performance Benchmarking** (v0.8.9+) ⭐ **NEW** (**Diataxis: Reference**)
+   - **Workspace Symbol Search Optimization**: 99.5% performance improvement measurement
+   - **Test Timeout Reduction**: Validation of 60s+ → 0.26s improvements
+   - **Cooperative Yielding Validation**: Measure non-blocking behavior in symbol processing
+   - **Memory Usage Profiling**: Track bounded processing and memory consumption limits
+   - **Fast Mode Benchmarking**: Performance validation with LSP_TEST_FALLBACKS configuration
+
+8. **Dual Function Call Indexing Benchmarking** (v0.8.9+) ⭐ **NEW** (**Diataxis: Reference**)
+   - **98% Reference Coverage Validation**: Measure comprehensive function call detection improvements
+   - **Dual Indexing Performance**: Benchmark O(1) lookup performance for bare + qualified function names
+   - **Unicode Processing Enhancement**: Atomic performance counter validation with emoji/character processing
+   - **Deduplication Efficiency**: Measure URI + Range based deduplication performance 
+   - **Thread-Safe Indexing**: Benchmark concurrent workspace indexing with zero race conditions
+   - **Memory Overhead Analysis**: Validate ~2x index memory usage vs. reference coverage trade-off
+
 ## Usage
 
 ### Quick Start
@@ -90,8 +105,31 @@ python3 scripts/generate_comparison.py \
 
 # Validate specific optimization categories
 cargo run -p perl-lexer --example whitespace_benchmark
-cargo run -p perl-lexer --example operator_disambiguation_benchmark  
-cargo run -p perl-lexer --example string_interpolation_benchmark
+cargo run -p perl-lexer --example operator_disambiguation_benchmark
+
+#### Dual Indexing Performance Benchmarking ⭐ **NEW** (**Diataxis: How-to**)
+
+```bash
+# Benchmark dual function call indexing performance
+cargo test -p perl-parser --test dual_function_call_indexing_benchmark --release
+
+# Measure 98% reference coverage improvement
+cargo run -p perl-parser --bin workspace_coverage_benchmark -- \
+  --workspace-path /path/to/perl/project \
+  --dual-indexing-enabled
+
+# Unicode processing performance validation
+cargo test -p perl-lsp --test lsp_encoding_edge_cases -- unicode_performance_validation --release
+
+# Benchmark concurrent workspace indexing
+cargo run -p perl-parser --bin concurrent_indexing_benchmark -- \
+  --threads 8 \
+  --iterations 100 \
+  --dual-indexing
+
+# Memory overhead analysis for dual indexing
+cargo xtask bench --feature dual-indexing-memory-analysis \
+  --output dual_indexing_memory.json
 ```
 
 #### C Benchmarking
@@ -196,6 +234,13 @@ The framework includes configurable performance gates that automatically detect 
 - **Threshold**: Configurable (default: 20% regression)
 - **Status**: WARNING/FAIL for memory increases
 - **Action**: Warns on memory regressions
+
+### LSP Performance Gates (v0.8.9+) (**Diataxis: Reference**)
+- **Test Timeout Threshold**: Validates 99.5% timeout reduction (60s+ → 0.26s)
+- **Workspace Symbol Search**: Validates bounded processing (MAX_PROCESS: 1000)
+- **Cooperative Yielding**: Validates non-blocking behavior (yield every 32 symbols)
+- **Memory Bounds**: Validates result limiting (RESULT_LIMIT: 100)
+- **Fast Mode Performance**: Validates LSP_TEST_FALLBACKS effectiveness
 - **Dual-mode Tracking**: procfs RSS measurement with peak_alloc fallback
 - **Statistical Analysis**: Memory usage patterns with confidence intervals
 - **Subprocess Estimation**: Size-based memory estimation for external processes
@@ -319,6 +364,173 @@ Tests are automatically categorized by:
 - **Operator-Heavy Expressions**: 14-16% improvement in disambiguation
 - **Template/Interpolation Code**: 20-22% faster variable extraction
 
+### Unicode Processing Performance Instrumentation (v0.8.8+) ⭐ **NEW** (*Diataxis: Reference* - Unicode performance monitoring)
+
+#### Overview (*Diataxis: Explanation* - Understanding Unicode processing costs)
+
+The v0.8.8+ release introduces comprehensive performance instrumentation for Unicode character processing in the lexer. This enables monitoring of Unicode-heavy codebases and optimization of character classification performance.
+
+#### Performance Counters (*Diataxis: Reference* - Atomic instrumentation API)
+
+The lexer maintains atomic performance counters for Unicode operations:
+
+```rust
+use std::sync::atomic::{AtomicU64, Ordering};
+
+// Performance tracking for Unicode operations
+static UNICODE_CHAR_CHECKS: AtomicU64 = AtomicU64::new(0);
+static UNICODE_EMOJI_HITS: AtomicU64 = AtomicU64::new(0);
+
+/// Get Unicode processing statistics for debugging
+pub fn get_unicode_stats() -> (u64, u64) {
+    (
+        UNICODE_CHAR_CHECKS.load(Ordering::Relaxed), 
+        UNICODE_EMOJI_HITS.load(Ordering::Relaxed)
+    )
+}
+
+/// Reset Unicode processing statistics
+pub fn reset_unicode_stats() {
+    UNICODE_CHAR_CHECKS.store(0, Ordering::Relaxed);
+    UNICODE_EMOJI_HITS.store(0, Ordering::Relaxed);
+}
+```
+
+#### Instrumented Unicode Classification (*Diataxis: Reference* - Performance-monitored character classification)
+
+Each Unicode character classification is instrumented with performance tracking:
+
+```rust
+pub fn is_perl_identifier_start(ch: char) -> bool {
+    UNICODE_CHAR_CHECKS.fetch_add(1, Ordering::Relaxed);
+
+    // Standard Unicode identifier check
+    if ch == '_' || is_xid_start(ch) {
+        return true;
+    }
+
+    // Enhanced emoji support with instrumentation
+    let is_emoji = matches!(ch as u32,
+        0x1F300..=0x1F6FF |  // Miscellaneous Symbols and Pictographs (🚀)
+        0x1F900..=0x1F9FF |  // Supplemental Symbols and Pictographs
+        0x2600..=0x26FF |    // Miscellaneous Symbols (♥)
+        0x2700..=0x27BF |    // Dingbats
+        // ... additional emoji ranges
+    );
+
+    if is_emoji {
+        UNICODE_EMOJI_HITS.fetch_add(1, Ordering::Relaxed);
+    }
+
+    is_emoji
+}
+```
+
+#### Benchmarking Unicode Performance (*Diataxis: How-to* - Measuring Unicode processing costs)
+
+Use the instrumentation API to benchmark Unicode-heavy codebases:
+
+```rust
+#[test]
+fn benchmark_unicode_processing() {
+    use perl_lexer::unicode::{reset_unicode_stats, get_unicode_stats};
+    
+    reset_unicode_stats();
+    
+    // Process Unicode-heavy Perl code
+    let source = r#"
+my $🚀rocket_var = "space";
+my $♥heart_emoji = "love";  
+my $𝓾𝓷𝓲𝓬𝓸𝓭𝓮_math = "fancy";
+"#;
+    
+    let start = std::time::Instant::now();
+    let lexer = PerlLexer::new(source);
+    let tokens = lexer.tokenize();
+    let elapsed = start.elapsed();
+    
+    let (char_checks, emoji_hits) = get_unicode_stats();
+    
+    println!("Unicode Performance Metrics:");
+    println!("  Total character checks: {}", char_checks);
+    println!("  Emoji character hits: {}", emoji_hits);
+    println!("  Processing time: {:?}", elapsed);
+    println!("  Avg time per Unicode check: {:?}", elapsed / char_checks as u32);
+}
+```
+
+#### Performance Analysis Features (*Diataxis: Reference* - Unicode complexity analysis)
+
+Enhanced Unicode analysis for comprehensive performance monitoring:
+
+```rust
+/// Analyze Unicode complexity in source code
+pub fn analyze_unicode_complexity(source: &str) -> UnicodeStats {
+    let mut stats = UnicodeStats::default();
+    
+    for ch in source.chars() {
+        stats.total_chars += 1;
+        
+        if ch.is_ascii() {
+            stats.ascii_chars += 1;
+        } else if is_emoji_char(ch) {
+            stats.emoji_chars += 1;
+        } else {
+            stats.complex_unicode += 1;
+        }
+    }
+    
+    stats
+}
+
+#[derive(Default)]
+pub struct UnicodeStats {
+    pub total_chars: u64,
+    pub ascii_chars: u64,
+    pub emoji_chars: u64,
+    pub complex_unicode: u64,
+}
+```
+
+#### Performance Targets (*Diataxis: Reference* - Unicode processing benchmarks)
+
+**Unicode Processing Performance Targets:**
+- **ASCII-Heavy Files**: <1μs per 1000 character checks
+- **Emoji-Dense Code**: <5μs per emoji character classification  
+- **Complex Unicode**: <10μs per non-ASCII, non-emoji character
+- **Mixed Content**: <30s total processing for large files (timeout protection)
+
+**Performance Gates:**
+- Character check rate: >100,000 checks/second
+- Emoji classification: >50,000 emoji/second
+- Unicode timeout: <30s for any single file
+- Memory efficiency: <1MB additional overhead for Unicode stats
+
+#### Integration with LSP Testing (*Diataxis: How-to* - Unicode performance in LSP tests)
+
+The Unicode instrumentation integrates with LSP testing for performance validation:
+
+```rust
+#[tokio::test]
+async fn test_unicode_lsp_performance() {
+    let unicode_source = include_str!("../fixtures/unicode_heavy.pl");
+    
+    reset_unicode_stats();
+    let start = std::time::Instant::now();
+    
+    // Process through LSP pipeline
+    let result = lsp_server.handle_unicode_document(unicode_source).await;
+    
+    let elapsed = start.elapsed();
+    let (char_checks, emoji_hits) = get_unicode_stats();
+    
+    // Performance assertions
+    assert!(elapsed < Duration::from_secs(30), "Unicode processing timeout");
+    assert!(char_checks > 0, "Unicode checks should be instrumented");
+    assert_eq!(result.symbols.len() >= 5, "Should find Unicode symbols");
+}
+```
+
 ### Regression Detection
 
 - **Parse Time**: >5% slowdown triggers regression warning
@@ -334,6 +546,8 @@ Tests are automatically categorized by:
 ```yaml
 # Example GitHub Actions integration
 - name: Run Benchmarks
+  env:
+    RUST_TEST_THREADS: 2  # Control threading for consistent results
   run: cargo xtask bench --save
 
 - name: Check Performance Gates
@@ -342,6 +556,49 @@ Tests are automatically categorized by:
       echo "Performance gates failed"
       exit 1
     fi
+```
+
+#### Threading Considerations for CI (v0.8.9+)
+
+**Thread Configuration for Benchmark Consistency**:
+
+Benchmark execution benefits from controlled threading to ensure consistent and reproducible results across CI environments:
+
+```bash
+# Recommended CI benchmarking with thread control
+RUST_TEST_THREADS=2 cargo xtask bench --save --output ci_benchmark.json
+
+# For LSP-specific benchmarks with controlled threading
+RUST_TEST_THREADS=2 cargo test -p perl-lsp --release -- --test-threads=2
+
+# Combined with memory tracking
+RUST_TEST_THREADS=2 cargo xtask compare --report
+```
+
+**Benefits of Limited Threading in Benchmarks**:
+
+1. **Consistent Resource Usage**: Prevents CPU oversubscription in shared CI runners
+2. **Reproducible Results**: Reduces variability in timing measurements
+3. **Reliable Memory Measurements**: More accurate memory profiling with predictable concurrency
+4. **Performance Gate Stability**: Reduces false positives from resource contention
+
+**Threading Configuration Impact**:
+
+| Threads | Benchmark Impact | Recommended Use |
+|---------|------------------|----------------|
+| 1 | Most consistent timing, slower execution | Critical performance validation |
+| 2 | Good balance of consistency and speed | **Recommended for CI** |
+| 4+ | Faster but higher variability | Local development only |
+
+**Environment Variables for Benchmark Threading**:
+```bash
+# Standard benchmark with threading control
+export RUST_TEST_THREADS=2
+cargo xtask bench --save
+
+# High-precision benchmarking (single-threaded)
+export RUST_TEST_THREADS=1
+cargo xtask bench --save --output precision_benchmark.json
 ```
 
 ### Performance Monitoring
@@ -435,6 +692,55 @@ cargo xtask compare --report  # Includes memory metrics in output
 - **Conservative Scaling**: Uses ~8x file size plus 0.5MB base overhead
 - **Minimum Guarantees**: Ensures at least 0.1MB reported for tiny files
 - **Fallback Values**: Returns 0.5MB default for inaccessible files
+
+### LSP Performance Benchmarking (v0.8.9+) (**Diataxis: How-to Guide**)
+
+The framework now includes specialized LSP performance benchmarking to validate workspace optimization improvements:
+
+#### LSP Benchmark Commands
+```bash
+# Run LSP performance tests with standard timeouts
+cargo test -p perl-lsp test_completion_detail_formatting
+
+# Run with fast mode (99.5% timeout reduction)
+LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp test_completion_detail_formatting
+
+# Benchmark workspace symbol search performance
+cargo test -p perl-lsp test_workspace_symbol_search -- --nocapture
+
+# Run all LSP tests in fast mode
+LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp
+```
+
+#### Performance Validation Metrics
+- **Baseline Performance**: >60 seconds (pre-optimization)
+- **Optimized Performance**: 0.26 seconds (post-optimization)
+- **Improvement Factor**: 99.5% reduction in test execution time
+- **Memory Usage**: Bounded by MAX_PROCESS (1000) and RESULT_LIMIT (100)
+- **Cooperative Yielding**: Every 32 symbols to prevent blocking
+
+#### LSP Performance Configuration
+```bash
+# Environment variables for LSP benchmarking
+export LSP_TEST_FALLBACKS=1          # Enable fast mode
+export PERL_LSP_INCREMENTAL=1        # Enable incremental parsing
+
+# Performance targets:
+# - Workspace symbol search: <1 second
+# - Symbol processing: bounded to 1000 items
+# - Result limiting: maximum 100 results
+# - Cooperative yielding: every 32 iterations
+```
+
+#### Performance Gate Validation
+```bash
+# Validate performance improvements
+time cargo test -p perl-lsp test_completion_detail_formatting  # Should be <1s
+
+# Compare with and without fallbacks
+time cargo test -p perl-lsp test_workspace_symbol_search
+LSP_TEST_FALLBACKS=1 time cargo test -p perl-lsp test_workspace_symbol_search
+```
 
 ## Contributing
 

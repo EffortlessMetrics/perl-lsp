@@ -455,7 +455,8 @@ pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
     // But when we join "A::" -> it becomes [Identifier("A::")]
     // So we must never remove whitespace between an identifier and a colon that might form a package name
     if let (TokenType::Identifier(_), TokenType::Operator(op)) = (&left.kind, &right.kind)
-        && op.as_ref() == ":" {
+        && op.as_ref() == ":"
+    {
         return false;
     }
 
@@ -463,7 +464,9 @@ pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
     // This prevents sequences like "a : :" from becoming "a::" which would be lexed
     // as a single package identifier instead of separate tokens
     if let (TokenType::Operator(left_op), TokenType::Operator(right_op)) = (&left.kind, &right.kind)
-        && left_op.as_ref() == ":" && right_op.as_ref() == ":" {
+        && left_op.as_ref() == ":"
+        && right_op.as_ref() == ":"
+    {
         return false;
     }
 

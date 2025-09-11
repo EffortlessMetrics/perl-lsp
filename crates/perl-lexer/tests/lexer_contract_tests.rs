@@ -92,6 +92,23 @@ fn quote_ops_with_delimiters_tokenize_correctly() {
 }
 
 #[test]
+fn substitution_single_quote_delimiters() {
+    // Verify lexer handles single-quoted substitution delimiters
+    let tests = ["s'foo'bar'", "s'foo'bar'gi", "s'it\\'s'it is'", "s''bar'", "s'foo''"];
+
+    for input in tests {
+        let mut lx = PerlLexer::new(input);
+        let t = lx.next_token().unwrap();
+        assert!(
+            matches!(t.token_type, TokenType::Substitution),
+            "{input} should tokenize as Substitution but got {:?}",
+            t.token_type
+        );
+        assert_eq!(t.text.as_ref(), input, "Token text mismatch for {input}");
+    }
+}
+
+#[test]
 fn heredoc_start_is_not_stringliteral() {
     let mut lx = PerlLexer::new("print <<'A';\nA\n");
 

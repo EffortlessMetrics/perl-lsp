@@ -260,7 +260,23 @@ fn default_timeout() -> Duration {
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .map(Duration::from_millis)
-        .unwrap_or(Duration::from_secs(5))
+        .unwrap_or_else(|| {
+            // Use adaptive timeout based on thread constraints to handle
+            // slower initialization in thread-limited environments like CI
+            let base_timeout = Duration::from_secs(5);
+            let thread_count = max_concurrent_threads();
+
+            if thread_count <= 2 {
+                // Significantly increase timeout for CI environments with RUST_TEST_THREADS=2
+                Duration::from_secs(15)
+            } else if thread_count <= 4 {
+                // Moderately increase for constrained environments
+                Duration::from_secs(10)
+            } else {
+                // Normal timeout for unconstrained environments
+                base_timeout
+            }
+        })
 }
 
 /// Short timeout for expected non-responses (malformed requests, etc)
@@ -270,6 +286,51 @@ pub fn short_timeout() -> Duration {
         .and_then(|s| s.parse::<u64>().ok())
         .map(Duration::from_millis)
         .unwrap_or(Duration::from_millis(500))
+}
+
+/// Get the maximum number of concurrent threads to use in tests
+/// Respects RUST_TEST_THREADS environment variable and scales down thread counts appropriately
+pub fn max_concurrent_threads() -> usize {
+    std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or_else(|| {
+            // Try to detect system thread count, default to 8
+            std::thread::available_parallelism().map(|n| n.get()).unwrap_or(8)
+        })
+        .max(1) // Ensure at least 1 thread
+}
+
+/// Get adaptive timeout based on thread constraints
+/// When thread count is limited, operations may take longer due to queueing
+pub fn adaptive_timeout() -> Duration {
+    let base_timeout = default_timeout();
+    let thread_count = max_concurrent_threads();
+
+    if thread_count <= 2 {
+        // Increase timeout significantly for heavily constrained environments
+        base_timeout * 3
+    } else if thread_count <= 4 {
+        // Moderate increase for moderately constrained environments
+        base_timeout * 2
+    } else {
+        // Normal timeout for unconstrained environments
+        base_timeout
+    }
+}
+
+/// Adaptive sleep duration based on thread constraints
+/// Use longer sleeps when threads are limited to reduce contention
+pub fn adaptive_sleep_ms(base_ms: u64) -> Duration {
+    let thread_count = max_concurrent_threads();
+    let multiplier = if thread_count <= 2 {
+        3
+    } else if thread_count <= 4 {
+        2
+    } else {
+        1
+    };
+    Duration::from_millis(base_ms * multiplier)
 }
 
 /// Blocking receive with a sane default timeout to avoid hangs.

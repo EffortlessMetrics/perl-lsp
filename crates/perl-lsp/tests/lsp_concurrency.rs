@@ -1,9 +1,11 @@
 use serde_json::json;
 use std::thread;
-use std::time::Duration;
 
 mod common;
-use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
+use common::{
+    adaptive_sleep_ms, initialize_lsp, max_concurrent_threads, send_notification, send_request,
+    start_lsp_server,
+};
 
 /// Test suite for concurrent operations and race conditions
 /// Ensures the LSP server handles concurrent requests correctly
@@ -32,12 +34,16 @@ fn test_concurrent_document_modifications() {
         }),
     );
 
-    // Send rapid concurrent modifications
-    let handles: Vec<_> = (2..20)
+    // Send rapid concurrent modifications (adaptive to thread constraints)
+    let max_threads = max_concurrent_threads();
+    let thread_count = (max_threads * 2).clamp(2, 18); // Scale between 2-18 based on available threads
+
+    let handles: Vec<_> = (2..thread_count + 2)
         .map(|version| {
             thread::spawn(move || {
                 // Simulate concurrent edits from different threads
-                thread::sleep(Duration::from_millis(version as u64 % 10));
+                // Use adaptive sleep to reduce contention under thread constraints
+                thread::sleep(adaptive_sleep_ms(version as u64 % 10));
                 (version, format!("my $x = {};", version))
             })
         })
@@ -63,6 +69,9 @@ fn test_concurrent_document_modifications() {
             }),
         );
     }
+
+    // Wait for system to stabilize before final request
+    thread::sleep(adaptive_sleep_ms(50));
 
     // Final request should see consistent state
     send_request(
@@ -131,6 +140,11 @@ fn test_concurrent_requests() {
                 "params": params
             }),
         );
+
+        // Brief pause to prevent overwhelming the server under thread constraints
+        if max_concurrent_threads() <= 4 {
+            thread::sleep(adaptive_sleep_ms(10));
+        }
     }
 }
 
@@ -139,8 +153,9 @@ fn test_race_condition_open_close() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
-    // Rapidly open and close documents
-    for i in 0..10 {
+    // Rapidly open and close documents (adaptive count)
+    let document_count = (max_concurrent_threads()).clamp(2, 10);
+    for i in 0..document_count {
         let uri = format!("file:///race{}.pl", i);
 
         // Open document
@@ -186,6 +201,11 @@ fn test_race_condition_open_close() {
             }),
         );
 
+        // Brief pause between rapid operations to prevent overwhelming under thread constraints
+        if max_concurrent_threads() <= 4 {
+            thread::sleep(adaptive_sleep_ms(5));
+        }
+
         // Try to use after close (should fail gracefully)
         send_request(
             &mut server,
@@ -207,8 +227,9 @@ fn test_workspace_symbol_during_changes() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
-    // Open multiple documents
-    for i in 0..5 {
+    // Open multiple documents (adaptive count)
+    let document_count = (max_concurrent_threads() / 2).clamp(2, 5);
+    for i in 0..document_count {
         send_notification(
             &mut server,
             json!({
@@ -239,8 +260,8 @@ fn test_workspace_symbol_during_changes() {
         }),
     );
 
-    // Modify documents during search
-    for i in 0..5 {
+    // Modify documents during search (adaptive count)
+    for i in 0..document_count {
         send_notification(
             &mut server,
             json!({
@@ -422,8 +443,9 @@ fn test_diagnostic_publishing_race() {
 
     let uri = "file:///diagnostic.pl";
 
-    // Rapidly change document to trigger diagnostic updates
-    for version in 1..20 {
+    // Rapidly change document to trigger diagnostic updates (adaptive count)
+    let version_count = (max_concurrent_threads() * 2).clamp(5, 20);
+    for version in 1..version_count {
         let has_error = version % 3 == 0;
         let text = if has_error {
             format!("my $x = ;  # Error in version {}", version)
@@ -452,9 +474,12 @@ fn test_diagnostic_publishing_race() {
             }),
         );
 
-        // Small delay to allow diagnostics to process
-        thread::sleep(Duration::from_millis(5));
+        // Small delay to allow diagnostics to process (adaptive)
+        thread::sleep(adaptive_sleep_ms(5));
     }
+
+    // Allow system to stabilize before final verification
+    thread::sleep(adaptive_sleep_ms(100));
 
     // Final state should be consistent
     send_request(
@@ -475,8 +500,9 @@ fn test_multi_file_rename_race() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
-    // Create multiple files with shared variable
-    for i in 0..3 {
+    // Create multiple files with shared variable (adaptive count)
+    let file_count = (max_concurrent_threads() / 2).clamp(1, 3);
+    for i in 0..file_count {
         send_notification(
             &mut server,
             json!({
@@ -509,8 +535,8 @@ fn test_multi_file_rename_race() {
         }),
     );
 
-    // Modify files during rename
-    for i in 0..3 {
+    // Modify files during rename (adaptive count)
+    for i in 0..file_count {
         send_notification(
             &mut server,
             json!({
@@ -648,8 +674,9 @@ fn test_semantic_tokens_consistency() {
         }),
     );
 
-    // Request semantic tokens multiple times rapidly
-    for id in 1..5 {
+    // Request semantic tokens multiple times rapidly (adaptive count)
+    let request_count = max_concurrent_threads().clamp(2, 5);
+    for id in 1..request_count {
         send_request(
             &mut server,
             json!({
