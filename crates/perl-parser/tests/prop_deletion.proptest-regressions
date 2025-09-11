@@ -7,3 +7,5 @@
 cc 002d71dd797613ce7c91d5bed6faa919b4cdb25a1bca8fef15cd4dca85f391ef # shrinks to s = "///A! ", ws = "\u{b}"
 cc 08982aa8ac693f7b7d59930bcf365acffff73f4c6753a5eb8396b0ada0eff6e4 # shrinks to s = "${\tAA"
 cc 4adc0fd3a19a0a953558289912ab51575b4ee514047dc43fc0ad30b571f8abb8 # shrinks to s = "$\r{¡"
+cc 71a3e9e4621affc007a0c4352502291f867e2f9449ded2e75f565c36ffd3c9a3 # shrinks to s = "A ::"
+cc 74235047ee27f9a475bd1468d073634591adb65976dc226795cc4062923b6320 # shrinks to s = "a:\t:"
