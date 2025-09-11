@@ -265,7 +265,7 @@ fn default_timeout() -> Duration {
             // slower initialization in thread-limited environments like CI
             let base_timeout = Duration::from_secs(5);
             let thread_count = max_concurrent_threads();
-            
+
             if thread_count <= 2 {
                 // Significantly increase timeout for CI environments with RUST_TEST_THREADS=2
                 Duration::from_secs(15)
