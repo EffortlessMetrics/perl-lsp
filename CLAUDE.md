@@ -243,7 +243,6 @@ cd xtask && cargo run --features parser-tasks -- highlight  # Tree-sitter highli
 # - Optional tree-sitter integration without breaking core builds
 # - Maintains workspace exclusion strategy for clean CI/CD
 ```
-
 ## Dual Indexing Architecture Pattern
 
 When implementing workspace indexing features, follow the dual indexing pattern established in PR #122:
