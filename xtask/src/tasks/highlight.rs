@@ -179,8 +179,8 @@ fn run_highlight_test_case(
     let mut cursor = QueryCursor::new();
     let captures = cursor.captures(&query, tree.root_node(), test_case.source.as_bytes());
     let mut actual_counts: HashMap<String, usize> = HashMap::new();
-    for (_m, capture_index) in captures {
-        let name = query.capture_names()[capture_index as usize].clone();
+    for (match_, capture_index) in captures {
+        let name = query.capture_names()[capture_index].to_string();
         *actual_counts.entry(name).or_insert(0) += 1;
     }
 

@@ -67,14 +67,13 @@ fn validate_output_path(output_path: &Path) -> Result<()> {
     }
 
     // Ensure parent directory is writable if it exists
-    if let Some(parent) = output_path.parent()
-        && parent.exists()
-        && parent.metadata()?.permissions().readonly()
-    {
-        return Err(color_eyre::eyre::eyre!(
-            "Output directory '{}' is read-only",
-            parent.display()
-        ));
+    if let Some(parent) = output_path.parent() {
+        if parent.exists() && parent.metadata()?.permissions().readonly() {
+            return Err(color_eyre::eyre::eyre!(
+                "Output directory '{}' is read-only",
+                parent.display()
+            ));
+        }
     }
 
     Ok(())

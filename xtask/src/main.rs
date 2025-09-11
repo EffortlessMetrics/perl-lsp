@@ -11,6 +11,7 @@ mod tasks;
 mod types;
 use tasks::*;
 use types::TestSuite;
+#[cfg(any(feature = "legacy", feature = "parser-tasks"))]
 use types::*;
 
 #[derive(Parser)]
@@ -165,6 +166,7 @@ enum Commands {
     },
 
     /// Run highlight tests
+    #[cfg(feature = "parser-tasks")]
     Highlight {
         /// Path to highlight test directory
         #[arg(long, default_value = "c/test/highlight")]
@@ -377,6 +379,7 @@ fn main() -> Result<()> {
         Commands::Corpus { path, scanner, diagnose, test } => {
             corpus::run(path, scanner, diagnose, test)
         }
+        #[cfg(feature = "parser-tasks")]
         Commands::Highlight { path, scanner } => highlight::run(path, scanner),
         Commands::Clean { all } => clean::run(all),
         #[cfg(feature = "parser-tasks")]
