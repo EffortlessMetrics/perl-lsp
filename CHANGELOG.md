@@ -5,37 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.8.9] - Performance Optimization and LSP Enhancement Release
+## [Unreleased]
 
-### Added - **Comprehensive Performance Optimizations (v0.8.9)**
-- **LSP Performance Breakthrough (99.5% Timeout Reduction)** - Revolutionary LSP performance optimizations eliminating workspace bottlenecks:
-  - **test_completion_detail_formatting**: Performance improvement from >60 seconds to 0.26 seconds (99.5% reduction)
-  - **Bounded Processing**: MAX_PROCESS limit (1000 symbols) prevents runaway symbol processing
-  - **Cooperative Yielding**: Every 32 symbols with `std::thread::yield_now()` preventing UI blocking
-  - **Smart Result Limiting**: RESULT_LIMIT (100) with early termination for memory efficiency
-  - **Match Classification**: Exact > Prefix > Contains > Fuzzy ranking for optimal result relevance
-- **LSP_TEST_FALLBACKS Environment Variable** - Fast testing mode for CI and development:
-  - **Timeout Reduction**: 75% faster test execution (2000ms → 500ms base timeout)
-  - **Idle Optimization**: 97.5% faster idle detection (2000ms → 50ms)
-  - **Symbol Polling**: Single 200ms attempt vs progressive backoff
-  - **Zero Regressions**: 100% API compatibility maintained with configurable performance modes
-- **Require Path Completion Fix** - Enhanced module path resolution:
-  - **Accurate Completion**: Only returns existing file paths for require statements
-  - **Workspace Integration**: Improved accuracy in complex project structures
-  - **False Positive Elimination**: Removes best-effort fallbacks that suggest non-existent paths
+### Added (*Diataxis: Reference* - New parser capabilities)
+- **Single-Quote Substitution Delimiter Support** - Enhanced lexer functionality with comprehensive single-quote delimiter recognition
+  - **Complete Operator Coverage**: Full support for `s'pattern'replacement'modifiers`, `y'from'to'`, and `tr'from'to'` syntax variations
+  - **Advanced Lexical Analysis**: Intelligent parsing that correctly identifies single-quote delimiters vs. string literals in context
+  - **Edge Case Handling**: Proper support for escaped quotes (`s'it\'s'it is'`), empty patterns/replacements (`s''bar'`, `s'foo''`), and modifier combinations
+  - **Backward Compatibility**: Existing slash and other delimiter support maintained with zero breaking changes
+  - **Comprehensive Test Coverage**: 17+ test cases covering all single-quote delimiter variations and edge cases
 
-### Performance Metrics
-- **Workspace Symbol Search**: 99.5% faster execution (60s+ → 0.26s)
-- **Test Suite Runtime**: <10 seconds total with LSP_TEST_FALLBACKS=1
-- **Memory Usage**: Capped by result and processing limits preventing unbounded growth
-- **Cooperative Processing**: Non-blocking symbol extraction with yield every 32 iterations
+### Fixed (*Diataxis: Explanation* - Parser improvements and bug resolutions)
+- **Enhanced Substitution Operator Recognition**: Lexer now recognizes single-quote delimiters for substitution operators (`s'foo'bar'`), expanding delimiter support beyond traditional slash-based patterns
+- **Regex Parser Delimiter Handling**: Fixed regex parser consuming the first pattern character when using non-slash delimiters, improving parsing accuracy for alternative delimiter styles
 
-### Changed - **Performance Infrastructure**
-- **LSP Test Harness**: Enhanced timeout configuration with fallback mode support
-- **Workspace Symbol Provider**: Completely rewritten with bounded processing and smart ranking
-- **Symbol Search**: Progressive timeout system with configurable attempt limiting
+## [v0.8.9] - Enhanced Builtin Function Parsing Release - 2025-09-09
+### Fixed
+- **Enhanced Builtin Function Parsing (PR #119, Issue #110)** - Resolves core parser ambiguity for map/grep/sort functions:
+  - **Parser Accuracy Enhancement**: Resolves ambiguity where `{}` after builtin functions was inconsistently parsed as blocks vs hash literals
+  - **Dedicated Parse Method**: Added `parse_builtin_block()` method ensuring map/grep/sort functions always generate predictable Block nodes
+  - **Complete Test Coverage**: All 15 builtin function tests now passing (15/15) with comprehensive S-expression validation
+  - **Zero Breaking Changes**: Enhanced parser maintains API compatibility while improving semantic accuracy
+  - **Comprehensive Documentation**: Complete Diataxis framework documentation with tutorial, how-to, explanation, and reference sections
 
-## [Unreleased] - Post-v0.8.8 Validation Enhancements
+## [Unreleased] - Post-v0.8.9 Validation Enhancements
 
 ### Added - **Post-Validation Enterprise Features**
 - **Intelligent Subtree Cache with Symbol Priority Eviction (PR #112)** - Enhanced incremental parsing with LSP-aware cache management:
@@ -86,7 +79,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Missing import detection for Module::symbol references (planned)
   - Optimized import generation with alphabetical sorting
   - Complete test coverage with 9 comprehensive test cases
-- **Built-in Function Parsing Enhancement** - Fixed 15 test failures in builtin_empty_blocks_test.rs
 - **Architectural Quality Improvements** - Zero clippy warnings, consistent formatting across all crates
 
 ### Added - **Enhanced Reliability and Fallback Mechanisms (v0.8.8+)** - 99.9% Feature Availability

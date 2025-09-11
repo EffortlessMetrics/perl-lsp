@@ -1,6 +1,6 @@
 //! Version bumping functionality
 
-use color_eyre::eyre::{Result, bail};
+use color_eyre::eyre::{bail, Result};
 use regex::Regex;
 use std::fs;
 use std::path::Path;

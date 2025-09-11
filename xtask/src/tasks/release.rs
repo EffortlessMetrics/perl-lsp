@@ -1,6 +1,6 @@
 //! Release task implementation
 
-use color_eyre::eyre::{Result, bail};
+use color_eyre::eyre::{bail, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::path::Path;

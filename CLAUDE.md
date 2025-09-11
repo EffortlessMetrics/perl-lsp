@@ -80,40 +80,25 @@ cargo test                               # All tests (robust across environments
 cargo test -p perl-parser               # Parser library tests
 cargo test -p perl-lsp                  # LSP server integration tests
 cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- --nocapture # Full E2E test
+cargo test -p perl-parser --test builtin_empty_blocks_test   # Builtin function parsing tests
 
 # Tests pass reliably regardless of external tool availability (perltidy, perlcritic)
 # Formatting tests demonstrate graceful degradation when tools are missing
+
+# Test enhanced import optimization features
+cargo test -p perl-parser --test import_optimizer_tests   # Import analysis and optimization tests
+cargo test -p perl-parser --test import_optimizer_tests -- handles_bare_imports_without_symbols  # Regression-proof bare import analysis
+
+# Test enhanced cross-file navigation capabilities
+cargo test -p perl-parser test_cross_file_definition      # Package::subroutine resolution
+cargo test -p perl-parser test_cross_file_references      # Enhanced dual-pattern reference search
 ```
 
 ### Development
 ```bash
-cargo clippy --workspace                # Lint workspace crates
-cargo bench                             # Performance benchmarks
-perl-lsp --stdio --log                  # Debug LSP server
-
-# Development Server (with file watching and LSP hot-reload)
-cd xtask && cargo run --no-default-features -- dev --watch --port 8080
-cd xtask && cargo run --no-default-features -- dev                    # Static mode without file watching
-
-# Performance Optimization (LSP test speed improvements)
-cd xtask && cargo run --no-default-features -- optimize-tests         # Analyze and fix slow tests
-```
-
-### Advanced Testing (*Diataxis: Tutorial* - Dual-Scanner Corpus Comparison)
-```bash
-# Prerequisites: Install system dependencies for dual-scanner testing
-sudo apt-get install libclang-dev       # Ubuntu/Debian  
-brew install llvm                       # macOS
-
-# Run dual-scanner corpus comparison (tutorial)
-cd xtask                                 # Navigate to xtask directory
-cargo run corpus                        # Compare C and Rust scanners
-cargo run corpus -- --diagnose          # Get detailed analysis of differences
-
-# Understanding the output:
-# - Scanner mismatches: Different S-expressions between C/Rust
-# - Structural analysis: Node count and type differences  
-# - Diagnostic mode: Detailed breakdown of parsing differences
+cargo clippy --workspace                # Lint all crates
+cargo bench                             # Run performance benchmarks
+perl-lsp --stdio --log                  # Run LSP server with logging
 ```
 
 ### Highlight Testing (*Diataxis: Tutorial* - Tree-Sitter Highlight Test Runner)
@@ -231,6 +216,55 @@ cd xtask && cargo run --no-default-features -- optimize-tests
 # - Inefficient polling patterns
 # - Potential savings up to 3+ seconds per test file
 ```
+
+## Dual Indexing Architecture Pattern
+
+When implementing workspace indexing features, follow the dual indexing pattern established in PR #122:
+
+### Implementation Pattern (*Diataxis: Reference* - Code patterns to follow)
+
+```rust
+// When indexing function calls, always index under both forms
+let qualified = format!("{}::{}", package, bare_name);
+
+// Index under bare name
+file_index.references.entry(bare_name.to_string()).or_default().push(symbol_ref.clone());
+
+// Index under qualified name  
+file_index.references.entry(qualified).or_default().push(symbol_ref);
+```
+
+### Search Pattern (*Diataxis: Reference* - Reference resolution patterns)
+
+```rust
+// When searching for references, implement dual pattern matching
+pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
+    let mut locations = Vec::new();
+    
+    // Search exact match first
+    if let Some(refs) = index.get(symbol_name) {
+        locations.extend(refs.iter().cloned());
+    }
+    
+    // If qualified, also search bare name
+    if let Some(idx) = symbol_name.rfind("::") {
+        let bare_name = &symbol_name[idx + 2..];
+        if let Some(refs) = index.get(bare_name) {
+            locations.extend(refs.iter().cloned());
+        }
+    }
+    
+    locations
+}
+```
+
+### Design Principles (*Diataxis: Explanation* - Architectural guidance)
+
+1. **Dual Storage**: Always store function references under both qualified and bare forms
+2. **Dual Retrieval**: Always search both qualified and bare forms when resolving references
+3. **Automatic Deduplication**: Implement deduplication based on URI + Range to prevent duplicates
+4. **Performance Awareness**: Maintain search performance despite dual lookups through efficient indexing
+5. **Backward Compatibility**: Ensure existing code continues to work with enhanced indexing
 
 ## Current Status (v0.8.9)
 

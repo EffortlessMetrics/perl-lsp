@@ -2,14 +2,27 @@
 
 ## Problem Summary
 
-Perl's use of the slash character `/` for multiple purposes creates a context-sensitive parsing challenge:
+Perl's use of delimiter characters for multiple purposes creates a context-sensitive parsing challenge:
+
+**Slash Delimiters (`/`)**:
 - Division operator: `$x / 2`
 - Regex delimiter: `/pattern/`
 - Substitution operator: `s/pattern/replacement/`
 - Transliteration: `tr/abc/xyz/`
 - Quote-regex: `qr/pattern/`
 
-The disambiguation depends on the previous token's semantic class - whether the parser expects a term (value) or an operator.
+**Single-Quote Delimiters (`'`) (*Diataxis: Reference* - Supported delimiter variations)**:
+- Substitution operator: `s'pattern'replacement'modifiers`
+- Transliteration operators: `y'from'to'modifiers`, `tr'from'to'modifiers`
+- Edge cases: Escaped quotes (`s'it\'s'it is'`), empty patterns (`s''replacement'`), empty replacements (`s'pattern''`)
+
+**Other Supported Delimiters**:
+- Braces: `s{pattern}{replacement}`, `tr{from}{to}`
+- Brackets: `s[pattern][replacement]`, `tr[from][to]`
+- Parentheses: `s(pattern)(replacement)`, `tr(from)(to)`
+- Various symbols: `s|pattern|replacement|`, `s#pattern#replacement#`
+
+The disambiguation depends on the previous token's semantic class - whether the parser expects a term (value) or an operator, as well as intelligent delimiter recognition patterns.
 
 ## Solution Architecture
 
@@ -62,7 +75,11 @@ The implementation correctly handles all edge cases from the reference document:
 1. **Division after identifier**: `x / 2` → Division
 2. **Regex after operator**: `=~ /foo/` → Regex
 3. **Mixed expressions**: `1/ /abc/` → Division then Regex
-4. **Substitution variants**: `s/a/b/`, `s{a}{b}`
+4. **Substitution variants (*Diataxis: Reference* - Complete delimiter support)**: 
+   - Slash delimiters: `s/a/b/`, `tr/abc/xyz/`
+   - Brace delimiters: `s{a}{b}`, `tr{from}{to}`
+   - **Single-quote delimiters**: `s'a'b'`, `y'abc'xyz'`, `tr'from'to'`
+   - **Single-quote edge cases**: `s'it\'s'it is'`, `s''empty'`, `s'pattern''`
 5. **Complex precedence**: `split /,/, $x / 3`
 
 ## Performance Impact

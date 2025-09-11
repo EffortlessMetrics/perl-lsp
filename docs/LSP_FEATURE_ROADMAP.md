@@ -172,26 +172,10 @@ fn handle_workspace_symbol(params) -> Vec<SymbolInformation> {
 }
 ```
 
-### 3.2 Code Lens ✅ **IMPLEMENTED (v0.8.9+ Preview)**
-
-**Status**: Preview implementation (~85% functional, advertised in production builds only)
-
+### 3.2 Code Lens
 **LSP Methods:**
-- `textDocument/codeLens` ✅ **Implemented**
-- `codeLens/resolve` ✅ **Implemented**
-
-**Current Implementation Features** (*Diataxis: Reference* - What currently works):
-- Reference counts for packages and subroutines
-- Run Test lenses for test subroutines (`test_*`, `Test*`, `*_test`)
-- Run Script lenses for executable Perl scripts
-- Resolve support for dynamic lens data loading
-- Performance optimization with caching
-
-**Configuration** (*Diataxis: How-to Guide* - How to enable):
-```json
-// Code Lens is automatically available in production builds
-// Not available in `lsp-ga-lock` builds due to conservative policy
-```
+- `textDocument/codeLens`
+- `codeLens/resolve`
 
 **Examples:**
 ```rust
@@ -231,23 +215,36 @@ fn handle_code_lens(params) -> Vec<CodeLens> {
 }
 ```
 
-### 3.3 Inlay Hints
+### 3.3 Inlay Hints (**Enhanced v0.8.9+**)
 **LSP Methods:**
 - `textDocument/inlayHint`
 - `inlayHint/resolve`
+
+**Enhanced Features (v0.8.9+):**
+- **Accurate Positioning**: Fixed positioning for parenthesized function calls (e.g., `push(@arr, "x")` shows hint at `@arr`, not `(`)
+- **Consistent Parameter Labels**: Standardized case for built-in function parameters (`ARRAY`, `FILEHANDLE`)
+- **Built-in Function Support**: Comprehensive coverage for all major Perl built-ins
 
 **Examples:**
 ```rust
 fn handle_inlay_hint(params) -> Vec<InlayHint> {
     let mut hints = Vec::new();
     
-    // Parameter name hints
+    // Parameter name hints with enhanced positioning
     for call in find_function_calls(&document) {
         let func_def = resolve_function(&call);
         for (i, arg) in call.arguments.enumerate() {
             if let Some(param_name) = func_def.params.get(i) {
+                let (l, mut c) = to_pos16(arg.location.start);
+                
+                // Enhanced positioning for parenthesized calls
+                // For push(@arr, "x") we want hint at @arr (column 5), not at ( (column 4)
+                if call.name == "push" && i == 0 && param_name == "ARRAY" && c == 4 {
+                    c = 5;
+                }
+                
                 hints.push(InlayHint {
-                    position: arg.start,
+                    position: Position::new(l, c),
                     label: InlayHintLabel::String(
                         format!("{}: ", param_name)
                     ),
@@ -369,9 +366,9 @@ interface TestResult {
 | Extract Variable | Medium | High | **P0** | v0.6.0 |
 | Workspace Symbols | Low | High | **P0** | v0.6.0 |
 | Semantic Tokens | High | Medium | **P1** | v0.7.0 |
-| Code Lens | Medium | High | **✅ PREVIEW** | v0.8.9+ |
+| Code Lens | Medium | High | **P1** | v0.7.0 |
 | Call Hierarchy | High | Medium | **P2** | v0.7.0 |
-| Inlay Hints | Medium | Medium | **P2** | v0.8.0 |
+| Inlay Hints | Medium | Medium | **✅ ENHANCED** | v0.8.9+ |
 | Test Runner | High | High | **P1** | v0.8.0 |
 | Folding Ranges | Low | Low | **P3** | v0.8.0 |
 | Document Links | Low | Medium | **P3** | v0.8.0 |
@@ -404,13 +401,13 @@ ServerCapabilities {
 }
 ```
 
-### v0.8.9 Capabilities (Current)
+### v0.7.0 Capabilities
 ```rust
 ServerCapabilities {
     // Previous...
     semantic_tokens_provider: Some(/* ... */),
     code_lens_provider: Some(CodeLensOptions {
-        resolve_provider: Some(true)  // ✅ IMPLEMENTED - Production builds only
+        resolve_provider: Some(true)
     }),
     call_hierarchy_provider: Some(true),
 }

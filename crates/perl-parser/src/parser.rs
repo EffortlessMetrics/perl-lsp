@@ -1392,10 +1392,22 @@ impl<'a> Parser<'a> {
         let mut name_end = first.end;
 
         // Handle :: in package names
-        while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            let dc = self.tokens.next()?; // consume ::
-            name_end = dc.end;
-            name.push_str("::");
+        // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
+        while self.peek_kind() == Some(TokenKind::DoubleColon)
+            || (self.peek_kind() == Some(TokenKind::Colon)
+                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+        {
+            if self.peek_kind() == Some(TokenKind::DoubleColon) {
+                let dc = self.tokens.next()?; // consume ::
+                name_end = dc.end;
+                name.push_str("::");
+            } else if self.peek_kind() == Some(TokenKind::Colon) {
+                // Handle two separate Colon tokens as ::
+                let _first_colon = self.tokens.next()?; // consume first :
+                let second_colon = self.tokens.next()?; // consume second :
+                name_end = second_colon.end;
+                name.push_str("::");
+            }
 
             // Check if there's an identifier after ::
             // If not, it's a trailing :: which is valid in Perl
@@ -1512,10 +1524,27 @@ impl<'a> Parser<'a> {
         };
 
         // Handle :: in module names
-        while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            self.consume_token()?; // consume ::
-            module.push_str("::");
-            module.push_str(&self.expect(TokenKind::Identifier)?.text);
+        // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
+        while self.peek_kind() == Some(TokenKind::DoubleColon)
+            || (self.peek_kind() == Some(TokenKind::Colon)
+                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+        {
+            if self.peek_kind() == Some(TokenKind::DoubleColon) {
+                self.consume_token()?; // consume ::
+                module.push_str("::");
+            } else {
+                // Handle two separate Colon tokens as ::
+                self.consume_token()?; // consume first :
+                self.consume_token()?; // consume second :
+                module.push_str("::");
+            }
+            // In Perl, trailing :: is valid (e.g., Foo::Bar::)
+            // Only consume identifier if there is one
+            if self.peek_kind() == Some(TokenKind::Identifier) {
+                let next_part = self.consume_token()?;
+                module.push_str(&next_part.text);
+            }
+            // No error for trailing :: - it's valid in Perl
         }
 
         // Parse optional version number
@@ -1909,10 +1938,27 @@ impl<'a> Parser<'a> {
         let mut module = self.expect(TokenKind::Identifier)?.text.clone();
 
         // Handle :: in module names
-        while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            self.consume_token()?; // consume ::
-            module.push_str("::");
-            module.push_str(&self.expect(TokenKind::Identifier)?.text);
+        // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
+        while self.peek_kind() == Some(TokenKind::DoubleColon)
+            || (self.peek_kind() == Some(TokenKind::Colon)
+                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+        {
+            if self.peek_kind() == Some(TokenKind::DoubleColon) {
+                self.consume_token()?; // consume ::
+                module.push_str("::");
+            } else {
+                // Handle two separate Colon tokens as ::
+                self.consume_token()?; // consume first :
+                self.consume_token()?; // consume second :
+                module.push_str("::");
+            }
+            // In Perl, trailing :: is valid (e.g., Foo::Bar::)
+            // Only consume identifier if there is one
+            if self.peek_kind() == Some(TokenKind::Identifier) {
+                let next_part = self.consume_token()?;
+                module.push_str(&next_part.text);
+            }
+            // No error for trailing :: - it's valid in Perl
         }
 
         // Parse optional version number
@@ -2299,25 +2345,8 @@ impl<'a> Parser<'a> {
                             } else if matches!(func_name.as_str(), "map" | "grep" | "sort")
                                 && self.peek_kind() == Some(TokenKind::LeftBrace)
                             {
-                                // Special handling for map/grep/sort with block as first argument
-                                let block_start = self.current_position();
-                                self.expect(TokenKind::LeftBrace)?;
-
-                                // Parse the expression inside the block (if any)
-                                let mut statements = Vec::new();
-                                if self.peek_kind() != Some(TokenKind::RightBrace) {
-                                    statements.push(self.parse_expression()?);
-                                }
-
-                                self.expect(TokenKind::RightBrace)?;
-                                let block_end = self.previous_position();
-
-                                // Wrap the expression in a block node
-                                let block = Node::new(
-                                    NodeKind::Block { statements },
-                                    SourceLocation { start: block_start, end: block_end },
-                                );
-                                args.push(block);
+                                // Special handling for map/grep/sort with block first argument
+                                args.push(self.parse_builtin_block()?);
                             } else {
                                 // For builtins, don't parse word operators as part of arguments
                                 // Word operators should be handled at statement level
@@ -3536,6 +3565,9 @@ impl<'a> Parser<'a> {
                                     }
                                     args.push(self.parse_comma()?);
                                 }
+                            } else if matches!(name.as_str(), "sort" | "map" | "grep") {
+                                // These builtins should parse {} as blocks, not hashes
+                                args.push(self.parse_builtin_block()?);
                             } else {
                                 // Other builtins - parse {} as first argument
                                 args.push(self.parse_hash_or_block()?);
@@ -3988,9 +4020,20 @@ impl<'a> Parser<'a> {
         };
 
         // Keep consuming :: and identifiers
-        while self.peek_kind() == Some(TokenKind::DoubleColon) {
-            self.consume_token()?; // consume ::
-            name.push_str("::");
+        // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
+        while self.peek_kind() == Some(TokenKind::DoubleColon)
+            || (self.peek_kind() == Some(TokenKind::Colon)
+                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+        {
+            if self.peek_kind() == Some(TokenKind::DoubleColon) {
+                self.consume_token()?; // consume ::
+                name.push_str("::");
+            } else if self.peek_kind() == Some(TokenKind::Colon) {
+                // Handle two separate Colon tokens as ::
+                self.consume_token()?; // consume first :
+                self.consume_token()?; // consume second :
+                name.push_str("::");
+            }
 
             // In Perl, trailing :: is valid (e.g., Foo::Bar::)
             // Only consume identifier if there is one
@@ -4592,10 +4635,30 @@ impl<'a> Parser<'a> {
         }
 
         // Check if the second token is a colon
-        match self.tokens.peek_second() {
-            Ok(token) => token.kind == TokenKind::Colon,
-            Err(_) => false,
+        if let Ok(second_token) = self.tokens.peek_second() {
+            if second_token.kind == TokenKind::Colon {
+                // To avoid conflict with qualified identifiers (Package::name),
+                // we need to be more careful. A true label should be:
+                // IDENTIFIER : STATEMENT
+                // where STATEMENT doesn't start with another colon.
+                //
+                // For now, let's be conservative and disable label detection
+                // when we see patterns that could be qualified identifiers.
+                // This is a simple heuristic: if we see IDENTIFIER : and the
+                // identifier looks like it could be a package name (starts with
+                // uppercase), we'll let the expression parser handle it.
+                if let Ok(first_token) = self.tokens.peek() {
+                    let name = &first_token.text;
+                    // If identifier starts with uppercase, it might be a package name
+                    // so avoid treating it as a label
+                    if name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                        return false;
+                    }
+                }
+                return true;
+            }
         }
+        false
     }
 
     /// Parse a labeled statement (LABEL: statement)
@@ -4833,7 +4896,26 @@ impl<'a> Parser<'a> {
         Ok(words)
     }
 
-    /// Parse hash literal or block  
+    /// Parse block specifically for builtin functions (map, grep, sort)
+    /// These always parse {} as blocks, never as hashes
+    fn parse_builtin_block(&mut self) -> ParseResult<Node> {
+        let start_token = self.tokens.next()?; // consume {
+        let start = start_token.start;
+
+        // Parse the expression inside the block (if any)
+        let mut statements = Vec::new();
+        if self.peek_kind() != Some(TokenKind::RightBrace) {
+            statements.push(self.parse_expression()?);
+        }
+
+        self.expect(TokenKind::RightBrace)?;
+        let end = self.previous_position();
+
+        // Always return a block node for builtin functions
+        Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
+    }
+
+    /// Parse hash literal or block
     fn parse_hash_or_block(&mut self) -> ParseResult<Node> {
         self.parse_hash_or_block_with_context(false)
     }
@@ -5326,5 +5408,20 @@ mod tests {
             "Should have hash or array, got: {}",
             sexp
         );
+    }
+
+    #[test]
+    fn test_qualified_function_call() {
+        let mut parser = Parser::new("return Data::Dumper::Dumper($param);");
+        let result = parser.parse();
+        match result {
+            Ok(ast) => {
+                println!("✅ Successfully parsed qualified function call: {}", ast.to_sexp());
+            }
+            Err(e) => {
+                println!("❌ Failed to parse qualified function call: {}", e);
+                panic!("Parsing failed: {}", e);
+            }
+        }
     }
 }

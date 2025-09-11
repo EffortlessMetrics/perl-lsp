@@ -76,9 +76,14 @@ impl<'source> RegexParser<'source> {
         // Skip optional whitespace after 'm'
         self.skip_whitespace();
 
-        let delimiter = if self.current_char_is('/') { '/' } else { self.parse_delimiter()? };
+        let delimiter = if self.current_char_is('/') {
+            self.advance(); // consume '/'
+            '/'
+        } else {
+            // parse_delimiter() consumes the opening delimiter
+            self.parse_delimiter()?
+        };
 
-        self.advance(); // Skip delimiter
         let pattern = self.parse_until_delimiter(delimiter)?;
         let modifiers = self.parse_modifiers();
 
@@ -96,9 +101,14 @@ impl<'source> RegexParser<'source> {
         // Skip optional whitespace after 's'
         self.skip_whitespace();
 
-        let delimiter = if self.current_char_is('/') { '/' } else { self.parse_delimiter()? };
+        let delimiter = if self.current_char_is('/') {
+            self.advance(); // consume '/'
+            '/'
+        } else {
+            // parse_delimiter() consumes the opening delimiter
+            self.parse_delimiter()?
+        };
 
-        self.advance(); // Skip delimiter
         let pattern = self.parse_until_delimiter(delimiter)?;
         let replacement = self.parse_until_delimiter(delimiter)?;
         let modifiers = self.parse_modifiers();

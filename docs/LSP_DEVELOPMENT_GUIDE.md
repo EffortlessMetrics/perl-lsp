@@ -69,6 +69,214 @@ let completions = provider.get_completions_with_path(&doc.text, offset, Some(uri
 - **Caching Strategy**: Fast path checks open documents first
 - **Generic Design**: Works with any document representation for flexibility
 
+## Enhanced Cross-File Definition Resolution (v0.8.9+) (*Diataxis: How-to Guide* - Advanced LSP Development)
+
+The v0.8.9+ releases introduce comprehensive Package::subroutine pattern resolution with sophisticated fallback mechanisms for robust cross-file navigation.
+
+### Implementation Patterns for Package::Subroutine Resolution
+
+#### Pattern 1: Regex-Based Symbol Detection
+```rust
+// Enhanced regex pattern for fully-qualified symbols
+use regex::Regex;
+
+let re = Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)")
+    .unwrap();
+
+for cap in re.captures_iter(&text_around) {
+    if let Some(m) = cap.get(1) {
+        if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
+            let parts: Vec<&str> = m.as_str().split("::").collect();
+            if parts.len() >= 2 {
+                let name = parts.last().unwrap().to_string();
+                let pkg = parts[..parts.len() - 1].join("::");
+                
+                // Create SymbolKey for workspace index lookup
+                let key = crate::workspace_index::SymbolKey {
+                    pkg: pkg.clone().into(),
+                    name: name.clone().into(),
+                    sigil: None,
+                    kind: crate::workspace_index::SymKind::Sub,
+                };
+                
+                // Try workspace index resolution first
+                if let Some(ref workspace_index) = self.workspace_index {
+                    if let Some(def_location) = workspace_index.find_def(&key) {
+                        return to_lsp_location(&def_location);
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+#### Pattern 2: Document Scanning Fallback
+```rust
+// Fallback: scan open documents for symbol definitions
+let docs_snapshot: Vec<(String, DocumentState)> = documents
+    .iter()
+    .map(|(k, v)| (k.clone(), v.clone()))
+    .collect();
+
+for (doc_uri, doc_state) in docs_snapshot {
+    if let Some(ref ast) = doc_state.ast {
+        let symbols = self.extract_document_symbols(
+            ast,
+            &doc_state.text,
+            &doc_uri,
+        );
+        for sym in symbols {
+            if sym.name == name && sym.container_name.as_deref() == Some(&pkg) {
+                return Ok(Some(json!([sym.location])));
+            }
+        }
+    }
+}
+```
+
+#### Pattern 3: Enhanced Reference Search with Dual Patterns
+```rust
+// Enhanced fallback: search for both qualified and unqualified references
+let symbol_name = &symbol_key.name;
+let package_name = &symbol_key.pkg;
+
+// Search patterns: both "symbol_name" and "package::symbol_name"  
+let patterns = vec![
+    format!(r"\b{}\b", regex::escape(symbol_name)),
+    format!(r"\b{}::{}\b", regex::escape(package_name), regex::escape(symbol_name)),
+];
+
+let mut enhanced_locations = Vec::new();
+for pattern in patterns {
+    if let Ok(search_regex) = regex::Regex::new(&pattern) {
+        for (doc_uri, doc_state) in &docs_snapshot {
+            let lines: Vec<&str> = doc_state.text.lines().collect();
+            for (line_num, line) in lines.iter().enumerate() {
+                for mat in search_regex.find_iter(line) {
+                    enhanced_locations.push(json!({
+                        "uri": doc_uri,
+                        "range": {
+                            "start": {
+                                "line": line_num,
+                                "character": mat.start(),
+                            },
+                            "end": {
+                                "line": line_num,
+                                "character": mat.end(),
+                            },
+                        },
+                    }));
+                }
+            }
+        }
+    }
+}
+
+// Combine workspace index results with text search results  
+workspace_locations.extend(enhanced_locations);
+```
+
+### Development Testing for Cross-File Features
+
+#### Test Cases for Package::Subroutine Resolution
+```rust
+#[test]
+fn test_cross_file_package_subroutine_resolution() {
+    let mut server = LspServer::new();
+    
+    // Create Package module
+    let package_content = r#"
+package Utils;
+
+sub utility_function {
+    my ($param) = @_;
+    return process($param);
+}
+
+1;
+"#;
+    
+    // Create client code using Package::subroutine
+    let client_content = r#"
+use Utils;
+
+sub main {
+    Utils::utility_function("test");  # Cursor here for go-to-definition
+}
+"#;
+    
+    server.documents.lock().unwrap().insert(
+        "file:///Utils.pm".to_string(),
+        DocumentState::new(package_content),
+    );
+    
+    server.documents.lock().unwrap().insert(
+        "file:///main.pl".to_string(), 
+        DocumentState::new(client_content),
+    );
+    
+    // Test go-to-definition for Utils::utility_function
+    let result = server.handle_definition(json!({
+        "textDocument": {"uri": "file:///main.pl"},
+        "position": {"line": 3, "character": 10}  // On "Utils::utility_function"
+    }));
+    
+    assert!(result.is_ok());
+    let locations = result.unwrap().unwrap();
+    assert!(!locations.as_array().unwrap().is_empty());
+    
+    // Should point to Utils.pm function definition
+    let location = &locations.as_array().unwrap()[0];
+    assert_eq!(location["uri"], "file:///Utils.pm");
+}
+
+#[test]
+fn test_definition_fallback_without_workspace_index() {
+    let mut server = LspServer::new();
+    server.workspace_index = None; // Force fallback mode
+    
+    // Same test as above - should still work via document scanning
+    // ... test implementation
+}
+
+#[test]
+fn test_enhanced_reference_search_dual_patterns() {
+    let mut server = LspServer::new();
+    
+    let content = r#"
+package Database;
+
+sub query_data { return "data"; }
+
+# In same file - test both patterns
+sub example {
+    query_data();              # Unqualified reference
+    Database::query_data();    # Qualified reference
+}
+"#;
+    
+    server.documents.lock().unwrap().insert(
+        "file:///Database.pm".to_string(),
+        DocumentState::new(content),
+    );
+    
+    // Test find references for "query_data" - should find both patterns
+    let result = server.handle_references(json!({
+        "textDocument": {"uri": "file:///Database.pm"},
+        "position": {"line": 2, "character": 5}, // On function declaration
+        "context": {"includeDeclaration": true}
+    }));
+    
+    assert!(result.is_ok());
+    let references = result.unwrap().unwrap();
+    let refs_array = references.as_array().unwrap();
+    
+    // Should find: declaration + unqualified call + qualified call = 3 references
+    assert!(refs_array.len() >= 3);
+}
+```
+
 ### Comment Documentation Extraction
 
 The system provides comprehensive comment documentation extraction with the following features:
@@ -102,6 +310,100 @@ my $documented_var = 42;
 
 sub foo {  # Not documentation
 }
+```
+
+## Cross-File Reference Handling (*Diataxis: Reference* - Enhanced package-qualified identifier support v0.8.9+)
+
+The v0.8.9+ release includes significant improvements to cross-file reference handling, particularly for package-qualified identifiers and reference deduplication.
+
+### Enhanced Workspace Indexing
+
+The workspace indexing system now provides more accurate cross-file reference tracking:
+
+#### **Improved Reference Deduplication**
+```rust
+// Enhanced find_refs implementation in workspace_index.rs
+pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
+    let qualified_name = format!("{}::{}", key.pkg, key.name);
+    let mut all_refs = self.find_references(&qualified_name);
+
+    // Critical improvement: Remove the definition from references
+    // The caller will include it separately if needed (e.g., for "Go to Definition")
+    if let Some(def) = self.find_def(key) {
+        all_refs.retain(|loc| !(loc.uri == def.uri && loc.range == def.range));
+    }
+
+    // Enhanced deduplication using HashSet for O(n) performance
+    let mut seen = HashSet::new();
+    all_refs.retain(|loc| seen.insert((loc.uri.clone(), loc.range)));
+    
+    all_refs
+}
+```
+
+#### **Package-Qualified Identifier Support**
+The system now correctly handles package-qualified identifiers in cross-file scenarios:
+
+**Before v0.8.9:**
+- References could include function definitions
+- Duplicate entries from dual indexing
+- Inconsistent handling of package contexts
+
+**After v0.8.9:**
+- Clean separation of references vs definitions
+- Intelligent deduplication across qualified/unqualified names
+- Consistent package context resolution
+
+#### **LSP Feature Integration**
+
+These improvements directly enhance several LSP features:
+
+**Find All References** (`textDocument/references`):
+```rust
+// Clean reference lists without definitions
+let references = workspace_index.find_refs(&symbol_key);
+// References now exclude the definition automatically
+```
+
+**Go to Definition** (`textDocument/definition`):
+```rust
+// Definitions handled separately for accuracy
+if let Some(definition) = workspace_index.find_def(&symbol_key) {
+    // Definition logic separate from reference finding
+}
+```
+
+**Workspace Rename** (`workspace/willRename`):
+```rust
+// More accurate rename operations across qualified calls
+let all_occurrences = workspace_index.find_refs(&symbol_key);
+// Plus the definition if renaming the symbol itself
+if include_definition {
+    if let Some(def) = workspace_index.find_def(&symbol_key) {
+        all_occurrences.push(def);
+    }
+}
+```
+
+### Development Best Practices
+
+When working with cross-file references in LSP features:
+
+1. **Use Enhanced APIs**: Always use `find_refs()` for references and `find_def()` for definitions
+2. **Handle Package Context**: Consider both bare and qualified names when searching
+3. **Leverage Deduplication**: The system automatically handles duplicate removal
+4. **Separate Concerns**: Keep reference finding separate from definition resolution
+
+### Testing Cross-File Features
+
+```bash
+# Test cross-file reference improvements
+cargo test -p perl-parser workspace_index_enhanced_deduplication
+cargo test -p perl-parser workspace_rename_package_qualified_support
+
+# Integration tests for LSP features
+cargo test -p perl-lsp test_find_references_excludes_definitions
+cargo test -p perl-lsp test_package_qualified_navigation
 ```
 
 ## Adding New LSP Features

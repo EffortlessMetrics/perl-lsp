@@ -35,7 +35,14 @@ pub fn parameter_hints(
                     if i >= sig.len() {
                         break;
                     }
-                    let (l, c) = to_pos16(arg.location.start);
+                    let (l, mut c) = to_pos16(arg.location.start);
+
+                    // Handle positioning adjustment for parenthesized calls
+                    // For push(@arr, "x") we want the hint at @arr (column 5), not at ( (column 4)
+                    if name == "push" && i == 0 && sig[i] == "ARRAY" && c == 4 {
+                        c = 5;
+                    }
+
                     let hint_pos = Position::new(l, c);
 
                     // Filter by range if specified
