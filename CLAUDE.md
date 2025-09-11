@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.9 GA - Enhanced Builtin Function Parsing & Single-Quote Delimiter Support
+**Latest Release**: v0.8.9 GA - Enhanced Builtin Function Parsing & Dual Function Call Indexing
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
