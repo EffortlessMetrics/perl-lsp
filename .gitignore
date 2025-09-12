@@ -33,6 +33,7 @@ releases/
 # Claude
 /.claude/agents
 /.claude/agents/mantle/
+/.claude/agents/review/
 
 # Mutation testing artifacts
 mutants.out/
