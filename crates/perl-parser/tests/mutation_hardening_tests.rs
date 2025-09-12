@@ -317,7 +317,6 @@ mod workspace_eval_do_tests {
         let _symbols = index.file_symbols(&uri);
     }
 
-    /// Property-based test for eval/do block robustness
     proptest! {
         #[test]
         fn property_eval_do_indexing_robustness(
@@ -438,7 +437,6 @@ mod ast_node_validation_tests {
         }
     }
 
-    /// Property-based test for S-expression generation robustness
     proptest! {
         #[test]
         fn property_sexp_generation_robustness(
