@@ -673,16 +673,16 @@
     }
   },
   "test_cases": [
+    "benchmark_tests/obscure_syntax.pl",
     "benchmark_tests/medium.pl",
     "benchmark_tests/large_50kb.pl",
+    "benchmark_tests/complex_nested.pl",
+    "benchmark_tests/large_5kb.pl",
+    "benchmark_tests/complex.pl",
+    "benchmark_tests/edge_cases.pl",
+    "benchmark_tests/complex_regex.pl",
     "benchmark_tests/complex_operators.pl",
     "benchmark_tests/simple.pl",
-    "benchmark_tests/obscure_syntax.pl",
-    "benchmark_tests/complex.pl",
-    "benchmark_tests/large_5kb.pl",
-    "benchmark_tests/edge_cases.pl",
-    "benchmark_tests/complex_nested.pl",
-    "benchmark_tests/complex_regex.pl",
     "benchmark_tests/fuzzed/fuzz_complex_000.pl",
     "benchmark_tests/fuzzed/fuzz_complex_nested_000.pl",
     "benchmark_tests/fuzzed/fuzz_complex_operators_000.pl",
@@ -695,5 +695,5 @@
     "benchmark_tests/fuzzed/fuzz_simple_000.pl",
     "benchmark_tests/fuzzed/stress_deep_nesting.pl"
   ],
-  "timestamp": "2025-09-04T15:14:02.480844663+00:00"
+  "timestamp": "2025-09-11T23:11:28.526831383+00:00"
 }
