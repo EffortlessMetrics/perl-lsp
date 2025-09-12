@@ -1,0 +1,272 @@
+[
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/completion.rs",
+    "function": {
+      "function_name": "CompletionProvider::add_file_completions_with_cancellation",
+      "return_type": "",
+      "span": {
+        "start": {
+          "line": 1172,
+          "column": 5
+        },
+        "end": {
+          "line": 1285,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 1233,
+        "column": 33
+      },
+      "end": {
+        "line": 1233,
+        "column": 34
+      }
+    },
+    "replacement": "==",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/completion.rs",
+    "function": {
+      "function_name": "CompletionProvider::analyze_context",
+      "return_type": "-> CompletionContext",
+      "span": {
+        "start": {
+          "line": 694,
+          "column": 5
+        },
+        "end": {
+          "line": 746,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 729,
+        "column": 45
+      },
+      "end": {
+        "line": 729,
+        "column": 46
+      }
+    },
+    "replacement": "==",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/completion.rs",
+    "function": {
+      "function_name": "CompletionProvider::resolve_safe_directory",
+      "return_type": "-> Option<PathBuf>",
+      "span": {
+        "start": {
+          "line": 1327,
+          "column": 5
+        },
+        "end": {
+          "line": 1352,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 1332,
+        "column": 31
+      },
+      "end": {
+        "line": 1332,
+        "column": 33
+      }
+    },
+    "replacement": "||",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/completion.rs",
+    "function": {
+      "function_name": "CompletionProvider::analyze_context",
+      "return_type": "-> CompletionContext",
+      "span": {
+        "start": {
+          "line": 694,
+          "column": 5
+        },
+        "end": {
+          "line": 746,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 697,
+        "column": 67
+      },
+      "end": {
+        "line": 697,
+        "column": 68
+      }
+    },
+    "replacement": "*",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/completion.rs",
+    "function": {
+      "function_name": "CompletionProvider::is_in_regex",
+      "return_type": "-> bool",
+      "span": {
+        "start": {
+          "line": 1530,
+          "column": 5
+        },
+        "end": {
+          "line": 1544,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 1536,
+        "column": 63
+      },
+      "end": {
+        "line": 1536,
+        "column": 64
+      }
+    },
+    "replacement": "+",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/completion.rs",
+    "function": {
+      "function_name": "CompletionProvider::get_file_completion_metadata",
+      "return_type": "-> (String, Option<String>)",
+      "span": {
+        "start": {
+          "line": 1428,
+          "column": 5
+        },
+        "end": {
+          "line": 1455,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 1441,
+        "column": 17
+      },
+      "end": {
+        "line": 1441,
+        "column": 43
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/completion.rs",
+    "function": {
+      "function_name": "CompletionProvider::add_keyword_completions",
+      "return_type": "",
+      "span": {
+        "start": {
+          "line": 911,
+          "column": 5
+        },
+        "end": {
+          "line": 951,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 928,
+        "column": 21
+      },
+      "end": {
+        "line": 928,
+        "column": 93
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/completion.rs",
+    "function": {
+      "function_name": "CompletionContext::detect_current_package",
+      "return_type": "-> String",
+      "span": {
+        "start": {
+          "line": 148,
+          "column": 5
+        },
+        "end": {
+          "line": 195,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 150,
+        "column": 9
+      },
+      "end": {
+        "line": 194,
+        "column": 16
+      }
+    },
+    "replacement": "\"xyzzy\".into()",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/completion.rs",
+    "function": {
+      "function_name": "CompletionProvider::get_completions_with_path_cancellable",
+      "return_type": "-> Vec<CompletionItem>",
+      "span": {
+        "start": {
+          "line": 479,
+          "column": 5
+        },
+        "end": {
+          "line": 619,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 549,
+        "column": 47
+      },
+      "end": {
+        "line": 549,
+        "column": 48
+      }
+    },
+    "replacement": "*",
+    "genre": "BinaryOperator"
+  }
+]

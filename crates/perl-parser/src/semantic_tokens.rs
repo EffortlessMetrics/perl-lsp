@@ -148,40 +148,37 @@ pub fn collect_semantic_tokens(
 /// Remove overlapping tokens to comply with LSP specification
 /// Prefers tokens with higher specificity (AST over lexer) and longer spans
 fn remove_overlapping_tokens(
-    mut raw_tokens: Vec<(u32, u32, u32, u32, u32)>,
+    raw_tokens: Vec<(u32, u32, u32, u32, u32)>,
 ) -> Vec<(u32, u32, u32, u32, u32)> {
-    if raw_tokens.is_empty() {
-        return raw_tokens;
-    }
-
-    // Sort by position (line, then character), then by length (longer first for same position)
-    raw_tokens.sort_by(|a, b| {
-        a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(b.2.cmp(&a.2)) // Longer tokens first (reverse order)
+    // Sort by start position first
+    let mut sorted_tokens = raw_tokens;
+    sorted_tokens.sort_by_key(|&(line, start_char, _length, _token_type, _modifier)| {
+        (line, start_char)
     });
-
+    
     let mut result = Vec::new();
-
-    for token in raw_tokens {
-        let (line, char, len, _kind, _mods) = token;
-        let end_char = char + len;
-
-        // Check if this token overlaps with any already accepted token
-        let overlaps = result.iter().any(|&(existing_line, existing_char, existing_len, _, _)| {
-            if line != existing_line {
-                return false; // Different lines, no overlap
+    
+    for token in sorted_tokens {
+        let (line, start_char, length, token_type, modifier) = token;
+        
+        // Check if this token overlaps with the last token in result
+        if let Some(&(last_line, last_start, last_length, _last_type, _last_modifier)) = result.last() {
+            // Tokens overlap if they're on the same line and ranges intersect
+            if line == last_line && start_char < last_start + last_length {
+                // Choose the token with better specificity or longer length
+                if length > last_length {
+                    result.pop(); // Remove the previous token
+                    result.push(token);
+                }
+                // If current token is not better, skip it
+            } else {
+                result.push(token);
             }
-
-            let existing_end = existing_char + existing_len;
-
-            // Check for overlap: token starts before existing ends AND token ends after existing starts
-            !(end_char <= existing_char || char >= existing_end)
-        });
-
-        if !overlaps {
+        } else {
             result.push(token);
         }
     }
-
+    
     result
 }
 

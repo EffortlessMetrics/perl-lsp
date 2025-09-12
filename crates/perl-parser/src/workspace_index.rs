@@ -33,13 +33,21 @@ pub struct SymbolKey {
 /// "$foo" -> (Some('$'), "foo")
 /// "foo" -> (None, "foo")
 pub fn normalize_var(name: &str) -> (Option<char>, &str) {
-    let mut chars = name.chars();
-    if let Some(first) = chars.next() {
-        if matches!(first, '$' | '@' | '%') {
-            return (Some(first), chars.as_str());
-        }
+    if name.is_empty() {
+        return (None, "");
     }
-    (None, name)
+    
+    let first_char = name.chars().next().unwrap();
+    match first_char {
+        '$' | '@' | '%' => {
+            if name.len() > 1 {
+                (Some(first_char), &name[1..])
+            } else {
+                (Some(first_char), "")
+            }
+        }
+        _ => (None, name),
+    }
 }
 
 /// Helper functions for safe URI <-> filesystem path conversion
@@ -572,7 +580,9 @@ impl WorkspaceIndex {
 
         // Remove the definition; the caller will include it separately if needed
         if let Some(def) = self.find_def(key) {
-            all_refs.retain(|loc| !(loc.uri == def.uri && loc.range == def.range));
+            all_refs.retain(|loc| {
+                !(loc.uri == def.uri && loc.range == def.range)
+            });
         }
 
         // Deduplicate by URI and range
