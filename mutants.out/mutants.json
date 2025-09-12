@@ -1,0 +1,62 @@
+[
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/semantic_tokens.rs",
+    "function": {
+      "function_name": "remove_overlapping_tokens",
+      "return_type": "-> Vec<(u32, u32, u32, u32, u32)>",
+      "span": {
+        "start": {
+          "line": 148,
+          "column": 1
+        },
+        "end": {
+          "line": 186,
+          "column": 2
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 153,
+        "column": 5
+      },
+      "end": {
+        "line": 185,
+        "column": 11
+      }
+    },
+    "replacement": "vec![(1, 1, 0, 0, 1)]",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/semantic_tokens.rs",
+    "function": {
+      "function_name": "kind_idx",
+      "return_type": "-> u32",
+      "span": {
+        "start": {
+          "line": 58,
+          "column": 1
+        },
+        "end": {
+          "line": 61,
+          "column": 2
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 60,
+        "column": 5
+      },
+      "end": {
+        "line": 60,
+        "column": 34
+      }
+    },
+    "replacement": "0",
+    "genre": "FnValue"
+  }
+]
