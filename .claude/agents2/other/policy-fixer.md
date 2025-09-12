@@ -34,13 +34,15 @@ After every fix attempt, you MUST route back to the policy-gatekeeper using this
 <<<ROUTE: back-to:policy-gatekeeper>>>
 <<<REASON: [Brief description of what you attempted to fix]>>>
 <<<DETAILS:
-- Fixed: [specific files/lines changed]
-- Issue: [brief description of the violation that was addressed]
+- Fixed: [comprehensive details of specific files/lines changed with full context]
+- Issue: [detailed analysis of the violation that was addressed, including impact on parser ecosystem]
+- Validation: [thorough description of testing performed to verify the fix]
+- Impact: [assessment of how this fix affects parsing functionality, LSP features, or workspace compliance]
 >>>
 ```
 
 **Quality Guidelines:**
-- Make only mechanical, obvious fixes - avoid subjective improvements while maintaining Rust parser ecosystem standards
+- Make only mechanical, obvious fixes with detailed justification - avoid subjective improvements while maintaining strict Rust parser ecosystem standards and providing comprehensive reasoning for each change
 - Preserve existing formatting and style unless it's part of the violation, following cargo fmt conventions
 - Test links and references when possible before committing, especially for /docs/ directory and crate cross-references
 - Maintain compliance with zero clippy warnings standard when fixing code issues
