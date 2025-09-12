@@ -268,13 +268,13 @@ fn default_timeout() -> Duration {
 
             if thread_count <= 2 {
                 // Significantly increase timeout for CI environments with RUST_TEST_THREADS=2
-                Duration::from_secs(15)
+                Duration::from_secs(30)
             } else if thread_count <= 4 {
                 // Moderately increase for constrained environments
-                Duration::from_secs(10)
+                Duration::from_secs(20)
             } else {
                 // Normal timeout for unconstrained environments
-                base_timeout
+                Duration::from_secs(10)
             }
         })
 }
@@ -308,11 +308,11 @@ pub fn adaptive_timeout() -> Duration {
     let thread_count = max_concurrent_threads();
 
     if thread_count <= 2 {
-        // Increase timeout significantly for heavily constrained environments
-        base_timeout * 3
+        // Add reasonable buffer for heavily constrained environments
+        base_timeout + Duration::from_secs(15)
     } else if thread_count <= 4 {
         // Moderate increase for moderately constrained environments
-        base_timeout * 2
+        base_timeout + Duration::from_secs(10)
     } else {
         // Normal timeout for unconstrained environments
         base_timeout
