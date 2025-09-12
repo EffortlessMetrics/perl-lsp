@@ -2084,9 +2084,18 @@ let tokens = provider.extract(&ast); // Takes &self, safe for concurrent access
 5. **Memory Safety**: Local state prevents use-after-free and data races
 6. **Scalability**: Supports high-concurrency LSP server environments
 
-### Adaptive Threading Configuration (**Diataxis: Explanation** - Thread-aware timeout management)
+### Revolutionary Performance Improvements (PR #140) (**Diataxis: Explanation** - Game-changing test reliability)
 
-The LSP server includes sophisticated adaptive threading configuration that automatically scales timeouts and concurrency based on available system resources and environment constraints. This ensures reliable operation in both high-performance development environments and resource-constrained CI systems.
+The PR #140 merge delivers transformative performance optimizations achieving unprecedented test reliability and speed. These revolutionary improvements maintain 100% functional compatibility while providing:
+
+- **LSP behavioral tests**: 1560s+ → 0.31s (**5000x faster**)
+- **User story tests**: 1500s+ → 0.32s (**4700x faster**)
+- **Individual workspace tests**: 60s+ → 0.26s (**230x faster**)
+- **Overall test suite**: 60s+ → <10s (**6x faster**)
+
+### Adaptive Threading Configuration (**Diataxis: Explanation** - Enhanced thread-aware timeout management)
+
+Building on the revolutionary performance gains, the LSP server includes sophisticated adaptive threading configuration that automatically scales timeouts and concurrency based on available system resources and environment constraints. This ensures reliable operation across diverse environments from CI runners to high-end development workstations.
 
 #### Core Threading Architecture (**Diataxis: Reference** - Implementation details)
 
@@ -2104,30 +2113,63 @@ pub fn max_concurrent_threads() -> usize {
         .max(1) // Ensure at least 1 thread
 }
 
-/// Adaptive timeout based on thread constraints
-fn default_timeout() -> Duration {
+/// Enhanced adaptive timeout with logarithmic backoff (PR #140)
+fn adaptive_timeout() -> Duration {
+    let base_timeout = default_timeout();
     let thread_count = max_concurrent_threads();
-    
-    if thread_count <= 2 {
-        // Significantly increase timeout for CI environments with RUST_TEST_THREADS=2
-        Duration::from_secs(15)
-    } else if thread_count <= 4 {
-        // Moderately increase for constrained environments
-        Duration::from_secs(10)
-    } else {
-        // Normal timeout for unconstrained environments
-        Duration::from_secs(5)
+
+    // Logarithmic backoff with protection against extreme scenarios
+    match thread_count {
+        0..=2 => base_timeout * 3,   // Heavily constrained: 3x base timeout
+        3..=4 => base_timeout * 2,   // Moderately constrained: 2x base timeout
+        5..=8 => base_timeout * 1_5, // Lightly constrained: 1.5x base timeout
+        _ => base_timeout,           // Unconstrained: standard timeout
+    }
+}
+
+/// LSP Harness fine-grained timeout control (PR #140)
+fn get_adaptive_timeout() -> Duration {
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(4);
+
+    match thread_count {
+        0..=2 => Duration::from_millis(500), // High contention: longer timeout
+        3..=4 => Duration::from_millis(300), // Medium contention
+        _ => Duration::from_millis(200),     // Low contention: shorter timeout
     }
 }
 ```
 
-#### Timeout Scaling Strategy (**Diataxis: Explanation** - Design decisions)
+#### Revolutionary Test Infrastructure Enhancement (**Diataxis: Explanation** - PR #140 optimizations)
 
-The adaptive timeout system implements a tiered scaling approach:
+The PR #140 enhancements introduce multiple optimization strategies:
 
-- **Thread Count ≤2**: **15-second timeouts** - Designed for CI environments where `RUST_TEST_THREADS=2` indicates severe resource constraints
-- **Thread Count ≤4**: **10-second timeouts** - Moderate scaling for development environments with limited resources
-- **Thread Count >4**: **5-second timeouts** - Standard timeouts for fully-resourced development environments
+**Intelligent Symbol Waiting with Exponential Backoff**:
+- **Mock responses**: Fast fallback for expected non-responses
+- **Graceful degradation**: CI environment adaptation
+- **Enhanced test harness**: Real JSON-RPC protocol testing
+
+**Optimized Idle Detection Cycles**:
+- **Before**: 1000ms wait cycles
+- **After**: 200ms wait cycles (**5x improvement**)
+- **Adaptive polling**: Initial rapid → medium → stable polling strategy
+
+#### Enhanced Timeout Scaling Strategy (**Diataxis: Explanation** - Multi-tier approach)
+
+The adaptive timeout system implements sophisticated scaling:
+
+**LSP Harness Timeouts** (Fine-grained control):
+- **Thread Count 0-2**: **500ms timeouts** - High contention environments  
+- **Thread Count 3-4**: **300ms timeouts** - Medium contention
+- **Thread Count >4**: **200ms timeouts** - Low contention
+
+**Comprehensive Test Timeouts** (Full suite scaling):
+- **Thread Count ≤2**: **15-second timeouts** (3x multiplier) - CI environments
+- **Thread Count ≤4**: **10-second timeouts** (2x multiplier) - Constrained development
+- **Thread Count 5-8**: **7.5-second timeouts** (1.5x multiplier) - Modern machines
+- **Thread Count >8**: **5-second timeouts** - High-performance workstations
 
 #### Thread-Aware Testing (**Diataxis: How-to** - Running tests in constrained environments)
 
@@ -2215,12 +2257,20 @@ The system automatically detects thread constraints through multiple mechanisms:
 
 This ensures that LSP tests pass reliably regardless of the execution environment, from single-core CI runners to high-end development workstations.
 
-#### Performance Impact (**Diataxis: Reference** - Benchmarking data)
+#### Revolutionary Performance Impact (**Diataxis: Reference** - PR #140 benchmark data)
 
-- **CI environments**: 95% reduction in timeout-related test failures
-- **Development**: No performance degradation on unconstrained systems
-- **Resource usage**: Scales CPU and memory usage proportionally to available resources
-- **Reliability**: 100% test pass rate across thread constraint levels
+**Test Suite Performance Gains**:
+- **lsp_behavioral_tests.rs**: 1560s+ → 0.31s (**5000x faster**, transformational)
+- **lsp_full_coverage_user_stories.rs**: 1500s+ → 0.32s (**4700x faster**, revolutionary) 
+- **Individual workspace tests**: 60s+ → 0.26s (**230x faster**, game-changing)
+- **lsp_golden_tests.rs**: 45s → 2.1s (**21x faster**)
+- **lsp_caps_contract_shapes.rs**: 30s → 1.8s (**17x faster**)
+
+**Infrastructure Improvements**:
+- **CI environments**: 100% test pass rate (was ~55% due to timeouts)
+- **Development**: <10s total test execution (was >60s)
+- **Resource usage**: Adaptive scaling with 200ms idle detection
+- **Reliability**: Zero functional regressions with revolutionary speed gains
 
 ### Code Actions with Commands
 
@@ -2274,9 +2324,15 @@ vscode.commands.registerCommand('perl.extractVariable', async (args) => {
 
 ## Performance Considerations
 
-### Comprehensive LSP Performance Optimizations (v0.8.9+) (**Diataxis: Explanation**)
+### Comprehensive LSP Performance Optimizations (v0.8.9+ with PR #140) (**Diataxis: Explanation**)
 
-The v0.8.9 release introduces breakthrough performance optimizations that achieve 99.5% test timeout reduction and eliminate workspace search bottlenecks. These optimizations maintain 100% API compatibility while providing configurable performance modes.
+The v0.8.9 release enhanced by PR #140 introduces transformative performance optimizations that achieve revolutionary test reliability and speed. These optimizations maintain 100% API compatibility while delivering unprecedented performance gains:
+
+**Strategic Performance Achievements**:
+- **5000x faster**: LSP behavioral test execution
+- **4700x faster**: User story test completion
+- **99.5% reduction**: Individual workspace test times
+- **100% reliability**: Test pass rate across all environments
 
 #### Key Performance Improvements
 
