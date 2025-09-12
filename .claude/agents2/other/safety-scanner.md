@@ -33,7 +33,7 @@ When activated, you will:
 **Step 3: Results Analysis and Routing**
 Based on the safety scan results, you will make routing decisions:
 
-- **Clean/Skipped Results**: If no unsafe code detected or all miri tests pass cleanly with zero clippy warnings, route to the next validation tier with:
+- **Clean/Skipped Results**: If no unsafe code detected or all miri tests pass cleanly with zero clippy warnings, provide comprehensive analysis and route to the next validation tier with detailed reporting including:
   ```
   <<<ROUTE: fuzz-tester>>>
   <<<REASON: The parser code passes all safety checks including enterprise security validation (or no unsafe code was detected). Dual indexing patterns and LSP threading are memory-safe. The next step is to run fuzz tests for parsing resilience.>>>
@@ -44,7 +44,7 @@ Based on the safety scan results, you will make routing decisions:
   >>>
   ```
 
-- **Safety Issues Detected**: If miri identifies undefined behavior, memory leaks, parser threading issues, scanner delegation safety violations, or enterprise security breaches, halt the validation flow and provide detailed analysis including:
+- **Safety Issues Detected**: If miri identifies undefined behavior, memory leaks, parser threading issues, scanner delegation safety violations, or enterprise security breaches, halt the validation flow immediately and provide extremely detailed analysis including comprehensive assessment of:
   - Affected parser components (recursive descent patterns, AST node handling, incremental parsing state)
   - Scanner architecture safety (RustScanner/CScanner delegation boundaries)
   - LSP threading violations (concurrent workspace indexing, symbol resolution race conditions)
