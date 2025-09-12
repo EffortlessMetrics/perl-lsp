@@ -97,6 +97,11 @@ cargo test -p perl-parser --test import_optimizer_tests -- handles_bare_imports_
 cargo test -p perl-parser test_cross_file_definition      # Package::subroutine resolution
 cargo test -p perl-parser test_cross_file_references      # Enhanced dual-pattern reference search
 
+# Mutation testing and test quality validation (PR #153)
+cargo test -p perl-parser --test mutation_hardening_tests # Comprehensive mutation survivor elimination (62 tests)
+# Note: 531-line test suite targeting specific mutation survivors in incremental parsing
+# Improved mutation score from 75% toward >85% quality target with edge case coverage
+
 # Revolutionary thread-constrained environment testing (PR #140 optimizations)
 RUST_TEST_THREADS=2 cargo test -p perl-lsp              # Adaptive timeout with 5000x improvements
 RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_behavioral_tests     # 0.31s (was 1560s+)
@@ -336,6 +341,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 4. **Testing** → Use existing comprehensive test infrastructure with adaptive threading support
 5. **Security features** → Follow enterprise security practices
 6. **xtask improvements** → `/xtask/src/` (Rust 2024 compatible advanced testing tools)
+7. **Agent customization** → `.claude/agents2/` (94 specialized agents for Perl parser ecosystem workflow)
 
 ### Coding Standards
 - Run `cargo clippy --workspace` before committing changes
