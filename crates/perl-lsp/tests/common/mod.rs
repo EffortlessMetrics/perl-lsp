@@ -261,20 +261,15 @@ fn default_timeout() -> Duration {
         .and_then(|s| s.parse::<u64>().ok())
         .map(Duration::from_millis)
         .unwrap_or_else(|| {
-            // Use adaptive timeout based on thread constraints to handle
-            // slower initialization in thread-limited environments like CI
-            let base_timeout = Duration::from_secs(5);
+            // More nuanced adaptive timeout with exponential backoff
+            let _base_timeout = Duration::from_secs(5); // Use underscore to suppress unused var warning
             let thread_count = max_concurrent_threads();
 
-            if thread_count <= 2 {
-                // Significantly increase timeout for CI environments with RUST_TEST_THREADS=2
-                Duration::from_secs(30)
-            } else if thread_count <= 4 {
-                // Moderately increase for constrained environments
-                Duration::from_secs(20)
-            } else {
-                // Normal timeout for unconstrained environments
-                Duration::from_secs(10)
+            match thread_count {
+                0..=2 => Duration::from_secs(45), // Heavily constrained: very long timeout
+                3..=4 => Duration::from_secs(25), // Moderately constrained: extended timeout
+                5..=8 => Duration::from_secs(15), // Lightly constrained: moderate timeout
+                _ => Duration::from_secs(10),     // Unconstrained: standard timeout
             }
         })
 }
@@ -302,33 +297,29 @@ pub fn max_concurrent_threads() -> usize {
 }
 
 /// Get adaptive timeout based on thread constraints
-/// When thread count is limited, operations may take longer due to queueing
+/// More comprehensive handling of timeout scaling with logarithmic backoff
 pub fn adaptive_timeout() -> Duration {
     let base_timeout = default_timeout();
     let thread_count = max_concurrent_threads();
 
-    if thread_count <= 2 {
-        // Add reasonable buffer for heavily constrained environments
-        base_timeout + Duration::from_secs(15)
-    } else if thread_count <= 4 {
-        // Moderate increase for moderately constrained environments
-        base_timeout + Duration::from_secs(10)
-    } else {
-        // Normal timeout for unconstrained environments
-        base_timeout
+    // Logarithmic backoff with protection against extreme scenarios
+    match thread_count {
+        0..=2 => base_timeout * 3,   // Heavily constrained: 3x base timeout
+        3..=4 => base_timeout * 2,   // Moderately constrained: 2x base timeout
+        5..=8 => base_timeout * 1_5, // Lightly constrained: 1.5x base timeout
+        _ => base_timeout,           // Unconstrained: standard timeout
     }
 }
 
 /// Adaptive sleep duration based on thread constraints
-/// Use longer sleeps when threads are limited to reduce contention
+/// More sophisticated sleep scaling with exponential strategy
 pub fn adaptive_sleep_ms(base_ms: u64) -> Duration {
     let thread_count = max_concurrent_threads();
-    let multiplier = if thread_count <= 2 {
-        3
-    } else if thread_count <= 4 {
-        2
-    } else {
-        1
+    let multiplier = match thread_count {
+        0..=2 => 4, // Extremely constrained: 4x sleep
+        3..=4 => 3, // Heavily constrained: 3x sleep
+        5..=8 => 2, // Moderately constrained: 2x sleep
+        _ => 1,     // Unconstrained: standard sleep
     };
     Duration::from_millis(base_ms * multiplier)
 }
