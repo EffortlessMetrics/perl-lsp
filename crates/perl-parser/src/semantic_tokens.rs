@@ -152,17 +152,18 @@ fn remove_overlapping_tokens(
 ) -> Vec<(u32, u32, u32, u32, u32)> {
     // Sort by start position first
     let mut sorted_tokens = raw_tokens;
-    sorted_tokens.sort_by_key(|&(line, start_char, _length, _token_type, _modifier)| {
-        (line, start_char)
-    });
-    
+    sorted_tokens
+        .sort_by_key(|&(line, start_char, _length, _token_type, _modifier)| (line, start_char));
+
     let mut result = Vec::new();
-    
+
     for token in sorted_tokens {
-        let (line, start_char, length, token_type, modifier) = token;
-        
+        let (line, start_char, length, _token_type, _modifier) = token;
+
         // Check if this token overlaps with the last token in result
-        if let Some(&(last_line, last_start, last_length, _last_type, _last_modifier)) = result.last() {
+        if let Some(&(last_line, last_start, last_length, _last_type, _last_modifier)) =
+            result.last()
+        {
             // Tokens overlap if they're on the same line and ranges intersect
             if line == last_line && start_char < last_start + last_length {
                 // Choose the token with better specificity or longer length
@@ -178,7 +179,7 @@ fn remove_overlapping_tokens(
             result.push(token);
         }
     }
-    
+
     result
 }
 
