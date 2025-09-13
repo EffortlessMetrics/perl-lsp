@@ -31,9 +31,7 @@ scripts/__pycache__/
 releases/
 
 # Claude
-/.claude/agents
-/.claude/agents/mantle/
-/.claude/agents/review/
+/.claude/agents/
 
 # Mutation testing artifacts
 mutants.out/
