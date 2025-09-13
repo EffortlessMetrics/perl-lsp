@@ -33,3 +33,4 @@ releases/
 # Claude
 /.claude/agents/mantle/
 /.claude/agents/review/
+/.claude/agents/
