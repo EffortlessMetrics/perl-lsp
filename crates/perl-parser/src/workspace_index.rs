@@ -36,7 +36,7 @@ pub fn normalize_var(name: &str) -> (Option<char>, &str) {
     if name.is_empty() {
         return (None, "");
     }
-    
+
     let first_char = name.chars().next().unwrap();
     match first_char {
         '$' | '@' | '%' => {
@@ -580,9 +580,7 @@ impl WorkspaceIndex {
 
         // Remove the definition; the caller will include it separately if needed
         if let Some(def) = self.find_def(key) {
-            all_refs.retain(|loc| {
-                !(loc.uri == def.uri && loc.range == def.range)
-            });
+            all_refs.retain(|loc| !(loc.uri == def.uri && loc.range == def.range));
         }
 
         // Deduplicate by URI and range
