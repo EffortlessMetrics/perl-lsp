@@ -428,13 +428,16 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
         .copied()
         .ok_or_else(|| anyhow::anyhow!("No checkpoint found"))?;
 
-    // Apply text edit
+    // Apply text edit with safe boundary checking
+    let old_end_byte = edit.old_end_byte.min(state.source.len());
+    let start_byte = edit.start_byte.min(state.source.len());
+
     let mut new_source = String::with_capacity(
-        state.source.len() - (edit.old_end_byte - edit.start_byte) + edit.new_text.len(),
+        state.source.len() - (old_end_byte - start_byte) + edit.new_text.len(),
     );
-    new_source.push_str(&state.source[..edit.start_byte]);
+    new_source.push_str(&state.source[..start_byte]);
     new_source.push_str(&edit.new_text);
-    new_source.push_str(&state.source[edit.old_end_byte..]);
+    new_source.push_str(&state.source[old_end_byte..]);
     state.source = new_source;
     state.rope = Rope::from_str(&state.source);
     state.line_index = LineIndex::new(&state.source);

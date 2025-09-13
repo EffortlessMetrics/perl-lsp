@@ -1,28 +1,28 @@
 [
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/completion.rs",
+    "file": "crates/perl-parser/src/parser.rs",
     "function": {
-      "function_name": "CompletionProvider::add_file_completions_with_cancellation",
-      "return_type": "",
+      "function_name": "Parser<'a>::check_recursion",
+      "return_type": "-> ParseResult<()>",
       "span": {
         "start": {
-          "line": 1172,
+          "line": 80,
           "column": 5
         },
         "end": {
-          "line": 1285,
+          "line": 87,
           "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 1233,
+        "line": 83,
         "column": 33
       },
       "end": {
-        "line": 1233,
+        "line": 83,
         "column": 34
       }
     },
@@ -31,242 +31,272 @@
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/completion.rs",
+    "file": "crates/perl-parser/src/parser.rs",
     "function": {
-      "function_name": "CompletionProvider::analyze_context",
-      "return_type": "-> CompletionContext",
+      "function_name": "Parser<'a>::check_recursion",
+      "return_type": "-> ParseResult<()>",
       "span": {
         "start": {
-          "line": 694,
+          "line": 80,
           "column": 5
         },
         "end": {
-          "line": 746,
+          "line": 87,
           "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 729,
-        "column": 45
-      },
-      "end": {
-        "line": 729,
-        "column": 46
-      }
-    },
-    "replacement": "==",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/completion.rs",
-    "function": {
-      "function_name": "CompletionProvider::resolve_safe_directory",
-      "return_type": "-> Option<PathBuf>",
-      "span": {
-        "start": {
-          "line": 1327,
-          "column": 5
-        },
-        "end": {
-          "line": 1352,
-          "column": 6
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 1332,
-        "column": 31
-      },
-      "end": {
-        "line": 1332,
+        "line": 83,
         "column": 33
+      },
+      "end": {
+        "line": 83,
+        "column": 34
       }
     },
-    "replacement": "||",
+    "replacement": ">=",
     "genre": "BinaryOperator"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/completion.rs",
+    "file": "crates/perl-parser/src/parser.rs",
     "function": {
-      "function_name": "CompletionProvider::analyze_context",
-      "return_type": "-> CompletionContext",
+      "function_name": "Parser<'a>::check_recursion",
+      "return_type": "-> ParseResult<()>",
       "span": {
         "start": {
-          "line": 694,
+          "line": 80,
           "column": 5
         },
         "end": {
-          "line": 746,
+          "line": 87,
           "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 697,
-        "column": 67
-      },
-      "end": {
-        "line": 697,
-        "column": 68
-      }
-    },
-    "replacement": "*",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/completion.rs",
-    "function": {
-      "function_name": "CompletionProvider::is_in_regex",
-      "return_type": "-> bool",
-      "span": {
-        "start": {
-          "line": 1530,
-          "column": 5
-        },
-        "end": {
-          "line": 1544,
-          "column": 6
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 1536,
-        "column": 63
-      },
-      "end": {
-        "line": 1536,
-        "column": 64
-      }
-    },
-    "replacement": "+",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/completion.rs",
-    "function": {
-      "function_name": "CompletionProvider::get_file_completion_metadata",
-      "return_type": "-> (String, Option<String>)",
-      "span": {
-        "start": {
-          "line": 1428,
-          "column": 5
-        },
-        "end": {
-          "line": 1455,
-          "column": 6
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 1441,
-        "column": 17
-      },
-      "end": {
-        "line": 1441,
-        "column": 43
-      }
-    },
-    "replacement": "",
-    "genre": "MatchArm"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/completion.rs",
-    "function": {
-      "function_name": "CompletionProvider::add_keyword_completions",
-      "return_type": "",
-      "span": {
-        "start": {
-          "line": 911,
-          "column": 5
-        },
-        "end": {
-          "line": 951,
-          "column": 6
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 928,
-        "column": 21
-      },
-      "end": {
-        "line": 928,
-        "column": 93
-      }
-    },
-    "replacement": "",
-    "genre": "MatchArm"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/completion.rs",
-    "function": {
-      "function_name": "CompletionContext::detect_current_package",
-      "return_type": "-> String",
-      "span": {
-        "start": {
-          "line": 148,
-          "column": 5
-        },
-        "end": {
-          "line": 195,
-          "column": 6
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 150,
+        "line": 82,
         "column": 9
       },
       "end": {
-        "line": 194,
-        "column": 16
+        "line": 86,
+        "column": 15
       }
     },
-    "replacement": "\"xyzzy\".into()",
+    "replacement": "ParseResult::from_iter([()])",
     "genre": "FnValue"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/completion.rs",
+    "file": "crates/perl-parser/src/parser.rs",
     "function": {
-      "function_name": "CompletionProvider::get_completions_with_path_cancellable",
-      "return_type": "-> Vec<CompletionItem>",
+      "function_name": "Parser<'a>::check_recursion",
+      "return_type": "-> ParseResult<()>",
       "span": {
         "start": {
-          "line": 479,
+          "line": 80,
           "column": 5
         },
         "end": {
-          "line": 619,
+          "line": 87,
           "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 549,
-        "column": 47
+        "line": 82,
+        "column": 9
       },
       "end": {
-        "line": 549,
-        "column": 48
+        "line": 86,
+        "column": 15
       }
     },
-    "replacement": "*",
+    "replacement": "ParseResult::new()",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/parser.rs",
+    "function": {
+      "function_name": "Parser<'a>::exit_recursion",
+      "return_type": "",
+      "span": {
+        "start": {
+          "line": 89,
+          "column": 5
+        },
+        "end": {
+          "line": 91,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 90,
+        "column": 9
+      },
+      "end": {
+        "line": 90,
+        "column": 71
+      }
+    },
+    "replacement": "()",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/parser.rs",
+    "function": {
+      "function_name": "Parser<'a>::check_recursion",
+      "return_type": "-> ParseResult<()>",
+      "span": {
+        "start": {
+          "line": 80,
+          "column": 5
+        },
+        "end": {
+          "line": 87,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 83,
+        "column": 33
+      },
+      "end": {
+        "line": 83,
+        "column": 34
+      }
+    },
+    "replacement": "<",
     "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/parser.rs",
+    "function": {
+      "function_name": "Parser<'a>::check_recursion",
+      "return_type": "-> ParseResult<()>",
+      "span": {
+        "start": {
+          "line": 80,
+          "column": 5
+        },
+        "end": {
+          "line": 87,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 82,
+        "column": 9
+      },
+      "end": {
+        "line": 86,
+        "column": 15
+      }
+    },
+    "replacement": "ParseResult::from(())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/parser.rs",
+    "function": {
+      "function_name": "Parser<'a>::check_recursion",
+      "return_type": "-> ParseResult<()>",
+      "span": {
+        "start": {
+          "line": 80,
+          "column": 5
+        },
+        "end": {
+          "line": 87,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 82,
+        "column": 30
+      },
+      "end": {
+        "line": 82,
+        "column": 32
+      }
+    },
+    "replacement": "-=",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/parser.rs",
+    "function": {
+      "function_name": "Parser<'a>::check_recursion",
+      "return_type": "-> ParseResult<()>",
+      "span": {
+        "start": {
+          "line": 80,
+          "column": 5
+        },
+        "end": {
+          "line": 87,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 82,
+        "column": 30
+      },
+      "end": {
+        "line": 82,
+        "column": 32
+      }
+    },
+    "replacement": "*=",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/parser.rs",
+    "function": {
+      "function_name": "Parser<'a>::check_recursion",
+      "return_type": "-> ParseResult<()>",
+      "span": {
+        "start": {
+          "line": 80,
+          "column": 5
+        },
+        "end": {
+          "line": 87,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 82,
+        "column": 9
+      },
+      "end": {
+        "line": 86,
+        "column": 15
+      }
+    },
+    "replacement": "ParseResult::new(())",
+    "genre": "FnValue"
   }
 ]
