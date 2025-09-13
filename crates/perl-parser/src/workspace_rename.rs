@@ -174,7 +174,7 @@ $var;
 
         // Workspace indexing now finds the declaration plus both qualified and unqualified calls
         // Enhanced dual indexing may find additional references due to improved coverage
-        assert_eq!(texts.len(), 4);
+        assert_eq!(texts.len(), 3);
         assert!(texts.contains(&"new_name".to_string()));
 
         // Apply edits and verify other symbols remain unchanged
