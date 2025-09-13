@@ -1,0 +1,26 @@
+[package]
+name = "fuzz-parser-robustness"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[[bin]]
+name = "fuzz_parser_robustness"
+path = "fuzz_parser_robustness.rs"
+
+[[bin]]
+name = "simple_fuzzer"
+path = "simple_fuzzer.rs"
+
+[[bin]]
+name = "minimal_repro"
+path = "minimal_repro.rs"
+
+[[bin]]
+name = "quick_lsp_test"
+path = "quick_lsp_test.rs"
+
+[dependencies]
+perl-parser = { path = "../../crates/perl-parser" }
+serde_json = "1.0"
