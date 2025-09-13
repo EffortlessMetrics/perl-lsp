@@ -249,8 +249,8 @@ impl<'a> PerlLexer<'a> {
 
                     // Scan line by line looking for the terminator
                     while self.position < self.input.len() {
-                        // Budget cap for huge bodies
-                        if self.position.saturating_sub(body_start) > MAX_HEREDOC_BYTES {
+                        // Budget cap for huge bodies - optimized check
+                        if self.position - body_start > MAX_HEREDOC_BYTES {
                             // Remove the pending heredoc to avoid infinite loop
                             self.pending_heredocs.remove(0);
                             self.position = self.input.len();
@@ -433,9 +433,18 @@ impl<'a> PerlLexer<'a> {
             let ch = self.current_char()?;
             self.advance();
 
+            // Optimize error token creation - avoid expensive formatting in hot path
+            let text = if ch.is_ascii() {
+                // Fast path for ASCII characters
+                Arc::from(&self.input[start..self.position])
+            } else {
+                // Slower path for Unicode
+                Arc::from(ch.to_string())
+            };
+
             return Some(Token {
-                token_type: TokenType::Error(Arc::from(format!("Unexpected character: {}", ch))),
-                text: Arc::from(ch.to_string()),
+                token_type: TokenType::Error(Arc::from("Unexpected character")),
+                text,
                 start,
                 end: self.position,
             });
@@ -443,17 +452,22 @@ impl<'a> PerlLexer<'a> {
     }
 
     /// Check budget and return UnknownRest token if exceeded
+    #[inline(always)]
     fn budget_guard(&mut self, start: usize, depth: usize) -> Option<Token> {
-        if self.position.saturating_sub(start) > MAX_REGEX_BYTES || depth > MAX_DELIM_NEST {
-            self.position = self.input.len();
-            return Some(Token {
-                token_type: TokenType::UnknownRest,
-                text: Arc::from(""),
-                start,
-                end: self.position,
-            });
+        // Fast path: most calls won't hit limits
+        let bytes_consumed = self.position - start;
+        if bytes_consumed <= MAX_REGEX_BYTES && depth <= MAX_DELIM_NEST {
+            return None;
         }
-        None
+
+        // Slow path: handle budget exceeded
+        self.position = self.input.len();
+        Some(Token {
+            token_type: TokenType::UnknownRest,
+            text: Arc::from(""),
+            start,
+            end: self.position,
+        })
     }
 
     /// Peek at the next token without consuming it
@@ -507,7 +521,7 @@ impl<'a> PerlLexer<'a> {
 
     // Internal helper methods
 
-    #[inline]
+    #[inline(always)]
     fn current_char(&self) -> Option<char> {
         if self.position < self.input_bytes.len() {
             // For ASCII, direct access is safe
@@ -540,7 +554,7 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn advance(&mut self) {
         if self.position < self.input_bytes.len() {
             let byte = self.input_bytes[self.position];

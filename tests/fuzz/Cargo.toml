@@ -21,6 +21,18 @@ path = "minimal_repro.rs"
 name = "quick_lsp_test"
 path = "quick_lsp_test.rs"
 
+[[bin]]
+name = "quick_recursion_test"
+path = "quick_recursion_test.rs"
+
+[[bin]]
+name = "test_original_repro"
+path = "test_original_repro.rs"
+
+[[bin]]
+name = "comprehensive_robustness_test"
+path = "comprehensive_robustness_test.rs"
+
 [dependencies]
 perl-parser = { path = "../../crates/perl-parser" }
 serde_json = "1.0"
