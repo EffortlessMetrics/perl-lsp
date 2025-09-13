@@ -19,7 +19,7 @@ pub struct Parser<'a> {
     at_stmt_start: bool, // Track if we're at statement start for indirect object detection
 }
 
-const MAX_RECURSION_DEPTH: usize = 1000;
+const MAX_RECURSION_DEPTH: usize = 500;
 
 impl<'a> Parser<'a> {
     /// Create a new parser for the given input
@@ -2445,6 +2445,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a block statement
     fn parse_block(&mut self) -> ParseResult<Node> {
+        self.check_recursion()?;
         let start = self.current_position();
         self.expect(TokenKind::LeftBrace)?;
 
@@ -2469,7 +2470,9 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::RightBrace)?;
         let end = self.previous_position();
 
-        Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
+        let result = Node::new(NodeKind::Block { statements }, SourceLocation { start, end });
+        self.exit_recursion();
+        Ok(result)
     }
 
     /// Parse an expression
