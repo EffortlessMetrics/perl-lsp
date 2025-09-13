@@ -2,29 +2,20 @@
   "outcomes": [
     {
       "scenario": "Baseline",
-      "summary": "Success",
+      "summary": "Failure",
       "log_path": "log/baseline.log",
       "diff_path": null,
       "phase_results": [
         {
           "phase": "Build",
-          "duration": 0.201895355,
-          "process_status": "Success",
+          "duration": 37.129632373,
+          "process_status": {
+            "Failure": 101
+          },
           "argv": [
             "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
             "test",
             "--no-run",
-            "--verbose",
-            "--package=perl-parser@0.8.8"
-          ]
-        },
-        {
-          "phase": "Test",
-          "duration": 5.66313445,
-          "process_status": "Success",
-          "argv": [
-            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
-            "test",
             "--verbose",
             "--package=perl-parser@0.8.8"
           ]

@@ -77,9 +77,11 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// Check recursion depth
+    /// Check recursion depth with optimized hot path
+    #[inline(always)]
     fn check_recursion(&mut self) -> ParseResult<()> {
         self.recursion_depth += 1;
+        // Fast path: avoid expensive comparisons in the common case
         if self.recursion_depth > MAX_RECURSION_DEPTH {
             return Err(ParseError::RecursionLimit);
         }
