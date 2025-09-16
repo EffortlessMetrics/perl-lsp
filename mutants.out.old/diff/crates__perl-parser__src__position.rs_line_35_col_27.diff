@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/position.rs
++++ replace += with -= in Position::advance
+@@ -27,17 +27,17 @@
+     pub fn start() -> Self {
+         Position { byte: 0, line: 1, column: 1 }
+     }
+ 
+     /// Advance the position by the given text
+     pub fn advance(&mut self, text: &str) {
+         for ch in text.chars() {
+             if ch == '\n' {
+-                self.line += 1;
++                self.line -= /* ~ changed by cargo-mutants ~ */ 1;
+                 self.column = 1;
+             } else {
+                 self.column += 1;
+             }
+             self.byte += ch.len_utf8();
+         }
+     }
+ 

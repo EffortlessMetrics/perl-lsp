@@ -48,6 +48,12 @@ This document describes the comprehensive benchmarking framework for comparing C
 7. **Revolutionary LSP Performance Benchmarking (PR #140)** (v0.8.9+) ⭐ **REVOLUTIONARY** (**Diataxis: Reference**)
    - **5000x Performance Improvement**: LSP behavioral tests 1560s+ → 0.31s validation
    - **4700x Performance Improvement**: User story tests 1500s+ → 0.32s measurement
+
+8. **Security-Performance Validation Framework (PR #153)** ⭐ **SECURITY-ENHANCED** (**Diataxis: Reference**)
+   - **Enterprise-Grade Security Benchmarking**: UTF-16 position conversion security with zero performance regression
+   - **Mutation Testing Integration**: Quality validation (87% score) with performance preservation verification
+   - **Security Boundary Testing**: UTF-16 boundary validation benchmarks with overflow protection measurement
+   - **Performance-Security Balance**: Comprehensive validation that security enhancements maintain revolutionary performance
    - **230x Performance Improvement**: Workspace tests 60s+ → 0.26s benchmarking
    - **Adaptive Timeout Validation**: Multi-tier timeout scaling (200ms-500ms LSP harness)
    - **Intelligent Symbol Waiting**: Exponential backoff with mock responses benchmarking
@@ -69,6 +75,173 @@ This document describes the comprehensive benchmarking framework for comparing C
    - **Deduplication Efficiency**: Measure URI + Range based deduplication performance 
    - **Thread-Safe Indexing**: Benchmark concurrent workspace indexing with zero race conditions
    - **Memory Overhead Analysis**: Validate ~2x index memory usage vs. reference coverage trade-off
+
+## Security-Performance Validation Methodology (PR #153) (*Diataxis: Explanation* - Enterprise-grade security benchmarking)
+
+### Overview
+
+**Revolutionary Security Integration**: PR #153 introduces a comprehensive security-performance validation framework that ensures enterprise-grade security enhancements maintain the revolutionary performance achievements from PR #140. This methodology validates that security improvements introduce zero performance regression while providing comprehensive vulnerability protection.
+
+### Security-Performance Balance Validation (*Diataxis: Reference* - Validation specifications)
+
+#### UTF-16 Position Conversion Security Benchmarking
+
+**Security Vulnerability Resolution with Performance Preservation:**
+
+```rust
+// Benchmark security-enhanced position conversion
+#[bench]
+fn bench_secure_utf16_position_conversion(b: &mut Bencher) {
+    let text = "Hello 🦀 Rust 🌍 World with multiple emoji 🎉";
+    let converter = PositionConverter::new();
+
+    b.iter(|| {
+        // Benchmark symmetric conversion with security validation
+        for i in 0..=text.len() {
+            let lsp_pos = converter.utf8_to_lsp_position(text, i);
+            let back_to_utf8 = converter.lsp_position_to_utf8(text, lsp_pos);
+
+            // Security validation included in performance measurement
+            assert!(converter.validate_position_bounds(text, lsp_pos));
+            assert!(back_to_utf8 <= text.len());
+        }
+    });
+}
+```
+
+**Performance Targets (Security-Enhanced):**
+- **UTF-16 Conversion**: <10µs per conversion (including security validation)
+- **Boundary Validation**: <5µs per validation check
+- **Symmetric Accuracy**: 100% round-trip accuracy with zero performance penalty
+- **Overflow Protection**: Zero performance impact from arithmetic boundary checking
+
+#### Mutation Testing Performance Integration
+
+**Quality Validation with Performance Monitoring:**
+
+```bash
+# Benchmark mutation testing with performance tracking
+cargo test -p perl-parser --test mutation_hardening_tests --release -- --nocapture
+
+# Performance metrics during mutation testing:
+# - Test execution time: Track duration of 147+ hardening tests
+# - Memory usage: Monitor test memory consumption
+# - Coverage efficiency: Measure 87% quality score achievement performance
+# - Security validation overhead: UTF-16 security test performance impact
+```
+
+**Mutation Testing Performance Targets:**
+- **Test Suite Execution**: <30s for complete 147+ test harness
+- **Individual Security Tests**: <100ms per UTF-16 boundary test
+- **Coverage Analysis**: <5s for complete mutation score calculation
+- **Memory Efficiency**: <100MB additional memory for mutation testing infrastructure
+
+#### Revolutionary Performance Preservation (*Diataxis: Reference* - Performance regression prevention)
+
+**Comprehensive Regression Prevention:**
+
+```bash
+# Validate revolutionary performance is maintained with security enhancements
+RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_behavioral_tests
+# Target: 0.31s (maintained from PR #140, not degraded by PR #153 security)
+
+RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_full_coverage_user_stories
+# Target: 0.32s (preserved revolutionary 4700x improvement)
+
+cargo test -p perl-parser --test lsp_comprehensive_e2e_test
+# Target: 0.26s (maintained 230x workspace improvement)
+```
+
+### Security Benchmarking Framework (*Diataxis: How-to* - Implementing security benchmarks)
+
+#### Enterprise Security Validation Tests
+
+```rust
+// Security-focused benchmark suite
+#[cfg(test)]
+mod security_performance_tests {
+    use super::*;
+    use std::time::Instant;
+
+    #[test]
+    fn validate_security_performance_balance() {
+        let text = "Complex Unicode: 🦀🌍🎉 with multiple byte sequences";
+        let converter = PositionConverter::new();
+
+        // Measure security-enhanced conversion performance
+        let start = Instant::now();
+        for _ in 0..1000 {
+            for i in 0..=text.len() {
+                let lsp_pos = converter.utf8_to_lsp_position(text, i);
+                let back_to_utf8 = converter.lsp_position_to_utf8(text, lsp_pos);
+
+                // Security validation (must not degrade performance)
+                assert!(converter.validate_position_bounds(text, lsp_pos));
+            }
+        }
+        let duration = start.elapsed();
+
+        // Performance regression test
+        assert!(duration.as_millis() < 100, "Security validation exceeded performance target");
+    }
+
+    #[test]
+    fn benchmark_mutation_testing_efficiency() {
+        let start = Instant::now();
+
+        // Run subset of mutation hardening tests
+        run_utf16_security_tests();
+        run_boundary_validation_tests();
+        run_overflow_protection_tests();
+
+        let duration = start.elapsed();
+
+        // Mutation testing efficiency validation
+        assert!(duration.as_secs() < 10, "Mutation testing exceeded efficiency target");
+    }
+}
+```
+
+#### Continuous Security-Performance Monitoring
+
+**CI Integration for Security-Performance Validation:**
+
+```bash
+# Automated security-performance validation in CI
+cargo xtask bench --security-enhanced --performance-regression-detection
+
+# Security-specific benchmark targets:
+# 1. UTF-16 conversion with security: <10µs per operation
+# 2. Boundary validation: <5µs per check
+# 3. Mutation testing suite: <30s complete execution
+# 4. Revolutionary performance preservation: Maintain all PR #140 improvements
+# 5. Zero regression tolerance: Any performance degradation fails validation
+```
+
+### Performance Metrics Integration (*Diataxis: Reference* - Security-enhanced metrics)
+
+**Enhanced Metrics Collection:**
+- **Security Validation Overhead**: Measure performance impact of UTF-16 security checks
+- **Memory Safety Cost**: Track memory overhead from boundary validation
+- **Mutation Testing Efficiency**: Monitor test execution performance and coverage speed
+- **Revolutionary Performance Preservation**: Validate maintained 5000x LSP improvements
+- **Enterprise Security Compliance**: Measure security feature performance impact
+
+**Reporting Integration:**
+- **Security-Performance Reports**: Combined security validation and performance analysis
+- **Regression Detection**: Automated alerts for any performance degradation from security enhancements
+- **Quality-Performance Balance**: Track 87% mutation score achievement with performance preservation
+- **Enterprise Metrics**: Security compliance validation with performance impact measurement
+
+### Implementation Guidelines (*Diataxis: How-to* - Security-performance best practices)
+
+1. **Security-First Performance**: Always benchmark security enhancements for performance impact
+2. **Zero Regression Tolerance**: Security improvements must not degrade revolutionary performance
+3. **Comprehensive Validation**: Include security validation in all performance measurements
+4. **Mutation Testing Integration**: Performance test mutation testing infrastructure itself
+5. **Enterprise Standards**: Maintain both security compliance and performance excellence
+
+This security-performance validation framework ensures that enterprise-grade security enhancements in PR #153 maintain the revolutionary performance achievements while providing comprehensive vulnerability protection and quality validation.
 
 ## Usage
 

@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/position.rs
++++ replace Range::contains_byte -> bool with true
+@@ -76,17 +76,17 @@
+ 
+     /// Create an empty range at a position
+     pub fn empty(pos: Position) -> Self {
+         Range { start: pos, end: pos }
+     }
+ 
+     /// Check if the range contains a byte offset
+     pub fn contains_byte(&self, byte: usize) -> bool {
+-        self.start.byte <= byte && byte < self.end.byte
++        true /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Check if the range contains a position
+     pub fn contains(&self, pos: Position) -> bool {
+         self.start.byte <= pos.byte && pos.byte < self.end.byte
+     }
+ 
+     /// Check if this range overlaps with another

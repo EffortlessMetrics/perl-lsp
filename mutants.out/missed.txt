@@ -1,0 +1,4 @@
+crates/perl-parser/src/util.rs:12:13: delete match arm TokenType::EOF in find_data_marker_byte_lexed
+crates/perl-parser/src/util.rs:28:5: replace find_data_marker_byte -> Option<usize> with None
+crates/perl-parser/src/util.rs:28:5: replace find_data_marker_byte -> Option<usize> with Some(0)
+crates/perl-parser/src/util.rs:28:5: replace find_data_marker_byte -> Option<usize> with Some(1)

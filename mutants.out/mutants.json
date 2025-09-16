@@ -1,272 +1,302 @@
 [
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/parser.rs",
+    "file": "crates/perl-parser/src/util.rs",
     "function": {
-      "function_name": "Parser<'a>::check_recursion",
-      "return_type": "-> ParseResult<()>",
+      "function_name": "find_data_marker_byte_lexed",
+      "return_type": "-> Option<usize>",
       "span": {
         "start": {
-          "line": 80,
-          "column": 5
+          "line": 3,
+          "column": 1
         },
         "end": {
-          "line": 87,
-          "column": 6
+          "line": 17,
+          "column": 2
         }
       }
     },
     "span": {
       "start": {
-        "line": 82,
-        "column": 30
+        "line": 7,
+        "column": 5
       },
       "end": {
-        "line": 82,
-        "column": 32
-      }
-    },
-    "replacement": "*=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/parser.rs",
-    "function": {
-      "function_name": "Parser<'a>::check_recursion",
-      "return_type": "-> ParseResult<()>",
-      "span": {
-        "start": {
-          "line": 80,
-          "column": 5
-        },
-        "end": {
-          "line": 87,
-          "column": 6
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 83,
-        "column": 33
-      },
-      "end": {
-        "line": 83,
-        "column": 34
-      }
-    },
-    "replacement": "<",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/parser.rs",
-    "function": {
-      "function_name": "Parser<'a>::check_recursion",
-      "return_type": "-> ParseResult<()>",
-      "span": {
-        "start": {
-          "line": 80,
-          "column": 5
-        },
-        "end": {
-          "line": 87,
-          "column": 6
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 83,
-        "column": 33
-      },
-      "end": {
-        "line": 83,
-        "column": 34
-      }
-    },
-    "replacement": "==",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/parser.rs",
-    "function": {
-      "function_name": "Parser<'a>::check_recursion",
-      "return_type": "-> ParseResult<()>",
-      "span": {
-        "start": {
-          "line": 80,
-          "column": 5
-        },
-        "end": {
-          "line": 87,
-          "column": 6
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 82,
+        "line": 16,
         "column": 9
-      },
-      "end": {
-        "line": 86,
-        "column": 15
       }
     },
-    "replacement": "ParseResult::new()",
+    "replacement": "None",
     "genre": "FnValue"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/parser.rs",
+    "file": "crates/perl-parser/src/util.rs",
     "function": {
-      "function_name": "Parser<'a>::check_recursion",
-      "return_type": "-> ParseResult<()>",
+      "function_name": "find_data_marker_byte_lexed",
+      "return_type": "-> Option<usize>",
       "span": {
         "start": {
-          "line": 80,
-          "column": 5
+          "line": 3,
+          "column": 1
         },
         "end": {
-          "line": 87,
-          "column": 6
+          "line": 17,
+          "column": 2
         }
       }
     },
     "span": {
       "start": {
-        "line": 82,
-        "column": 30
+        "line": 7,
+        "column": 5
       },
       "end": {
-        "line": 82,
-        "column": 32
-      }
-    },
-    "replacement": "-=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/parser.rs",
-    "function": {
-      "function_name": "Parser<'a>::check_recursion",
-      "return_type": "-> ParseResult<()>",
-      "span": {
-        "start": {
-          "line": 80,
-          "column": 5
-        },
-        "end": {
-          "line": 87,
-          "column": 6
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 82,
+        "line": 16,
         "column": 9
-      },
-      "end": {
-        "line": 86,
-        "column": 15
       }
     },
-    "replacement": "ParseResult::from_iter([()])",
+    "replacement": "Some(0)",
     "genre": "FnValue"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/parser.rs",
+    "file": "crates/perl-parser/src/util.rs",
     "function": {
-      "function_name": "Parser<'a>::check_recursion",
-      "return_type": "-> ParseResult<()>",
+      "function_name": "find_data_marker_byte_lexed",
+      "return_type": "-> Option<usize>",
       "span": {
         "start": {
-          "line": 80,
-          "column": 5
+          "line": 3,
+          "column": 1
         },
         "end": {
-          "line": 87,
-          "column": 6
+          "line": 17,
+          "column": 2
         }
       }
     },
     "span": {
       "start": {
-        "line": 82,
-        "column": 9
+        "line": 7,
+        "column": 5
       },
       "end": {
-        "line": 86,
-        "column": 15
+        "line": 16,
+        "column": 9
       }
     },
-    "replacement": "ParseResult::new(())",
+    "replacement": "Some(1)",
     "genre": "FnValue"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/parser.rs",
+    "file": "crates/perl-parser/src/util.rs",
     "function": {
-      "function_name": "Parser<'a>::check_recursion",
-      "return_type": "-> ParseResult<()>",
+      "function_name": "find_data_marker_byte_lexed",
+      "return_type": "-> Option<usize>",
       "span": {
         "start": {
-          "line": 80,
-          "column": 5
+          "line": 3,
+          "column": 1
         },
         "end": {
-          "line": 87,
-          "column": 6
+          "line": 17,
+          "column": 2
         }
       }
     },
     "span": {
       "start": {
-        "line": 83,
-        "column": 33
+        "line": 11,
+        "column": 13
       },
       "end": {
-        "line": 83,
-        "column": 34
+        "line": 11,
+        "column": 64
       }
     },
-    "replacement": ">=",
-    "genre": "BinaryOperator"
+    "replacement": "",
+    "genre": "MatchArm"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/parser.rs",
+    "file": "crates/perl-parser/src/util.rs",
     "function": {
-      "function_name": "Parser<'a>::check_recursion",
-      "return_type": "-> ParseResult<()>",
+      "function_name": "find_data_marker_byte_lexed",
+      "return_type": "-> Option<usize>",
       "span": {
         "start": {
-          "line": 80,
-          "column": 5
+          "line": 3,
+          "column": 1
         },
         "end": {
-          "line": 87,
-          "column": 6
+          "line": 17,
+          "column": 2
         }
       }
     },
     "span": {
       "start": {
-        "line": 82,
-        "column": 9
+        "line": 12,
+        "column": 13
       },
       "end": {
-        "line": 86,
-        "column": 15
+        "line": 12,
+        "column": 37
       }
     },
-    "replacement": "ParseResult::from(())",
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/util.rs",
+    "function": {
+      "function_name": "code_slice",
+      "return_type": "-> &str",
+      "span": {
+        "start": {
+          "line": 19,
+          "column": 1
+        },
+        "end": {
+          "line": 22,
+          "column": 2
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 21,
+        "column": 5
+      },
+      "end": {
+        "line": 21,
+        "column": 74
+      }
+    },
+    "replacement": "\"\"",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/util.rs",
+    "function": {
+      "function_name": "code_slice",
+      "return_type": "-> &str",
+      "span": {
+        "start": {
+          "line": 19,
+          "column": 1
+        },
+        "end": {
+          "line": 22,
+          "column": 2
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 21,
+        "column": 5
+      },
+      "end": {
+        "line": 21,
+        "column": 74
+      }
+    },
+    "replacement": "\"xyzzy\"",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/util.rs",
+    "function": {
+      "function_name": "find_data_marker_byte",
+      "return_type": "-> Option<usize>",
+      "span": {
+        "start": {
+          "line": 24,
+          "column": 1
+        },
+        "end": {
+          "line": 29,
+          "column": 2
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 28,
+        "column": 5
+      },
+      "end": {
+        "line": 28,
+        "column": 35
+      }
+    },
+    "replacement": "None",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/util.rs",
+    "function": {
+      "function_name": "find_data_marker_byte",
+      "return_type": "-> Option<usize>",
+      "span": {
+        "start": {
+          "line": 24,
+          "column": 1
+        },
+        "end": {
+          "line": 29,
+          "column": 2
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 28,
+        "column": 5
+      },
+      "end": {
+        "line": 28,
+        "column": 35
+      }
+    },
+    "replacement": "Some(0)",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/util.rs",
+    "function": {
+      "function_name": "find_data_marker_byte",
+      "return_type": "-> Option<usize>",
+      "span": {
+        "start": {
+          "line": 24,
+          "column": 1
+        },
+        "end": {
+          "line": 29,
+          "column": 2
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 28,
+        "column": 5
+      },
+      "end": {
+        "line": 28,
+        "column": 35
+      }
+    },
+    "replacement": "Some(1)",
     "genre": "FnValue"
   }
 ]
