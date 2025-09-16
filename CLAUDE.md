@@ -197,7 +197,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 ### Architecture Decision Records (ADRs)
 - **[ADR-001: Agent Architecture](docs/ADR_001_AGENT_ARCHITECTURE.md)** - 94 specialized agents and workflow coordination (PR #153)
 - **[Agent Orchestration](docs/AGENT_ORCHESTRATION.md)** - Agent ecosystem patterns and routing
-- **[Agent Customization Framework](docs/AGENT_CUSTOMIZER.md)** - Domain-specific agent adaptation
+- **[Agent Customization Framework](.claude/agents2/agent-customizer.md)** - Domain-specific agent adaptation
 
 ## Development Guidelines
 
