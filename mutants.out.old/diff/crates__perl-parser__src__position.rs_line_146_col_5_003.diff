@@ -1,0 +1,58 @@
+--- crates/perl-parser/src/position.rs
++++ replace offset_to_utf16_line_col -> (u32, u32) with (1, 1)
+@@ -138,54 +138,17 @@
+             end: Position { byte: loc.end, line: 0, column: 0 },
+         }
+     }
+ }
+ 
+ /// Convert byte offset to UTF-16 line and column for LSP
+ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
+     // If offset is beyond text length, clamp to end
+-    if offset >= text.len() {
+-        let lines: Vec<&str> = text.lines().collect();
+-        let last_line = lines.len().saturating_sub(1) as u32;
+-        let last_col = lines.last().map(|l| l.encode_utf16().count()).unwrap_or(0) as u32;
+-        return (last_line, last_col);
+-    }
+-
+-    let mut acc = 0usize;
+-    for (line_idx, line) in text.split_inclusive('\n').enumerate() {
+-        let next = acc + line.len();
+-        if offset < next {
+-            // Found the line containing our offset
+-            let rel = offset - acc;
+-
+-            // Handle CRLF correctly: get logical line content without line ending
+-            let logical_line = if line.ends_with("\r\n") {
+-                &line[..line.len().saturating_sub(2)]
+-            } else if line.ends_with('\n') {
+-                &line[..line.len().saturating_sub(1)]
+-            } else {
+-                line
+-            };
+-
+-            // Get the slice up to our position (clamped to logical line)
+-            let prefix =
+-                if rel <= logical_line.len() { &logical_line[..rel] } else { logical_line };
+-
+-            // Count UTF-16 code units for LSP
+-            let utf16_col = prefix.encode_utf16().count() as u32;
+-            return (line_idx as u32, utf16_col);
+-        }
+-        acc = next;
+-    }
+-
+-    // Fallback: clamp to end
+-    let last_line = text.lines().count().saturating_sub(1) as u32;
+-    let last_col = text.lines().last().map(|l| l.encode_utf16().count()).unwrap_or(0) as u32;
+-    (last_line, last_col)
++    (1, 1) /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ /// Convert UTF-16 line and column to byte offset
+ pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
+     let mut offset = 0usize;
+ 
+     for (current_line, line_text) in text.split_inclusive('\n').enumerate() {
+         if current_line as u32 == line {

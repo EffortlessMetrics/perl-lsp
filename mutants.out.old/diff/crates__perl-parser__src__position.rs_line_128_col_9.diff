@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/position.rs
++++ replace <impl fmt::Display for Range>::fmt -> fmt::Result with Ok(Default::default())
+@@ -120,17 +120,17 @@
+             start: if self.start.byte < other.start.byte { self.start } else { other.start },
+             end: if self.end.byte > other.end.byte { self.end } else { other.end },
+         }
+     }
+ }
+ 
+ impl fmt::Display for Range {
+     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+-        write!(f, "{}-{}", self.start, self.end)
++        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ /// Convert old SourceLocation to Range (for migration)
+ impl From<crate::ast::SourceLocation> for Range {
+     fn from(loc: crate::ast::SourceLocation) -> Self {
+         // For migration, we'll need to calculate line/column later
+         Range {

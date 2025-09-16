@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/position.rs
++++ replace Range::empty -> Self with Default::default()
+@@ -71,17 +71,17 @@
+ impl Range {
+     /// Create a new range
+     pub fn new(start: Position, end: Position) -> Self {
+         Range { start, end }
+     }
+ 
+     /// Create an empty range at a position
+     pub fn empty(pos: Position) -> Self {
+-        Range { start: pos, end: pos }
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Check if the range contains a byte offset
+     pub fn contains_byte(&self, byte: usize) -> bool {
+         self.start.byte <= byte && byte < self.end.byte
+     }
+ 
+     /// Check if the range contains a position

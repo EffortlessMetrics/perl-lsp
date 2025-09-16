@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/position.rs
++++ replace == with != in Position::advance_char
+@@ -38,17 +38,17 @@
+                 self.column += 1;
+             }
+             self.byte += ch.len_utf8();
+         }
+     }
+ 
+     /// Advance by a single character
+     pub fn advance_char(&mut self, ch: char) {
+-        if ch == '\n' {
++        if ch != /* ~ changed by cargo-mutants ~ */ '\n' {
+             self.line += 1;
+             self.column = 1;
+         } else {
+             self.column += 1;
+         }
+         self.byte += ch.len_utf8();
+     }
+ }
