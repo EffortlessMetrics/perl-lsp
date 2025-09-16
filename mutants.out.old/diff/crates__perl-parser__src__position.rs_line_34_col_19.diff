@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/position.rs
++++ replace == with != in Position::advance
+@@ -26,17 +26,17 @@
+     /// Create a position at the start of a file
+     pub fn start() -> Self {
+         Position { byte: 0, line: 1, column: 1 }
+     }
+ 
+     /// Advance the position by the given text
+     pub fn advance(&mut self, text: &str) {
+         for ch in text.chars() {
+-            if ch == '\n' {
++            if ch != /* ~ changed by cargo-mutants ~ */ '\n' {
+                 self.line += 1;
+                 self.column = 1;
+             } else {
+                 self.column += 1;
+             }
+             self.byte += ch.len_utf8();
+         }
+     }

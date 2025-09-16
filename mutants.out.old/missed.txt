@@ -1,0 +1,33 @@
+crates/perl-parser/src/position.rs:46:9: replace Position::advance_char with ()
+crates/perl-parser/src/position.rs:46:15: replace == with != in Position::advance_char
+crates/perl-parser/src/position.rs:47:23: replace += with -= in Position::advance_char
+crates/perl-parser/src/position.rs:47:23: replace += with *= in Position::advance_char
+crates/perl-parser/src/position.rs:50:25: replace += with -= in Position::advance_char
+crates/perl-parser/src/position.rs:50:25: replace += with *= in Position::advance_char
+crates/perl-parser/src/position.rs:52:19: replace += with -= in Position::advance_char
+crates/perl-parser/src/position.rs:52:19: replace += with *= in Position::advance_char
+crates/perl-parser/src/position.rs:58:9: replace <impl fmt::Display for Position>::fmt -> fmt::Result with Ok(Default::default())
+crates/perl-parser/src/position.rs:84:41: replace < with <= in Range::contains_byte
+crates/perl-parser/src/position.rs:89:9: replace Range::contains -> bool with true
+crates/perl-parser/src/position.rs:89:9: replace Range::contains -> bool with false
+crates/perl-parser/src/position.rs:89:37: replace && with || in Range::contains
+crates/perl-parser/src/position.rs:89:25: replace <= with > in Range::contains
+crates/perl-parser/src/position.rs:89:49: replace < with == in Range::contains
+crates/perl-parser/src/position.rs:89:49: replace < with > in Range::contains
+crates/perl-parser/src/position.rs:89:49: replace < with <= in Range::contains
+crates/perl-parser/src/position.rs:94:9: replace Range::overlaps -> bool with true
+crates/perl-parser/src/position.rs:94:42: replace && with || in Range::overlaps
+crates/perl-parser/src/position.rs:94:25: replace < with <= in Range::overlaps
+crates/perl-parser/src/position.rs:94:62: replace < with <= in Range::overlaps
+crates/perl-parser/src/position.rs:104:9: replace Range::is_empty -> bool with true
+crates/perl-parser/src/position.rs:109:9: replace Range::extend with ()
+crates/perl-parser/src/position.rs:109:29: replace < with == in Range::extend
+crates/perl-parser/src/position.rs:109:29: replace < with > in Range::extend
+crates/perl-parser/src/position.rs:109:29: replace < with <= in Range::extend
+crates/perl-parser/src/position.rs:112:27: replace > with == in Range::extend
+crates/perl-parser/src/position.rs:112:27: replace > with < in Range::extend
+crates/perl-parser/src/position.rs:112:27: replace > with >= in Range::extend
+crates/perl-parser/src/position.rs:120:39: replace < with <= in Range::span_to
+crates/perl-parser/src/position.rs:121:35: replace > with == in Range::span_to
+crates/perl-parser/src/position.rs:121:35: replace > with >= in Range::span_to
+crates/perl-parser/src/position.rs:128:9: replace <impl fmt::Display for Range>::fmt -> fmt::Result with Ok(Default::default())

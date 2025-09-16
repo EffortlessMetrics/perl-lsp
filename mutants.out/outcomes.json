@@ -2,16 +2,14 @@
   "outcomes": [
     {
       "scenario": "Baseline",
-      "summary": "Failure",
+      "summary": "Success",
       "log_path": "log/baseline.log",
       "diff_path": null,
       "phase_results": [
         {
           "phase": "Build",
-          "duration": 37.129632373,
-          "process_status": {
-            "Failure": 101
-          },
+          "duration": 40.772440587,
+          "process_status": "Success",
           "argv": [
             "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
             "test",
@@ -19,13 +17,656 @@
             "--verbose",
             "--package=perl-parser@0.8.8"
           ]
+        },
+        {
+          "phase": "Test",
+          "duration": 14.459771137,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/util.rs",
+          "function": {
+            "function_name": "find_data_marker_byte_lexed",
+            "return_type": "-> Option<usize>",
+            "span": {
+              "start": {
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "line": 17,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 7,
+              "column": 5
+            },
+            "end": {
+              "line": 16,
+              "column": 9
+            }
+          },
+          "replacement": "None",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__util.rs_line_7_col_5.log",
+      "diff_path": "diff/crates__perl-parser__src__util.rs_line_7_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 14.751791168,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 11.845768615,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/util.rs",
+          "function": {
+            "function_name": "find_data_marker_byte_lexed",
+            "return_type": "-> Option<usize>",
+            "span": {
+              "start": {
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "line": 17,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 7,
+              "column": 5
+            },
+            "end": {
+              "line": 16,
+              "column": 9
+            }
+          },
+          "replacement": "Some(0)",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__util.rs_line_7_col_5_001.log",
+      "diff_path": "diff/crates__perl-parser__src__util.rs_line_7_col_5_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 12.974325741,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 9.453901445,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/util.rs",
+          "function": {
+            "function_name": "find_data_marker_byte_lexed",
+            "return_type": "-> Option<usize>",
+            "span": {
+              "start": {
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "line": 17,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 7,
+              "column": 5
+            },
+            "end": {
+              "line": 16,
+              "column": 9
+            }
+          },
+          "replacement": "Some(1)",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__util.rs_line_7_col_5_002.log",
+      "diff_path": "diff/crates__perl-parser__src__util.rs_line_7_col_5_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 12.397565522,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 10.417292348,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/util.rs",
+          "function": {
+            "function_name": "find_data_marker_byte_lexed",
+            "return_type": "-> Option<usize>",
+            "span": {
+              "start": {
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "line": 17,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 11,
+              "column": 13
+            },
+            "end": {
+              "line": 11,
+              "column": 64
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__util.rs_line_11_col_13.log",
+      "diff_path": "diff/crates__perl-parser__src__util.rs_line_11_col_13.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 12.8595931,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 9.65679634,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/util.rs",
+          "function": {
+            "function_name": "find_data_marker_byte_lexed",
+            "return_type": "-> Option<usize>",
+            "span": {
+              "start": {
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "line": 17,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 12,
+              "column": 13
+            },
+            "end": {
+              "line": 12,
+              "column": 37
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__util.rs_line_12_col_13.log",
+      "diff_path": "diff/crates__perl-parser__src__util.rs_line_12_col_13.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 12.511177949,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 10.304223795,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/util.rs",
+          "function": {
+            "function_name": "code_slice",
+            "return_type": "-> &str",
+            "span": {
+              "start": {
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "line": 22,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 21,
+              "column": 5
+            },
+            "end": {
+              "line": 21,
+              "column": 74
+            }
+          },
+          "replacement": "\"\"",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__util.rs_line_21_col_5.log",
+      "diff_path": "diff/crates__perl-parser__src__util.rs_line_21_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 13.113173548,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 10.53924204,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/util.rs",
+          "function": {
+            "function_name": "code_slice",
+            "return_type": "-> &str",
+            "span": {
+              "start": {
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "line": 22,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 21,
+              "column": 5
+            },
+            "end": {
+              "line": 21,
+              "column": 74
+            }
+          },
+          "replacement": "\"xyzzy\"",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__util.rs_line_21_col_5_001.log",
+      "diff_path": "diff/crates__perl-parser__src__util.rs_line_21_col_5_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 12.535730658,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 9.43485056,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/util.rs",
+          "function": {
+            "function_name": "find_data_marker_byte",
+            "return_type": "-> Option<usize>",
+            "span": {
+              "start": {
+                "line": 24,
+                "column": 1
+              },
+              "end": {
+                "line": 29,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 28,
+              "column": 5
+            },
+            "end": {
+              "line": 28,
+              "column": 35
+            }
+          },
+          "replacement": "None",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__util.rs_line_28_col_5.log",
+      "diff_path": "diff/crates__perl-parser__src__util.rs_line_28_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 12.757171762,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 10.960009611,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/util.rs",
+          "function": {
+            "function_name": "find_data_marker_byte",
+            "return_type": "-> Option<usize>",
+            "span": {
+              "start": {
+                "line": 24,
+                "column": 1
+              },
+              "end": {
+                "line": 29,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 28,
+              "column": 5
+            },
+            "end": {
+              "line": 28,
+              "column": 35
+            }
+          },
+          "replacement": "Some(0)",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__util.rs_line_28_col_5_001.log",
+      "diff_path": "diff/crates__perl-parser__src__util.rs_line_28_col_5_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 13.092812681,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 10.551656828,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/util.rs",
+          "function": {
+            "function_name": "find_data_marker_byte",
+            "return_type": "-> Option<usize>",
+            "span": {
+              "start": {
+                "line": 24,
+                "column": 1
+              },
+              "end": {
+                "line": 29,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 28,
+              "column": 5
+            },
+            "end": {
+              "line": 28,
+              "column": 35
+            }
+          },
+          "replacement": "Some(1)",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__util.rs_line_28_col_5_002.log",
+      "diff_path": "diff/crates__perl-parser__src__util.rs_line_28_col_5_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 12.651870133,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 10.518678895,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
         }
       ]
     }
   ],
-  "total_mutants": 0,
-  "missed": 0,
-  "caught": 0,
+  "total_mutants": 10,
+  "missed": 4,
+  "caught": 6,
   "timeout": 0,
   "unviable": 0,
   "success": 0

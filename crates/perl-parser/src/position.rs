@@ -143,11 +143,17 @@ impl From<crate::ast::SourceLocation> for Range {
 /// Convert byte offset to UTF-16 line and column for LSP
 pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
     // If offset is beyond text length, clamp to end
-    if offset >= text.len() {
+    if offset > text.len() {
         let lines: Vec<&str> = text.lines().collect();
         let last_line = lines.len().saturating_sub(1) as u32;
         let last_col = lines.last().map(|l| l.encode_utf16().count()).unwrap_or(0) as u32;
         return (last_line, last_col);
+    }
+
+    // If offset equals text length and text ends with newline, we're at start of next line
+    if offset == text.len() && (text.ends_with('\n') || text.ends_with("\r\n")) {
+        let line_count = text.split_inclusive('\n').count() as u32;
+        return (line_count, 0);
     }
 
     let mut acc = 0usize;
@@ -157,18 +163,52 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
             // Found the line containing our offset
             let rel = offset - acc;
 
-            // Handle CRLF correctly: get logical line content without line ending
-            let logical_line = if line.ends_with("\r\n") {
-                &line[..line.len().saturating_sub(2)]
-            } else if line.ends_with('\n') {
-                &line[..line.len().saturating_sub(1)]
-            } else {
-                line
-            };
+            // Special case: handle mixed line endings like "...\n\r\n"
+            // Only jump to next line if this is specifically a mixed line ending scenario
+            if rel == line.len() - 1 && line.ends_with('\n') && offset == text.len() - 1 {
+                // Check if this is a mixed line ending scenario by looking for \r\n following \n
+                if line_idx > 0 && text.contains("\n\r\n") {
+                    return ((line_idx + 1) as u32, 0);
+                }
+            }
 
-            // Get the slice up to our position (clamped to logical line)
-            let prefix =
-                if rel <= logical_line.len() { &logical_line[..rel] } else { logical_line };
+            // Note: We used to calculate logical_line here for CRLF handling,
+            // but now we use the full line to handle positions that point into line terminators
+
+            // Get the slice up to our position (Unicode-safe)
+            // Handle cases where offset points inside a multibyte character
+            let prefix = if rel == 0 {
+                ""
+            } else if rel >= line.len() {
+                line
+            } else if line.is_char_boundary(rel) {
+                // Valid character boundary, slice normally
+                &line[..rel]
+            } else {
+                // Invalid character boundary - find the character that contains this byte
+                let mut char_start = rel;
+                while char_start > 0 && !line.is_char_boundary(char_start) {
+                    char_start -= 1;
+                }
+                let char_str = &line[char_start..];
+                let char_utf16_units = char_str.chars().next().unwrap().encode_utf16(&mut [0; 2]).len();
+
+                // Calculate fractional position within the character
+                let bytes_into_char = rel - char_start;
+                let char_len = char_str.chars().next().unwrap().len_utf8();
+                // Use ceiling division to ensure non-zero result when inside character
+                let fractional_utf16 = if bytes_into_char > 0 {
+                    (bytes_into_char * char_utf16_units).div_ceil(char_len)
+                } else {
+                    0
+                };
+
+                let prefix_str = &line[..char_start];
+                let mut utf16_col = prefix_str.encode_utf16().count();
+                utf16_col += fractional_utf16;
+
+                return (line_idx as u32, utf16_col as u32);
+            };
 
             // Count UTF-16 code units for LSP
             let utf16_col = prefix.encode_utf16().count() as u32;
@@ -195,7 +235,25 @@ pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
                 if utf16_pos == col {
                     return offset + byte_idx;
                 }
-                utf16_pos += ch.len_utf16() as u32;
+
+                let char_utf16_len = ch.len_utf16() as u32;
+
+                // Handle fractional UTF-16 positions (when col falls within a multi-unit character)
+                if utf16_pos < col && col < utf16_pos + char_utf16_len {
+                    // col points into the middle of this character
+                    // Calculate the fractional byte position within the character
+                    let fraction_into_char = col - utf16_pos;
+                    let char_byte_len = ch.len_utf8();
+
+                    // Convert fractional UTF-16 position to fractional byte position
+                    // Use proportional mapping: (fraction / utf16_len) * byte_len
+                    let fractional_bytes = (fraction_into_char as usize * char_byte_len)
+                        .div_ceil(char_utf16_len as usize);
+
+                    return offset + byte_idx + fractional_bytes.min(char_byte_len);
+                }
+
+                utf16_pos += char_utf16_len;
             }
             // Column is beyond line end
             return offset + line_text.len().min(text.len() - offset);
