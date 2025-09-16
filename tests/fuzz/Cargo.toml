@@ -33,6 +33,10 @@ path = "test_original_repro.rs"
 name = "comprehensive_robustness_test"
 path = "comprehensive_robustness_test.rs"
 
+[[bin]]
+name = "focused_security_test"
+path = "focused_security_test.rs"
+
 [dependencies]
 perl-parser = { path = "../../crates/perl-parser" }
 serde_json = "1.0"
