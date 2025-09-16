@@ -103,7 +103,6 @@ mod incremental_position_arithmetic_tests {
         assert!(result.is_ok(), "Edit at end of source should succeed");
     }
 
-    /// Property-based test for position arithmetic invariants
     proptest! {
         #[test]
         fn property_position_arithmetic_never_panics(
@@ -398,15 +397,15 @@ mod position_utf16_conversion_tests {
     #[test]
     fn test_utf16_roundtrip_edge_cases() {
         let edge_cases = vec![
-            "", // Empty
-            "\n", // Just newline
-            "\r\n", // Just CRLF
-            "😀", // Single emoji
-            "😀\n😀", // Emoji with newline
+            "",             // Empty
+            "\n",           // Just newline
+            "\r\n",         // Just CRLF
+            "😀",           // Single emoji
+            "😀\n😀",       // Emoji with newline
             "a😀b\r\nc😀d", // Mixed ASCII, emoji, CRLF
-            "\u{0000}", // Null character
-            "\u{FEFF}", // BOM character
-            "𝕏", // Mathematical script X (4-byte UTF-8, 2 UTF-16 units)
+            "\u{0000}",     // Null character
+            "\u{FEFF}",     // BOM character
+            "𝕏",            // Mathematical script X (4-byte UTF-8, 2 UTF-16 units)
         ];
 
         for text in edge_cases {
@@ -419,9 +418,14 @@ mod position_utf16_conversion_tests {
                 let tolerance = if text.chars().any(|c| c.len_utf8() > 1) { 4 } else { 0 };
 
                 assert!(
-                    roundtrip <= offset + tolerance && roundtrip >= offset.saturating_sub(tolerance),
+                    roundtrip <= offset + tolerance
+                        && roundtrip >= offset.saturating_sub(tolerance),
                     "Roundtrip failed for text {:?} at offset {}: (line={}, col={}) -> offset={}",
-                    text, offset, line, col, roundtrip
+                    text,
+                    offset,
+                    line,
+                    col,
+                    roundtrip
                 );
             }
         }
@@ -444,11 +448,11 @@ mod position_utf16_conversion_tests {
     fn test_line_counting_edge_cases() {
         // Test files with various line ending patterns
         let cases = vec![
-            ("no_newline", 10, (0, 10)), // No final newline
-            ("with_newline\n", 13, (1, 0)), // With final newline
+            ("no_newline", 10, (0, 10)),         // No final newline
+            ("with_newline\n", 13, (1, 0)),      // With final newline
             ("empty_last_line\n\n", 17, (2, 0)), // Empty final line
-            ("crlf_ending\r\n", 13, (1, 0)), // CRLF ending
-            ("mixed\n\r\n", 7, (2, 0)), // Mixed line endings
+            ("crlf_ending\r\n", 13, (1, 0)),     // CRLF ending
+            ("mixed\n\r\n", 7, (2, 0)),          // Mixed line endings
         ];
 
         for (text, offset, expected) in cases {
@@ -518,8 +522,14 @@ mod parser_completeness_tests {
                 if should_work && open_delim != "#" {
                     // Comment delimiters are expected to cause lexer issues
                     match result {
-                        Ok(_) => println!("✓ Successfully parsed with delimiter '{}': {}", open_delim, code),
-                        Err(e) => println!("⚠ Parse failed with delimiter '{}': {} (error: {})", open_delim, code, e),
+                        Ok(_) => println!(
+                            "✓ Successfully parsed with delimiter '{}': {}",
+                            open_delim, code
+                        ),
+                        Err(e) => println!(
+                            "⚠ Parse failed with delimiter '{}': {} (error: {})",
+                            open_delim, code, e
+                        ),
                     }
                 } else {
                     // Just ensure we don't panic - some delimiters may not be supported
@@ -557,11 +567,17 @@ mod parser_completeness_tests {
         if should_parse {
             match result {
                 Ok(_) => println!("✓ Successfully parsed qualified identifier: {}", qualified_name),
-                Err(e) => println!("⚠ Expected parse success for '{}' but got error: {}", qualified_name, e),
+                Err(e) => println!(
+                    "⚠ Expected parse success for '{}' but got error: {}",
+                    qualified_name, e
+                ),
             }
         } else {
             match result {
-                Ok(_) => println!("Note: '{}' parsed successfully (Perl might allow this)", qualified_name),
+                Ok(_) => println!(
+                    "Note: '{}' parsed successfully (Perl might allow this)",
+                    qualified_name
+                ),
                 Err(_) => println!("✓ Correctly rejected invalid identifier: {}", qualified_name),
             }
         }
@@ -586,10 +602,7 @@ mod parser_completeness_tests {
     #[case("use 5.036.;", false)] // Trailing dot
     #[case("use v;", false)] // Empty v-string
     #[case("use vx;", false)] // Invalid v-string
-    fn test_version_string_completeness(
-        #[case] code: &str,
-        #[case] should_parse: bool,
-    ) {
+    fn test_version_string_completeness(#[case] code: &str, #[case] should_parse: bool) {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
@@ -600,7 +613,9 @@ mod parser_completeness_tests {
             }
         } else {
             match result {
-                Ok(_) => println!("Note: '{}' parsed successfully (Perl might be more permissive)", code),
+                Ok(_) => {
+                    println!("Note: '{}' parsed successfully (Perl might be more permissive)", code)
+                }
                 Err(_) => println!("✓ Correctly rejected invalid version syntax: {}", code),
             }
         }
@@ -657,7 +672,11 @@ mod ast_sexp_validation_tests {
 
             // Both should be non-empty
             assert!(!sexp.is_empty(), "S-expression should not be empty for {}", test_name);
-            assert!(!sexp_inner.is_empty(), "Inner S-expression should not be empty for {}", test_name);
+            assert!(
+                !sexp_inner.is_empty(),
+                "Inner S-expression should not be empty for {}",
+                test_name
+            );
 
             if is_anonymous {
                 // Anonymous subroutines should maintain expression statement wrapper in sexp_inner
@@ -689,10 +708,7 @@ mod ast_sexp_validation_tests {
     #[case("map { $_ * 2 } @list;", "map_expression")]
     #[case("grep { $_ > 0 } @list;", "grep_expression")]
     #[case("sort { $a <=> $b } @list;", "sort_expression")]
-    fn test_expression_statement_sexp_generation(
-        #[case] code: &str,
-        #[case] test_name: &str,
-    ) {
+    fn test_expression_statement_sexp_generation(#[case] code: &str, #[case] test_name: &str) {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
@@ -714,22 +730,30 @@ mod ast_sexp_validation_tests {
         assert!(!sexp_inner.is_empty(), "Inner S-expression should not be empty for {}", test_name);
 
         // Check that both formats are valid S-expressions (basic validation)
-        assert!(sexp.starts_with('(') && sexp.ends_with(')'), "Invalid S-expression format: {}", sexp);
-        assert!(sexp_inner.starts_with('(') && sexp_inner.ends_with(')'), "Invalid inner S-expression format: {}", sexp_inner);
+        assert!(
+            sexp.starts_with('(') && sexp.ends_with(')'),
+            "Invalid S-expression format: {}",
+            sexp
+        );
+        assert!(
+            sexp_inner.starts_with('(') && sexp_inner.ends_with(')'),
+            "Invalid inner S-expression format: {}",
+            sexp_inner
+        );
     }
 
     /// Test error handling in S-expression generation with malformed AST
     #[test]
     fn test_sexp_error_handling_robustness() {
         let edge_cases = vec![
-            "",                      // Empty program
-            ";",                     // Empty statement
-            "{ };",                  // Empty block
-            "sub { sub { }; };",     // Nested anonymous subroutines
-            "package;",              // Empty package
-            "use;",                  // Empty use
-            "require;",              // Empty require
-            "sub { } sub { };",      // Multiple anonymous subroutines
+            "",                  // Empty program
+            ";",                 // Empty statement
+            "{ };",              // Empty block
+            "sub { sub { }; };", // Nested anonymous subroutines
+            "package;",          // Empty package
+            "use;",              // Empty use
+            "require;",          // Empty require
+            "sub { } sub { };",  // Multiple anonymous subroutines
         ];
 
         for code in edge_cases {
@@ -789,16 +813,16 @@ mod dual_indexing_pattern_tests {
 
         // Test dual pattern matching for various function reference patterns
         let test_cases = vec![
-            "test_function",           // Bare function name
-            "TestPackage::test_function", // Fully qualified
-            "_private_function",       // Private function
-            "public_method",           // Method name
+            "test_function",                   // Bare function name
+            "TestPackage::test_function",      // Fully qualified
+            "_private_function",               // Private function
+            "public_method",                   // Method name
             "Another::Package::public_method", // Deep qualification
-            "global_function",         // Global function
-            "Local::local_function",   // Local package function
-            "CONSTANT",               // Constant-like function
-            "main",                   // Main function
-            "nonexistent_function",    // Should return empty
+            "global_function",                 // Global function
+            "Local::local_function",           // Local package function
+            "CONSTANT",                        // Constant-like function
+            "main",                            // Main function
+            "nonexistent_function",            // Should return empty
         ];
 
         for symbol_name in test_cases {
@@ -1060,7 +1084,7 @@ mod integration_mutation_tests {
 
         // This tests the workspace indexing functionality
         // The success is that we can index and re-index without issues
-        assert!(initial_symbols.len() >= 0, "Should have some symbols initially");
+        assert!(!initial_symbols.is_empty(), "Should have some symbols initially");
         assert!(
             updated_symbols.len() >= initial_symbols.len(),
             "Should have at least as many symbols after update"
