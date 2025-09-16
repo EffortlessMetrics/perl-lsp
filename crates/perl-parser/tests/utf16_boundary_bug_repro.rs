@@ -28,7 +28,9 @@ fn test_emoji_utf16_roundtrip_failure() {
     let tolerance = 4; // Allow tolerance for mid-character positions
     assert!(
         roundtrip <= offset + tolerance && roundtrip >= offset.saturating_sub(tolerance),
-        "UTF-16 roundtrip bug: offset {} became {}", offset, roundtrip
+        "UTF-16 roundtrip bug: offset {} became {}",
+        offset,
+        roundtrip
     );
 }
 
@@ -41,7 +43,10 @@ fn test_simple_emoji_fractional_positions() {
         let (line, col) = offset_to_utf16_line_col(text, offset);
         let roundtrip = utf16_line_col_to_offset(text, line, col);
 
-        println!("Emoji test - Offset {} -> (line={}, col={}) -> roundtrip={}", offset, line, col, roundtrip);
+        println!(
+            "Emoji test - Offset {} -> (line={}, col={}) -> roundtrip={}",
+            offset, line, col, roundtrip
+        );
 
         // Offsets 1, 2, 3 are all mid-emoji and should roundtrip to reasonable positions
         if offset > 0 && offset < text.len() {
@@ -49,7 +54,9 @@ fn test_simple_emoji_fractional_positions() {
             let tolerance = text.len(); // Be very generous for this test
             assert!(
                 roundtrip <= offset + tolerance,
-                "Simple emoji roundtrip failed: offset {} became {}", offset, roundtrip
+                "Simple emoji roundtrip failed: offset {} became {}",
+                offset,
+                roundtrip
             );
         }
     }
@@ -58,18 +65,20 @@ fn test_simple_emoji_fractional_positions() {
 #[test]
 fn test_mixed_unicode_edge_cases() {
     let test_cases = vec![
-        ("😀", 2),    // Mid-emoji
-        ("a😀", 2),   // After ASCII, mid-emoji
-        ("😀b", 2),   // Mid-emoji, before ASCII
-        ("a😀b", 2),  // ASCII, mid-emoji, ASCII
+        ("😀", 2),   // Mid-emoji
+        ("a😀", 2),  // After ASCII, mid-emoji
+        ("😀b", 2),  // Mid-emoji, before ASCII
+        ("a😀b", 2), // ASCII, mid-emoji, ASCII
     ];
 
     for (text, offset) in test_cases {
         let (line, col) = offset_to_utf16_line_col(text, offset);
         let roundtrip = utf16_line_col_to_offset(text, line, col);
 
-        println!("Case {:?} at offset {} -> (line={}, col={}) -> roundtrip={}",
-                 text, offset, line, col, roundtrip);
+        println!(
+            "Case {:?} at offset {} -> (line={}, col={}) -> roundtrip={}",
+            text, offset, line, col, roundtrip
+        );
 
         // Document the expected vs actual behavior for debugging
         if roundtrip != offset {
@@ -90,8 +99,10 @@ fn test_utf16_boundary_behavior_baseline() {
 
         if offset == 2 || offset == 3 || offset == 10 || offset == 11 {
             // These are mid-emoji positions - document current behavior
-            println!("Mid-emoji position {} -> (line={}, col={}) -> roundtrip={}",
-                     offset, line, col, roundtrip);
+            println!(
+                "Mid-emoji position {} -> (line={}, col={}) -> roundtrip={}",
+                offset, line, col, roundtrip
+            );
         }
     }
 }

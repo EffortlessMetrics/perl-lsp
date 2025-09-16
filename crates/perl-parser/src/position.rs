@@ -191,7 +191,8 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
                     char_start -= 1;
                 }
                 let char_str = &line[char_start..];
-                let char_utf16_units = char_str.chars().next().unwrap().encode_utf16(&mut [0; 2]).len();
+                let char_utf16_units =
+                    char_str.chars().next().unwrap().encode_utf16(&mut [0; 2]).len();
 
                 // Calculate fractional position within the character
                 let bytes_into_char = rel - char_start;

@@ -28,7 +28,10 @@ fn debug_utf16_roundtrip_failure() {
             for (i, ch) in text.chars().enumerate() {
                 let utf8_len = ch.len_utf8();
                 let utf16_len = ch.len_utf16();
-                println!("Char {}: {:?} - UTF-8 bytes: {}, UTF-16 units: {}", i, ch, utf8_len, utf16_len);
+                println!(
+                    "Char {}: {:?} - UTF-8 bytes: {}, UTF-16 units: {}",
+                    i, ch, utf8_len, utf16_len
+                );
             }
 
             // Demonstrate the specific issue with offset 2
@@ -45,8 +48,14 @@ fn debug_utf16_roundtrip_failure() {
             let mut acc = 0usize;
             for (line_idx, line_text) in text.split_inclusive('\n').enumerate() {
                 let next = acc + line_text.len();
-                println!("Line {}: {:?}, acc={}, next={}, contains offset 2: {}",
-                    line_idx, line_text, acc, next, offset >= acc && offset < next);
+                println!(
+                    "Line {}: {:?}, acc={}, next={}, contains offset 2: {}",
+                    line_idx,
+                    line_text,
+                    acc,
+                    next,
+                    offset >= acc && offset < next
+                );
 
                 if offset >= acc && offset < next {
                     let rel = offset - acc;
