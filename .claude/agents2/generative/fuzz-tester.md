@@ -1,5 +1,5 @@
 ---
-name: fuzz-tester
+name: perl-fuzz-tester
 description: Use this agent when you need to perform validation-tier fuzzing on critical Perl parsing logic after code changes. This agent should be triggered as part of a validation pipeline when changes are made to recursive descent parser components, LSP providers, or lexical analysis logic. Examples: <example>Context: A pull request has been submitted with changes to Perl parsing logic that needs fuzz testing validation.<br>user: "I've submitted PR #123 with changes to the recursive descent parser"<br>assistant: "I'll use the fuzz-tester agent to run validation fuzzing and check for edge-case parsing failures in the Perl syntax coverage."<br><commentary>Since the user mentioned a PR with parser changes, use the fuzz-tester agent to run fuzzing validation.</commentary></example> <example>Context: Code review process requires running fuzz tests on critical Perl syntax handling code.<br>user: "The builtin function parsing code in PR #456 needs fuzz testing"<br>assistant: "I'll launch the fuzz-tester agent to perform time-boxed fuzzing on the enhanced builtin function parsing logic."<br><commentary>The user is requesting fuzz testing validation on Perl parsing components, so use the fuzz-tester agent.</commentary></example>
 model: sonnet
 color: orange
