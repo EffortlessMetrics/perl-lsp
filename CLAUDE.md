@@ -195,9 +195,9 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[Threading Configuration Guide](docs/THREADING_CONFIGURATION_GUIDE.md)** - Adaptive threading and concurrency management
 
 ### Architecture Decision Records (ADRs)
-- **[ADR-001: Agent Architecture](docs/ADR_001_AGENT_ARCHITECTURE.md)** - 94 specialized agents and workflow coordination (PR #153)
+- **[ADR-001: Agent Architecture](docs/ADR_001_AGENT_ARCHITECTURE.md)** - 97 specialized agents and workflow coordination (PR #153)
 - **[Agent Orchestration](docs/AGENT_ORCHESTRATION.md)** - Agent ecosystem patterns and routing
-- **[Agent Customization Framework](.claude/agents2/agent-customizer.md)** - Domain-specific agent adaptation
+- **[Agent Customization Framework](docs/AGENT_CUSTOMIZER.md)** - Domain-specific agent adaptation
 
 ## Development Guidelines
 
@@ -372,7 +372,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 4. **Testing** → Use existing comprehensive test infrastructure with adaptive threading support
 5. **Security features** → Follow enterprise security practices
 6. **xtask improvements** → `/xtask/src/` (Rust 2024 compatible advanced testing tools)
-7. **Agent customization** → `.claude/agents2/` (94 specialized agents for Perl parser ecosystem workflow, PR #153 architecture)
+7. **Agent customization** → `.claude/agents2/` (97 specialized agents for Perl parser ecosystem workflow, PR #153 architecture)
 
 ### Coding Standards
 - Run `cargo clippy --workspace` before committing changes
