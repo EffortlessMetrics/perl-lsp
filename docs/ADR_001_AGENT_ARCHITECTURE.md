@@ -22,27 +22,27 @@ We will implement a specialized agent architecture with domain-specific agents o
 
 ### Agent Categories
 
-Total: **94 specialized agents** (vs. 53 generic agents) organized by functional domain:
+Total: **97 specialized agents** (vs. 53 generic agents) organized by functional domain:
 
-1. **Review Agents** (`review/`): **26 agents** for comprehensive PR review workflow
+1. **Review Agents** (`review/`): **29 agents** for comprehensive PR review workflow
    - Code quality validation, security scanning, performance validation
    - Mutation testing coordination, clippy compliance verification
    - UTF-16 security validation, architectural alignment checking
    - Examples: `review-security-scanner`, `review-mutation-tester`, `review-performance-validator`
 
-2. **Integration Agents** (`integration/`): **21 agents** for CI/CD and testing coordination
+2. **Integration Agents** (`integration/`): **18 agents** for CI/CD and testing coordination
    - Automated testing workflows, continuous integration management
    - Cross-crate dependency validation, workspace orchestration
    - Performance regression detection, adaptive threading coordination
    - Examples: `integration-test-coordinator`, `integration-performance-monitor`, `integration-workspace-validator`
 
-3. **Generative Agents** (`generative/`): **24 agents** for content creation and development
+3. **Generative Agents** (`generative/`): **22 agents** for content creation and development
    - Documentation generation, test case creation, code scaffolding
    - Parser feature development, LSP provider implementation
    - Benchmark suite generation, security test creation
    - Examples: `generative-doc-writer`, `generative-test-creator`, `generative-parser-enhancer`
 
-4. **Mantle Agents** (`mantle/`): **17 agents** for maintenance and operational tasks
+4. **Mantle Agents** (`mantle/`): **22 agents** for maintenance and operational tasks
    - Dependency management, version coordination, release preparation
    - Codebase cleanup, refactoring coordination, deprecation management
    - Security audit scheduling, performance monitoring
@@ -135,4 +135,5 @@ Total: **94 specialized agents** (vs. 53 generic agents) organized by functional
 ## Related Documents
 - [CLAUDE.md](../CLAUDE.md) - Agent ecosystem overview
 - [AGENT_ORCHESTRATION.md](AGENT_ORCHESTRATION.md) - Agent workflow patterns
+- [AGENT_CUSTOMIZER.md](AGENT_CUSTOMIZER.md) - Domain-specific agent adaptation framework
 - [CLAUDE_AGENT_FLOW.md](CLAUDE_AGENT_FLOW.md) - PR review flow design
