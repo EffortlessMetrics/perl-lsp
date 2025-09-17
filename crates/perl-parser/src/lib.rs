@@ -35,8 +35,7 @@
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)] // prevent stray pub items from escaping
 #![warn(rust_2018_idioms)]
-// TODO: Enable missing_docs warning once documentation is complete
-// #![warn(missing_docs)]
+#![warn(missing_docs)]
 #![warn(clippy::all)]
 #![allow(
     // Core allows for parser/lexer code
@@ -102,8 +101,10 @@
 //! }
 //! ```
 
+#[allow(missing_docs)]
 pub mod ast;
 pub use parser::Parser;
+#[allow(missing_docs)]
 pub mod ast_v2;
 pub mod builtin_signatures;
 pub mod builtin_signatures_phf;
@@ -111,15 +112,18 @@ pub mod capabilities;
 pub mod code_actions;
 pub mod code_actions_enhanced;
 pub mod code_actions_pragmas;
+/// LSP code actions provider for automated refactoring and fixes.
 pub mod code_actions_provider;
 pub mod completion;
 pub mod diagnostics;
 pub mod diagnostics_catalog;
 pub mod edit;
 pub mod error;
+/// Error classification and recovery strategies for parse failures.
 pub mod error_classifier;
 pub mod error_recovery;
 pub mod execute_command;
+/// Feature flags and capability management for LSP server functionality.
 pub mod features;
 pub mod formatting;
 pub mod implementation_provider;
@@ -132,11 +136,13 @@ pub mod incremental_edit;
 pub mod lsp_errors;
 pub mod util;
 // pub mod refactoring; // TODO: Fix compilation errors
+/// LSP call hierarchy provider for function call navigation.
 pub mod call_hierarchy_provider;
 pub mod code_lens_provider;
 pub mod dead_code_detector;
 pub mod declaration;
 pub mod document_highlight;
+/// LSP document links provider for file and URL navigation.
 pub mod document_links;
 pub mod document_store;
 pub mod folding;
@@ -154,16 +160,20 @@ pub mod incremental_simple;
 #[cfg(feature = "incremental")]
 pub mod incremental_v2;
 pub mod index;
+/// LSP inlay hints for inline type and parameter information.
 pub mod inlay_hints;
+/// LSP inlay hints provider implementation.
 pub mod inlay_hints_provider;
 pub mod inline_completions;
 pub mod line_index;
+/// LSP linked editing provider for synchronized symbol renaming.
 pub mod linked_editing;
 pub mod lsp_document_link;
 pub mod lsp_on_type_formatting;
 pub mod lsp_selection_range;
 pub mod lsp_server;
 pub mod lsp_utils;
+/// LSP on-type formatting provider for automatic code formatting.
 pub mod on_type_formatting;
 pub mod parser;
 pub mod parser_context;
@@ -173,17 +183,22 @@ pub mod position;
 pub mod position_mapper;
 #[doc(hidden)]
 pub mod positions;
+/// Parser for Perl quote and quote-like operators.
 pub mod quote_parser;
 pub mod recovery_parser;
+/// LSP references provider for symbol usage analysis.
 pub mod references;
 pub mod rename;
+/// LSP selection range provider for smart text selection.
 pub mod selection_range;
 pub mod semantic;
+/// LSP semantic tokens provider for syntax highlighting.
 pub mod semantic_tokens;
 pub mod semantic_tokens_provider;
 pub mod signature_help;
 pub mod symbol;
 pub mod test_generator;
+/// Test execution and TDD support functionality.
 pub mod test_runner;
 pub mod textdoc;
 pub mod token_stream;
@@ -191,7 +206,9 @@ pub mod token_wrapper;
 pub mod trivia;
 pub mod trivia_parser;
 pub mod type_definition;
+/// LSP type hierarchy provider for inheritance navigation.
 pub mod type_hierarchy;
+/// Type inference engine for Perl variable analysis.
 pub mod type_inference;
 pub mod uri;
 pub mod workspace_index;
@@ -200,11 +217,16 @@ pub mod workspace_rename;
 pub mod workspace_symbols;
 // pub mod tdd_workflow;    // TODO: Fix compilation
 pub mod debug_adapter;
+/// Code modernization utilities for Perl best practices.
 pub mod modernize;
+/// Enhanced code modernization with refactoring capabilities.
 pub mod modernize_refactored;
 pub mod performance;
 pub mod pragma_tracker;
+/// Scope analysis for variable and subroutine resolution.
+#[allow(missing_docs)]
 pub mod scope_analyzer;
+#[allow(missing_docs)]
 pub mod tdd_basic;
 
 // Compatibility module for tests using old API

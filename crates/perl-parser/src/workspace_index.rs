@@ -29,9 +29,38 @@ pub struct SymbolKey {
     pub kind: SymKind,
 }
 
-/// Normalize a Perl variable name, extracting sigil and base name
-/// "$foo" -> (Some('$'), "foo")
-/// "foo" -> (None, "foo")
+/// Normalize a Perl variable name for consistent email processing pipeline indexing
+///
+/// Extracts sigil prefix and base name from Perl variables during Index stage processing
+/// to enable consistent cross-file symbol lookup during PSTX email script analysis.
+///
+/// # Arguments
+///
+/// * `name` - Variable name from email script content (with or without sigil)
+///
+/// # Returns
+///
+/// A tuple of (optional sigil character, base name) for normalized indexing
+///
+/// # Examples
+///
+/// ```rust
+/// use perl_parser::workspace_index::normalize_var;
+///
+/// // Email script variables with sigils
+/// assert_eq!(normalize_var("$email_count"), (Some('$'), "email_count"));
+/// assert_eq!(normalize_var("@email_list"), (Some('@'), "email_list"));
+/// assert_eq!(normalize_var("%email_headers"), (Some('%'), "email_headers"));
+///
+/// // Plain names without sigils
+/// assert_eq!(normalize_var("process_emails"), (None, "process_emails"));
+/// ```
+///
+/// # PSTX Pipeline Context
+///
+/// This function supports the Index stage by normalizing variable names found in
+/// email processing scripts, enabling consistent symbol lookup across complex
+/// PST file analysis workflows.
 pub fn normalize_var(name: &str) -> (Option<char>, &str) {
     let mut chars = name.chars();
     if let Some(first) = chars.next() {
