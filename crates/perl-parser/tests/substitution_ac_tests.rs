@@ -69,6 +69,11 @@ fn test_ac2_invalid_flag_combinations() {
         "s/old/new/z",  // Invalid flag 'z'
         "s/old/new/ga", // Invalid flag 'a'
         "s/old/new/1",  // Invalid flag '1'
+        "s/old/new/k",  // Invalid flag 'k'
+        "s/old/new/q",  // Invalid flag 'q'
+        "s/old/new/!",  // Invalid symbol flag
+        "s/old/new/@",  // Invalid symbol flag
+        "s/old/new/ ",  // Invalid space flag
     ];
 
     for code in invalid_cases {
@@ -78,6 +83,32 @@ fn test_ac2_invalid_flag_combinations() {
         // Should either fail to parse or detect invalid flags
         // Currently will fail to parse (expected until implementation)
         assert!(result.is_err());
+    }
+}
+
+#[test]
+#[ignore = "MUT_002: Exposes empty replacement parsing bug - will kill mutant when fixed"]
+fn test_ac2_empty_replacement_balanced_delimiters() {
+    // AC2: Test empty replacement specifically with balanced delimiters
+    // This targets the MUT_002 surviving mutant in quote_parser.rs:80
+    let empty_replacement_cases = vec![
+        ("s{pattern}{}", "pattern", ""),
+        ("s[pattern][]", "pattern", ""),
+        ("s(pattern)()", "pattern", ""),
+        ("s<pattern><>", "pattern", ""),
+        ("s{}{}", "", ""),
+        ("s[][]", "", ""),
+        ("s()()", "", ""),
+        ("s<><>", "", ""),
+    ];
+
+    for (code, expected_pattern, expected_replacement) in empty_replacement_cases {
+        let mut parser = Parser::new(code);
+        let result = parser.parse();
+
+        // This should now pass with substitution parsing implemented
+        assert!(result.is_ok() && has_proper_substitution_node(&result.unwrap()),
+                "Failed for empty replacement case: {}", code);
     }
 }
 
