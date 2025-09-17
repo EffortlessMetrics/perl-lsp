@@ -91,7 +91,7 @@ fn test_ac3_basic_alternative_delimiters() {
         ("s#old#new#", '#', "old", "new", ""),
     ];
 
-    for (code, expected_delimiter, expected_pattern, expected_replacement, expected_flags) in
+    for (code, expected_delimiter, _expected_pattern, _expected_replacement, _expected_flags) in
         test_cases
     {
         let mut parser = Parser::new(code);
@@ -140,7 +140,7 @@ fn test_ac3_balanced_delimiters() {
         ("s<old><new>", '<', "old", "new"),
     ];
 
-    for (code, expected_delimiter, expected_pattern, expected_replacement) in test_cases {
+    for (code, expected_delimiter, _expected_pattern, _expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
@@ -307,46 +307,46 @@ fn has_proper_flags_parsing(ast: &perl_parser::ast::Node, expected_flags: &str) 
     }
 }
 
-fn has_proper_delimiter_parsing(ast: &perl_parser::ast::Node, expected_delimiter: char) -> bool {
+fn has_proper_delimiter_parsing(_ast: &perl_parser::ast::Node, _expected_delimiter: char) -> bool {
     // Check if delimiter is properly detected and stored
     // This is a placeholder - actual implementation will depend on AST structure
     false
 }
 
 fn has_proper_balanced_delimiter_parsing(
-    ast: &perl_parser::ast::Node,
-    expected_delimiter: char,
+    _ast: &perl_parser::ast::Node,
+    _expected_delimiter: char,
 ) -> bool {
     // Check if balanced delimiters are properly handled
     // This is a placeholder - actual implementation will depend on AST structure
     false
 }
 
-fn has_complete_ast_structure(ast: &perl_parser::ast::Node) -> bool {
+fn has_complete_ast_structure(_ast: &perl_parser::ast::Node) -> bool {
     // Check if AST has all required fields for substitution
     // This is a placeholder - actual implementation will depend on AST structure
     false
 }
 
-fn has_proper_position_info(ast: &perl_parser::ast::Node) -> bool {
+fn has_proper_position_info(_ast: &perl_parser::ast::Node) -> bool {
     // Check if source position information is maintained
     // This is a placeholder - actual implementation will depend on AST structure
     false
 }
 
-fn has_regex_pattern_integration(ast: &perl_parser::ast::Node) -> bool {
+fn has_regex_pattern_integration(_ast: &perl_parser::ast::Node) -> bool {
     // Check if regex pattern parsing is properly integrated
     // This is a placeholder - actual implementation will depend on AST structure
     false
 }
 
-fn has_backreference_support(ast: &perl_parser::ast::Node) -> bool {
+fn has_backreference_support(_ast: &perl_parser::ast::Node) -> bool {
     // Check if backreferences in replacement text are supported
     // This is a placeholder - actual implementation will depend on AST structure
     false
 }
 
-fn has_documented_behavior(ast: &perl_parser::ast::Node) -> bool {
+fn has_documented_behavior(_ast: &perl_parser::ast::Node) -> bool {
     // Check if behavior matches documentation
     // This is a placeholder - actual implementation will depend on final documentation
     false
