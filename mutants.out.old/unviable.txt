@@ -1,3 +1,0 @@
-crates/perl-parser/src/position.rs:79:9: replace Range::empty -> Self with Default::default()
-crates/perl-parser/src/position.rs:119:9: replace Range::span_to -> Range with Default::default()
-crates/perl-parser/src/position.rs:136:9: replace <impl From<crate::ast::SourceLocation> for Range>::from -> Self with Default::default()
