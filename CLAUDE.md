@@ -153,7 +153,7 @@ The scanner implementation uses a unified Rust-based architecture with C compati
 
 ## Key Features
 
-- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases, enhanced builtin function parsing, and comprehensive delimiter support (including single-quote substitution delimiters: `s'pattern'replacement'`)
+- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases, enhanced builtin function parsing, comprehensive substitution operator support (`s///` with all modifiers and delimiters), and full delimiter support (including single-quote substitution delimiters: `s'pattern'replacement'`)
 - **Enhanced Cross-File Navigation**: Dual indexing strategy with 98% reference coverage for both qualified (`Package::function`) and bare (`function`) function calls
 - **Advanced Workspace Indexing**: Revolutionary dual pattern matching for comprehensive LSP navigation across package boundaries
 - **Production-Ready LSP Server**: ~89% of LSP features functional with comprehensive workspace support and enhanced reference resolution

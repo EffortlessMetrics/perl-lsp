@@ -3,8 +3,26 @@
 /// including edge cases, modifiers, and special delimiters
 use perl_parser::{Parser, ast::NodeKind};
 
+// Helper function to extract substitution node from AST
+fn extract_substitution<'a>(
+    ast: &'a perl_parser::ast::Node,
+) -> Option<(&'a str, &'a str, &'a str)> {
+    if let NodeKind::Program { statements } = &ast.kind {
+        if let Some(stmt) = statements.first() {
+            if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
+                if let NodeKind::Substitution { pattern, replacement, modifiers, .. } =
+                    &expression.kind
+                {
+                    return Some((pattern, replacement, modifiers));
+                }
+            }
+        }
+    }
+    None
+}
+
 #[test]
-#[ignore = "substitution operator not implemented"]
+// #[ignore = "substitution operator not implemented"]
 fn test_basic_substitution() {
     let code = "s/foo/bar/";
     let mut parser = Parser::new(code);
@@ -12,13 +30,17 @@ fn test_basic_substitution() {
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
-        if let NodeKind::Substitution { pattern, replacement, modifiers, .. } = &statements[0].kind
-        {
-            assert_eq!(pattern, "foo");
-            assert_eq!(replacement, "bar");
-            assert_eq!(modifiers, "");
+        if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
+            if let NodeKind::Substitution { pattern, replacement, modifiers, .. } = &expression.kind
+            {
+                assert_eq!(pattern, "foo");
+                assert_eq!(replacement, "bar");
+                assert_eq!(modifiers, "");
+            } else {
+                panic!("Expected Substitution node in expression, got {:?}", expression.kind);
+            }
         } else {
-            panic!("Expected Substitution node, got {:?}", statements[0].kind);
+            panic!("Expected ExpressionStatement node, got {:?}", statements[0].kind);
         }
     } else {
         panic!("Expected Program node");
@@ -26,7 +48,7 @@ fn test_basic_substitution() {
 }
 
 #[test]
-#[ignore = "substitution operator not implemented"]
+// #[ignore = "substitution operator not implemented"]
 fn test_substitution_with_modifiers() {
     let test_cases = vec![
         ("s/foo/bar/g", "g"),
@@ -45,17 +67,21 @@ fn test_substitution_with_modifiers() {
         let ast = parser.parse().expect("parse");
 
         if let NodeKind::Program { statements } = &ast.kind {
-            if let NodeKind::Substitution { modifiers, .. } = &statements[0].kind {
-                assert_eq!(modifiers, expected_modifiers, "Failed for {}", code);
+            if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
+                if let NodeKind::Substitution { modifiers, .. } = &expression.kind {
+                    assert_eq!(modifiers, expected_modifiers, "Failed for {}", code);
+                } else {
+                    panic!("Expected Substitution node in expression for {}", code);
+                }
             } else {
-                panic!("Expected Substitution node for {}", code);
+                panic!("Expected ExpressionStatement for {}", code);
             }
         }
     }
 }
 
 #[test]
-#[ignore = "substitution operator not implemented"]
+// #[ignore = "substitution operator not implemented"]
 fn test_substitution_with_different_delimiters() {
     let test_cases = vec![
         ("s(foo)(bar)", "foo", "bar"),
@@ -85,7 +111,7 @@ fn test_substitution_with_different_delimiters() {
 }
 
 #[test]
-#[ignore = "substitution operator not implemented"]
+// #[ignore = "substitution operator not implemented"]
 fn test_substitution_with_nested_delimiters() {
     let test_cases = vec![
         ("s{f{o}o}{b{a}r}", "f{o}o", "b{a}r"),
@@ -110,7 +136,7 @@ fn test_substitution_with_nested_delimiters() {
 }
 
 #[test]
-#[ignore = "substitution operator not implemented"]
+// #[ignore = "substitution operator not implemented"]
 fn test_substitution_with_special_chars() {
     let test_cases = vec![
         (r#"s/\n/\\n/"#, r"\n", r"\\n"),
@@ -135,7 +161,7 @@ fn test_substitution_with_special_chars() {
 }
 
 #[test]
-#[ignore = "substitution operator not implemented"]
+// #[ignore = "substitution operator not implemented"]
 fn test_substitution_empty_pattern_or_replacement() {
     let test_cases = vec![("s///", "", ""), ("s/foo//", "foo", ""), ("s//bar/", "", "bar")];
 
@@ -155,7 +181,7 @@ fn test_substitution_empty_pattern_or_replacement() {
 }
 
 #[test]
-#[ignore = "substitution operator not implemented"]
+// #[ignore = "substitution operator not implemented"]
 fn test_substitution_with_expressions() {
     // Test the /e modifier which evaluates replacement as Perl code
     let code = r#"s/(\d+)/sprintf("%02d", $1)/eg"#;
@@ -175,7 +201,7 @@ fn test_substitution_with_expressions() {
 }
 
 #[test]
-#[ignore = "substitution operator not implemented"]
+// #[ignore = "substitution operator not implemented"]
 fn test_substitution_in_context() {
     let test_cases = vec![
         ("$str =~ s/foo/bar/g;", "foo", "bar", "g"),
@@ -199,7 +225,7 @@ fn test_substitution_in_context() {
 }
 
 #[test]
-#[ignore = "substitution operator not implemented"]
+// #[ignore = "substitution operator not implemented"]
 fn test_substitution_unicode() {
     let test_cases = vec![
         ("s/café/coffee/", "café", "coffee"),

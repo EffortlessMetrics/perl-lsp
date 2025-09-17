@@ -91,12 +91,16 @@ fn test_ac3_basic_alternative_delimiters() {
         ("s#old#new#", '#', "old", "new", ""),
     ];
 
-    for (code, expected_delimiter, expected_pattern, expected_replacement, expected_flags) in test_cases {
+    for (code, expected_delimiter, expected_pattern, expected_replacement, expected_flags) in
+        test_cases
+    {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
         // This should now pass with delimiter parsing implemented
-        assert!(result.is_ok() && has_proper_delimiter_parsing(&result.unwrap(), expected_delimiter));
+        assert!(
+            result.is_ok() && has_proper_delimiter_parsing(&result.unwrap(), expected_delimiter)
+        );
     }
 }
 
@@ -120,7 +124,9 @@ fn test_ac3_printable_ascii_delimiters() {
         let result = parser.parse();
 
         // This should now pass with delimiter parsing implemented
-        assert!(result.is_ok() && has_proper_delimiter_parsing(&result.unwrap(), expected_delimiter));
+        assert!(
+            result.is_ok() && has_proper_delimiter_parsing(&result.unwrap(), expected_delimiter)
+        );
     }
 }
 
@@ -139,7 +145,10 @@ fn test_ac3_balanced_delimiters() {
         let result = parser.parse();
 
         // This should fail until substitution parsing is implemented
-        assert!(result.is_err() || !has_proper_balanced_delimiter_parsing(&result.unwrap(), expected_delimiter));
+        assert!(
+            result.is_err()
+                || !has_proper_balanced_delimiter_parsing(&result.unwrap(), expected_delimiter)
+        );
     }
 }
 
@@ -181,13 +190,8 @@ fn test_ac4_regex_integration() {
 #[test]
 fn test_ac5_basic_forms() {
     // AC5: Must include tests for basic forms: `s/pattern/replacement/flags`
-    let basic_forms = vec![
-        "s/foo/bar/",
-        "s/foo/bar/g",
-        "s/foo/bar/gi",
-        "s/pattern/replacement/",
-        "s/a/b/gims",
-    ];
+    let basic_forms =
+        vec!["s/foo/bar/", "s/foo/bar/g", "s/foo/bar/gi", "s/pattern/replacement/", "s/a/b/gims"];
 
     for code in basic_forms {
         let mut parser = Parser::new(code);
@@ -221,12 +225,12 @@ fn test_ac5_complex_replacements() {
 fn test_ac5_negative_malformed() {
     // AC5: Must include negative tests for malformed substitution operators
     let malformed_cases = vec![
-        "s/pattern/",           // Missing replacement and closing delimiter
-        "s/pattern",            // Missing replacement delimiter and replacement
-        "s/pattern/replacement", // Missing closing delimiter
-        "s",                    // Just the 's' keyword
-        "s/",                   // Just 's' and opening delimiter
-        "s//",                  // Missing replacement
+        "s/pattern/",                         // Missing replacement and closing delimiter
+        "s/pattern",                          // Missing replacement delimiter and replacement
+        "s/pattern/replacement",              // Missing closing delimiter
+        "s",                                  // Just the 's' keyword
+        "s/",                                 // Just 's' and opening delimiter
+        "s//",                                // Missing replacement
         "s/pattern/replacement/invalid_flag", // Invalid flag
     ];
 
@@ -309,7 +313,10 @@ fn has_proper_delimiter_parsing(ast: &perl_parser::ast::Node, expected_delimiter
     false
 }
 
-fn has_proper_balanced_delimiter_parsing(ast: &perl_parser::ast::Node, expected_delimiter: char) -> bool {
+fn has_proper_balanced_delimiter_parsing(
+    ast: &perl_parser::ast::Node,
+    expected_delimiter: char,
+) -> bool {
     // Check if balanced delimiters are properly handled
     // This is a placeholder - actual implementation will depend on AST structure
     false

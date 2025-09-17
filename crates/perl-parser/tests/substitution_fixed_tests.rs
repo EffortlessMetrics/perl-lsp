@@ -2,11 +2,15 @@
 use perl_parser::{Parser, ast::NodeKind};
 
 // Helper function to extract substitution node from AST
-fn extract_substitution<'a>(ast: &'a perl_parser::ast::Node) -> Option<(&'a str, &'a str, &'a str)> {
+fn extract_substitution<'a>(
+    ast: &'a perl_parser::ast::Node,
+) -> Option<(&'a str, &'a str, &'a str)> {
     if let NodeKind::Program { statements } = &ast.kind {
         if let Some(stmt) = statements.first() {
             if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
-                if let NodeKind::Substitution { pattern, replacement, modifiers, .. } = &expression.kind {
+                if let NodeKind::Substitution { pattern, replacement, modifiers, .. } =
+                    &expression.kind
+                {
                     return Some((pattern, replacement, modifiers));
                 }
             }
