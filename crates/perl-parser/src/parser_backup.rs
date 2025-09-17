@@ -3106,15 +3106,8 @@ impl<'a> Parser<'a> {
                 ))
             }
             "s" => {
-                // Substitution operator - for now just parse as regex
-                // TODO: Parse replacement and modifiers
-                Ok(Node::new(
-                    NodeKind::Regex {
-                        pattern: format!("s{}{}{}", opening_delim, content, closing_delim),
-                        modifiers: String::new(),
-                    },
-                    SourceLocation { start, end }
-                ))
+                // Substitution operator - parse pattern, replacement, and modifiers
+                self.parse_substitution_operator(start, opening_delim, closing_delim, content)
             }
             _ => {
                 Err(ParseError::syntax(
@@ -3124,7 +3117,165 @@ impl<'a> Parser<'a> {
             }
         }
     }
-    
+
+    /// Parse substitution operator (s///) with pattern, replacement, and modifiers
+    fn parse_substitution_operator(&mut self, start: Position, opening_delim: char, closing_delim: char, pattern: String) -> ParseResult<Node> {
+        // We already have the pattern from the quote operator parsing
+        // Now we need to parse the replacement part
+
+        // Expect the same closing delimiter to start the replacement
+        let next_token = self.consume_token().map_err(|_|
+            ParseError::syntax("Expected delimiter to start replacement text", start))?;
+
+        // The delimiter should match the closing delimiter of the pattern
+        let replacement_start_delim = match next_token.kind {
+            TokenKind::RightBrace if closing_delim == '}' => '}',
+            TokenKind::RightBracket if closing_delim == ']' => ']',
+            TokenKind::RightParen if closing_delim == ')' => ')',
+            TokenKind::Greater if closing_delim == '>' => '>',
+            _ => {
+                // For non-bracket delimiters, check if the text matches
+                let delim_char = next_token.text.chars().next()
+                    .ok_or_else(|| ParseError::syntax("Invalid delimiter", next_token.start))?;
+                if delim_char == closing_delim {
+                    delim_char
+                } else {
+                    return Err(ParseError::syntax(
+                        &format!("Expected '{}' delimiter, found '{}'", closing_delim, delim_char),
+                        next_token.start
+                    ));
+                }
+            }
+        };
+
+        // Now collect the replacement text until the next delimiter
+        let mut replacement = String::new();
+        let mut depth = 1;
+
+        while depth > 0 && !self.tokens.is_eof() {
+            let token_kind = self.peek_kind();
+
+            // Handle bracket-based delimiters with nesting
+            if matches!(opening_delim, '{' | '[' | '(' | '<') {
+                match (opening_delim, token_kind) {
+                    ('{', Some(TokenKind::LeftBrace)) => {
+                        self.consume_token()?;
+                        replacement.push('{');
+                        depth += 1;
+                    }
+                    ('{', Some(TokenKind::RightBrace)) => {
+                        self.consume_token()?;
+                        depth -= 1;
+                        if depth > 0 {
+                            replacement.push('}');
+                        }
+                    }
+                    ('[', Some(TokenKind::LeftBracket)) => {
+                        self.consume_token()?;
+                        replacement.push('[');
+                        depth += 1;
+                    }
+                    ('[', Some(TokenKind::RightBracket)) => {
+                        self.consume_token()?;
+                        depth -= 1;
+                        if depth > 0 {
+                            replacement.push(']');
+                        }
+                    }
+                    ('(', Some(TokenKind::LeftParen)) => {
+                        self.consume_token()?;
+                        replacement.push('(');
+                        depth += 1;
+                    }
+                    ('(', Some(TokenKind::RightParen)) => {
+                        self.consume_token()?;
+                        depth -= 1;
+                        if depth > 0 {
+                            replacement.push(')');
+                        }
+                    }
+                    ('<', Some(TokenKind::Less)) => {
+                        self.consume_token()?;
+                        replacement.push('<');
+                        depth += 1;
+                    }
+                    ('<', Some(TokenKind::Greater)) => {
+                        self.consume_token()?;
+                        depth -= 1;
+                        if depth > 0 {
+                            replacement.push('>');
+                        }
+                    }
+                    _ => {
+                        let token = self.consume_token()?;
+                        replacement.push_str(&token.text);
+                    }
+                }
+            } else {
+                // For simple delimiters, just check for exact match
+                let token = self.consume_token()?;
+                if let Some(first_char) = token.text.chars().next() {
+                    if first_char == closing_delim {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    if depth > 0 {
+                        replacement.push_str(&token.text);
+                    }
+                } else {
+                    replacement.push_str(&token.text);
+                }
+            }
+        }
+
+        // Parse modifier flags
+        let mut modifiers = String::new();
+        while let Some(token_kind) = self.peek_kind() {
+            if let Some(TokenKind::Identifier) = token_kind {
+                let flag_token = self.consume_token()?;
+                let flag_text = &flag_token.text;
+
+                // Validate each character is a valid substitution flag
+                for ch in flag_text.chars() {
+                    match ch {
+                        'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' => {
+                            modifiers.push(ch);
+                        }
+                        _ => {
+                            return Err(ParseError::syntax(
+                                &format!("Invalid substitution flag: '{}'", ch),
+                                flag_token.start
+                            ));
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        let end = self.get_current_position();
+
+        // Create a dummy expression for now - this should be improved
+        // to handle actual target expressions like $str =~ s/.../.../
+        let dummy_expr = Node::new(
+            NodeKind::Variable { sigil: "$".to_string(), name: "_".to_string() },
+            SourceLocation { start, end }
+        );
+
+        Ok(Node::new(
+            NodeKind::Substitution {
+                expr: Box::new(dummy_expr),
+                pattern,
+                replacement,
+                modifiers,
+            },
+            SourceLocation { start, end }
+        ))
+    }
+
     /// Parse qualified identifier (may contain ::)
     fn parse_qualified_identifier(&mut self) -> ParseResult<Node> {
         let start_token = self.consume_token()?;
