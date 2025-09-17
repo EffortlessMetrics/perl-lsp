@@ -64,6 +64,24 @@ pub struct TestCase {
 }
 
 impl TestGenerator {
+    /// Create a new test generator for email processing workflow test automation
+    ///
+    /// # Arguments
+    ///
+    /// * `framework` - Test framework to use for generating test code
+    ///
+    /// # Returns
+    ///
+    /// A configured test generator ready for email script test generation
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::{TestGenerator, TestFramework};
+    ///
+    /// let generator = TestGenerator::new(TestFramework::TestMore);
+    /// // Generator ready for email processing workflow test generation
+    /// ```
     pub fn new(framework: TestFramework) -> Self {
         Self { framework, options: TestGeneratorOptions::default() }
     }

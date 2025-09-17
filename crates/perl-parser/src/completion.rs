@@ -258,7 +258,27 @@ const TEST_MORE_EXPORTS: &[(&str, &str, &str)] = &[
 ];
 
 impl CompletionProvider {
-    /// Create a new completion provider from parsed AST
+    /// Create a new completion provider from parsed AST for email script analysis
+    ///
+    /// # Arguments
+    ///
+    /// * `ast` - Parsed AST from email script content during PSTX Extract stage
+    /// * `workspace_index` - Optional workspace-wide symbol index for cross-file completion
+    ///
+    /// # Returns
+    ///
+    /// A configured completion provider ready for email processing workflow analysis
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::{Parser, CompletionProvider};
+    ///
+    /// let mut parser = Parser::new("my $email_filter = sub { /important/ };");
+    /// let ast = parser.parse().unwrap();
+    /// let provider = CompletionProvider::new_with_index(&ast, None);
+    /// // Provider ready for email script completion analysis
+    /// ```
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
         Self::new_with_index_and_source(ast, "", workspace_index)
     }

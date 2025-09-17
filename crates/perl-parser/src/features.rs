@@ -8,6 +8,7 @@ pub mod catalog {
     include!(concat!(env!("OUT_DIR"), "/feature_catalog.rs"));
 }
 
+/// LSP capability feature mapping utilities.
 pub mod map;
 
 // Re-export the main functions for convenience

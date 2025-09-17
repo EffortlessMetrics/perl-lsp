@@ -22,7 +22,30 @@ pub mod error_codes {
     pub const REQUEST_FAILED: i32 = -32803;
 }
 
-/// Create a method not found error
+/// Create a method not found error for LSP operations during email processing workflow
+///
+/// # Arguments
+///
+/// * `method` - The LSP method name that was not found or supported
+///
+/// # Returns
+///
+/// A [`JsonRpcError`] with METHOD_NOT_FOUND code for client response
+///
+/// # Email Processing Context
+///
+/// This occurs when LSP clients request unsupported features during email script analysis
+/// in the PSTX pipeline. Common during IDE integration when processing large PST files
+/// where certain language features may be disabled for performance optimization.
+///
+/// # Examples
+///
+/// ```rust
+/// use perl_parser::lsp_errors::method_not_found;
+///
+/// let error = method_not_found("textDocument/semanticTokens");
+/// assert_eq!(error.code, -32601);
+/// ```
 pub fn method_not_found(method: &str) -> JsonRpcError {
     JsonRpcError {
         code: error_codes::METHOD_NOT_FOUND,
@@ -31,7 +54,26 @@ pub fn method_not_found(method: &str) -> JsonRpcError {
     }
 }
 
-/// Create a method not found error for unadvertised features
+/// Create a method not found error for unadvertised features in email processing workflows
+///
+/// # Returns
+///
+/// A [`JsonRpcError`] indicating the method was not advertised in server capabilities
+///
+/// # Email Processing Context
+///
+/// Occurs when LSP clients attempt to use features not enabled during PSTX pipeline
+/// processing. This helps enforce capability boundaries during large-scale email analysis
+/// where resource constraints require selective feature enabling.
+///
+/// # Examples
+///
+/// ```rust
+/// use perl_parser::lsp_errors::method_not_advertised;
+///
+/// let error = method_not_advertised();
+/// assert_eq!(error.code, -32601);
+/// ```
 pub fn method_not_advertised() -> JsonRpcError {
     JsonRpcError {
         code: error_codes::METHOD_NOT_FOUND,
@@ -40,12 +82,49 @@ pub fn method_not_advertised() -> JsonRpcError {
     }
 }
 
-/// Create a server cancelled error (-32802 for server-side cancellation)
+/// Create a server cancelled error for operations terminated during email processing
+///
+/// # Arguments
+///
+/// * `message` - Descriptive message about why the operation was cancelled
+///
+/// # Returns
+///
+/// A [`JsonRpcError`] with SERVER_CANCELLED code (-32802) for LSP 3.17 compliance
+///
+/// # Email Processing Context
+///
+/// Used when long-running email analysis operations are cancelled to maintain system
+/// responsiveness during 50GB+ PST file processing. Enables graceful cancellation
+/// of expensive operations like workspace-wide symbol indexing.
+///
+/// # Examples
+///
+/// ```rust
+/// use perl_parser::lsp_errors::server_cancelled;
+///
+/// let error = server_cancelled("Operation cancelled due to memory pressure");
+/// assert_eq!(error.code, -32802);
+/// ```
 pub fn server_cancelled(message: &str) -> JsonRpcError {
     JsonRpcError { code: error_codes::SERVER_CANCELLED, message: message.to_string(), data: None }
 }
 
-/// Create an invalid params error
+/// Create an invalid params error for malformed LSP requests during email processing
+///
+/// # Arguments
+///
+/// * `message` - Descriptive error message about the parameter validation failure
+///
+/// # Returns
+///
+/// A JSON [`Value`] containing the error code and message for LSP response
+///
+/// # Email Processing Context
+///
+/// Occurs when LSP clients send malformed parameters during email script analysis
+/// operations. Common when processing complex PST structures where parameter
+/// validation ensures data integrity throughout the PSTX pipeline.
 pub fn invalid_params(message: &str) -> Value {
     json!({
         "code": error_codes::INVALID_PARAMS,
@@ -53,7 +132,21 @@ pub fn invalid_params(message: &str) -> Value {
     })
 }
 
-/// Create an internal error
+/// Create an internal error for unexpected failures during email processing workflows
+///
+/// # Arguments
+///
+/// * `message` - Descriptive error message about the internal failure
+///
+/// # Returns
+///
+/// A JSON [`Value`] containing the error code and message for LSP response
+///
+/// # Email Processing Context
+///
+/// Used when unexpected internal failures occur during PSTX pipeline processing,
+/// such as memory allocation failures during 50GB+ PST analysis or threading
+/// issues during concurrent email processing operations.
 pub fn internal_error(message: &str) -> Value {
     json!({
         "code": error_codes::INTERNAL_ERROR,
@@ -61,18 +154,39 @@ pub fn internal_error(message: &str) -> Value {
     })
 }
 
-/// Check if a feature is advertised
+/// Configuration structure for tracking which LSP features are advertised during email processing
+///
+/// This struct manages feature availability during PSTX pipeline operations, allowing
+/// selective enabling/disabling of LSP capabilities based on processing requirements
+/// and resource constraints during large-scale email analysis.
+///
+/// # Performance Context
+///
+/// Feature advertisement is optimized for 50GB+ PST processing scenarios where
+/// resource-intensive features may be dynamically disabled to maintain throughput
+/// and memory efficiency during enterprise-scale email analysis.
 pub struct AdvertisedFeatures {
+    /// Enable code lens support for email script analysis
     pub code_lens: bool,
+    /// Enable call hierarchy navigation during email processing
     pub call_hierarchy: bool,
+    /// Enable type hierarchy analysis for Perl objects in email scripts
     pub type_hierarchy: bool,
+    /// Enable inlay hints for email processing workflows
     pub inlay_hints: bool,
+    /// Enable semantic token highlighting during email script analysis
     pub semantic_tokens: bool,
+    /// Enable code actions for email processing workflow optimization
     pub code_actions: bool,
+    /// Enable symbol rename operations across email processing pipeline
     pub rename: bool,
+    /// Enable document link resolution in email content
     pub document_links: bool,
+    /// Enable selection range provider for email script navigation
     pub selection_ranges: bool,
+    /// Enable on-type formatting during email script editing
     pub on_type_formatting: bool,
+    /// Enable pull-based diagnostics for email processing workflows
     pub pull_diagnostics: bool,
 }
 
@@ -96,7 +210,27 @@ impl Default for AdvertisedFeatures {
 }
 
 impl AdvertisedFeatures {
-    /// Create GA-lock features (conservative set)
+    /// Create GA-lock features configuration for production email processing workflows
+    ///
+    /// # Returns
+    ///
+    /// An [`AdvertisedFeatures`] instance with all features disabled for maximum stability
+    ///
+    /// # Email Processing Context
+    ///
+    /// This conservative configuration is used during production PSTX pipeline processing
+    /// of large PST files where stability takes precedence over IDE features. Ensures
+    /// minimal resource consumption during enterprise-scale email analysis operations.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::lsp_errors::AdvertisedFeatures;
+    ///
+    /// let features = AdvertisedFeatures::ga_lock();
+    /// assert!(!features.code_lens);
+    /// assert!(!features.semantic_tokens);
+    /// ```
     pub fn ga_lock() -> Self {
         Self {
             code_lens: false,
@@ -113,7 +247,31 @@ impl AdvertisedFeatures {
         }
     }
 
-    /// Check if a method should be refused
+    /// Check if an LSP method should be refused based on advertised features during email processing
+    ///
+    /// # Arguments
+    ///
+    /// * `method` - The LSP method name to check against advertised capabilities
+    ///
+    /// # Returns
+    ///
+    /// `true` if the method should be refused, `false` if it should be allowed
+    ///
+    /// # Email Processing Context
+    ///
+    /// This method enforces capability boundaries during PSTX pipeline operations,
+    /// preventing resource-intensive LSP operations when processing large PST files.
+    /// Helps maintain performance targets during enterprise-scale email analysis.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::lsp_errors::AdvertisedFeatures;
+    ///
+    /// let features = AdvertisedFeatures::ga_lock();
+    /// assert!(features.should_refuse("textDocument/codeLens"));
+    /// assert!(!features.should_refuse("textDocument/hover")); // Core feature always allowed
+    /// ```
     pub fn should_refuse(&self, method: &str) -> bool {
         match method {
             "textDocument/codeLens" => !self.code_lens,

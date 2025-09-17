@@ -54,6 +54,23 @@ This guide helps you find the right documentation for your needs, organized usin
 1. **[CONTRIBUTING.md](../CONTRIBUTING.md)** - Contribution guidelines (How-to)
 2. **[DEBUGGING.md](DEBUGGING.md)** - Development troubleshooting (How-to)
 3. **[ARCHITECTURE.md](../ARCHITECTURE.md)** - Deep technical architecture (Explanation)
+4. **[API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md)** - Comprehensive API documentation requirements ⭐ **NEW: Issue #149**
+
+### Documentation Standards & Quality Enforcement ⭐ **NEW: Issue #149**
+
+**Comprehensive API documentation is now enforced** through `#![warn(missing_docs)]` for production-quality perl-parser crate:
+
+1. **[API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md)** - Requirements and best practices (How-to)
+2. **CI Quality Gates** - Automated documentation coverage validation
+3. **TDD Test Suite** - Comprehensive acceptance criteria validation at `crates/perl-parser/tests/missing_docs_ac_tests.rs`
+4. **Documentation Quality Metrics** - Regression prevention and improvement tracking
+
+**Key Requirements**:
+- All public structs, enums, and functions must have comprehensive documentation
+- Performance-critical APIs must document memory usage and 50GB PST processing implications
+- Complex APIs must include working usage examples with doctests
+- Error types must document email processing workflow context and recovery strategies
+- Module-level documentation must explain PSTX pipeline integration (Extract → Normalize → Thread → Render → Index)
 
 ## Specialized Documentation
 
