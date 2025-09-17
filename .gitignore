@@ -38,3 +38,5 @@ releases/
 
 # mutants
 /mutants.out*
+mutants.out.old/
+mutants.out/
