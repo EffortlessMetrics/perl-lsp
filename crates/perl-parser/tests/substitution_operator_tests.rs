@@ -83,11 +83,15 @@ fn test_substitution_with_different_delimiters() {
         let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
 
         if let NodeKind::Program { statements } = &ast.kind {
-            if let NodeKind::Substitution { pattern, replacement, .. } = &statements[0].kind {
-                assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+            if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
+                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                    assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
+                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                } else {
+                    panic!("Expected Substitution node for {}", code);
+                }
             } else {
-                panic!("Expected Substitution node for {}", code);
+                panic!("Expected ExpressionStatement node for {}", code);
             }
         }
     }
@@ -108,11 +112,15 @@ fn test_substitution_with_nested_delimiters() {
         let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
 
         if let NodeKind::Program { statements } = &ast.kind {
-            if let NodeKind::Substitution { pattern, replacement, .. } = &statements[0].kind {
-                assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+            if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
+                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                    assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
+                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                } else {
+                    panic!("Expected Substitution node for {}", code);
+                }
             } else {
-                panic!("Expected Substitution node for {}", code);
+                panic!("Expected ExpressionStatement node for {}", code);
             }
         }
     }
@@ -133,11 +141,15 @@ fn test_substitution_with_special_chars() {
         let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
 
         if let NodeKind::Program { statements } = &ast.kind {
-            if let NodeKind::Substitution { pattern, replacement, .. } = &statements[0].kind {
-                assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+            if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
+                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                    assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
+                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                } else {
+                    panic!("Expected Substitution node for {}", code);
+                }
             } else {
-                panic!("Expected Substitution node for {}", code);
+                panic!("Expected ExpressionStatement node for {}", code);
             }
         }
     }
@@ -153,11 +165,15 @@ fn test_substitution_empty_pattern_or_replacement() {
         let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
 
         if let NodeKind::Program { statements } = &ast.kind {
-            if let NodeKind::Substitution { pattern, replacement, .. } = &statements[0].kind {
-                assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+            if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
+                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                    assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
+                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                } else {
+                    panic!("Expected Substitution node for {}", code);
+                }
             } else {
-                panic!("Expected Substitution node for {}", code);
+                panic!("Expected ExpressionStatement node for {}", code);
             }
         }
     }
@@ -172,13 +188,17 @@ fn test_substitution_with_expressions() {
     let ast = parser.parse().expect("parse");
 
     if let NodeKind::Program { statements } = &ast.kind {
-        if let NodeKind::Substitution { pattern, replacement, modifiers, .. } = &statements[0].kind
-        {
-            assert_eq!(pattern, r"(\d+)");
-            assert_eq!(replacement, r#"sprintf("%02d", $1)"#);
-            assert_eq!(modifiers, "eg");
+        if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
+            if let NodeKind::Substitution { pattern, replacement, modifiers, .. } = &expression.kind
+            {
+                assert_eq!(pattern, r"(\d+)");
+                assert_eq!(replacement, r#"sprintf("%02d", $1)"#);
+                assert_eq!(modifiers, "eg");
+            } else {
+                panic!("Expected Substitution node");
+            }
         } else {
-            panic!("Expected Substitution node");
+            panic!("Expected ExpressionStatement node");
         }
     }
 }
@@ -221,11 +241,15 @@ fn test_substitution_unicode() {
         let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
 
         if let NodeKind::Program { statements } = &ast.kind {
-            if let NodeKind::Substitution { pattern, replacement, .. } = &statements[0].kind {
-                assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+            if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
+                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                    assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
+                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                } else {
+                    panic!("Expected Substitution node for {}", code);
+                }
             } else {
-                panic!("Expected Substitution node for {}", code);
+                panic!("Expected ExpressionStatement node for {}", code);
             }
         }
     }
@@ -244,6 +268,9 @@ fn find_substitution_node(node: &perl_parser::ast::Node) -> Option<(String, Stri
                 }
             }
             None
+        }
+        NodeKind::ExpressionStatement { expression } => {
+            find_substitution_node(expression)
         }
         NodeKind::Binary { left, right, .. } => {
             find_substitution_node(left).or_else(|| find_substitution_node(right))

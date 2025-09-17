@@ -3106,8 +3106,9 @@ impl<'a> Parser<'a> {
                 ))
             }
             "s" => {
-                // Substitution operator - parse pattern, replacement, and modifiers
-                self.parse_substitution_operator(start, opening_delim, closing_delim, content)
+                // Substitution operator - needs special handling for two-part structure
+                // Don't use the regular quote parsing for substitution operators
+                self.parse_substitution_from_start(start, opening_delim, closing_delim, content)
             }
             _ => {
                 Err(ParseError::syntax(
@@ -3118,143 +3119,42 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse substitution operator (s///) with pattern, replacement, and modifiers
-    fn parse_substitution_operator(&mut self, start: Position, opening_delim: char, closing_delim: char, pattern: String) -> ParseResult<Node> {
-        // We already have the pattern from the quote operator parsing
-        // Now we need to parse the replacement part
+    /// Parse substitution operator (s///) from the beginning with proper two-part handling
+    fn parse_substitution_from_start(&mut self, start: Position, opening_delim: char, closing_delim: char, first_part: String) -> ParseResult<Node> {
+        // We have the pattern from the first part
+        let pattern = first_part;
 
-        // Expect the same closing delimiter to start the replacement
-        let next_token = self.consume_token().map_err(|_|
-            ParseError::syntax("Expected delimiter to start replacement text", start))?;
+        // Now parse the replacement part
+        // For bracket delimiters, expect another opening bracket
+        // For simple delimiters, replacement starts immediately
+        let replacement = if matches!(opening_delim, '{' | '[' | '(' | '<') {
+            // For bracket delimiters like s{pattern}{replacement}
+            let next_token = self.consume_token().map_err(|_|
+                ParseError::syntax("Expected opening delimiter for replacement text", start))?;
 
-        // The delimiter should match the closing delimiter of the pattern
-        let replacement_start_delim = match next_token.kind {
-            TokenKind::RightBrace if closing_delim == '}' => '}',
-            TokenKind::RightBracket if closing_delim == ']' => ']',
-            TokenKind::RightParen if closing_delim == ')' => ')',
-            TokenKind::Greater if closing_delim == '>' => '>',
-            _ => {
-                // For non-bracket delimiters, check if the text matches
-                let delim_char = next_token.text.chars().next()
-                    .ok_or_else(|| ParseError::syntax("Invalid delimiter", next_token.start))?;
-                if delim_char == closing_delim {
-                    delim_char
-                } else {
+            // Verify we get the correct opening delimiter
+            match (opening_delim, next_token.kind) {
+                ('{', TokenKind::LeftBrace) |
+                ('[', TokenKind::LeftBracket) |
+                ('(', TokenKind::LeftParen) |
+                ('<', TokenKind::Less) => {
+                    // Parse replacement content with nesting support
+                    self.parse_delimited_content(opening_delim, closing_delim)?
+                }
+                _ => {
                     return Err(ParseError::syntax(
-                        &format!("Expected '{}' delimiter, found '{}'", closing_delim, delim_char),
+                        &format!("Expected '{}' to start replacement text, found {:?}", opening_delim, next_token.kind),
                         next_token.start
                     ));
                 }
             }
+        } else {
+            // For simple delimiters like s/pattern/replacement/
+            self.parse_simple_delimited_content(closing_delim)?
         };
 
-        // Now collect the replacement text until the next delimiter
-        let mut replacement = String::new();
-        let mut depth = 1;
-
-        while depth > 0 && !self.tokens.is_eof() {
-            let token_kind = self.peek_kind();
-
-            // Handle bracket-based delimiters with nesting
-            if matches!(opening_delim, '{' | '[' | '(' | '<') {
-                match (opening_delim, token_kind) {
-                    ('{', Some(TokenKind::LeftBrace)) => {
-                        self.consume_token()?;
-                        replacement.push('{');
-                        depth += 1;
-                    }
-                    ('{', Some(TokenKind::RightBrace)) => {
-                        self.consume_token()?;
-                        depth -= 1;
-                        if depth > 0 {
-                            replacement.push('}');
-                        }
-                    }
-                    ('[', Some(TokenKind::LeftBracket)) => {
-                        self.consume_token()?;
-                        replacement.push('[');
-                        depth += 1;
-                    }
-                    ('[', Some(TokenKind::RightBracket)) => {
-                        self.consume_token()?;
-                        depth -= 1;
-                        if depth > 0 {
-                            replacement.push(']');
-                        }
-                    }
-                    ('(', Some(TokenKind::LeftParen)) => {
-                        self.consume_token()?;
-                        replacement.push('(');
-                        depth += 1;
-                    }
-                    ('(', Some(TokenKind::RightParen)) => {
-                        self.consume_token()?;
-                        depth -= 1;
-                        if depth > 0 {
-                            replacement.push(')');
-                        }
-                    }
-                    ('<', Some(TokenKind::Less)) => {
-                        self.consume_token()?;
-                        replacement.push('<');
-                        depth += 1;
-                    }
-                    ('<', Some(TokenKind::Greater)) => {
-                        self.consume_token()?;
-                        depth -= 1;
-                        if depth > 0 {
-                            replacement.push('>');
-                        }
-                    }
-                    _ => {
-                        let token = self.consume_token()?;
-                        replacement.push_str(&token.text);
-                    }
-                }
-            } else {
-                // For simple delimiters, just check for exact match
-                let token = self.consume_token()?;
-                if let Some(first_char) = token.text.chars().next() {
-                    if first_char == closing_delim {
-                        depth -= 1;
-                        if depth == 0 {
-                            break;
-                        }
-                    }
-                    if depth > 0 {
-                        replacement.push_str(&token.text);
-                    }
-                } else {
-                    replacement.push_str(&token.text);
-                }
-            }
-        }
-
         // Parse modifier flags
-        let mut modifiers = String::new();
-        while let Some(token_kind) = self.peek_kind() {
-            if let Some(TokenKind::Identifier) = token_kind {
-                let flag_token = self.consume_token()?;
-                let flag_text = &flag_token.text;
-
-                // Validate each character is a valid substitution flag
-                for ch in flag_text.chars() {
-                    match ch {
-                        'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' => {
-                            modifiers.push(ch);
-                        }
-                        _ => {
-                            return Err(ParseError::syntax(
-                                &format!("Invalid substitution flag: '{}'", ch),
-                                flag_token.start
-                            ));
-                        }
-                    }
-                }
-            } else {
-                break;
-            }
-        }
+        let modifiers = self.parse_substitution_modifiers()?;
 
         let end = self.get_current_position();
 
@@ -3274,6 +3174,129 @@ impl<'a> Parser<'a> {
             },
             SourceLocation { start, end }
         ))
+    }
+
+    /// Parse content delimited by bracket pairs with nesting support
+    fn parse_delimited_content(&mut self, opening_delim: char, closing_delim: char) -> ParseResult<String> {
+        let mut content = String::new();
+        let mut depth = 1;
+
+        while depth > 0 && !self.tokens.is_eof() {
+            let token_kind = self.peek_kind();
+
+            match (opening_delim, token_kind) {
+                ('{', Some(TokenKind::LeftBrace)) => {
+                    self.consume_token()?;
+                    content.push('{');
+                    depth += 1;
+                }
+                ('{', Some(TokenKind::RightBrace)) => {
+                    self.consume_token()?;
+                    depth -= 1;
+                    if depth > 0 {
+                        content.push('}');
+                    }
+                }
+                ('[', Some(TokenKind::LeftBracket)) => {
+                    self.consume_token()?;
+                    content.push('[');
+                    depth += 1;
+                }
+                ('[', Some(TokenKind::RightBracket)) => {
+                    self.consume_token()?;
+                    depth -= 1;
+                    if depth > 0 {
+                        content.push(']');
+                    }
+                }
+                ('(', Some(TokenKind::LeftParen)) => {
+                    self.consume_token()?;
+                    content.push('(');
+                    depth += 1;
+                }
+                ('(', Some(TokenKind::RightParen)) => {
+                    self.consume_token()?;
+                    depth -= 1;
+                    if depth > 0 {
+                        content.push(')');
+                    }
+                }
+                ('<', Some(TokenKind::Less)) => {
+                    self.consume_token()?;
+                    content.push('<');
+                    depth += 1;
+                }
+                ('<', Some(TokenKind::Greater)) => {
+                    self.consume_token()?;
+                    depth -= 1;
+                    if depth > 0 {
+                        content.push('>');
+                    }
+                }
+                _ => {
+                    let token = self.consume_token()?;
+                    content.push_str(&token.text);
+                }
+            }
+        }
+
+        Ok(content)
+    }
+
+    /// Parse content delimited by simple characters (like /)
+    fn parse_simple_delimited_content(&mut self, delimiter: char) -> ParseResult<String> {
+        let mut content = String::new();
+
+        while !self.tokens.is_eof() {
+            let token = self.consume_token()?;
+            if let Some(first_char) = token.text.chars().next() {
+                if first_char == delimiter {
+                    break;
+                }
+            }
+            content.push_str(&token.text);
+        }
+
+        Ok(content)
+    }
+
+    /// Parse substitution modifier flags (g, i, m, s, x, o, e, r)
+    fn parse_substitution_modifiers(&mut self) -> ParseResult<String> {
+        let mut modifiers = String::new();
+
+        while let Some(token_kind) = self.peek_kind() {
+            if let Some(TokenKind::Identifier) = token_kind {
+                // Peek at the token to see if it's a valid modifier
+                if let Ok(token) = self.tokens.peek() {
+                    let flag_text = &token.text;
+
+                    // Check if this is a single character and a valid substitution flag
+                    if flag_text.len() == 1 {
+                        let ch = flag_text.chars().next().unwrap();
+                        match ch {
+                            'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' => {
+                                // Valid modifier, consume it
+                                self.consume_token()?;
+                                modifiers.push(ch);
+                            }
+                            _ => {
+                                // Not a substitution flag, don't consume
+                                break;
+                            }
+                        }
+                    } else {
+                        // Multi-character identifier, not modifiers
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        Ok(modifiers)
     }
 
     /// Parse qualified identifier (may contain ::)
