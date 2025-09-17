@@ -4227,14 +4227,12 @@ fn parse_substitution_parts(s: &str) -> Result<(String, String, String), String>
     for ch in chars {
         if phase == 2 {
             // Validate substitution modifiers - only allow valid flags
-            eprintln!("DEBUG: Processing modifier character: '{}'", ch);
             match ch {
                 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' => {
                     modifiers.push(ch);
                 }
                 _ => {
                     // Invalid modifier - return error
-                    eprintln!("DEBUG: Invalid modifier found: '{}'", ch);
                     return Err(format!("Invalid substitution modifier flag: '{}'", ch));
                 }
             }
