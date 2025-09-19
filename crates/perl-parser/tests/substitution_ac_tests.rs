@@ -108,8 +108,11 @@ fn test_ac2_empty_replacement_balanced_delimiters() {
         let result = parser.parse();
 
         // This should now pass with substitution parsing implemented
-        assert!(result.is_ok() && has_proper_substitution_node(&result.unwrap()),
-                "Failed for empty replacement case: {}", code);
+        assert!(
+            result.is_ok() && has_proper_substitution_node(&result.unwrap()),
+            "Failed for empty replacement case: {}",
+            code
+        );
     }
 }
 
@@ -132,7 +135,9 @@ fn test_ac3_basic_alternative_delimiters() {
         // This should now pass with delimiter parsing implemented
         assert!(
             result.is_ok() && has_proper_substitution_node(&result.unwrap()),
-            "Failed for delimiter '{}' in code: {}", expected_delimiter, code
+            "Failed for delimiter '{}' in code: {}",
+            expected_delimiter,
+            code
         );
     }
 }
@@ -159,7 +164,9 @@ fn test_ac3_printable_ascii_delimiters() {
         // This should now pass with delimiter parsing implemented
         assert!(
             result.is_ok() && has_proper_substitution_node(&result.unwrap()),
-            "Failed for delimiter '{}' in code: {}", expected_delimiter, code
+            "Failed for delimiter '{}' in code: {}",
+            expected_delimiter,
+            code
         );
     }
 }
@@ -232,7 +239,11 @@ fn test_ac5_basic_forms() {
         let result = parser.parse();
 
         // These should all now pass with implementation complete
-        assert!(result.is_ok() && has_proper_substitution_node(&result.unwrap()), "Failed for code: {}", code);
+        assert!(
+            result.is_ok() && has_proper_substitution_node(&result.unwrap()),
+            "Failed for code: {}",
+            code
+        );
     }
 }
 
@@ -342,6 +353,7 @@ fn has_proper_flags_parsing(ast: &perl_parser::ast::Node, expected_flags: &str) 
     }
 }
 
+#[allow(dead_code)]
 fn has_proper_delimiter_parsing(_ast: &perl_parser::ast::Node, _expected_delimiter: char) -> bool {
     // Check if delimiter is properly detected and stored
     // This is a placeholder - actual implementation will depend on AST structure

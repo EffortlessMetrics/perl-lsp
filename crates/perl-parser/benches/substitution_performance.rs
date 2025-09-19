@@ -1,6 +1,5 @@
 ///! Performance benchmark for substitution operator parsing in PR #158
 ///! Tests for performance regression in substitution operator implementation
-
 use criterion::{Criterion, criterion_group, criterion_main};
 use perl_parser::Parser;
 use std::hint::black_box as bb;
