@@ -329,7 +329,9 @@ impl LspHarness {
             let mut req = request;
             req["id"] = json!(self.next_request_id);
             self.next_request_id += 1;
-            self.send_request(req).unwrap_or_else(|e| {
+
+            // Use send_request_full_response to get the complete JSON-RPC response
+            self.send_request_full_response(req).unwrap_or_else(|e| {
                 json!({
                     "jsonrpc": "2.0",
                     "id": null,
@@ -419,6 +421,12 @@ impl LspHarness {
         self.send_request_with_timeout(request, timeout)
     }
 
+    // Private helper to send request and get full JSON-RPC response with adaptive timeout
+    fn send_request_full_response(&mut self, request: Value) -> Result<Value, String> {
+        let timeout = self.get_adaptive_timeout();
+        self.send_request_with_timeout_full_response(request, timeout)
+    }
+
     // Private helper to send request with timeout
     fn send_request_with_timeout(
         &mut self,
@@ -491,8 +499,88 @@ impl LspHarness {
             // If no response yet, wait a bit
             if start.elapsed() < timeout {
                 thread::sleep(Duration::from_millis(10));
+            } else {
+                break;
             }
         }
+
+        Err("No response received".to_string())
+    }
+
+    // Private helper to send request with timeout and return full JSON-RPC response
+    fn send_request_with_timeout_full_response(
+        &mut self,
+        request: Value,
+        timeout: Duration,
+    ) -> Result<Value, String> {
+        // Clear output buffer
+        self.output_buffer.lock().unwrap().clear();
+
+        // Format request with Content-Length header
+        let request_str = request.to_string();
+        let content = format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str);
+
+        // Send to server thread
+        if let Err(e) = self.sender.send(content.into_bytes()) {
+            return Err(format!("Server send error: {}", e));
+        }
+
+        // Wait for response with timeout
+        let start = Instant::now();
+        loop {
+            if start.elapsed() > timeout {
+                return Err(format!("Request timed out after {:?}", timeout));
+            }
+
+            // Check if we have a response
+            if let Ok(output) = self.output_buffer.try_lock() {
+                let output_str = String::from_utf8_lossy(&output);
+
+                // Parse all messages in the output (might be multiple)
+                let mut remaining = output_str.as_ref();
+                while !remaining.is_empty() {
+                    // Look for Content-Length header
+                    if let Some(content_start) = remaining.find("Content-Length:") {
+                        remaining = &remaining[content_start..];
+
+                        // Parse content length
+                        if let Some(header_end) = remaining.find("\r\n\r\n") {
+                            let header = &remaining[..header_end];
+                            if let Some(length_str) = header.strip_prefix("Content-Length:") {
+                                if let Ok(length) = length_str.trim().parse::<usize>() {
+                                    let json_start = header_end + 4; // Skip \r\n\r\n
+                                    if remaining.len() >= json_start + length {
+                                        let json_str = &remaining[json_start..json_start + length];
+                                        if let Ok(msg) = serde_json::from_str::<Value>(json_str) {
+                                            // Check if this is our response (has matching id)
+                                            if msg.get("id").is_some() {
+                                                // Return the full message for schema validation tests
+                                                return Ok(msg);
+                                            }
+                                        }
+                                        // Move to next message
+                                        remaining = &remaining[json_start + length..];
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    break; // No more complete messages
+                }
+
+                drop(output);
+            }
+
+            // If no response yet, wait a bit
+            if start.elapsed() < timeout {
+                thread::sleep(Duration::from_millis(10));
+            } else {
+                break;
+            }
+        }
+
+        Err("No response received".to_string())
     }
 
     /// Get type definition at a position

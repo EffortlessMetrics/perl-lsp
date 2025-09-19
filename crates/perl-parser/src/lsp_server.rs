@@ -541,6 +541,14 @@ impl LspServer {
 
                 Ok(None)
             }
+            // All other requests require initialization
+            _ if !self.initialized && request.method != "shutdown" && request.method != "exit" => {
+                Err(JsonRpcError {
+                    code: -32002, // ServerNotInitialized per LSP spec
+                    message: "Server not initialized".to_string(),
+                    data: None,
+                })
+            }
             "shutdown" => {
                 // Clear any pending cancelled requests on shutdown
                 self.cancelled.lock().unwrap().clear();
