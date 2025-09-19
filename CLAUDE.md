@@ -115,6 +115,11 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp              # Adaptive timeout with 
 RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_behavioral_tests     # 0.31s (was 1560s+)
 RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # 0.32s (was 1500s+)
 RUST_TEST_THREADS=1 cargo test --test lsp_comprehensive_e2e_test # Maximum reliability mode
+
+# API Documentation Quality Testing ⭐ **NEW: Issue #149**
+cargo test -p perl-parser --test missing_docs_ac_tests           # 12 comprehensive acceptance criteria
+cargo test -p perl-parser --test missing_docs_ac_tests -- --nocapture  # Detailed validation output
+cargo doc --no-deps --package perl-parser                       # Validate doc generation without warnings
 ```
 
 ### Development
@@ -219,6 +224,28 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **LSP Server**: `/crates/perl-lsp/` - standalone LSP server binary (v0.8.9)
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions
+
+### API Documentation Standards ⭐ **NEW: Issue #149**
+
+**Comprehensive API documentation is enforced** for the perl-parser crate through `#![warn(missing_docs)]`:
+
+```bash
+# Validate documentation compliance
+cargo test -p perl-parser --test missing_docs_ac_tests  # 12 acceptance criteria validation
+cargo doc --no-deps --package perl-parser              # Generate docs without warnings
+```
+
+**Key Requirements** (see [API Documentation Standards](docs/API_DOCUMENTATION_STANDARDS.md)):
+- **All public APIs** must have comprehensive documentation with examples
+- **Performance-critical modules** must document memory usage and 50GB PST processing implications
+- **Error types** must explain email processing workflow context and recovery strategies
+- **Module documentation** must describe PSTX pipeline integration (Extract → Normalize → Thread → Render → Index)
+- **Cross-references** must use proper Rust documentation linking (`[`function_name`]`)
+
+**Quality Enforcement**:
+- **TDD Test Suite**: `/crates/perl-parser/tests/missing_docs_ac_tests.rs` validates all requirements
+- **CI Integration**: Automated documentation quality gates prevent regression
+- **Edge Case Detection**: Validates malformed doctests, empty docs, invalid cross-references
 
 ### Development Workflow (Enhanced)
 
