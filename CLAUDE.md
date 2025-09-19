@@ -1,4 +1,5 @@
 # CLAUDE.md
+<!-- Labels: review:stage:governance-checking, review-lane-58, docs:complete, governance:checking -->
 
 This file provides guidance to Claude Code when working with this repository.
 
@@ -93,6 +94,12 @@ cargo test -p perl-parser --test builtin_empty_blocks_test   # Builtin function 
 cargo test -p perl-parser --test import_optimizer_tests   # Import analysis and optimization tests
 cargo test -p perl-parser --test import_optimizer_tests -- handles_bare_imports_without_symbols  # Regression-proof bare import analysis
 
+# Test comprehensive substitution operator parsing (PR #158)
+cargo test -p perl-parser --test substitution_fixed_tests      # Core substitution operator functionality
+cargo test -p perl-parser --test substitution_ac_tests         # Acceptance criteria validation tests
+cargo test -p perl-parser --test substitution_debug_test       # Debug verification tests
+cargo test -p perl-parser substitution_operator_tests          # Comprehensive substitution syntax coverage
+
 # Test enhanced cross-file navigation capabilities
 cargo test -p perl-parser test_cross_file_definition      # Package::subroutine resolution
 cargo test -p perl-parser test_cross_file_references      # Enhanced dual-pattern reference search
@@ -153,7 +160,7 @@ The scanner implementation uses a unified Rust-based architecture with C compati
 
 ## Key Features
 
-- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases, enhanced builtin function parsing, comprehensive substitution operator support (`s///` with all modifiers and delimiters), and full delimiter support (including single-quote substitution delimiters: `s'pattern'replacement'`)
+- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases, enhanced builtin function parsing, **comprehensive substitution operator parsing** (`s///` with complete pattern/replacement/modifier support, all delimiter styles including balanced delimiters `s{}{}, s[][], s<>`, and alternative delimiters `s///, s###, s|||`), and full delimiter support (including single-quote substitution delimiters: `s'pattern'replacement'`)
 - **Enhanced Cross-File Navigation**: Dual indexing strategy with 98% reference coverage for both qualified (`Package::function`) and bare (`function`) function calls
 - **Advanced Workspace Indexing**: Revolutionary dual pattern matching for comprehensive LSP navigation across package boundaries
 - **Production-Ready LSP Server**: ~89% of LSP features functional with comprehensive workspace support and enhanced reference resolution
