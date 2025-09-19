@@ -14,6 +14,7 @@ exclude = [
     "crates/perl-parser-pest",  # Excluded: legacy Pest parser with bindgen dependency
     "crates/parser-benchmarks",  # Excluded: benchmarking crate with potential dependencies
     "crates/parser-tests",  # Excluded: test harness with potential dependencies
+    "fuzz",  # Excluded: fuzz testing with specialized build requirements
 ]
 
 [workspace.dependencies]

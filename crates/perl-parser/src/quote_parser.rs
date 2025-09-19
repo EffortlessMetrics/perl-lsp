@@ -224,5 +224,8 @@ fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &s
 
 /// Extract only alphabetic characters as modifiers
 fn extract_modifiers(text: &str) -> String {
-    text.chars().take_while(|c| c.is_ascii_alphabetic()).collect()
+    text.chars()
+        .take_while(|c| c.is_ascii_alphabetic())
+        .filter(|&c| matches!(c, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r'))
+        .collect()
 }
