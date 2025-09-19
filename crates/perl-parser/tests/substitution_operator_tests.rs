@@ -3,7 +3,6 @@
 /// including edge cases, modifiers, and special delimiters
 use perl_parser::{Parser, ast::NodeKind};
 
-
 #[test]
 // #[ignore = "substitution operator not implemented"]
 fn test_basic_substitution() {
@@ -86,7 +85,11 @@ fn test_substitution_with_different_delimiters() {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
                 if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                    assert_eq!(
+                        replacement, expected_replacement,
+                        "Replacement mismatch for {}",
+                        code
+                    );
                 } else {
                     panic!("Expected Substitution node for {}", code);
                 }
@@ -115,7 +118,11 @@ fn test_substitution_with_nested_delimiters() {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
                 if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                    assert_eq!(
+                        replacement, expected_replacement,
+                        "Replacement mismatch for {}",
+                        code
+                    );
                 } else {
                     panic!("Expected Substitution node for {}", code);
                 }
@@ -144,7 +151,11 @@ fn test_substitution_with_special_chars() {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
                 if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                    assert_eq!(
+                        replacement, expected_replacement,
+                        "Replacement mismatch for {}",
+                        code
+                    );
                 } else {
                     panic!("Expected Substitution node for {}", code);
                 }
@@ -168,7 +179,11 @@ fn test_substitution_empty_pattern_or_replacement() {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
                 if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                    assert_eq!(
+                        replacement, expected_replacement,
+                        "Replacement mismatch for {}",
+                        code
+                    );
                 } else {
                     panic!("Expected Substitution node for {}", code);
                 }
@@ -186,18 +201,18 @@ fn test_substitution_empty_replacement_balanced_delimiters() {
     // These test cases specifically target the empty replacement parsing logic
     // for paired delimiters in quote_parser.rs line 80
     let test_cases = vec![
-        ("s{pattern}{}", "pattern", ""),  // Empty replacement with braces
-        ("s[pattern][]", "pattern", ""),  // Empty replacement with brackets
-        ("s(pattern)()", "pattern", ""),  // Empty replacement with parentheses
-        ("s<pattern><>", "pattern", ""),  // Empty replacement with angle brackets
-        ("s{}{replacement}", "", "replacement"),  // Empty pattern with braces
-        ("s[]{replacement}", "", "replacement"),  // Empty pattern with brackets
-        ("s(){replacement}", "", "replacement"),  // Empty pattern with parentheses
-        ("s<>{replacement}", "", "replacement"),  // Empty pattern with angle brackets
-        ("s{}{}", "", ""),              // Both empty with braces
-        ("s[][]", "", ""),              // Both empty with brackets
-        ("s()()", "", ""),              // Both empty with parentheses
-        ("s<><>", "", ""),              // Both empty with angle brackets
+        ("s{pattern}{}", "pattern", ""), // Empty replacement with braces
+        ("s[pattern][]", "pattern", ""), // Empty replacement with brackets
+        ("s(pattern)()", "pattern", ""), // Empty replacement with parentheses
+        ("s<pattern><>", "pattern", ""), // Empty replacement with angle brackets
+        ("s{}{replacement}", "", "replacement"), // Empty pattern with braces
+        ("s[]{replacement}", "", "replacement"), // Empty pattern with brackets
+        ("s(){replacement}", "", "replacement"), // Empty pattern with parentheses
+        ("s<>{replacement}", "", "replacement"), // Empty pattern with angle brackets
+        ("s{}{}", "", ""),               // Both empty with braces
+        ("s[][]", "", ""),               // Both empty with brackets
+        ("s()()", "", ""),               // Both empty with parentheses
+        ("s<><>", "", ""),               // Both empty with angle brackets
     ];
 
     for (code, expected_pattern, expected_replacement) in test_cases {
@@ -208,7 +223,11 @@ fn test_substitution_empty_replacement_balanced_delimiters() {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
                 if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                    assert_eq!(
+                        replacement, expected_replacement,
+                        "Replacement mismatch for {}",
+                        code
+                    );
                 } else {
                     panic!("Expected Substitution node for {}", code);
                 }
@@ -284,7 +303,11 @@ fn test_substitution_unicode() {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
                 if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                    assert_eq!(
+                        replacement, expected_replacement,
+                        "Replacement mismatch for {}",
+                        code
+                    );
                 } else {
                     panic!("Expected Substitution node for {}", code);
                 }
@@ -309,9 +332,7 @@ fn find_substitution_node(node: &perl_parser::ast::Node) -> Option<(String, Stri
             }
             None
         }
-        NodeKind::ExpressionStatement { expression } => {
-            find_substitution_node(expression)
-        }
+        NodeKind::ExpressionStatement { expression } => find_substitution_node(expression),
         NodeKind::Binary { left, right, .. } => {
             find_substitution_node(left).or_else(|| find_substitution_node(right))
         }
@@ -342,67 +363,67 @@ fn test_substitution_invalid_modifier_characters() {
     // These test cases specifically target the invalid modifier validation logic
     // in parser_backup.rs line 4231 where only 'g', 'i', 'm', 's', 'x', 'o', 'e', 'r' are allowed
     let invalid_modifier_cases = vec![
-        "s/foo/bar/z",    // Invalid modifier 'z'
-        "s/foo/bar/a",    // Invalid modifier 'a'
-        "s/foo/bar/b",    // Invalid modifier 'b'
-        "s/foo/bar/c",    // Invalid modifier 'c'
-        "s/foo/bar/d",    // Invalid modifier 'd'
-        "s/foo/bar/f",    // Invalid modifier 'f'
-        "s/foo/bar/h",    // Invalid modifier 'h'
-        "s/foo/bar/j",    // Invalid modifier 'j'
-        "s/foo/bar/k",    // Invalid modifier 'k'
-        "s/foo/bar/l",    // Invalid modifier 'l'
-        "s/foo/bar/n",    // Invalid modifier 'n'
-        "s/foo/bar/p",    // Invalid modifier 'p'
-        "s/foo/bar/q",    // Invalid modifier 'q'
-        "s/foo/bar/t",    // Invalid modifier 't'
-        "s/foo/bar/u",    // Invalid modifier 'u'
-        "s/foo/bar/v",    // Invalid modifier 'v'
-        "s/foo/bar/w",    // Invalid modifier 'w'
-        "s/foo/bar/y",    // Invalid modifier 'y'
-        "s/foo/bar/1",    // Invalid numeric modifier '1'
-        "s/foo/bar/2",    // Invalid numeric modifier '2'
-        "s/foo/bar/9",    // Invalid numeric modifier '9'
-        "s/foo/bar/0",    // Invalid numeric modifier '0'
-        "s/foo/bar/@",    // Invalid symbol modifier '@'
-        "s/foo/bar/#",    // Invalid symbol modifier '#'
-        "s/foo/bar/$",    // Invalid symbol modifier '$'
-        "s/foo/bar/%",    // Invalid symbol modifier '%'
-        "s/foo/bar/^",    // Invalid symbol modifier '^'
-        "s/foo/bar/&",    // Invalid symbol modifier '&'
-        "s/foo/bar/*",    // Invalid symbol modifier '*'
-        "s/foo/bar/(",    // Invalid symbol modifier '('
-        "s/foo/bar/)",    // Invalid symbol modifier ')'
-        "s/foo/bar/-",    // Invalid symbol modifier '-'
-        "s/foo/bar/+",    // Invalid symbol modifier '+'
-        "s/foo/bar/=",    // Invalid symbol modifier '='
-        "s/foo/bar/[",    // Invalid symbol modifier '['
-        "s/foo/bar/]",    // Invalid symbol modifier ']'
-        "s/foo/bar/{",    // Invalid symbol modifier '{'
-        "s/foo/bar/}",    // Invalid symbol modifier '}'
-        "s/foo/bar/|",    // Invalid symbol modifier '|'
-        "s/foo/bar/\\",   // Invalid symbol modifier '\\'
-        "s/foo/bar/:",    // Invalid symbol modifier ':'
-        "s/foo/bar/;",    // Invalid symbol modifier ';'
-        "s/foo/bar/\"",   // Invalid symbol modifier '"'
-        "s/foo/bar/'",    // Invalid symbol modifier "'"
-        "s/foo/bar/<",    // Invalid symbol modifier '<'
-        "s/foo/bar/>",    // Invalid symbol modifier '>'
-        "s/foo/bar/,",    // Invalid symbol modifier ','
-        "s/foo/bar/.",    // Invalid symbol modifier '.'
-        "s/foo/bar/?",    // Invalid symbol modifier '?'
-        "s/foo/bar/ ",    // Invalid space modifier
-        "s/foo/bar/\t",   // Invalid tab modifier
-        "s/foo/bar/\n",   // Invalid newline modifier
-        "s/foo/bar/\r",   // Invalid carriage return modifier
-        "s/foo/bar/ga",   // Valid 'g' but invalid 'a' in combination
-        "s/foo/bar/iz",   // Valid 'i' but invalid 'z' in combination
-        "s/foo/bar/mxy",  // Valid 'm', 'x' but invalid 'y' in combination
-        "s/foo/bar/gi1",  // Valid 'g', 'i' but invalid '1' in combination
-        "s/foo/bar/xyz",  // Valid 'x' but invalid 'y', 'z' in combination
-        "s/foo/bar/123",  // All invalid numeric modifiers
-        "s/foo/bar/abc",  // Mix of invalid letters
-        "s/foo/bar/!@#",  // Mix of invalid symbols
+        "s/foo/bar/z",   // Invalid modifier 'z'
+        "s/foo/bar/a",   // Invalid modifier 'a'
+        "s/foo/bar/b",   // Invalid modifier 'b'
+        "s/foo/bar/c",   // Invalid modifier 'c'
+        "s/foo/bar/d",   // Invalid modifier 'd'
+        "s/foo/bar/f",   // Invalid modifier 'f'
+        "s/foo/bar/h",   // Invalid modifier 'h'
+        "s/foo/bar/j",   // Invalid modifier 'j'
+        "s/foo/bar/k",   // Invalid modifier 'k'
+        "s/foo/bar/l",   // Invalid modifier 'l'
+        "s/foo/bar/n",   // Invalid modifier 'n'
+        "s/foo/bar/p",   // Invalid modifier 'p'
+        "s/foo/bar/q",   // Invalid modifier 'q'
+        "s/foo/bar/t",   // Invalid modifier 't'
+        "s/foo/bar/u",   // Invalid modifier 'u'
+        "s/foo/bar/v",   // Invalid modifier 'v'
+        "s/foo/bar/w",   // Invalid modifier 'w'
+        "s/foo/bar/y",   // Invalid modifier 'y'
+        "s/foo/bar/1",   // Invalid numeric modifier '1'
+        "s/foo/bar/2",   // Invalid numeric modifier '2'
+        "s/foo/bar/9",   // Invalid numeric modifier '9'
+        "s/foo/bar/0",   // Invalid numeric modifier '0'
+        "s/foo/bar/@",   // Invalid symbol modifier '@'
+        "s/foo/bar/#",   // Invalid symbol modifier '#'
+        "s/foo/bar/$",   // Invalid symbol modifier '$'
+        "s/foo/bar/%",   // Invalid symbol modifier '%'
+        "s/foo/bar/^",   // Invalid symbol modifier '^'
+        "s/foo/bar/&",   // Invalid symbol modifier '&'
+        "s/foo/bar/*",   // Invalid symbol modifier '*'
+        "s/foo/bar/(",   // Invalid symbol modifier '('
+        "s/foo/bar/)",   // Invalid symbol modifier ')'
+        "s/foo/bar/-",   // Invalid symbol modifier '-'
+        "s/foo/bar/+",   // Invalid symbol modifier '+'
+        "s/foo/bar/=",   // Invalid symbol modifier '='
+        "s/foo/bar/[",   // Invalid symbol modifier '['
+        "s/foo/bar/]",   // Invalid symbol modifier ']'
+        "s/foo/bar/{",   // Invalid symbol modifier '{'
+        "s/foo/bar/}",   // Invalid symbol modifier '}'
+        "s/foo/bar/|",   // Invalid symbol modifier '|'
+        "s/foo/bar/\\",  // Invalid symbol modifier '\\'
+        "s/foo/bar/:",   // Invalid symbol modifier ':'
+        "s/foo/bar/;",   // Invalid symbol modifier ';'
+        "s/foo/bar/\"",  // Invalid symbol modifier '"'
+        "s/foo/bar/'",   // Invalid symbol modifier "'"
+        "s/foo/bar/<",   // Invalid symbol modifier '<'
+        "s/foo/bar/>",   // Invalid symbol modifier '>'
+        "s/foo/bar/,",   // Invalid symbol modifier ','
+        "s/foo/bar/.",   // Invalid symbol modifier '.'
+        "s/foo/bar/?",   // Invalid symbol modifier '?'
+        "s/foo/bar/ ",   // Invalid space modifier
+        "s/foo/bar/\t",  // Invalid tab modifier
+        "s/foo/bar/\n",  // Invalid newline modifier
+        "s/foo/bar/\r",  // Invalid carriage return modifier
+        "s/foo/bar/ga",  // Valid 'g' but invalid 'a' in combination
+        "s/foo/bar/iz",  // Valid 'i' but invalid 'z' in combination
+        "s/foo/bar/mxy", // Valid 'm', 'x' but invalid 'y' in combination
+        "s/foo/bar/gi1", // Valid 'g', 'i' but invalid '1' in combination
+        "s/foo/bar/xyz", // Valid 'x' but invalid 'y', 'z' in combination
+        "s/foo/bar/123", // All invalid numeric modifiers
+        "s/foo/bar/abc", // Mix of invalid letters
+        "s/foo/bar/!@#", // Mix of invalid symbols
     ];
 
     for code in invalid_modifier_cases {
@@ -456,18 +477,19 @@ fn test_substitution_valid_modifier_combinations() {
         ("s/foo/bar/oe", "oe"),
         ("s/foo/bar/or", "or"),
         ("s/foo/bar/er", "er"),
-        ("s/foo/bar/ee", "ee"),  // Double 'e' is valid
+        ("s/foo/bar/ee", "ee"), // Double 'e' is valid
         ("s/foo/bar/gims", "gims"),
         ("s/foo/bar/gimsx", "gimsx"),
         ("s/foo/bar/gimsxo", "gimsxo"),
         ("s/foo/bar/gimsxoe", "gimsxoe"),
         ("s/foo/bar/gimsxoer", "gimsxoer"),
-        ("s/foo/bar/eeg", "eeg"),  // Multiple 'e' with other modifiers
+        ("s/foo/bar/eeg", "eeg"), // Multiple 'e' with other modifiers
     ];
 
     for (code, expected_modifiers) in valid_modifier_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("Valid modifiers should parse: {}", code));
+        let ast =
+            parser.parse().unwrap_or_else(|_| panic!("Valid modifiers should parse: {}", code));
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
@@ -524,7 +546,11 @@ fn test_substitution_delimiter_edge_cases() {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
                 if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                    assert_eq!(
+                        replacement, expected_replacement,
+                        "Replacement mismatch for {}",
+                        code
+                    );
                 } else {
                     panic!("Expected Substitution node for {}", code);
                 }
@@ -564,7 +590,11 @@ fn test_substitution_complex_nested_scenarios() {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
                 if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-                    assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+                    assert_eq!(
+                        replacement, expected_replacement,
+                        "Replacement mismatch for {}",
+                        code
+                    );
                 } else {
                     panic!("Expected Substitution node for {}", code);
                 }

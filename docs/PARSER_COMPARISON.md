@@ -40,7 +40,7 @@ This document provides a comprehensive comparison of the three Perl parser imple
 
 **Pros:**
 - ✅ **Easy to modify** - Grammar in readable PEG format
-- ✅ **Excellent coverage** - ~99.996% of real-world Perl (enhanced substitution support via PR #42)
+- ✅ **Excellent coverage** - ~99.996% of real-world Perl (comprehensive substitution operator support with all modifiers and delimiters)
 - ✅ **Well-tested** - Comprehensive test suite
 - ✅ **Good error messages** - Pest provides clear parse errors
 - ✅ **Pure Rust** - No C dependencies
@@ -91,7 +91,7 @@ This document provides a comprehensive comparison of the three Perl parser imple
 | **References** | ⚠️ Basic | ✅ | ✅ |
 | **Regex `/pattern/`** | ✅ | ✅ | ✅ |
 | **Regex `m!pattern!`** | ❌ | ❌ | ✅ |
-| **Substitution** | ⚠️ Basic | ✅ | ✅ |
+| **Substitution `s///`** | ⚠️ Basic | ✅ Complete | ✅ Complete |
 | **Heredocs** | ⚠️ Limited | ✅ | ✅ |
 | **String Interpolation** | ⚠️ Basic | ✅ | ✅ |
 | **Unicode Identifiers** | ✅ | ✅ | ✅ |
