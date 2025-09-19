@@ -3126,9 +3126,8 @@ impl<'a> Parser<'a> {
                 ))
             }
             "s" => {
-                // Substitution operator - needs special handling for two-part structure
-                // Don't use the regular quote parsing for substitution operators
-                self.parse_substitution_from_start(start, opening_delim, closing_delim, content)
+                // Substitution operator - optimized for performance
+                self.parse_substitution_from_start_optimized(start, opening_delim, closing_delim, content)
             }
             _ => {
                 Err(ParseError::syntax(
@@ -3292,6 +3291,76 @@ impl<'a> Parser<'a> {
         }
 
         Ok(content)
+    }
+
+    /// Optimized substitution parsing with reduced token overhead
+    fn parse_substitution_from_start_optimized(&mut self, start: Position, opening_delim: char, closing_delim: char, first_part: String) -> ParseResult<Node> {
+        let pattern = first_part;
+
+        // Fast path: try to parse replacement using lookahead for simple cases
+        let replacement = if matches!(opening_delim, '{' | '[' | '(' | '<') {
+            // For bracket delimiters, use existing complex parsing but with early returns
+            if self.tokens.is_eof() {
+                return Ok(Node::new(
+                    NodeKind::Substitution {
+                        expr: Box::new(Node::new(
+                            NodeKind::Variable { sigil: "$".to_string(), name: "_".to_string() },
+                            SourceLocation { start, end: start }
+                        )),
+                        pattern,
+                        replacement: String::new(),
+                        modifiers: String::new(),
+                    },
+                    SourceLocation { start, end: start }
+                ));
+            }
+
+            // Try fast bracket parsing
+            if let Ok(token) = self.tokens.peek() {
+                if token.text.starts_with(opening_delim) && token.text.ends_with(closing_delim) && token.text.len() >= 2 {
+                    // Fast path: complete replacement in single token
+                    let content = &token.text[1..token.text.len()-1];
+                    self.tokens.consume().unwrap(); // consume the token
+                    content.to_string()
+                } else {
+                    // Fall back to complex parsing only when needed
+                    self.parse_delimited_content(opening_delim, closing_delim)?
+                }
+            } else {
+                String::new()
+            }
+        } else {
+            // For simple delimiters, use efficient string-based parsing
+            self.parse_simple_delimited_content(closing_delim)?
+        };
+
+        // Quick modifier parsing - peek only
+        let modifiers = if let Ok(token) = self.tokens.peek() {
+            if token.text.chars().all(|c| matches!(c, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r')) {
+                self.tokens.consume().unwrap();
+                token.text.clone()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
+        let end = self.get_current_position();
+        let dummy_expr = Node::new(
+            NodeKind::Variable { sigil: "$".to_string(), name: "_".to_string() },
+            SourceLocation { start, end }
+        );
+
+        Ok(Node::new(
+            NodeKind::Substitution {
+                expr: Box::new(dummy_expr),
+                pattern,
+                replacement,
+                modifiers,
+            },
+            SourceLocation { start, end }
+        ))
     }
 
     /// Parse substitution modifier flags (g, i, m, s, x, o, e, r)
