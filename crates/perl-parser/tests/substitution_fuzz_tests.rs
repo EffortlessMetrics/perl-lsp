@@ -2,9 +2,9 @@
 ///
 /// These tests systematically explore edge cases and boundary conditions
 /// in the substitution operator parsing logic.
+use std::panic;
 
 use perl_parser::{Parser, quote_parser::extract_substitution_parts};
-use std::panic;
 
 /// Test a batch of substitution operator inputs with invariant checking
 fn test_substitution_batch(inputs: &[&str]) -> Vec<String> {
@@ -22,8 +22,12 @@ fn test_substitution_batch(inputs: &[&str]) -> Vec<String> {
 
             // Verify modifiers only contain valid characters
             for ch in modifiers.chars() {
-                assert!(matches!(ch, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r'),
-                       "Invalid modifier '{}' in: {}", ch, input);
+                assert!(
+                    matches!(ch, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r'),
+                    "Invalid modifier '{}' in: {}",
+                    ch,
+                    input
+                );
             }
 
             (pattern, replacement, modifiers)
@@ -55,13 +59,11 @@ fn generate_edge_case_inputs() -> Vec<&'static str> {
         "s/",
         "s//",
         "s///",
-
         // Empty components
         "s///g",
         "s/a//",
         "s//b/",
         "s/a/b/",
-
         // Single character delimiters
         "s!pattern!replacement!",
         "s@pattern@replacement@",
@@ -73,13 +75,11 @@ fn generate_edge_case_inputs() -> Vec<&'static str> {
         "s+pattern+replacement+",
         "s=pattern=replacement=",
         "s~pattern~replacement~",
-
         // Balanced delimiters
         "s(pattern)(replacement)",
         "s{pattern}{replacement}",
         "s[pattern][replacement]",
         "s<pattern><replacement>",
-
         // Edge cases with balanced delimiters
         "s()()",
         "s{}{}",
@@ -89,7 +89,6 @@ fn generate_edge_case_inputs() -> Vec<&'static str> {
         "s{}{}g",
         "s[][]g",
         "s<><>g",
-
         // Incomplete balanced delimiters
         "s(",
         "s{",
@@ -103,7 +102,6 @@ fn generate_edge_case_inputs() -> Vec<&'static str> {
         "s{pattern}",
         "s[pattern]",
         "s<pattern>",
-
         // Modifier edge cases
         "s/a/b/ggiimmssxxooeerr",
         "s/a/b/gibberish",
@@ -112,23 +110,19 @@ fn generate_edge_case_inputs() -> Vec<&'static str> {
         "s/a/b/ ",
         "s/a/b/\t",
         "s/a/b/\n",
-
         // Escape sequence edge cases
         "s/\\/\\/\\/",
         "s/\\\\\\\\\\\\",
-
         // Unicode edge cases
         "s/α/β/",
         "s/😀/😁/",
         "s/🦀/🔥/",
         "s/Ω/Α/",
-
         // Nested delimiter cases
         "s{pat{tern}}{replace{ment}}",
         "s[pat[tern]][replace[ment]]",
         "s(pat(tern))(replace(ment))",
         "s<pat<tern>><replace<ment>>",
-
         // Mixed content
         "s/[a-z]+/NUMBER/g",
         "s/\\d{3}-\\d{2}-\\d{4}/XXX-XX-XXXX/",
@@ -141,14 +135,17 @@ fn generate_pathological_inputs() -> Vec<String> {
     let mut inputs = Vec::new();
 
     // Deep nesting with balanced delimiters
-    for depth in 1..5 {  // Reduced depth to prevent timeout
+    for depth in 1..5 {
+        // Reduced depth to prevent timeout
         let pattern = format!("s{}{}{}", "{".repeat(depth), "a".repeat(depth), "}".repeat(depth));
-        let replacement = format!("{}{}{}", "{".repeat(depth), "b".repeat(depth), "}".repeat(depth));
+        let replacement =
+            format!("{}{}{}", "{".repeat(depth), "b".repeat(depth), "}".repeat(depth));
         inputs.push(format!("s{}{}", pattern, replacement));
     }
 
     // Long modifiers
-    for len in [10, 50] {  // Reduced lengths
+    for len in [10, 50] {
+        // Reduced lengths
         inputs.push(format!("s/a/b/{}", "g".repeat(len)));
         inputs.push(format!("s/a/b/{}", "invalid".repeat(len)));
     }
@@ -185,17 +182,8 @@ fn run_substitution_fuzz_tests() -> Result<(), Vec<String>> {
 #[test]
 fn test_substitution_fuzz_edge_cases() {
     // Test basic edge cases that should never crash
-    let edge_cases = vec![
-        "s",
-        "s/",
-        "s//",
-        "s///",
-        "s/a/b/",
-        "s{a}{b}",
-        "s[a][b]",
-        "s(a)(b)",
-        "s<a><b>",
-    ];
+    let edge_cases =
+        vec!["s", "s/", "s//", "s///", "s/a/b/", "s{a}{b}", "s[a][b]", "s(a)(b)", "s<a><b>"];
 
     let crashes = test_substitution_batch(&edge_cases);
     assert!(crashes.is_empty(), "Found crashes in edge cases: {:?}", crashes);
@@ -224,14 +212,8 @@ fn test_substitution_fuzz_delimiter_variants() {
 #[test]
 fn test_substitution_fuzz_unicode_handling() {
     // Test Unicode edge cases
-    let unicode_cases = vec![
-        "s/α/β/",
-        "s/😀/😁/",
-        "s/🦀/🔥/",
-        "s/Ω/Α/",
-        "s/नमस्ते/हैलो/",
-        "s/Здравствуй/Привет/",
-    ];
+    let unicode_cases =
+        vec!["s/α/β/", "s/😀/😁/", "s/🦀/🔥/", "s/Ω/Α/", "s/नमस्ते/हैलो/", "s/Здравствуй/Привет/"];
 
     let crashes = test_substitution_batch(&unicode_cases);
     assert!(crashes.is_empty(), "Found crashes in Unicode cases: {:?}", crashes);
@@ -245,9 +227,9 @@ fn test_substitution_fuzz_boundary_conditions() {
         "s{}{}g",
         "s[][]g",
         "s<><>g",
-        "s/a/b/ggiimmssxxooeerr",  // Excessive valid modifiers
-        "s/\\/\\/\\/",             // Escape sequences
-        "s/\\\\\\\\\\\\",          // Multiple backslashes
+        "s/a/b/ggiimmssxxooeerr", // Excessive valid modifiers
+        "s/\\/\\/\\/",            // Escape sequences
+        "s/\\\\\\\\\\\\",         // Multiple backslashes
     ];
 
     let crashes = test_substitution_batch(&boundary_cases);
