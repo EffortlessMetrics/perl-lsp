@@ -1,0 +1,464 @@
+# Documentation Standards Schema for perl-parser Crate
+# Domain schema defining documentation patterns and validation rules
+
+schema_version: "1.0"
+schema_id: "documentation-standards"
+scope: "perl-parser-crate-documentation"
+
+## Documentation Template Definitions
+
+documentation_templates:
+
+  public_struct:
+    pattern: |
+      /// {brief_description}
+      ///
+      /// {detailed_description}
+      ///
+      /// ## PSTX Pipeline Integration
+      ///
+      /// This struct is used in the {pipeline_stages} stage(s) of the PSTX email processing pipeline:
+      /// {pipeline_integration_details}
+      ///
+      /// ## Key Features
+      ///
+      /// {key_features_list}
+      ///
+      /// ## Examples
+      ///
+      /// ```rust
+      /// use perl_parser::{struct_name};
+      ///
+      /// {usage_example}
+      /// ```
+      ///
+      /// ## Performance Characteristics
+      ///
+      /// {performance_notes}
+      ///
+      /// ## Thread Safety
+      ///
+      /// {thread_safety_guarantees}
+      ///
+      /// ## See Also
+      ///
+      /// {cross_references}
+      pub struct {StructName} {
+          // fields
+      }
+
+    required_sections:
+      - brief_description: "Single sentence describing the struct's purpose"
+      - detailed_description: "2-3 paragraph comprehensive explanation"
+      - pipeline_integration_details: "Specific role in Extract/Normalize/Thread/Render/Index stages"
+      - key_features_list: "Bullet points of main capabilities"
+      - usage_example: "Working Rust code example"
+      - performance_notes: "Memory usage, time complexity, scalability considerations"
+      - thread_safety_guarantees: "Thread safety level and synchronization requirements"
+      - cross_references: "Links to related structs/functions using [`name`] syntax"
+
+    optional_sections:
+      - migration_notes: "For deprecated or evolving APIs"
+      - error_handling: "Common error scenarios and handling patterns"
+      - limitations: "Known limitations or constraints"
+
+  public_enum:
+    pattern: |
+      /// {brief_description}
+      ///
+      /// {detailed_description}
+      ///
+      /// ## Variants
+      ///
+      /// {variant_descriptions}
+      ///
+      /// ## Usage in PSTX Pipeline
+      ///
+      /// {pipeline_usage}
+      ///
+      /// ## Examples
+      ///
+      /// ```rust
+      /// use perl_parser::{enum_name};
+      ///
+      /// match {example_value} {
+      ///     {EnumName}::{Variant1} => {
+      ///         {example_handling}
+      ///     }
+      ///     {EnumName}::{Variant2} => {
+      ///         {example_handling}
+      ///     }
+      /// }
+      /// ```
+      ///
+      /// ## See Also
+      ///
+      /// {cross_references}
+      pub enum {EnumName} {
+          // variants with individual documentation
+      }
+
+    required_sections:
+      - brief_description: "Purpose of the enum and what it represents"
+      - detailed_description: "Context and usage scenarios"
+      - variant_descriptions: "Documentation for each variant's purpose and usage"
+      - pipeline_usage: "How enum is used in PSTX email processing stages"
+      - example_handling: "Practical usage with pattern matching"
+      - cross_references: "Related enums, structs, and functions"
+
+  public_function:
+    pattern: |
+      /// {brief_description}
+      ///
+      /// {detailed_description}
+      ///
+      /// ## Arguments
+      ///
+      /// {parameter_documentation}
+      ///
+      /// ## Returns
+      ///
+      /// {return_documentation}
+      ///
+      /// ## Errors
+      ///
+      /// {error_documentation}
+      ///
+      /// ## Panics
+      ///
+      /// {panic_documentation}
+      ///
+      /// ## Performance
+      ///
+      /// {performance_characteristics}
+      ///
+      /// ## Examples
+      ///
+      /// ```rust
+      /// use perl_parser::{function_name};
+      ///
+      /// {usage_example}
+      /// ```
+      ///
+      /// ## PSTX Integration
+      ///
+      /// {pipeline_integration}
+      ///
+      /// ## See Also
+      ///
+      /// {cross_references}
+      pub fn {function_name}({parameters}) -> {return_type} {
+          // implementation
+      }
+
+    required_sections:
+      - brief_description: "What the function does in one sentence"
+      - detailed_description: "Comprehensive explanation of behavior and purpose"
+      - parameter_documentation: "Each parameter with type, constraints, and purpose"
+      - return_documentation: "Return value description including all possible variants"
+      - error_documentation: "All possible error conditions and when they occur"
+      - panic_documentation: "Conditions that cause panics (if any)"
+      - performance_characteristics: "Time complexity, memory usage, scalability"
+      - usage_example: "Working code example showing typical usage"
+      - pipeline_integration: "How function fits into PSTX email processing workflow"
+      - cross_references: "Related functions and types"
+
+  public_trait:
+    pattern: |
+      /// {brief_description}
+      ///
+      /// {detailed_description}
+      ///
+      /// ## Required Methods
+      ///
+      /// {required_methods_overview}
+      ///
+      /// ## Provided Methods
+      ///
+      /// {provided_methods_overview}
+      ///
+      /// ## Implementation Requirements
+      ///
+      /// {implementation_requirements}
+      ///
+      /// ## Examples
+      ///
+      /// ```rust
+      /// use perl_parser::{trait_name};
+      ///
+      /// {implementation_example}
+      /// ```
+      ///
+      /// ## PSTX Pipeline Usage
+      ///
+      /// {pipeline_usage}
+      ///
+      /// ## See Also
+      ///
+      /// {cross_references}
+      pub trait {TraitName} {
+          // methods with individual documentation
+      }
+
+    required_sections:
+      - brief_description: "Purpose and abstraction provided by the trait"
+      - detailed_description: "When to implement this trait and design patterns"
+      - required_methods_overview: "Summary of methods implementors must provide"
+      - provided_methods_overview: "Default implementations and their behavior"
+      - implementation_requirements: "Constraints and contracts for implementors"
+      - implementation_example: "Complete example of trait implementation"
+      - pipeline_usage: "How trait fits into PSTX email processing architecture"
+      - cross_references: "Related traits, structs, and functions"
+
+  module_documentation:
+    pattern: |
+      //! # {Module Name}
+      //!
+      //! {brief_module_description}
+      //!
+      //! ## Overview
+      //!
+      //! {comprehensive_module_description}
+      //!
+      //! ## PSTX Pipeline Integration
+      //!
+      //! This module supports the following pipeline stages:
+      //!
+      //! {pipeline_stage_details}
+      //!
+      //! ## Architecture
+      //!
+      //! {architecture_description}
+      //!
+      //! ## Key Components
+      //!
+      //! {component_list}
+      //!
+      //! ## Examples
+      //!
+      //! ```rust
+      //! use perl_parser::{module_name}::*;
+      //!
+      //! {module_usage_example}
+      //! ```
+      //!
+      //! ## Performance Considerations
+      //!
+      //! {performance_notes}
+      //!
+      //! ## Security Considerations
+      //!
+      //! {security_notes}
+      //!
+      //! ## See Also
+      //!
+      //! {related_modules}
+
+    required_sections:
+      - brief_module_description: "Single sentence describing module purpose"
+      - comprehensive_module_description: "Detailed explanation of module functionality"
+      - pipeline_stage_details: "Specific roles in Extract/Normalize/Thread/Render/Index stages"
+      - architecture_description: "How components interact within the module"
+      - component_list: "Key structs, enums, functions with brief descriptions"
+      - module_usage_example: "Complete working example of module usage"
+      - performance_notes: "Performance characteristics relevant to email processing"
+      - security_notes: "Security considerations for enterprise email processing"
+      - related_modules: "Cross-references to related modules and external crates"
+
+## Validation Rules
+
+validation_rules:
+
+  documentation_completeness:
+    missing_docs_compliance:
+      rule: "All public items must have documentation comments"
+      validation: "cargo build with #![warn(missing_docs)] produces no warnings"
+      automation: "CI pipeline enforces missing_docs warnings"
+
+    minimal_documentation_length:
+      rule: "Brief descriptions must be 5-50 words, detailed descriptions 20-200 words"
+      validation: "Automated length checking in CI"
+      exception: "Simple utility functions may have shorter documentation"
+
+    required_sections_presence:
+      rule: "All required sections must be present for each documentation type"
+      validation: "Custom linting tool validates section presence"
+      enforcement: "Pre-commit hooks check documentation structure"
+
+  cross_reference_validation:
+    internal_links:
+      rule: "All [`function_name`] references must resolve to valid items"
+      validation: "cargo doc generation validates all internal links"
+      error_handling: "Build fails on broken internal references"
+
+    external_links:
+      rule: "External links must use full paths like [`crate::item`]"
+      validation: "Documentation generation validates external references"
+      maintenance: "Periodic link validation in CI"
+
+    pipeline_references:
+      rule: "PSTX pipeline stage references must use standard terminology"
+      validation: "Custom linting ensures consistent pipeline stage naming"
+      terminology: "Extract, Normalize, Thread, Render, Index (exact capitalization)"
+
+  example_validation:
+    code_compilation:
+      rule: "All code examples must compile successfully"
+      validation: "cargo test --doc validates all code examples"
+      error_handling: "Test failures indicate broken documentation examples"
+
+    example_relevance:
+      rule: "Examples must demonstrate real-world usage scenarios"
+      validation: "Manual review ensures example quality and relevance"
+      guidelines: "Examples should solve actual problems developers face"
+
+    performance_examples:
+      rule: "Performance-critical APIs must include performance-aware examples"
+      validation: "Examples for optimization APIs include performance considerations"
+      scope: "Parser, incremental parsing, workspace indexing, large file processing"
+
+## Style Guidelines
+
+formatting_standards:
+
+  sentence_structure:
+    brief_descriptions:
+      format: "Start with verb in third person singular (e.g., 'Parses', 'Extracts', 'Provides')"
+      length: "5-15 words maximum"
+      punctuation: "No trailing period for brief descriptions"
+      examples:
+        - "Parses Perl source code into an abstract syntax tree"
+        - "Extracts semantic tokens for syntax highlighting"
+        - "Provides code completion suggestions based on context"
+
+    detailed_descriptions:
+      format: "Multiple sentences explaining purpose, behavior, and context"
+      length: "2-4 sentences for most APIs, longer for complex components"
+      structure: "Purpose → Behavior → Context → Usage scenarios"
+
+  code_formatting:
+    rust_code_blocks:
+      syntax: "```rust for all Rust code examples"
+      compilation: "All examples must compile with use statements"
+      style: "Follow rustfmt formatting standards"
+      documentation: "Include explanatory comments in complex examples"
+
+    inline_code:
+      function_references: "`function_name()` for function calls in prose"
+      type_references: "`TypeName` for type references in prose"
+      parameter_references: "`param_name` for parameter names in descriptions"
+
+  terminology_standards:
+    pstx_pipeline:
+      stages: "Extract, Normalize, Thread, Render, Index (exact capitalization)"
+      workflow: "PSTX email processing pipeline or email processing workflow"
+      consistency: "Use consistent terminology across all documentation"
+
+    perl_terminology:
+      ast: "Abstract Syntax Tree (AST) on first use, AST in subsequent references"
+      lsp: "Language Server Protocol (LSP) on first use, LSP subsequently"
+      parser: "Perl parser not parser when context is ambiguous"
+
+## Quality Metrics
+
+documentation_quality_metrics:
+
+  coverage_metrics:
+    api_coverage: "100% of public APIs documented (no missing_docs warnings)"
+    section_coverage: "≥90% of APIs include all required sections"
+    example_coverage: "≥80% of complex APIs include working examples"
+    cross_reference_coverage: "≥60% of APIs include relevant cross-references"
+
+  content_quality_metrics:
+    clarity_score: "Manual review assesses explanation clarity (scale 1-5)"
+    completeness_score: "Information completeness for developer needs (scale 1-5)"
+    accuracy_score: "Technical accuracy verified through testing (scale 1-5)"
+    relevance_score: "Relevance to PSTX enterprise use cases (scale 1-5)"
+
+  maintenance_metrics:
+    freshness: "Documentation updated within 30 days of API changes"
+    link_health: "100% of internal links functional"
+    example_health: "100% of code examples compile and execute successfully"
+    style_consistency: "≥95% adherence to style guidelines"
+
+## Tool Integration
+
+documentation_tools:
+
+  generation_tools:
+    cargo_doc: "Primary documentation generation with --no-deps flag"
+    rustdoc: "Standard Rust documentation generation tool"
+    custom_preprocessing: "Custom scripts for PSTX-specific formatting"
+
+  validation_tools:
+    missing_docs_check: "cargo build with #![warn(missing_docs)] enabled"
+    link_validation: "cargo doc validates internal cross-references"
+    example_testing: "cargo test --doc validates all code examples"
+    style_checking: "Custom linting for documentation formatting"
+
+  automation_integration:
+    ci_pipeline: "Automated documentation validation on all pull requests"
+    pre_commit_hooks: "Documentation structure validation before commits"
+    periodic_maintenance: "Weekly automated link and example validation"
+    metrics_tracking: "Documentation quality metrics tracked over time"
+
+## Specialized Documentation Patterns
+
+pstx_specific_patterns:
+
+  performance_documentation:
+    pattern: |
+      ## Performance Characteristics
+
+      - **Time Complexity**: {big_o_notation}
+      - **Memory Usage**: {memory_characteristics}
+      - **50GB PST Processing**: {large_file_performance}
+      - **Concurrency**: {thread_safety_and_scaling}
+      - **Incremental Updates**: {incremental_performance}
+
+    required_for:
+      - "Parser and parsing-related functions"
+      - "Workspace indexing and symbol resolution"
+      - "Incremental parsing components"
+      - "Memory-intensive operations"
+
+  error_documentation:
+    pattern: |
+      ## Error Conditions
+
+      This function returns errors in the following scenarios:
+
+      - **Parse Errors**: When {parse_error_conditions}
+      - **IO Errors**: When {io_error_conditions}
+      - **Memory Errors**: When {memory_error_conditions}
+      - **Timeout Errors**: When {timeout_conditions}
+
+      ## Error Recovery
+
+      {error_recovery_strategies}
+
+    pipeline_integration:
+      extract_stage: "Document parsing errors in email extraction context"
+      normalize_stage: "Document transformation and validation errors"
+      thread_stage: "Document symbol resolution and indexing errors"
+      render_stage: "Document LSP provider and rendering errors"
+      index_stage: "Document search and indexing errors"
+
+  security_documentation:
+    pattern: |
+      ## Security Considerations
+
+      - **Input Validation**: {input_sanitization}
+      - **Path Traversal**: {path_security}
+      - **Memory Safety**: {memory_safety_guarantees}
+      - **Denial of Service**: {dos_protection}
+
+      ## Enterprise Email Processing
+
+      {enterprise_security_considerations}
+
+    required_for:
+      - "File system access functions"
+      - "User input processing"
+      - "Network communication"
+      - "External tool integration"
