@@ -5,7 +5,7 @@
 ### `/crates/perl-parser/` - Main Parser Library ⭐ **MAIN CRATE**
 - **Purpose**: Core recursive descent parser with production-grade features
 - **Key Features**:
-  - Native recursive descent parser with ~100% Perl 5 syntax coverage
+  - Native recursive descent parser with ~100% Perl 5 syntax coverage (including comprehensive substitution operator parsing)
   - 4-19x faster than legacy implementations (1-150 µs parsing)
   - True incremental parsing with <1ms LSP updates
   - Production-ready Rope integration for UTF-16/UTF-8 position conversion

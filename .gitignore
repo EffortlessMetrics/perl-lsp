@@ -29,3 +29,15 @@ scripts/__pycache__/
 scripts/__pycache__/
 *.pyc
 releases/
+
+/.claude/agents
+
+# Mutation testing artifacts
+mutants.out/
+mutants.out.old/
+mutation_testing_report.md
+manual_mutation_test.rs
+run_mutation_test.sh
+test_survivor_analysis.rs
+analyze_survivors.sh
+.cargo/mutants.toml

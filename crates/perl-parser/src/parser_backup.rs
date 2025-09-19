@@ -2162,16 +2162,22 @@ impl<'a> Parser<'a> {
                         } else if let NodeKind::Regex { pattern, .. } = &right.kind {
                             if pattern.starts_with("s/") || pattern.starts_with("s|") || pattern.starts_with("s{") || pattern.starts_with("s[") {
                                 // Parse as substitution
-                                let parts = parse_substitution_parts(pattern);
-                                expr = Node::new(
-                                    NodeKind::Substitution {
-                                        expr: Box::new(expr),
-                                        pattern: parts.0,
-                                        replacement: parts.1,
-                                        modifiers: parts.2,
-                                    },
-                                    SourceLocation { start, end }
-                                );
+                                match parse_substitution_parts(pattern) {
+                                    Ok(parts) => {
+                                        expr = Node::new(
+                                            NodeKind::Substitution {
+                                                expr: Box::new(expr),
+                                                pattern: parts.0,
+                                                replacement: parts.1,
+                                                modifiers: parts.2,
+                                            },
+                                            SourceLocation { start, end }
+                                        );
+                                    }
+                                    Err(err) => {
+                                        return Err(ParseError::syntax(&err, start));
+                                    }
+                                }
                             } else if pattern.starts_with("tr/") || pattern.starts_with("y/") || 
                                      pattern.starts_with("tr{") || pattern.starts_with("y{") ||
                                      pattern.starts_with("tr[") || pattern.starts_with("y[") {
@@ -2909,6 +2915,20 @@ impl<'a> Parser<'a> {
             TokenKind::LeftBracket => '[',
             TokenKind::LeftParen => '(',
             TokenKind::Less => '<',
+            TokenKind::Div => '/',
+            TokenKind::Or => '|',
+            TokenKind::Hash => '#',
+            TokenKind::Bang => '!',
+            TokenKind::At => '@',
+            TokenKind::Percent => '%',
+            TokenKind::Caret => '^',
+            TokenKind::Ampersand => '&',
+            TokenKind::Star => '*',
+            TokenKind::Plus => '+',
+            TokenKind::Equal => '=',
+            TokenKind::Tilde => '~',
+            TokenKind::Quote => '\'',
+            TokenKind::Comma => ',',
             _ => delim_token.text.chars().next()
                 .ok_or_else(|| ParseError::syntax("Expected delimiter after quote operator", delim_token.start))?
         };
@@ -3106,15 +3126,9 @@ impl<'a> Parser<'a> {
                 ))
             }
             "s" => {
-                // Substitution operator - for now just parse as regex
-                // TODO: Parse replacement and modifiers
-                Ok(Node::new(
-                    NodeKind::Regex {
-                        pattern: format!("s{}{}{}", opening_delim, content, closing_delim),
-                        modifiers: String::new(),
-                    },
-                    SourceLocation { start, end }
-                ))
+                // Substitution operator - needs special handling for two-part structure
+                // Don't use the regular quote parsing for substitution operators
+                self.parse_substitution_from_start(start, opening_delim, closing_delim, content)
             }
             _ => {
                 Err(ParseError::syntax(
@@ -3124,7 +3138,212 @@ impl<'a> Parser<'a> {
             }
         }
     }
-    
+
+    /// Parse substitution operator (s///) from the beginning with proper two-part handling
+    fn parse_substitution_from_start(&mut self, start: Position, opening_delim: char, closing_delim: char, first_part: String) -> ParseResult<Node> {
+        // We have the pattern from the first part
+        let pattern = first_part;
+
+        // Check if we have more tokens - if not, this is malformed
+        if self.tokens.is_eof() {
+            return Err(ParseError::syntax("Incomplete substitution operator - missing replacement text", start));
+        }
+
+        // Now parse the replacement part
+        // For bracket delimiters, expect another opening bracket
+        // For simple delimiters, replacement starts immediately
+        let replacement = if matches!(opening_delim, '{' | '[' | '(' | '<') {
+            // For bracket delimiters like s{pattern}{replacement}
+            let next_token = self.consume_token().map_err(|_|
+                ParseError::syntax("Expected opening delimiter for replacement text", start))?;
+
+            // Verify we get the correct opening delimiter
+            match (opening_delim, next_token.kind) {
+                ('{', TokenKind::LeftBrace) |
+                ('[', TokenKind::LeftBracket) |
+                ('(', TokenKind::LeftParen) |
+                ('<', TokenKind::Less) => {
+                    // Parse replacement content with nesting support
+                    self.parse_delimited_content(opening_delim, closing_delim)?
+                }
+                _ => {
+                    return Err(ParseError::syntax(
+                        &format!("Expected '{}' to start replacement text, found {:?}", opening_delim, next_token.kind),
+                        next_token.start
+                    ));
+                }
+            }
+        } else {
+            // For simple delimiters like s/pattern/replacement/
+            self.parse_simple_delimited_content(closing_delim)?
+        };
+
+        // Parse modifier flags
+        let modifiers = self.parse_substitution_modifiers()?;
+
+        let end = self.get_current_position();
+
+        // Create a dummy expression for now - this should be improved
+        // to handle actual target expressions like $str =~ s/.../.../
+        let dummy_expr = Node::new(
+            NodeKind::Variable { sigil: "$".to_string(), name: "_".to_string() },
+            SourceLocation { start, end }
+        );
+
+        Ok(Node::new(
+            NodeKind::Substitution {
+                expr: Box::new(dummy_expr),
+                pattern,
+                replacement,
+                modifiers,
+            },
+            SourceLocation { start, end }
+        ))
+    }
+
+    /// Parse content delimited by bracket pairs with nesting support
+    fn parse_delimited_content(&mut self, opening_delim: char, closing_delim: char) -> ParseResult<String> {
+        let mut content = String::new();
+        let mut depth = 1;
+
+        while depth > 0 && !self.tokens.is_eof() {
+            let token_kind = self.peek_kind();
+
+            match (opening_delim, token_kind) {
+                ('{', Some(TokenKind::LeftBrace)) => {
+                    self.consume_token()?;
+                    content.push('{');
+                    depth += 1;
+                }
+                ('{', Some(TokenKind::RightBrace)) => {
+                    self.consume_token()?;
+                    depth -= 1;
+                    if depth > 0 {
+                        content.push('}');
+                    }
+                }
+                ('[', Some(TokenKind::LeftBracket)) => {
+                    self.consume_token()?;
+                    content.push('[');
+                    depth += 1;
+                }
+                ('[', Some(TokenKind::RightBracket)) => {
+                    self.consume_token()?;
+                    depth -= 1;
+                    if depth > 0 {
+                        content.push(']');
+                    }
+                }
+                ('(', Some(TokenKind::LeftParen)) => {
+                    self.consume_token()?;
+                    content.push('(');
+                    depth += 1;
+                }
+                ('(', Some(TokenKind::RightParen)) => {
+                    self.consume_token()?;
+                    depth -= 1;
+                    if depth > 0 {
+                        content.push(')');
+                    }
+                }
+                ('<', Some(TokenKind::Less)) => {
+                    self.consume_token()?;
+                    content.push('<');
+                    depth += 1;
+                }
+                ('<', Some(TokenKind::Greater)) => {
+                    self.consume_token()?;
+                    depth -= 1;
+                    if depth > 0 {
+                        content.push('>');
+                    }
+                }
+                _ => {
+                    let token = self.consume_token()?;
+                    content.push_str(&token.text);
+                }
+            }
+        }
+
+        Ok(content)
+    }
+
+    /// Parse content delimited by simple characters (like /)
+    fn parse_simple_delimited_content(&mut self, delimiter: char) -> ParseResult<String> {
+        let mut content = String::new();
+        let mut found_delimiter = false;
+
+        while !self.tokens.is_eof() {
+            let token = self.consume_token()?;
+            if let Some(first_char) = token.text.chars().next() {
+                if first_char == delimiter {
+                    found_delimiter = true;
+                    break;
+                }
+            }
+            content.push_str(&token.text);
+        }
+
+        if !found_delimiter {
+            return Err(ParseError::syntax(
+                &format!("Missing closing delimiter '{}'", delimiter),
+                self.get_current_position()
+            ));
+        }
+
+        Ok(content)
+    }
+
+    /// Parse substitution modifier flags (g, i, m, s, x, o, e, r)
+    fn parse_substitution_modifiers(&mut self) -> ParseResult<String> {
+        let mut modifiers = String::new();
+
+        while let Some(token_kind) = self.peek_kind() {
+            if let Some(TokenKind::Identifier) = token_kind {
+                // Peek at the token to see if it's a valid modifier
+                if let Ok(token) = self.tokens.peek() {
+                    let flag_text = &token.text;
+
+                    // Check each character in the token
+                    for ch in flag_text.chars() {
+                        match ch {
+                            'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' => {
+                                // Valid modifier
+                                modifiers.push(ch);
+                            }
+                            _ => {
+                                // Invalid substitution flag - return error
+                                return Err(ParseError::syntax(
+                                    &format!("Invalid substitution modifier flag: '{}'", ch),
+                                    token.start
+                                ));
+                            }
+                        }
+                    }
+
+                    // Consume the entire token after validating all characters
+                    self.consume_token()?;
+                } else {
+                    break;
+                }
+            } else if let Some(TokenKind::Number) = token_kind {
+                // Numbers are invalid as modifiers
+                if let Ok(token) = self.tokens.peek() {
+                    return Err(ParseError::syntax(
+                        &format!("Invalid substitution modifier flag: '{}'", token.text),
+                        token.start
+                    ));
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        Ok(modifiers)
+    }
+
     /// Parse qualified identifier (may contain ::)
     fn parse_qualified_identifier(&mut self) -> ParseResult<Node> {
         let start_token = self.consume_token()?;
@@ -3211,21 +3430,26 @@ impl<'a> Parser<'a> {
             
             TokenKind::Substitution => {
                 let token = self.tokens.next()?;
-                let (pattern, replacement, modifiers) = parse_substitution_parts(&token.text);
-                
-                // Substitution as a standalone expression (will be used with =~ later)
-                Ok(Node::new(
-                    NodeKind::Substitution { 
-                        expr: Box::new(Node::new(
-                            NodeKind::Identifier { name: String::from("$_") },
-                            SourceLocation { start: token.start, end: token.start }
-                        )),
-                        pattern,
-                        replacement,
-                        modifiers,
-                    },
-                    SourceLocation { start: token.start, end: token.end }
-                ))
+                match parse_substitution_parts(&token.text) {
+                    Ok((pattern, replacement, modifiers)) => {
+                        // Substitution as a standalone expression (will be used with =~ later)
+                        Ok(Node::new(
+                            NodeKind::Substitution {
+                                expr: Box::new(Node::new(
+                                    NodeKind::Identifier { name: String::from("$_") },
+                                    SourceLocation { start: token.start, end: token.start }
+                                )),
+                                pattern,
+                                replacement,
+                                modifiers,
+                            },
+                            SourceLocation { start: token.start, end: token.end }
+                        ))
+                    }
+                    Err(err) => {
+                        Err(ParseError::syntax(&err, token.start))
+                    }
+                }
             }
             
             TokenKind::Transliteration => {
@@ -3978,12 +4202,12 @@ impl<'a> Parser<'a> {
 }
 
 /// Parse substitution parts from a string like "s/pattern/replacement/flags"
-fn parse_substitution_parts(s: &str) -> (String, String, String) {
+fn parse_substitution_parts(s: &str) -> Result<(String, String, String), String> {
     // Skip 's' and first delimiter
     let mut chars = s.chars();
     chars.next(); // skip 's'
     let delimiter = chars.next().unwrap_or('/');
-    
+
     let is_paired = matches!(delimiter, '{' | '[' | '(' | '<');
     let closing = match delimiter {
         '{' => '}',
@@ -3992,17 +4216,26 @@ fn parse_substitution_parts(s: &str) -> (String, String, String) {
         '<' => '>',
         _ => delimiter,
     };
-    
+
     let mut pattern = String::new();
     let mut replacement = String::new();
     let mut modifiers = String::new();
     let mut in_escape = false;
     let mut phase = 0; // 0 = pattern, 1 = replacement, 2 = modifiers
     let mut depth = if is_paired { 1 } else { 0 };
-    
+
     for ch in chars {
         if phase == 2 {
-            modifiers.push(ch);
+            // Validate substitution modifiers - only allow valid flags
+            match ch {
+                'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' => {
+                    modifiers.push(ch);
+                }
+                _ => {
+                    // Invalid modifier - return error
+                    return Err(format!("Invalid substitution modifier flag: '{}'", ch));
+                }
+            }
             continue;
         }
         
@@ -4074,8 +4307,13 @@ fn parse_substitution_parts(s: &str) -> (String, String, String) {
             }
         }
     }
-    
-    (pattern, replacement, modifiers)
+
+    // Validate that we have both pattern and replacement parts (phase should be at least 1)
+    if phase == 0 {
+        return Err("Incomplete substitution operator - missing replacement text".to_string());
+    }
+
+    Ok((pattern, replacement, modifiers))
 }
 
 /// Parse heredoc delimiter from a string like "<<EOF", "<<'EOF'", "<<~EOF"
