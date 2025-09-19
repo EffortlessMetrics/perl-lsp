@@ -8,7 +8,9 @@ use serde_json::{Value, json};
 /// Helper to create and initialize a test server
 fn setup_server() -> LspServer {
     let mut server = LspServer::new();
-    let request = JsonRpcRequest {
+
+    // Send initialize request
+    let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
         method: "initialize".to_string(),
@@ -18,7 +20,17 @@ fn setup_server() -> LspServer {
             "rootUri": "file:///test"
         })),
     };
-    server.handle_request(request);
+    server.handle_request(init_request);
+
+    // Send initialized notification (required after successful initialize)
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    };
+    server.handle_request(initialized_notification);
+
     server
 }
 
