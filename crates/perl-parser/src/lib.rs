@@ -8,16 +8,16 @@
 //! ## Quick use (library)
 //! ```rust
 //! use perl_parser::Parser;
-//! let mut p = Parser::new();
-//! let ast = p.parse(r#"sub hello { print "hi\n"; }"#).unwrap();
+//! let mut p = Parser::new(r#"sub hello { print "hi\n"; }"#);
+//! let ast = p.parse().unwrap();
 //! println!("{}", ast.to_sexp());
 //! ```
 //!
 //! ## Test Generation (TDD)
 //! ```rust
 //! use perl_parser::{Parser, TestGenerator, TestFramework};
-//! let mut p = Parser::new();
-//! let ast = p.parse(r#"sub add { my ($a, $b) = @_; return $a + $b; }"#).unwrap();
+//! let mut p = Parser::new(r#"sub add { my ($a, $b) = @_; return $a + $b; }"#);
+//! let ast = p.parse().unwrap();
 //!
 //! let generator = TestGenerator::new(TestFramework::TestMore);
 //! let tests = generator.generate_tests(&ast, "");

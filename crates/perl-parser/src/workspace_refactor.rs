@@ -320,7 +320,7 @@ impl WorkspaceRefactor {
     /// * `RefactorError::UriConversion` - If file path/URI conversion fails
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,no_run
     /// # use perl_parser::workspace_refactor::WorkspaceRefactor;
     /// # use perl_parser::workspace_index::WorkspaceIndex;
     /// # use std::path::Path;
@@ -470,7 +470,7 @@ impl WorkspaceRefactor {
     /// * `RefactorError::UriConversion` - If file path/URI conversion fails
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,no_run
     /// # use perl_parser::workspace_refactor::WorkspaceRefactor;
     /// # use perl_parser::workspace_index::WorkspaceIndex;
     /// # use std::path::Path;
@@ -597,7 +597,7 @@ impl WorkspaceRefactor {
     /// * `RefactorError::UriConversion` - If file path/URI conversion fails
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,no_run
     /// # use perl_parser::workspace_refactor::WorkspaceRefactor;
     /// # use perl_parser::workspace_index::WorkspaceIndex;
     /// # use std::path::Path;

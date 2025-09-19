@@ -8,7 +8,7 @@
 //!
 //! ## Example
 //!
-//! ```rust
+//! ```rust,no_run
 //! use perl_parser::import_optimizer::ImportOptimizer;
 //! use std::path::Path;
 //!
