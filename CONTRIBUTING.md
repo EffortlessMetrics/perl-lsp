@@ -597,7 +597,26 @@ The project maintains high code quality standards. Before committing:
    cargo clippy --all -- -W clippy::all
    ```
 
-3. **Follow Rust best practices**
+3. **Validate API documentation** ⭐ **NEW: Issue #149**
+   ```bash
+   # Run comprehensive documentation tests
+   cargo test -p perl-parser --test missing_docs_ac_tests
+
+   # Validate cargo doc generation
+   cargo doc --no-deps --package perl-parser
+   ```
+
+4. **Follow API Documentation Standards** ⭐ **NEW: Issue #149**
+
+   The perl-parser crate enforces comprehensive API documentation through `#![warn(missing_docs)]`. All contributions must follow the [API Documentation Standards](docs/API_DOCUMENTATION_STANDARDS.md):
+
+   - **All public structs, enums, and functions** must have comprehensive documentation
+   - **Performance-critical APIs** must document memory usage and 50GB PST processing implications
+   - **Complex APIs** must include working usage examples with doctests
+   - **Error types** must document email processing workflow context and recovery strategies
+   - **Module-level documentation** must explain PSTX pipeline integration (Extract → Normalize → Thread → Render → Index)
+
+5. **Follow Rust best practices**
    - Prefer `.first()` over `.get(0)` for accessing first element
    - Use `.push(char)` instead of `.push_str("x")` for single characters
    - Use `or_default()` instead of `or_insert_with(Vec::new)` for default values
@@ -666,6 +685,9 @@ perf: optimize string interpolation parsing
 - [ ] Tests pass locally
 - [ ] Code is formatted (`cargo fmt`)
 - [ ] No clippy warnings (`cargo clippy`)
+- [ ] **API documentation complete** ⭐ **NEW: Issue #149** (`cargo test -p perl-parser --test missing_docs_ac_tests`)
+- [ ] **Documentation follows standards** (see [API Documentation Standards](docs/API_DOCUMENTATION_STANDARDS.md))
+- [ ] **cargo doc builds without warnings** (`cargo doc --no-deps --package perl-parser`)
 - [ ] Documentation updated if needed
 - [ ] Commit messages follow conventions
 - [ ] PR description explains the changes

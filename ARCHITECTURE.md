@@ -593,11 +593,83 @@ fn is_in_hash_key_context(&self, _node: &Node) -> bool {
 - Preserve S-expression format
 - Enhance performance iteratively
 
+## 🏛️ Architectural Decisions ⭐ **NEW: Issue #149**
+
+*Diataxis: Explanation* - Understanding the reasoning behind key architectural choices
+
+### ADR-001: Comprehensive API Documentation Enforcement
+
+**Status**: Accepted (Issue #149)
+**Date**: 2025-01-16
+**Context**: Enterprise-grade perl-parser crate requiring production-ready documentation standards
+
+#### Decision
+Enable `#![warn(missing_docs)]` lint in the perl-parser crate to enforce comprehensive API documentation for all public interfaces.
+
+#### Rationale
+
+1. **Enterprise Quality Requirements**: The perl-parser crate is used in production environments processing 50GB+ PST files, requiring comprehensive documentation for:
+   - Performance characteristics and memory usage patterns
+   - PSTX pipeline integration (Extract → Normalize → Thread → Render → Index)
+   - Error handling and recovery strategies
+   - Usage examples for complex APIs
+
+2. **Developer Productivity**: Complete API documentation reduces onboarding time and integration effort by providing:
+   - Clear usage examples with working doctests
+   - Cross-references between related functionality
+   - Performance implications for critical operations
+   - Context about email processing workflows
+
+3. **Maintainability**: Enforced documentation standards ensure:
+   - Consistent documentation quality across all public APIs
+   - Prevention of undocumented public interface additions
+   - Clear architectural relationships and design decisions
+   - Comprehensive test coverage validation
+
+#### Implementation
+
+- **Compiler Enforcement**: `#![warn(missing_docs)]` in `/crates/perl-parser/src/lib.rs`
+- **Validation Infrastructure**: Comprehensive test suite at `/crates/perl-parser/tests/missing_docs_ac_tests.rs`
+- **Quality Standards**: Detailed requirements in `docs/API_DOCUMENTATION_STANDARDS.md`
+- **CI Integration**: Automated validation in build pipeline
+
+#### Consequences
+
+**Positive**:
+- Guarantees complete API documentation for all public interfaces
+- Improves developer experience and adoption
+- Establishes documentation quality standards for future development
+- Reduces support burden through self-documenting APIs
+
+**Negative**:
+- Increased development overhead for new public APIs
+- Temporary CI warnings during implementation phase
+- Additional maintenance burden for documentation updates
+
+#### Compliance Requirements
+
+All new public APIs must include:
+1. **Comprehensive documentation** with purpose, parameters, returns, errors
+2. **PSTX pipeline context** explaining role in email processing workflow
+3. **Performance documentation** for critical APIs including memory usage
+4. **Working examples** with doctests for complex functionality
+5. **Cross-references** to related APIs using Rust documentation linking
+
+#### Validation
+
+- **AC1-AC12**: 12 comprehensive acceptance criteria covering all documentation aspects
+- **Property-based testing**: Systematic validation of documentation patterns
+- **Edge case detection**: Automated detection of malformed or incomplete documentation
+- **CI quality gates**: Automated enforcement preventing regression
+
+This decision establishes perl-parser as an exemplar of enterprise-grade Rust crate documentation standards.
+
 ## 📚 References
 
 - [Pest Parser](https://pest.rs/): PEG parser generator
 - [Tree-sitter](https://tree-sitter.github.io/): Parsing framework
 - [Perl Language Reference](https://perldoc.perl.org/): Official Perl documentation
+- [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/): Official Rust documentation standards
 
 ---
 
