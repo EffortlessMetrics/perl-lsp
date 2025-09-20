@@ -86,26 +86,26 @@ pub fn undefined_var() -> DiagnosticMeta {
 
 // Package/module diagnostics (PL200-PL299)
 
-/// Generate diagnostic for missing package declaration in email script modules
+/// Generate diagnostic for missing package declaration in Perl modules
 ///
-/// Used within PSTX pipeline when email scripts lack proper package declarations,
-/// which can lead to symbol collision issues during large-scale PST processing.
+/// Used when Perl scripts lack proper package declarations,
+/// which can lead to symbol collision issues during large-scale code analysis.
 ///
 /// # Returns
 ///
 /// Diagnostic metadata with error code PL200 for package declaration issues
 ///
-/// # PSTX Integration
+/// # LSP Integration
 ///
-/// Essential for Extract stage validation of email script module structure
+/// Essential for Parse stage validation of Perl module structure
 pub fn missing_package_declaration() -> DiagnosticMeta {
     DiagnosticMeta::new("PL200", Some("https://docs.perl-lsp.org/errors/PL200"))
 }
 
-/// Generate diagnostic for duplicate package declarations in email scripts
+/// Generate diagnostic for duplicate package declarations in Perl scripts
 ///
-/// Detects multiple package declarations within email script content that could
-/// cause namespace conflicts during PSTX pipeline processing of complex PST files.
+/// Detects multiple package declarations within Perl source code that could
+/// cause namespace conflicts during LSP analysis of complex codebases.
 ///
 /// # Returns
 ///
@@ -116,10 +116,10 @@ pub fn duplicate_package() -> DiagnosticMeta {
 
 // Subroutine diagnostics (PL300-PL399)
 
-/// Generate diagnostic for duplicate subroutine definitions in email scripts
+/// Generate diagnostic for duplicate subroutine definitions in Perl scripts
 ///
 /// Identifies redefined subroutines that could cause runtime errors during
-/// email processing workflows within the PSTX pipeline Normalize stage.
+/// code execution workflows within the LSP analysis pipeline.
 ///
 /// # Returns
 ///
@@ -131,7 +131,7 @@ pub fn duplicate_sub() -> DiagnosticMeta {
 /// Generate diagnostic for missing explicit return statements
 ///
 /// Flags subroutines lacking explicit return statements, which can lead to
-/// unexpected behavior in email filtering scripts during PST processing.
+/// unexpected behavior in Perl scripts during code execution.
 ///
 /// # Returns
 ///
@@ -142,10 +142,10 @@ pub fn missing_return() -> DiagnosticMeta {
 
 // Best practices (PL400-PL499)
 
-/// Generate diagnostic for bareword filehandle usage in email scripts
+/// Generate diagnostic for bareword filehandle usage in Perl scripts
 ///
 /// Identifies bareword filehandle usage that can cause security vulnerabilities
-/// during email processing, particularly important for enterprise PST workflows.
+/// during file operations, particularly important for enterprise Perl development.
 ///
 /// # Returns
 ///
@@ -154,10 +154,10 @@ pub fn bareword_filehandle() -> DiagnosticMeta {
     DiagnosticMeta::new("PL400", Some("https://docs.perl-lsp.org/errors/PL400"))
 }
 
-/// Generate diagnostic for two-argument open() calls in email scripts
+/// Generate diagnostic for two-argument open() calls in Perl scripts
 ///
 /// Flags potentially unsafe two-argument open() calls that could introduce
-/// security risks when processing email attachments within PSTX pipelines.
+/// security risks when processing files within Perl applications.
 ///
 /// # Returns
 ///
@@ -166,10 +166,10 @@ pub fn two_arg_open() -> DiagnosticMeta {
     DiagnosticMeta::new("PL401", Some("https://docs.perl-lsp.org/errors/PL401"))
 }
 
-/// Generate diagnostic for implicit return values in email script functions
+/// Generate diagnostic for implicit return values in Perl functions
 ///
 /// Detects implicit return behavior that could lead to unexpected results
-/// during email filtering and processing operations within PSTX workflows.
+/// during function execution and processing operations within Perl code.
 ///
 /// # Returns
 ///
@@ -182,8 +182,8 @@ pub fn implicit_return() -> DiagnosticMeta {
 
 /// Generate diagnostic for Perl::Critic severity level 5 violations
 ///
-/// Maps gentle (severity 5) Perl::Critic policy violations found in email
-/// scripts during PSTX pipeline code quality analysis.
+/// Maps gentle (severity 5) Perl::Critic policy violations found in Perl
+/// scripts during LSP code quality analysis.
 ///
 /// # Returns
 ///
@@ -194,7 +194,7 @@ pub fn critic_severity_5() -> DiagnosticMeta {
 
 /// Generate diagnostic for Perl::Critic severity level 4 violations
 ///
-/// Maps stern (severity 4) Perl::Critic policy violations in email scripts
+/// Maps stern (severity 4) Perl::Critic policy violations in Perl scripts
 /// that indicate code quality issues requiring attention.
 ///
 /// # Returns
@@ -207,7 +207,7 @@ pub fn critic_severity_4() -> DiagnosticMeta {
 /// Generate diagnostic for Perl::Critic severity level 3 violations
 ///
 /// Maps harsh (severity 3) Perl::Critic policy violations that represent
-/// significant code quality issues in email processing scripts.
+/// significant code quality issues in Perl scripts.
 ///
 /// # Returns
 ///
@@ -219,7 +219,7 @@ pub fn critic_severity_3() -> DiagnosticMeta {
 /// Generate diagnostic for Perl::Critic severity level 2 violations
 ///
 /// Maps stern (severity 2) Perl::Critic policy violations indicating serious
-/// code quality problems that could affect email processing reliability.
+/// code quality problems that could affect Perl code reliability.
 ///
 /// # Returns
 ///

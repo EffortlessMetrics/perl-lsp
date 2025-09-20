@@ -1,22 +1,22 @@
-//! Workspace-wide refactoring operations for PSTX email processing pipeline
+//! Workspace-wide refactoring operations for Perl codebases
 //!
 //! This module provides comprehensive refactoring capabilities that span multiple files,
 //! including symbol renaming, module extraction, import optimization, and code movement.
 //! All operations are designed to be safe, reversible, and provide detailed feedback.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! Refactoring operations support large-scale email script maintenance across PSTX workflow stages:
-//! - **Extract**: Rename email processing functions across multiple script files
-//! - **Normalize**: Standardize symbol names and import patterns for consistency
-//! - **Thread**: Update cross-file dependencies during control flow refactoring
-//! - **Render**: Maintain formatting consistency during code reorganization
-//! - **Index**: Update workspace symbol indices after refactoring operations
+//! Refactoring operations support large-scale Perl code maintenance across LSP workflow stages:
+//! - **Parse**: Analyze Perl syntax and extract symbols from source files
+//! - **Index**: Build workspace symbol index and cross-file references
+//! - **Navigate**: Update cross-file dependencies during control flow refactoring
+//! - **Complete**: Maintain symbol completion consistency during code reorganization
+//! - **Analyze**: Update workspace analysis after refactoring operations
 //!
 //! # Performance Characteristics
 //!
-//! Optimized for enterprise-scale email processing workflows:
-//! - **50GB+ PST Support**: Efficient memory management during large workspace refactoring
+//! Optimized for enterprise-scale Perl development workflows:
+//! - **Large Codebase Support**: Efficient memory management during workspace refactoring
 //! - **Incremental Updates**: Process only changed files to minimize operation time
 //! - **Workspace Indexing**: Leverages comprehensive symbol index for fast cross-file operations
 //! - **Batch Operations**: Groups related changes to minimize file I/O overhead

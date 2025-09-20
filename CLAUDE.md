@@ -251,9 +251,9 @@ cargo doc --no-deps --package perl-parser              # Generate docs without w
 
 **Key Requirements** (see [API Documentation Standards](docs/API_DOCUMENTATION_STANDARDS.md)):
 - **All public APIs** must have comprehensive documentation with examples
-- **Performance-critical modules** must document memory usage and 50GB PST processing implications
-- **Error types** must explain email processing workflow context and recovery strategies
-- **Module documentation** must describe PSTX pipeline integration (Extract → Normalize → Thread → Render → Index)
+- **Performance-critical modules** must document parsing performance characteristics and memory usage for large Perl files
+- **Error types** must explain Perl parsing context and recovery strategies for syntax errors
+- **Module documentation** must describe LSP workflow integration (Parse → Index → Navigate → Complete → Analyze)
 - **Cross-references** must use proper Rust documentation linking (`[`function_name`]`)
 
 **Quality Enforcement**:

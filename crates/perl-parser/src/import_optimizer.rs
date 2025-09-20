@@ -6,18 +6,18 @@
 //! - Consolidating imports to reduce clutter
 //! - Generating optimized import statements
 //!
-//! ## PSTX Pipeline Integration
+//! ## LSP Workflow Integration
 //!
-//! Import optimization operates within the **PSTX email processing pipeline**:
-//! **Extract → Normalize → Thread → Render → Index**
+//! Import optimization operates within the **Perl LSP analysis pipeline**:
+//! **Parse → Index → Navigate → Complete → Analyze**
 //!
-//! - **Extract Stage**: Identifies import statements during Perl script analysis
-//! - **Normalize Stage**: Standardizes import patterns and resolves dependencies
-//! - **Thread Stage**: Tracks cross-file import dependencies for refactoring
-//! - **Render Stage**: Generates optimized import statements for code actions
-//! - **Index Stage**: Updates workspace symbols and reference tracking
+//! - **Parse Stage**: Identifies import statements during Perl source analysis
+//! - **Index Stage**: Builds symbol index and resolves import dependencies
+//! - **Navigate Stage**: Tracks cross-file import dependencies for refactoring
+//! - **Complete Stage**: Generates optimized import statements for code actions
+//! - **Analyze Stage**: Updates workspace symbols and reference tracking
 //!
-//! Critical for maintaining clean imports in enterprise email processing workflows
+//! Critical for maintaining clean imports in enterprise Perl development workflows
 //! where large Perl codebases require systematic dependency management.
 //!
 //! ## Example
