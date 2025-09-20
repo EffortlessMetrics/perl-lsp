@@ -397,8 +397,8 @@ fn test_quote_parser_integration() {
     // Test that transliteration parsing works end-to-end
     let (search, replace, modifiers) = extract_transliteration_parts("tr[a-z][A-Z]");
     assert_eq!(search, "a-z", "Integration: transliteration search");
-    assert_eq!(replace, "", "Integration: transliteration replace - actual behavior");
-    assert_eq!(modifiers, "A", "Integration: transliteration modifiers - actual behavior");
+    assert_eq!(replace, "A-Z", "Integration: transliteration replace");
+    assert_eq!(modifiers, "", "Integration: transliteration modifiers");
 }
 
 // Error boundary tests - functions should not panic on malformed input
@@ -446,7 +446,7 @@ fn test_quote_parser_utf8_safety() {
     let (search, replace, modifiers) = extract_transliteration_parts("tr/αβγ/ΑΒΓ/");
     assert_eq!(
         (search.as_str(), replace.as_str(), modifiers.as_str()),
-        ("αβγ", "", ""),
-        "Unicode transliteration parsing - actual behavior"
+        ("αβγ", "ΑΒΓ", ""),
+        "Unicode transliteration parsing"
     );
 }

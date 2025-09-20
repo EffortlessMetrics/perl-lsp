@@ -44,7 +44,7 @@ fn fuzz_transliteration_regression_suite() {
     let test_cases = vec![
         ("y/abc/xyz/", ("abc", "xyz", "")),
         ("tr/a/b/d", ("a", "b", "d")),
-        ("y/x/y/g", ("x", "y", "g")),
+        ("y/x/y/g", ("x", "y", "")), // 'g' is not a valid transliteration modifier
         ("tr{abc}{xyz}d", ("abc", "xyz", "d")), // This might work correctly with paired delimiters
     ];
 
