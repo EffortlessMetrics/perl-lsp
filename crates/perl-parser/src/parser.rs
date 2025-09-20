@@ -5264,10 +5264,10 @@ fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool) {
     let rest = chars.as_str().trim();
 
     // Check quoting to determine interpolation
-    let (delimiter, interpolated) = if rest.starts_with('"') && rest.ends_with('"') {
+    let (delimiter, interpolated) = if rest.starts_with('"') && rest.ends_with('"') && rest.len() >= 2 {
         // Double-quoted: interpolated
         (&rest[1..rest.len() - 1], true)
-    } else if rest.starts_with('\'') && rest.ends_with('\'') {
+    } else if rest.starts_with('\'') && rest.ends_with('\'') && rest.len() >= 2 {
         // Single-quoted: not interpolated
         (&rest[1..rest.len() - 1], false)
     } else {
