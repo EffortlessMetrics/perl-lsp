@@ -19,3 +19,31 @@ path = "fuzz_targets/substitution_parsing.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "builtin_functions"
+path = "fuzz_targets/builtin_functions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "unicode_positions"
+path = "fuzz_targets/unicode_positions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lsp_navigation"
+path = "fuzz_targets/lsp_navigation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "heredoc_parsing"
+path = "fuzz_targets/heredoc_parsing.rs"
+test = false
+doc = false
+bench = false
