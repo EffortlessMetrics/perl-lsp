@@ -164,11 +164,11 @@ fn fuzz_extract_substitution_parts_crash_detection() {
                 // Escape sequence stress testing
                 prop::string::string_regex("s/([^/\\\\]|\\\\.)*//[imsxg]*").unwrap(),
                 // Very deep nesting
-                "s" + &prop::string::string_regex("[{(\\[]{0,50}.*[})]\\[]{0,50}").unwrap(),
+                "s[{(\\[]{0,50}.*[})]\\[]{0,50}",
                 // Unicode boundary stress
                 "s/[\\u{0080}-\\u{FFFF}]+/[\\u{0080}-\\u{FFFF}]+/g",
                 // Memory exhaustion patterns
-                "[s/]{1,10}" + &prop::string::string_regex("[a-zA-Z0-9]{0,500}").unwrap(),
+                "[s/]{1,10}[a-zA-Z0-9]{0,500}",
             ]
         ) {
             test_substitution_no_crash(input)?;
@@ -390,7 +390,7 @@ fn fuzz_quote_parser_extreme_stress() {
 /// This tests the interaction between quote parsing and AST construction
 #[test]
 fn fuzz_quote_parser_incremental_parsing_integration() {
-    use perl_parser::PerlParser;
+    use perl_parser::Parser;
 
     fn test_incremental_integration(
         input: String,
@@ -415,7 +415,7 @@ print "Done\n";
 
         // Test that parser doesn't crash on quote-like constructs
         let result = std::panic::catch_unwind(|| {
-            let parser = PerlParser::new();
+            let parser = Parser::new();
             parser.parse(&perl_script)
         });
 

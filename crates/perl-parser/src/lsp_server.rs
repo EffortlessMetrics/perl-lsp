@@ -14,6 +14,7 @@ use crate::{
     declaration::ParentMap,
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
+    implementation_provider::ImplementationProvider,
     inlay_hints_provider::{InlayHintConfig, InlayHintsProvider},
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
@@ -23,7 +24,6 @@ use crate::{
     test_runner::{TestKind, TestRunner},
     type_hierarchy::TypeHierarchyProvider,
     type_inference::TypeInferenceEngine,
-    workspace_index::{LspLocation, LspPosition, LspRange, LspWorkspaceSymbol},
 };
 use lsp_types::Location;
 use md5;
@@ -47,6 +47,9 @@ use crate::workspace_index::{
     LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol,
     uri_to_fs_path,
 };
+
+#[cfg(feature = "workspace")]
+use lazy_static::lazy_static;
 
 #[cfg(feature = "workspace")]
 lazy_static! {
@@ -3054,12 +3057,12 @@ impl LspServer {
     fn handle_implementation(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let _line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let _character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
+            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref _ast) = doc.ast {
+                if let Some(ref ast) = doc.ast {
                     #[cfg(feature = "workspace")]
                     {
                         let provider = ImplementationProvider::new(self.workspace_index.clone());
@@ -4003,7 +4006,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
-            if let (Some(uri), Some(line), Some(ch), Some(_new_name)) = (
+            if let (Some(uri), Some(line), Some(ch), Some(new_name)) = (
                 p.get("textDocument").and_then(|t| t.get("uri")).and_then(|s| s.as_str()),
                 p.get("position").and_then(|p| p.get("line")).and_then(|n| n.as_u64()),
                 p.get("position").and_then(|p| p.get("character")).and_then(|n| n.as_u64()),
@@ -4014,7 +4017,7 @@ impl LspServer {
                     if let Some(ref ast) = doc.ast {
                         let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
                         let current_pkg = crate::declaration::current_package_at(ast, offset);
-                        if let Some(_key) =
+                        if let Some(key) =
                             crate::declaration::symbol_at_cursor(ast, offset, current_pkg)
                         {
                             #[cfg(feature = "workspace")]
