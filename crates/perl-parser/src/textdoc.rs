@@ -52,7 +52,7 @@ pub enum PosEnc {
 ///
 /// # Returns
 /// Byte offset clamped to valid rope boundaries
-pub fn lsp_pos_to_byte(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
+pub fn lsp_pos_to_byte(_rope: &Rope, _pos: Position, _enc: PosEnc) -> usize {
     1 /* ~ changed by cargo-mutants ~ */
 }
 

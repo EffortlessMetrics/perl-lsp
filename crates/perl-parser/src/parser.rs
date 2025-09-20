@@ -5232,7 +5232,7 @@ impl<'a> Parser<'a> {
         start: usize,
         end: usize,
     ) -> Node {
-        if saw_fat_arrow && elements.len() % 2 == 0 {
+        if saw_fat_arrow && elements.len().is_multiple_of(2) {
             // Convert to HashLiteral
             let mut pairs = Vec::with_capacity(elements.len() / 2);
             for chunk in elements.chunks(2) {

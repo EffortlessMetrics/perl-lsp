@@ -191,7 +191,8 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
     };
 
     // Extract only valid transliteration modifiers
-    let modifiers = modifiers_str.chars()
+    let modifiers = modifiers_str
+        .chars()
         .take_while(|c| c.is_ascii_alphabetic())
         .filter(|&c| matches!(c, 'c' | 'd' | 's' | 'r'))
         .collect();

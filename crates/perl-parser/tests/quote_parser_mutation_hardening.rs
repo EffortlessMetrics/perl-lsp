@@ -1,9 +1,8 @@
 /// Mutation hardening tests for quote_parser.rs
 /// These tests target specific edge cases and boundary conditions
 /// that could be mutation survivors in quote parsing logic.
-
 use perl_parser::quote_parser::{
-    extract_regex_parts, extract_substitution_parts, extract_transliteration_parts
+    extract_regex_parts, extract_substitution_parts, extract_transliteration_parts,
 };
 
 /// Test edge cases in regex extraction that could be mutation survivors
@@ -62,21 +61,14 @@ fn test_m_operator_second_char_validation() {
     for (input, (expected_pattern, expected_mods)) in valid_cases {
         let (pattern, mods) = extract_regex_parts(input);
         // Extract the actual pattern without delimiters for comparison
-        let actual_pattern = if pattern.len() >= 2 {
-            &pattern[1..pattern.len()-1]
-        } else {
-            &pattern
-        };
+        let actual_pattern =
+            if pattern.len() >= 2 { &pattern[1..pattern.len() - 1] } else { &pattern };
         assert_eq!(actual_pattern, expected_pattern, "Failed for input: {}", input);
         assert_eq!(mods, expected_mods, "Failed modifiers for input: {}", input);
     }
 
     // Invalid m operators (alphabetic second char) - these actually still get parsed with the closing delimiter
-    let invalid_cases = vec![
-        ("ma", "mam"),
-        ("mb", "mbm"),
-        ("mc", "mcm"),
-    ];
+    let invalid_cases = vec![("ma", "mam"), ("mb", "mbm"), ("mc", "mcm")];
 
     for (input, expected_pattern) in invalid_cases {
         let (pattern, mods) = extract_regex_parts(input);
@@ -91,20 +83,38 @@ fn test_substitution_edge_cases() {
     // Empty substitutions
     assert_eq!(extract_substitution_parts("s"), ("".to_string(), "".to_string(), "".to_string()));
     assert_eq!(extract_substitution_parts("s//"), ("".to_string(), "".to_string(), "".to_string()));
-    assert_eq!(extract_substitution_parts("s///"), ("".to_string(), "".to_string(), "".to_string()));
+    assert_eq!(
+        extract_substitution_parts("s///"),
+        ("".to_string(), "".to_string(), "".to_string())
+    );
 
     // Single character patterns/replacements
-    assert_eq!(extract_substitution_parts("s/a/b/"), ("a".to_string(), "b".to_string(), "".to_string()));
-    assert_eq!(extract_substitution_parts("s{a}{b}"), ("a".to_string(), "b".to_string(), "".to_string()));
+    assert_eq!(
+        extract_substitution_parts("s/a/b/"),
+        ("a".to_string(), "b".to_string(), "".to_string())
+    );
+    assert_eq!(
+        extract_substitution_parts("s{a}{b}"),
+        ("a".to_string(), "b".to_string(), "".to_string())
+    );
 
     // Patterns with escaped delimiters (escapes are preserved in the output)
-    assert_eq!(extract_substitution_parts("s/a\\/b/c/"), ("a\\/b".to_string(), "c".to_string(), "".to_string()));
-    assert_eq!(extract_substitution_parts("s{a\\}b}{c}"), ("a\\}b".to_string(), "c".to_string(), "".to_string()));
+    assert_eq!(
+        extract_substitution_parts("s/a\\/b/c/"),
+        ("a\\/b".to_string(), "c".to_string(), "".to_string())
+    );
+    assert_eq!(
+        extract_substitution_parts("s{a\\}b}{c}"),
+        ("a\\}b".to_string(), "c".to_string(), "".to_string())
+    );
 
     // Malformed substitutions
     assert_eq!(extract_substitution_parts("s/"), ("".to_string(), "".to_string(), "".to_string()));
     assert_eq!(extract_substitution_parts("s{"), ("".to_string(), "".to_string(), "".to_string()));
-    assert_eq!(extract_substitution_parts("s/pattern"), ("pattern".to_string(), "".to_string(), "".to_string()));
+    assert_eq!(
+        extract_substitution_parts("s/pattern"),
+        ("pattern".to_string(), "".to_string(), "".to_string())
+    );
 }
 
 /// Test substitution with all valid modifiers
@@ -144,22 +154,18 @@ fn test_paired_delimiter_substitutions() {
         ("s{old}{new}", ("old", "new", "")),
         ("s[old][new]", ("old", "new", "")),
         ("s<old><new>", ("old", "new", "")),
-
         // Nested delimiters
         ("s{o(l)d}{n(e)w}", ("o(l)d", "n(e)w", "")),
         ("s(o{l}d)(n{e}w)", ("o{l}d", "n{e}w", "")),
         ("s[o(l)d][n(e)w]", ("o(l)d", "n(e)w", "")),
         ("s<o{l}d><n{e}w>", ("o{l}d", "n{e}w", "")),
-
         // With modifiers
         ("s{old}{new}g", ("old", "new", "g")),
         ("s(old)(new)gi", ("old", "new", "gi")),
-
         // Empty parts
         ("s{}{}", ("", "", "")),
         ("s(){}", ("", "", "")),
         ("s{}()", ("", "", "")),
-
         // Missing second delimiter (should result in empty replacement)
         ("s{pattern}", ("pattern", "", "")),
         ("s(pattern)", ("pattern", "", "")),
@@ -177,26 +183,62 @@ fn test_paired_delimiter_substitutions() {
 #[test]
 fn test_transliteration_parsing() {
     // Basic tr operations
-    assert_eq!(extract_transliteration_parts("tr/abc/xyz/"), ("abc".to_string(), "xyz".to_string(), "".to_string()));
-    assert_eq!(extract_transliteration_parts("y/abc/xyz/"), ("abc".to_string(), "xyz".to_string(), "".to_string()));
+    assert_eq!(
+        extract_transliteration_parts("tr/abc/xyz/"),
+        ("abc".to_string(), "xyz".to_string(), "".to_string())
+    );
+    assert_eq!(
+        extract_transliteration_parts("y/abc/xyz/"),
+        ("abc".to_string(), "xyz".to_string(), "".to_string())
+    );
 
     // With modifiers
-    assert_eq!(extract_transliteration_parts("tr/abc/xyz/d"), ("abc".to_string(), "xyz".to_string(), "d".to_string()));
-    assert_eq!(extract_transliteration_parts("tr/abc/xyz/cds"), ("abc".to_string(), "xyz".to_string(), "cds".to_string()));
+    assert_eq!(
+        extract_transliteration_parts("tr/abc/xyz/d"),
+        ("abc".to_string(), "xyz".to_string(), "d".to_string())
+    );
+    assert_eq!(
+        extract_transliteration_parts("tr/abc/xyz/cds"),
+        ("abc".to_string(), "xyz".to_string(), "cds".to_string())
+    );
 
     // Paired delimiters
-    assert_eq!(extract_transliteration_parts("tr{abc}{xyz}"), ("abc".to_string(), "xyz".to_string(), "".to_string()));
-    assert_eq!(extract_transliteration_parts("y(abc)(xyz)"), ("abc".to_string(), "xyz".to_string(), "".to_string()));
+    assert_eq!(
+        extract_transliteration_parts("tr{abc}{xyz}"),
+        ("abc".to_string(), "xyz".to_string(), "".to_string())
+    );
+    assert_eq!(
+        extract_transliteration_parts("y(abc)(xyz)"),
+        ("abc".to_string(), "xyz".to_string(), "".to_string())
+    );
 
     // Edge cases
-    assert_eq!(extract_transliteration_parts("tr"), ("".to_string(), "".to_string(), "".to_string()));
-    assert_eq!(extract_transliteration_parts("y"), ("".to_string(), "".to_string(), "".to_string()));
-    assert_eq!(extract_transliteration_parts("tr//"), ("".to_string(), "".to_string(), "".to_string()));
-    assert_eq!(extract_transliteration_parts("tr/abc/"), ("abc".to_string(), "".to_string(), "".to_string()));
+    assert_eq!(
+        extract_transliteration_parts("tr"),
+        ("".to_string(), "".to_string(), "".to_string())
+    );
+    assert_eq!(
+        extract_transliteration_parts("y"),
+        ("".to_string(), "".to_string(), "".to_string())
+    );
+    assert_eq!(
+        extract_transliteration_parts("tr//"),
+        ("".to_string(), "".to_string(), "".to_string())
+    );
+    assert_eq!(
+        extract_transliteration_parts("tr/abc/"),
+        ("abc".to_string(), "".to_string(), "".to_string())
+    );
 
     // Invalid modifiers should be filtered out
-    assert_eq!(extract_transliteration_parts("tr/abc/xyz/cdsx"), ("abc".to_string(), "xyz".to_string(), "cds".to_string()));
-    assert_eq!(extract_transliteration_parts("tr/abc/xyz/123"), ("abc".to_string(), "xyz".to_string(), "".to_string()));
+    assert_eq!(
+        extract_transliteration_parts("tr/abc/xyz/cdsx"),
+        ("abc".to_string(), "xyz".to_string(), "cds".to_string())
+    );
+    assert_eq!(
+        extract_transliteration_parts("tr/abc/xyz/123"),
+        ("abc".to_string(), "xyz".to_string(), "".to_string())
+    );
 }
 
 /// Test valid transliteration modifiers
@@ -236,11 +278,17 @@ fn test_escaped_characters() {
     // Substitution escapes (escapes are preserved)
     let (pattern, replacement, _) = extract_substitution_parts("s/\\/path/\\/new/");
     assert_eq!(pattern, "\\/path", "Should preserve escaped slashes in substitution pattern");
-    assert_eq!(replacement, "\\/new", "Should preserve escaped slashes in substitution replacement");
+    assert_eq!(
+        replacement, "\\/new",
+        "Should preserve escaped slashes in substitution replacement"
+    );
 
     let (pattern, replacement, _) = extract_substitution_parts("s{\\}old\\{}{\\}new\\{}");
     assert_eq!(pattern, "\\}old\\{", "Should preserve escaped braces in substitution pattern");
-    assert_eq!(replacement, "\\}new\\{", "Should preserve escaped braces in substitution replacement");
+    assert_eq!(
+        replacement, "\\}new\\{",
+        "Should preserve escaped braces in substitution replacement"
+    );
 
     // Transliteration escapes (escapes are preserved)
     let (search, replace, _) = extract_transliteration_parts("tr/\\//\\\\/");
@@ -304,12 +352,18 @@ fn test_boundary_conditions() {
     // Single character inputs
     assert_eq!(extract_regex_parts("/"), ("//".to_string(), "".to_string()));
     assert_eq!(extract_substitution_parts("s"), ("".to_string(), "".to_string(), "".to_string()));
-    assert_eq!(extract_transliteration_parts("t"), ("".to_string(), "".to_string(), "".to_string()));
+    assert_eq!(
+        extract_transliteration_parts("t"),
+        ("".to_string(), "".to_string(), "".to_string())
+    );
 
     // Two character inputs
     assert_eq!(extract_regex_parts("//"), ("//".to_string(), "".to_string()));
     assert_eq!(extract_substitution_parts("s/"), ("".to_string(), "".to_string(), "".to_string()));
-    assert_eq!(extract_transliteration_parts("tr"), ("".to_string(), "".to_string(), "".to_string()));
+    assert_eq!(
+        extract_transliteration_parts("tr"),
+        ("".to_string(), "".to_string(), "".to_string())
+    );
 
     // Maximum reasonable patterns (should not crash)
     let long_pattern = "a".repeat(1000);

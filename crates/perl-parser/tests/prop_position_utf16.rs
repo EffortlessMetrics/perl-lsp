@@ -1,9 +1,8 @@
+use perl_parser::position::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 /// Property-based tests for UTF-16 position conversion
 /// Uses proptest to generate randomized inputs and verify invariants
 /// that should hold for all valid UTF-16 position conversions.
-
 use proptest::prelude::*;
-use perl_parser::position::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 
 /// Generate reasonable text content for testing
 fn arb_text() -> impl Strategy<Value = String> {
@@ -22,7 +21,8 @@ fn arb_text() -> impl Strategy<Value = String> {
                 "[\u{4E00}-\u{9FFF}]",   // Chinese characters
             ],
             1..5
-        ).prop_map(|parts| parts.join(""))
+        )
+        .prop_map(|parts| parts.join(""))
     ]
 }
 

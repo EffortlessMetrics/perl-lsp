@@ -1,7 +1,6 @@
 /// Mutation hardening tests for position.rs
 /// These tests target specific mutation survivors to improve test coverage
 /// and eliminate edge cases that could lead to security vulnerabilities.
-
 use perl_parser::position::{Position, Range, offset_to_utf16_line_col, utf16_line_col_to_offset};
 
 /// Test the critical line advancement bug that was a mutation survivor
@@ -147,7 +146,11 @@ fn test_utf16_fractional_positions() {
             assert_eq!(col, 8, "Should be at column 8 after emoji (6 + 2 UTF-16 units)");
         } else {
             // Fractional positions should be between 6 and 8
-            assert!(col >= 6 && col <= 8, "Fractional position should be between 6 and 8, got {}", col);
+            assert!(
+                col >= 6 && col <= 8,
+                "Fractional position should be between 6 and 8, got {}",
+                col
+            );
         }
     }
 }
@@ -156,15 +159,15 @@ fn test_utf16_fractional_positions() {
 #[test]
 fn test_utf16_roundtrip_edge_cases() {
     let texts = vec![
-        "",                    // Empty text
-        "\n",                  // Single newline
-        "\r\n",               // CRLF
-        "😀",                  // Single emoji
-        "a😀b",               // Emoji in middle
+        "",                  // Empty text
+        "\n",                // Single newline
+        "\r\n",              // CRLF
+        "😀",                // Single emoji
+        "a😀b",              // Emoji in middle
         "😀😀😀",            // Multiple emojis
-        "hello\nworld\r\n",   // Mixed line endings
-        "café naïve résumé",  // Accented characters
-        "中文测试",           // Chinese characters
+        "hello\nworld\r\n",  // Mixed line endings
+        "café naïve résumé", // Accented characters
+        "中文测试",          // Chinese characters
     ];
 
     for text in texts {
@@ -172,7 +175,8 @@ fn test_utf16_roundtrip_edge_cases() {
 
         // Test round-trip for every possible UTF-16 position
         for line in 0..=text.lines().count() as u32 {
-            for col in 0..=20u32 { // Test beyond typical line length
+            for col in 0..=20u32 {
+                // Test beyond typical line length
                 let byte_offset = utf16_line_col_to_offset(text, line, col);
                 let (back_line, back_col) = offset_to_utf16_line_col(text, byte_offset);
 
@@ -180,7 +184,11 @@ fn test_utf16_roundtrip_edge_cases() {
                 assert!(
                     byte_offset <= text.len(),
                     "Byte offset {} exceeds text length {} for line {}, col {} in {:?}",
-                    byte_offset, text.len(), line, col, text
+                    byte_offset,
+                    text.len(),
+                    line,
+                    col,
+                    text
                 );
 
                 // For positions within bounds, check if round-trip is reasonable
@@ -191,9 +199,14 @@ fn test_utf16_roundtrip_edge_cases() {
                         if col <= line_utf16_len {
                             // For valid positions, round-trip should be exact
                             assert_eq!(
-                                (line, col), (back_line, back_col),
+                                (line, col),
+                                (back_line, back_col),
                                 "Round-trip failed for valid position line {}, col {} in {:?}: got line {}, col {}",
-                                line, col, text, back_line, back_col
+                                line,
+                                col,
+                                text,
+                                back_line,
+                                back_col
                             );
                         }
                     }
@@ -202,9 +215,14 @@ fn test_utf16_roundtrip_edge_cases() {
                     // Single line texts without trailing newline may not have a separate "next line"
                     if text.contains('\n') {
                         assert_eq!(
-                            (line, col), (back_line, back_col),
+                            (line, col),
+                            (back_line, back_col),
                             "Round-trip failed for end-of-document position line {}, col {} in {:?}: got line {}, col {}",
-                            line, col, text, back_line, back_col
+                            line,
+                            col,
+                            text,
+                            back_line,
+                            back_col
                         );
                     }
                 }
@@ -235,7 +253,12 @@ fn test_mixed_line_ending_scenarios() {
             // Test position just before line ending
             if byte_pos < line_end - 1 {
                 let (line, col) = offset_to_utf16_line_col(text, line_end - 1);
-                println!("  Position {} (before line end): line {}, col {}", line_end - 1, line, col);
+                println!(
+                    "  Position {} (before line end): line {}, col {}",
+                    line_end - 1,
+                    line,
+                    col
+                );
             }
 
             // Test position at line ending
@@ -266,7 +289,11 @@ fn test_position_arithmetic_overflow() {
     let max_pos2 = Position::new(usize::MAX, u32::MAX, u32::MAX);
     let range = Range::new(max_pos1, max_pos2);
 
-    assert_eq!(range.len(), 10, "Range length should be calculated correctly even with large values");
+    assert_eq!(
+        range.len(),
+        10,
+        "Range length should be calculated correctly even with large values"
+    );
     assert!(range.contains_byte(usize::MAX - 5), "Range should contain intermediate values");
     assert!(!range.contains_byte(usize::MAX), "Range should not contain end value (exclusive)");
 }
