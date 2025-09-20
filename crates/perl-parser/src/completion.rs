@@ -258,16 +258,16 @@ const TEST_MORE_EXPORTS: &[(&str, &str, &str)] = &[
 ];
 
 impl CompletionProvider {
-    /// Create a new completion provider from parsed AST for email script analysis
+    /// Create a new completion provider from parsed AST for Perl script analysis
     ///
     /// # Arguments
     ///
-    /// * `ast` - Parsed AST from email script content during PSTX Extract stage
+    /// * `ast` - Parsed AST from Perl script content during LSP Parse stage
     /// * `workspace_index` - Optional workspace-wide symbol index for cross-file completion
     ///
     /// # Returns
     ///
-    /// A configured completion provider ready for email processing workflow analysis
+    /// A configured completion provider ready for Perl parsing workflow analysis
     ///
     /// # Examples
     ///
@@ -277,7 +277,7 @@ impl CompletionProvider {
     /// let mut parser = Parser::new("my $email_filter = sub { /important/ };");
     /// let ast = parser.parse().unwrap();
     /// let provider = CompletionProvider::new_with_index(&ast, None);
-    /// // Provider ready for email script completion analysis
+    /// // Provider ready for Perl script completion analysis
     /// ```
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
         Self::new_with_index_and_source(ast, "", workspace_index)
@@ -286,8 +286,8 @@ impl CompletionProvider {
     /// Create a new completion provider from parsed AST and source with workspace integration
     ///
     /// Constructs a completion provider with full workspace symbol information for
-    /// comprehensive completion suggestions during email script editing within the
-    /// PSTX pipeline. Integrates local AST symbols with workspace-wide indexing.
+    /// comprehensive completion suggestions during Perl script editing within the
+    /// LSP workflow. Integrates local AST symbols with workspace-wide indexing.
     ///
     /// # Arguments
     ///
@@ -298,7 +298,7 @@ impl CompletionProvider {
     /// # Returns
     ///
     /// A configured completion provider ready for LSP completion requests with
-    /// both local and workspace symbol coverage for email script development.
+    /// both local and workspace symbol coverage for Perl script development.
     ///
     /// # Examples
     ///
@@ -314,7 +314,7 @@ impl CompletionProvider {
     /// let provider = CompletionProvider::new_with_index_and_source(
     ///     &ast, script, Some(workspace_idx)
     /// );
-    /// // Provider ready for cross-file email script completions
+    /// // Provider ready for cross-file Perl script completions
     /// ```
     pub fn new_with_index_and_source(
         ast: &Node,
@@ -516,8 +516,8 @@ impl CompletionProvider {
     /// Create a new completion provider from parsed AST without workspace context
     ///
     /// Constructs a basic completion provider using only local scope symbols from
-    /// the provided AST. Suitable for simple email script editing without cross-file
-    /// dependencies in the PSTX pipeline.
+    /// the provided AST. Suitable for simple Perl script editing without cross-file
+    /// dependencies in the LSP workflow.
     ///
     /// # Arguments
     ///
@@ -546,9 +546,9 @@ impl CompletionProvider {
 
     /// Get completions at a given position with optional filepath for enhanced context
     ///
-    /// Provides completion suggestions based on cursor position within email script
+    /// Provides completion suggestions based on cursor position within Perl script
     /// source code. Uses filepath context to enable enhanced completions for test
-    /// files and specific email processing patterns within PSTX workflows.
+    /// files and specific Perl parsing patterns within LSP workflows.
     ///
     /// # Arguments
     ///
@@ -591,8 +591,8 @@ impl CompletionProvider {
     /// Get completions at a given position with cancellation support for responsive editing
     ///
     /// Provides completion suggestions with cancellation capability for responsive
-    /// email script editing during large workspace operations. Optimized for
-    /// enterprise-scale PSTX environments where completion requests may need
+    /// Perl script editing during large workspace operations. Optimized for
+    /// enterprise-scale LSP environments where completion requests may need
     /// to be interrupted for better user experience.
     ///
     /// # Arguments
@@ -605,12 +605,12 @@ impl CompletionProvider {
     /// # Returns
     ///
     /// Vector of completion items or empty vector if operation was cancelled,
-    /// sorted by relevance for optimal email script development experience.
+    /// sorted by relevance for optimal Perl script development experience.
     ///
     /// # Performance
     ///
     /// - Respects cancellation for operations exceeding typical response times
-    /// - Optimized for large email script files in 50GB PST processing workflows
+    /// - Optimized for large Perl script files in large Perl codebase processing workflows
     /// - Provides partial results when possible before cancellation
     ///
     /// # Examples
@@ -841,11 +841,11 @@ impl CompletionProvider {
         completions
     }
 
-    /// Get completions at a given position for email script development
+    /// Get completions at a given position for Perl script development
     ///
     /// Provides basic completion suggestions at the specified cursor position
-    /// within email script source code. This is the primary interface for
-    /// LSP completion requests during PSTX email processing development.
+    /// within Perl script source code. This is the primary interface for
+    /// LSP completion requests during Perl parsing workflow development.
     ///
     /// # Arguments
     ///
@@ -855,7 +855,7 @@ impl CompletionProvider {
     /// # Returns
     ///
     /// Vector of completion items including local variables, functions, keywords,
-    /// and built-in Perl constructs relevant to email processing workflows.
+    /// and built-in Perl constructs relevant to Perl parsing workflows.
     ///
     /// # Examples
     ///

@@ -1,23 +1,23 @@
-//! Find-all-references functionality for symbol usage analysis in email scripts
+//! Find-all-references functionality for symbol usage analysis in Perl scripts
 //!
-//! This module provides comprehensive reference finding capabilities for email script
-//! development within the PSTX pipeline. Enables developers to quickly locate all
-//! usage sites of variables, functions, and packages across email processing code.
+//! This module provides comprehensive reference finding capabilities for Perl script
+//! development within the LSP workflow. Enables developers to quickly locate all
+//! usage sites of variables, functions, and packages across Perl code.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! - **Extract**: Identifies symbol definitions during email script parsing
-//! - **Normalize**: Supports refactoring and symbol standardization
-//! - **Thread**: Analyzes variable flow and dependencies in email processing
-//! - **Render**: Enables reference highlighting and navigation in editors
-//! - **Index**: Powers workspace-wide symbol usage tracking
+//! - **Parse**: Identifies symbol definitions during Perl script parsing
+//! - **Index**: Supports refactoring and symbol standardization
+//! - **Navigate**: Analyzes variable flow and dependencies in Perl code
+//! - **Complete**: Enables reference highlighting and navigation in editors
+//! - **Analyze**: Powers workspace-wide symbol usage tracking
 //!
 //! # Usage Examples
 //!
 //! ```rust
 //! use perl_parser::{Parser, references::find_references_single_file};
 //!
-//! let script = "my $email_count = 0; $email_count++; print $email_count;";
+//! let script = "my $count = 0; $count++; print $count;";
 //! let mut parser = Parser::new(script);
 //! let ast = parser.parse().unwrap();
 //!

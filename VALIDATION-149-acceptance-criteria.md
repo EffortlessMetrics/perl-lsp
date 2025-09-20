@@ -22,9 +22,9 @@ This document validates that the architectural blueprint in `SPEC-149-missing-do
 
 ---
 
-### AC2: Document all public structs and enums with comprehensive descriptions including PSTX pipeline role
+### AC2: Document all public structs and enums with comprehensive descriptions including LSP workflow role
 
-**Requirement**: Document all public structs and enums with comprehensive descriptions including their role in the PSTX email processing pipeline stages (Extract → Normalize → Thread → Render → Index)
+**Requirement**: Document all public structs and enums with comprehensive descriptions including their role in the LSP Perl parsing workflow stages (Parse → Index → Navigate → Complete → Analyze)
 
 **Specification Coverage**: ✅ **FULLY ADDRESSED**
 
@@ -32,7 +32,7 @@ This document validates that the architectural blueprint in `SPEC-149-missing-do
 - **Public Contracts** → `struct_documentation` template includes "Pipeline Integration" section
 - **Documentation Standards Schema** → `public_struct` template mandates `pipeline_integration_details`
 - **Scope Definition** → Explicitly maps modules to pipeline stages
-- **Module Documentation** template includes "PSTX Pipeline Integration" section
+- **Module Documentation** template includes "LSP Workflow Integration" section
 
 **Test Tag**: `// AC:AC2`
 
@@ -59,14 +59,14 @@ This document validates that the architectural blueprint in `SPEC-149-missing-do
 
 ### AC4: Document performance characteristics for optimization-related APIs like `AstCache`
 
-**Requirement**: Document performance characteristics for optimization-related APIs like `AstCache` and other performance-critical components relevant to 50GB PST processing targets
+**Requirement**: Document performance characteristics for optimization-related APIs like `AstCache` and other performance-critical components relevant to large Perl codebase processing targets
 
 **Specification Coverage**: ✅ **FULLY ADDRESSED**
 
 **Evidence**:
-- **Performance Constraints** → "50GB PST processing performance must be documented for relevant APIs"
+- **Performance Constraints** → "large Perl codebase processing performance must be documented for relevant APIs"
 - **Documentation Templates** → Performance section mandatory for optimization APIs
-- **Specialized Documentation Patterns** → `performance_documentation` pattern specifically for 50GB PST processing
+- **Specialized Documentation Patterns** → `performance_documentation` pattern specifically for large Perl codebase processing
 - **Core Modules** → Performance module explicitly listed for documentation
 - **Implementation Strategy** → Phase 5 dedicated to "Performance Features"
 
@@ -74,14 +74,14 @@ This document validates that the architectural blueprint in `SPEC-149-missing-do
 
 ---
 
-### AC5: Add module-level documentation explaining purpose and PSTX architecture relationship
+### AC5: Add module-level documentation explaining purpose and LSP architecture relationship
 
-**Requirement**: Add module-level documentation explaining the purpose and relationship of each module within the PSTX email processing architecture
+**Requirement**: Add module-level documentation explaining the purpose and relationship of each module within the LSP Perl parsing architecture
 
 **Specification Coverage**: ✅ **FULLY ADDRESSED**
 
 **Evidence**:
-- **Public Contracts** → `module_documentation` format includes PSTX Pipeline Integration section
+- **Public Contracts** → `module_documentation` format includes LSP Workflow Integration section
 - **Documentation Standards Schema** → `module_documentation` template mandates pipeline stage details
 - **Scope Definition** → All core modules mapped to pipeline stages
 - **Implementation Strategy** → Each phase includes "Module-level documentation" deliverables
@@ -122,9 +122,9 @@ This document validates that the architectural blueprint in `SPEC-149-missing-do
 
 ---
 
-### AC8: Document error types and panic conditions with email processing workflow context
+### AC8: Document error types and panic conditions with Perl parsing workflow context
 
-**Requirement**: Document error types and panic conditions with clear explanations of when they occur in email processing workflows
+**Requirement**: Document error types and panic conditions with clear explanations of when they occur in Perl parsing workflows
 
 **Specification Coverage**: ✅ **FULLY ADDRESSED**
 
@@ -215,7 +215,7 @@ This document validates that the architectural blueprint in `SPEC-149-missing-do
 
 ### Scope Completeness
 - ✅ All 857 public API items identified for documentation
-- ✅ All core modules mapped to PSTX pipeline stages
+- ✅ All core modules mapped to LSP workflow stages
 - ✅ Performance-critical APIs identified for enhanced documentation
 - ✅ Cross-module dependencies and references mapped
 
@@ -232,8 +232,8 @@ This document validates that the architectural blueprint in `SPEC-149-missing-do
 - ✅ Error handling and edge cases covered
 
 ### Enterprise Alignment
-- ✅ PSTX pipeline integration requirements addressed
-- ✅ 50GB PST processing performance documentation included
+- ✅ LSP workflow integration requirements addressed
+- ✅ large Perl codebase processing performance documentation included
 - ✅ Enterprise security considerations documented
 - ✅ Developer experience optimization prioritized
 

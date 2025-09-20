@@ -1,13 +1,13 @@
-//! Scope analysis and variable tracking for PSTX email processing pipeline
+//! Scope analysis and variable tracking for Perl parsing workflow pipeline
 //!
-//! This module provides comprehensive scope analysis for email scripts, tracking
+//! This module provides comprehensive scope analysis for Perl scripts, tracking
 //! variable declarations, usage patterns, and potential issues across different
-//! scopes within the PSTX workflow stages.
+//! scopes within the LSP workflow stages.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! Scope analysis supports email processing across all PSTX stages:
-//! - **Extract**: Analyze variable scope in embedded email scripts
+//! Scope analysis supports Perl parsing across all LSP stages:
+//! - **Extract**: Analyze variable scope in embedded Perl scripts
 //! - **Normalize**: Track variable usage during standardization transforms
 //! - **Thread**: Analyze control flow variable dependencies
 //! - **Render**: Validate variable scope during output generation
@@ -19,7 +19,7 @@
 //! use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
 //! use perl_parser::{Parser, ast::Node};
 //!
-//! // Analyze email script for scope issues
+//! // Analyze Perl script for scope issues
 //! let script = "my $email_filter = sub { my $msg = shift; $msg =~ /important/; };";
 //! let mut parser = Parser::new(script);
 //! let ast = parser.parse().unwrap();
@@ -27,7 +27,7 @@
 //! let mut analyzer = ScopeAnalyzer::new();
 //! let issues = analyzer.analyze(&ast, script);
 //!
-//! // Check for common scope issues in email processing code
+//! // Check for common scope issues in Perl parsing code
 //! for issue in &issues {
 //!     match issue.kind {
 //!         IssueKind::UnusedVariable => println!("Unused variable: {}", issue.message),

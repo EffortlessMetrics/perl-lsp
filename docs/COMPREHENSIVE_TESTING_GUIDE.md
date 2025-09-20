@@ -195,7 +195,7 @@ RUST_TEST_THREADS=1 cargo test --test lsp_comprehensive_e2e_test # Maximum relia
 - **Sub-microsecond Parsing**: 1-150µs per parse operation
 - **LSP Response Times**: <1ms for incremental updates
 - **Memory Efficiency**: O(log n) memory usage for most operations
-- **Scalability**: Tested up to 50GB PST file processing
+- **Scalability**: Tested up to large Perl codebase processing
 
 ## Quality Metrics and Validation
 

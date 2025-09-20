@@ -22,7 +22,7 @@ pub mod error_codes {
     pub const REQUEST_FAILED: i32 = -32803;
 }
 
-/// Create a method not found error for LSP operations during email processing workflow
+/// Create a method not found error for LSP operations during Perl parsing workflow
 ///
 /// # Arguments
 ///
@@ -34,8 +34,8 @@ pub mod error_codes {
 ///
 /// # Email Processing Context
 ///
-/// This occurs when LSP clients request unsupported features during email script analysis
-/// in the PSTX pipeline. Common during IDE integration when processing large PST files
+/// This occurs when LSP clients request unsupported features during Perl script analysis
+/// in the LSP workflow. Common during IDE integration when processing large Perl files
 /// where certain language features may be disabled for performance optimization.
 ///
 /// # Examples
@@ -54,7 +54,7 @@ pub fn method_not_found(method: &str) -> JsonRpcError {
     }
 }
 
-/// Create a method not found error for unadvertised features in email processing workflows
+/// Create a method not found error for unadvertised features in Perl parsing workflows
 ///
 /// # Returns
 ///
@@ -62,8 +62,8 @@ pub fn method_not_found(method: &str) -> JsonRpcError {
 ///
 /// # Email Processing Context
 ///
-/// Occurs when LSP clients attempt to use features not enabled during PSTX pipeline
-/// processing. This helps enforce capability boundaries during large-scale email analysis
+/// Occurs when LSP clients attempt to use features not enabled during LSP workflow
+/// processing. This helps enforce capability boundaries during large-scale Perl analysis
 /// where resource constraints require selective feature enabling.
 ///
 /// # Examples
@@ -82,7 +82,7 @@ pub fn method_not_advertised() -> JsonRpcError {
     }
 }
 
-/// Create a server cancelled error for operations terminated during email processing
+/// Create a server cancelled error for operations terminated during Perl parsing
 ///
 /// # Arguments
 ///
@@ -94,8 +94,8 @@ pub fn method_not_advertised() -> JsonRpcError {
 ///
 /// # Email Processing Context
 ///
-/// Used when long-running email analysis operations are cancelled to maintain system
-/// responsiveness during 50GB+ PST file processing. Enables graceful cancellation
+/// Used when long-running Perl analysis operations are cancelled to maintain system
+/// responsiveness during 50GB+ Perl file processing. Enables graceful cancellation
 /// of expensive operations like workspace-wide symbol indexing.
 ///
 /// # Examples
@@ -110,7 +110,7 @@ pub fn server_cancelled(message: &str) -> JsonRpcError {
     JsonRpcError { code: error_codes::SERVER_CANCELLED, message: message.to_string(), data: None }
 }
 
-/// Create an invalid params error for malformed LSP requests during email processing
+/// Create an invalid params error for malformed LSP requests during Perl parsing
 ///
 /// # Arguments
 ///
@@ -122,9 +122,9 @@ pub fn server_cancelled(message: &str) -> JsonRpcError {
 ///
 /// # Email Processing Context
 ///
-/// Occurs when LSP clients send malformed parameters during email script analysis
+/// Occurs when LSP clients send malformed parameters during Perl script analysis
 /// operations. Common when processing complex PST structures where parameter
-/// validation ensures data integrity throughout the PSTX pipeline.
+/// validation ensures data integrity throughout the LSP workflow.
 pub fn invalid_params(message: &str) -> Value {
     json!({
         "code": error_codes::INVALID_PARAMS,
@@ -132,7 +132,7 @@ pub fn invalid_params(message: &str) -> Value {
     })
 }
 
-/// Create an internal error for unexpected failures during email processing workflows
+/// Create an internal error for unexpected failures during Perl parsing workflows
 ///
 /// # Arguments
 ///
@@ -144,9 +144,9 @@ pub fn invalid_params(message: &str) -> Value {
 ///
 /// # Email Processing Context
 ///
-/// Used when unexpected internal failures occur during PSTX pipeline processing,
-/// such as memory allocation failures during 50GB+ PST analysis or threading
-/// issues during concurrent email processing operations.
+/// Used when unexpected internal failures occur during LSP workflow processing,
+/// such as memory allocation failures during large Perl codebase analysis or threading
+/// issues during concurrent Perl parsing operations.
 pub fn internal_error(message: &str) -> Value {
     json!({
         "code": error_codes::INTERNAL_ERROR,
@@ -154,39 +154,39 @@ pub fn internal_error(message: &str) -> Value {
     })
 }
 
-/// Configuration structure for tracking which LSP features are advertised during email processing
+/// Configuration structure for tracking which LSP features are advertised during Perl parsing
 ///
-/// This struct manages feature availability during PSTX pipeline operations, allowing
+/// This struct manages feature availability during LSP workflow operations, allowing
 /// selective enabling/disabling of LSP capabilities based on processing requirements
-/// and resource constraints during large-scale email analysis.
+/// and resource constraints during large-scale Perl analysis.
 ///
 /// # Performance Context
 ///
-/// Feature advertisement is optimized for 50GB+ PST processing scenarios where
+/// Feature advertisement is optimized for 50GB+ Perl codebase processing scenarios where
 /// resource-intensive features may be dynamically disabled to maintain throughput
-/// and memory efficiency during enterprise-scale email analysis.
+/// and memory efficiency during enterprise-scale Perl analysis.
 pub struct AdvertisedFeatures {
-    /// Enable code lens support for email script analysis
+    /// Enable code lens support for Perl script analysis
     pub code_lens: bool,
-    /// Enable call hierarchy navigation during email processing
+    /// Enable call hierarchy navigation during Perl parsing
     pub call_hierarchy: bool,
-    /// Enable type hierarchy analysis for Perl objects in email scripts
+    /// Enable type hierarchy analysis for Perl objects in Perl scripts
     pub type_hierarchy: bool,
-    /// Enable inlay hints for email processing workflows
+    /// Enable inlay hints for Perl parsing workflows
     pub inlay_hints: bool,
-    /// Enable semantic token highlighting during email script analysis
+    /// Enable semantic token highlighting during Perl script analysis
     pub semantic_tokens: bool,
-    /// Enable code actions for email processing workflow optimization
+    /// Enable code actions for Perl parsing workflow optimization
     pub code_actions: bool,
-    /// Enable symbol rename operations across email processing pipeline
+    /// Enable symbol rename operations across Perl parsing pipeline
     pub rename: bool,
-    /// Enable document link resolution in email content
+    /// Enable document link resolution in Perl code
     pub document_links: bool,
-    /// Enable selection range provider for email script navigation
+    /// Enable selection range provider for Perl script navigation
     pub selection_ranges: bool,
-    /// Enable on-type formatting during email script editing
+    /// Enable on-type formatting during Perl script editing
     pub on_type_formatting: bool,
-    /// Enable pull-based diagnostics for email processing workflows
+    /// Enable pull-based diagnostics for Perl parsing workflows
     pub pull_diagnostics: bool,
 }
 
@@ -210,7 +210,7 @@ impl Default for AdvertisedFeatures {
 }
 
 impl AdvertisedFeatures {
-    /// Create GA-lock features configuration for production email processing workflows
+    /// Create GA-lock features configuration for production Perl parsing workflows
     ///
     /// # Returns
     ///
@@ -218,9 +218,9 @@ impl AdvertisedFeatures {
     ///
     /// # Email Processing Context
     ///
-    /// This conservative configuration is used during production PSTX pipeline processing
-    /// of large PST files where stability takes precedence over IDE features. Ensures
-    /// minimal resource consumption during enterprise-scale email analysis operations.
+    /// This conservative configuration is used during production LSP workflow processing
+    /// of large Perl files where stability takes precedence over IDE features. Ensures
+    /// minimal resource consumption during enterprise-scale Perl analysis operations.
     ///
     /// # Examples
     ///
@@ -247,7 +247,7 @@ impl AdvertisedFeatures {
         }
     }
 
-    /// Check if an LSP method should be refused based on advertised features during email processing
+    /// Check if an LSP method should be refused based on advertised features during Perl parsing
     ///
     /// # Arguments
     ///
@@ -259,9 +259,9 @@ impl AdvertisedFeatures {
     ///
     /// # Email Processing Context
     ///
-    /// This method enforces capability boundaries during PSTX pipeline operations,
-    /// preventing resource-intensive LSP operations when processing large PST files.
-    /// Helps maintain performance targets during enterprise-scale email analysis.
+    /// This method enforces capability boundaries during LSP workflow operations,
+    /// preventing resource-intensive LSP operations when processing large Perl files.
+    /// Helps maintain performance targets during enterprise-scale Perl analysis.
     ///
     /// # Examples
     ///

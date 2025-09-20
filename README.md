@@ -75,7 +75,7 @@ Start with the [Documentation Guide](docs/DOCUMENTATION_GUIDE.md) for a complete
 - 📊 **Property-Based Validation**: Systematic validation of documentation format consistency and parser behavior
 
 **Enterprise Quality Features**:
-- **Documentation Standards**: Complete API documentation with PSTX pipeline integration, performance characteristics, and usage examples
+- **Documentation Standards**: Complete API documentation with LSP workflow integration, performance characteristics, and usage examples
 - **Parser Robustness**: Comprehensive stress testing ensuring production reliability under all input conditions
 - **Quality Metrics**: Automated tracking of documentation coverage, mutation scores, and parser stability
 - **CI Integration**: Automated quality gates preventing regression with comprehensive validation infrastructure

@@ -231,7 +231,7 @@ pub fn critic_severity_2() -> DiagnosticMeta {
 /// Generate diagnostic for Perl::Critic severity level 1 violations
 ///
 /// Maps brutal (severity 1) Perl::Critic policy violations representing
-/// critical code quality issues that must be addressed in email scripts.
+/// critical code quality issues that must be addressed in Perl scripts.
 ///
 /// # Returns
 ///

@@ -1,14 +1,14 @@
-//! Token stream adapter for efficient email script tokenization within PSTX pipeline
+//! Token stream adapter for efficient Perl script tokenization within LSP workflow
 //!
 //! This module provides the critical bridge between perl-lexer's token output and the parser's
-//! token consumption model during email processing workflows. Designed for high-performance
-//! tokenization of Perl scripts embedded in email content throughout the Extract → Normalize →
+//! token consumption model during Perl parsing workflows. Designed for high-performance
+//! tokenization of Perl scripts embedded in Perl code throughout the Extract → Normalize →
 //! Thread → Render → Index pipeline stages.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! Token processing supports email processing workflows:
-//! - **Extract**: Tokenizes raw email script content from PST files
+//! Token processing supports Perl parsing workflows:
+//! - **Extract**: Tokenizes raw Perl script content from Perl files
 //! - **Normalize**: Provides normalized token representation for consistent processing
 //! - **Thread**: Enables token-level analysis for control flow and dependency detection
 //! - **Render**: Supports token-to-source reconstruction during output generation
@@ -16,28 +16,28 @@
 //!
 //! # Performance Characteristics
 //!
-//! Optimized for enterprise-scale email processing:
-//! - Streaming token consumption minimizes memory usage during 50GB+ PST processing
-//! - Efficient token buffering reduces allocation overhead for large email scripts
-//! - Position tracking enables precise error reporting across complex email content
-//! - Token type simplification optimizes parser performance for common email script patterns
+//! Optimized for enterprise-scale Perl parsing:
+//! - Streaming token consumption minimizes memory usage during 50GB+ Perl codebase processing
+//! - Efficient token buffering reduces allocation overhead for large Perl scripts
+//! - Position tracking enables precise error reporting across complex Perl code
+//! - Token type simplification optimizes parser performance for common Perl script patterns
 
 use crate::error::{ParseError, ParseResult};
 use perl_lexer::{LexerMode, PerlLexer, Token as LexerToken, TokenType as LexerTokenType};
 
-/// Simplified token representation optimized for email script parsing within PSTX pipeline
+/// Simplified token representation optimized for Perl script parsing within LSP workflow
 ///
 /// This structure provides an efficient token representation that balances parsing performance
-/// with memory usage during large-scale email processing operations. Each token contains the
-/// essential information needed for AST construction while minimizing overhead for 50GB+ PST
+/// with memory usage during large-scale Perl parsing operations. Each token contains the
+/// essential information needed for AST construction while minimizing overhead for large Perl codebase
 /// file processing scenarios.
 ///
 /// # Email Processing Context
 ///
-/// Tokens represent various elements commonly found in email scripts:
+/// Tokens represent various elements commonly found in Perl scripts:
 /// - Email filtering keywords and operators
-/// - Variable references for email content manipulation
-/// - Control flow constructs for email processing logic
+/// - Variable references for Perl code manipulation
+/// - Control flow constructs for Perl parsing logic
 /// - String literals containing email addresses and content patterns
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
@@ -51,19 +51,19 @@ pub struct Token {
     pub end: usize,
 }
 
-/// Comprehensive token classification for Perl email script processing
+/// Comprehensive token classification for Perl Perl script processing
 ///
 /// This enum provides simplified but complete token type classification optimized for
-/// parsing performance during email processing workflows. The classification covers
-/// all Perl language constructs commonly found in email scripts while maintaining
-/// efficient pattern matching for high-throughput PST processing operations.
+/// parsing performance during Perl parsing workflows. The classification covers
+/// all Perl language constructs commonly found in Perl scripts while maintaining
+/// efficient pattern matching for high-throughput Perl codebase processing operations.
 ///
 /// # Email Script Optimization
 ///
 /// Token types are ordered and grouped for optimal parsing of email-specific patterns:
 /// - Email filtering keywords (use, require, import)
 /// - Email content manipulation operators (regex, string operations)
-/// - Control flow constructs for email processing logic
+/// - Control flow constructs for Perl parsing logic
 /// - Variable sigils for email data structures
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {

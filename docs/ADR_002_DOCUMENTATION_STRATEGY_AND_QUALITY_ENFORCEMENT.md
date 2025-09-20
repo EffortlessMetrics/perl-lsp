@@ -14,7 +14,7 @@ The perl-parser crate has grown into a production-grade enterprise Perl parsing 
 2. **Integration Challenges**: Complex LSP providers and parser configuration lack usage guidance
 3. **Maintenance Overhead**: Lack of design documentation for architectural decisions
 4. **Quality Regression Risk**: No systematic validation of documentation completeness
-5. **Enterprise Adoption Barriers**: Missing performance characteristics and PSTX pipeline integration guidance
+5. **Enterprise Adoption Barriers**: Missing performance characteristics and Perl parsing workflow guidance
 
 ## Decision
 
@@ -32,12 +32,12 @@ We implement a comprehensive documentation strategy with automated quality enfor
 ### 2. Documentation Standards Framework
 
 **Decision**: Implement enterprise-grade documentation standards with domain-specific templates
-- **PSTX Pipeline Integration**: All APIs document their role in Extract → Normalize → Thread → Render → Index workflow
-- **Performance Documentation**: Critical APIs document memory usage and 50GB PST processing implications
+- **Perl LSP Workflow Integration**: All APIs document their role in Parse → Index → Navigate → Complete → Analyze workflow
+- **Performance Documentation**: Critical APIs document memory usage and large Perl codebase processing implications
 - **Cross-Reference System**: Systematic linking between related functions using Rust documentation syntax
 - **Usage Examples**: Complex APIs include working doctests with realistic enterprise scenarios
 
-**Rationale**: Enterprise integration requires complete context about performance, pipeline integration, and usage patterns.
+**Rationale**: Enterprise integration requires complete context about performance, LSP workflow integration, and usage patterns.
 
 ### 3. Quality Enforcement Architecture
 
@@ -69,7 +69,7 @@ We implement a comprehensive documentation strategy with automated quality enfor
 
 ### Phase 2: Core API Documentation (Completed)
 - Documentation for parser.rs, ast.rs, error.rs core modules
-- Module-level documentation with PSTX pipeline integration
+- Module-level documentation with Perl LSP workflow integration
 - Working doctests for primary parsing APIs
 - Performance documentation for optimization-critical functions
 
@@ -92,7 +92,7 @@ We implement a comprehensive documentation strategy with automated quality enfor
 1. **Enhanced Developer Experience**: Complete API documentation enables efficient enterprise integration
 2. **Improved Code Quality**: Comprehensive validation catches issues before production
 3. **Systematic Quality Assurance**: Automated testing prevents documentation regression
-4. **Enterprise Readiness**: Complete performance and pipeline integration documentation
+4. **Enterprise Readiness**: Complete performance and LSP workflow integration documentation
 5. **Maintainability**: Clear architectural decisions and design rationale captured
 6. **Production Reliability**: Robust parser validation ensures documented behavior matches implementation
 

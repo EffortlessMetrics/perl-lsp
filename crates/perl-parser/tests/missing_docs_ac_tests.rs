@@ -141,7 +141,7 @@ mod doc_validation_helpers {
         core_api_modules.iter().any(|module| file_path.ends_with(module))
     }
 
-    /// Checks if documentation includes PSTX pipeline integration context
+    /// Checks if documentation includes LSP workflow integration context
     fn has_pipeline_integration_docs(lines: &[&str], item_line: usize) -> bool {
         let doc_range_start = if item_line > 10 { item_line - 10 } else { 0 };
         let doc_range = &lines[doc_range_start..item_line];
@@ -500,7 +500,7 @@ mod doc_validation_helpers {
         missing_recovery
     }
 
-    /// Analyzes PSTX pipeline stage coverage across modules
+    /// Analyzes LSP workflow stage coverage across modules
     pub fn analyze_pipeline_coverage(
         module_paths: &[&str],
         src_dir: &str,
@@ -556,7 +556,7 @@ mod missing_docs_tests {
     #[test]
     fn test_public_structs_documentation_presence() {
         // AC:AC2 - Verify all public structs/enums have comprehensive documentation
-        // including PSTX pipeline role description
+        // including LSP workflow role description
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let critical_modules = [
             "parser.rs",
@@ -587,7 +587,7 @@ mod missing_docs_tests {
         assert!(all_missing_docs.is_empty(), "All public structs should have documentation");
         assert!(
             all_missing_pipeline_integration.is_empty(),
-            "All public structs should document PSTX pipeline integration"
+            "All public structs should document LSP workflow integration"
         );
     }
 
@@ -604,7 +604,7 @@ mod missing_docs_tests {
         }
 
         if !missing_pipeline.is_empty() {
-            error_msg.push_str("Missing PSTX pipeline integration documentation:\n");
+            error_msg.push_str("Missing LSP workflow integration documentation:\n");
             for item in missing_pipeline {
                 error_msg.push_str(&format!("  - {}\n", item));
             }
@@ -795,7 +795,7 @@ mod missing_docs_tests {
 
     #[test]
     fn test_performance_documentation_presence() {
-        // AC:AC4 - Verify performance-critical APIs document memory usage and 50GB PST processing
+        // AC:AC4 - Verify performance-critical APIs document memory usage and large Perl codebase processing
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let performance_modules = [
             "incremental_v2.rs",
@@ -885,7 +885,7 @@ mod missing_docs_tests {
             missing.push("Memory usage documentation");
         }
         if !indicators.has_pst_processing_notes {
-            missing.push("50GB PST processing notes");
+            missing.push("large Perl codebase processing notes");
         }
 
         missing
@@ -900,7 +900,7 @@ mod missing_docs_tests {
         }
         error_msg.push_str("\nPerformance-critical APIs must document:\n");
         error_msg.push_str("  - Memory usage patterns\n");
-        error_msg.push_str("  - 50GB PST processing performance implications\n");
+        error_msg.push_str("  - large Perl codebase processing performance implications\n");
         error_msg.push_str("  - Optimization characteristics\n");
 
         panic!("{}", error_msg);
@@ -909,7 +909,7 @@ mod missing_docs_tests {
     #[test]
     fn test_module_level_documentation_presence() {
         // AC:AC5 - Verify each module has comprehensive module-level documentation
-        // with //! comments explaining purpose and PSTX architecture relationship
+        // with //! comments explaining purpose and LSP architecture relationship
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let core_modules = [
             "parser.rs",
@@ -1003,7 +1003,7 @@ mod missing_docs_tests {
             missing.push("Comprehensive overview");
         }
         if !has_pstx_integration {
-            missing.push("PSTX pipeline integration");
+            missing.push("LSP workflow integration");
         }
         if !has_examples {
             missing.push("Usage examples");
@@ -1033,7 +1033,7 @@ mod missing_docs_tests {
 
         error_msg.push_str("\nEach module must have:\n");
         error_msg.push_str("  - //! Module-level documentation\n");
-        error_msg.push_str("  - Purpose and PSTX architecture relationship\n");
+        error_msg.push_str("  - Purpose and LSP architecture relationship\n");
         error_msg.push_str("  - Usage examples\n");
 
         panic!("{}", error_msg);
@@ -1166,7 +1166,7 @@ mod missing_docs_tests {
 
     #[test]
     fn test_error_types_documentation() {
-        // AC:AC8 - Verify error types are documented with email processing workflow context
+        // AC:AC8 - Verify error types are documented with Perl parsing workflow context
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let error_files = ["error.rs", "lsp_errors.rs", "diagnostics.rs"];
 
@@ -1273,7 +1273,7 @@ mod missing_docs_tests {
         }
 
         error_msg.push_str("\nError documentation must include:\n");
-        error_msg.push_str("  - When the error occurs in email processing workflows\n");
+        error_msg.push_str("  - When the error occurs in Perl parsing workflows\n");
         error_msg.push_str("  - Recovery strategies\n");
         error_msg.push_str("  - Pipeline stage context (Extract/Normalize/Thread/Render/Index)\n");
 
@@ -1480,7 +1480,7 @@ mod missing_docs_tests {
 
     #[test]
     fn test_comprehensive_pstx_pipeline_documentation() {
-        // Integration test ensuring all PSTX pipeline stages are documented
+        // Integration test ensuring all LSP workflow stages are documented
         // This combines aspects of multiple ACs to ensure comprehensive coverage
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let core_modules = [
@@ -1506,7 +1506,7 @@ mod missing_docs_tests {
 
         assert!(
             total_coverage >= expected_minimum,
-            "PSTX pipeline stages should be comprehensively documented across core modules"
+            "LSP workflow stages should be comprehensively documented across core modules"
         );
     }
 
@@ -1523,14 +1523,14 @@ mod missing_docs_tests {
         total: usize,
         expected: usize,
     ) {
-        let mut error_msg = String::from("PSTX PIPELINE DOCUMENTATION INCOMPLETE:\n");
+        let mut error_msg = String::from("LSP PIPELINE DOCUMENTATION INCOMPLETE:\n");
         error_msg.push_str("Pipeline stage coverage in core modules:\n");
         for (stage, count) in coverage {
             error_msg.push_str(&format!("  - {}: {} modules\n", stage, count));
         }
         error_msg
             .push_str(&format!("\nTotal coverage: {}, Expected minimum: {}\n", total, expected));
-        error_msg.push_str("All core modules should document their role in PSTX pipeline stages\n");
+        error_msg.push_str("All core modules should document their role in LSP workflow stages\n");
 
         panic!("{}", error_msg);
     }
@@ -1791,7 +1791,7 @@ pub fn another_risky() -> Result<(), Box<dyn std::error::Error>> {
                 name: "Complete documentation",
                 content: r#"
 //! This module provides comprehensive functionality
-//! for email processing in the PSTX pipeline.
+//! for Perl parsing in the LSP workflow.
 //!
 //! # Examples
 //! ```rust
@@ -1800,10 +1800,10 @@ pub fn another_risky() -> Result<(), Box<dyn std::error::Error>> {
 //! assert!(result.is_ok());
 //! ```
 
-/// Processes emails in the Extract stage of PSTX pipeline
+/// Processes Perl in the Parse stage of LSP workflow
 ///
 /// # Arguments
-/// * `input` - The email content to process
+/// * `input` - The Perl code to process
 ///
 /// # Returns
 /// * `Ok(ProcessedEmail)` - Successfully processed email
@@ -1956,7 +1956,7 @@ pub fn bad_refs() {}
                 content: r#"
 //! High-performance parser with O(n) time complexity
 //!
-//! Optimized for processing 50GB PST files with efficient
+//! Optimized for processing large Perl codebase files with efficient
 //! memory usage. Benchmarks show 150µs parsing speed
 //! for typical email structures.
 //!
@@ -1977,7 +1977,7 @@ pub fn bad_refs() {}
                 content: r#"
 //! Incremental parsing module
 //!
-//! Handles large PST files efficiently with optimized algorithms.
+//! Handles large Perl files efficiently with optimized algorithms.
 //! Performance tested on enterprise-scale datasets.
 "#,
                 expected_missing_items: 1, // missing complexity (it has optimized/performance keywords)

@@ -47,8 +47,8 @@ The hygiene sweeper should focus on:
 ### 📋 Mechanical Validation
 - Verify API documentation completeness per SPEC-149 acceptance criteria
 - Validate cross-references and documentation links in parser modules
-- Confirm enterprise-grade documentation standards for PSTX pipeline integration
-- Check performance implications documentation for 50GB+ PST processing
+- Confirm enterprise-grade documentation standards for LSP workflow integration
+- Check performance implications documentation for large Perl codebase processing
 
 ### 🔍 Parser-Specific Validation
 - Validate enhanced builtin function parsing documentation
@@ -59,7 +59,7 @@ The hygiene sweeper should focus on:
 ### 📊 Quality Gates
 - Execute missing docs acceptance tests: `cargo test -p perl-parser --test missing_docs_ac_tests`
 - Validate documentation generation: `cargo doc --no-deps --package perl-parser`
-- Confirm PSTX pipeline integration documentation completeness
+- Confirm LSP workflow integration documentation completeness
 - Verify enterprise security requirements documentation
 
 ---

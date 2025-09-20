@@ -70,10 +70,10 @@ This guide helps you find the right documentation for your needs, organized usin
 
 **Key Requirements**:
 - All public structs, enums, and functions must have comprehensive documentation
-- Performance-critical APIs must document memory usage and 50GB PST processing implications
+- Performance-critical APIs must document memory usage and large Perl codebase processing implications
 - Complex APIs must include working usage examples with doctests
-- Error types must document email processing workflow context and recovery strategies
-- Module-level documentation must explain PSTX pipeline integration (Extract → Normalize → Thread → Render → Index)
+- Error types must document Perl parsing workflow context and recovery strategies
+- Module-level documentation must explain LSP workflow integration (Parse → Index → Navigate → Complete → Analyze)
 
 **Quality Enforcement Features (PR #159)**:
 - **Property-Based Testing**: Systematic validation of documentation format consistency

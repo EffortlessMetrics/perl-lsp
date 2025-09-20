@@ -612,10 +612,10 @@ The project maintains high code quality standards. Before committing:
    The perl-parser crate enforces comprehensive API documentation through `#![warn(missing_docs)]`. All contributions must follow the [API Documentation Standards](docs/API_DOCUMENTATION_STANDARDS.md):
 
    - **All public structs, enums, and functions** must have comprehensive documentation
-   - **Performance-critical APIs** must document memory usage and 50GB PST processing implications
+   - **Performance-critical APIs** must document memory usage and large Perl codebase processing implications
    - **Complex APIs** must include working usage examples with doctests
-   - **Error types** must document email processing workflow context and recovery strategies
-   - **Module-level documentation** must explain PSTX pipeline integration (Extract → Normalize → Thread → Render → Index)
+   - **Error types** must document Perl parsing workflow context and recovery strategies
+   - **Module-level documentation** must explain LSP workflow integration (Parse → Index → Navigate → Complete → Analyze)
 
 5. **Follow Rust best practices**
    - Prefer `.first()` over `.get(0)` for accessing first element

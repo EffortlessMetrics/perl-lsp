@@ -608,9 +608,9 @@ Enable `#![warn(missing_docs)]` lint in the perl-parser crate to enforce compreh
 
 #### Rationale
 
-1. **Enterprise Quality Requirements**: The perl-parser crate is used in production environments processing 50GB+ PST files, requiring comprehensive documentation for:
+1. **Enterprise Quality Requirements**: The perl-parser crate is used in production environments processing 50GB+ Perl files, requiring comprehensive documentation for:
    - Performance characteristics and memory usage patterns
-   - PSTX pipeline integration (Extract → Normalize → Thread → Render → Index)
+   - LSP workflow integration (Parse → Index → Navigate → Complete → Analyze)
    - Error handling and recovery strategies
    - Usage examples for complex APIs
 
@@ -618,7 +618,7 @@ Enable `#![warn(missing_docs)]` lint in the perl-parser crate to enforce compreh
    - Clear usage examples with working doctests
    - Cross-references between related functionality
    - Performance implications for critical operations
-   - Context about email processing workflows
+   - Context about Perl parsing workflows
 
 3. **Maintainability**: Enforced documentation standards ensure:
    - Consistent documentation quality across all public APIs
@@ -651,7 +651,7 @@ Enable `#![warn(missing_docs)]` lint in the perl-parser crate to enforce compreh
 All new public APIs must include:
 
 1. **Comprehensive documentation** with purpose, parameters, returns, errors
-2. **PSTX pipeline context** explaining role in email processing workflow
+2. **LSP workflow context** explaining role in Perl parsing workflow
 3. **Performance documentation** for critical APIs including memory usage
 4. **Working examples** with doctests for complex functionality
 5. **Cross-references** to related APIs using Rust documentation linking

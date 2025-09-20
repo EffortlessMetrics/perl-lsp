@@ -1,36 +1,36 @@
-//! Error types for the Perl parser within the PSTX email processing pipeline
+//! Error types for the Perl parser within the Perl parsing workflow pipeline
 //!
 //! This module defines comprehensive error handling for Perl parsing operations that occur
-//! throughout the PSTX email processing workflow: Extract → Normalize → Thread → Render → Index.
+//! throughout the Perl parsing workflow workflow: Parse → Index → Navigate → Complete → Analyze.
 //!
 //! # Error Recovery Strategy
 //!
-//! When parsing errors occur during email processing:
-//! 1. **Extract stage**: Parsing failures indicate corrupted or malformed PST data
-//! 2. **Normalize stage**: Syntax errors suggest script inconsistencies requiring fallback processing
-//! 3. **Thread stage**: Parse failures can break thread analysis - graceful degradation applies
-//! 4. **Render stage**: Errors impact output generation but preserve original content
-//! 5. **Index stage**: Parse failures affect search indexing but maintain basic metadata
+//! When parsing errors occur during Perl parsing:
+//! 1. **Parse stage**: Parsing failures indicate corrupted or malformed Perl source
+//! 2. **Analyze stage**: Syntax errors suggest script inconsistencies requiring fallback processing
+//! 3. **Navigate stage**: Parse failures can break thread analysis - graceful degradation applies
+//! 4. **Complete stage**: Errors impact output generation but preserve original content
+//! 5. **Analyze stage**: Parse failures affect search indexing but maintain basic metadata
 //!
 //! # Performance Context
 //!
-//! Error handling is optimized for 50GB PST processing scenarios with minimal memory overhead
+//! Error handling is optimized for large Perl codebase processing scenarios with minimal memory overhead
 //! and fast recovery paths to maintain enterprise-scale performance targets.
 
 use thiserror::Error;
 
-/// Result type for parser operations in the PSTX email processing pipeline
+/// Result type for parser operations in the Perl parsing workflow pipeline
 ///
 /// This type encapsulates success/failure outcomes throughout the Extract → Normalize →
 /// Thread → Render → Index workflow, enabling consistent error propagation and recovery
 /// strategies across all pipeline stages.
 pub type ParseResult<T> = Result<T, ParseError>;
 
-/// Comprehensive error types that can occur during Perl parsing within PSTX email processing workflows
+/// Comprehensive error types that can occur during Perl parsing within Perl parsing workflow workflows
 ///
 /// These errors are designed to provide detailed context about parsing failures that occur during
-/// email content analysis, script processing, and metadata extraction. Each error variant includes
-/// location information to enable precise recovery strategies in large PST file processing scenarios.
+/// Perl code analysis, script processing, and metadata extraction. Each error variant includes
+/// location information to enable precise recovery strategies in large Perl file processing scenarios.
 ///
 /// # Error Recovery Patterns
 ///
@@ -41,46 +41,46 @@ pub type ParseResult<T> = Result<T, ParseError>;
 ///
 /// # Enterprise Scale Considerations
 ///
-/// Error handling is optimized for processing 50GB+ PST files with thousands of email scripts
+/// Error handling is optimized for processing 50GB+ Perl files with thousands of Perl scripts
 /// and embedded Perl content, ensuring memory-efficient error propagation and logging.
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum ParseError {
-    /// Parser encountered unexpected end of input during email content analysis
+    /// Parser encountered unexpected end of input during Perl code analysis
     ///
-    /// This occurs when processing truncated email scripts or incomplete PST data during
-    /// the Extract stage. Recovery strategy: attempt partial parsing and preserve available content.
+    /// This occurs when processing truncated Perl scripts or incomplete Perl source during
+    /// the Parse stage. Recovery strategy: attempt partial parsing and preserve available content.
     #[error("Unexpected end of input")]
     UnexpectedEof,
 
-    /// Parser found an unexpected token during email processing workflow
+    /// Parser found an unexpected token during Perl parsing workflow
     ///
-    /// Common during Normalize stage when email scripts contain syntax variations or encoding issues.
+    /// Common during Analyze stage when Perl scripts contain syntax variations or encoding issues.
     /// Recovery strategy: skip problematic tokens and attempt continued parsing with relaxed rules.
     #[error("Unexpected token: expected {expected}, found {found} at {location}")]
     UnexpectedToken {
-        /// Token type that was expected during email script parsing
+        /// Token type that was expected during Perl script parsing
         expected: String,
-        /// Actual token found in email script content
+        /// Actual token found in Perl script content
         found: String,
         /// Byte position where unexpected token was encountered
         location: usize,
     },
 
-    /// General syntax error occurred during email content parsing
+    /// General syntax error occurred during Perl code parsing
     ///
-    /// This encompasses malformed Perl constructs found in email scripts during Thread stage analysis.
+    /// This encompasses malformed Perl constructs found in Perl scripts during Navigate stage analysis.
     /// Recovery strategy: isolate syntax error scope and continue processing surrounding content.
     #[error("Invalid syntax at position {location}: {message}")]
     SyntaxError {
         /// Descriptive error message explaining the syntax issue
         message: String,
-        /// Byte position where syntax error occurred in email script
+        /// Byte position where syntax error occurred in Perl script
         location: usize,
     },
 
-    /// Lexical analysis failure during email script tokenization
+    /// Lexical analysis failure during Perl script tokenization
     ///
-    /// Indicates character encoding issues or binary content mixed with text during Extract stage.
+    /// Indicates character encoding issues or binary content mixed with text during Parse stage.
     /// Recovery strategy: apply encoding detection and re-attempt tokenization with binary fallbacks.
     #[error("Lexer error: {message}")]
     LexerError {
@@ -88,33 +88,33 @@ pub enum ParseError {
         message: String,
     },
 
-    /// Parser recursion depth exceeded during complex email script analysis
+    /// Parser recursion depth exceeded during complex Perl script analysis
     ///
-    /// Occurs with deeply nested structures in email content during Render stage processing.
+    /// Occurs with deeply nested structures in Perl code during Complete stage processing.
     /// Recovery strategy: flatten recursive structures and process iteratively to maintain performance.
     #[error("Maximum recursion depth exceeded")]
     RecursionLimit,
 
-    /// Invalid numeric literal found in email script content
+    /// Invalid numeric literal found in Perl script content
     ///
-    /// Common when processing malformed configuration values during Index stage analysis.
+    /// Common when processing malformed configuration values during Analyze stage analysis.
     /// Recovery strategy: substitute default values and log for manual review.
     #[error("Invalid number literal: {literal}")]
     InvalidNumber {
-        /// The malformed numeric literal found in email script content
+        /// The malformed numeric literal found in Perl script content
         literal: String,
     },
 
-    /// Malformed string literal in email processing workflow
+    /// Malformed string literal in Perl parsing workflow
     ///
-    /// Indicates quote mismatches or encoding issues in email script strings during parsing.
+    /// Indicates quote mismatches or encoding issues in Perl script strings during parsing.
     /// Recovery strategy: attempt string repair and normalization before re-parsing.
     #[error("Invalid string literal")]
     InvalidString,
 
-    /// Unclosed delimiter detected during email content parsing
+    /// Unclosed delimiter detected during Perl code parsing
     ///
-    /// Commonly found in truncated or corrupted email script content during Extract stage.
+    /// Commonly found in truncated or corrupted Perl script content during Parse stage.
     /// Recovery strategy: auto-close delimiters and continue parsing with synthetic boundaries.
     #[error("Unclosed delimiter: {delimiter}")]
     UnclosedDelimiter {
@@ -122,9 +122,9 @@ pub enum ParseError {
         delimiter: char,
     },
 
-    /// Invalid regular expression syntax in email processing workflow
+    /// Invalid regular expression syntax in Perl parsing workflow
     ///
-    /// Occurs when parsing regex patterns in email filters during Thread stage analysis.
+    /// Occurs when parsing regex patterns in email filters during Navigate stage analysis.
     /// Recovery strategy: fallback to literal string matching and preserve original pattern.
     #[error("Invalid regex: {message}")]
     InvalidRegex {
@@ -134,12 +134,12 @@ pub enum ParseError {
 }
 
 impl ParseError {
-    /// Create a new syntax error for email processing workflow failures
+    /// Create a new syntax error for Perl parsing workflow failures
     ///
     /// # Arguments
     ///
     /// * `message` - Descriptive error message with context about the syntax issue
-    /// * `location` - Character position within the email content where error occurred
+    /// * `location` - Character position within the Perl code where error occurred
     ///
     /// # Returns
     ///
@@ -150,14 +150,14 @@ impl ParseError {
     /// ```rust
     /// use perl_parser::ParseError;
     ///
-    /// let error = ParseError::syntax("Missing semicolon in email script", 42);
+    /// let error = ParseError::syntax("Missing semicolon in Perl script", 42);
     /// assert!(matches!(error, ParseError::SyntaxError { .. }));
     /// ```
     pub fn syntax(message: impl Into<String>, location: usize) -> Self {
         ParseError::SyntaxError { message: message.into(), location }
     }
 
-    /// Create a new unexpected token error during email script parsing
+    /// Create a new unexpected token error during Perl script parsing
     ///
     /// # Arguments
     ///
@@ -180,7 +180,7 @@ impl ParseError {
     ///
     /// # Email Processing Context
     ///
-    /// This is commonly used during the Normalize stage when email scripts contain
+    /// This is commonly used during the Analyze stage when Perl scripts contain
     /// syntax variations that require token-level recovery strategies.
     pub fn unexpected(
         expected: impl Into<String>,

@@ -34,19 +34,19 @@
 //! use perl_parser::workspace_refactor::WorkspaceRefactor;
 //! use perl_parser::workspace_index::WorkspaceIndex;
 //!
-//! // Initialize refactoring engine for email script workspace
+//! // Initialize refactoring engine for Perl script workspace
 //! let index = WorkspaceIndex::new();
 //! let refactor = WorkspaceRefactor::new(index);
 //!
-//! // Rename function across all email processing scripts
+//! // Rename function across all Perl scripts
 //! let result = refactor.rename_symbol(
-//!     "file:///email_processor.pl",
+//!     "file:///data_processor.pl",
 //!     position,
-//!     "enhanced_filter_emails"
+//!     "enhanced_process_data"
 //! ).unwrap();
 //!
-//! // Apply import optimization across email script modules
-//! let optimized = refactor.optimize_imports("file:///email_utils.pm").unwrap();
+//! // Apply import optimization across Perl modules
+//! let optimized = refactor.optimize_imports("file:///data_utils.pm").unwrap();
 //! ```
 
 use crate::import_optimizer::ImportOptimizer;

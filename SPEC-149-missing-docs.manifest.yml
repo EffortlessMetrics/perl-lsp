@@ -17,10 +17,10 @@ story_file: "ISSUE-149.story.md"
 ## User Stories
 
 primary_user_story:
-  role: "PSTX developer integrating with perl-parser crate for enterprise email processing workflows"
+  role: "Perl developer integrating with perl-parser crate for enterprise Perl development workflows"
   goal: "comprehensive API documentation for all public interfaces"
-  benefit: "efficiently implement email extraction, normalization, threading, rendering, and indexing components without reverse-engineering undocumented APIs"
-  business_value: "Reduced integration time and improved developer experience for enterprise-scale email processing workflows"
+  benefit: "efficiently implement Perl parsing, normalization, threading, rendering, and indexing components without reverse-engineering undocumented APIs"
+  business_value: "Reduced integration time and improved developer experience for enterprise-scale Perl development workflows"
 
 ## Acceptance Criteria Mapping
 
@@ -33,9 +33,9 @@ acceptance_criteria:
 
   AC2:
     id: "AC2"
-    description: "Document all public structs and enums with comprehensive descriptions including PSTX pipeline role"
+    description: "Document all public structs and enums with comprehensive descriptions including LSP workflow role"
     test_tag: "// AC:AC2"
-    validation: "All public structs/enums have module documentation describing Extract → Normalize → Thread → Render → Index pipeline integration"
+    validation: "All public structs/enums have module documentation describing Parse → Index → Navigate → Complete → Analyze workflow integration"
 
   AC3:
     id: "AC3"
@@ -47,11 +47,11 @@ acceptance_criteria:
     id: "AC4"
     description: "Document performance characteristics for optimization APIs like AstCache"
     test_tag: "// AC:AC4"
-    validation: "Performance-critical APIs document memory usage and 50GB PST processing performance implications"
+    validation: "Performance-critical APIs document memory usage and large Perl codebase processing performance implications"
 
   AC5:
     id: "AC5"
-    description: "Add module-level documentation explaining purpose and PSTX architecture relationship"
+    description: "Add module-level documentation explaining purpose and LSP architecture relationship"
     test_tag: "// AC:AC5"
     validation: "Each module has comprehensive module-level docs with //! comments"
 
@@ -69,9 +69,9 @@ acceptance_criteria:
 
   AC8:
     id: "AC8"
-    description: "Document error types and panic conditions with email processing workflow context"
+    description: "Document error types and panic conditions with Perl parsing workflow context"
     test_tag: "// AC:AC8"
-    validation: "Error types documented with when they occur in email processing workflows"
+    validation: "Error types documented with when they occur in Perl parsing workflows"
 
   AC9:
     id: "AC9"
@@ -107,10 +107,10 @@ affected_crates:
     - "perl-corpus" # For documentation examples
 
 pipeline_stages:
-  - "Extract: Parser API integration for PST email extraction"
+  - "Extract: Parser API integration for PST Perl parsing"
   - "Normalize: AST transformation and normalization components"
   - "Thread: Symbol resolution and workspace indexing for threading"
-  - "Render: LSP providers for email content rendering"
+  - "Render: LSP providers for Perl code rendering"
   - "Index: Semantic analysis and workspace indexing for search"
 
 core_modules:
@@ -151,7 +151,7 @@ core_modules:
 ## Constraints and Requirements
 
 performance_constraints:
-  pst_processing: "50GB PST processing performance must be documented for relevant APIs"
+  pst_processing: "large Perl codebase processing performance must be documented for relevant APIs"
   memory_usage: "Memory consumption patterns documented for large file processing"
   incremental_parsing: "Sub-millisecond parsing update performance documented"
 
@@ -162,7 +162,7 @@ technical_constraints:
   backward_compatibility: "Existing public API contracts must remain unchanged"
 
 enterprise_requirements:
-  security_documentation: "Document security considerations for email processing"
+  security_documentation: "Document security considerations for Perl parsing"
   error_recovery: "Document error recovery patterns for enterprise workflows"
   threading_safety: "Document thread safety guarantees for concurrent processing"
   unicode_handling: "Document Unicode and internationalization support"
@@ -175,7 +175,7 @@ api_documentation_standards:
       /// Brief one-line description of the struct's purpose
       ///
       /// Detailed description explaining:
-      /// - Role in PSTX email processing pipeline
+      /// - Role in LSP Perl parsing workflow
       /// - Key responsibilities and use cases
       /// - Performance characteristics (if applicable)
       /// - Thread safety guarantees
@@ -190,7 +190,7 @@ api_documentation_standards:
       ///
       /// # Pipeline Integration
       ///
-      /// This struct is used in the [stage] stage of the PSTX pipeline:
+      /// This struct is used in the [stage] stage of the LSP workflow:
       /// - Extract: [role if applicable]
       /// - Normalize: [role if applicable]
       /// - Thread: [role if applicable]
@@ -200,7 +200,7 @@ api_documentation_standards:
     required_fields:
       - "purpose_summary: Single line describing the struct's main purpose"
       - "detailed_description: Multi-paragraph explanation with context"
-      - "pipeline_integration: Role in PSTX email processing stages"
+      - "workflow_integration: Role in LSP Perl parsing stages"
       - "examples: Practical usage examples with working code"
       - "performance_notes: Memory/CPU characteristics for relevant structs"
 
@@ -209,7 +209,7 @@ api_documentation_standards:
       /// Brief one-line description of what the function does
       ///
       /// Detailed description explaining the function's purpose,
-      /// behavior, and relationship to email processing workflows.
+      /// behavior, and relationship to Perl parsing workflows.
       ///
       /// # Arguments
       ///
@@ -228,7 +228,7 @@ api_documentation_standards:
       ///
       /// # Panics
       ///
-      /// Panics when [condition] occurs in email processing.
+      /// Panics when [condition] occurs in Perl parsing.
       ///
       /// # Examples
       ///
@@ -261,9 +261,9 @@ api_documentation_standards:
       //! ## Overview
       //!
       //! Comprehensive description of the module's functionality and how it
-      //! integrates with the PSTX email processing pipeline stages.
+      //! integrates with the LSP Perl parsing workflow stages.
       //!
-      //! ## PSTX Pipeline Integration
+      //! ## LSP Workflow Integration
       //!
       //! This module supports the following pipeline stages:
       //! - **Extract**: [role if applicable]
@@ -286,14 +286,14 @@ api_documentation_standards:
       //!
       //! ## Performance Considerations
       //!
-      //! [Performance characteristics relevant to 50GB PST processing]
+      //! [Performance characteristics relevant to large Perl codebase processing]
 
 error_documentation_standards:
   error_types:
     format: |
       /// Represents a [specific type] error in Perl parsing
       ///
-      /// This error occurs when [specific condition] during email processing
+      /// This error occurs when [specific condition] during Perl parsing
       /// workflows, particularly in the [pipeline stage] stage.
       ///
       /// # When This Error Occurs
@@ -436,7 +436,7 @@ validation_strategy:
 
   manual_reviews:
     - "Documentation accuracy review by perl-parser maintainers"
-    - "Enterprise integration review for PSTX pipeline documentation"
+    - "Enterprise integration review for LSP workflow documentation"
     - "Performance documentation validation against actual benchmarks"
     - "Cross-reference link validation and consistency check"
 
@@ -479,15 +479,15 @@ quantitative_metrics:
 
 qualitative_metrics:
   developer_experience: "New contributors can understand API usage without code reading"
-  integration_efficiency: "Enterprise teams can integrate PSTX components in <50% time"
+  integration_efficiency: "Enterprise teams can integrate LSP components in <50% time"
   maintenance_quality: "Documentation remains accurate through ≥3 release cycles"
-  completeness_assessment: "All PSTX pipeline stages clearly documented and cross-referenced"
+  completeness_assessment: "All LSP workflow stages clearly documented and cross-referenced"
 
 acceptance_validation:
   ac1_validation: "cargo build completes without missing_docs warnings"
   ac11_validation: "cargo doc completes without any warnings or errors"
   ac12_validation: "CI pipeline enforces documentation for new public APIs"
-  enterprise_validation: "All PSTX pipeline integration points clearly documented"
+  enterprise_validation: "All LSP workflow integration points clearly documented"
 
 ## Dependencies and Integration
 

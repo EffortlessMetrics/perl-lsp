@@ -1,11 +1,11 @@
 //! LSP Server Capabilities Configuration for Email Script Processing
 //!
 //! This module provides centralized configuration for LSP server capabilities
-//! advertised to clients during email script development within the PSTX pipeline.
+//! advertised to clients during Perl script development within the LSP workflow.
 //! Serves as the single source of truth for feature availability and build-time
-//! capability gating for optimal email processing workflows.
+//! capability gating for optimal Perl parsing workflows.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
 //! - **Extract**: Provides capabilities for parsing and syntax analysis
 //! - **Normalize**: Enables code formatting and standardization features
@@ -16,11 +16,11 @@
 use lsp_types::*;
 use serde_json::Value;
 
-/// LSP features advertised to clients for email script development
+/// LSP features advertised to clients for Perl script development
 ///
 /// Controls which LSP capabilities are announced during server initialization,
 /// enabling clients to provide appropriate UI elements and functionality
-/// for email script editing within PSTX workflows.
+/// for Perl script editing within LSP workflows.
 #[derive(Debug, Clone, Default)]
 pub struct AdvertisedFeatures {
     /// Code completion for variables, functions, and keywords
@@ -31,9 +31,9 @@ pub struct AdvertisedFeatures {
     pub definition: bool,
     /// Find-all-references for symbol usage analysis
     pub references: bool,
-    /// Document symbol outline for email script structure
+    /// Document symbol outline for Perl script structure
     pub document_symbol: bool,
-    /// Workspace-wide symbol search across email processing files
+    /// Workspace-wide symbol search across Perl parsing files
     pub workspace_symbol: bool,
     /// Automated code actions and refactoring suggestions
     pub code_action: bool,
@@ -45,7 +45,7 @@ pub struct AdvertisedFeatures {
     pub range_formatting: bool,
     /// Symbol renaming with workspace-wide updates
     pub rename: bool,
-    /// Code folding for improved email script navigation
+    /// Code folding for improved Perl script navigation
     pub folding_range: bool,
     /// Smart text selection expansion for efficient editing
     pub selection_range: bool,
@@ -53,11 +53,11 @@ pub struct AdvertisedFeatures {
     pub linked_editing: bool,
     /// Inline type and parameter hints for clarity
     pub inlay_hints: bool,
-    /// Semantic syntax highlighting for email scripts
+    /// Semantic syntax highlighting for Perl scripts
     pub semantic_tokens: bool,
     /// Call hierarchy navigation for function relationships
     pub call_hierarchy: bool,
-    /// Type hierarchy for object-oriented email processing
+    /// Type hierarchy for object-oriented Perl parsing
     pub type_hierarchy: bool,
     /// Pull-based diagnostic reporting for error detection
     pub diagnostic_provider: bool,
@@ -66,8 +66,8 @@ pub struct AdvertisedFeatures {
 /// Build-time feature flags for conditional LSP capability compilation
 ///
 /// Controls which capabilities are compiled into the LSP server binary,
-/// allowing for optimized builds targeted at specific email processing
-/// deployment scenarios within enterprise PSTX environments.
+/// allowing for optimized builds targeted at specific Perl parsing
+/// deployment scenarios within enterprise LSP environments.
 #[derive(Debug, Clone, Default)]
 pub struct BuildFlags {
     /// Code completion provider compilation flag

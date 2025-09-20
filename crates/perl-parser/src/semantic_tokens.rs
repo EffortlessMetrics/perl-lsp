@@ -1,23 +1,23 @@
-//! Semantic token analysis for LSP syntax highlighting in email script processing
+//! Semantic token analysis for LSP syntax highlighting in Perl script processing
 //!
-//! This module provides semantic token extraction and classification for Perl email scripts
-//! within the PSTX pipeline. It generates precise syntax highlighting information that helps
-//! developers understand complex email processing code during the Render stage.
+//! This module provides semantic token extraction and classification for Perl scripts
+//! within the LSP workflow. It generates precise syntax highlighting information that helps
+//! developers understand complex Perl code during the Complete stage.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! - **Extract**: Receives parsed AST from email script parsing
-//! - **Normalize**: Uses semantic information for code standardization
-//! - **Thread**: Applies semantic analysis for dependency tracking
-//! - **Render**: Primary consumer - provides syntax highlighting for code presentation
-//! - **Index**: Uses semantic classification for enhanced search and navigation
+//! - **Parse**: Receives parsed AST from Perl script parsing
+//! - **Index**: Uses semantic information for symbol indexing
+//! - **Navigate**: Applies semantic analysis for cross-file navigation
+//! - **Complete**: Primary consumer - provides syntax highlighting for code presentation
+//! - **Analyze**: Uses semantic classification for enhanced search and analysis
 //!
 //! # Performance Characteristics
 //!
-//! - Memory usage: O(n) where n is token count in email script
+//! - Memory usage: O(n) where n is token count in Perl script
 //! - Time complexity: O(n) linear scanning with lexer integration
-//! - Optimized for 50GB PST processing with efficient token classification
-//! - Thread-safe semantic token generation for concurrent email processing
+//! - Optimized for large Perl codebase processing with efficient token classification
+//! - Thread-safe semantic token generation for concurrent script processing
 
 use crate::ast::{Node, NodeKind};
 use perl_lexer::{PerlLexer, TokenType};
@@ -43,11 +43,11 @@ pub struct TokensLegend {
     pub map: FxHashMap<String, u32>,
 }
 
-/// Create the standard semantic token legend for Perl email script highlighting
+/// Create the standard semantic token legend for Perl script highlighting
 ///
 /// Returns a configured legend with all supported token types and modifiers
-/// for comprehensive email script syntax highlighting. Optimized for common
-/// Perl constructs found in email processing workflows.
+/// for comprehensive Perl script syntax highlighting. Optimized for common
+/// Perl constructs found in Perl parsing workflows.
 ///
 /// # Returns
 ///
@@ -111,17 +111,17 @@ fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
     *leg.map.get(k).unwrap_or(&0)
 }
 
-/// Collect semantic tokens from parsed email script AST for LSP highlighting
+/// Collect semantic tokens from parsed Perl script AST for LSP highlighting
 ///
 /// Analyzes the provided AST and source text to generate semantic tokens suitable
 /// for LSP client consumption. Combines lexer-based token classification with
 /// AST-based semantic analysis to provide comprehensive syntax highlighting for
-/// email script content within the PSTX Render stage.
+/// Perl script content within the LSP Complete stage.
 ///
 /// # Arguments
 ///
-/// * `ast` - Parsed email script AST containing semantic information
-/// * `text` - Original source text of the email script for token extraction
+/// * `ast` - Parsed Perl script AST containing semantic information
+/// * `text` - Original source text of the Perl script for token extraction
 /// * `to_pos16` - Position conversion function mapping byte offsets to LSP coordinates
 ///
 /// # Returns
@@ -131,10 +131,10 @@ fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
 ///
 /// # Performance
 ///
-/// - Time complexity: O(n) where n is the number of tokens in the email script
+/// - Time complexity: O(n) where n is the number of tokens in the Perl script
 /// - Memory usage: O(n) for token storage and classification
-/// - Optimized for large email scripts found in 50GB PST processing workflows
-/// - Thread-safe operation suitable for concurrent email processing
+/// - Optimized for large Perl scripts found in enterprise development workflows
+/// - Thread-safe operation suitable for concurrent Perl parsing
 ///
 /// # Examples
 ///
@@ -157,7 +157,7 @@ fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
 /// This function is particularly effective for highlighting:
 /// - Email filtering and routing logic with regular expressions
 /// - Email template processing code with variable interpolation
-/// - Configuration scripts embedded in email content
+/// - Configuration scripts embedded in Perl code
 /// - Message processing automation with proper keyword highlighting
 pub fn collect_semantic_tokens(
     ast: &Node,

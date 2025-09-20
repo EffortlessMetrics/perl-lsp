@@ -29,14 +29,14 @@ pub struct SymbolKey {
     pub kind: SymKind,
 }
 
-/// Normalize a Perl variable name for consistent email processing pipeline indexing
+/// Normalize a Perl variable name for consistent Perl parsing pipeline indexing
 ///
-/// Extracts sigil prefix and base name from Perl variables during Index stage processing
-/// to enable consistent cross-file symbol lookup during PSTX email script analysis.
+/// Extracts sigil prefix and base name from Perl variables during Analyze stage processing
+/// to enable consistent cross-file symbol lookup during LSP Perl script analysis.
 ///
 /// # Arguments
 ///
-/// * `name` - Variable name from email script content (with or without sigil)
+/// * `name` - Variable name from Perl script content (with or without sigil)
 ///
 /// # Returns
 ///
@@ -56,11 +56,11 @@ pub struct SymbolKey {
 /// assert_eq!(normalize_var("process_emails"), (None, "process_emails"));
 /// ```
 ///
-/// # PSTX Pipeline Context
+/// # LSP Workflow Context
 ///
-/// This function supports the Index stage by normalizing variable names found in
-/// email processing scripts, enabling consistent symbol lookup across complex
-/// PST file analysis workflows.
+/// This function supports the Analyze stage by normalizing variable names found in
+/// Perl parsing scripts, enabling consistent symbol lookup across complex
+/// Perl file analysis workflows.
 pub fn normalize_var(name: &str) -> (Option<char>, &str) {
     if name.is_empty() {
         return (None, "");
@@ -1137,7 +1137,7 @@ pub mod lsp_adapter {
     /// Convert workspace index location to LSP Location for client transmission
     ///
     /// Transforms internal workspace index location data into LSP-compatible format
-    /// for cross-file navigation during email script analysis in PSTX pipeline.
+    /// for cross-file navigation during Perl script analysis in LSP workflow.
     ///
     /// # Arguments
     ///
@@ -1169,7 +1169,7 @@ pub mod lsp_adapter {
     ///
     /// Efficiently transforms a collection of internal index locations into LSP-compatible
     /// format for batch transmission during find-references and workspace symbol operations
-    /// in email script analysis workflows.
+    /// in Perl script analysis workflows.
     ///
     /// # Arguments
     ///
@@ -1183,7 +1183,7 @@ pub mod lsp_adapter {
     ///
     /// - Time complexity: O(n) where n is the number of locations
     /// - Memory usage: O(n) for output vector allocation
-    /// - Optimized for batch processing during 50GB PST workspace navigation
+    /// - Optimized for batch processing during large Perl codebase workspace navigation
     ///
     /// # Examples
     ///

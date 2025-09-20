@@ -1,27 +1,27 @@
-//! Main Perl parser implementation for PSTX email processing pipeline
+//! Main Perl parser implementation for Perl parsing workflow pipeline
 //!
 //! This module implements a high-performance recursive descent parser with operator precedence
 //! handling that consumes tokens from perl-lexer and produces comprehensive ASTs for email
-//! script analysis throughout the Extract → Normalize → Thread → Render → Index workflow.
+//! script analysis throughout the Parse → Index → Navigate → Complete → Analyze workflow.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! The parser serves as the entry point for the Extract stage, converting raw email script
+//! The parser serves as the entry point for the Parse stage, converting raw Perl script
 //! content into structured ASTs that flow through subsequent pipeline stages:
 //!
-//! - **Extract**: Parses Perl scripts embedded in PST email content
+//! - **Extract**: Parses Perl scripts embedded in PST Perl code
 //! - **Normalize**: Provides AST foundation for standardization transformations
-//! - **Thread**: Enables control flow and dependency analysis across email scripts
+//! - **Thread**: Enables control flow and dependency analysis across Perl scripts
 //! - **Render**: Supports AST-to-source reconstruction with formatting preservation
 //! - **Index**: Facilitates symbol extraction and searchable metadata generation
 //!
 //! # Performance Characteristics
 //!
-//! Optimized for enterprise-scale email processing:
-//! - Handles 50GB+ PST files with efficient memory management
+//! Optimized for enterprise-scale Perl parsing:
+//! - Handles 50GB+ Perl files with efficient memory management
 //! - Recursive descent with configurable depth limits for safety
 //! - Token stream abstraction minimizes memory allocation during parsing
-//! - Error recovery enables continued processing of malformed email scripts
+//! - Error recovery enables continued processing of malformed Perl scripts
 //!
 //! # Usage Example
 //!
@@ -31,12 +31,12 @@
 //! let mut parser = Parser::new("my $email_filter = sub { /important/ };");
 //! match parser.parse() {
 //!     Ok(ast) => {
-//!         // AST ready for PSTX pipeline processing
-//!         println!("Parsed email script: {}", ast.to_sexp());
+//!         // AST ready for LSP workflow processing
+//!         println!("Parsed Perl script: {}", ast.to_sexp());
 //!     }
 //!     Err(e) => {
 //!         // Handle parsing errors with recovery strategies
-//!         eprintln!("Parse error in email script: {}", e);
+//!         eprintln!("Parse error in Perl script: {}", e);
 //!     }
 //! }
 //! ```
@@ -48,16 +48,16 @@ use crate::{
     token_stream::{Token, TokenKind, TokenStream},
 };
 
-/// High-performance Perl parser for email script analysis within PSTX pipeline
+/// High-performance Perl parser for Perl script analysis within LSP workflow
 ///
-/// The parser processes email script content through recursive descent parsing with
+/// The parser processes Perl script content through recursive descent parsing with
 /// operator precedence handling, producing comprehensive ASTs suitable for analysis
-/// across all PSTX pipeline stages. Designed for enterprise-scale performance with
-/// 50GB+ PST file processing capabilities.
+/// across all LSP workflow stages. Designed for enterprise-scale performance with
+/// 50GB+ Perl file processing capabilities.
 ///
 /// # Email Processing Context
 ///
-/// This parser specializes in handling Perl scripts commonly found in email content:
+/// This parser specializes in handling Perl scripts commonly found in Perl code:
 /// - Email filtering and routing scripts
 /// - Message processing automation code
 /// - Configuration and setup scripts embedded in emails
@@ -68,11 +68,11 @@ use crate::{
 /// - Configurable recursion depth limits prevent stack overflow on malformed content
 /// - Token stream abstraction minimizes memory allocation during large file processing
 /// - Error recovery strategies maintain parsing progress despite syntax issues
-/// - Position tracking enables precise error reporting for debugging complex email scripts
+/// - Position tracking enables precise error reporting for debugging complex Perl scripts
 pub struct Parser<'a> {
-    /// Token stream providing access to lexed email script content
+    /// Token stream providing access to lexed Perl script content
     tokens: TokenStream<'a>,
-    /// Current recursion depth for overflow protection during complex email script parsing
+    /// Current recursion depth for overflow protection during complex Perl script parsing
     recursion_depth: usize,
     /// Position tracking for error reporting and AST location information
     last_end_position: usize,
@@ -85,16 +85,16 @@ pub struct Parser<'a> {
 const MAX_RECURSION_DEPTH: usize = 500;
 
 impl<'a> Parser<'a> {
-    /// Create a new parser for processing email script content within PSTX pipeline
+    /// Create a new parser for processing Perl script content within LSP workflow
     ///
     /// # Arguments
     ///
-    /// * `input` - Email script source code to be parsed during Extract stage
+    /// * `input` - Email script source code to be parsed during Parse stage
     ///
     /// # Returns
     ///
-    /// A configured parser ready for email script analysis with optimal settings
-    /// for enterprise-scale PST processing workflows.
+    /// A configured parser ready for Perl script analysis with optimal settings
+    /// for enterprise-scale Perl codebase processing workflows.
     ///
     /// # Examples
     ///
@@ -103,7 +103,7 @@ impl<'a> Parser<'a> {
     ///
     /// let script = "use strict; my $filter = qr/important/;";
     /// let mut parser = Parser::new(script);
-    /// // Parser ready for PSTX pipeline processing
+    /// // Parser ready for LSP workflow processing
     /// ```
     pub fn new(input: &'a str) -> Self {
         Parser {
@@ -115,12 +115,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse email script content and return comprehensive AST for PSTX pipeline processing
+    /// Parse Perl script content and return comprehensive AST for LSP workflow processing
     ///
-    /// This method performs complete parsing of email script content, producing an AST
-    /// suitable for analysis throughout the Extract → Normalize → Thread → Render → Index
-    /// pipeline stages. Designed for robust processing of complex email scripts found
-    /// in enterprise PST files.
+    /// This method performs complete parsing of Perl script content, producing an AST
+    /// suitable for analysis throughout the Parse → Index → Navigate → Complete → Analyze
+    /// pipeline stages. Designed for robust processing of complex Perl scripts found
+    /// in enterprise Perl files.
     ///
     /// # Returns
     ///
@@ -136,7 +136,7 @@ impl<'a> Parser<'a> {
     /// - Invalid token sequences that cannot be recovered from
     ///
     /// Recovery strategy: Use error classifier to categorize failures and apply
-    /// appropriate fallback parsing strategies for continued email processing.
+    /// appropriate fallback parsing strategies for continued Perl parsing.
     ///
     /// # Examples
     ///
@@ -146,7 +146,7 @@ impl<'a> Parser<'a> {
     /// let mut parser = Parser::new("my $email_count = scalar(@emails);");
     /// match parser.parse() {
     ///     Ok(ast) => {
-    ///         // AST ready for PSTX pipeline stages
+    ///         // AST ready for LSP workflow stages
     ///         assert!(matches!(ast.kind, perl_parser::NodeKind::Program { .. }));
     ///     }
     ///     Err(e) => {
@@ -161,7 +161,7 @@ impl<'a> Parser<'a> {
     /// This method is optimized for parsing Perl scripts commonly found in email environments:
     /// - Email filtering and routing logic
     /// - Message processing automation scripts
-    /// - Configuration scripts embedded in email content
+    /// - Configuration scripts embedded in Perl code
     /// - Template processing code within email systems
     pub fn parse(&mut self) -> ParseResult<Node> {
         self.parse_program()

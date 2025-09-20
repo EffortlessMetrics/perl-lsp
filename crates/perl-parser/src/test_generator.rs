@@ -3,18 +3,18 @@
 //! This module provides automatic test generation for Perl code,
 //! supporting the red-green-refactor cycle of Test-Driven Development.
 //!
-//! ## PSTX Pipeline Integration
+//! ## LSP Workflow Integration
 //!
-//! Test generation operates within the **PSTX email processing pipeline**:
-//! **Extract → Normalize → Thread → Render → Index**
+//! Test generation operates within the **LSP workflow**:
+//! **Parse → Index → Navigate → Complete → Analyze**
 //!
-//! - **Extract Stage**: Analyzes Perl functions/methods to determine test requirements
-//! - **Normalize Stage**: Standardizes test patterns and identifies edge cases
-//! - **Thread Stage**: Links related test cases and maintains test dependency relationships
-//! - **Render Stage**: Generates test code using appropriate test frameworks (Test::More, Test2::V0)
-//! - **Index Stage**: Updates test coverage metrics and integrates with workspace symbols
+//! - **Parse Stage**: Analyzes Perl functions/methods to determine test requirements
+//! - **Index Stage**: Standardizes test patterns and identifies edge cases
+//! - **Navigate Stage**: Links related test cases and maintains test dependency relationships
+//! - **Complete Stage**: Generates test code using appropriate test frameworks (Test::More, Test2::V0)
+//! - **Analyze Stage**: Updates test coverage metrics and integrates with workspace symbols
 //!
-//! Essential for maintaining high-quality test coverage in enterprise email processing
+//! Essential for maintaining high-quality test coverage in enterprise Perl development
 //! systems where reliability and correctness are critical business requirements.
 //!
 //! ## Usage Examples
@@ -103,7 +103,7 @@ pub struct TestCase {
 }
 
 impl TestGenerator {
-    /// Create a new test generator for email processing workflow test automation
+    /// Create a new test generator for Perl parsing workflow test automation
     ///
     /// # Arguments
     ///
@@ -111,7 +111,7 @@ impl TestGenerator {
     ///
     /// # Returns
     ///
-    /// A configured test generator ready for email script test generation
+    /// A configured test generator ready for Perl script test generation
     ///
     /// # Examples
     ///
@@ -119,7 +119,7 @@ impl TestGenerator {
     /// use perl_parser::{TestGenerator, TestFramework};
     ///
     /// let generator = TestGenerator::new(TestFramework::TestMore);
-    /// // Generator ready for email processing workflow test generation
+    /// // Generator ready for Perl parsing workflow test generation
     /// ```
     pub fn new(framework: TestFramework) -> Self {
         Self { framework, options: TestGeneratorOptions::default() }

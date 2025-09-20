@@ -75,20 +75,20 @@ pub struct DiagnosticsProvider {
 }
 
 impl DiagnosticsProvider {
-    /// Create a new diagnostics provider for email script analysis
+    /// Create a new diagnostics provider for Perl script analysis
     ///
-    /// Constructs a diagnostics provider capable of analyzing email scripts
-    /// for syntax errors, semantic issues, and email processing best practices
-    /// within the PSTX pipeline workflow.
+    /// Constructs a diagnostics provider capable of analyzing Perl scripts
+    /// for syntax errors, semantic issues, and Perl parsing best practices
+    /// within the LSP workflow workflow.
     ///
     /// # Arguments
     ///
-    /// * `ast` - Parsed AST containing email script structure for analysis
+    /// * `ast` - Parsed AST containing Perl script structure for analysis
     /// * `source` - Original source code for position mapping and context
     ///
     /// # Returns
     ///
-    /// A configured diagnostics provider ready for comprehensive email script
+    /// A configured diagnostics provider ready for comprehensive Perl script
     /// error detection and reporting during development and processing stages.
     ///
     /// # Examples
@@ -101,7 +101,7 @@ impl DiagnosticsProvider {
     /// let ast = parser.parse().unwrap();
     ///
     /// let provider = DiagnosticsProvider::new(&ast, script.to_string());
-    /// // Provider ready for email script error analysis
+    /// // Provider ready for Perl script error analysis
     /// ```
     pub fn new(ast: &Node, source: String) -> Self {
         let extractor = SymbolExtractor::new_with_source(&source);
@@ -112,11 +112,11 @@ impl DiagnosticsProvider {
         Self { symbol_table, _source: source, scope_analyzer, error_classifier }
     }
 
-    /// Get all diagnostics for email script document analysis
+    /// Get all diagnostics for Perl script document analysis
     ///
-    /// Performs comprehensive analysis of email script content to identify
-    /// syntax errors, semantic issues, unused variables, and email processing
-    /// best practice violations within PSTX pipeline development.
+    /// Performs comprehensive analysis of Perl script content to identify
+    /// syntax errors, semantic issues, unused variables, and Perl parsing
+    /// best practice violations within LSP workflow development.
     ///
     /// # Arguments
     ///
@@ -127,7 +127,7 @@ impl DiagnosticsProvider {
     /// # Returns
     ///
     /// Vector of diagnostic messages including errors, warnings, and information
-    /// items sorted by severity and position for optimal email script development.
+    /// items sorted by severity and position for optimal Perl script development.
     ///
     /// # Examples
     ///

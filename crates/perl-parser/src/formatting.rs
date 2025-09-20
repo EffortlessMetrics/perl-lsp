@@ -1,22 +1,22 @@
-//! Code formatting support using Perl::Tidy for PSTX email processing pipeline
+//! Code formatting support using Perl::Tidy for Perl parsing workflow pipeline
 //!
-//! This module provides integration with perltidy for code formatting of email scripts
-//! throughout the PSTX workflow, ensuring consistent code style and readability for
-//! large-scale email processing operations.
+//! This module provides integration with perltidy for code formatting of Perl scripts
+//! throughout the LSP workflow, ensuring consistent code style and readability for
+//! large-scale Perl parsing operations.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! Formatting operations are integrated across PSTX workflow stages:
-//! - **Extract**: Format email scripts during initial processing for consistency
-//! - **Normalize**: Apply standardized formatting rules to email processing code
+//! Formatting operations are integrated across LSP workflow stages:
+//! - **Extract**: Format Perl scripts during initial processing for consistency
+//! - **Normalize**: Apply standardized formatting rules to Perl parsing code
 //! - **Thread**: Maintain readable formatting during control flow analysis
-//! - **Render**: Ensure consistent output formatting for processed email scripts
+//! - **Render**: Ensure consistent output formatting for processed Perl scripts
 //! - **Index**: Generate consistently formatted code for indexing and search
 //!
 //! # Performance Characteristics
 //!
-//! Optimized for enterprise-scale email script formatting:
-//! - **50GB+ PST Support**: Efficient handling of large email script collections
+//! Optimized for enterprise-scale Perl script formatting:
+//! - **large Perl codebase Support**: Efficient handling of large Perl script collections
 //! - **Incremental Formatting**: Format only changed code sections for performance
 //! - **Graceful Degradation**: Continues operation even when perltidy is unavailable
 //! - **Memory Efficient**: Streams large files to minimize memory usage during formatting
@@ -26,13 +26,13 @@
 //! ```rust
 //! use perl_parser::formatting::{format_document, FormattingOptions};
 //!
-//! // Format email processing script with standard options
+//! // Format Perl parsing script with standard options
 //! let script = "sub process_email{my$msg=shift;return$msg;}";
 //! let options = FormattingOptions::default();
 //!
 //! match format_document(script, &options) {
 //!     Ok(edits) => {
-//!         // Apply formatting edits to email script
+//!         // Apply formatting edits to Perl script
 //!         println!("Formatted {} edits", edits.len());
 //!     }
 //!     Err(e) => {
@@ -99,15 +99,15 @@ pub struct FormattingOptions {
 pub struct CodeFormatter;
 
 impl CodeFormatter {
-    /// Create a new code formatter for email script processing
+    /// Create a new code formatter for Perl script processing
     ///
-    /// Constructs a formatter instance capable of formatting Perl email scripts
-    /// according to best practices and coding standards within PSTX pipeline
+    /// Constructs a formatter instance capable of formatting Perl Perl scripts
+    /// according to best practices and coding standards within LSP workflow
     /// development workflows.
     ///
     /// # Returns
     ///
-    /// A configured formatter ready for email script formatting operations
+    /// A configured formatter ready for Perl script formatting operations
     /// with perltidy integration and graceful fallback handling.
     ///
     /// # Examples
@@ -116,17 +116,17 @@ impl CodeFormatter {
     /// use perl_parser::CodeFormatter;
     ///
     /// let formatter = CodeFormatter::new();
-    /// // Formatter ready for email script formatting
+    /// // Formatter ready for Perl script formatting
     /// ```
     pub fn new() -> Self {
         Self
     }
 
-    /// Format the entire email script document with perltidy integration
+    /// Format the entire Perl script document with perltidy integration
     ///
-    /// Performs comprehensive formatting of email script content using perltidy
+    /// Performs comprehensive formatting of Perl script content using perltidy
     /// with graceful fallback handling for environments where perltidy is not
-    /// available. Optimized for PSTX email processing development workflows.
+    /// available. Optimized for Perl parsing workflow development workflows.
     ///
     /// # Arguments
     ///
@@ -155,7 +155,7 @@ impl CodeFormatter {
     ///
     /// match formatter.format_document(script, &options) {
     ///     Ok(edits) => {
-    ///         // Apply formatting edits for cleaner email script
+    ///         // Apply formatting edits for cleaner Perl script
     ///         println!("Formatted with {} edits", edits.len());
     ///     }
     ///     Err(e) => {
@@ -168,7 +168,7 @@ impl CodeFormatter {
     /// # Error Recovery
     ///
     /// This function provides graceful degradation when perltidy is not available,
-    /// ensuring email script development can continue with manual formatting.
+    /// ensuring Perl script development can continue with manual formatting.
     pub fn format_document(
         &self,
         content: &str,

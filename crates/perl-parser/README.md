@@ -66,9 +66,9 @@ This crate enforces enterprise-grade API documentation standards through `#![war
 ### Documentation Requirements
 
 - **All public APIs** have comprehensive documentation with examples and cross-references
-- **Performance-critical modules** document memory usage and 50GB PST processing implications
-- **Error types** explain email processing workflow context and recovery strategies
-- **Module documentation** describes PSTX pipeline integration (Extract → Normalize → Thread → Render → Index)
+- **Performance-critical modules** document memory usage and large Perl codebase processing implications
+- **Error types** explain Perl parsing workflow context and recovery strategies
+- **Module documentation** describes LSP workflow integration (Parse → Index → Navigate → Complete → Analyze)
 
 ### Quality Validation
 

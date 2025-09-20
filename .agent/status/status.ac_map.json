@@ -15,7 +15,7 @@
       "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
     },
     "AC2": {
-      "description": "Document all public structs/enums with PSTX pipeline role descriptions",
+      "description": "Document all public structs/enums with LSP pipeline role descriptions",
       "test_function": "test_public_structs_documentation_presence",
       "line_number": 45,
       "status": "FAILING_AS_EXPECTED",
@@ -29,14 +29,14 @@
       "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
     },
     "AC4": {
-      "description": "Document performance characteristics for AstCache and 50GB PST processing",
+      "description": "Document performance characteristics for AstCache and 50GB Perl codebase processing",
       "test_function": "test_performance_documentation_presence",
       "line_number": 226,
       "status": "FAILING_AS_EXPECTED",
       "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
     },
     "AC5": {
-      "description": "Add module-level documentation explaining PSTX architecture relationship",
+      "description": "Add module-level documentation explaining LSP architecture relationship",
       "test_function": "test_module_level_documentation_presence",
       "line_number": 304,
       "status": "FAILING_AS_EXPECTED",
@@ -122,7 +122,7 @@
   "additional_tests": [
     {
       "name": "test_comprehensive_pstx_pipeline_documentation",
-      "description": "Integration test ensuring all PSTX pipeline stages are documented",
+      "description": "Integration test ensuring all LSP pipeline stages are documented",
       "status": "PASSING",
       "line_number": 792
     }
@@ -131,6 +131,6 @@
     "All AC requirements are properly covered with appropriate test tags",
     "Test failure patterns align with TDD expectations for unimplemented functionality",
     "No trivial fixes required - test suite is ready for implementation phase",
-    "Comprehensive PSTX pipeline coverage validated across all acceptance criteria"
+    "Comprehensive LSP pipeline coverage validated across all acceptance criteria"
   ]
 }
