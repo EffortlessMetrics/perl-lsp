@@ -2,7 +2,6 @@
 ///
 /// This test ensures that the substitution operator parsing improvements
 /// don't break parsing of the existing fuzzed corpus files.
-
 use perl_parser::Parser;
 use std::fs;
 use std::path::PathBuf;
@@ -15,7 +14,7 @@ fn get_fuzzed_files() -> Vec<PathBuf> {
             .filter_map(|entry| entry.ok())
             .map(|entry| entry.path())
             .filter(|path| path.extension().and_then(|s| s.to_str()) == Some("pl"))
-            .take(20)  // Limit to first 20 files for bounded testing
+            .take(20) // Limit to first 20 files for bounded testing
             .collect()
     } else {
         Vec::new()

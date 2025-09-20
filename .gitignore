@@ -30,11 +30,13 @@ scripts/__pycache__/
 *.pyc
 releases/
 
-/.claude/agents
+# Claude
+/.claude/agents/
 
 # Mutation testing artifacts
 mutants.out/
 mutants.out.old/
+mutants.out*
 mutation_testing_report.md
 manual_mutation_test.rs
 run_mutation_test.sh
