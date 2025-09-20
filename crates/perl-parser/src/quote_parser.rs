@@ -145,10 +145,11 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
         let trimmed = rest1.trim_start();
         // For paired delimiters like tr{search}{replace}, we expect another opening delimiter
         if trimmed.starts_with(delimiter) {
+            // Keep the delimiter - don't strip it since extract_delimited_content expects it
             trimmed
         } else {
-            // If no second delimiter found, the replacement is empty
-            ""
+            // If no second delimiter found, fall back to original rest
+            rest1
         }
     } else {
         rest2_owned = format!("{}{}", delimiter, rest1);
