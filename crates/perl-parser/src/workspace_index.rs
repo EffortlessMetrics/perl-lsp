@@ -1134,10 +1134,70 @@ pub mod lsp_adapter {
     // lsp_types uses Uri, not Url
     type LspUrl = lsp_types::Uri;
 
+    /// Convert workspace index location to LSP Location for client transmission
+    ///
+    /// Transforms internal workspace index location data into LSP-compatible format
+    /// for cross-file navigation during email script analysis in PSTX pipeline.
+    ///
+    /// # Arguments
+    ///
+    /// * `ix` - Internal index location with URI and range information
+    ///
+    /// # Returns
+    ///
+    /// * `Some(LspLocation)` - Successfully converted LSP location
+    /// * `None` - When URI parsing fails or location is invalid
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::{IxLocation, to_lsp_location};
+    /// use lsp_types::Range;
+    ///
+    /// let ix_loc = IxLocation {
+    ///     uri: "file:///path/to/email_script.pl".to_string(),
+    ///     range: Range::default(),
+    /// };
+    /// let lsp_loc = to_lsp_location(&ix_loc);
+    /// assert!(lsp_loc.is_some());
+    /// ```
     pub fn to_lsp_location(ix: &IxLocation) -> Option<LspLocation> {
         parse_url(&ix.uri).map(|uri| LspLocation { uri, range: ix.range })
     }
 
+    /// Convert multiple workspace index locations to LSP Locations for batch operations
+    ///
+    /// Efficiently transforms a collection of internal index locations into LSP-compatible
+    /// format for batch transmission during find-references and workspace symbol operations
+    /// in email script analysis workflows.
+    ///
+    /// # Arguments
+    ///
+    /// * `all` - Iterator of internal index locations to convert
+    ///
+    /// # Returns
+    ///
+    /// Vector of successfully converted LSP locations, with invalid locations filtered out
+    ///
+    /// # Performance
+    ///
+    /// - Time complexity: O(n) where n is the number of locations
+    /// - Memory usage: O(n) for output vector allocation
+    /// - Optimized for batch processing during 50GB PST workspace navigation
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::{IxLocation, to_lsp_locations};
+    /// use lsp_types::Range;
+    ///
+    /// let locations = vec![
+    ///     IxLocation { uri: "file:///script1.pl".to_string(), range: Range::default() },
+    ///     IxLocation { uri: "file:///script2.pl".to_string(), range: Range::default() },
+    /// ];
+    /// let lsp_locations = to_lsp_locations(locations);
+    /// assert_eq!(lsp_locations.len(), 2);
+    /// ```
     pub fn to_lsp_locations(all: impl IntoIterator<Item = IxLocation>) -> Vec<LspLocation> {
         all.into_iter().filter_map(|ix| to_lsp_location(&ix)).collect()
     }

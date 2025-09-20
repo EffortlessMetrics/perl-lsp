@@ -283,7 +283,39 @@ impl CompletionProvider {
         Self::new_with_index_and_source(ast, "", workspace_index)
     }
 
-    /// Create a new completion provider from parsed AST and source
+    /// Create a new completion provider from parsed AST and source with workspace integration
+    ///
+    /// Constructs a completion provider with full workspace symbol information for
+    /// comprehensive completion suggestions during email script editing within the
+    /// PSTX pipeline. Integrates local AST symbols with workspace-wide indexing.
+    ///
+    /// # Arguments
+    ///
+    /// * `ast` - Parsed AST containing local scope symbols and structure
+    /// * `source` - Original source code for position-based context analysis
+    /// * `workspace_index` - Optional workspace symbol index for cross-file completions
+    ///
+    /// # Returns
+    ///
+    /// A configured completion provider ready for LSP completion requests with
+    /// both local and workspace symbol coverage for email script development.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::{Parser, CompletionProvider, workspace_index::WorkspaceIndex};
+    /// use std::sync::Arc;
+    ///
+    /// let script = "package EmailProcessor; sub filter_spam { my $";
+    /// let mut parser = Parser::new(script);
+    /// let ast = parser.parse().unwrap();
+    ///
+    /// let workspace_idx = Arc::new(WorkspaceIndex::new());
+    /// let provider = CompletionProvider::new_with_index_and_source(
+    ///     &ast, script, Some(workspace_idx)
+    /// );
+    /// // Provider ready for cross-file email script completions
+    /// ```
     pub fn new_with_index_and_source(
         ast: &Node,
         source: &str,
@@ -482,11 +514,68 @@ impl CompletionProvider {
     }
 
     /// Create a new completion provider from parsed AST without workspace context
+    ///
+    /// Constructs a basic completion provider using only local scope symbols from
+    /// the provided AST. Suitable for simple email script editing without cross-file
+    /// dependencies in the PSTX pipeline.
+    ///
+    /// # Arguments
+    ///
+    /// * `ast` - Parsed AST containing local symbols for completion
+    ///
+    /// # Returns
+    ///
+    /// A completion provider configured for local-only completions without
+    /// workspace symbol integration.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::{Parser, CompletionProvider};
+    ///
+    /// let script = "my $email_count = 0; my $";
+    /// let mut parser = Parser::new(script);
+    /// let ast = parser.parse().unwrap();
+    ///
+    /// let provider = CompletionProvider::new(&ast);
+    /// // Provider ready for local variable completions
+    /// ```
     pub fn new(ast: &Node) -> Self {
         Self::new_with_index(ast, None)
     }
 
-    /// Get completions at a given position (with optional filepath for test detection)
+    /// Get completions at a given position with optional filepath for enhanced context
+    ///
+    /// Provides completion suggestions based on cursor position within email script
+    /// source code. Uses filepath context to enable enhanced completions for test
+    /// files and specific email processing patterns within PSTX workflows.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - Email script source code for analysis
+    /// * `position` - Byte offset cursor position for completion
+    /// * `filepath` - Optional file path for context-aware completion enhancement
+    ///
+    /// # Returns
+    ///
+    /// Vector of completion items sorted by relevance for the current context,
+    /// including local variables, functions, and workspace symbols when available.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::{Parser, CompletionProvider};
+    ///
+    /// let script = "my $email_filter = sub { my $";
+    /// let mut parser = Parser::new(script);
+    /// let ast = parser.parse().unwrap();
+    ///
+    /// let provider = CompletionProvider::new(&ast);
+    /// let completions = provider.get_completions_with_path(
+    ///     script, script.len(), Some("/path/to/email_processor.pl")
+    /// );
+    /// assert!(!completions.is_empty());
+    /// ```
     pub fn get_completions_with_path(
         &self,
         source: &str,
@@ -496,7 +585,50 @@ impl CompletionProvider {
         self.get_completions_with_path_cancellable(source, position, filepath, &|| false)
     }
 
-    /// Get completions at a given position with cancellation support
+    /// Get completions at a given position with cancellation support for responsive editing
+    ///
+    /// Provides completion suggestions with cancellation capability for responsive
+    /// email script editing during large workspace operations. Optimized for
+    /// enterprise-scale PSTX environments where completion requests may need
+    /// to be interrupted for better user experience.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - Email script source code for completion analysis
+    /// * `position` - Byte offset cursor position within the source
+    /// * `filepath` - Optional file path for enhanced context detection
+    /// * `is_cancelled` - Cancellation callback for responsive completion
+    ///
+    /// # Returns
+    ///
+    /// Vector of completion items or empty vector if operation was cancelled,
+    /// sorted by relevance for optimal email script development experience.
+    ///
+    /// # Performance
+    ///
+    /// - Respects cancellation for operations exceeding typical response times
+    /// - Optimized for large email script files in 50GB PST processing workflows
+    /// - Provides partial results when possible before cancellation
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::{Parser, CompletionProvider};
+    /// use std::sync::atomic::{AtomicBool, Ordering};
+    /// use std::sync::Arc;
+    ///
+    /// let script = "package EmailHandler; sub process_";
+    /// let mut parser = Parser::new(script);
+    /// let ast = parser.parse().unwrap();
+    ///
+    /// let provider = CompletionProvider::new(&ast);
+    /// let cancelled = Arc::new(AtomicBool::new(false));
+    /// let cancel_fn = || cancelled.load(Ordering::Relaxed);
+    ///
+    /// let completions = provider.get_completions_with_path_cancellable(
+    ///     script, script.len(), Some("email_handler.pl"), &cancel_fn
+    /// );
+    /// ```
     pub fn get_completions_with_path_cancellable(
         &self,
         source: &str,
@@ -706,7 +838,39 @@ impl CompletionProvider {
         completions
     }
 
-    /// Get completions at a given position (backward compatibility)
+    /// Get completions at a given position for email script development
+    ///
+    /// Provides basic completion suggestions at the specified cursor position
+    /// within email script source code. This is the primary interface for
+    /// LSP completion requests during PSTX email processing development.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - Email script source code for completion analysis
+    /// * `position` - Byte offset cursor position where completions are requested
+    ///
+    /// # Returns
+    ///
+    /// Vector of completion items including local variables, functions, keywords,
+    /// and built-in Perl constructs relevant to email processing workflows.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::{Parser, CompletionProvider};
+    ///
+    /// let script = "my $email_count = scalar(@emails); $email_c";
+    /// let mut parser = Parser::new(script);
+    /// let ast = parser.parse().unwrap();
+    ///
+    /// let provider = CompletionProvider::new(&ast);
+    /// let completions = provider.get_completions(script, script.len());
+    ///
+    /// // Should include completion for $email_count variable
+    /// assert!(completions.iter().any(|c| c.label.contains("email_count")));
+    /// ```
+    ///
+    /// See also [`get_completions_with_path`] for enhanced context-aware completions.
     pub fn get_completions(&self, source: &str, position: usize) -> Vec<CompletionItem> {
         self.get_completions_with_path(source, position, None)
     }

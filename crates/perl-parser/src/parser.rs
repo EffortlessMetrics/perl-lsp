@@ -127,6 +127,17 @@ impl<'a> Parser<'a> {
     /// * `Ok(Node)` - Successfully parsed AST with Program root node containing all statements
     /// * `Err(ParseError)` - Parsing failure with detailed error context for recovery strategies
     ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` when:
+    /// - Email script syntax is malformed or incomplete
+    /// - Unexpected end of input during parsing
+    /// - Recursion depth limit exceeded (protects against deeply nested structures)
+    /// - Invalid token sequences that cannot be recovered from
+    ///
+    /// Recovery strategy: Use error classifier to categorize failures and apply
+    /// appropriate fallback parsing strategies for continued email processing.
+    ///
     /// # Examples
     ///
     /// ```rust

@@ -1,3 +1,35 @@
+//! Find-all-references functionality for symbol usage analysis in email scripts
+//!
+//! This module provides comprehensive reference finding capabilities for email script
+//! development within the PSTX pipeline. Enables developers to quickly locate all
+//! usage sites of variables, functions, and packages across email processing code.
+//!
+//! # PSTX Pipeline Integration
+//!
+//! - **Extract**: Identifies symbol definitions during email script parsing
+//! - **Normalize**: Supports refactoring and symbol standardization
+//! - **Thread**: Analyzes variable flow and dependencies in email processing
+//! - **Render**: Enables reference highlighting and navigation in editors
+//! - **Index**: Powers workspace-wide symbol usage tracking
+//!
+//! # Usage Examples
+//!
+//! ```rust
+//! use perl_parser::{Parser, references::find_references_single_file};
+//!
+//! let script = "my $email_count = 0; $email_count++; print $email_count;";
+//! let mut parser = Parser::new(script);
+//! let ast = parser.parse().unwrap();
+//!
+//! // Find all references to $email_count
+//! if let Some(refs) = find_references_single_file(&ast, 3) { // Position of first $email_count
+//!     println!("Found {} references to $email_count", refs.len());
+//!     for (start, end) in refs {
+//!         println!("Reference at {}-{}: {}", start, end, &script[start..end]);
+//!     }
+//! }
+//! ```
+
 use crate::ast::{Node, NodeKind};
 
 /// Return (start_offset, end_offset) for same-file references

@@ -59,12 +59,76 @@ pub struct FormattingOptions {
 pub struct CodeFormatter;
 
 impl CodeFormatter {
-    /// Create a new formatter
+    /// Create a new code formatter for email script processing
+    ///
+    /// Constructs a formatter instance capable of formatting Perl email scripts
+    /// according to best practices and coding standards within PSTX pipeline
+    /// development workflows.
+    ///
+    /// # Returns
+    ///
+    /// A configured formatter ready for email script formatting operations
+    /// with perltidy integration and graceful fallback handling.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::CodeFormatter;
+    ///
+    /// let formatter = CodeFormatter::new();
+    /// // Formatter ready for email script formatting
+    /// ```
     pub fn new() -> Self {
         Self
     }
 
-    /// Format the entire document
+    /// Format the entire email script document with perltidy integration
+    ///
+    /// Performs comprehensive formatting of email script content using perltidy
+    /// with graceful fallback handling for environments where perltidy is not
+    /// available. Optimized for PSTX email processing development workflows.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - Email script source code to format
+    /// * `options` - Formatting configuration including indentation and style preferences
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Vec<FormatTextEdit>)` - Text edits to apply formatted changes
+    /// * `Err(FormatError)` - When formatting fails or perltidy is unavailable
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::{CodeFormatter, FormattingOptions};
+    ///
+    /// let formatter = CodeFormatter::new();
+    /// let script = "my$email_count=scalar(@emails);print$email_count;";
+    /// let options = FormattingOptions {
+    ///     tab_size: 4,
+    ///     insert_spaces: true,
+    ///     trim_trailing_whitespace: Some(true),
+    ///     insert_final_newline: Some(true),
+    ///     trim_final_newlines: Some(true),
+    /// };
+    ///
+    /// match formatter.format_document(script, &options) {
+    ///     Ok(edits) => {
+    ///         // Apply formatting edits for cleaner email script
+    ///         println!("Formatted with {} edits", edits.len());
+    ///     }
+    ///     Err(e) => {
+    ///         // Handle formatting errors gracefully
+    ///         eprintln!("Formatting failed: {}", e);
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// # Error Recovery
+    ///
+    /// This function provides graceful degradation when perltidy is not available,
+    /// ensuring email script development can continue with manual formatting.
     pub fn format_document(
         &self,
         content: &str,

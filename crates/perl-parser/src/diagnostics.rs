@@ -52,7 +52,34 @@ pub struct DiagnosticsProvider {
 }
 
 impl DiagnosticsProvider {
-    /// Create a new diagnostics provider
+    /// Create a new diagnostics provider for email script analysis
+    ///
+    /// Constructs a diagnostics provider capable of analyzing email scripts
+    /// for syntax errors, semantic issues, and email processing best practices
+    /// within the PSTX pipeline workflow.
+    ///
+    /// # Arguments
+    ///
+    /// * `ast` - Parsed AST containing email script structure for analysis
+    /// * `source` - Original source code for position mapping and context
+    ///
+    /// # Returns
+    ///
+    /// A configured diagnostics provider ready for comprehensive email script
+    /// error detection and reporting during development and processing stages.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::{Parser, DiagnosticsProvider};
+    ///
+    /// let script = "my $email_filter = qr/important/; my $email_filter = 1;";
+    /// let mut parser = Parser::new(script);
+    /// let ast = parser.parse().unwrap();
+    ///
+    /// let provider = DiagnosticsProvider::new(&ast, script.to_string());
+    /// // Provider ready for email script error analysis
+    /// ```
     pub fn new(ast: &Node, source: String) -> Self {
         let extractor = SymbolExtractor::new_with_source(&source);
         let symbol_table = extractor.extract(ast);
@@ -62,7 +89,52 @@ impl DiagnosticsProvider {
         Self { symbol_table, _source: source, scope_analyzer, error_classifier }
     }
 
-    /// Get all diagnostics for the document
+    /// Get all diagnostics for email script document analysis
+    ///
+    /// Performs comprehensive analysis of email script content to identify
+    /// syntax errors, semantic issues, unused variables, and email processing
+    /// best practice violations within PSTX pipeline development.
+    ///
+    /// # Arguments
+    ///
+    /// * `ast` - Parsed AST structure for semantic analysis
+    /// * `parse_errors` - Parser-detected syntax errors for reporting
+    /// * `source` - Original source code for position mapping and context
+    ///
+    /// # Returns
+    ///
+    /// Vector of diagnostic messages including errors, warnings, and information
+    /// items sorted by severity and position for optimal email script development.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::{Parser, DiagnosticsProvider};
+    ///
+    /// let script = "my $unused_var = 1; my $email_count";
+    /// let mut parser = Parser::new(script);
+    /// let result = parser.parse();
+    ///
+    /// match result {
+    ///     Ok(ast) => {
+    ///         let provider = DiagnosticsProvider::new(&ast, script.to_string());
+    ///         let diagnostics = provider.get_diagnostics(&ast, &[], script);
+    ///         // Should include unused variable warnings
+    ///         assert!(!diagnostics.is_empty());
+    ///     }
+    ///     Err(parse_errors) => {
+    ///         // Handle parse errors
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// # Email Processing Context
+    ///
+    /// This analysis is particularly valuable for:
+    /// - Email filtering script validation
+    /// - Message processing automation error detection
+    /// - Configuration script best practice enforcement
+    /// - Template processing code quality assurance
     pub fn get_diagnostics(
         &self,
         ast: &Node,

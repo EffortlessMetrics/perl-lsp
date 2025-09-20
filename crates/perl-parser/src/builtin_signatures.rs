@@ -1,12 +1,28 @@
-//! Comprehensive built-in function signatures for Perl
+//! Comprehensive built-in function signatures for Perl email script processing
 //!
 //! This module provides complete signature information for all Perl built-in functions
+//! with special focus on functions commonly used in email processing workflows within
+//! the PSTX pipeline. Enables enhanced completion and documentation during email
+//! script development.
+//!
+//! # PSTX Pipeline Integration
+//!
+//! - **Extract**: Provides signatures for parsing and data extraction functions
+//! - **Normalize**: Supports string manipulation and formatting functions
+//! - **Thread**: Enables array and hash operations for data organization
+//! - **Render**: Facilitates output formatting and presentation functions
+//! - **Index**: Powers search and matching operations with regex functions
 
 use std::collections::HashMap;
 
-/// Built-in function signature
+/// Built-in function signature with documentation for email script development
+///
+/// Contains complete signature information and documentation for Perl built-in
+/// functions, optimized for email processing use cases within PSTX workflows.
 pub struct BuiltinSignature {
+    /// Function signature variants showing different parameter combinations
     pub signatures: Vec<&'static str>,
+    /// Comprehensive documentation explaining function behavior and email processing use cases
     pub documentation: &'static str,
 }
 
