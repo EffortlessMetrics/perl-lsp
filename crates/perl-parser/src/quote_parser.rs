@@ -136,24 +136,68 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
-    // Parse first body (search)
+    // Parse first body (search pattern)
     let (search, rest1) = extract_delimited_content(content, delimiter, closing);
 
     // For paired delimiters, skip whitespace and expect new delimiter
+    let rest2_owned;
     let rest2 = if is_paired {
         let trimmed = rest1.trim_start();
-        if trimmed.starts_with(delimiter) { &trimmed[delimiter.len_utf8()..] } else { rest1 }
+        // For paired delimiters like tr{search}{replace}, we expect another opening delimiter
+        if trimmed.starts_with(delimiter) {
+            trimmed
+        } else {
+            // If no second delimiter found, the replacement is empty
+            ""
+        }
     } else {
-        rest1
+        rest2_owned = format!("{}{}", delimiter, rest1);
+        &rest2_owned
     };
 
-    // Parse second body (replace)
-    let (replace, modifiers_str) = extract_delimited_content(rest2, delimiter, closing);
+    // Parse second body (replacement pattern)
+    let (replacement, modifiers_str) = if !is_paired && !rest1.is_empty() {
+        // Manually parse the replacement for non-paired delimiters
+        let chars = rest1.char_indices();
+        let mut body = String::new();
+        let mut escaped = false;
+        let mut end_pos = rest1.len();
 
-    // Extract only alphabetic modifiers
-    let modifiers = extract_modifiers(modifiers_str);
+        for (i, ch) in chars {
+            if escaped {
+                body.push(ch);
+                escaped = false;
+                continue;
+            }
 
-    (search, replace, modifiers)
+            match ch {
+                '\\' => {
+                    body.push(ch);
+                    escaped = true;
+                }
+                c if c == closing => {
+                    end_pos = i + ch.len_utf8();
+                    break;
+                }
+                _ => body.push(ch),
+            }
+        }
+
+        (body, &rest1[end_pos..])
+    } else if is_paired {
+        extract_delimited_content(rest2, delimiter, closing)
+    } else {
+        (String::new(), rest1)
+    };
+
+    // Extract only valid transliteration modifiers
+    let modifiers = modifiers_str
+        .chars()
+        .take_while(|c| c.is_ascii_alphabetic())
+        .filter(|&c| matches!(c, 'c' | 'd' | 's' | 'r'))
+        .collect();
+
+    (search, replacement, modifiers)
 }
 
 /// Get the closing delimiter for a given opening delimiter

@@ -49,10 +49,10 @@ impl ErrorClassifier {
         let single_quote_count = source.matches('\'').count();
 
         // Check if we have unclosed quotes
-        if quote_count % 2 != 0 {
+        if !quote_count.is_multiple_of(2) {
             return ParseErrorKind::UnclosedString;
         }
-        if single_quote_count % 2 != 0 {
+        if !single_quote_count.is_multiple_of(2) {
             return ParseErrorKind::UnclosedString;
         }
 

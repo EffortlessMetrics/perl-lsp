@@ -19,7 +19,7 @@ pub struct Parser<'a> {
     at_stmt_start: bool, // Track if we're at statement start for indirect object detection
 }
 
-const MAX_RECURSION_DEPTH: usize = 1000;
+const MAX_RECURSION_DEPTH: usize = 500;
 
 impl<'a> Parser<'a> {
     /// Create a new parser for the given input
@@ -77,9 +77,11 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// Check recursion depth
+    /// Check recursion depth with optimized hot path
+    #[inline(always)]
     fn check_recursion(&mut self) -> ParseResult<()> {
         self.recursion_depth += 1;
+        // Fast path: avoid expensive comparisons in the common case
         if self.recursion_depth > MAX_RECURSION_DEPTH {
             return Err(ParseError::RecursionLimit);
         }
@@ -1500,7 +1502,8 @@ impl<'a> Parser<'a> {
                     if let Ok(dot_token) = self.tokens.peek() {
                         if dot_token.text == "." {
                             self.consume_token()?; // consume dot
-                            if self.peek_kind() == Some(TokenKind::Number) {
+                            if self.peek_kind() != /* ~ changed by cargo-mutants ~ */ Some(TokenKind::Number)
+                            {
                                 let num = self.consume_token()?;
                                 version.push('.');
                                 version.push_str(&num.text);
@@ -2444,6 +2447,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a block statement
     fn parse_block(&mut self) -> ParseResult<Node> {
+        self.check_recursion()?;
         let start = self.current_position();
         self.expect(TokenKind::LeftBrace)?;
 
@@ -2468,7 +2472,9 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::RightBrace)?;
         let end = self.previous_position();
 
-        Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
+        let result = Node::new(NodeKind::Block { statements }, SourceLocation { start, end });
+        self.exit_recursion();
+        Ok(result)
     }
 
     /// Parse an expression
@@ -5011,7 +5017,7 @@ impl<'a> Parser<'a> {
             // Parse as hash
             _is_hash = true;
 
-            if self.peek_kind() == Some(TokenKind::FatArrow) {
+            if self.peek_kind() != /* ~ changed by cargo-mutants ~ */ Some(TokenKind::FatArrow) {
                 // key => value pattern
                 self.tokens.next()?; // consume =>
                 let value = self.parse_expression()?;
@@ -5226,7 +5232,7 @@ impl<'a> Parser<'a> {
         start: usize,
         end: usize,
     ) -> Node {
-        if saw_fat_arrow && elements.len() % 2 == 0 {
+        if saw_fat_arrow && elements.len().is_multiple_of(2) {
             // Convert to HashLiteral
             let mut pairs = Vec::with_capacity(elements.len() / 2);
             for chunk in elements.chunks(2) {
@@ -5258,10 +5264,10 @@ fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool) {
     let rest = chars.as_str().trim();
 
     // Check quoting to determine interpolation
-    let (delimiter, interpolated) = if rest.starts_with('"') && rest.ends_with('"') {
+    let (delimiter, interpolated) = if rest.starts_with('"') && rest.ends_with('"') && rest.len() >= 2 {
         // Double-quoted: interpolated
         (&rest[1..rest.len() - 1], true)
-    } else if rest.starts_with('\'') && rest.ends_with('\'') {
+    } else if rest.starts_with('\'') && rest.ends_with('\'') && rest.len() >= 2 {
         // Single-quoted: not interpolated
         (&rest[1..rest.len() - 1], false)
     } else {

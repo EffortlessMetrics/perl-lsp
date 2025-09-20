@@ -19,6 +19,16 @@ fn setup_server() -> LspServer {
     };
 
     server.handle_request(init_request).unwrap();
+
+    // Send initialized notification (required after successful initialize)
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    };
+    server.handle_request(initialized_notification);
+
     server
 }
 

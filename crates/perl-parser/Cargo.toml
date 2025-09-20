@@ -93,6 +93,7 @@ regex = "1.11.1"
 serial_test = "3.0"
 tempfile = "3.8"
 proptest = "1"
+rstest = "0.22"
 perl-corpus = { version = "0.8.8" }
 which = "6"
 

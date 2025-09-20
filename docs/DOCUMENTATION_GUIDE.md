@@ -47,6 +47,7 @@ This guide helps you find the right documentation for your needs, organized usin
 5. **[ROPE_INTEGRATION_GUIDE.md](ROPE_INTEGRATION_GUIDE.md)** - Document management system explained
 6. **[EDGE_CASES.md](EDGE_CASES.md)** - Why Perl parsing edge cases are challenging
 7. **[MODERN_ARCHITECTURE.md](MODERN_ARCHITECTURE.md)** - Contemporary design evolution
+8. **[ADR_001_AGENT_ARCHITECTURE.md](ADR_001_AGENT_ARCHITECTURE.md)** - Agent specialization architectural decisions ⭐ **NEW: PR #153 Agent Ecosystem**
 
 ### For Contributors
 

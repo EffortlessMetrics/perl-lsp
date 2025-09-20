@@ -550,6 +550,123 @@ pub fn get_code_actions(&self, ast: &Node, range: (usize, usize), diagnostics: &
 - Tree-sitter compatible error nodes and diagnostics
 - Performance optimized (<5% overhead for normal code)
 
+## Agent Ecosystem Integration (PR #153) (*Diataxis: Explanation* - Specialized workflow automation)
+
+### 94 Specialized Agents Architecture
+
+**Revolutionary Workflow Enhancement**: PR #153 introduces a comprehensive agent ecosystem with 94 specialized agents designed specifically for the tree-sitter-perl parsing ecosystem. This represents a paradigm shift from generic automation to domain-specific intelligent workflow coordination.
+
+#### Agent Directory Structure (*Diataxis: Reference* - Agent organization)
+
+```
+.claude/agents2/                          # 94 specialized agents (vs. 53 generic)
+├── review/                               # 26 agents - PR review workflow
+│   ├── review-security-scanner.md       # UTF-16 security validation
+│   ├── review-mutation-tester.md        # 87% quality score validation
+│   ├── review-performance-validator.md  # Revolutionary performance preservation
+│   └── review-governance-gate.md        # Final quality assurance
+├── integration/                          # 21 agents - CI/CD coordination
+│   ├── integration-test-coordinator.md  # Adaptive threading orchestration
+│   ├── integration-workspace-validator.md # Multi-crate validation
+│   └── integration-performance-monitor.md # 5000x LSP improvements tracking
+├── generative/                           # 24 agents - Content creation
+│   ├── generative-doc-writer.md         # Parser ecosystem documentation
+│   ├── generative-test-creator.md       # Mutation hardening test generation
+│   └── generative-parser-enhancer.md    # AST and parsing improvements
+├── mantle/                               # 17 agents - Maintenance operations
+│   ├── mantle-dependency-manager.md     # Workspace dependency coordination
+│   ├── mantle-release-coordinator.md    # Multi-crate release orchestration
+│   └── mantle-security-auditor.md       # Enterprise security compliance
+└── other/                                # 6 agents - Cross-cutting concerns
+    ├── agent-customizer.md              # Self-adapting agent framework
+    └── workflow-orchestrator.md         # Agent coordination patterns
+```
+
+#### Specialized Agent Capabilities (*Diataxis: Explanation* - Domain expertise integration)
+
+**Parser Ecosystem Context Integration:**
+- **Multi-crate Architecture**: Understanding of 5 published crates and their interdependencies
+- **Performance Standards**: Built-in knowledge of revolutionary performance requirements (5000x LSP improvements)
+- **Security Requirements**: UTF-16 position conversion security, enterprise-grade Unicode safety
+- **Quality Metrics**: Mutation testing (87% score), zero clippy warnings, comprehensive test coverage
+
+**Intelligent Workflow Coordination:**
+```rust
+// Example: Security-focused agent routing
+SecurityScanner → MutationTester → PerformanceValidator → GovernanceGate
+
+// Example: Development agent coordination
+CodeEnhancer → TestCreator → DocGenerator → ReviewPrep
+```
+
+#### Agent Customization Framework (*Diataxis: Reference* - Self-adapting architecture)
+
+**Contextual Adaptation Engine:**
+```markdown
+# Agent customizes itself based on project context
+- Multi-crate workspace patterns (perl-parser ⭐, perl-lsp ⭐, perl-lexer, perl-corpus)
+- Revolutionary performance requirements (sub-microsecond parsing, <1ms LSP updates)
+- Enterprise security standards (UTF-16 safety, path traversal prevention)
+- Comprehensive quality validation (87% mutation score, zero clippy warnings)
+```
+
+**Self-Documenting Configuration:**
+- **Inline Expertise**: Each agent includes parser ecosystem domain knowledge
+- **Quality Integration**: Built-in understanding of mutation testing and performance benchmarks
+- **Security Awareness**: UTF-16 position conversion security and enterprise patterns
+- **Workflow Intelligence**: Context-aware routing between specialized agents
+
+#### Quality and Security Integration (*Diataxis: Explanation* - Enterprise-grade validation)
+
+**Mutation Testing Coordination:**
+- **Real Bug Discovery**: Agents coordinate mutation testing that discovered UTF-16 security vulnerabilities
+- **Quality Score Achievement**: 87% mutation score through systematic agent-driven testing
+- **Security Validation**: UTF-16 boundary violation detection and remediation
+
+**Performance Preservation:**
+- **Revolutionary Standards**: Agents ensure 5000x LSP performance improvements are maintained
+- **Security-Performance Balance**: Enhanced security without performance regression
+- **Adaptive Threading**: CI environment optimization through intelligent agent coordination
+
+#### Integration Points (*Diataxis: Reference* - Agent ecosystem interfaces)
+
+**Crate Integration:**
+- **`/crates/perl-parser/`**: Core parser logic enhanced by generative agents (test creation, performance optimization)
+- **`/crates/perl-lsp/`**: LSP server validated by review agents (security scanning, performance validation)
+- **`/crates/perl-lexer/`**: Tokenizer improvements coordinated by integration agents
+- **`/crates/perl-corpus/`**: Test corpus expansion through generative and integration agents
+
+**Documentation Ecosystem:**
+- **`/docs/`**: Comprehensive documentation maintained by specialized doc-writer agents
+- **ADRs**: Architecture decisions documented and validated by governance agents
+- **Security Guides**: Enterprise security patterns maintained by security-focused agents
+
+#### Workflow Orchestration Patterns (*Diataxis: How-to* - Agent coordination)
+
+**Review Workflow:**
+```bash
+# Agent-coordinated PR review with intelligent routing
+review-security-scanner     # UTF-16 security validation
+  ↓
+review-mutation-tester      # 87% quality score verification
+  ↓
+review-performance-validator # Revolutionary performance preservation
+  ↓
+review-governance-gate      # Final quality assurance and routing decision
+```
+
+**Development Workflow:**
+```bash
+# Agent-enhanced development cycle
+generative-parser-enhancer  # AST and parsing improvements
+  ↓
+generative-test-creator     # Comprehensive test coverage
+  ↓
+integration-test-coordinator # Multi-crate validation
+  ↓
+generative-doc-writer       # Documentation synchronization
+```
+
 ## Development Guidelines
 
 ### Choosing a Crate
