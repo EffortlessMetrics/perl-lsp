@@ -196,7 +196,6 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[Benchmark Framework](docs/BENCHMARK_FRAMEWORK.md)** - Cross-language performance analysis
 
 ### Specialized Guides
-- **[Scanner Migration Guide](docs/SCANNER_MIGRATION_GUIDE.md)** - C-to-Rust scanner delegation architecture
 - **[Builtin Function Parsing](docs/BUILTIN_FUNCTION_PARSING.md)** - Enhanced empty block parsing for map/grep/sort functions
 - **[Workspace Navigation](docs/WORKSPACE_NAVIGATION_GUIDE.md)** - Enhanced cross-file features
 - **[Rope Integration](docs/ROPE_INTEGRATION_GUIDE.md)** - Document management system
