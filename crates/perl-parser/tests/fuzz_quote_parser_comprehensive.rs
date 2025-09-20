@@ -415,8 +415,8 @@ print "Done\n";
 
         // Test that parser doesn't crash on quote-like constructs
         let result = std::panic::catch_unwind(|| {
-            let parser = Parser::new();
-            parser.parse(&perl_script)
+            let mut parser = Parser::new(&perl_script);
+            parser.parse()
         });
 
         prop_assert!(result.is_ok(), "Parser crashed on quote construct integration: {:?}", input);
@@ -424,7 +424,15 @@ print "Done\n";
         if let Ok(parse_result) = result {
             // Basic AST integrity checks
             if let Ok(ast) = parse_result {
-                prop_assert!(!ast.is_empty(), "AST should not be empty for valid Perl script");
+                // Verify AST has valid structure - at minimum should be a Program node
+                match &ast.kind {
+                    perl_parser::NodeKind::Program { statements: _ } => {
+                        // Valid program node structure
+                    }
+                    _ => {
+                        prop_assert!(false, "Expected Program node but got: {:?}", ast.kind);
+                    }
+                }
                 // Additional AST validation could go here
             }
             // If parsing fails, that's acceptable - we just don't want panics
