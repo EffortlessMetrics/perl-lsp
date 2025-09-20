@@ -40,7 +40,7 @@ pub enum ParseErrorKind {
         /// Token type that was expected during parsing
         expected: String,
         /// Actual token found in email script content
-        found: String
+        found: String,
     },
     /// String literal not properly closed in email script
     UnclosedString,

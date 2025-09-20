@@ -9,17 +9,14 @@ fn test_heredoc_boundary_fix_validation() {
         // Empty quoted delimiters - these triggered the original crash
         ("<<\"\"", "Empty double-quoted delimiter"),
         ("<<''", "Empty single-quoted delimiter"),
-
         // Single character delimiters - potential boundary issues
         ("<<\"a\"", "Single char double-quoted"),
         ("<<'a'", "Single char single-quoted"),
-
         // Malformed delimiters that triggered the boundary error
         ("<<\"", "Unterminated double quote"),
         ("<<'", "Unterminated single quote"),
         ("<<\"a", "Missing closing double quote"),
         ("<<'a", "Missing closing single quote"),
-
         // Edge cases that stressed the boundary logic
         ("<<\"\\\"\"", "Escaped quote in delimiter"),
         ("<<'\\''", "Escaped quote in single delimiter"),
@@ -80,12 +77,12 @@ print $text;
 fn test_specific_boundary_conditions() {
     // Test the exact conditions fixed in parse_heredoc_delimiter (lines 5267 & 5270)
     let boundary_conditions = [
-        "<<\"\"",     // rest.len() == 2, exactly at boundary
-        "<<''",      // rest.len() == 2, exactly at boundary
-        "<<\"a\"",   // rest.len() == 3, valid case
-        "<<'a'",     // rest.len() == 3, valid case
-        "<<\"",      // rest.len() == 2, but missing end quote
-        "<<'",       // rest.len() == 2, but missing end quote
+        "<<\"\"",  // rest.len() == 2, exactly at boundary
+        "<<''",    // rest.len() == 2, exactly at boundary
+        "<<\"a\"", // rest.len() == 3, valid case
+        "<<'a'",   // rest.len() == 3, valid case
+        "<<\"",    // rest.len() == 2, but missing end quote
+        "<<'",     // rest.len() == 2, but missing end quote
     ];
 
     for test_case in &boundary_conditions {

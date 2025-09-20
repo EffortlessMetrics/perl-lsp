@@ -63,7 +63,7 @@ pub enum ParseError {
         /// Actual token found in email script content
         found: String,
         /// Byte position where unexpected token was encountered
-        location: usize
+        location: usize,
     },
 
     /// General syntax error occurred during email content parsing
@@ -75,7 +75,7 @@ pub enum ParseError {
         /// Descriptive error message explaining the syntax issue
         message: String,
         /// Byte position where syntax error occurred in email script
-        location: usize
+        location: usize,
     },
 
     /// Lexical analysis failure during email script tokenization
@@ -85,7 +85,7 @@ pub enum ParseError {
     #[error("Lexer error: {message}")]
     LexerError {
         /// Detailed lexer error message describing tokenization failure
-        message: String
+        message: String,
     },
 
     /// Parser recursion depth exceeded during complex email script analysis
@@ -102,7 +102,7 @@ pub enum ParseError {
     #[error("Invalid number literal: {literal}")]
     InvalidNumber {
         /// The malformed numeric literal found in email script content
-        literal: String
+        literal: String,
     },
 
     /// Malformed string literal in email processing workflow
@@ -119,7 +119,7 @@ pub enum ParseError {
     #[error("Unclosed delimiter: {delimiter}")]
     UnclosedDelimiter {
         /// The delimiter character that was left unclosed
-        delimiter: char
+        delimiter: char,
     },
 
     /// Invalid regular expression syntax in email processing workflow
@@ -129,7 +129,7 @@ pub enum ParseError {
     #[error("Invalid regex: {message}")]
     InvalidRegex {
         /// Specific error message describing regex syntax issue
-        message: String
+        message: String,
     },
 }
 

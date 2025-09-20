@@ -21,12 +21,12 @@ use perl_parser::position::{Position, Range, offset_to_utf16_line_col};
 fn test_range_overlaps_logical_operator_mutations() {
     // Create test ranges for comprehensive overlap testing
     // Range overlaps are based on byte positions only
-    let range1 = Range::new(Position::new(0, 0, 0), Position::new(5, 0, 5));  // [0, 5)
-    let range2 = Range::new(Position::new(3, 0, 3), Position::new(8, 0, 8));  // [3, 8)
+    let range1 = Range::new(Position::new(0, 0, 0), Position::new(5, 0, 5)); // [0, 5)
+    let range2 = Range::new(Position::new(3, 0, 3), Position::new(8, 0, 8)); // [3, 8)
     let range3 = Range::new(Position::new(6, 0, 6), Position::new(10, 0, 10)); // [6, 10)
-    let range4 = Range::new(Position::new(5, 0, 5), Position::new(6, 0, 6));  // [5, 6)
-    let range5 = Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0));  // [0, 0) - empty
-    let range6 = Range::new(Position::new(1, 0, 1), Position::new(1, 0, 1));  // [1, 1) - empty
+    let range4 = Range::new(Position::new(5, 0, 5), Position::new(6, 0, 6)); // [5, 6)
+    let range5 = Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)); // [0, 0) - empty
+    let range6 = Range::new(Position::new(1, 0, 1), Position::new(1, 0, 1)); // [1, 1) - empty
 
     // Test cases that MUST return true (kill false-return mutations from && → ||)
     // These cases satisfy: self.start.byte < other.end.byte && other.start.byte < self.end.byte
@@ -49,17 +49,14 @@ fn test_range_overlaps_logical_operator_mutations() {
         // Adjacent ranges - fail the overlap test
         (&range1, &range4, "Adjacent ranges [0,5) and [5,6) should NOT overlap"),
         (&range4, &range1, "Adjacent ranges [5,6) and [0,5) should NOT overlap (symmetric)"),
-
         // Separated ranges - fail both conditions
         (&range1, &range3, "Separated ranges [0,5) and [6,10) should NOT overlap"),
         (&range3, &range1, "Separated ranges [6,10) and [0,5) should NOT overlap (symmetric)"),
-
         // Empty ranges - fail various conditions
         (&range5, &range1, "Empty range [0,0) should NOT overlap with [0,5)"),
         (&range1, &range5, "Range [0,5) should NOT overlap with empty range [0,0)"),
         (&range5, &range6, "Empty ranges [0,0) and [1,1) should NOT overlap"),
         (&range6, &range5, "Empty ranges [1,1) and [0,0) should NOT overlap (symmetric)"),
-
         // Same position empty ranges - edge case
         (&range5, &range5, "Same empty range [0,0) should NOT overlap with itself"),
     ];
@@ -79,8 +76,8 @@ fn test_range_overlaps_logical_operator_mutations() {
 fn test_range_boundary_conditions_mutations() {
     // Test zero-width ranges at various positions
     let zero_ranges = vec![
-        Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)),   // Start of line
-        Range::new(Position::new(5, 0, 5), Position::new(5, 0, 5)),   // Mid-line
+        Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)), // Start of line
+        Range::new(Position::new(5, 0, 5), Position::new(5, 0, 5)), // Mid-line
         Range::new(Position::new(10, 1, 0), Position::new(10, 1, 0)), // Start of next line
         Range::new(Position::new(25, 2, 3), Position::new(25, 2, 3)), // Arbitrary position
     ];
@@ -91,7 +88,8 @@ fn test_range_boundary_conditions_mutations() {
             assert!(
                 !range1.overlaps(range2),
                 "MUTATION KILL: Zero-width range {} should not overlap with zero-width range {} (kills boolean logic mutations)",
-                i, j
+                i,
+                j
             );
         }
     }
@@ -99,7 +97,7 @@ fn test_range_boundary_conditions_mutations() {
     // Test ranges that touch at boundaries but don't overlap
     let touching_ranges = vec![
         (
-            Range::new(Position::new(0, 0, 0), Position::new(5, 0, 5)),   // [0, 5)
+            Range::new(Position::new(0, 0, 0), Position::new(5, 0, 5)), // [0, 5)
             Range::new(Position::new(5, 0, 5), Position::new(10, 0, 10)), // [5, 10)
         ),
         (
@@ -138,19 +136,16 @@ fn test_utf16_position_conversion_arithmetic_mutations() {
         ("Hello\nWorld", 5, "Mid ASCII text"),
         ("Hello\nWorld", 6, "After newline"),
         ("Hello\nWorld", 11, "End of ASCII text"),
-
         // Multi-byte UTF-8 characters
         ("café\nnaïve", 0, "Start of UTF-8 text"),
         ("café\nnaïve", 3, "Before é in café"),
         ("café\nnaïve", 5, "After café"),
         ("café\nnaïve", 10, "End of UTF-8 text"),
-
         // Emoji (4-byte UTF-8, 2 UTF-16 units each)
         ("🌍🚀\ntest", 0, "Start of emoji text"),
         ("🌍🚀\ntest", 4, "After first emoji"),
         ("🌍🚀\ntest", 8, "After second emoji"),
         ("🌍🚀\ntest", 13, "End of emoji text"),
-
         // Edge cases
         ("", 0, "Empty string"),
         ("\n", 0, "Start of newline"),
@@ -187,7 +182,9 @@ fn test_utf16_position_conversion_arithmetic_mutations() {
             assert!(
                 next_line >= line,
                 "MUTATION KILL: {} - line position went backwards from {} to {} (kills arithmetic mutations)",
-                description, line, next_line
+                description,
+                line,
+                next_line
             );
         }
     }
@@ -283,10 +280,7 @@ fn test_range_extreme_values_mutations() {
     );
 
     // Test length calculations don't overflow
-    let normal_range = Range::new(
-        Position::new(100, 0, 0),
-        Position::new(200, 0, 10)
-    );
+    let normal_range = Range::new(Position::new(100, 0, 0), Position::new(200, 0, 10));
     assert_eq!(
         normal_range.len(),
         100,
@@ -331,13 +325,15 @@ print $x;
             assert!(
                 line < 100,
                 "MUTATION KILL: Line {} is unreasonable for offset {} (detects arithmetic mutations)",
-                line, byte_offset
+                line,
+                byte_offset
             );
 
             assert!(
                 col < 100,
                 "MUTATION KILL: Column {} is unreasonable for offset {} (detects arithmetic mutations)",
-                col, byte_offset
+                col,
+                byte_offset
             );
         }
     }
@@ -356,13 +352,7 @@ print $x;
         "MUTATION KILL: Non-overlapping ranges should not overlap"
     );
 
-    assert!(
-        test_range.len() > 0,
-        "MUTATION KILL: Range should have positive length"
-    );
+    assert!(test_range.len() > 0, "MUTATION KILL: Range should have positive length");
 
-    assert!(
-        other_range.len() > 0,
-        "MUTATION KILL: Other range should have positive length"
-    );
+    assert!(other_range.len() > 0, "MUTATION KILL: Other range should have positive length");
 }

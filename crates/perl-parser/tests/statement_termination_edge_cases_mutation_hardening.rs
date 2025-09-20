@@ -13,7 +13,7 @@
 /// parsing and ensure proper statement boundary detection in enterprise Perl code.
 ///
 /// Labels: tests:hardening, mutation:score-improvement, parser:termination
-use perl_parser::{Parser, ParseError};
+use perl_parser::{ParseError, Parser};
 
 /// Test statement termination in complex nested contexts
 /// Ensures parsing doesn't get stuck in infinite loops due to termination mutations
@@ -21,11 +21,7 @@ use perl_parser::{Parser, ParseError};
 fn test_nested_statement_termination_edge_cases() {
     let test_cases = vec![
         // Basic statement sequences with proper termination
-        (
-            "my $x = 1; my $y = 2; my $z = 3;",
-            "Sequential statements should parse correctly",
-        ),
-
+        ("my $x = 1; my $y = 2; my $z = 3;", "Sequential statements should parse correctly"),
         // Statement modifiers with complex expressions
         (
             "print $x if defined $y && $z > 0;",
@@ -39,7 +35,6 @@ fn test_nested_statement_termination_edge_cases() {
             "next if $continue; last if $done; redo if $retry;",
             "Multiple control flow statements should terminate properly",
         ),
-
         // Nested blocks with statement modifiers
         (
             "{ my $x = 1; print $x if $debug; }",
@@ -49,7 +44,6 @@ fn test_nested_statement_termination_edge_cases() {
             "if ($condition) { my $x = 1; print $x unless $quiet; }",
             "If block with unless modifier should terminate properly",
         ),
-
         // Subroutine definitions with complex bodies
         (
             "sub test { my $x = shift; return $x * 2 if $x > 0; }",
@@ -59,13 +53,11 @@ fn test_nested_statement_termination_edge_cases() {
             "sub complex { my ($a, $b) = @_; my $result = $a + $b; print $result if $verbose; return $result; }",
             "Complex subroutine should terminate properly",
         ),
-
         // Package declarations with code
         (
             "package Foo::Bar; use strict; my $x = 1; 1;",
             "Package with code should terminate properly",
         ),
-
         // Loop constructs with statement modifiers
         (
             "for my $item (@list) { print $item if defined $item; }",
@@ -75,7 +67,6 @@ fn test_nested_statement_termination_edge_cases() {
             "while (my $line = <$fh>) { chomp $line; process($line) unless $line =~ /^#/; }",
             "While loop with statement modifier should terminate properly",
         ),
-
         // Complex expressions with operators
         (
             "my $result = $a > $b ? $a : $b; print $result if $debug;",
@@ -85,13 +76,11 @@ fn test_nested_statement_termination_edge_cases() {
             "my @sorted = sort { $a <=> $b } @numbers; print @sorted unless $quiet;",
             "Sort with block and statement modifier should terminate properly",
         ),
-
         // Anonymous subroutines and closures
         (
             "my $code = sub { my $x = shift; return $x * 2; }; my $result = $code->(5);",
             "Anonymous subroutine should terminate properly",
         ),
-
         // Hash and array operations
         (
             "my %hash = (key => 'value', other => 'data'); my $value = $hash{key};",
@@ -101,7 +90,6 @@ fn test_nested_statement_termination_edge_cases() {
             "my @array = (1, 2, 3); my $first = $array[0] if @array;",
             "Array operations with conditional access should terminate properly",
         ),
-
         // Regular expressions with modifiers
         (
             "my $match = $string =~ /pattern/gi; print $match if $match;",
@@ -111,7 +99,6 @@ fn test_nested_statement_termination_edge_cases() {
             "my $result = $string =~ s/old/new/g; print 'replaced' if $result;",
             "Substitution with statement modifier should terminate properly",
         ),
-
         // Use and require statements
         (
             "use Data::Dumper; use strict; use warnings; my $x = 1;",
@@ -121,19 +108,16 @@ fn test_nested_statement_termination_edge_cases() {
             "require 'config.pl' if -f 'config.pl'; my $config = get_config();",
             "Conditional require should terminate properly",
         ),
-
         // Complex control flow
         (
             "eval { my $x = risky_operation(); print $x if defined $x; }; warn $@ if $@;",
             "Eval with error handling should terminate properly",
         ),
-
         // Heredocs and quoted strings
         (
             r#"my $text = <<'EOF'; print $text if $show; This is a heredoc EOF"#,
             "Heredoc should terminate properly",
         ),
-
         // File operations
         (
             "open my $fh, '<', $file or die $!; my $content = <$fh>; close $fh;",
@@ -151,7 +135,7 @@ fn test_nested_statement_termination_edge_cases() {
         match parse_result {
             Ok(_) => {
                 // Success is good - code parsed correctly
-            },
+            }
             Err(error) => {
                 // Error is acceptable for some edge cases, but should not be a timeout/hang
                 match error {
@@ -160,7 +144,7 @@ fn test_nested_statement_termination_edge_cases() {
                             "MUTATION KILL: {} - hit recursion limit, indicates infinite loop from termination mutation in code: {}",
                             description, perl_code
                         );
-                    },
+                    }
                     _ => {
                         // Other parse errors are acceptable for edge cases
                     }
@@ -204,14 +188,17 @@ fn test_parsing_timeout_prevention() {
         assert!(
             elapsed < timeout,
             "MUTATION KILL: {} - parsing took too long ({:?}), indicates infinite loop from termination mutation in code: '{}'",
-            description, elapsed, perl_code
+            description,
+            elapsed,
+            perl_code
         );
 
         // Expect parse errors for malformed code (that's normal)
         assert!(
             parse_result.is_err(),
             "MUTATION KILL: {} - malformed code should produce parse error, not infinite loop: '{}'",
-            description, perl_code
+            description,
+            perl_code
         );
     }
 }
@@ -227,22 +214,26 @@ fn test_statement_modifier_termination_precedence() {
         ("next while $continue;", true, "Simple while modifier should terminate"),
         ("last until $done;", true, "Simple until modifier should terminate"),
         ("redo for $i;", true, "Simple for modifier should terminate"),
-
         // Chained statement modifiers (not typically valid Perl, but should handle gracefully)
         ("print 'test' if $a unless $b;", false, "Chained modifiers should not parse successfully"),
         ("return if $x while $y;", false, "Invalid chained modifiers should fail"),
-
         // Statement modifiers with complex expressions
         ("print $x if defined $x && $x > 0;", true, "Complex if condition should terminate"),
         ("return $y unless $error || $timeout;", true, "Complex unless condition should terminate"),
-        ("process($item) for my $item (@list);", true, "For modifier with declaration should terminate"),
-
+        (
+            "process($item) for my $item (@list);",
+            true,
+            "For modifier with declaration should terminate",
+        ),
         // Statement modifiers in blocks
         ("{ print $x if $debug; }", true, "Block with modifier should terminate"),
         ("sub test { return $x if $x > 0; }", true, "Sub with modifier should terminate"),
-
         // Multiple statements with modifiers
-        ("print $a if $debug; print $b unless $quiet;", true, "Multiple statements with modifiers should terminate"),
+        (
+            "print $a if $debug; print $b unless $quiet;",
+            true,
+            "Multiple statements with modifiers should terminate",
+        ),
     ];
 
     for (perl_code, should_succeed, description) in test_cases {
@@ -254,13 +245,14 @@ fn test_statement_modifier_termination_precedence() {
             match parse_result {
                 Ok(_) => {
                     // Expected success
-                },
+                }
                 Err(error) => {
                     // Check that it's not a recursion/infinite loop error
                     assert!(
                         !matches!(error, ParseError::RecursionLimit),
                         "MUTATION KILL: {} - should not hit recursion limit (indicates termination mutation): '{}'",
-                        description, perl_code
+                        description,
+                        perl_code
                     );
                 }
             }
@@ -269,7 +261,8 @@ fn test_statement_modifier_termination_precedence() {
             assert!(
                 parse_result.is_err(),
                 "MUTATION KILL: {} - invalid code should fail to parse: '{}'",
-                description, perl_code
+                description,
+                perl_code
             );
         }
     }
@@ -284,24 +277,19 @@ fn test_termination_special_token_edge_cases() {
         (";", "Empty statement should parse"),
         (";;", "Multiple empty statements should parse"),
         (";;;", "Many empty statements should parse"),
-
         // Whitespace handling
         (" ; ", "Whitespace around semicolon should parse"),
         ("\n;\n", "Newlines around semicolon should parse"),
         ("\t;\t", "Tabs around semicolon should parse"),
-
         // Comments and termination
         ("# comment", "Comment without semicolon should parse"),
         ("# comment\n", "Comment with newline should parse"),
         ("; # comment after semicolon", "Comment after semicolon should parse"),
-
         // Mixed terminators
         ("my $x = 1; # comment\nmy $y = 2;", "Mixed semicolons and newlines should parse"),
-
         // Special characters that might confuse termination
         ("my $x = ';'; my $y = \";\";", "Quoted semicolons should not terminate statements"),
         ("my $x = q{;}; my $y = qq{;};", "Quoted semicolons in q/qq should not terminate"),
-
         // Operators that might be confused with terminators
         ("my $x = $a <=> $b;", "Spaceship operator should not cause termination issues"),
         ("my $x = $a // $b;", "Defined-or operator should not cause termination issues"),
@@ -318,20 +306,21 @@ fn test_termination_special_token_edge_cases() {
         assert!(
             elapsed < std::time::Duration::from_millis(50),
             "MUTATION KILL: {} - parsing took too long, indicates termination mutation: '{}'",
-            description, perl_code
+            description,
+            perl_code
         );
 
         // Most of these should parse successfully
         match parse_result {
             Ok(_) => {
                 // Success is expected
-            },
+            }
             Err(ParseError::RecursionLimit) => {
                 panic!(
                     "MUTATION KILL: {} - hit recursion limit, indicates infinite loop from termination mutation: '{}'",
                     description, perl_code
                 );
-            },
+            }
             Err(_) => {
                 // Other parse errors might be acceptable for edge cases
             }
@@ -352,19 +341,19 @@ fn test_deeply_nested_statement_termination() {
         (nested_blocks, "Deeply nested blocks should terminate properly"),
         (nested_parens, "Deeply nested parentheses should terminate properly"),
         (nested_arrays, "Deeply nested arrays should terminate properly"),
-
         // Nested control structures
         (
             "if ($a) { if ($b) { if ($c) { print 'deep'; } } }".to_string(),
-            "Deeply nested if statements should terminate properly"
+            "Deeply nested if statements should terminate properly",
         ),
         (
-            "for my $i (1..3) { for my $j (1..3) { for my $k (1..3) { print $i * $j * $k; } } }".to_string(),
-            "Deeply nested for loops should terminate properly"
+            "for my $i (1..3) { for my $j (1..3) { for my $k (1..3) { print $i * $j * $k; } } }"
+                .to_string(),
+            "Deeply nested for loops should terminate properly",
         ),
         (
             "while ($outer) { while ($middle) { while ($inner) { last; } } }".to_string(),
-            "Deeply nested while loops should terminate properly"
+            "Deeply nested while loops should terminate properly",
         ),
     ];
 
