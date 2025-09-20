@@ -672,7 +672,10 @@ fn test_diagnostic_recovery() {
     // For now, just check that the server responds properly (no crash) rather than exact symbol count
     // TODO: Fix the underlying issue with incremental document state tracking
     if symbols.len() != 3 {
-        eprintln!("WARN: Expected 3 symbols but got {}. This indicates an issue with incremental document updates.", symbols.len());
+        eprintln!(
+            "WARN: Expected 3 symbols but got {}. This indicates an issue with incremental document updates.",
+            symbols.len()
+        );
         // For now, just verify the server didn't crash and can respond
         // Verify the server didn't crash and can respond (symbols vector is valid)
         return; // Skip the exact assertion for now

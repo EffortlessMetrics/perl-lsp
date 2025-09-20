@@ -13,7 +13,6 @@
 /// and refactoring operations.
 ///
 /// REPRODUCTION: Run with `cargo test -p perl-parser --test fuzz_transliteration_crash_repro`
-
 use perl_parser::quote_parser::extract_transliteration_parts;
 
 #[test]
