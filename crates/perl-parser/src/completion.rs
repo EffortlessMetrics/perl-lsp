@@ -274,7 +274,7 @@ impl CompletionProvider {
     /// ```rust
     /// use perl_parser::{Parser, CompletionProvider};
     ///
-    /// let mut parser = Parser::new("my $email_filter = sub { /important/ };");
+    /// let mut parser = Parser::new("my $data_filter = sub { /valid/ };");
     /// let ast = parser.parse().unwrap();
     /// let provider = CompletionProvider::new_with_index(&ast, None);
     /// // Provider ready for Perl script completion analysis
@@ -566,13 +566,13 @@ impl CompletionProvider {
     /// ```rust
     /// use perl_parser::{Parser, CompletionProvider};
     ///
-    /// let script = "my $email_filter = sub { my $";
+    /// let script = "my $data_filter = sub { my $";
     /// let mut parser = Parser::new(script);
     /// let ast = parser.parse().unwrap();
     ///
     /// let provider = CompletionProvider::new(&ast);
     /// let completions = provider.get_completions_with_path(
-    ///     script, script.len(), Some("/path/to/email_processor.pl")
+    ///     script, script.len(), Some("/path/to/data_processor.pl")
     /// );
     /// assert!(!completions.is_empty());
     /// ```

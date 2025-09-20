@@ -674,7 +674,7 @@ fn test_diagnostic_recovery() {
     if symbols.len() != 3 {
         eprintln!("WARN: Expected 3 symbols but got {}. This indicates an issue with incremental document updates.", symbols.len());
         // For now, just verify the server didn't crash and can respond
-        assert!(symbols.len() >= 0); // Just check it's a valid response
+        // Verify the server didn't crash and can respond (symbols vector is valid)
         return; // Skip the exact assertion for now
     }
 

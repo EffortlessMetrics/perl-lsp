@@ -685,7 +685,7 @@ pub enum NodeKind {
         attributes: Vec<String>,
     },
 
-    /// Assignment operation for LSP email data processing workflows
+    /// Assignment operation for LSP data processing workflows
     Assignment {
         /// Left-hand side of assignment
         lhs: Box<Node>,
@@ -734,7 +734,7 @@ pub enum NodeKind {
     /// Undef value for Perl parsing workflow
     Undef, // undef
 
-    /// Readline operation for LSP email file processing
+    /// Readline operation for LSP file processing
     Readline {
         /// Optional filehandle: <STDIN>, <$fh>, etc.
         filehandle: Option<String>, // <STDIN>, <$fh>, etc.

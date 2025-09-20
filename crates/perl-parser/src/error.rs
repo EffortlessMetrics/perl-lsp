@@ -124,7 +124,7 @@ pub enum ParseError {
 
     /// Invalid regular expression syntax in Perl parsing workflow
     ///
-    /// Occurs when parsing regex patterns in email filters during Navigate stage analysis.
+    /// Occurs when parsing regex patterns in data filters during Navigate stage analysis.
     /// Recovery strategy: fallback to literal string matching and preserve original pattern.
     #[error("Invalid regex: {message}")]
     InvalidRegex {

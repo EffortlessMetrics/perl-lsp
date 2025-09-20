@@ -141,7 +141,7 @@ fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
 /// ```rust
 /// use perl_parser::{Parser, semantic_tokens::collect_semantic_tokens};
 ///
-/// let script = "my $email_filter = qr/important/;";
+/// let script = "my $data_filter = qr/valid/;";
 /// let mut parser = Parser::new(script);
 /// let ast = parser.parse().unwrap();
 ///

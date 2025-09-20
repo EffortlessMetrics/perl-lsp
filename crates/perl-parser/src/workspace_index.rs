@@ -1155,7 +1155,7 @@ pub mod lsp_adapter {
     /// use lsp_types::Range;
     ///
     /// let ix_loc = IxLocation {
-    ///     uri: "file:///path/to/email_script.pl".to_string(),
+    ///     uri: "file:///path/to/data_script.pl".to_string(),
     ///     range: Range::default(),
     /// };
     /// let lsp_loc = to_lsp_location(&ix_loc);

@@ -20,7 +20,7 @@
 //! use perl_parser::{Parser, ast::Node};
 //!
 //! // Analyze Perl script for scope issues
-//! let script = "my $email_filter = sub { my $msg = shift; $msg =~ /important/; };";
+//! let script = "my $data_filter = sub { my $msg = shift; $msg =~ /valid/; };";
 //! let mut parser = Parser::new(script);
 //! let ast = parser.parse().unwrap();
 //!

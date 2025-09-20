@@ -96,7 +96,7 @@ impl DiagnosticsProvider {
     /// ```rust
     /// use perl_parser::{Parser, DiagnosticsProvider};
     ///
-    /// let script = "my $email_filter = qr/important/; my $email_filter = 1;";
+    /// let script = "my $data_filter = qr/valid/; my $data_filter = 1;";
     /// let mut parser = Parser::new(script);
     /// let ast = parser.parse().unwrap();
     ///
