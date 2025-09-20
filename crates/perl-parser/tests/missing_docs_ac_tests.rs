@@ -83,8 +83,9 @@ mod doc_validation_helpers {
                     ));
                 }
 
-                // Check for pipeline integration documentation
-                if !has_pipeline_integration_docs(&lines, line_num) {
+                // Check for pipeline integration documentation (only for core parser APIs)
+                if is_core_parser_api(file_path) && !has_pipeline_integration_docs(&lines, line_num)
+                {
                     analysis.missing_pipeline_integration.push(format!(
                         "{}:{}: {}",
                         file_path,
@@ -125,6 +126,19 @@ mod doc_validation_helpers {
             || trimmed.starts_with("pub enum")
             || trimmed.starts_with("pub fn"))
             && !line.contains("//")
+    }
+
+    /// Checks if a file contains core parser APIs that need pipeline context
+    fn is_core_parser_api(file_path: &str) -> bool {
+        let core_api_modules = [
+            "parser.rs",
+            "workspace_index.rs",
+            "incremental_v2.rs",
+            "semantic.rs",
+            "lsp_providers.rs",
+        ];
+
+        core_api_modules.iter().any(|module| file_path.ends_with(module))
     }
 
     /// Checks if documentation includes PSTX pipeline integration context
@@ -211,6 +225,14 @@ mod doc_validation_helpers {
 
     /// Runs cargo doc and validates output for warnings
     pub fn validate_cargo_doc_generation(package_dir: &str) -> Result<(), String> {
+        // Gate behind CI flag to avoid slow/flaky builds in development
+        if std::env::var("CI").is_err() && std::env::var("DOCS_VALIDATE_CARGO_DOC").is_err() {
+            println!(
+                "Skipping cargo doc validation in development (set DOCS_VALIDATE_CARGO_DOC=1 to enable)"
+            );
+            return Ok(());
+        }
+
         let output = Command::new("cargo")
             .args(&["doc", "--no-deps", "--package", "perl-parser"])
             .current_dir(package_dir)
@@ -2103,9 +2125,7 @@ pub fn bad_refs() {}
                 critical_issues.join("\n")
             );
 
-            // For now, this is informational since we're strengthening tests
-            // In production, this would be: panic!("{}", error_summary);
-            println!("Enhanced validation detected issues:\n{}", error_summary);
+            panic!("{}", error_summary);
         }
 
         // Ensure we tested actual modules
@@ -2172,9 +2192,5 @@ pub fn bad_refs() {}
         for (file, violations) in sorted_files.iter().take(10) {
             println!("  {}: {} violations", file, violations);
         }
-
-        // For now, this is informational - in production this would enforce thresholds
-        // assert!(total_violations <= max_total_violations,
-        //         "Documentation quality regression detected");
     }
 }

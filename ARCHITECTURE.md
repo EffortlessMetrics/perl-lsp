@@ -649,6 +649,7 @@ Enable `#![warn(missing_docs)]` lint in the perl-parser crate to enforce compreh
 #### Compliance Requirements
 
 All new public APIs must include:
+
 1. **Comprehensive documentation** with purpose, parameters, returns, errors
 2. **PSTX pipeline context** explaining role in email processing workflow
 3. **Performance documentation** for critical APIs including memory usage

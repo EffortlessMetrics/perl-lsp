@@ -117,6 +117,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_full_coverage_user_stories
 RUST_TEST_THREADS=1 cargo test --test lsp_comprehensive_e2e_test # Maximum reliability mode
 
 # API Documentation Quality Testing ⭐ **NEW: Issue #149**
+
 cargo test -p perl-parser --test missing_docs_ac_tests           # 12 comprehensive acceptance criteria
 cargo test -p perl-parser --test missing_docs_ac_tests -- --nocapture  # Detailed validation output
 cargo doc --no-deps --package perl-parser                       # Validate doc generation without warnings

@@ -255,7 +255,7 @@ pub enum ParseError {
 
 1. **Brief Summary First**: Start with one-line summary
 2. **Section Headers**: Use `# Arguments`, `# Returns`, `# Errors`, `# Examples`
-3. **Code Blocks**: Specify language with `​```rust`
+3. **Code Blocks**: Specify language with ```rust
 4. **Cross-References**: Use `[`function_name`]` for same-module, `[`module::function`]` for cross-module
 5. **Consistent Formatting**: Follow rustdoc conventions
 

@@ -77,10 +77,11 @@ This crate enforces enterprise-grade API documentation standards through `#![war
 cargo test --test missing_docs_ac_tests
 
 # Generate documentation without warnings
-cargo doc --no-deps
+cargo doc -p perl-parser --no-deps
 ```
 
 The documentation validation suite includes:
+
 - **Comprehensive API coverage**: All public structs, enums, and functions
 - **Working examples**: Doctests with assertions for complex functionality
 - **Cross-reference validation**: Proper linking between related APIs

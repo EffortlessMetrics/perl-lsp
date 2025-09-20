@@ -598,6 +598,7 @@ The project maintains high code quality standards. Before committing:
    ```
 
 3. **Validate API documentation** ⭐ **NEW: Issue #149**
+
    ```bash
    # Run comprehensive documentation tests
    cargo test -p perl-parser --test missing_docs_ac_tests
@@ -685,6 +686,7 @@ perf: optimize string interpolation parsing
 - [ ] Tests pass locally
 - [ ] Code is formatted (`cargo fmt`)
 - [ ] No clippy warnings (`cargo clippy`)
+
 - [ ] **API documentation complete** ⭐ **NEW: Issue #149** (`cargo test -p perl-parser --test missing_docs_ac_tests`)
 - [ ] **Documentation follows standards** (see [API Documentation Standards](docs/API_DOCUMENTATION_STANDARDS.md))
 - [ ] **cargo doc builds without warnings** (`cargo doc --no-deps --package perl-parser`)
