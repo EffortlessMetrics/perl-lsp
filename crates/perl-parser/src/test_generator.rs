@@ -2,11 +2,39 @@
 //!
 //! This module provides automatic test generation for Perl code,
 //! supporting the red-green-refactor cycle of Test-Driven Development.
+//!
+//! ## PSTX Pipeline Integration
+//!
+//! Test generation operates within the **PSTX email processing pipeline**:
+//! **Extract → Normalize → Thread → Render → Index**
+//!
+//! - **Extract Stage**: Analyzes Perl functions/methods to determine test requirements
+//! - **Normalize Stage**: Standardizes test patterns and identifies edge cases
+//! - **Thread Stage**: Links related test cases and maintains test dependency relationships
+//! - **Render Stage**: Generates test code using appropriate test frameworks (Test::More, Test2::V0)
+//! - **Index Stage**: Updates test coverage metrics and integrates with workspace symbols
+//!
+//! Essential for maintaining high-quality test coverage in enterprise email processing
+//! systems where reliability and correctness are critical business requirements.
+//!
+//! ## Usage Examples
+//!
+//! ```rust
+//! use perl_parser::test_generator::{TestGenerator, TestFramework};
+//!
+//! let generator = TestGenerator::new(TestFramework::TestMore);
+//! let test_code = generator.generate_tests(&ast_node)?;
+//! println!("{}", test_code);
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
 
 use crate::ast::{Node, NodeKind};
 use std::collections::HashMap;
 
 /// Test generator for creating unit tests from code
+///
+/// Automatically generates comprehensive test suites with support for multiple
+/// test frameworks and TDD workflow patterns.
 pub struct TestGenerator {
     /// Test framework to use (Test::More, Test2::V0, etc.)
     framework: TestFramework,
@@ -14,14 +42,25 @@ pub struct TestGenerator {
     options: TestGeneratorOptions,
 }
 
+/// Supported Perl test frameworks
+///
+/// Different test frameworks provide varying levels of functionality and syntax.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TestFramework {
+    /// Test::More - Classic Perl testing framework
     TestMore,
+    /// Test2::V0 - Modern Test2 ecosystem
     Test2V0,
+    /// Test::Simple - Basic testing framework
     TestSimple,
+    /// Test::Class - Class-based testing framework
     TestClass,
 }
 
+/// Configuration options for test generation
+///
+/// Controls various aspects of test generation including coverage,
+/// performance testing, and mock usage.
 #[derive(Debug, Clone)]
 pub struct TestGeneratorOptions {
     /// Generate tests for private methods

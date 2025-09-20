@@ -20,31 +20,66 @@ impl DiagnosticMeta {
 }
 
 // Perl Parser diagnostics (PL000-PL099)
+/// General parse error diagnostic
+///
+/// # Returns
+///
+/// Diagnostic metadata for PL001 parse errors
 pub fn parse_error() -> DiagnosticMeta {
     DiagnosticMeta::new("PL001", Some("https://docs.perl-lsp.org/errors/PL001"))
 }
 
+/// Syntax error diagnostic
+///
+/// # Returns
+///
+/// Diagnostic metadata for PL002 syntax errors
 pub fn syntax_error() -> DiagnosticMeta {
     DiagnosticMeta::new("PL002", Some("https://docs.perl-lsp.org/errors/PL002"))
 }
 
+/// Unexpected end-of-file diagnostic
+///
+/// # Returns
+///
+/// Diagnostic metadata for PL003 unexpected EOF errors
 pub fn unexpected_eof() -> DiagnosticMeta {
     DiagnosticMeta::new("PL003", Some("https://docs.perl-lsp.org/errors/PL003"))
 }
 
 // Strict/warnings diagnostics (PL100-PL199)
+/// Missing 'use strict' pragma diagnostic
+///
+/// # Returns
+///
+/// Diagnostic metadata for PL100 missing strict warnings
 pub fn missing_strict() -> DiagnosticMeta {
     DiagnosticMeta::new("PL100", Some("https://docs.perl-lsp.org/errors/PL100"))
 }
 
+/// Missing 'use warnings' pragma diagnostic
+///
+/// # Returns
+///
+/// Diagnostic metadata for PL101 missing warnings
 pub fn missing_warnings() -> DiagnosticMeta {
     DiagnosticMeta::new("PL101", Some("https://docs.perl-lsp.org/errors/PL101"))
 }
 
+/// Unused variable diagnostic
+///
+/// # Returns
+///
+/// Diagnostic metadata for PL102 unused variable warnings
 pub fn unused_var() -> DiagnosticMeta {
     DiagnosticMeta::new("PL102", Some("https://docs.perl-lsp.org/errors/PL102"))
 }
 
+/// Undefined variable diagnostic
+///
+/// # Returns
+///
+/// Diagnostic metadata for PL103 undefined variable errors
 pub fn undefined_var() -> DiagnosticMeta {
     DiagnosticMeta::new("PL103", Some("https://docs.perl-lsp.org/errors/PL103"))
 }

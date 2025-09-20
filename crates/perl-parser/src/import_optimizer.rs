@@ -6,6 +6,20 @@
 //! - Consolidating imports to reduce clutter
 //! - Generating optimized import statements
 //!
+//! ## PSTX Pipeline Integration
+//!
+//! Import optimization operates within the **PSTX email processing pipeline**:
+//! **Extract → Normalize → Thread → Render → Index**
+//!
+//! - **Extract Stage**: Identifies import statements during Perl script analysis
+//! - **Normalize Stage**: Standardizes import patterns and resolves dependencies
+//! - **Thread Stage**: Tracks cross-file import dependencies for refactoring
+//! - **Render Stage**: Generates optimized import statements for code actions
+//! - **Index Stage**: Updates workspace symbols and reference tracking
+//!
+//! Critical for maintaining clean imports in enterprise email processing workflows
+//! where large Perl codebases require systematic dependency management.
+//!
 //! ## Example
 //!
 //! ```rust,no_run
