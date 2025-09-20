@@ -18,6 +18,16 @@ fn setup_server() -> LspServer {
     };
 
     server.handle_request(init_request);
+
+    // Send initialized notification per LSP 3.17 protocol requirements
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    };
+    server.handle_request(initialized_notification);
+
     server
 }
 
