@@ -53,34 +53,7 @@ pub enum PosEnc {
 /// # Returns
 /// Byte offset clamped to valid rope boundaries
 pub fn lsp_pos_to_byte(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
-    let line = pos.line as usize;
-    let col = pos.character as usize;
-
-    if line >= rope.len_lines() {
-        return rope.len_bytes();
-    }
-
-    let line_char0 = rope.line_to_char(line);
-
-    match enc {
-        PosEnc::Utf8 => {
-            let line_chars = rope.line(line).len_chars();
-            let char_idx = col.min(line_chars);
-            rope.char_to_byte(line_char0 + char_idx)
-        }
-        PosEnc::Utf16 => {
-            let line_slice = rope.line(line);
-            let mut cu = 0usize;
-            for (i, ch) in line_slice.chars().enumerate() {
-                if cu >= col {
-                    return rope.char_to_byte(line_char0 + i);
-                }
-                cu += ch.len_utf16();
-            }
-            // Clamp to end of line
-            rope.char_to_byte(line_char0 + line_slice.len_chars())
-        }
-    }
+    1 /* ~ changed by cargo-mutants ~ */
 }
 
 /// Convert byte offset to LSP position with UTF-16/UTF-8 encoding support
