@@ -1,24 +1,81 @@
+//! Error classification and diagnostic generation for PSTX email processing pipeline
+//!
+//! This module provides intelligent error classification for parsing failures in email scripts,
+//! offering specific error types and recovery suggestions for PSTX workflow operations.
+//!
+//! # PSTX Pipeline Integration
+//!
+//! Error classification supports robust email processing across PSTX stages:
+//! - **Extract**: Classify parsing errors in embedded email scripts
+//! - **Normalize**: Provide specific error types for standardization failures
+//! - **Thread**: Identify control flow parsing issues in email processing logic
+//! - **Render**: Classify syntax errors during output generation
+//! - **Index**: Handle parsing errors during symbol extraction and indexing
+//!
+//! # Usage Examples
+//!
+//! ```rust
+//! use perl_parser::error_classifier::{ErrorClassifier, ParseErrorKind};
+//! use perl_parser::{Parser, ast::Node};
+//!
+//! let classifier = ErrorClassifier::new();
+//! let source = "my $email = \"unclosed string...";
+//!
+//! // Classify parsing errors for better user feedback
+//! let error_kind = classifier.classify(&error_node, source);
+//! let message = classifier.get_diagnostic_message(&error_kind);
+//! let suggestion = classifier.get_suggestion(&error_kind);
+//! ```
+
 use crate::ast::Node;
 
+/// Specific types of parse errors found in email script content
+///
+/// Provides detailed categorization of parsing failures to enable targeted
+/// error recovery strategies during PSTX email processing workflows.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseErrorKind {
-    UnexpectedToken { expected: String, found: String },
+    /// Parser encountered unexpected token during email script analysis
+    UnexpectedToken {
+        /// Token type that was expected during parsing
+        expected: String,
+        /// Actual token found in email script content
+        found: String
+    },
+    /// String literal not properly closed in email script
     UnclosedString,
+    /// Regular expression pattern not properly closed
     UnclosedRegex,
+    /// Code block (braces) not properly closed
     UnclosedBlock,
+    /// Required semicolon missing in email script
     MissingSemicolon,
+    /// General syntax error in email processing code
     InvalidSyntax,
+    /// Parenthesis not properly closed in expression
     UnclosedParenthesis,
+    /// Array or hash bracket not properly closed
     UnclosedBracket,
+    /// Hash or block brace not properly closed
     UnclosedBrace,
+    /// Heredoc block not properly terminated
     UnterminatedHeredoc,
+    /// Variable name does not follow Perl naming rules
     InvalidVariableName,
+    /// Subroutine name does not follow Perl naming rules
     InvalidSubroutineName,
+    /// Required operator missing in expression
     MissingOperator,
+    /// Required operand missing in expression
     MissingOperand,
+    /// Unexpected end of file during parsing
     UnexpectedEof,
 }
 
+/// Email script error classification engine for PSTX pipeline operations
+///
+/// Analyzes parsing errors and provides specific error types with recovery suggestions
+/// for robust email processing workflows within enterprise PSTX environments.
 pub struct ErrorClassifier;
 
 impl Default for ErrorClassifier {
@@ -28,10 +85,28 @@ impl Default for ErrorClassifier {
 }
 
 impl ErrorClassifier {
+    /// Create new error classifier for email script analysis
+    ///
+    /// # Returns
+    ///
+    /// Configured classifier ready for PSTX pipeline error analysis
     pub fn new() -> Self {
         ErrorClassifier
     }
 
+    /// Classify parsing error based on AST node and source context
+    ///
+    /// Analyzes error patterns in email script content to provide specific
+    /// error types for targeted recovery strategies during PSTX processing.
+    ///
+    /// # Arguments
+    ///
+    /// * `error_node` - AST node where error occurred
+    /// * `source` - Complete email script source code for context analysis
+    ///
+    /// # Returns
+    ///
+    /// Specific error type for targeted recovery during email processing
     pub fn classify(&self, error_node: &Node, source: &str) -> ParseErrorKind {
         // Get the error text if available based on location
         let error_text = {
@@ -127,6 +202,18 @@ impl ErrorClassifier {
         ParseErrorKind::InvalidSyntax
     }
 
+    /// Generate user-friendly diagnostic message for classified error
+    ///
+    /// Converts error classification into readable message for email script developers
+    /// during PSTX pipeline processing and debugging operations.
+    ///
+    /// # Arguments
+    ///
+    /// * `kind` - Classified error type from email script analysis
+    ///
+    /// # Returns
+    ///
+    /// Human-readable error message describing the parsing issue
     pub fn get_diagnostic_message(&self, kind: &ParseErrorKind) -> String {
         match kind {
             ParseErrorKind::UnexpectedToken { expected, found } => {
@@ -149,6 +236,18 @@ impl ErrorClassifier {
         }
     }
 
+    /// Generate recovery suggestion for classified parsing error
+    ///
+    /// Provides actionable recovery suggestions for email script developers
+    /// to resolve parsing issues during PSTX workflow development.
+    ///
+    /// # Arguments
+    ///
+    /// * `kind` - Classified error type requiring recovery suggestion
+    ///
+    /// # Returns
+    ///
+    /// Optional recovery suggestion or None if no specific suggestion available
     pub fn get_suggestion(&self, kind: &ParseErrorKind) -> Option<String> {
         match kind {
             ParseErrorKind::MissingSemicolon => {

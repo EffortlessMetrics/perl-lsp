@@ -1,3 +1,42 @@
+//! Scope analysis and variable tracking for PSTX email processing pipeline
+//!
+//! This module provides comprehensive scope analysis for email scripts, tracking
+//! variable declarations, usage patterns, and potential issues across different
+//! scopes within the PSTX workflow stages.
+//!
+//! # PSTX Pipeline Integration
+//!
+//! Scope analysis supports email processing across all PSTX stages:
+//! - **Extract**: Analyze variable scope in embedded email scripts
+//! - **Normalize**: Track variable usage during standardization transforms
+//! - **Thread**: Analyze control flow variable dependencies
+//! - **Render**: Validate variable scope during output generation
+//! - **Index**: Extract scope information for symbol indexing
+//!
+//! # Usage Examples
+//!
+//! ```rust
+//! use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
+//! use perl_parser::{Parser, ast::Node};
+//!
+//! // Analyze email script for scope issues
+//! let script = "my $email_filter = sub { my $msg = shift; $msg =~ /important/; };";
+//! let mut parser = Parser::new(script);
+//! let ast = parser.parse().unwrap();
+//!
+//! let mut analyzer = ScopeAnalyzer::new();
+//! let issues = analyzer.analyze(&ast, script);
+//!
+//! // Check for common scope issues in email processing code
+//! for issue in &issues {
+//!     match issue.kind {
+//!         IssueKind::UnusedVariable => println!("Unused variable: {}", issue.message),
+//!         IssueKind::VariableShadowing => println!("Variable shadowing: {}", issue.message),
+//!         _ => {}
+//!     }
+//! }
+//! ```
+
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
 use std::cell::RefCell;

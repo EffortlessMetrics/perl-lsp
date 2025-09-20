@@ -57,21 +57,36 @@ pub enum ParseError {
     /// Common during Normalize stage when email scripts contain syntax variations or encoding issues.
     /// Recovery strategy: skip problematic tokens and attempt continued parsing with relaxed rules.
     #[error("Unexpected token: expected {expected}, found {found} at {location}")]
-    UnexpectedToken { expected: String, found: String, location: usize },
+    UnexpectedToken {
+        /// Token type that was expected during email script parsing
+        expected: String,
+        /// Actual token found in email script content
+        found: String,
+        /// Byte position where unexpected token was encountered
+        location: usize
+    },
 
     /// General syntax error occurred during email content parsing
     ///
     /// This encompasses malformed Perl constructs found in email scripts during Thread stage analysis.
     /// Recovery strategy: isolate syntax error scope and continue processing surrounding content.
     #[error("Invalid syntax at position {location}: {message}")]
-    SyntaxError { message: String, location: usize },
+    SyntaxError {
+        /// Descriptive error message explaining the syntax issue
+        message: String,
+        /// Byte position where syntax error occurred in email script
+        location: usize
+    },
 
     /// Lexical analysis failure during email script tokenization
     ///
     /// Indicates character encoding issues or binary content mixed with text during Extract stage.
     /// Recovery strategy: apply encoding detection and re-attempt tokenization with binary fallbacks.
     #[error("Lexer error: {message}")]
-    LexerError { message: String },
+    LexerError {
+        /// Detailed lexer error message describing tokenization failure
+        message: String
+    },
 
     /// Parser recursion depth exceeded during complex email script analysis
     ///
@@ -85,7 +100,10 @@ pub enum ParseError {
     /// Common when processing malformed configuration values during Index stage analysis.
     /// Recovery strategy: substitute default values and log for manual review.
     #[error("Invalid number literal: {literal}")]
-    InvalidNumber { literal: String },
+    InvalidNumber {
+        /// The malformed numeric literal found in email script content
+        literal: String
+    },
 
     /// Malformed string literal in email processing workflow
     ///
@@ -99,14 +117,20 @@ pub enum ParseError {
     /// Commonly found in truncated or corrupted email script content during Extract stage.
     /// Recovery strategy: auto-close delimiters and continue parsing with synthetic boundaries.
     #[error("Unclosed delimiter: {delimiter}")]
-    UnclosedDelimiter { delimiter: char },
+    UnclosedDelimiter {
+        /// The delimiter character that was left unclosed
+        delimiter: char
+    },
 
     /// Invalid regular expression syntax in email processing workflow
     ///
     /// Occurs when parsing regex patterns in email filters during Thread stage analysis.
     /// Recovery strategy: fallback to literal string matching and preserve original pattern.
     #[error("Invalid regex: {message}")]
-    InvalidRegex { message: String },
+    InvalidRegex {
+        /// Specific error message describing regex syntax issue
+        message: String
+    },
 }
 
 impl ParseError {

@@ -1,8 +1,53 @@
-//! Workspace-wide refactoring operations
+//! Workspace-wide refactoring operations for PSTX email processing pipeline
 //!
 //! This module provides comprehensive refactoring capabilities that span multiple files,
 //! including symbol renaming, module extraction, import optimization, and code movement.
 //! All operations are designed to be safe, reversible, and provide detailed feedback.
+//!
+//! # PSTX Pipeline Integration
+//!
+//! Refactoring operations support large-scale email script maintenance across PSTX workflow stages:
+//! - **Extract**: Rename email processing functions across multiple script files
+//! - **Normalize**: Standardize symbol names and import patterns for consistency
+//! - **Thread**: Update cross-file dependencies during control flow refactoring
+//! - **Render**: Maintain formatting consistency during code reorganization
+//! - **Index**: Update workspace symbol indices after refactoring operations
+//!
+//! # Performance Characteristics
+//!
+//! Optimized for enterprise-scale email processing workflows:
+//! - **50GB+ PST Support**: Efficient memory management during large workspace refactoring
+//! - **Incremental Updates**: Process only changed files to minimize operation time
+//! - **Workspace Indexing**: Leverages comprehensive symbol index for fast cross-file operations
+//! - **Batch Operations**: Groups related changes to minimize file I/O overhead
+//!
+//! # Enterprise Features
+//!
+//! - **Safe Refactoring**: Pre-validation ensures operation safety before applying changes
+//! - **Rollback Support**: All operations can be reversed with detailed change tracking
+//! - **Cross-File Analysis**: Handles complex dependency graphs in multi-file email systems
+//! - **Import Optimization**: Automatically manages import statements during refactoring
+//!
+//! # Usage Examples
+//!
+//! ```rust
+//! use perl_parser::workspace_refactor::WorkspaceRefactor;
+//! use perl_parser::workspace_index::WorkspaceIndex;
+//!
+//! // Initialize refactoring engine for email script workspace
+//! let index = WorkspaceIndex::new();
+//! let refactor = WorkspaceRefactor::new(index);
+//!
+//! // Rename function across all email processing scripts
+//! let result = refactor.rename_symbol(
+//!     "file:///email_processor.pl",
+//!     position,
+//!     "enhanced_filter_emails"
+//! ).unwrap();
+//!
+//! // Apply import optimization across email script modules
+//! let optimized = refactor.optimize_imports("file:///email_utils.pm").unwrap();
+//! ```
 
 use crate::import_optimizer::ImportOptimizer;
 use crate::workspace_index::{
