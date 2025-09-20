@@ -10,7 +10,6 @@
 /// - extract_modifiers: FnValue mutations
 ///
 /// Labels: tests:hardening
-
 use perl_parser::quote_parser::*;
 
 // Edge case tests for extract_regex_parts function
@@ -18,8 +17,8 @@ use perl_parser::quote_parser::*;
 #[test]
 fn test_extract_regex_parts_edge_cases() {
     let test_cases = vec![
-        ("", ("", "")), // Empty input - should return empty strings, not "xyzzy"
-        ("qr", ("", "")), // qr without delimiter - should return empty, not "xyzzy"
+        ("", ("", "")),    // Empty input - should return empty strings, not "xyzzy"
+        ("qr", ("", "")),  // qr without delimiter - should return empty, not "xyzzy"
         ("m", ("mm", "")), // m without delimiter - actual behavior
         ("qr/test/i", ("/test/", "i")), // Basic qr case - should not return ("", "xyzzy")
         ("m/test/gi", ("/test/", "gi")), // Basic m case - should not return ("xyzzy", "")
@@ -33,8 +32,12 @@ fn test_extract_regex_parts_edge_cases() {
 
     for (input, expected) in test_cases {
         let (pattern, modifiers) = extract_regex_parts(input);
-        assert_eq!((pattern.as_str(), modifiers.as_str()), expected,
-            "extract_regex_parts failed for input '{}' - this kills FnValue mutations", input);
+        assert_eq!(
+            (pattern.as_str(), modifiers.as_str()),
+            expected,
+            "extract_regex_parts failed for input '{}' - this kills FnValue mutations",
+            input
+        );
     }
 }
 
@@ -44,16 +47,25 @@ fn test_extract_regex_parts_edge_cases() {
 fn test_extract_regex_parts_length_boundary_conditions() {
     // Test length checks that could be mutated from > to < or >= to ==
     let result = extract_regex_parts("m");
-    assert_eq!(result, ("mm".to_string(), "".to_string()),
-        "Single 'm' should return mm - kills BinaryOperator mutation > to <");
+    assert_eq!(
+        result,
+        ("mm".to_string(), "".to_string()),
+        "Single 'm' should return mm - kills BinaryOperator mutation > to <"
+    );
 
     let result = extract_regex_parts("mx");
-    assert_eq!(result, ("mxm".to_string(), "".to_string()),
-        "Two chars 'mx' should extract 'mxm' - kills length check mutations");
+    assert_eq!(
+        result,
+        ("mxm".to_string(), "".to_string()),
+        "Two chars 'mx' should extract 'mxm' - kills length check mutations"
+    );
 
     let result = extract_regex_parts("malpha");
-    assert_eq!(result, ("malpham".to_string(), "".to_string()),
-        "m followed by alphabetic should extract content - kills && to || mutation");
+    assert_eq!(
+        result,
+        ("malpham".to_string(), "".to_string()),
+        "m followed by alphabetic should extract content - kills && to || mutation"
+    );
 }
 
 // Tests for alphabetic character detection mutations
@@ -62,16 +74,25 @@ fn test_extract_regex_parts_length_boundary_conditions() {
 fn test_extract_regex_parts_alphabetic_detection() {
     // Test that alphabetic characters after 'm' are handled
     let result = extract_regex_parts("ma");
-    assert_eq!(result, ("mam".to_string(), "".to_string()),
-        "m followed by alphabetic 'a' should return mam - kills ! operator removal");
+    assert_eq!(
+        result,
+        ("mam".to_string(), "".to_string()),
+        "m followed by alphabetic 'a' should return mam - kills ! operator removal"
+    );
 
     let result = extract_regex_parts("mz");
-    assert_eq!(result, ("mzm".to_string(), "".to_string()),
-        "m followed by alphabetic 'z' should return mzm - kills ! operator removal");
+    assert_eq!(
+        result,
+        ("mzm".to_string(), "".to_string()),
+        "m followed by alphabetic 'z' should return mzm - kills ! operator removal"
+    );
 
     let result = extract_regex_parts("m/");
-    assert_eq!(result, ("//".to_string(), "".to_string()),
-        "m followed by non-alphabetic '/' should extract - kills ! operator removal");
+    assert_eq!(
+        result,
+        ("//".to_string(), "".to_string()),
+        "m followed by non-alphabetic '/' should extract - kills ! operator removal"
+    );
 }
 
 // Comprehensive boundary tests for extract_substitution_parts
@@ -79,8 +100,8 @@ fn test_extract_regex_parts_alphabetic_detection() {
 #[test]
 fn test_extract_substitution_parts_boundary_cases() {
     let test_cases = vec![
-        ("", ("", "", "")), // Empty input - not ("xyzzy", "", "")
-        ("s", ("", "", "")), // Just 's' - not ("", "xyzzy", "xyzzy")
+        ("", ("", "", "")),                      // Empty input - not ("xyzzy", "", "")
+        ("s", ("", "", "")),                     // Just 's' - not ("", "xyzzy", "xyzzy")
         ("s/", ("", "", "")), // s with single delimiter - not ("xyzzy", "xyzzy", "")
         ("s/old/new/", ("old", "new", "")), // Basic case - not ("", "", "xyzzy")
         ("s/old/new/g", ("old", "new", "g")), // With modifier - not combinations with "xyzzy"
@@ -96,7 +117,8 @@ fn test_extract_substitution_parts_boundary_cases() {
         assert_eq!(
             (pattern.as_str(), replacement.as_str(), modifiers.as_str()),
             expected,
-            "extract_substitution_parts failed for input '{}' - kills FnValue mutations", input
+            "extract_substitution_parts failed for input '{}' - kills FnValue mutations",
+            input
         );
     }
 }
@@ -196,7 +218,12 @@ fn test_get_closing_delimiter_comprehensive() {
         // Note: get_closing_delimiter is private, so we test it indirectly through the public functions
         // by verifying they handle all delimiter types correctly
 
-        let test_input = format!("s{}test{}replacement{}", open, expected, if open == expected { "" } else { &expected.to_string() });
+        let test_input = format!(
+            "s{}test{}replacement{}",
+            open,
+            expected,
+            if open == expected { "" } else { &expected.to_string() }
+        );
         let (pattern, replacement, _) = extract_substitution_parts(&test_input);
 
         if open == expected {
@@ -208,7 +235,11 @@ fn test_get_closing_delimiter_comprehensive() {
             assert_eq!(pattern, "test", "Paired delimiter {} should work", open);
             if open == '(' && expected == ')' {
                 // Special case for parentheses - seems to have different behavior
-                assert_eq!(replacement, "", "Paired delimiter {} replacement - actual behavior", expected);
+                assert_eq!(
+                    replacement, "",
+                    "Paired delimiter {} replacement - actual behavior",
+                    expected
+                );
             } else {
                 assert_eq!(replacement, "replacement", "Paired delimiter {} replacement", expected);
             }
@@ -229,8 +260,12 @@ fn test_closing_delimiter_via_regex() {
 
     for (input, expected) in test_cases {
         let result = extract_regex_parts(input);
-        assert_eq!((result.0.as_str(), result.1.as_str()), expected,
-            "Delimiter mapping test for {}", input);
+        assert_eq!(
+            (result.0.as_str(), result.1.as_str()),
+            expected,
+            "Delimiter mapping test for {}",
+            input
+        );
     }
 }
 
@@ -239,13 +274,13 @@ fn test_closing_delimiter_via_regex() {
 #[test]
 fn test_extract_transliteration_parts_comprehensive() {
     let test_cases = vec![
-        ("", ("", "", "")), // Empty - not ("xyzzy", "xyzzy", "xyzzy")
-        ("tr", ("", "", "")), // Just prefix - not ("", "xyzzy", "xyzzy")
-        ("y", ("", "", "")), // Just y prefix - not ("xyzzy", "", "xyzzy")
-        ("tr/abc/xyz/", ("abc", "", "xyz")), // Basic tr - actual behavior
-        ("y/abc/xyz/d", ("abc", "", "xyz")), // y with modifier - actual behavior
+        ("", ("", "", "")),                     // Empty - not ("xyzzy", "xyzzy", "xyzzy")
+        ("tr", ("", "", "")),                   // Just prefix - not ("", "xyzzy", "xyzzy")
+        ("y", ("", "", "")),                    // Just y prefix - not ("xyzzy", "", "xyzzy")
+        ("tr/abc/xyz/", ("abc", "", "xyz")),    // Basic tr - actual behavior
+        ("y/abc/xyz/d", ("abc", "", "xyz")),    // y with modifier - actual behavior
         ("tr{abc}{xyz}d", ("abc", "xyz", "d")), // Paired delimiters - correct behavior
-        ("y(abc)(xyz)", ("abc", "xyz", "")), // Parentheses - correct behavior
+        ("y(abc)(xyz)", ("abc", "xyz", "")),    // Parentheses - correct behavior
         ("tr[abc][xyz]cd", ("abc", "xyz", "cd")), // Multiple modifiers - correct behavior
     ];
 
@@ -254,7 +289,8 @@ fn test_extract_transliteration_parts_comprehensive() {
         assert_eq!(
             (search.as_str(), replace.as_str(), modifiers.as_str()),
             expected,
-            "extract_transliteration_parts failed for '{}' - kills FnValue mutations", input
+            "extract_transliteration_parts failed for '{}' - kills FnValue mutations",
+            input
         );
     }
 }
@@ -280,21 +316,24 @@ fn test_extract_transliteration_delimiter_detection() {
 #[test]
 fn test_extract_modifiers_comprehensive() {
     let test_cases = vec![
-        ("s/test/repl/", ""), // Empty modifiers - should return "", not "xyzzy"
-        ("s/test/repl/abc", "abc"), // All alphabetic - should return "abc", not "xyzzy"
+        ("s/test/repl/", ""),          // Empty modifiers - should return "", not "xyzzy"
+        ("s/test/repl/abc", "abc"),    // All alphabetic - should return "abc", not "xyzzy"
         ("s/test/repl/abc123", "abc"), // Mixed - should return "abc", not ""
-        ("s/test/repl/123", ""), // No alphabetic - should return "", not "xyzzy"
-        ("s/test/repl/abc!", "abc"), // Alphabetic + punctuation - should return "abc"
-        ("s/test/repl/!abc", ""), // Starts with non-alphabetic - should return ""
-        ("s/test/repl/AbC", "AbC"), // Mixed case - should preserve case
+        ("s/test/repl/123", ""),       // No alphabetic - should return "", not "xyzzy"
+        ("s/test/repl/abc!", "abc"),   // Alphabetic + punctuation - should return "abc"
+        ("s/test/repl/!abc", ""),      // Starts with non-alphabetic - should return ""
+        ("s/test/repl/AbC", "AbC"),    // Mixed case - should preserve case
         ("s/test/repl/aBc123XyZ", "aBc"), // Stop at first non-alphabetic
     ];
 
     for (input, expected) in test_cases {
         // Test extract_modifiers indirectly through substitution parsing
         let (_, _, modifiers) = extract_substitution_parts(input);
-        assert_eq!(modifiers, expected,
-            "Modifiers extraction from '{}' should return '{}', not mutated value", input, expected);
+        assert_eq!(
+            modifiers, expected,
+            "Modifiers extraction from '{}' should return '{}', not mutated value",
+            input, expected
+        );
     }
 }
 
@@ -320,8 +359,13 @@ fn test_extract_modifiers_properties() {
         };
 
         for ch in modifiers.chars() {
-            assert!(ch.is_ascii_alphabetic(),
-                "Result '{}' contains non-alphabetic char '{}' from input '{}'", modifiers, ch, input);
+            assert!(
+                ch.is_ascii_alphabetic(),
+                "Result '{}' contains non-alphabetic char '{}' from input '{}'",
+                modifiers,
+                ch,
+                input
+            );
         }
         assert_eq!(modifiers, expected, "Modifiers mismatch for input '{}'", input);
     }
@@ -386,11 +430,23 @@ fn test_quote_parser_error_boundaries() {
 fn test_quote_parser_utf8_safety() {
     // Test with Unicode characters
     let (pattern, modifiers) = extract_regex_parts("qr/🦀test🦀/i");
-    assert_eq!((pattern.as_str(), modifiers.as_str()), ("/🦀test🦀/", "i"), "Unicode regex parsing");
+    assert_eq!(
+        (pattern.as_str(), modifiers.as_str()),
+        ("/🦀test🦀/", "i"),
+        "Unicode regex parsing"
+    );
 
     let (pattern, replacement, modifiers) = extract_substitution_parts("s/café/茶/g");
-    assert_eq!((pattern.as_str(), replacement.as_str(), modifiers.as_str()), ("café", "茶", "g"), "Unicode substitution parsing");
+    assert_eq!(
+        (pattern.as_str(), replacement.as_str(), modifiers.as_str()),
+        ("café", "茶", "g"),
+        "Unicode substitution parsing"
+    );
 
     let (search, replace, modifiers) = extract_transliteration_parts("tr/αβγ/ΑΒΓ/");
-    assert_eq!((search.as_str(), replace.as_str(), modifiers.as_str()), ("αβγ", "", ""), "Unicode transliteration parsing - actual behavior");
+    assert_eq!(
+        (search.as_str(), replace.as_str(), modifiers.as_str()),
+        ("αβγ", "", ""),
+        "Unicode transliteration parsing - actual behavior"
+    );
 }

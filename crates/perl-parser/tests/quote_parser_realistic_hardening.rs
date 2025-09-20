@@ -6,7 +6,6 @@
 /// Target: Kill remaining 13 mutation survivors to reach 85%+ mutation score
 ///
 /// Labels: tests:hardening
-
 use perl_parser::quote_parser::*;
 
 /// Tests targeting function return mutations with realistic expectations
@@ -20,7 +19,7 @@ mod realistic_function_return_kills {
         let regex_cases = vec![
             ("qr/test/i", "/test/", "i"),
             ("m/pattern/", "/pattern/", ""),
-            ("", "", ""),  // Empty should return ("", ""), not ("xyzzy", "xyzzy")
+            ("", "", ""), // Empty should return ("", ""), not ("xyzzy", "xyzzy")
         ];
 
         for (input, expected_pattern, expected_mods) in regex_cases {
@@ -37,8 +36,8 @@ mod realistic_function_return_kills {
         // Test extract_transliteration_parts with realistic expectations
         // Based on debug output, paired delimiters don't work as expected, so test simpler cases
         let tr_cases = vec![
-            ("", "", "", ""),  // Should return ("", "", ""), not any "xyzzy" combination
-            ("tr", "", "", ""),  // Should return ("", "", ""), not any "xyzzy" combination
+            ("", "", "", ""),   // Should return ("", "", ""), not any "xyzzy" combination
+            ("tr", "", "", ""), // Should return ("", "", ""), not any "xyzzy" combination
         ];
 
         for (input, expected_search, expected_replace, expected_mods) in tr_cases {
@@ -64,10 +63,7 @@ mod realistic_arithmetic_kills {
     #[test]
     fn test_kill_plus_to_multiply_with_simple_cases() {
         // Use simple non-paired delimiters that work correctly
-        let cases = vec![
-            "s/a/b/",
-            "s/test/replacement/",
-        ];
+        let cases = vec!["s/a/b/", "s/test/replacement/"];
 
         for input in cases {
             let (pattern, replacement, _) = extract_substitution_parts(input);
@@ -89,7 +85,7 @@ mod realistic_arithmetic_kills {
     #[test]
     fn test_kill_greater_than_to_greater_equal_boundary() {
         // Test exact boundary where > vs >= matters
-        let single_char = "m";  // length = 1
+        let single_char = "m"; // length = 1
         let (pattern, _) = extract_regex_parts(single_char);
 
         // With > 1: length 1 > 1 is false, use text directly
@@ -97,7 +93,7 @@ mod realistic_arithmetic_kills {
         assert_eq!(pattern, "mm", "Boundary case with length 1 should use > check");
 
         // Test just over boundary
-        let two_chars = "m/";  // length = 2, non-alphabetic second char
+        let two_chars = "m/"; // length = 2, non-alphabetic second char
         let (pattern2, _) = extract_regex_parts(two_chars);
         assert_eq!(pattern2, "//", "Two chars with non-alpha should work");
     }
@@ -106,10 +102,7 @@ mod realistic_arithmetic_kills {
     #[test]
     fn test_kill_plus_equal_to_minus_equal_with_working_cases() {
         // Test simple non-paired cases that should work
-        let simple_cases = vec![
-            "s/test/repl/",
-            "s#old#new#",
-        ];
+        let simple_cases = vec!["s/test/repl/", "s#old#new#"];
 
         for input in simple_cases {
             let (pattern, replacement, _) = extract_substitution_parts(input);
@@ -132,14 +125,14 @@ mod realistic_boolean_logic_kills {
         // Condition: text.starts_with('m') && text.len() > 1 && !text.chars().nth(1).unwrap().is_alphabetic()
 
         // Case where second condition is false: len() = 1
-        let case1 = "m";  // starts_with('m')=true, len()>1=false
+        let case1 = "m"; // starts_with('m')=true, len()>1=false
         let (pattern1, _) = extract_regex_parts(case1);
         // With &&: true && false && _ = false (use text directly)
         // With ||: true || false || _ = true (different behavior)
         assert_eq!(pattern1, "mm", "Single 'm' should work with && logic");
 
         // Case where third condition is false: alphabetic second char
-        let case2 = "ma";  // starts_with('m')=true, len()>1=true, !is_alphabetic('a')=false
+        let case2 = "ma"; // starts_with('m')=true, len()>1=true, !is_alphabetic('a')=false
         let (pattern2, _) = extract_regex_parts(case2);
         // With &&: true && true && false = false (use text directly)
         // With ||: true || true || false = true (different behavior)
@@ -150,7 +143,7 @@ mod realistic_boolean_logic_kills {
     #[test]
     fn test_kill_not_equal_to_equal_in_delimiter_logic() {
         // Test cases with same vs different delimiters
-        let same_delim = "s/old/new/";  // '/' != '/' is false (non-paired)
+        let same_delim = "s/old/new/"; // '/' != '/' is false (non-paired)
         let (pattern, replacement, _) = extract_substitution_parts(same_delim);
 
         // Should work correctly with != logic
@@ -174,14 +167,8 @@ mod realistic_control_flow_kills {
     #[test]
     fn test_kill_match_arm_deletions_with_working_cases() {
         // First debug what the actual behavior is
-        let test_cases = vec![
-            "qr(test)",
-            "qr[test]",
-            "qr{test}",
-            "qr<test>",
-            "qr/test/",
-            "qr#test#",
-        ];
+        let test_cases =
+            vec!["qr(test)", "qr[test]", "qr{test}", "qr<test>", "qr/test/", "qr#test#"];
 
         for input in test_cases {
             let (actual_pattern, actual_mods) = extract_regex_parts(input);
@@ -194,11 +181,7 @@ mod realistic_control_flow_kills {
         }
 
         // Test with simple substitutions that work
-        let sub_cases = vec![
-            "s/old/new/",
-            "s#old#new#",
-            "s|old|new|",
-        ];
+        let sub_cases = vec!["s/old/new/", "s#old#new#", "s|old|new|"];
 
         for input in sub_cases {
             let (pattern, replacement, _) = extract_substitution_parts(input);
@@ -235,7 +218,7 @@ fn test_comprehensive_realistic_mutation_coverage() {
     let sub_tests = vec![
         ("s/old/new/g", "old", "new", "g"),
         ("s#find#replace#i", "find", "replace", "i"),
-        ("s//", "", "", ""),  // Empty case
+        ("s//", "", "", ""), // Empty case
     ];
 
     for (input, expected_pattern, expected_replacement, expected_mods) in sub_tests {
@@ -251,11 +234,7 @@ fn test_comprehensive_realistic_mutation_coverage() {
     }
 
     // Transliteration with simple cases
-    let tr_tests = vec![
-        ("", "", "", ""),
-        ("tr", "", "", ""),
-        ("y", "", "", ""),
-    ];
+    let tr_tests = vec![("", "", "", ""), ("tr", "", "", ""), ("y", "", "", "")];
 
     for (input, expected_search, expected_replace, expected_mods) in tr_tests {
         let (search, replace, mods) = extract_transliteration_parts(input);
@@ -290,7 +269,11 @@ fn test_edge_cases_for_arithmetic_mutations() {
         let (pattern, replacement, _) = extract_substitution_parts(input);
         // Should extract something reasonable with correct arithmetic
         if !input.starts_with("qr") {
-            assert!(!pattern.is_empty() || input.contains("//"), "Pattern extraction for {}", input);
+            assert!(
+                !pattern.is_empty() || input.contains("//"),
+                "Pattern extraction for {}",
+                input
+            );
         }
     }
 }
@@ -299,9 +282,18 @@ fn test_edge_cases_for_arithmetic_mutations() {
 #[test]
 fn test_mutation_invariants() {
     let test_inputs = vec![
-        "", "q", "m", "s", "tr", "y",
-        "qr/test/", "m/pattern/i", "s/old/new/g",
-        "s//", "s#a#b#", "tr/a/b/",
+        "",
+        "q",
+        "m",
+        "s",
+        "tr",
+        "y",
+        "qr/test/",
+        "m/pattern/i",
+        "s/old/new/g",
+        "s//",
+        "s#a#b#",
+        "tr/a/b/",
     ];
 
     for input in test_inputs {

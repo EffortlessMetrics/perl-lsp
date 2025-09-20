@@ -2,7 +2,6 @@
 /// Focus on AST consistency and workspace indexing robustness
 ///
 /// Labels: tests:fuzz, perl-fuzz:running
-
 use perl_parser::Parser;
 use proptest::prelude::*;
 use std::panic::AssertUnwindSafe;
@@ -27,9 +26,7 @@ fn fuzz_incremental_parsing_robustness() {
     for original_script in test_cases {
         // Test that parsing doesn't crash on original
         let mut parser = Parser::new(original_script);
-        let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-            parser.parse()
-        }));
+        let result = std::panic::catch_unwind(AssertUnwindSafe(|| parser.parse()));
 
         assert!(result.is_ok(), "Parser crashed on script: {}", original_script);
 
@@ -47,13 +44,14 @@ fn fuzz_incremental_parsing_robustness() {
 
         for modified_script in modifications {
             let mut parser = Parser::new(&modified_script);
-            let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-                parser.parse()
-            }));
+            let result = std::panic::catch_unwind(AssertUnwindSafe(|| parser.parse()));
 
-            assert!(result.is_ok(),
+            assert!(
+                result.is_ok(),
                 "Parser crashed on modified script:\nOriginal: {}\nModified: {}",
-                original_script, modified_script);
+                original_script,
+                modified_script
+            );
         }
     }
 }
@@ -66,15 +64,12 @@ fn fuzz_dual_indexing_function_patterns() {
         ("sub test { 42 }", "test()"),
         ("package Pkg; sub test { 42 }", "Pkg::test()"),
         ("package Pkg; sub test { 42 }", "test()"), // Bare call to qualified function
-
         // Nested packages
         ("package A::B::C; sub deep { 1 }", "A::B::C::deep()"),
         ("package A::B::C; sub deep { 1 }", "deep()"),
-
         // Unicode identifiers
         ("sub café { 'coffee' }", "café()"),
         ("package Ñañá; sub test { 1 }", "Ñañá::test()"),
-
         // Edge case names
         ("sub _private { 1 }", "_private()"),
         ("sub CONSTANT { 42 }", "CONSTANT()"),
@@ -85,13 +80,14 @@ fn fuzz_dual_indexing_function_patterns() {
         let script = format!("{}\n{}\n", definition, call);
 
         let mut parser = Parser::new(&script);
-        let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-            parser.parse()
-        }));
+        let result = std::panic::catch_unwind(AssertUnwindSafe(|| parser.parse()));
 
-        assert!(result.is_ok(),
+        assert!(
+            result.is_ok(),
             "Dual indexing test failed for definition: {} call: {}",
-            definition, call);
+            definition,
+            call
+        );
 
         // Test that result is reasonable
         if let Ok(parse_result) = result {
@@ -118,7 +114,6 @@ fn fuzz_workspace_indexing_stress() {
         A::method_a();
         B::method_b();
         "#,
-
         // Recursive package references
         r#"
         package Recursive;
@@ -126,7 +121,6 @@ fn fuzz_workspace_indexing_stress() {
         sub helper { return 1; }
         Recursive::call_self();
         "#,
-
         // Mixed qualified/unqualified calls
         r#"
         package Utils;
@@ -138,7 +132,6 @@ fn fuzz_workspace_indexing_stress() {
         debug(); # Should this resolve?
         info();  # Should this resolve?
         "#,
-
         // Complex inheritance-like patterns
         r#"
         package Base;
@@ -159,9 +152,7 @@ fn fuzz_workspace_indexing_stress() {
 
     for script in complex_scripts {
         let mut parser = Parser::new(script);
-        let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-            parser.parse()
-        }));
+        let result = std::panic::catch_unwind(AssertUnwindSafe(|| parser.parse()));
 
         assert!(result.is_ok(), "Complex workspace indexing failed for script: {}", script);
 
@@ -178,19 +169,15 @@ fn fuzz_malformed_quote_incremental_interaction() {
         "my $var = 'unclosed string",
         "my $regex = qr/unclosed",
         "my $sub = s/unclosed/replacement",
-
         // Nested quote issues
         "my $complex = qr{test{nested}unclosed",
         "s/pattern{nested/replacement/g",
-
         // Mixed quote styles
         "s/test'mixed/quotes\"here/",
         "qr'mixed\"quotes/here'",
-
         // Very deep nesting
         "s{{{{{test}}}}}{{{{replacement}}}}",
         "qr((((((nested))))))",
-
         // Quote-like in strings
         "my $str = 'contains s/fake/substitution/'",
         "print \"qr/fake/regex in string\"",
@@ -198,9 +185,7 @@ fn fuzz_malformed_quote_incremental_interaction() {
 
     for script in malformed_quote_scripts {
         let mut parser = Parser::new(script);
-        let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-            parser.parse()
-        }));
+        let result = std::panic::catch_unwind(AssertUnwindSafe(|| parser.parse()));
 
         // These may fail to parse, but should not crash
         assert!(result.is_ok(), "Parser crashed (not just failed) on malformed quote: {}", script);
@@ -248,33 +233,45 @@ proptest! {
 fn fuzz_performance_under_stress() {
     let stress_scripts = vec![
         // Large number of function definitions
-        (0..100).map(|i| format!("sub func_{} {{ return {}; }}", i, i)).collect::<Vec<_>>().join("\n"),
-
+        (0..100)
+            .map(|i| format!("sub func_{} {{ return {}; }}", i, i))
+            .collect::<Vec<_>>()
+            .join("\n"),
         // Large number of package definitions
-        (0..50).map(|i| format!("package Pkg_{};\nsub method {{ return {}; }}", i, i)).collect::<Vec<_>>().join("\n"),
-
+        (0..50)
+            .map(|i| format!("package Pkg_{};\nsub method {{ return {}; }}", i, i))
+            .collect::<Vec<_>>()
+            .join("\n"),
         // Very long function call chains
-        format!("package Chain;\n{}\nChain::start();",
-               (0..50).map(|i| format!("sub step_{} {{ step_{}(); }}", i, i+1)).collect::<Vec<_>>().join("\n")),
-
+        format!(
+            "package Chain;\n{}\nChain::start();",
+            (0..50)
+                .map(|i| format!("sub step_{} {{ step_{}(); }}", i, i + 1))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
         // Large nested structures
-        format!("my $data = {{{}}};",
-               (0..100).map(|i| format!("key_{} => 'value_{}'", i, i)).collect::<Vec<_>>().join(", ")),
+        format!(
+            "my $data = {{{}}};",
+            (0..100).map(|i| format!("key_{} => 'value_{}'", i, i)).collect::<Vec<_>>().join(", ")
+        ),
     ];
 
     for script in stress_scripts {
         let start = std::time::Instant::now();
 
         let mut parser = Parser::new(&script);
-        let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-            parser.parse()
-        }));
+        let result = std::panic::catch_unwind(AssertUnwindSafe(|| parser.parse()));
 
         let duration = start.elapsed();
 
         assert!(result.is_ok(), "Stress test script caused crash");
-        assert!(duration.as_millis() < 5000, "Parsing took too long: {}ms for {} chars",
-               duration.as_millis(), script.len());
+        assert!(
+            duration.as_millis() < 5000,
+            "Parsing took too long: {}ms for {} chars",
+            duration.as_millis(),
+            script.len()
+        );
 
         // Memory usage should be reasonable (basic check)
         if let Ok(parse_result) = result {

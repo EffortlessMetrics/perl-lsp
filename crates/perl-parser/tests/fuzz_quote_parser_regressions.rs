@@ -6,7 +6,6 @@
 /// These tests serve as regression guards for those fixes.
 ///
 /// Labels: tests:fuzz, perl-fuzz:issues
-
 use perl_parser::quote_parser::*;
 
 /// Reproducer for regex parts extraction with edge case delimiters
@@ -25,8 +24,12 @@ fn test_regex_parts_delimiter_edge_cases() {
 
     for (input, expected) in test_cases {
         let (pattern, modifiers) = extract_regex_parts(input);
-        assert_eq!((pattern.as_str(), modifiers.as_str()), expected,
-            "Regex parts extraction failed for input '{}' - this was a fuzz test failure", input);
+        assert_eq!(
+            (pattern.as_str(), modifiers.as_str()),
+            expected,
+            "Regex parts extraction failed for input '{}' - this was a fuzz test failure",
+            input
+        );
     }
 }
 
@@ -51,7 +54,8 @@ fn test_substitution_parts_delimiter_detection() {
         assert_eq!(
             (pattern.as_str(), replacement.as_str(), modifiers.as_str()),
             expected,
-            "Substitution parts extraction failed for input '{}' - fuzz test regression", input
+            "Substitution parts extraction failed for input '{}' - fuzz test regression",
+            input
         );
     }
 }
@@ -73,7 +77,8 @@ fn test_transliteration_delimiter_consistency() {
         assert_eq!(
             (search.as_str(), replace.as_str(), modifiers.as_str()),
             expected,
-            "Transliteration parts extraction failed for input '{}' - fuzz regression", input
+            "Transliteration parts extraction failed for input '{}' - fuzz regression",
+            input
         );
     }
 }
@@ -96,7 +101,8 @@ fn test_escape_sequence_consistency() {
         assert_eq!(
             (pattern.as_str(), replacement.as_str(), modifiers.as_str()),
             expected,
-            "Escape sequence handling failed for input '{}' - fuzz test regression", input
+            "Escape sequence handling failed for input '{}' - fuzz test regression",
+            input
         );
     }
 }
@@ -119,7 +125,8 @@ fn test_nested_delimiter_depth_tracking() {
         assert_eq!(
             (pattern.as_str(), replacement.as_str(), modifiers.as_str()),
             expected,
-            "Nested delimiter handling failed for input '{}' - fuzz regression", input
+            "Nested delimiter handling failed for input '{}' - fuzz regression",
+            input
         );
     }
 }

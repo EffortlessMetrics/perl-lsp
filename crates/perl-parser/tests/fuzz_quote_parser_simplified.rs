@@ -2,7 +2,6 @@
 /// Focus on bounded testing to discover crashes, panics, and invariant violations
 ///
 /// Labels: tests:fuzz, perl-fuzz:running
-
 use perl_parser::quote_parser::*;
 use proptest::prelude::*;
 
@@ -122,18 +121,28 @@ fn fuzz_known_edge_cases() {
         // Empty inputs
         "",
         // Minimal prefixes
-        "m", "s", "qr", "tr", "y",
+        "m",
+        "s",
+        "qr",
+        "tr",
+        "y",
         // Unmatched delimiters
-        "s{unclosed", "qr(unclosed", "tr[unclosed",
+        "s{unclosed",
+        "qr(unclosed",
+        "tr[unclosed",
         // Very long strings
         &long_a,
         &long_s,
         // Unicode edge cases
-        "s/🦀/test/", "qr/café/i", "tr/αβγ/ΑΒΓ/",
+        "s/🦀/test/",
+        "qr/café/i",
+        "tr/αβγ/ΑΒΓ/",
         // Escape sequences
-        "s/test\\/end/repl/", "s/a\\\\b/c\\\\d/",
+        "s/test\\/end/repl/",
+        "s/a\\\\b/c\\\\d/",
         // Nested delimiters
-        "s{test{nested}}{replacement}", "qr(test(nested))",
+        "s{test{nested}}{replacement}",
+        "qr(test(nested))",
         // Binary-like sequences
         "s/\x00\x01\x02/\x7F\x7E/",
     ];
@@ -155,13 +164,16 @@ fn fuzz_memory_exhaustion_resistance() {
 
         // Should handle large inputs without excessive memory usage
         let start = std::time::Instant::now();
-        let result = std::panic::catch_unwind(|| {
-            extract_substitution_parts(&large_input)
-        });
+        let result = std::panic::catch_unwind(|| extract_substitution_parts(&large_input));
         let duration = start.elapsed();
 
         assert!(result.is_ok(), "Crashed on large input size {}", size);
-        assert!(duration.as_millis() < 100, "Too slow on size {}: {}ms", size, duration.as_millis());
+        assert!(
+            duration.as_millis() < 100,
+            "Too slow on size {}: {}ms",
+            size,
+            duration.as_millis()
+        );
 
         if let Ok((pattern, replacement, modifiers)) = result {
             // Results should be reasonable
@@ -187,16 +199,17 @@ fn fuzz_escape_sequence_robustness() {
     ];
 
     for input in escape_cases {
-        let result = std::panic::catch_unwind(|| {
-            extract_substitution_parts(input)
-        });
+        let result = std::panic::catch_unwind(|| extract_substitution_parts(input));
 
         assert!(result.is_ok(), "Escape handling crashed on: {}", input);
 
         if let Ok((pattern, replacement, _)) = result {
             // Escaped content should be preserved in some form
-            assert!(!pattern.is_empty() || !replacement.is_empty(),
-                "Both pattern and replacement empty for: {}", input);
+            assert!(
+                !pattern.is_empty() || !replacement.is_empty(),
+                "Both pattern and replacement empty for: {}",
+                input
+            );
         }
     }
 }
@@ -221,17 +234,18 @@ fn fuzz_delimiter_boundary_conditions() {
     ];
 
     for (input, _expected_pattern_repl) in delimiter_cases {
-        let result = std::panic::catch_unwind(|| {
-            extract_substitution_parts(input)
-        });
+        let result = std::panic::catch_unwind(|| extract_substitution_parts(input));
 
         assert!(result.is_ok(), "Delimiter handling crashed on: {}", input);
 
         if let Ok((pattern, replacement, _)) = result {
             // Basic sanity check - we got some reasonable parsing
             if input.contains("test") {
-                assert!(pattern.contains("test") || replacement.contains("test"),
-                    "Expected content missing for: {}", input);
+                assert!(
+                    pattern.contains("test") || replacement.contains("test"),
+                    "Expected content missing for: {}",
+                    input
+                );
             }
         }
     }

@@ -8,7 +8,6 @@
 /// - Edge case discovery in quote parsing logic
 ///
 /// Labels: tests:fuzz, perl-fuzz:running
-
 use perl_parser::quote_parser::*;
 use proptest::prelude::*;
 use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
@@ -21,25 +20,35 @@ const REGRESS_DIR: &str =
 /// Tests stress conditions with random inputs to find crashes/panics
 #[test]
 fn fuzz_extract_regex_parts_stress_test() {
-    fn test_regex_parts_no_panic(input: String) -> Result<(), proptest::test_runner::TestCaseError> {
+    fn test_regex_parts_no_panic(
+        input: String,
+    ) -> Result<(), proptest::test_runner::TestCaseError> {
         // Core invariant: function should never panic, regardless of input
-        let result = std::panic::catch_unwind(|| {
-            extract_regex_parts(&input)
-        });
+        let result = std::panic::catch_unwind(|| extract_regex_parts(&input));
 
         prop_assert!(result.is_ok(), "extract_regex_parts panicked on input: {:?}", input);
 
         if let Ok((pattern, modifiers)) = result {
             // AST invariant: results should be valid UTF-8 strings
-            prop_assert!(pattern.is_ascii() || std::str::from_utf8(pattern.as_bytes()).is_ok(),
-                "Pattern contains invalid UTF-8: {:?}", pattern);
-            prop_assert!(modifiers.is_ascii() || std::str::from_utf8(modifiers.as_bytes()).is_ok(),
-                "Modifiers contains invalid UTF-8: {:?}", modifiers);
+            prop_assert!(
+                pattern.is_ascii() || std::str::from_utf8(pattern.as_bytes()).is_ok(),
+                "Pattern contains invalid UTF-8: {:?}",
+                pattern
+            );
+            prop_assert!(
+                modifiers.is_ascii() || std::str::from_utf8(modifiers.as_bytes()).is_ok(),
+                "Modifiers contains invalid UTF-8: {:?}",
+                modifiers
+            );
 
             // Parser invariant: modifiers should only contain alphabetic chars
             for ch in modifiers.chars() {
-                prop_assert!(ch.is_ascii_alphabetic() || ch.is_ascii_whitespace(),
-                    "Modifier contains non-alphabetic char: '{}' in modifiers: {:?}", ch, modifiers);
+                prop_assert!(
+                    ch.is_ascii_alphabetic() || ch.is_ascii_whitespace(),
+                    "Modifier contains non-alphabetic char: '{}' in modifiers: {:?}",
+                    ch,
+                    modifiers
+                );
             }
         }
 
@@ -84,26 +93,47 @@ fn fuzz_extract_regex_parts_stress_test() {
 /// Fuzz testing for substitution parts extraction with focus on crash discovery
 #[test]
 fn fuzz_extract_substitution_parts_crash_detection() {
-    fn test_substitution_no_crash(input: String) -> Result<(), proptest::test_runner::TestCaseError> {
-        let result = std::panic::catch_unwind(|| {
-            extract_substitution_parts(&input)
-        });
+    fn test_substitution_no_crash(
+        input: String,
+    ) -> Result<(), proptest::test_runner::TestCaseError> {
+        let result = std::panic::catch_unwind(|| extract_substitution_parts(&input));
 
         prop_assert!(result.is_ok(), "extract_substitution_parts crashed on: {:?}", input);
 
         if let Ok((pattern, replacement, modifiers)) = result {
             // Memory safety invariants
-            prop_assert!(pattern.len() <= input.len() * 2,
-                "Pattern length {} exceeds reasonable bound for input length {}", pattern.len(), input.len());
-            prop_assert!(replacement.len() <= input.len() * 2,
-                "Replacement length {} exceeds reasonable bound for input length {}", replacement.len(), input.len());
-            prop_assert!(modifiers.len() <= input.len(),
-                "Modifiers length {} exceeds input length {}", modifiers.len(), input.len());
+            prop_assert!(
+                pattern.len() <= input.len() * 2,
+                "Pattern length {} exceeds reasonable bound for input length {}",
+                pattern.len(),
+                input.len()
+            );
+            prop_assert!(
+                replacement.len() <= input.len() * 2,
+                "Replacement length {} exceeds reasonable bound for input length {}",
+                replacement.len(),
+                input.len()
+            );
+            prop_assert!(
+                modifiers.len() <= input.len(),
+                "Modifiers length {} exceeds input length {}",
+                modifiers.len(),
+                input.len()
+            );
 
             // UTF-8 safety invariants
-            prop_assert!(std::str::from_utf8(pattern.as_bytes()).is_ok(), "Invalid UTF-8 in pattern");
-            prop_assert!(std::str::from_utf8(replacement.as_bytes()).is_ok(), "Invalid UTF-8 in replacement");
-            prop_assert!(std::str::from_utf8(modifiers.as_bytes()).is_ok(), "Invalid UTF-8 in modifiers");
+            prop_assert!(
+                std::str::from_utf8(pattern.as_bytes()).is_ok(),
+                "Invalid UTF-8 in pattern"
+            );
+            prop_assert!(
+                std::str::from_utf8(replacement.as_bytes()).is_ok(),
+                "Invalid UTF-8 in replacement"
+            );
+            prop_assert!(
+                std::str::from_utf8(modifiers.as_bytes()).is_ok(),
+                "Invalid UTF-8 in modifiers"
+            );
         }
 
         Ok(())
@@ -149,10 +179,10 @@ fn fuzz_extract_substitution_parts_crash_detection() {
 /// Fuzz testing for transliteration parsing with AST invariant validation
 #[test]
 fn fuzz_extract_transliteration_ast_invariants() {
-    fn test_transliteration_invariants(input: String) -> Result<(), proptest::test_runner::TestCaseError> {
-        let result = std::panic::catch_unwind(|| {
-            extract_transliteration_parts(&input)
-        });
+    fn test_transliteration_invariants(
+        input: String,
+    ) -> Result<(), proptest::test_runner::TestCaseError> {
+        let result = std::panic::catch_unwind(|| extract_transliteration_parts(&input));
 
         prop_assert!(result.is_ok(), "extract_transliteration_parts panicked on: {:?}", input);
 
@@ -160,24 +190,44 @@ fn fuzz_extract_transliteration_ast_invariants() {
             // AST consistency invariants
 
             // Length invariants - results shouldn't be longer than reasonable bounds
-            prop_assert!(search.len() <= input.len(),
-                "Search part length {} exceeds input length {}", search.len(), input.len());
-            prop_assert!(replace.len() <= input.len(),
-                "Replace part length {} exceeds input length {}", replace.len(), input.len());
-            prop_assert!(modifiers.len() <= input.len(),
-                "Modifiers length {} exceeds input length {}", modifiers.len(), input.len());
+            prop_assert!(
+                search.len() <= input.len(),
+                "Search part length {} exceeds input length {}",
+                search.len(),
+                input.len()
+            );
+            prop_assert!(
+                replace.len() <= input.len(),
+                "Replace part length {} exceeds input length {}",
+                replace.len(),
+                input.len()
+            );
+            prop_assert!(
+                modifiers.len() <= input.len(),
+                "Modifiers length {} exceeds input length {}",
+                modifiers.len(),
+                input.len()
+            );
 
             // Character class invariants for modifiers
             for ch in modifiers.chars() {
-                prop_assert!(ch.is_ascii_alphabetic() || ch.is_ascii_whitespace(),
-                    "Invalid character '{}' in modifiers: {:?}", ch, modifiers);
+                prop_assert!(
+                    ch.is_ascii_alphabetic() || ch.is_ascii_whitespace(),
+                    "Invalid character '{}' in modifiers: {:?}",
+                    ch,
+                    modifiers
+                );
             }
 
             // UTF-8 invariants
-            prop_assert!(search.is_ascii() || std::str::from_utf8(search.as_bytes()).is_ok(),
-                "Search contains invalid UTF-8");
-            prop_assert!(replace.is_ascii() || std::str::from_utf8(replace.as_bytes()).is_ok(),
-                "Replace contains invalid UTF-8");
+            prop_assert!(
+                search.is_ascii() || std::str::from_utf8(search.as_bytes()).is_ok(),
+                "Search contains invalid UTF-8"
+            );
+            prop_assert!(
+                replace.is_ascii() || std::str::from_utf8(replace.as_bytes()).is_ok(),
+                "Replace contains invalid UTF-8"
+            );
         }
 
         Ok(())
@@ -229,42 +279,74 @@ fn fuzz_quote_parser_extreme_stress() {
         let result = std::panic::catch_unwind(|| extract_regex_parts(&input));
         prop_assert!(result.is_ok(), "extract_regex_parts panicked on extreme input: {:?}", input);
         if let Ok((output1, output2)) = result {
-            prop_assert!(output1.len() <= input.len() * 10,
+            prop_assert!(
+                output1.len() <= input.len() * 10,
                 "extract_regex_parts produced oversized output: length {} vs input length {}",
-                output1.len(), input.len());
-            prop_assert!(output2.len() <= input.len() * 10,
+                output1.len(),
+                input.len()
+            );
+            prop_assert!(
+                output2.len() <= input.len() * 10,
                 "extract_regex_parts produced oversized output: length {} vs input length {}",
-                output2.len(), input.len());
+                output2.len(),
+                input.len()
+            );
         }
 
         // Test extract_substitution_parts
         let result = std::panic::catch_unwind(|| extract_substitution_parts(&input));
-        prop_assert!(result.is_ok(), "extract_substitution_parts panicked on extreme input: {:?}", input);
+        prop_assert!(
+            result.is_ok(),
+            "extract_substitution_parts panicked on extreme input: {:?}",
+            input
+        );
         if let Ok((output1, output2, output3)) = result {
-            prop_assert!(output1.len() <= input.len() * 10,
+            prop_assert!(
+                output1.len() <= input.len() * 10,
                 "extract_substitution_parts produced oversized pattern: length {} vs input length {}",
-                output1.len(), input.len());
-            prop_assert!(output2.len() <= input.len() * 10,
+                output1.len(),
+                input.len()
+            );
+            prop_assert!(
+                output2.len() <= input.len() * 10,
                 "extract_substitution_parts produced oversized replacement: length {} vs input length {}",
-                output2.len(), input.len());
-            prop_assert!(output3.len() <= input.len() * 10,
+                output2.len(),
+                input.len()
+            );
+            prop_assert!(
+                output3.len() <= input.len() * 10,
                 "extract_substitution_parts produced oversized modifiers: length {} vs input length {}",
-                output3.len(), input.len());
+                output3.len(),
+                input.len()
+            );
         }
 
         // Test extract_transliteration_parts
         let result = std::panic::catch_unwind(|| extract_transliteration_parts(&input));
-        prop_assert!(result.is_ok(), "extract_transliteration_parts panicked on extreme input: {:?}", input);
+        prop_assert!(
+            result.is_ok(),
+            "extract_transliteration_parts panicked on extreme input: {:?}",
+            input
+        );
         if let Ok((output1, output2, output3)) = result {
-            prop_assert!(output1.len() <= input.len() * 10,
+            prop_assert!(
+                output1.len() <= input.len() * 10,
                 "extract_transliteration_parts produced oversized search: length {} vs input length {}",
-                output1.len(), input.len());
-            prop_assert!(output2.len() <= input.len() * 10,
+                output1.len(),
+                input.len()
+            );
+            prop_assert!(
+                output2.len() <= input.len() * 10,
                 "extract_transliteration_parts produced oversized replace: length {} vs input length {}",
-                output2.len(), input.len());
-            prop_assert!(output3.len() <= input.len() * 10,
+                output2.len(),
+                input.len()
+            );
+            prop_assert!(
+                output3.len() <= input.len() * 10,
                 "extract_transliteration_parts produced oversized modifiers: length {} vs input length {}",
-                output3.len(), input.len());
+                output3.len(),
+                input.len()
+            );
         }
 
         Ok(())
@@ -310,9 +392,12 @@ fn fuzz_quote_parser_extreme_stress() {
 fn fuzz_quote_parser_incremental_parsing_integration() {
     use perl_parser::PerlParser;
 
-    fn test_incremental_integration(input: String) -> Result<(), proptest::test_runner::TestCaseError> {
+    fn test_incremental_integration(
+        input: String,
+    ) -> Result<(), proptest::test_runner::TestCaseError> {
         // Create a simple Perl script that uses quote-like constructs
-        let perl_script = format!(r#"
+        let perl_script = format!(
+            r#"
 #!/usr/bin/perl
 use strict;
 use warnings;
@@ -324,7 +409,9 @@ my $transliteration = $substitution;
 $transliteration =~ {};
 
 print "Done\n";
-"#, input, input, input);
+"#,
+            input, input, input
+        );
 
         // Test that parser doesn't crash on quote-like constructs
         let result = std::panic::catch_unwind(|| {

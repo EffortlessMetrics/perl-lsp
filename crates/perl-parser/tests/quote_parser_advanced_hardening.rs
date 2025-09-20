@@ -7,7 +7,6 @@
 /// - 6 Control flow mutations (depth tracking, delimiter matching)
 ///
 /// Labels: tests:hardening
-
 use perl_parser::quote_parser::*;
 
 /// Test module targeting specific function return value mutations
@@ -32,12 +31,18 @@ mod function_return_hardening {
             let (actual_pattern, actual_mods) = extract_regex_parts(input);
 
             // Explicitly check pattern is NOT "xyzzy" - kills FnValue mutation
-            assert_ne!(actual_pattern, "xyzzy",
-                "extract_regex_parts pattern should not be 'xyzzy' for input '{}'", input);
+            assert_ne!(
+                actual_pattern, "xyzzy",
+                "extract_regex_parts pattern should not be 'xyzzy' for input '{}'",
+                input
+            );
 
             // Explicitly check modifiers is NOT "xyzzy" - kills FnValue mutation
-            assert_ne!(actual_mods, "xyzzy",
-                "extract_regex_parts modifiers should not be 'xyzzy' for input '{}'", input);
+            assert_ne!(
+                actual_mods, "xyzzy",
+                "extract_regex_parts modifiers should not be 'xyzzy' for input '{}'",
+                input
+            );
 
             // Verify correct behavior
             assert_eq!(actual_pattern, expected_pattern, "Pattern mismatch for '{}'", input);
@@ -54,7 +59,7 @@ mod function_return_hardening {
             ("", ("", "", "")),
             ("tr", ("", "", "")),
             ("y", ("", "", "")),
-            ("tr/abc/xyz/", ("abc", "", "xyz")),  // Note: actual behavior from existing tests
+            ("tr/abc/xyz/", ("abc", "", "xyz")), // Note: actual behavior from existing tests
             ("y/abc/xyz/", ("abc", "", "xyz")),
         ];
 
@@ -63,8 +68,11 @@ mod function_return_hardening {
 
             // Explicitly kill the mutation (String::new(), "xyzzy".into(), String::new())
             if input.is_empty() || input == "tr" || input == "y" {
-                assert_ne!(actual_replace, "xyzzy",
-                    "extract_transliteration_parts replace should not be 'xyzzy' for input '{}'", input);
+                assert_ne!(
+                    actual_replace, "xyzzy",
+                    "extract_transliteration_parts replace should not be 'xyzzy' for input '{}'",
+                    input
+                );
             }
 
             // Verify correct behavior
@@ -85,8 +93,8 @@ mod arithmetic_boundary_hardening {
     fn test_position_calculation_boundary_arithmetic() {
         // Create inputs that would break with i - ch.len_utf8() (underflow)
         let test_cases = vec![
-            "s/a/b/",      // Simple case where i=1, ch.len_utf8()=1, i-len would be 0
-            "s/🦀/🔥/",    // Unicode: i=3, ch.len_utf8()=1, but 🦀 is 4 bytes
+            "s/a/b/",       // Simple case where i=1, ch.len_utf8()=1, i-len would be 0
+            "s/🦀/🔥/",     // Unicode: i=3, ch.len_utf8()=1, but 🦀 is 4 bytes
             "s/test/repl/", // Longer case where arithmetic matters
         ];
 
@@ -95,8 +103,11 @@ mod arithmetic_boundary_hardening {
 
             // Verify the function doesn't panic or produce wrong results
             // If + was mutated to -, this would likely cause index errors or wrong slicing
-            assert!(!pattern.is_empty() || !replacement.is_empty() || !modifiers.is_empty(),
-                "Position arithmetic failed for input '{}'", input);
+            assert!(
+                !pattern.is_empty() || !replacement.is_empty() || !modifiers.is_empty(),
+                "Position arithmetic failed for input '{}'",
+                input
+            );
 
             // Additional validation: check sensible parsing
             if input == "s/a/b/" {
@@ -111,7 +122,7 @@ mod arithmetic_boundary_hardening {
     #[test]
     fn test_length_boundary_check_mutations() {
         // Test exact boundary case where len() == 1
-        let boundary_input = "m";  // len() = 1
+        let boundary_input = "m"; // len() = 1
         let (pattern, modifiers) = extract_regex_parts(boundary_input);
 
         // With correct > check: len()=1 > 1 is false, so should use text directly
@@ -120,13 +131,13 @@ mod arithmetic_boundary_hardening {
         assert_eq!(modifiers, "", "Single 'm' modifiers");
 
         // Test just over boundary
-        let over_boundary = "mx";  // len() = 2
+        let over_boundary = "mx"; // len() = 2
         let (pattern, modifiers) = extract_regex_parts(over_boundary);
         // This should detect alphabetic 'x' and return text directly
         assert_eq!(pattern, "mxm", "Two char 'mx' should be handled correctly");
 
         // Test well over boundary
-        let well_over = "m/test/";  // len() = 7
+        let well_over = "m/test/"; // len() = 7
         let (pattern, modifiers) = extract_regex_parts(well_over);
         assert_eq!(pattern, "/test/", "Multi char should extract pattern correctly");
     }
@@ -137,8 +148,8 @@ mod arithmetic_boundary_hardening {
     fn test_depth_calculation_arithmetic_mutations() {
         // Test nested delimiter cases where depth tracking is critical
         let nested_cases = vec![
-            "s{a{b}c}{replacement}",    // depth starts at 1, increments to 2, decrements to 1, then 0
-            "s{{}}{{}}",               // Double nesting
+            "s{a{b}c}{replacement}", // depth starts at 1, increments to 2, decrements to 1, then 0
+            "s{{}}{{}}",             // Double nesting
             "s{{{test}}}{replacement}", // Triple nesting
         ];
 
@@ -148,11 +159,18 @@ mod arithmetic_boundary_hardening {
             // With correct -= operator, depth properly decrements and parsing works
             // With /= mutation, depth /= 1 does nothing, so depth never reaches 0 and parsing breaks
 
-            assert!(!pattern.is_empty(), "Depth calculation should work for nested input '{}'", input);
+            assert!(
+                !pattern.is_empty(),
+                "Depth calculation should work for nested input '{}'",
+                input
+            );
 
             // Specific validation for known cases
             if input == "s{a{b}c}{replacement}" {
-                assert_eq!(pattern, "a{b}c", "Nested pattern extraction with correct depth tracking");
+                assert_eq!(
+                    pattern, "a{b}c",
+                    "Nested pattern extraction with correct depth tracking"
+                );
                 assert_eq!(replacement, "replacement", "Nested replacement extraction");
             }
         }
@@ -245,19 +263,23 @@ mod control_flow_hardening {
     fn test_delimiter_mapping_control_flow() {
         // Test each delimiter mapping to ensure control flow is correct
         let delimiter_mappings = vec![
-            ("s(test)(repl)", ("test", "repl")),     // () mapping
-            ("s[test][repl]", ("test", "repl")),     // [] mapping
-            ("s{test}{repl}", ("test", "repl")),     // {} mapping
-            ("s<test><repl>", ("test", "repl")),     // <> mapping
-            ("s/test/repl/", ("test", "repl")),      // same delimiter
-            ("s#test#repl#", ("test", "repl")),      // same delimiter
-            ("s|test|repl|", ("test", "repl")),      // same delimiter
+            ("s(test)(repl)", ("test", "repl")), // () mapping
+            ("s[test][repl]", ("test", "repl")), // [] mapping
+            ("s{test}{repl}", ("test", "repl")), // {} mapping
+            ("s<test><repl>", ("test", "repl")), // <> mapping
+            ("s/test/repl/", ("test", "repl")),  // same delimiter
+            ("s#test#repl#", ("test", "repl")),  // same delimiter
+            ("s|test|repl|", ("test", "repl")),  // same delimiter
         ];
 
         for (input, (expected_pattern, expected_replacement)) in delimiter_mappings {
             let (pattern, replacement, _) = extract_substitution_parts(input);
             assert_eq!(pattern, expected_pattern, "Delimiter mapping failed for {}", input);
-            assert_eq!(replacement, expected_replacement, "Replacement mapping failed for {}", input);
+            assert_eq!(
+                replacement, expected_replacement,
+                "Replacement mapping failed for {}",
+                input
+            );
         }
     }
 
@@ -275,8 +297,11 @@ mod control_flow_hardening {
             let (pattern, replacement, _) = extract_substitution_parts(input);
 
             // Should not panic and should extract something reasonable
-            assert!(!pattern.is_empty() || !replacement.is_empty(),
-                "Complex nesting should be handled: {}", input);
+            assert!(
+                !pattern.is_empty() || !replacement.is_empty(),
+                "Complex nesting should be handled: {}",
+                input
+            );
         }
     }
 
@@ -285,10 +310,10 @@ mod control_flow_hardening {
     fn test_control_flow_edge_cases() {
         // Test cases that stress different control flow paths
         let edge_cases = vec![
-            "s{}{}", // Empty pattern and replacement
-            "s{}abc", // Empty pattern, non-empty replacement
-            "s{abc}{}", // Non-empty pattern, empty replacement
-            "s{\\{}{\\}}", // Escaped delimiters
+            "s{}{}",                 // Empty pattern and replacement
+            "s{}abc",                // Empty pattern, non-empty replacement
+            "s{abc}{}",              // Non-empty pattern, empty replacement
+            "s{\\{}{\\}}",           // Escaped delimiters
             "s{test\\\\more}{repl}", // Escaped backslashes
         ];
 
@@ -308,29 +333,71 @@ mod property_hardening {
     #[test]
     fn test_no_xyzzy_property() {
         let test_inputs = vec![
-            "", "qr", "m", "s", "tr", "y",
-            "qr/test/", "m/test/i", "s/old/new/g",
-            "tr/abc/xyz/", "y/abc/xyz/d",
-            "qr{test}", "s{old}{new}", "tr{abc}{xyz}",
+            "",
+            "qr",
+            "m",
+            "s",
+            "tr",
+            "y",
+            "qr/test/",
+            "m/test/i",
+            "s/old/new/g",
+            "tr/abc/xyz/",
+            "y/abc/xyz/d",
+            "qr{test}",
+            "s{old}{new}",
+            "tr{abc}{xyz}",
         ];
 
         for input in test_inputs {
             // Test regex parts
             let (pattern, modifiers) = extract_regex_parts(input);
-            assert_ne!(pattern, "xyzzy", "extract_regex_parts pattern should never be 'xyzzy' for '{}'", input);
-            assert_ne!(modifiers, "xyzzy", "extract_regex_parts modifiers should never be 'xyzzy' for '{}'", input);
+            assert_ne!(
+                pattern, "xyzzy",
+                "extract_regex_parts pattern should never be 'xyzzy' for '{}'",
+                input
+            );
+            assert_ne!(
+                modifiers, "xyzzy",
+                "extract_regex_parts modifiers should never be 'xyzzy' for '{}'",
+                input
+            );
 
             // Test substitution parts
             let (pattern, replacement, modifiers) = extract_substitution_parts(input);
-            assert_ne!(pattern, "xyzzy", "extract_substitution_parts pattern should never be 'xyzzy' for '{}'", input);
-            assert_ne!(replacement, "xyzzy", "extract_substitution_parts replacement should never be 'xyzzy' for '{}'", input);
-            assert_ne!(modifiers, "xyzzy", "extract_substitution_parts modifiers should never be 'xyzzy' for '{}'", input);
+            assert_ne!(
+                pattern, "xyzzy",
+                "extract_substitution_parts pattern should never be 'xyzzy' for '{}'",
+                input
+            );
+            assert_ne!(
+                replacement, "xyzzy",
+                "extract_substitution_parts replacement should never be 'xyzzy' for '{}'",
+                input
+            );
+            assert_ne!(
+                modifiers, "xyzzy",
+                "extract_substitution_parts modifiers should never be 'xyzzy' for '{}'",
+                input
+            );
 
             // Test transliteration parts
             let (search, replace, modifiers) = extract_transliteration_parts(input);
-            assert_ne!(search, "xyzzy", "extract_transliteration_parts search should never be 'xyzzy' for '{}'", input);
-            assert_ne!(replace, "xyzzy", "extract_transliteration_parts replace should never be 'xyzzy' for '{}'", input);
-            assert_ne!(modifiers, "xyzzy", "extract_transliteration_parts modifiers should never be 'xyzzy' for '{}'", input);
+            assert_ne!(
+                search, "xyzzy",
+                "extract_transliteration_parts search should never be 'xyzzy' for '{}'",
+                input
+            );
+            assert_ne!(
+                replace, "xyzzy",
+                "extract_transliteration_parts replace should never be 'xyzzy' for '{}'",
+                input
+            );
+            assert_ne!(
+                modifiers, "xyzzy",
+                "extract_transliteration_parts modifiers should never be 'xyzzy' for '{}'",
+                input
+            );
         }
     }
 
@@ -360,9 +427,9 @@ mod property_hardening {
         // Test cases where && vs || would produce different outcomes
         let logic_cases = vec![
             ("s/a/b/", false, false), // non-paired, non-empty
-            ("s{a}{b}", true, false),  // paired, non-empty
-            ("s//", false, true),      // non-paired, empty
-            ("s{}{}", true, true),     // paired, empty
+            ("s{a}{b}", true, false), // paired, non-empty
+            ("s//", false, true),     // non-paired, empty
+            ("s{}{}", true, true),    // paired, empty
         ];
 
         for (input, is_paired_expected, is_empty_expected) in logic_cases {
@@ -371,8 +438,11 @@ mod property_hardening {
             // Validate the logic produces sensible results
             if !is_paired_expected && !is_empty_expected {
                 // !is_paired && !rest1.is_empty() should be true
-                assert!(!pattern.is_empty() || !replacement.is_empty(),
-                    "Non-paired non-empty should extract content: {}", input);
+                assert!(
+                    !pattern.is_empty() || !replacement.is_empty(),
+                    "Non-paired non-empty should extract content: {}",
+                    input
+                );
             }
         }
     }

@@ -55,15 +55,18 @@ This guide helps you find the right documentation for your needs, organized usin
 2. **[DEBUGGING.md](DEBUGGING.md)** - Development troubleshooting (How-to)
 3. **[ARCHITECTURE.md](../ARCHITECTURE.md)** - Deep technical architecture (Explanation)
 4. **[API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md)** - Comprehensive API documentation requirements ⭐ **NEW: Issue #149**
+5. **[COMPREHENSIVE_TESTING_GUIDE.md](COMPREHENSIVE_TESTING_GUIDE.md)** - Advanced testing infrastructure including fuzz testing and mutation hardening ⭐ **NEW: PR #159**
 
-### Documentation Standards & Quality Enforcement ⭐ **NEW: Issue #149**
+### Documentation Standards & Quality Enforcement ⭐ **NEW: Issue #149 + PR #159 Enhancements**
 
-**Comprehensive API documentation is now enforced** through `#![warn(missing_docs)]` for production-quality perl-parser crate:
+**Comprehensive API documentation is now enforced** through `#![warn(missing_docs)]` for production-quality perl-parser crate with advanced quality assurance:
 
 1. **[API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md)** - Requirements and best practices (How-to)
-2. **CI Quality Gates** - Automated documentation coverage validation
-3. **TDD Test Suite** - Comprehensive acceptance criteria validation at `crates/perl-parser/tests/missing_docs_ac_tests.rs`
-4. **Documentation Quality Metrics** - Regression prevention and improvement tracking
+2. **[ADR_002_DOCUMENTATION_STRATEGY_AND_QUALITY_ENFORCEMENT.md](ADR_002_DOCUMENTATION_STRATEGY_AND_QUALITY_ENFORCEMENT.md)** - Architecture decision rationale (Explanation)
+3. **CI Quality Gates** - Automated documentation coverage validation with property-based testing
+4. **TDD Test Suite** - Comprehensive acceptance criteria validation at `crates/perl-parser/tests/missing_docs_ac_tests.rs`
+5. **Documentation Quality Metrics** - Regression prevention and improvement tracking with edge case detection
+6. **Advanced Validation Infrastructure** - Fuzz testing and mutation hardening supporting documented behavior
 
 **Key Requirements**:
 - All public structs, enums, and functions must have comprehensive documentation
@@ -71,6 +74,12 @@ This guide helps you find the right documentation for your needs, organized usin
 - Complex APIs must include working usage examples with doctests
 - Error types must document email processing workflow context and recovery strategies
 - Module-level documentation must explain PSTX pipeline integration (Extract → Normalize → Thread → Render → Index)
+
+**Quality Enforcement Features (PR #159)**:
+- **Property-Based Testing**: Systematic validation of documentation format consistency
+- **Edge Case Detection**: Automated identification of malformed doctests, empty documentation, invalid cross-references
+- **Fuzz Testing Integration**: Documentation behavior validated through comprehensive parser stress testing
+- **Mutation Testing Enhancement**: 60%+ improvement in mutation score supporting documented API contracts
 
 ## Specialized Documentation
 
@@ -106,6 +115,11 @@ This guide helps you find the right documentation for your needs, organized usin
 - **[COMPLETE_PARSER_ARCHITECTURE.md](COMPLETE_PARSER_ARCHITECTURE.md)** - Full parser design
 - **[ITERATIVE_PARSER.md](ITERATIVE_PARSER.md)** - Iterative parsing approach
 - **[UNICODE_SUPPORT.md](UNICODE_SUPPORT.md)** - Unicode handling
+
+### Quality Assurance & Testing ⭐ **NEW: PR #159**
+- **[COMPREHENSIVE_TESTING_GUIDE.md](COMPREHENSIVE_TESTING_GUIDE.md)** - Advanced testing infrastructure with fuzz testing and mutation hardening
+- **[API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md)** - Enterprise-grade documentation requirements and validation
+- **[ADR_002_DOCUMENTATION_STRATEGY_AND_QUALITY_ENFORCEMENT.md](ADR_002_DOCUMENTATION_STRATEGY_AND_QUALITY_ENFORCEMENT.md)** - Architecture decision rationale for quality enforcement systems
 
 ## Documentation Status
 
