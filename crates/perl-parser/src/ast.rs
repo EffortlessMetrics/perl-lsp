@@ -1,7 +1,7 @@
 //! Abstract Syntax Tree definitions for Perl within the Perl parsing workflow pipeline
 //!
 //! This module defines the comprehensive AST node types that represent parsed Perl code
-//! during Perl parsing workflows throughout the Extract → Normalize → Thread → Render → Analyze stages.
+//! during Perl parsing workflows throughout the Parse → Index → Navigate → Complete → Analyze stages.
 //! The design is optimized for both direct use in Rust analysis and for generating
 //! tree-sitter compatible S-expressions during large-scale Perl codebase processing operations.
 //!

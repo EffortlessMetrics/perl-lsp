@@ -50,7 +50,7 @@ documentation_templates:
     required_sections:
       - brief_description: "Single sentence describing the struct's purpose"
       - detailed_description: "2-3 paragraph comprehensive explanation"
-      - pipeline_integration_details: "Specific role in Extract/Normalize/Thread/Render/Analyze stages"
+      - pipeline_integration_details: "Specific role in Parse/Index/Navigate/Complete/Analyze stages"
       - key_features_list: "Bullet points of main capabilities"
       - usage_example: "Working Rust code example"
       - performance_notes: "Memory usage, time complexity, scalability considerations"
@@ -257,7 +257,7 @@ documentation_templates:
     required_sections:
       - brief_module_description: "Single sentence describing module purpose"
       - comprehensive_module_description: "Detailed explanation of module functionality"
-      - pipeline_stage_details: "Specific roles in Extract/Normalize/Thread/Render/Analyze stages"
+      - pipeline_stage_details: "Specific roles in Parse/Index/Navigate/Complete/Analyze stages"
       - architecture_description: "How components interact within the module"
       - component_list: "Key structs, enums, functions with brief descriptions"
       - module_usage_example: "Complete working example of module usage"
@@ -299,7 +299,7 @@ validation_rules:
     pipeline_references:
       rule: "LSP workflow stage references must use standard terminology"
       validation: "Custom linting ensures consistent pipeline stage naming"
-      terminology: "Extract, Normalize, Thread, Render, Index (exact capitalization)"
+      terminology: "Parse, Index, Navigate, Complete, Analyze (exact capitalization)"
 
   example_validation:
     code_compilation:
@@ -350,7 +350,7 @@ formatting_standards:
 
   terminology_standards:
     pstx_pipeline:
-      stages: "Extract, Normalize, Thread, Render, Index (exact capitalization)"
+      stages: "Parse, Index, Navigate, Complete, Analyze (exact capitalization)"
       workflow: "LSP Perl parsing pipeline or Perl parsing workflow"
       consistency: "Use consistent terminology across all documentation"
 

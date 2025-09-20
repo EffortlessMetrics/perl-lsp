@@ -12,84 +12,84 @@
       "test_function": "test_missing_docs_warning_compilation",
       "line_number": 18,
       "status": "FAILING_AS_EXPECTED",
-      "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
+      "pipeline_stages": ["Parse", "Index", "Navigate", "Complete", "Analyze"]
     },
     "AC2": {
       "description": "Document all public structs/enums with LSP pipeline role descriptions",
       "test_function": "test_public_structs_documentation_presence",
       "line_number": 45,
       "status": "FAILING_AS_EXPECTED",
-      "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
+      "pipeline_stages": ["Parse", "Index", "Navigate", "Complete", "Analyze"]
     },
     "AC3": {
       "description": "Add comprehensive function documentation with parameters, returns, errors",
       "test_function": "test_public_functions_documentation_presence",
       "line_number": 116,
       "status": "FAILING_AS_EXPECTED",
-      "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
+      "pipeline_stages": ["Parse", "Index", "Navigate", "Complete", "Analyze"]
     },
     "AC4": {
       "description": "Document performance characteristics for AstCache and 50GB Perl codebase processing",
       "test_function": "test_performance_documentation_presence",
       "line_number": 226,
       "status": "FAILING_AS_EXPECTED",
-      "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
+      "pipeline_stages": ["Parse", "Index", "Navigate", "Complete", "Analyze"]
     },
     "AC5": {
       "description": "Add module-level documentation explaining LSP architecture relationship",
       "test_function": "test_module_level_documentation_presence",
       "line_number": 304,
       "status": "FAILING_AS_EXPECTED",
-      "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
+      "pipeline_stages": ["Parse", "Index", "Navigate", "Complete", "Analyze"]
     },
     "AC6": {
       "description": "Include usage examples for complex APIs and LSP provider implementations",
       "test_function": "test_usage_examples_in_complex_apis",
       "line_number": 406,
       "status": "FAILING_AS_EXPECTED",
-      "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
+      "pipeline_stages": ["Parse", "Index", "Navigate", "Complete", "Analyze"]
     },
     "AC7": {
       "description": "Add doctests for critical functionality that pass with cargo test",
       "test_function": "test_doctests_presence_and_execution",
       "line_number": 450,
       "status": "FAILING_AS_EXPECTED",
-      "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
+      "pipeline_stages": ["Parse", "Index", "Navigate", "Complete", "Analyze"]
     },
     "AC8": {
       "description": "Document error types and panic conditions with workflow context",
       "test_function": "test_error_types_documentation",
       "line_number": 498,
       "status": "FAILING_AS_EXPECTED",
-      "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
+      "pipeline_stages": ["Parse", "Index", "Navigate", "Complete", "Analyze"]
     },
     "AC9": {
       "description": "Add cross-references between related functions using Rust documentation linking",
       "test_function": "test_cross_references_between_functions",
       "line_number": 585,
       "status": "FAILING_AS_EXPECTED",
-      "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
+      "pipeline_stages": ["Parse", "Index", "Navigate", "Complete", "Analyze"]
     },
     "AC10": {
       "description": "Ensure documentation follows Rust best practices with consistent style",
       "test_function": "test_rust_documentation_best_practices",
       "line_number": 632,
       "status": "PASSING",
-      "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
+      "pipeline_stages": ["Parse", "Index", "Navigate", "Complete", "Analyze"]
     },
     "AC11": {
       "description": "Verify cargo doc generates complete documentation without warnings",
       "test_function": "test_cargo_doc_generation_success",
       "line_number": 702,
       "status": "FAILING_AS_EXPECTED",
-      "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
+      "pipeline_stages": ["Parse", "Index", "Navigate", "Complete", "Analyze"]
     },
     "AC12": {
       "description": "Maintain documentation coverage for new public APIs in CI",
       "test_function": "test_ci_missing_docs_enforcement",
       "line_number": 747,
       "status": "PASSING",
-      "pipeline_stages": ["Extract", "Normalize", "Thread", "Render", "Index"]
+      "pipeline_stages": ["Parse", "Index", "Navigate", "Complete", "Analyze"]
     }
   },
   "validation_summary": {

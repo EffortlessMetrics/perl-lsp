@@ -21,8 +21,8 @@ use thiserror::Error;
 
 /// Result type for parser operations in the Perl parsing workflow pipeline
 ///
-/// This type encapsulates success/failure outcomes throughout the Extract → Normalize →
-/// Thread → Render → Index workflow, enabling consistent error propagation and recovery
+/// This type encapsulates success/failure outcomes throughout the Parse → Index →
+/// Navigate → Complete → Analyze workflow, enabling consistent error propagation and recovery
 /// strategies across all pipeline stages.
 pub type ParseResult<T> = Result<T, ParseError>;
 

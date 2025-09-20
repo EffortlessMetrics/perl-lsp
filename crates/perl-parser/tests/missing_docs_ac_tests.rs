@@ -505,7 +505,7 @@ mod doc_validation_helpers {
         module_paths: &[&str],
         src_dir: &str,
     ) -> HashMap<String, usize> {
-        let pipeline_stages = ["Extract", "Normalize", "Thread", "Render", "Index"];
+        let pipeline_stages = ["Parse", "Index", "Navigate", "Complete", "Analyze"];
         let mut coverage = HashMap::new();
 
         for stage in &pipeline_stages {
@@ -1275,7 +1275,7 @@ mod missing_docs_tests {
         error_msg.push_str("\nError documentation must include:\n");
         error_msg.push_str("  - When the error occurs in Perl parsing workflows\n");
         error_msg.push_str("  - Recovery strategies\n");
-        error_msg.push_str("  - Pipeline stage context (Extract/Normalize/Thread/Render/Index)\n");
+        error_msg.push_str("  - Workflow stage context (Parse/Index/Navigate/Complete/Analyze)\n");
 
         panic!("{}", error_msg);
     }

@@ -130,7 +130,7 @@ pub fn parse_perl_source(perl_source: &str, options: ParseOptions) -> Result<Per
 
 **Required Documentation**:
 - **When the error occurs** in Perl parsing workflows
-- **Pipeline stage context** (Extract/Normalize/Thread/Render/Index)
+- **Workflow stage context** (Parse/Index/Navigate/Complete/Analyze)
 - **Recovery strategies** and error handling guidance
 - **Diagnostic information** available
 

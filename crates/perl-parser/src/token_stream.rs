@@ -2,8 +2,8 @@
 //!
 //! This module provides the critical bridge between perl-lexer's token output and the parser's
 //! token consumption model during Perl parsing workflows. Designed for high-performance
-//! tokenization of Perl scripts embedded in Perl code throughout the Extract → Normalize →
-//! Thread → Render → Index pipeline stages.
+//! tokenization of Perl scripts embedded in Perl code throughout the Parse → Index →
+//! Navigate → Complete → Analyze workflow stages.
 //!
 //! # LSP Workflow Integration
 //!
