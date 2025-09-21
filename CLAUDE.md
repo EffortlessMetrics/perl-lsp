@@ -3,7 +3,7 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.9 GA - Enhanced Builtin Function Parsing & Dual Function Call Indexing + PR #159 API Documentation Infrastructure & Parser Robustness
+**Latest Release**: v0.8.9 GA - Enhanced Builtin Function Parsing & Dual Function Call Indexing + PR #160 API Documentation Infrastructure & Parser Robustness (SPEC-149)
 
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
@@ -21,8 +21,9 @@ This repository contains **five published crates** forming a complete Perl parsi
    - **Enhanced Dual Indexing Strategy**: Functions indexed under both qualified (`Package::function`) and bare (`function`) names for 98% reference coverage
    - **Enhanced Builtin Function Parsing**: Deterministic parsing of map/grep/sort functions with {} blocks
    - **Test-Driven Development Support**: Auto-detecting TestGenerator with AST-based expectation inference
-   - **Comprehensive API Documentation**: Enterprise-grade documentation infrastructure with `#![warn(missing_docs)]` enforcement (PR #159)
-   - **Advanced Parser Robustness**: Comprehensive fuzz testing and mutation hardening (60%+ mutation score improvement)
+   - **Comprehensive API Documentation**: Enterprise-grade documentation infrastructure with `#![warn(missing_docs)]` enforcement (PR #160/SPEC-149)
+   - **Advanced Parser Robustness**: Comprehensive fuzz testing and mutation hardening with 12 test suites (60%+ mutation score improvement)
+   - **Documentation Quality Enforcement**: 12 acceptance criteria validation with automated quality gates and progress tracking (129 violations baseline)
 
 2. **perl-lsp** (`/crates/perl-lsp/`) ⭐ **LSP BINARY**
    - Standalone Language Server binary with production-grade CLI
@@ -128,18 +129,18 @@ cargo test -p perl-parser --test missing_docs_ac_tests           # 12 comprehens
 cargo test -p perl-parser --test missing_docs_ac_tests -- --nocapture  # Detailed validation output
 cargo doc --no-deps --package perl-parser                       # Validate doc generation without warnings
 
-# Missing Documentation Warnings Infrastructure ⭐ **NEW: PR #160**
-# Comprehensive documentation enforcement with `#![warn(missing_docs)]` enabled
-cargo test -p perl-parser --test missing_docs_ac_tests -- test_missing_docs_warning_compilation  # Verify warnings enabled
-cargo test -p perl-parser --test missing_docs_ac_tests -- test_public_functions_documentation_presence  # Function docs
-cargo test -p perl-parser --test missing_docs_ac_tests -- test_public_structs_enums_documentation_presence  # Struct/enum docs
-cargo test -p perl-parser --test missing_docs_ac_tests -- test_performance_critical_apis_documentation  # Performance docs
-cargo test -p perl-parser --test missing_docs_ac_tests -- test_module_level_documentation_presence  # Module docs
-cargo test -p perl-parser --test missing_docs_ac_tests -- test_complex_apis_usage_examples  # Usage examples
-cargo test -p perl-parser --test missing_docs_ac_tests -- test_doctests_presence_critical_functionality  # Doctests
-cargo test -p perl-parser --test missing_docs_ac_tests -- test_error_types_workflow_context  # Error docs
+# Missing Documentation Warnings Infrastructure ⭐ **IMPLEMENTED: PR #160 (SPEC-149)**
+# Comprehensive documentation enforcement with `#![warn(missing_docs)]` enabled - Currently tracking 129 violations for systematic resolution
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_missing_docs_warning_compilation  # Verify warnings enabled ✅
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_public_functions_documentation_presence  # Function docs (Phase 1 target)
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_public_structs_documentation_presence  # Struct/enum docs (Phase 1 target)
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_performance_documentation_presence  # Performance docs (Phase 1 target)
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_module_level_documentation_presence  # Module docs (Phase 1 target)
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_usage_examples_in_complex_apis  # Usage examples (Phase 2 target)
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_doctests_presence_and_execution  # Doctests validation ✅
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_error_types_documentation  # Error workflow context (Phase 1 target)
 
-# Comprehensive Parser Robustness Testing ⭐ **NEW: PR #159 Enhancements**
+# Comprehensive Parser Robustness Testing ⭐ **IMPLEMENTED: PR #160 (SPEC-149)**
 # Fuzz Testing Infrastructure - Property-based testing with crash/panic detection
 cargo test -p perl-parser --test fuzz_quote_parser_comprehensive  # Bounded fuzz testing with AST invariant validation
 cargo test -p perl-parser --test fuzz_quote_parser_simplified     # Focused fuzz testing for regression prevention
@@ -381,7 +382,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 4. **Performance Awareness**: Maintain search performance despite dual lookups through efficient indexing
 5. **Backward Compatibility**: Ensure existing code continues to work with enhanced indexing
 
-## Current Status (v0.8.9 + PR #140 Revolutionary Performance + PR #159 API Documentation & Parser Robustness)
+## Current Status (v0.8.9 + PR #140 Revolutionary Performance + PR #160 API Documentation & Parser Robustness [SPEC-149])
 
 ✅ **Revolutionary Production Ready**:
 - 100% test pass rate across all components (295+ tests passing including 15/15 builtin function tests)
@@ -394,16 +395,17 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 - Zero clippy warnings, consistent formatting
 - Enterprise-grade LSP server with comprehensive features
 - Production-stable incremental parsing with statistical validation
-- **API Documentation Infrastructure (PR #159)**:
-  - **Comprehensive Documentation Standards**: `#![warn(missing_docs)]` enforcement with 12 acceptance criteria
-  - **Enterprise-Grade Quality Assurance**: Systematic validation of API documentation completeness
-  - **CI Integration**: Automated documentation coverage tracking and validation
-  - **Documentation Quality Metrics**: Property-based testing and edge case detection
-- **Advanced Parser Robustness (PR #159)**:
-  - **Comprehensive Fuzz Testing**: Property-based testing with crash/panic detection and AST invariant validation
-  - **Mutation Testing Enhancement**: 60%+ mutation score improvement through systematic mutant elimination
-  - **Quote Parser Hardening**: Enhanced quote parser with comprehensive delimiter handling and boundary validation
-  - **Production Quality Assurance**: Advanced edge case coverage and real-world scenario testing
+- **API Documentation Infrastructure (PR #160/SPEC-149)**:
+  - **Successfully Implemented**: `#![warn(missing_docs)]` enforcement with 12 acceptance criteria validation framework
+  - **Current Baseline**: 129 documentation violations tracked for systematic resolution across 4 phases
+  - **Enterprise-Grade Quality Assurance**: Property-based testing, edge case detection, and CI integration
+  - **Implementation Strategy**: Phased approach targeting critical parser infrastructure first (Phase 1)
+  - **Quality Standards**: Comprehensive API Documentation Standards with LSP workflow integration requirements
+- **Advanced Parser Robustness (PR #160/SPEC-149)**:
+  - **Comprehensive Fuzz Testing**: 12 test suites with property-based testing, crash detection, and AST invariant validation
+  - **Mutation Testing Enhancement**: 7 mutation hardening test files achieving 60%+ mutation score improvement
+  - **Quote Parser Hardening**: Enhanced delimiter handling, boundary validation, and transliteration safety preservation
+  - **Production Quality Assurance**: Advanced edge case coverage and real-world scenario testing with systematic vulnerability elimination
 
 **LSP Features (~89% functional)**:
 - ✅ Syntax checking, diagnostics, completion, hover

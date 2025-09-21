@@ -100,13 +100,11 @@ impl DynamicDelimiterRecovery {
                     0.5
                 };
 
-                self.variable_values.entry(var_name.to_string()).or_default().push(
-                    PossibleValue {
-                        value: value.to_string(),
-                        confidence,
-                        source: ValueSource::Literal,
-                    },
-                );
+                self.variable_values.entry(var_name.to_string()).or_default().push(PossibleValue {
+                    value: value.to_string(),
+                    confidence,
+                    source: ValueSource::Literal,
+                });
             }
         }
 
@@ -177,14 +175,13 @@ impl DynamicDelimiterRecovery {
                             0.3
                         };
 
-                        self.variable_values
-                            .entry(var_name.to_string())
-                            .or_default()
-                            .push(PossibleValue {
+                        self.variable_values.entry(var_name.to_string()).or_default().push(
+                            PossibleValue {
                                 value: value.to_string(),
                                 confidence,
                                 source: ValueSource::Literal,
-                            });
+                            },
+                        );
                     }
                 }
             }
@@ -709,13 +706,11 @@ impl DynamicDelimiterRecovery {
 
     /// Add a user-provided hint
     pub fn add_user_hint(&mut self, var_name: &str, value: &str) {
-        self.variable_values.entry(var_name.to_string()).or_default().push(
-            PossibleValue {
-                value: value.to_string(),
-                confidence: 0.9, // High confidence for user hints
-                source: ValueSource::UserHint,
-            },
-        );
+        self.variable_values.entry(var_name.to_string()).or_default().push(PossibleValue {
+            value: value.to_string(),
+            confidence: 0.9, // High confidence for user hints
+            source: ValueSource::UserHint,
+        });
     }
 }
 

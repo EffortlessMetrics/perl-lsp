@@ -150,14 +150,12 @@ impl PhaseAwareParser {
 
             // Track any variables modified in this phase
             for var in context.variables_modified {
-                self.phase_variables.entry(var.clone()).or_default().push(
-                    PhaseAssignment {
-                        variable: var,
-                        value: None, // Would need data flow analysis
-                        phase: self.current_phase.clone(),
-                        line: context.start_line,
-                    },
-                );
+                self.phase_variables.entry(var.clone()).or_default().push(PhaseAssignment {
+                    variable: var,
+                    value: None, // Would need data flow analysis
+                    phase: self.current_phase.clone(),
+                    line: context.start_line,
+                });
             }
         }
     }
