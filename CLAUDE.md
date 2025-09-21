@@ -118,10 +118,21 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_behavioral_tests     # 0.3
 RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # 0.32s (was 1500s+)
 RUST_TEST_THREADS=1 cargo test --test lsp_comprehensive_e2e_test # Maximum reliability mode
 
-# API Documentation Quality Testing ⭐ **NEW: Issue #149**
+# API Documentation Quality Testing ⭐ **NEW: PR #160 (SPEC-149)**
 cargo test -p perl-parser --test missing_docs_ac_tests           # 12 comprehensive acceptance criteria
 cargo test -p perl-parser --test missing_docs_ac_tests -- --nocapture  # Detailed validation output
 cargo doc --no-deps --package perl-parser                       # Validate doc generation without warnings
+
+# Missing Documentation Warnings Infrastructure ⭐ **NEW: PR #160**
+# Comprehensive documentation enforcement with `#![warn(missing_docs)]` enabled
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_missing_docs_warning_compilation  # Verify warnings enabled
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_public_functions_documentation_presence  # Function docs
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_public_structs_enums_documentation_presence  # Struct/enum docs
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_performance_critical_apis_documentation  # Performance docs
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_module_level_documentation_presence  # Module docs
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_complex_apis_usage_examples  # Usage examples
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_doctests_presence_critical_functionality  # Doctests
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_error_types_workflow_context  # Error docs
 
 # Comprehensive Parser Robustness Testing ⭐ **NEW: PR #159 Enhancements**
 # Fuzz Testing Infrastructure - Property-based testing with crash/panic detection
@@ -239,14 +250,18 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions
 
-### API Documentation Standards ⭐ **NEW: Issue #149**
+### API Documentation Standards ⭐ **NEW: PR #160 (SPEC-149)**
 
-**Comprehensive API documentation is enforced** for the perl-parser crate through `#![warn(missing_docs)]`:
+**Comprehensive API documentation infrastructure is now enforced** for the perl-parser crate through `#![warn(missing_docs)]`:
 
 ```bash
-# Validate documentation compliance
+# Validate documentation compliance and infrastructure
 cargo test -p perl-parser --test missing_docs_ac_tests  # 12 acceptance criteria validation
 cargo doc --no-deps --package perl-parser              # Generate docs without warnings
+
+# Check documentation infrastructure status
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_missing_docs_warning_compilation  # Verify enforcement enabled
+# Current status: 603 missing documentation warnings identified for systematic resolution
 ```
 
 **Key Requirements** (see [API Documentation Standards](docs/API_DOCUMENTATION_STANDARDS.md)):
@@ -260,6 +275,11 @@ cargo doc --no-deps --package perl-parser              # Generate docs without w
 - **TDD Test Suite**: `/crates/perl-parser/tests/missing_docs_ac_tests.rs` validates all requirements
 - **CI Integration**: Automated documentation quality gates prevent regression
 - **Edge Case Detection**: Validates malformed doctests, empty docs, invalid cross-references
+
+**Implementation Strategy**:
+- **Phased Approach**: See [Documentation Implementation Strategy](docs/DOCUMENTATION_IMPLEMENTATION_STRATEGY.md) for systematic resolution of 603 missing documentation warnings
+- **Priority-Based Implementation**: Core parser infrastructure → LSP providers → Advanced features → Supporting infrastructure
+- **Timeline**: 8-week phased rollout with quality gates and progress tracking
 
 ### Development Workflow (Enhanced)
 

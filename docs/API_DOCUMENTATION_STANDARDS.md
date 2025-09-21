@@ -4,7 +4,9 @@
 
 ## Overview
 
-As of **Issue #149**, the perl-parser crate enforces comprehensive API documentation through `#![warn(missing_docs)]` to maintain enterprise-grade code quality. This guide provides detailed requirements and best practices for writing effective API documentation.
+As of **PR #160 (SPEC-149)**, the perl-parser crate enforces comprehensive API documentation through `#![warn(missing_docs)]` to maintain enterprise-grade code quality. This infrastructure enables systematic tracking and resolution of 603 identified documentation gaps across the codebase.
+
+This guide provides detailed requirements and best practices for writing effective API documentation that meets the new enforcement standards.
 
 ## Quality Enforcement
 
@@ -317,8 +319,18 @@ Systematic validation using property-based tests ensures:
 1. **Write Code**: Implement functionality with comprehensive documentation
 2. **Run Tests**: `cargo test -p perl-parser --test missing_docs_ac_tests`
 3. **Validate Docs**: `cargo doc --no-deps --package perl-parser`
-4. **Check Style**: Automated validation through CI pipeline
-5. **Review**: Ensure documentation meets all acceptance criteria
+4. **Check Progress**: Monitor documentation warning count reduction from current 603 baseline
+5. **Check Style**: Automated validation through CI pipeline
+6. **Review**: Ensure documentation meets all acceptance criteria
+
+#### Implementation Strategy Reference
+
+For systematic documentation completion, see [DOCUMENTATION_IMPLEMENTATION_STRATEGY.md](DOCUMENTATION_IMPLEMENTATION_STRATEGY.md) which outlines:
+
+- **Phased approach** for addressing the 603 missing documentation warnings
+- **Priority-based implementation** starting with critical parser infrastructure
+- **Timeline and milestones** for complete documentation coverage
+- **Quality standards** and validation procedures
 
 ## Troubleshooting
 
