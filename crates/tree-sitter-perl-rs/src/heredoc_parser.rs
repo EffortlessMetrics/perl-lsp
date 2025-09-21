@@ -273,7 +273,7 @@ impl<'a> HeredocCollector<'a> {
         let mut line_to_heredocs: HashMap<usize, Vec<usize>> = HashMap::new();
 
         for (idx, decl) in declarations.iter().enumerate() {
-            line_to_heredocs.entry(decl.declaration_line).or_insert_with(Vec::new).push(idx);
+            line_to_heredocs.entry(decl.declaration_line).or_default().push(idx);
         }
 
         // For each line with heredocs, collect content

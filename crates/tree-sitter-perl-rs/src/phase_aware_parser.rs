@@ -150,7 +150,7 @@ impl PhaseAwareParser {
 
             // Track any variables modified in this phase
             for var in context.variables_modified {
-                self.phase_variables.entry(var.clone()).or_insert_with(Vec::new).push(
+                self.phase_variables.entry(var.clone()).or_default().push(
                     PhaseAssignment {
                         variable: var,
                         value: None, // Would need data flow analysis
