@@ -4,6 +4,7 @@
 This file provides guidance to Claude Code when working with this repository.
 
 **Latest Release**: v0.8.9 GA - Enhanced Builtin Function Parsing & Dual Function Call Indexing + PR #159 API Documentation Infrastructure & Parser Robustness
+
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview
@@ -42,6 +43,7 @@ This repository contains **five published crates** forming a complete Perl parsi
 ## Quick Start
 
 ### Installation
+
 ```bash
 # Install LSP server
 cargo install perl-lsp
@@ -51,6 +53,7 @@ curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/m
 ```
 
 ### Usage
+
 ```bash
 # Run LSP server (for editors)
 perl-lsp --stdio
@@ -67,6 +70,7 @@ cargo test
 **AI tools can run bare `cargo build` and `cargo test`** - the `.cargo/config.toml` ensures correct behavior.
 
 ### Build & Install
+
 ```bash
 # Build main components
 cargo build -p perl-lsp --release        # LSP server
@@ -78,6 +82,7 @@ cargo install --path crates/perl-lsp     # From source
 ```
 
 ### Testing
+
 ```bash
 cargo test                               # All tests (robust across environments)
 cargo test -p perl-parser               # Parser library tests
@@ -149,6 +154,7 @@ cargo test -p perl-parser --test quote_parser_realistic_hardening  # Real-world 
 ```
 
 ### Development
+
 ```bash
 cargo clippy --workspace                # Lint all crates
 cargo bench                             # Run performance benchmarks
@@ -156,6 +162,7 @@ perl-lsp --stdio --log                  # Run LSP server with logging
 ```
 
 ### Highlight Testing (*Diataxis: Tutorial* - Tree-Sitter Highlight Test Runner)
+
 ```bash
 # Prerequisites: Highlight test fixtures in crates/tree-sitter-perl/test/highlight/
 # Navigate to xtask directory for highlight testing commands
@@ -187,6 +194,7 @@ cargo run highlight -- --path ../crates/tree-sitter-perl/test/highlight  # Custo
 - **v1 (C-based)**: ~95% coverage, benchmarking only (now uses unified Rust scanner via delegation)
 
 ### Scanner Architecture (*Diataxis: Explanation* - Unified scanner design)
+
 The scanner implementation uses a unified Rust-based architecture with C compatibility wrapper:
 
 - **Rust Scanner** (`RustScanner`): Core scanning implementation in Rust with full Perl lexical analysis
@@ -428,6 +436,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 7. **Agent customization** → `.claude/agents2/` (97 specialized agents for Perl parser ecosystem workflow, PR #153 architecture)
 
 ### Coding Standards
+
 - Run `cargo clippy --workspace` before committing changes
 - Use `cargo fmt` for consistent formatting
 - Prefer `.first()` over `.get(0)` for accessing first element
