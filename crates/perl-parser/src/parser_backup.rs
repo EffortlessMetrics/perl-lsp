@@ -2963,50 +2963,50 @@ impl<'a> Parser<'a> {
                 match (delim_char, token_kind) {
                     ('{', Some(TokenKind::LeftBrace)) => {
                         self.consume_token()?;
-                        content.push_str("{");
+                        content.push('{');
                         depth += 1;
                     }
                     ('{', Some(TokenKind::RightBrace)) => {
                         self.consume_token()?;
                         depth -= 1;
                         if depth > 0 {
-                            content.push_str("}");
+                            content.push('}');
                         }
                     }
                     ('[', Some(TokenKind::LeftBracket)) => {
                         self.consume_token()?;
-                        content.push_str("[");
+                        content.push('[');
                         depth += 1;
                     }
                     ('[', Some(TokenKind::RightBracket)) => {
                         self.consume_token()?;
                         depth -= 1;
                         if depth > 0 {
-                            content.push_str("]");
+                            content.push(']');
                         }
                     }
                     ('(', Some(TokenKind::LeftParen)) => {
                         self.consume_token()?;
-                        content.push_str("(");
+                        content.push('(');
                         depth += 1;
                     }
                     ('(', Some(TokenKind::RightParen)) => {
                         self.consume_token()?;
                         depth -= 1;
                         if depth > 0 {
-                            content.push_str(")");
+                            content.push(')');
                         }
                     }
                     ('<', Some(TokenKind::Less)) => {
                         self.consume_token()?;
-                        content.push_str("<");
+                        content.push('<');
                         depth += 1;
                     }
                     ('<', Some(TokenKind::Greater)) => {
                         self.consume_token()?;
                         depth -= 1;
                         if depth > 0 {
-                            content.push_str(">");
+                            content.push('>');
                         }
                     }
                     _ => {

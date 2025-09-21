@@ -78,11 +78,11 @@ fn fuzz_extract_regex_parts_stress_test() {
                 // Longer strings with nested delimiters
                 prop::string::string_regex("(m|qr)[/\\\\{}()\\[\\]<>|#!~][^/\\\\{}()\\[\\]<>|#!~]*[/\\\\{}()\\[\\]<>|#!~][imsxgaeludnrpcoRD]*").unwrap(),
                 // Unicode strings that might cause UTF-8 boundary issues
-                ".*[\\u{0080}-\\u{FFFF}].*",
+                prop::string::string_regex(".*[\\u{0080}-\\u{FFFF}].*").unwrap(),
                 // Malformed regex patterns
                 prop::string::string_regex("(m|qr)[^a-zA-Z0-9\\s]*").unwrap(),
                 // Very long strings to test memory boundaries
-                "[a-zA-Z0-9/\\\\{}()\\[\\]<>|#!~]{0,1000}"
+                prop::string::string_regex("[a-zA-Z0-9/\\\\{}()\\[\\]<>|#!~]{0,1000}").unwrap()
             ]
         ) {
             test_regex_parts_no_panic(input)?;
@@ -247,20 +247,22 @@ fn fuzz_extract_transliteration_ast_invariants() {
         fn transliteration_invariants_fuzz(
             input in prop_oneof![
                 // Empty and minimal
-                "",
-                "tr",
-                "y",
+                Just("".to_string()),
+                Just("tr".to_string()),
+                Just("y".to_string()),
                 // Basic transliteration patterns
                 prop::string::string_regex("(tr|y)[/\\\\{}()\\[\\]<>|#!~][a-zA-Z0-9]*[/\\\\{}()\\[\\]<>|#!~][a-zA-Z0-9]*[/\\\\{}()\\[\\]<>|#!~]?[cdsr]*").unwrap(),
                 // Character class patterns
-                "tr/[a-z]/[A-Z]/",
-                "y/[0-9]/[a-j]/d",
+                Just("tr/[a-z]/[A-Z]/".to_string()),
+                Just("y/[0-9]/[a-j]/d".to_string()),
                 // Unicode character classes
-                "tr/[α-ω]/[Α-Ω]/",
+                Just("tr/[α-ω]/[Α-Ω]/".to_string()),
                 // Malformed patterns that might break parsing
                 prop::string::string_regex("(tr|y)[^a-zA-Z0-9\\s/\\\\]*").unwrap(),
                 // Edge case delimiters
-                "tr|||", "y###", "tr   ",
+                Just("tr|||".to_string()),
+                Just("y###".to_string()),
+                Just("tr   ".to_string()),
             ]
         ) {
             test_transliteration_invariants(input)?;
@@ -372,7 +374,7 @@ fn fuzz_quote_parser_extreme_stress() {
                 // Escape sequence stress
                 prop::string::string_regex("s/(\\\\.){1,100}/(\\\\.){1,100}/").unwrap(),
                 // Unicode stress with mixed byte sequences
-                ".*[\\u{0000}-\\u{FFFF}]{1,100}.*",
+                prop::string::string_regex(".*[\\u{0000}-\\u{FFFF}]{1,100}.*").unwrap(),
                 // Repeated pattern stress (potential infinite loop triggers)
                 prop::string::string_regex("(s//|m//|tr///|qr//){1,50}").unwrap(),
                 // Binary-like data that might confuse parser

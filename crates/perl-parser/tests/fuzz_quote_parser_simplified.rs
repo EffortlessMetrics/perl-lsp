@@ -15,13 +15,9 @@ proptest! {
         input in ".*"
     ) {
         // Core invariant: function should never panic
-        let result = std::panic::catch_unwind(|| {
-            extract_regex_parts(&input)
-        });
-
-        prop_assert!(result.is_ok(), "extract_regex_parts panicked on: {:?}", input);
-
-        if let Ok((pattern, modifiers)) = result {
+        // Let proptest handle panics naturally for better shrinking
+        let (pattern, modifiers) = extract_regex_parts(&input);
+        {
             // Memory safety: outputs shouldn't be unreasonably large
             prop_assert!(pattern.len() <= input.len() * 5,
                 "Pattern too large: {} vs input {}", pattern.len(), input.len());
@@ -96,9 +92,9 @@ proptest! {
             prop_assert!(modifiers.len() <= input.len(),
                 "Modifiers too large: {} vs input {}", modifiers.len(), input.len());
 
-            // Modifier character validation
+            // Modifier character validation - extract_modifiers returns only alphabetic modifiers
             for ch in modifiers.chars() {
-                prop_assert!(ch.is_ascii_alphabetic() || ch.is_ascii_whitespace(),
+                prop_assert!(ch.is_ascii_alphabetic(),
                     "Invalid modifier char: '{}'", ch);
             }
 
