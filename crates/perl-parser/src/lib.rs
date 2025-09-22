@@ -101,9 +101,11 @@
 //! }
 //! ```
 
+/// Abstract Syntax Tree (AST) definitions for Perl parsing.
 #[allow(missing_docs)]
 pub mod ast;
 pub use parser::Parser;
+/// Experimental second‑generation AST (work in progress).
 #[allow(missing_docs)]
 pub mod ast_v2;
 pub mod builtin_signatures;
