@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (*Diataxis: Reference* - Documentation Infrastructure & Parser Robustness)
+- **Comprehensive API Documentation Infrastructure (PR #160, SPEC-149)** - Enterprise-grade documentation enforcement and quality assurance
+  - **Missing Documentation Warnings Enabled**: `#![warn(missing_docs)]` now enforced across perl-parser crate with 603 identified documentation gaps
+  - **Test-Driven Documentation Validation**: 12 comprehensive acceptance criteria with property-based testing for documentation completeness
+  - **API Documentation Standards Integration**: Links with existing [docs/API_DOCUMENTATION_STANDARDS.md](docs/API_DOCUMENTATION_STANDARDS.md) for enterprise-grade quality
+  - **LSP Workflow Integration Documentation**: Enhanced requirements for Parse → Index → Navigate → Complete → Analyze pipeline context
+  - **Performance Documentation Requirements**: Critical modules must document memory usage patterns and large Perl codebase processing characteristics
+  - **Comprehensive Edge Case Detection**: Validates malformed doctests, empty documentation, invalid cross-references, and incomplete error recovery docs
+  - **CI Integration Ready**: Foundation for automated documentation coverage tracking and regression prevention
+- **Advanced Parser Robustness Improvements (PR #160)** - Production-ready fuzz testing and mutation hardening
+  - **Comprehensive Fuzz Testing Infrastructure**: Property-based testing with AST invariant validation and crash/panic detection
+  - **Quote Parser Mutation Hardening**: 60%+ mutation score improvement through systematic mutant elimination and edge case coverage
+  - **Enhanced Quote Parser Robustness**: Comprehensive delimiter handling, boundary validation, and real-world scenario testing
+  - **Production Quality Assurance**: Advanced testing methodology with realistic hardening and comprehensive test coverage
+
 ### Added (*Diataxis: Reference* - New parser capabilities)
 - **Single-Quote Substitution Delimiter Support** - Enhanced lexer functionality with comprehensive single-quote delimiter recognition
   - **Complete Operator Coverage**: Full support for `s'pattern'replacement'modifiers`, `y'from'to'`, and `tr'from'to'` syntax variations

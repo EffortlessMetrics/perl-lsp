@@ -1,65 +1,132 @@
-//! LSP Server Capabilities Configuration
+//! LSP Server Capabilities Configuration for Email Script Processing
 //!
-//! Single source of truth for advertised LSP capabilities
+//! This module provides centralized configuration for LSP server capabilities
+//! advertised to clients during Perl script development within the LSP workflow.
+//! Serves as the single source of truth for feature availability and build-time
+//! capability gating for optimal Perl parsing workflows.
+//!
+//! # LSP Workflow Integration
+//!
+//! - **Extract**: Provides capabilities for parsing and syntax analysis
+//! - **Normalize**: Enables code formatting and standardization features
+//! - **Thread**: Supports workspace navigation and symbol resolution
+//! - **Render**: Facilitates syntax highlighting and code presentation
+//! - **Index**: Powers workspace symbols and cross-file navigation
 
 use lsp_types::*;
 use serde_json::Value;
 
-/// Advertised features for gating
+/// LSP features advertised to clients for Perl script development
+///
+/// Controls which LSP capabilities are announced during server initialization,
+/// enabling clients to provide appropriate UI elements and functionality
+/// for Perl script editing within LSP workflows.
 #[derive(Debug, Clone, Default)]
 pub struct AdvertisedFeatures {
+    /// Code completion for variables, functions, and keywords
     pub completion: bool,
+    /// Hover information for symbols and documentation
     pub hover: bool,
+    /// Go-to-definition navigation for symbols
     pub definition: bool,
+    /// Find-all-references for symbol usage analysis
     pub references: bool,
+    /// Document symbol outline for Perl script structure
     pub document_symbol: bool,
+    /// Workspace-wide symbol search across Perl parsing files
     pub workspace_symbol: bool,
+    /// Automated code actions and refactoring suggestions
     pub code_action: bool,
+    /// Code lens with reference counts and actionable information
     pub code_lens: bool,
+    /// Full document formatting with perltidy integration
     pub formatting: bool,
+    /// Range-specific formatting for selected code sections
     pub range_formatting: bool,
+    /// Symbol renaming with workspace-wide updates
     pub rename: bool,
+    /// Code folding for improved Perl script navigation
     pub folding_range: bool,
+    /// Smart text selection expansion for efficient editing
     pub selection_range: bool,
+    /// Linked editing for synchronized symbol updates
     pub linked_editing: bool,
+    /// Inline type and parameter hints for clarity
     pub inlay_hints: bool,
+    /// Semantic syntax highlighting for Perl scripts
     pub semantic_tokens: bool,
+    /// Call hierarchy navigation for function relationships
     pub call_hierarchy: bool,
+    /// Type hierarchy for object-oriented Perl parsing
     pub type_hierarchy: bool,
+    /// Pull-based diagnostic reporting for error detection
     pub diagnostic_provider: bool,
 }
 
-/// Build flags for conditional capabilities
+/// Build-time feature flags for conditional LSP capability compilation
+///
+/// Controls which capabilities are compiled into the LSP server binary,
+/// allowing for optimized builds targeted at specific Perl parsing
+/// deployment scenarios within enterprise LSP environments.
 #[derive(Debug, Clone, Default)]
 pub struct BuildFlags {
+    /// Code completion provider compilation flag
     pub completion: bool,
+    /// Hover information provider compilation flag
     pub hover: bool,
+    /// Go-to-definition provider compilation flag
     pub definition: bool,
+    /// Type definition navigation compilation flag
     pub type_definition: bool,
+    /// Implementation finding compilation flag
     pub implementation: bool,
+    /// Find-all-references provider compilation flag
     pub references: bool,
+    /// Document symbol outline provider compilation flag
     pub document_symbol: bool,
+    /// Workspace symbol search provider compilation flag
     pub workspace_symbol: bool,
+    /// Inlay hints provider compilation flag
     pub inlay_hints: bool,
+    /// Pull-based diagnostics provider compilation flag
     pub pull_diagnostics: bool,
+    /// Workspace symbol resolution provider compilation flag
     pub workspace_symbol_resolve: bool,
+    /// Semantic token highlighting provider compilation flag
     pub semantic_tokens: bool,
+    /// Code actions provider compilation flag
     pub code_actions: bool,
+    /// Command execution provider compilation flag
     pub execute_command: bool,
+    /// Symbol renaming provider compilation flag
     pub rename: bool,
+    /// Document links provider compilation flag
     pub document_links: bool,
+    /// Smart text selection ranges provider compilation flag
     pub selection_ranges: bool,
+    /// On-type formatting provider compilation flag
     pub on_type_formatting: bool,
-    pub code_lens: bool,         // Not advertised by default
-    pub call_hierarchy: bool,    // Call hierarchy navigation
-    pub type_hierarchy: bool,    // Type hierarchy navigation
-    pub linked_editing: bool,    // Linked editing ranges
-    pub inline_completion: bool, // Inline completion suggestions
-    pub inline_values: bool,     // Inline values for debugging
-    pub moniker: bool,           // Stable symbol identifiers
-    pub document_color: bool,    // Color swatches in strings/comments
+    /// Code lens provider compilation flag
+    pub code_lens: bool,
+    /// Call hierarchy navigation provider compilation flag
+    pub call_hierarchy: bool,
+    /// Type hierarchy navigation provider compilation flag
+    pub type_hierarchy: bool,
+    /// Linked editing ranges provider compilation flag
+    pub linked_editing: bool,
+    /// Inline completion suggestions provider compilation flag
+    pub inline_completion: bool,
+    /// Inline values for debugging provider compilation flag
+    pub inline_values: bool,
+    /// Stable symbol identifiers provider compilation flag
+    pub moniker: bool,
+    /// Document color provider compilation flag for color swatches in strings and comments
+    pub document_color: bool,
+    /// Document formatting provider compilation flag
     pub formatting: bool,
+    /// Range formatting provider compilation flag
     pub range_formatting: bool,
+    /// Folding range provider compilation flag
     pub folding_range: bool,
 }
 

@@ -1,3 +1,42 @@
+//! Scope analysis and variable tracking for Perl parsing workflow pipeline
+//!
+//! This module provides comprehensive scope analysis for Perl scripts, tracking
+//! variable declarations, usage patterns, and potential issues across different
+//! scopes within the LSP workflow stages.
+//!
+//! # LSP Workflow Integration
+//!
+//! Scope analysis supports Perl parsing across all LSP stages:
+//! - **Extract**: Analyze variable scope in embedded Perl scripts
+//! - **Normalize**: Track variable usage during standardization transforms
+//! - **Thread**: Analyze control flow variable dependencies
+//! - **Render**: Validate variable scope during output generation
+//! - **Index**: Extract scope information for symbol indexing
+//!
+//! # Usage Examples
+//!
+//! ```rust
+//! use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
+//! use perl_parser::{Parser, ast::Node};
+//!
+//! // Analyze Perl script for scope issues
+//! let script = "my $data_filter = sub { my $msg = shift; $msg =~ /valid/; };";
+//! let mut parser = Parser::new(script);
+//! let ast = parser.parse().unwrap();
+//!
+//! let mut analyzer = ScopeAnalyzer::new();
+//! let issues = analyzer.analyze(&ast, script);
+//!
+//! // Check for common scope issues in Perl parsing code
+//! for issue in &issues {
+//!     match issue.kind {
+//!         IssueKind::UnusedVariable => println!("Unused variable: {}", issue.message),
+//!         IssueKind::VariableShadowing => println!("Variable shadowing: {}", issue.message),
+//!         _ => {}
+//!     }
+//! }
+//! ```
+
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
 use std::cell::RefCell;

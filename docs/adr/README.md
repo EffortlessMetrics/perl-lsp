@@ -7,6 +7,7 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | ADR | Status | Date | Title | Description |
 |-----|--------|------|-------|-------------|
 | [ADR-0001](0001-substitution-operator-parsing-architecture.md) | Accepted | 2025-01-20 | Substitution Operator Parsing Architecture | Comprehensive parsing support for Perl substitution operators (`s///`) with all modifiers and delimiter styles |
+| [ADR-0002](0002-api-documentation-infrastructure.md) | Accepted | 2025-09-20 | API Documentation Infrastructure Strategy | Enterprise-grade documentation enforcement with `#![warn(missing_docs)]` and systematic validation framework |
 
 ## About ADRs
 

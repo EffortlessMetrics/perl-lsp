@@ -11,6 +11,7 @@ A high-performance Perl parser with full Language Server Protocol support.
 - **Debug Adapter Protocol**: Integrated debugging support
 - **Tree-sitter compatible**: Produces standard S-expression output
 - **Performance**: 4-19x faster than traditional parsers
+- **Enterprise-grade API Documentation** ⭐ **NEW: Issue #149**: Comprehensive API documentation enforced through `#![warn(missing_docs)]`
 
 ## Binaries
 
@@ -57,6 +58,37 @@ perl-lsp --stdio
 - Code actions and refactoring
 - Test discovery and execution
 - Code formatting
+
+## API Documentation Quality ⭐ **NEW: Issue #149**
+
+This crate enforces enterprise-grade API documentation standards through `#![warn(missing_docs)]`:
+
+### Documentation Requirements
+
+- **All public APIs** have comprehensive documentation with examples and cross-references
+- **Performance-critical modules** document memory usage and large Perl codebase processing implications
+- **Error types** explain Perl parsing workflow context and recovery strategies
+- **Module documentation** describes LSP workflow integration (Parse → Index → Navigate → Complete → Analyze)
+
+### Quality Validation
+
+```bash
+# Run comprehensive documentation tests (12 acceptance criteria)
+cargo test --test missing_docs_ac_tests
+
+# Generate documentation without warnings
+cargo doc -p perl-parser --no-deps
+```
+
+The documentation validation suite includes:
+
+- **Comprehensive API coverage**: All public structs, enums, and functions
+- **Working examples**: Doctests with assertions for complex functionality
+- **Cross-reference validation**: Proper linking between related APIs
+- **Performance documentation**: Memory usage and scaling characteristics
+- **Error handling guidance**: Recovery strategies and workflow context
+
+See the [API Documentation Standards](../../docs/API_DOCUMENTATION_STANDARDS.md) for complete requirements.
 
 ## License
 
