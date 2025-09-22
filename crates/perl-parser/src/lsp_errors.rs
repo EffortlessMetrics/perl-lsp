@@ -154,6 +154,14 @@ pub fn internal_error(message: &str) -> Value {
     })
 }
 
+pub fn invalid_params_err(message: &str) -> JsonRpcError {
+    JsonRpcError { code: error_codes::INVALID_PARAMS, message: message.to_string(), data: None }
+}
+
+pub fn internal_error_err(message: &str) -> JsonRpcError {
+    JsonRpcError { code: error_codes::INTERNAL_ERROR, message: message.to_string(), data: None }
+}
+
 /// Configuration structure for tracking which LSP features are advertised during Perl parsing
 ///
 /// This struct manages feature availability during LSP workflow operations, allowing
