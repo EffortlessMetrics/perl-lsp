@@ -1,4 +1,4 @@
-# PSTX Policy Governance Validation Report - PR #158
+# LSP Policy Governance Validation Report - PR #158
 
 **Lane ID**: 58
 **Stage**: policy-gatekeeper ✅

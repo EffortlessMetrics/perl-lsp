@@ -23,7 +23,7 @@ fn test_related_heredoc_edge_cases() {
     // Test variations of the crash pattern to ensure robustness
     let edge_cases = [
         "xqN<<\"", // Original crash case
-        "xqN<<'", // Single quote variant
+        "xqN<<'",  // Single quote variant
         "abc<<\"", // Different prefix
         "x<<\"",   // Minimal prefix
         "<<\"",    // No prefix

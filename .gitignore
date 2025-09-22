@@ -37,9 +37,22 @@ releases/
 mutants.out/
 mutants.out.old/
 mutants.out*
-mutation_testing_report.md
-manual_mutation_test.rs
-run_mutation_test.sh
-test_survivor_analysis.rs
-analyze_survivors.sh
 .cargo/mutants.toml
+mutation_testing_report.md
+**/manual_mutation_test.rs
+**/test_survivor_analysis.rs
+
+# Fuzzing artifacts
+fuzz/
+fuzz_results/
+
+# Generated reports and analysis
+INTEGRATION_COMPLETION_DIGEST.md
+*_analysis.md
+*_report.md
+
+# Temporary scripts and artifacts
+analyze_survivors.sh
+run_mutation_test.sh
+**/temp_*.rs
+**/*_temp.rs

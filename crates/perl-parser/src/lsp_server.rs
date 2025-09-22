@@ -14,6 +14,7 @@ use crate::{
     declaration::ParentMap,
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
+    implementation_provider::ImplementationProvider,
     inlay_hints_provider::{InlayHintConfig, InlayHintsProvider},
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
@@ -24,7 +25,6 @@ use crate::{
     type_hierarchy::TypeHierarchyProvider,
     type_inference::TypeInferenceEngine,
 };
-use lazy_static::lazy_static;
 use lsp_types::Location;
 use md5;
 use serde::{Deserialize, Serialize};
@@ -47,6 +47,9 @@ use crate::workspace_index::{
     LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol,
     uri_to_fs_path,
 };
+
+#[cfg(feature = "workspace")]
+use lazy_static::lazy_static;
 
 #[cfg(feature = "workspace")]
 lazy_static! {
@@ -3052,8 +3055,6 @@ impl LspServer {
 
     /// Handle textDocument/implementation request
     fn handle_implementation(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
-        use crate::implementation_provider::ImplementationProvider;
-
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;

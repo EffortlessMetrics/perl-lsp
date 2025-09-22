@@ -1,17 +1,68 @@
-// crates/perl-parser/src/semantic_tokens.rs
+//! Semantic token analysis for LSP syntax highlighting in Perl script processing
+//!
+//! This module provides semantic token extraction and classification for Perl scripts
+//! within the LSP workflow. It generates precise syntax highlighting information that helps
+//! developers understand complex Perl code during the Complete stage.
+//!
+//! # LSP Workflow Integration
+//!
+//! - **Parse**: Receives parsed AST from Perl script parsing
+//! - **Index**: Uses semantic information for symbol indexing
+//! - **Navigate**: Applies semantic analysis for cross-file navigation
+//! - **Complete**: Primary consumer - provides syntax highlighting for code presentation
+//! - **Analyze**: Uses semantic classification for enhanced search and analysis
+//!
+//! # Performance Characteristics
+//!
+//! - Memory usage: O(n) where n is token count in Perl script
+//! - Time complexity: O(n) linear scanning with lexer integration
+//! - Optimized for large Perl codebase processing with efficient token classification
+//! - Thread-safe semantic token generation for concurrent script processing
+
 use crate::ast::{Node, NodeKind};
 use perl_lexer::{PerlLexer, TokenType};
 use rustc_hash::FxHashMap;
 
-/// LSP wants [deltaLine, deltaStartChar, length, tokenTypeIndex, tokenModBits]
+/// LSP semantic token encoding format for client transmission
+///
+/// Represents a semantic token as [deltaLine, deltaStartChar, length, tokenTypeIndex, tokenModBits]
+/// following the LSP specification for efficient delta-encoded token streams.
 pub type EncodedToken = [u32; 5];
 
+/// Semantic token legend mapping token types and modifiers to indices
+///
+/// Provides the mapping between semantic token names and their numeric indices
+/// for LSP client consumption. Used to establish a contract between the server
+/// and client for semantic highlighting interpretation.
 pub struct TokensLegend {
+    /// List of token type names in index order
     pub token_types: Vec<String>,
+    /// List of modifier names in index order
     pub modifiers: Vec<String>,
+    /// Fast lookup map from token type names to indices
     pub map: FxHashMap<String, u32>,
 }
 
+/// Create the standard semantic token legend for Perl script highlighting
+///
+/// Returns a configured legend with all supported token types and modifiers
+/// for comprehensive Perl script syntax highlighting. Optimized for common
+/// Perl constructs found in Perl parsing workflows.
+///
+/// # Returns
+///
+/// A TokensLegend containing all token types, modifiers, and lookup mappings
+/// ready for LSP client registration and semantic token classification.
+///
+/// # Examples
+///
+/// ```rust
+/// use perl_parser::semantic_tokens::legend;
+///
+/// let legend = legend();
+/// assert!(legend.token_types.contains(&"function".to_string()));
+/// assert!(legend.token_types.contains(&"keyword".to_string()));
+/// ```
 pub fn legend() -> TokensLegend {
     let types = vec![
         "namespace",
@@ -60,6 +111,54 @@ fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
     *leg.map.get(k).unwrap_or(&0)
 }
 
+/// Collect semantic tokens from parsed Perl script AST for LSP highlighting
+///
+/// Analyzes the provided AST and source text to generate semantic tokens suitable
+/// for LSP client consumption. Combines lexer-based token classification with
+/// AST-based semantic analysis to provide comprehensive syntax highlighting for
+/// Perl script content within the LSP Complete stage.
+///
+/// # Arguments
+///
+/// * `ast` - Parsed Perl script AST containing semantic information
+/// * `text` - Original source text of the Perl script for token extraction
+/// * `to_pos16` - Position conversion function mapping byte offsets to LSP coordinates
+///
+/// # Returns
+///
+/// Vector of encoded semantic tokens ready for LSP transmission, sorted by
+/// position and delta-encoded according to LSP specification.
+///
+/// # Performance
+///
+/// - Time complexity: O(n) where n is the number of tokens in the Perl script
+/// - Memory usage: O(n) for token storage and classification
+/// - Optimized for large Perl scripts found in enterprise development workflows
+/// - Thread-safe operation suitable for concurrent Perl parsing
+///
+/// # Examples
+///
+/// ```rust
+/// use perl_parser::{Parser, semantic_tokens::collect_semantic_tokens};
+///
+/// let script = "my $data_filter = qr/valid/;";
+/// let mut parser = Parser::new(script);
+/// let ast = parser.parse().unwrap();
+///
+/// let pos_mapper = |pos| (0u32, pos as u32); // Simple line-based mapping
+/// let tokens = collect_semantic_tokens(&ast, script, &pos_mapper);
+///
+/// assert!(!tokens.is_empty());
+/// // Tokens are delta-encoded for LSP transmission
+/// ```
+///
+/// # Email Processing Context
+///
+/// This function is particularly effective for highlighting:
+/// - Email filtering and routing logic with regular expressions
+/// - Email template processing code with variable interpolation
+/// - Configuration scripts embedded in Perl code
+/// - Message processing automation with proper keyword highlighting
 pub fn collect_semantic_tokens(
     ast: &Node,
     text: &str,

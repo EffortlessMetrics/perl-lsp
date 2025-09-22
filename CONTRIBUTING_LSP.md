@@ -11,7 +11,50 @@ This guide helps you contribute to the Perl LSP following our [Development Roadm
 
 ## How to Contribute
 
-### 1. Pick a Task
+### 1. API Documentation Requirements ⭐ **NEW: PR #160 (SPEC-149)**
+
+**All contributions to perl-parser crate must include comprehensive API documentation** due to enforced `#![warn(missing_docs)]`:
+
+#### Documentation Standards for Contributors
+- **Public APIs**: Must include comprehensive documentation with examples
+- **LSP Workflow Integration**: Document role in Parse → Index → Navigate → Complete → Analyze pipeline
+- **Performance Critical Functions**: Document memory usage and large Perl file processing characteristics
+- **Error Types**: Explain Perl parsing context and recovery strategies
+
+#### Quick Documentation Checklist
+```rust
+/// Brief summary (1 sentence)
+///
+/// Detailed description with LSP workflow context
+///
+/// # Arguments
+/// * `param` - Description with type and purpose
+///
+/// # Returns
+/// * `Ok(Type)` - Success case description
+/// * `Err(Error)` - Error conditions and recovery
+///
+/// # Examples
+/// ```rust
+/// use perl_parser::YourAPI;
+/// let result = your_function(input)?;
+/// assert!(result.is_valid());
+/// ```
+pub fn your_function(param: Type) -> Result<ReturnType, Error> {
+    // Implementation
+}
+```
+
+#### Validation Commands
+```bash
+# Validate your documentation before submitting
+cargo test -p perl-parser --test missing_docs_ac_tests
+cargo doc --no-deps --package perl-parser  # Should compile without warnings
+```
+
+For complete documentation standards, see [API Documentation Standards](docs/API_DOCUMENTATION_STANDARDS.md).
+
+### 2. Pick a Task
 Check our priority list and pick an unassigned task:
 
 #### 🔴 High Priority (Great First Issues)

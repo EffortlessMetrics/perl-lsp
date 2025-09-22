@@ -1,3 +1,35 @@
+//! Find-all-references functionality for symbol usage analysis in Perl scripts
+//!
+//! This module provides comprehensive reference finding capabilities for Perl script
+//! development within the LSP workflow. Enables developers to quickly locate all
+//! usage sites of variables, functions, and packages across Perl code.
+//!
+//! # LSP Workflow Integration
+//!
+//! - **Parse**: Identifies symbol definitions during Perl script parsing
+//! - **Index**: Supports refactoring and symbol standardization
+//! - **Navigate**: Analyzes variable flow and dependencies in Perl code
+//! - **Complete**: Enables reference highlighting and navigation in editors
+//! - **Analyze**: Powers workspace-wide symbol usage tracking
+//!
+//! # Usage Examples
+//!
+//! ```rust
+//! use perl_parser::{Parser, references::find_references_single_file};
+//!
+//! let script = "my $count = 0; $count++; print $count;";
+//! let mut parser = Parser::new(script);
+//! let ast = parser.parse().unwrap();
+//!
+//! // Find all references to $email_count
+//! if let Some(refs) = find_references_single_file(&ast, 3) { // Position of first $email_count
+//!     println!("Found {} references to $email_count", refs.len());
+//!     for (start, end) in refs {
+//!         println!("Reference at {}-{}: {}", start, end, &script[start..end]);
+//!     }
+//! }
+//! ```
+
 use crate::ast::{Node, NodeKind};
 
 /// Return (start_offset, end_offset) for same-file references

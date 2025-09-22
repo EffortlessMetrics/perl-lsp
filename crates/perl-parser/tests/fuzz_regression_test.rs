@@ -45,16 +45,8 @@ fn test_fuzz_crash_substitution_parts() {
 #[test]
 fn test_fuzz_edge_cases_similar_to_crash() {
     // Test variations of the crashing input to ensure robustness
-    let similar_inputs = [
-        "xqN<<",
-        "xqN<<'",
-        "xqN<<`",
-        "qN<<\"",
-        "x<<\"",
-        "xq<<\"",
-        "xqN<",
-        "xqN<<\"\"",
-    ];
+    let similar_inputs =
+        ["xqN<<", "xqN<<'", "xqN<<`", "qN<<\"", "x<<\"", "xq<<\"", "xqN<", "xqN<<\"\""];
 
     for input in &similar_inputs {
         let mut parser = Parser::new(input);

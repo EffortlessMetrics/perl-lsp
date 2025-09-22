@@ -1,12 +1,28 @@
-//! Comprehensive built-in function signatures for Perl
+//! Comprehensive built-in function signatures for Perl Perl script processing
 //!
 //! This module provides complete signature information for all Perl built-in functions
+//! with special focus on functions commonly used in Perl parsing workflows within
+//! the LSP workflow. Enables enhanced completion and documentation during email
+//! script development.
+//!
+//! # LSP Workflow Integration
+//!
+//! - **Extract**: Provides signatures for parsing and data extraction functions
+//! - **Normalize**: Supports string manipulation and formatting functions
+//! - **Thread**: Enables array and hash operations for data organization
+//! - **Render**: Facilitates output formatting and presentation functions
+//! - **Index**: Powers search and matching operations with regex functions
 
 use std::collections::HashMap;
 
-/// Built-in function signature
+/// Built-in function signature with documentation for Perl script development
+///
+/// Contains complete signature information and documentation for Perl built-in
+/// functions, optimized for Perl parsing use cases within LSP workflows.
 pub struct BuiltinSignature {
+    /// Function signature variants showing different parameter combinations
     pub signatures: Vec<&'static str>,
+    /// Comprehensive documentation explaining function behavior and Perl parsing use cases
     pub documentation: &'static str,
 }
 

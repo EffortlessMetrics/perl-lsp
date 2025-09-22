@@ -1,8 +1,53 @@
-//! Workspace-wide refactoring operations
+//! Workspace-wide refactoring operations for Perl codebases
 //!
 //! This module provides comprehensive refactoring capabilities that span multiple files,
 //! including symbol renaming, module extraction, import optimization, and code movement.
 //! All operations are designed to be safe, reversible, and provide detailed feedback.
+//!
+//! # LSP Workflow Integration
+//!
+//! Refactoring operations support large-scale Perl code maintenance across LSP workflow stages:
+//! - **Parse**: Analyze Perl syntax and extract symbols from source files
+//! - **Index**: Build workspace symbol index and cross-file references
+//! - **Navigate**: Update cross-file dependencies during control flow refactoring
+//! - **Complete**: Maintain symbol completion consistency during code reorganization
+//! - **Analyze**: Update workspace analysis after refactoring operations
+//!
+//! # Performance Characteristics
+//!
+//! Optimized for enterprise-scale Perl development workflows:
+//! - **Large Codebase Support**: Efficient memory management during workspace refactoring
+//! - **Incremental Updates**: Process only changed files to minimize operation time
+//! - **Workspace Indexing**: Leverages comprehensive symbol index for fast cross-file operations
+//! - **Batch Operations**: Groups related changes to minimize file I/O overhead
+//!
+//! # Enterprise Features
+//!
+//! - **Safe Refactoring**: Pre-validation ensures operation safety before applying changes
+//! - **Rollback Support**: All operations can be reversed with detailed change tracking
+//! - **Cross-File Analysis**: Handles complex dependency graphs in multi-file email systems
+//! - **Import Optimization**: Automatically manages import statements during refactoring
+//!
+//! # Usage Examples
+//!
+//! ```rust
+//! use perl_parser::workspace_refactor::WorkspaceRefactor;
+//! use perl_parser::workspace_index::WorkspaceIndex;
+//!
+//! // Initialize refactoring engine for Perl script workspace
+//! let index = WorkspaceIndex::new();
+//! let refactor = WorkspaceRefactor::new(index);
+//!
+//! // Rename function across all Perl scripts
+//! let result = refactor.rename_symbol(
+//!     "file:///data_processor.pl",
+//!     position,
+//!     "enhanced_process_data"
+//! ).unwrap();
+//!
+//! // Apply import optimization across Perl modules
+//! let optimized = refactor.optimize_imports("file:///data_utils.pm").unwrap();
+//! ```
 
 use crate::import_optimizer::ImportOptimizer;
 use crate::workspace_index::{
