@@ -118,12 +118,17 @@ mod doc_validation_helpers {
         analysis
     }
 
-    /// Checks if a line declares a public item (struct, enum, function, etc.)
+    /// Checks if a line declares a public item (struct, enum, function, trait, type, const, mod, use)
     fn is_public_item_declaration(line: &str) -> bool {
         let trimmed = line.trim_start();
         (trimmed.starts_with("pub struct")
             || trimmed.starts_with("pub enum")
-            || trimmed.starts_with("pub fn"))
+            || trimmed.starts_with("pub fn")
+            || trimmed.starts_with("pub trait")
+            || trimmed.starts_with("pub type")
+            || trimmed.starts_with("pub const")
+            || trimmed.starts_with("pub mod")
+            || trimmed.starts_with("pub use"))
             && !line.contains("//")
     }
 
@@ -2103,9 +2108,7 @@ pub fn bad_refs() {}
                 critical_issues.join("\n")
             );
 
-            // For now, this is informational since we're strengthening tests
-            // In production, this would be: panic!("{}", error_summary);
-            println!("Enhanced validation detected issues:\n{}", error_summary);
+            panic!("{}", error_summary);
         }
 
         // Ensure we tested actual modules
@@ -2157,7 +2160,7 @@ pub fn bad_refs() {}
         let max_acceptable_violations_per_file = 50; // This will need tuning
         let max_total_violations = all_rust_files.len() * max_acceptable_violations_per_file;
 
-        println!(
+        eprintln!(
             "Documentation Quality Metrics:\n- Total files: {}\n- Total violations: {}\n- Threshold: {}",
             all_rust_files.len(),
             total_violations,
@@ -2168,13 +2171,11 @@ pub fn bad_refs() {}
         let mut sorted_files: Vec<_> = quality_metrics.iter().collect();
         sorted_files.sort_by(|a, b| b.1.cmp(a.1));
 
-        println!("Top 10 files needing documentation improvement:");
+        eprintln!("Top 10 files needing documentation improvement:");
         for (file, violations) in sorted_files.iter().take(10) {
-            println!("  {}: {} violations", file, violations);
+            eprintln!("  {}: {} violations", file, violations);
         }
 
         // For now, this is informational - in production this would enforce thresholds
-        // assert!(total_violations <= max_total_violations,
-        //         "Documentation quality regression detected");
     }
 }
