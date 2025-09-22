@@ -56,3 +56,7 @@ analyze_survivors.sh
 run_mutation_test.sh
 **/temp_*.rs
 **/*_temp.rs
+
+# Integration artifacts
+.base_sha
+benchmark_results_*.txt
