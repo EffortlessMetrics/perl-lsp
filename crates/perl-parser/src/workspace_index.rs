@@ -1161,7 +1161,7 @@ pub mod lsp_adapter {
     /// # Examples
     ///
     /// ```rust
-    /// use perl_parser::workspace_index::{IxLocation, to_lsp_location};
+    /// use perl_parser::workspace_index::{Location as IxLocation, lsp_adapter::to_lsp_location};
     /// use lsp_types::Range;
     ///
     /// let ix_loc = IxLocation {
@@ -1198,7 +1198,7 @@ pub mod lsp_adapter {
     /// # Examples
     ///
     /// ```rust
-    /// use perl_parser::workspace_index::{IxLocation, to_lsp_locations};
+    /// use perl_parser::workspace_index::{Location as IxLocation, lsp_adapter::to_lsp_locations};
     /// use lsp_types::Range;
     ///
     /// let locations = vec![
