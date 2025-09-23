@@ -1585,7 +1585,7 @@ impl LspServer {
 
             // Check index readiness (soft wait, no sleeps) - provide basic completion if not ready
             #[cfg(feature = "workspace")]
-            let index_ready = self.workspace_index.as_ref().map_or(false, |idx| idx.has_symbols());
+            let index_ready = self.workspace_index.as_ref().is_some_and(|idx| idx.has_symbols());
 
             #[cfg(not(feature = "workspace"))]
             let index_ready = false;
