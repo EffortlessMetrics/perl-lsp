@@ -349,6 +349,22 @@ impl LspServer {
         output.flush()
     }
 
+    /// Send index-ready notification to inform clients that workspace indexing is available
+    fn send_index_ready_notification(&self) -> io::Result<()> {
+        #[cfg(feature = "workspace")]
+        let has_symbols = self.workspace_index
+            .as_ref()
+            .map(|idx| idx.has_symbols())
+            .unwrap_or(false);
+
+        #[cfg(not(feature = "workspace"))]
+        let has_symbols = false;
+
+        self.notify("perl-lsp/index-ready", json!({
+            "ready": has_symbols
+        }))
+    }
+
     /// Run the LSP server
     pub fn run(&mut self) -> io::Result<()> {
         let stdin = io::stdin();
@@ -543,6 +559,9 @@ impl LspServer {
                 if self.client_capabilities.dynamic_registration_support {
                     self.register_file_watchers_async();
                 }
+
+                // Send index-ready notification
+                let _ = self.send_index_ready_notification();
 
                 Ok(None)
             }
