@@ -24,13 +24,14 @@
 //! # Usage Examples
 //!
 //! ```rust
-//! use perl_parser::formatting::{format_document, FormattingOptions};
+//! use perl_parser::formatting::{PerlTidyFormatter, FormattingOptions};
 //!
 //! // Format Perl parsing script with standard options
 //! let script = "sub process_email{my$msg=shift;return$msg;}";
 //! let options = FormattingOptions::default();
+//! let formatter = PerlTidyFormatter::new();
 //!
-//! match format_document(script, &options) {
+//! match formatter.format_document(script, &options) {
 //!     Ok(edits) => {
 //!         // Apply formatting edits to Perl script
 //!         println!("Formatted {} edits", edits.len());

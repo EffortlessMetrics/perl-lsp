@@ -306,7 +306,7 @@ impl CompletionProvider {
     /// use perl_parser::{Parser, CompletionProvider, workspace_index::WorkspaceIndex};
     /// use std::sync::Arc;
     ///
-    /// let script = "package EmailProcessor; sub filter_spam { my $";
+    /// let script = "package EmailProcessor; sub filter_spam { my $var; }";
     /// let mut parser = Parser::new(script);
     /// let ast = parser.parse().unwrap();
     ///
@@ -566,7 +566,7 @@ impl CompletionProvider {
     /// ```rust
     /// use perl_parser::{Parser, CompletionProvider};
     ///
-    /// let script = "my $data_filter = sub { my $";
+    /// let script = "my $data_filter = sub { my $var; };";
     /// let mut parser = Parser::new(script);
     /// let ast = parser.parse().unwrap();
     ///
@@ -620,7 +620,7 @@ impl CompletionProvider {
     /// use std::sync::atomic::{AtomicBool, Ordering};
     /// use std::sync::Arc;
     ///
-    /// let script = "package EmailHandler; sub process_";
+    /// let script = "package EmailHandler; sub process_emails { }";
     /// let mut parser = Parser::new(script);
     /// let ast = parser.parse().unwrap();
     ///

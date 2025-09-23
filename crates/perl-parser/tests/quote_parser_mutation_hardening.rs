@@ -277,10 +277,10 @@ fn test_extract_transliteration_parts_comprehensive() {
         ("", ("", "", "")),                     // Empty - not ("xyzzy", "xyzzy", "xyzzy")
         ("tr", ("", "", "")),                   // Just prefix - not ("", "xyzzy", "xyzzy")
         ("y", ("", "", "")),                    // Just y prefix - not ("xyzzy", "", "xyzzy")
-        ("tr/abc/xyz/", ("abc", "xyz", "")),    // Basic tr - security fix: invalid modifiers filtered
-        ("y/abc/xyz/d", ("abc", "xyz", "d")),   // y with valid modifier - security fix applied
+        ("tr/abc/xyz/", ("abc", "xyz", "")), // Basic tr - security fix: invalid modifiers filtered
+        ("y/abc/xyz/d", ("abc", "xyz", "d")), // y with valid modifier - security fix applied
         ("tr{abc}{xyz}d", ("abc", "xyz", "d")), // Paired delimiters - consistent behavior
-        ("y(abc)(xyz)", ("abc", "xyz", "")),    // Parentheses - correct behavior
+        ("y(abc)(xyz)", ("abc", "xyz", "")), // Parentheses - correct behavior
         ("tr[abc][xyz]cd", ("abc", "xyz", "cd")), // Multiple valid modifiers - correct behavior
     ];
 
@@ -308,7 +308,10 @@ fn test_extract_transliteration_delimiter_detection() {
     let (search, replace, modifiers) = extract_transliteration_parts("tr/old/new/");
     assert_eq!(search, "old", "Non-paired delimiter search extraction");
     assert_eq!(replace, "new", "Non-paired delimiter replace extraction - corrected behavior");
-    assert_eq!(modifiers, "", "Non-paired delimiter modifiers - security fix: invalid modifiers filtered");
+    assert_eq!(
+        modifiers, "",
+        "Non-paired delimiter modifiers - security fix: invalid modifiers filtered"
+    );
 }
 
 // Comprehensive tests for extract_modifiers helper (tested indirectly)
@@ -316,13 +319,13 @@ fn test_extract_transliteration_delimiter_detection() {
 #[test]
 fn test_extract_modifiers_comprehensive() {
     let test_cases = vec![
-        ("s/test/repl/", ""),          // Empty modifiers - should return "", not "xyzzy"
-        ("s/test/repl/abc", ""),       // Invalid modifiers - security fix: filtered out
-        ("s/test/repl/abc123", ""),    // Invalid modifiers - security fix: filtered out
-        ("s/test/repl/123", ""),       // No alphabetic - should return "", not "xyzzy"
-        ("s/test/repl/abc!", ""),      // Invalid modifiers - security fix: filtered out
-        ("s/test/repl/!abc", ""),      // Starts with non-alphabetic - should return ""
-        ("s/test/repl/gim", "gim"),    // Valid substitution modifiers - should preserve
+        ("s/test/repl/", ""),       // Empty modifiers - should return "", not "xyzzy"
+        ("s/test/repl/abc", ""),    // Invalid modifiers - security fix: filtered out
+        ("s/test/repl/abc123", ""), // Invalid modifiers - security fix: filtered out
+        ("s/test/repl/123", ""),    // No alphabetic - should return "", not "xyzzy"
+        ("s/test/repl/abc!", ""),   // Invalid modifiers - security fix: filtered out
+        ("s/test/repl/!abc", ""),   // Starts with non-alphabetic - should return ""
+        ("s/test/repl/gim", "gim"), // Valid substitution modifiers - should preserve
         ("s/test/repl/gimsx", "gimsx"), // Valid substitution modifiers - should preserve all
     ];
 
@@ -343,10 +346,10 @@ fn test_extract_modifiers_properties() {
     // Property: result should never contain non-alphabetic chars
     // Updated for security fix: only valid modifiers should be preserved
     let test_cases = vec![
-        ("s/test/repl/a1b", ""), // 'a' is invalid for substitution operators
-        ("s/test/repl/abc!", ""), // 'a', 'b', 'c' are invalid for substitution operators
+        ("s/test/repl/a1b", ""),    // 'a' is invalid for substitution operators
+        ("s/test/repl/abc!", ""),   // 'a', 'b', 'c' are invalid for substitution operators
         ("s/test/repl/123abc", ""), // numbers filtered out, 'a', 'b', 'c' invalid
-        ("s/test/repl/ab cd", ""), // 'a', 'b' are invalid for substitution operators
+        ("s/test/repl/ab cd", ""),  // 'a', 'b' are invalid for substitution operators
         ("tr/a/b/a\nb", ""), // 'a', 'b' are invalid for transliteration (only 'c', 'd', 's', 'r' valid)
     ];
 
