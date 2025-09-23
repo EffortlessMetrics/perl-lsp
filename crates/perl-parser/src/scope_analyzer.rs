@@ -20,18 +20,19 @@
 //! use perl_parser::{Parser, ast::Node};
 //!
 //! // Analyze Perl script for scope issues
-//! let script = "my $data_filter = sub { my $msg = shift; $msg =~ /valid/; };";
+//! let script = "my $var = 42; sub hello { print $var; }";
 //! let mut parser = Parser::new(script);
 //! let ast = parser.parse().unwrap();
 //!
-//! let mut analyzer = ScopeAnalyzer::new();
-//! let issues = analyzer.analyze(&ast, script);
+//! let analyzer = ScopeAnalyzer::new();
+//! let pragma_map = vec![];
+//! let issues = analyzer.analyze(&ast, script, &pragma_map);
 //!
 //! // Check for common scope issues in Perl parsing code
 //! for issue in &issues {
 //!     match issue.kind {
-//!         IssueKind::UnusedVariable => println!("Unused variable: {}", issue.message),
-//!         IssueKind::VariableShadowing => println!("Variable shadowing: {}", issue.message),
+//!         IssueKind::UnusedVariable => println!("Unused variable: {}", issue.variable_name),
+//!         IssueKind::VariableShadowing => println!("Variable shadowing: {}", issue.variable_name),
 //!         _ => {}
 //!     }
 //! }

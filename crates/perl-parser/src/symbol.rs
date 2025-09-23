@@ -3,6 +3,11 @@
 //! This module provides symbol extraction from the AST, building a symbol table
 //! that tracks definitions, references, and scopes for IDE features like
 //! go-to-definition, find-all-references, and semantic highlighting.
+//!
+//! # Related Modules
+//!
+//! See also [`crate::workspace_index`] for workspace-wide indexing and
+//! [`crate::references`] for cross-file reference resolution.
 
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};

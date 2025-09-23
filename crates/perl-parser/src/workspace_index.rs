@@ -2,6 +2,11 @@
 //!
 //! This module provides efficient indexing of symbols across an entire workspace,
 //! enabling features like find-references, rename, and workspace symbol search.
+//!
+//! # Related Modules
+//!
+//! See also [`crate::symbol`] for symbol extraction, [`crate::references`] for
+//! reference finding, and [`crate::semantic_tokens`] for semantic classification.
 
 use crate::Parser;
 use crate::ast::{Node, NodeKind};
