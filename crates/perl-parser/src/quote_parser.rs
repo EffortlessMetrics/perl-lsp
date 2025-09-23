@@ -307,11 +307,6 @@ fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &s
 
 /// Extract only alphabetic characters as modifiers for regex patterns
 ///
-/// This function preserves the original behavior for regex patterns,
-/// extracting any alphabetic characters as potential modifiers.
-fn extract_modifiers(text: &str) -> String {
-    text.chars().take_while(|c| c.is_ascii_alphabetic()).collect()
-}
 
 /// Extract and validate substitution modifiers, returning only valid ones
 ///
