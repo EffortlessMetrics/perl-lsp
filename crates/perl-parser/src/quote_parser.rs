@@ -148,8 +148,8 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
         (String::new(), rest1)
     };
 
-    // Extract only alphabetic modifiers
-    let modifiers = extract_modifiers(modifiers_str);
+    // Extract and validate only valid substitution modifiers
+    let modifiers = extract_substitution_modifiers(modifiers_str);
 
     (pattern, replacement, modifiers)
 }
@@ -228,19 +228,13 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
         (String::new(), rest1)
     };
 
-    // Extract only valid transliteration modifiers
-    // For mutation testing, we need to preserve the actual content for testing purposes
-    let modifiers = if is_paired {
-        // For paired delimiters, filter to valid tr modifiers only
-        modifiers_str
-            .chars()
-            .take_while(|c| c.is_ascii_alphabetic())
-            .filter(|&c| matches!(c, 'c' | 'd' | 's' | 'r'))
-            .collect()
-    } else {
-        // For non-paired delimiters, preserve the content for mutation testing
-        modifiers_str.to_string()
-    };
+    // Extract and validate only valid transliteration modifiers
+    // Security fix: Apply consistent validation for all delimiter types
+    let modifiers = modifiers_str
+        .chars()
+        .take_while(|c| c.is_ascii_alphabetic())
+        .filter(|&c| matches!(c, 'c' | 'd' | 's' | 'r'))
+        .collect();
 
     (search, replacement, modifiers)
 }
@@ -311,7 +305,22 @@ fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &s
     (body, &text[end_pos..])
 }
 
-/// Extract only alphabetic characters as modifiers
+/// Extract only alphabetic characters as modifiers for regex patterns
+///
+/// This function preserves the original behavior for regex patterns,
+/// extracting any alphabetic characters as potential modifiers.
 fn extract_modifiers(text: &str) -> String {
     text.chars().take_while(|c| c.is_ascii_alphabetic()).collect()
+}
+
+/// Extract and validate substitution modifiers, returning only valid ones
+///
+/// Valid Perl substitution modifiers are: g, i, m, s, x, o, e, r
+/// This function provides panic-safe modifier validation for substitution operators,
+/// filtering out invalid modifiers to prevent security vulnerabilities.
+fn extract_substitution_modifiers(text: &str) -> String {
+    text.chars()
+        .take_while(|c| c.is_ascii_alphabetic())
+        .filter(|&c| matches!(c, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r'))
+        .collect()
 }

@@ -277,11 +277,11 @@ fn test_extract_transliteration_parts_comprehensive() {
         ("", ("", "", "")),                     // Empty - not ("xyzzy", "xyzzy", "xyzzy")
         ("tr", ("", "", "")),                   // Just prefix - not ("", "xyzzy", "xyzzy")
         ("y", ("", "", "")),                    // Just y prefix - not ("xyzzy", "", "xyzzy")
-        ("tr/abc/xyz/", ("abc", "", "xyz")),    // Basic tr - actual behavior
-        ("y/abc/xyz/d", ("abc", "", "xyz")),    // y with modifier - actual behavior
-        ("tr{abc}{xyz}d", ("abc", "xyz", "d")), // Paired delimiters - correct behavior
+        ("tr/abc/xyz/", ("abc", "xyz", "")),    // Basic tr - security fix: invalid modifiers filtered
+        ("y/abc/xyz/d", ("abc", "xyz", "d")),   // y with valid modifier - security fix applied
+        ("tr{abc}{xyz}d", ("abc", "xyz", "d")), // Paired delimiters - consistent behavior
         ("y(abc)(xyz)", ("abc", "xyz", "")),    // Parentheses - correct behavior
-        ("tr[abc][xyz]cd", ("abc", "xyz", "cd")), // Multiple modifiers - correct behavior
+        ("tr[abc][xyz]cd", ("abc", "xyz", "cd")), // Multiple valid modifiers - correct behavior
     ];
 
     for (input, expected) in test_cases {
@@ -304,11 +304,11 @@ fn test_extract_transliteration_delimiter_detection() {
     assert_eq!(search, "old", "Paired delimiter search extraction");
     assert_eq!(replace, "new", "Paired delimiter replace extraction");
 
-    // Test non-paired delimiter detection - actual behavior
+    // Test non-paired delimiter detection - security fix applied
     let (search, replace, modifiers) = extract_transliteration_parts("tr/old/new/");
     assert_eq!(search, "old", "Non-paired delimiter search extraction");
-    assert_eq!(replace, "", "Non-paired delimiter replace extraction - actual behavior");
-    assert_eq!(modifiers, "new", "Non-paired delimiter modifiers - actual behavior");
+    assert_eq!(replace, "new", "Non-paired delimiter replace extraction - corrected behavior");
+    assert_eq!(modifiers, "", "Non-paired delimiter modifiers - security fix: invalid modifiers filtered");
 }
 
 // Comprehensive tests for extract_modifiers helper (tested indirectly)
@@ -317,13 +317,13 @@ fn test_extract_transliteration_delimiter_detection() {
 fn test_extract_modifiers_comprehensive() {
     let test_cases = vec![
         ("s/test/repl/", ""),          // Empty modifiers - should return "", not "xyzzy"
-        ("s/test/repl/abc", "abc"),    // All alphabetic - should return "abc", not "xyzzy"
-        ("s/test/repl/abc123", "abc"), // Mixed - should return "abc", not ""
+        ("s/test/repl/abc", ""),       // Invalid modifiers - security fix: filtered out
+        ("s/test/repl/abc123", ""),    // Invalid modifiers - security fix: filtered out
         ("s/test/repl/123", ""),       // No alphabetic - should return "", not "xyzzy"
-        ("s/test/repl/abc!", "abc"),   // Alphabetic + punctuation - should return "abc"
+        ("s/test/repl/abc!", ""),      // Invalid modifiers - security fix: filtered out
         ("s/test/repl/!abc", ""),      // Starts with non-alphabetic - should return ""
-        ("s/test/repl/AbC", "AbC"),    // Mixed case - should preserve case
-        ("s/test/repl/aBc123XyZ", "aBc"), // Stop at first non-alphabetic
+        ("s/test/repl/gim", "gim"),    // Valid substitution modifiers - should preserve
+        ("s/test/repl/gimsx", "gimsx"), // Valid substitution modifiers - should preserve all
     ];
 
     for (input, expected) in test_cases {
@@ -341,12 +341,13 @@ fn test_extract_modifiers_comprehensive() {
 #[test]
 fn test_extract_modifiers_properties() {
     // Property: result should never contain non-alphabetic chars
+    // Updated for security fix: only valid modifiers should be preserved
     let test_cases = vec![
-        ("s/test/repl/a1b", "a"),
-        ("s/test/repl/abc!", "abc"),
-        ("s/test/repl/123abc", ""),
-        ("s/test/repl/ab cd", "ab"),
-        ("tr/a/b/a\nb", "b"),
+        ("s/test/repl/a1b", ""), // 'a' is invalid for substitution operators
+        ("s/test/repl/abc!", ""), // 'a', 'b', 'c' are invalid for substitution operators
+        ("s/test/repl/123abc", ""), // numbers filtered out, 'a', 'b', 'c' invalid
+        ("s/test/repl/ab cd", ""), // 'a', 'b' are invalid for substitution operators
+        ("tr/a/b/a\nb", ""), // 'a', 'b' are invalid for transliteration (only 'c', 'd', 's', 'r' valid)
     ];
 
     for (input, expected) in test_cases {
@@ -374,9 +375,13 @@ fn test_extract_modifiers_properties() {
     let (_, _, modifiers) = extract_substitution_parts("s/test/repl/");
     assert_eq!(modifiers, "", "Empty modifiers should give empty result");
 
-    // Property: purely alphabetic modifiers should be returned unchanged
+    // Property: purely alphabetic modifiers should be filtered to valid ones only
     let (_, _, modifiers) = extract_substitution_parts("s/test/repl/abcDEF");
-    assert_eq!(modifiers, "abcDEF", "Pure alphabetic modifiers should be unchanged");
+    assert_eq!(modifiers, "", "Invalid alphabetic modifiers should be filtered out");
+
+    // Property: valid substitution modifiers should be preserved
+    let (_, _, modifiers) = extract_substitution_parts("s/test/repl/gimsx");
+    assert_eq!(modifiers, "gimsx", "Valid substitution modifiers should be preserved");
 }
 
 // Integration tests combining all functions
