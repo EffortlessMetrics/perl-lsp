@@ -239,6 +239,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[File Completion Guide](docs/FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
 - **[Import Optimizer Guide](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Comprehensive import analysis and optimization
 - **[Threading Configuration Guide](docs/THREADING_CONFIGURATION_GUIDE.md)** - Adaptive threading and concurrency management
+- **[Conditional Documentation Compilation](docs/CONDITIONAL_DOCS_COMPILATION_STRATEGY.md)** - Performance-optimized missing_docs enforcement strategy
 
 ### Architecture Decision Records (ADRs)
 - **[ADR-001: Agent Architecture](docs/ADR_001_AGENT_ARCHITECTURE.md)** - 97 specialized agents and workflow coordination (PR #153)
