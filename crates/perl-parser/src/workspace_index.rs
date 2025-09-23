@@ -479,6 +479,16 @@ impl WorkspaceIndex {
         symbols
     }
 
+    /// Check if the workspace index has symbols (soft readiness check)
+    ///
+    /// Returns true if the index contains any symbols, indicating that
+    /// at least some files have been indexed and the workspace is ready
+    /// for symbol-based operations like completion.
+    pub fn has_symbols(&self) -> bool {
+        let files = self.files.read().unwrap();
+        files.values().any(|file_index| !file_index.symbols.is_empty())
+    }
+
     /// Search for symbols by query
     pub fn search_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
         let query_lower = query.to_lowercase();
