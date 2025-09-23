@@ -220,7 +220,7 @@ mod doc_validation_helpers {
         // Strategy: Enable missing_docs warnings specifically for doc generation
         let output = Command::new("cargo")
             .args(&["doc", "--no-deps", "--package", "perl-parser"])
-            .env("RUSTFLAGS", "-W missing_docs")  // Force warnings for doc validation
+            .env("RUSTFLAGS", "-W missing_docs") // Force warnings for doc validation
             .current_dir(package_dir)
             .output()
             .map_err(|e| format!("Failed to execute cargo doc: {}", e))?;
@@ -528,7 +528,10 @@ mod missing_docs_tests {
             // Fast path: Basic validation for performance-critical test runs
             let lib_path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/lib.rs");
             let content = std::fs::read_to_string(lib_path).expect("Failed to read lib.rs");
-            assert!(content.contains("warn(missing_docs)"), "missing_docs warning should be configured");
+            assert!(
+                content.contains("warn(missing_docs)"),
+                "missing_docs warning should be configured"
+            );
             return;
         }
 
@@ -2151,9 +2154,7 @@ pub fn bad_refs() {}
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
 
         // Optimized file enumeration: only process critical files during fast execution
-        let critical_files = vec![
-            "lib.rs", "parser.rs", "ast.rs", "error.rs", "token_stream.rs"
-        ];
+        let critical_files = vec!["lib.rs", "parser.rs", "ast.rs", "error.rs", "token_stream.rs"];
 
         let all_rust_files = if std::env::var("PERL_FAST_DOC_CHECK").is_ok() {
             critical_files.into_iter().map(|s| s.to_string()).collect()

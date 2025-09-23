@@ -736,7 +736,7 @@ pub enum NodeKind {
 
     /// Readline operation for LSP file processing
     Readline {
-        /// Optional filehandle: <STDIN>, <$fh>, etc.
+        /// Optional filehandle: `<STDIN>`, `<$fh>`, etc.
         filehandle: Option<String>, // <STDIN>, <$fh>, etc.
     },
 
