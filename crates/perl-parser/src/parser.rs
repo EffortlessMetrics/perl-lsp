@@ -28,7 +28,7 @@
 //! ```rust
 //! use perl_parser::Parser;
 //!
-//! let mut parser = Parser::new("my $data_filter = sub { /valid/ };");
+//! let mut parser = Parser::new("my $var = 42; sub hello { print $var; }");
 //! match parser.parse() {
 //!     Ok(ast) => {
 //!         // AST ready for LSP workflow processing

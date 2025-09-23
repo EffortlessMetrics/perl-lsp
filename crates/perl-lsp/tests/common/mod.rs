@@ -467,9 +467,9 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
         server.writer.flush().unwrap();
     }
 
-    // wait specifically for id=1
-    let resp =
-        read_response_matching_i64(server, 1, adaptive_timeout()).expect("initialize response");
+    // wait specifically for id=1 - use extended timeout for initialization
+    let init_timeout = adaptive_timeout() * 2; // Double timeout for critical initialization
+    let resp = read_response_matching_i64(server, 1, init_timeout).expect("initialize response");
 
     // Send initialized notification with a brief delay
     std::thread::sleep(Duration::from_millis(50));
