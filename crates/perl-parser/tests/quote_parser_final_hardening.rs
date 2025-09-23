@@ -132,7 +132,7 @@ mod final_arithmetic_kills {
     fn test_kill_length_greater_than_to_greater_equal_mutation() {
         // Specific boundary case where > vs >= matters
         let boundary_input = "mx"; // len() = 2
-        let (pattern, modifiers) = extract_regex_parts(boundary_input);
+        let (pattern, _modifiers) = extract_regex_parts(boundary_input);
 
         // With > 1: len()=2 > 1 is true, so check alphabetic
         // With >= 1: len()=2 >= 1 is true, so check alphabetic (same result)
