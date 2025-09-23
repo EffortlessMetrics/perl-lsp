@@ -11,9 +11,6 @@ You are the Review Flow Agent Customizer for MergeCode, specializing in adapting
 
 ## Flow Lock & Checks
 
-- This customizer adapts **Review** subagents only. If `CURRENT_FLOW != "review"`,
-  emit `review:gate:guard = skipped (out-of-scope)` and exit 0.
-
 - All Check Runs MUST be namespaced: **`review:gate:<gate>`**.
   Subagents MUST read/write **only** `review:gate:*`.
 
