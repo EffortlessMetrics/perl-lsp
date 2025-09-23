@@ -475,7 +475,20 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
     std::thread::sleep(Duration::from_millis(50));
     send_notification(server, json!({"jsonrpc":"2.0","method":"initialized"}));
 
+    // Wait for index-ready notification to ensure deterministic completion behavior
+    await_index_ready(server);
+
     resp
+}
+
+/// Wait for the index-ready notification from the server
+pub fn await_index_ready(server: &mut LspServer) {
+    // Wait for perl-lsp/index-ready notification with a reasonable timeout
+    if let Some(_notification) = read_notification_method(server, "perl-lsp/index-ready", Duration::from_millis(1500)) {
+        eprintln!("Index ready notification received");
+    } else {
+        eprintln!("No index-ready notification received within timeout (proceeding anyway)");
+    }
 }
 
 /// Gracefully shut the server down (best-effort) without hanging tests.
