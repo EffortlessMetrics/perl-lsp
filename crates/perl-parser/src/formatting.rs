@@ -24,17 +24,24 @@
 //! # Usage Examples
 //!
 //! ```rust
-//! use perl_parser::formatting::{PerlTidyFormatter, FormattingOptions};
+//! use perl_parser::perltidy::{PerlTidyFormatter, PerlTidyConfig};
+//! use perl_parser::formatting::FormattingOptions;
 //!
 //! // Format Perl parsing script with standard options
 //! let script = "sub process_email{my$msg=shift;return$msg;}";
-//! let options = FormattingOptions::default();
-//! let formatter = PerlTidyFormatter::new();
+//! let _options = FormattingOptions {
+//!     tab_size: 4,
+//!     insert_spaces: true,
+//!     trim_trailing_whitespace: Some(true),
+//!     insert_final_newline: Some(true),
+//!     trim_final_newlines: Some(true),
+//! };
+//! let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default());
 //!
-//! match formatter.format_document(script, &options) {
-//!     Ok(edits) => {
-//!         // Apply formatting edits to Perl script
-//!         println!("Formatted {} edits", edits.len());
+//! match formatter.format(script) {
+//!     Ok(formatted_text) => {
+//!         // Apply formatting to Perl script
+//!         println!("Formatted text: {}", formatted_text);
 //!     }
 //!     Err(e) => {
 //!         // Handle formatting errors gracefully

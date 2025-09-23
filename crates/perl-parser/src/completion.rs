@@ -274,7 +274,7 @@ impl CompletionProvider {
     /// ```rust
     /// use perl_parser::{Parser, CompletionProvider};
     ///
-    /// let mut parser = Parser::new("my $data_filter = sub { /valid/ };");
+    /// let mut parser = Parser::new("my $var = 42; sub hello { print $var; }");
     /// let ast = parser.parse().unwrap();
     /// let provider = CompletionProvider::new_with_index(&ast, None);
     /// // Provider ready for Perl script completion analysis
@@ -566,7 +566,7 @@ impl CompletionProvider {
     /// ```rust
     /// use perl_parser::{Parser, CompletionProvider};
     ///
-    /// let script = "my $data_filter = sub { my $var; };";
+    /// let script = "my $var = 42; sub hello { print $var; }";
     /// let mut parser = Parser::new(script);
     /// let ast = parser.parse().unwrap();
     ///

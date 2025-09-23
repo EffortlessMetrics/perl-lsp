@@ -1,6 +1,11 @@
 //! Code actions and quick fixes for Perl
 //!
 //! This module provides automated fixes for common issues and refactoring actions.
+//!
+//! # Related Modules
+//!
+//! See also [`crate::diagnostics`] for issue detection and [`crate::import_optimizer`]
+//! for import-related code actions.
 
 use crate::ast::{Node, NodeKind, SourceLocation};
 use crate::diagnostics::Diagnostic;
