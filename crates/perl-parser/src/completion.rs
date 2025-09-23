@@ -577,8 +577,8 @@ impl CompletionProvider {
     /// assert!(!completions.is_empty());
     /// ```
     ///
-    /// See also [`get_completions_with_path_cancellable`] for cancellation support
-    /// and [`get_completions`] for simple completions without filepath context.
+    /// See also [`Self::get_completions_with_path_cancellable`] for cancellation support
+    /// and [`Self::get_completions`] for simple completions without filepath context.
     pub fn get_completions_with_path(
         &self,
         source: &str,
@@ -873,7 +873,7 @@ impl CompletionProvider {
     /// assert!(completions.iter().any(|c| c.label.contains("email_count")));
     /// ```
     ///
-    /// See also [`get_completions_with_path`] for enhanced context-aware completions.
+    /// See also [`Self::get_completions_with_path`] for enhanced context-aware completions.
     pub fn get_completions(&self, source: &str, position: usize) -> Vec<CompletionItem> {
         self.get_completions_with_path(source, position, None)
     }

@@ -39,7 +39,10 @@
 // Strategy: Preserve documentation quality while enabling revolutionary 5000x LSP performance
 // - Enterprise development: warnings enforced for quality assurance
 // - Test environments: warnings conditionally disabled for sub-second execution
-#![cfg_attr(all(not(test), not(feature = "test-compat"), not(feature = "test-performance")), warn(missing_docs))]
+#![cfg_attr(
+    all(not(test), not(feature = "test-compat"), not(feature = "test-performance")),
+    warn(missing_docs)
+)]
 #![warn(clippy::all)]
 #![allow(
     // Core allows for parser/lexer code
