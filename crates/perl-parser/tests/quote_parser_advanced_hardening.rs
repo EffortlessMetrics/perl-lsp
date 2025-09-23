@@ -132,13 +132,13 @@ mod arithmetic_boundary_hardening {
 
         // Test just over boundary
         let over_boundary = "mx"; // len() = 2
-        let (pattern, modifiers) = extract_regex_parts(over_boundary);
+        let (pattern, _modifiers) = extract_regex_parts(over_boundary);
         // This should detect alphabetic 'x' and return text directly
         assert_eq!(pattern, "mxm", "Two char 'mx' should be handled correctly");
 
         // Test well over boundary
         let well_over = "m/test/"; // len() = 7
-        let (pattern, modifiers) = extract_regex_parts(well_over);
+        let (pattern, _modifiers) = extract_regex_parts(well_over);
         assert_eq!(pattern, "/test/", "Multi char should extract pattern correctly");
     }
 
@@ -318,7 +318,7 @@ mod control_flow_hardening {
         ];
 
         for input in edge_cases {
-            let result = extract_substitution_parts(input);
+            let _result = extract_substitution_parts(input);
             // Should not panic - control flow should handle all cases gracefully
             assert!(true, "Control flow should handle edge case: {}", input);
         }
