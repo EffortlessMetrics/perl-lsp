@@ -216,6 +216,13 @@ mod doc_validation_helpers {
 
     /// Runs cargo doc and validates output for warnings (performance-optimized)
     pub fn validate_cargo_doc_generation(package_dir: &str) -> Result<(), String> {
+        // Skip locally unless explicitly enabled
+        if std::env::var("CI").ok().as_deref() != Some("true")
+            && std::env::var("DOCS_ENFORCE").ok().as_deref() != Some("1")
+        {
+            eprintln!("Skipping cargo doc generation outside CI (set DOCS_ENFORCE=1 to run).");
+            return Ok(());
+        }
         // Performance optimization: Use more efficient cargo doc validation
         // Strategy: Enable missing_docs warnings specifically for doc generation
         let output = Command::new("cargo")
