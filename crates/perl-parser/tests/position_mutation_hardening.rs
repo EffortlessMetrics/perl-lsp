@@ -147,7 +147,7 @@ fn test_utf16_fractional_positions() {
         } else {
             // Fractional positions should be between 6 and 8
             assert!(
-                col >= 6 && col <= 8,
+                (6..=8).contains(&col),
                 "Fractional position should be between 6 and 8, got {}",
                 col
             );

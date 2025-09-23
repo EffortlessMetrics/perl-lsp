@@ -305,9 +305,6 @@ fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &s
     (body, &text[end_pos..])
 }
 
-/// Extract only alphabetic characters as modifiers for regex patterns
-///
-
 /// Extract and validate substitution modifiers, returning only valid ones
 ///
 /// Valid Perl substitution modifiers are: g, i, m, s, x, o, e, r
