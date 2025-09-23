@@ -40,13 +40,14 @@
 //!
 //! // Rename function across all Perl scripts
 //! let result = refactor.rename_symbol(
-//!     "file:///data_processor.pl",
-//!     position,
-//!     "enhanced_process_data"
+//!     "process_data",
+//!     "enhanced_process_data",
+//!     &std::path::Path::new("data_processor.pl"),
+//!     (0, 0)
 //! ).unwrap();
 //!
 //! // Apply import optimization across Perl modules
-//! let optimized = refactor.optimize_imports("file:///data_utils.pm").unwrap();
+//! let optimized = refactor.optimize_imports().unwrap();
 //! ```
 
 use crate::import_optimizer::ImportOptimizer;

@@ -91,9 +91,10 @@ fn fuzz_dual_indexing_function_patterns() {
 
         // Test that result is reasonable
         if let Ok(parse_result) = result
-            && let Ok(_ast) = parse_result {
-                // Parsing succeeded - AST structure could be validated here
-            }
+            && let Ok(_ast) = parse_result
+        {
+            // Parsing succeeded - AST structure could be validated here
+        }
     }
 }
 
@@ -273,8 +274,9 @@ fn fuzz_performance_under_stress() {
 
         // Memory usage should be reasonable (basic check)
         if let Ok(parse_result) = result
-            && let Ok(_ast) = parse_result {
-                // AST created successfully
-            }
+            && let Ok(_ast) = parse_result
+        {
+            // AST created successfully
+        }
     }
 }
