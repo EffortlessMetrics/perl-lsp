@@ -41,6 +41,145 @@
                                       └──────────────────┘
 ```
 
+## Documentation Requirements for LSP Providers (*Diataxis: How-to Guide* - Enterprise API documentation standards)
+
+### Missing Documentation Infrastructure (SPEC-149) ✅ **IMPLEMENTED**
+
+As of **Draft PR 159 (SPEC-149)**, all LSP provider implementations must comply with comprehensive API documentation standards enforced through `#![warn(missing_docs)]`. This section outlines specific requirements for LSP provider documentation.
+
+#### Required Documentation Components
+
+**All LSP Provider Modules Must Include**:
+
+1. **Module-Level Documentation**: LSP workflow integration context
+2. **Function Documentation**: Complete API coverage with examples
+3. **Performance Documentation**: Scaling characteristics and optimization notes
+4. **Protocol Compliance**: LSP specification adherence details
+5. **Error Handling**: Recovery strategies and diagnostic information
+
+#### LSP Provider Documentation Template
+
+```rust
+//! LSP Completion Provider - Intelligent Perl code completion with workspace integration.
+//!
+//! This module implements the Language Server Protocol `textDocument/completion` capability,
+//! providing context-aware autocompletion for Perl code. Integrates with the workspace
+//! indexing system to offer both local and cross-file completion candidates.
+//!
+//! # LSP Pipeline Integration
+//! - **Parse**: Uses AST context for completion point analysis
+//! - **Index**: Leverages workspace symbols for completion candidates
+//! - **Navigate**: Provides jump-to-definition integration for completed items
+//! - **Complete**: Primary implementation of completion capabilities
+//! - **Analyze**: Uses scope analysis for variable completion filtering
+//!
+//! # Performance Characteristics
+//! - **Response Time**: <50ms for completion requests with workspace caching
+//! - **Memory Usage**: O(n) where n is number of workspace symbols
+//! - **Thread Safety**: Fully thread-safe with atomic workspace updates
+//!
+//! # Protocol Compliance
+//! - **LSP Version**: 3.18 full compliance
+//! - **Capabilities**: Supports completion items, resolve, and snippets
+//! - **Trigger Characters**: `.`, `:`, `$`, `@`, `%` for context-sensitive completion
+
+/// Provides intelligent Perl code completion with workspace-aware symbol resolution.
+///
+/// Implements the LSP `textDocument/completion` request handler, analyzing the current
+/// cursor position to provide contextually relevant completion candidates. Supports
+/// variable completion, function completion, module imports, and package navigation.
+///
+/// # Arguments
+/// * `params` - LSP completion parameters containing document URI and cursor position
+/// * `workspace_index` - Shared workspace symbol index for cross-file completion
+///
+/// # Returns
+/// * `Ok(CompletionResponse)` - List of completion items with documentation
+/// * `Err(LspError)` - When document cannot be accessed or parsed
+///
+/// # Examples
+/// ```rust
+/// use perl_parser::completion::CompletionProvider;
+/// use lsp_types::CompletionParams;
+///
+/// let provider = CompletionProvider::new(workspace_index);
+/// let items = provider.provide_completion(params)?;
+/// assert!(!items.is_empty());
+/// ```
+///
+/// # Performance Characteristics
+/// * **Time Complexity**: O(log n) for symbol lookup with workspace caching
+/// * **Memory Usage**: Minimal allocations with shared workspace references
+/// * **Workspace Scale**: Handles 10,000+ symbols with <50ms response time
+///
+/// # LSP Protocol Integration
+/// * **Request**: `textDocument/completion` with position-based context
+/// * **Response**: `CompletionList` with items, documentation, and resolve support
+/// * **Threading**: Thread-safe with concurrent request handling
+///
+/// # Error Recovery
+/// * **Parse Errors**: Provides partial completions based on available context
+/// * **Workspace Issues**: Falls back to local file symbols when workspace unavailable
+/// * **Position Errors**: Uses nearest valid context for completion candidates
+///
+/// # See Also
+/// * [`CompletionItemResolver`] - For resolve requests with additional documentation
+/// * [`WorkspaceIndex::get_symbols`] - For workspace symbol integration
+/// * [`ScopeAnalyzer::analyze_completion_context`] - For context-sensitive filtering
+pub fn provide_completion(
+    &self,
+    params: CompletionParams,
+) -> Result<CompletionResponse, LspError> {
+    // Implementation...
+}
+```
+
+#### Phase 2 Priority Modules
+
+The following LSP provider modules are **Phase 2 priorities** in the systematic documentation resolution strategy:
+
+```bash
+# LSP provider modules requiring comprehensive documentation (Phase 2: Weeks 3-4)
+src/completion.rs               # Autocompletion engine - ~50 violations
+src/workspace_index.rs          # Workspace symbol indexing - ~45 violations
+src/diagnostics.rs              # Error and warning reporting - ~40 violations
+src/semantic_tokens.rs          # Syntax highlighting - ~35 violations
+src/hover.rs                    # Hover information - ~30 violations
+```
+
+#### Validation Commands
+
+```bash
+# Test LSP provider documentation compliance
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_lsp_provider_documentation_critical_paths
+
+# Validate specific LSP components
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_comprehensive_pstx_pipeline_documentation
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_performance_documentation_presence
+```
+
+#### LSP-Specific Documentation Requirements
+
+1. **Protocol Compliance Documentation**:
+   - LSP specification version and capability surface
+   - Request/response message format compliance
+   - Error handling and protocol edge cases
+
+2. **Thread Safety Documentation**:
+   - Concurrent request handling patterns
+   - Workspace state synchronization mechanisms
+   - Adaptive threading configuration integration
+
+3. **Performance Documentation**:
+   - Response time targets (<50ms for most operations)
+   - Memory usage patterns and optimization strategies
+   - Workspace scaling characteristics (10,000+ symbols)
+
+4. **Integration Documentation**:
+   - Editor integration patterns (VSCode, Neovim, Emacs)
+   - Dual indexing strategy usage and benefits
+   - Cross-file navigation and workspace management
+
 ## Secure UTF-16 Position Mapping (PR #153) (*Diataxis: Reference* - Position conversion API and security patterns)
 
 ### Security-Enhanced Position Conversion API
