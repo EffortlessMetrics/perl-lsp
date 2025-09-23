@@ -194,11 +194,13 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
                     char_start -= 1;
                 }
 
-                // Always map mid-character bytes to the UTF-16 position at the start of the character
-                // This creates symmetric behavior for roundtrip conversion
+                // Map mid-character bytes to the next UTF-16 position to handle emoji correctly
+                // For emoji like 😀 (4 UTF-8 bytes, 2 UTF-16 units), offset 1-3 should map to column 1
                 let prefix = &line[..char_start];
                 let utf16_col = prefix.encode_utf16().count() as u32;
-                return (line_idx as u32, utf16_col);
+                // If we're in the middle of a character, advance to the next UTF-16 position
+                let next_utf16_col = utf16_col + 1;
+                return (line_idx as u32, next_utf16_col);
             }
         }
         acc = next;
