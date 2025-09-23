@@ -352,17 +352,18 @@ impl LspServer {
     /// Send index-ready notification to inform clients that workspace indexing is available
     fn send_index_ready_notification(&self) -> io::Result<()> {
         #[cfg(feature = "workspace")]
-        let has_symbols = self.workspace_index
-            .as_ref()
-            .map(|idx| idx.has_symbols())
-            .unwrap_or(false);
+        let has_symbols =
+            self.workspace_index.as_ref().map(|idx| idx.has_symbols()).unwrap_or(false);
 
         #[cfg(not(feature = "workspace"))]
         let has_symbols = false;
 
-        self.notify("perl-lsp/index-ready", json!({
-            "ready": has_symbols
-        }))
+        self.notify(
+            "perl-lsp/index-ready",
+            json!({
+                "ready": has_symbols
+            }),
+        )
     }
 
     /// Run the LSP server
@@ -1745,11 +1746,12 @@ impl LspServer {
                     .map(|c| {
                         // Determine insertTextFormat based on client capability and completion kind
                         let is_snippet = c.kind == CompletionItemKind::Snippet;
-                        let insert_text_format = if is_snippet && self.client_capabilities.snippet_support {
-                            2 // Snippet format
-                        } else {
-                            1 // PlainText format
-                        };
+                        let insert_text_format =
+                            if is_snippet && self.client_capabilities.snippet_support {
+                                2 // Snippet format
+                            } else {
+                                1 // PlainText format
+                            };
 
                         let mut item = json!({
                             "label": c.label,
