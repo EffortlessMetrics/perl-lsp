@@ -5,6 +5,7 @@
 use perl_parser::quote_parser::*;
 use proptest::prelude::*;
 
+#[allow(unused_doc_comments)]
 /// Test regex parts extraction with stress inputs
 /// Focus: memory safety, panic prevention, UTF-8 safety
 proptest! {
@@ -33,6 +34,7 @@ proptest! {
     }
 }
 
+#[allow(unused_doc_comments)]
 /// Test substitution parts extraction with stress inputs
 /// Focus: delimiter handling, escape sequences, memory bounds
 proptest! {
@@ -68,6 +70,7 @@ proptest! {
     }
 }
 
+#[allow(unused_doc_comments)]
 /// Test transliteration parts with focus on AST invariants
 /// Focus: character class handling, modifier validation
 proptest! {
