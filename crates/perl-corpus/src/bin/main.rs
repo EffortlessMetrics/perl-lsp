@@ -1,3 +1,5 @@
+#![allow(clippy::pedantic)] // Binary tool - focus on core clippy lints only
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use perl_corpus::{index::write_indices, parse_dir};

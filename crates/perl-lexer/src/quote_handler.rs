@@ -46,7 +46,7 @@ pub fn canon_run(run: &str, spec: &ModSpec) -> String {
     out
 }
 
-/// Split a contiguous alphabetic tail into (run_flags, charset_flag) for the given spec
+/// Split a contiguous alphabetic tail into (`run_flags`, `charset_flag`) for the given spec
 pub fn split_tail_for_spec(tail: &str, spec: &ModSpec) -> Option<(String, Option<&'static str>)> {
     // Must be all alphabetic
     if !tail.chars().all(|c| c.is_ascii_alphabetic()) {

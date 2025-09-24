@@ -1,3 +1,5 @@
+#![allow(clippy::pedantic)] // Build script - focus on core clippy lints only
+
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};

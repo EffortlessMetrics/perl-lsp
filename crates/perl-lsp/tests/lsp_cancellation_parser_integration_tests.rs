@@ -42,6 +42,8 @@ struct ParserIntegrationFixture {
 impl ParserIntegrationFixture {
     fn new() -> Self {
         let mut server = start_lsp_server();
+        // Note: Use a fresh server instance for each fixture to avoid initialization conflicts
+        // Each test gets its own independent LSP server instance
         initialize_lsp(&mut server);
 
         // Create comprehensive test workspace for parser integration testing
