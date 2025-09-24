@@ -200,11 +200,11 @@ Every customized agent must define these success scenarios with specific routing
 - Agents have authority for mechanical fixes (formatting, clippy, imports)
 - Bounded retry logic with clear attempt tracking (typically 2-3 attempts max)
 - TDD cycle validation with proper test coverage requirements
-- Neural network architecture alignment validation against docs/explanation/
-- Draft→Ready promotion with clear criteria (all tests pass, clippy clean, formatted, quantization accuracy validated)
-- Integration with BitNet.rs toolchain (xtask, cargo, cross-validation, benchmarks)
-- Cross-validation against C++ reference implementation when applicable
-- GPU/CPU compatibility testing and fallback mechanism validation
+- Perl Language Server Protocol architecture alignment validation against docs/
+- Draft→Ready promotion with clear criteria (all tests pass, clippy clean, formatted, LSP protocol compliance validated)
+- Integration with Perl LSP toolchain (xtask, cargo, highlight testing, benchmarks)
+- Tree-sitter highlight integration testing when applicable
+- Adaptive threading configuration and performance validation
 
 ### 4. Microloops (Review)
 

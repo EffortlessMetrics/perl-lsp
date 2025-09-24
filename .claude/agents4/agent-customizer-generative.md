@@ -81,7 +81,7 @@ Evidence
 - test: 148/154 pass; new: 0/6 pass; AC satisfied: 9/9
 - mutation: 86% (threshold 80%); survivors: 12 (top 3 files…)
 - fuzz: 0 crashes in 300s; corpus size: 41
-- paths: crates/parser/src/lib.rs:184, docs/explanation/…/xyz.md
+- paths: crates/perl-parser/src/lib.rs:184, docs/LSP_IMPLEMENTATION_GUIDE.md
 
 **Standardized Evidence Format (All Flows):**
 ```
@@ -103,16 +103,16 @@ Agents should populate the Story → Schema → Tests → Code table with concre
 **Gate Evolution Position (Generative → Review → Integrative):**
 - **Generative**: `benchmarks` (establish baseline) → feeds to Review
 - **Review**: inherits baseline, adds `perf` (validate deltas) → feeds to Integrative
-- **Integrative**: inherits metrics, adds `throughput` (SLO validation)
+- **Integrative**: inherits metrics, adds `parsing` (SLO validation)
 
 **Generative-Specific Policies:**
-- **Features gate**: ≤3-combo smoke (`cpu|gpu|none`) after `impl-creator`; emit `smoke 3/3 ok`
+- **Features gate**: ≤3-combo smoke (`parser|lsp|lexer`) after `impl-creator`; emit `smoke 3/3 ok`
 - **Security gate**: Optional with fallbacks; use `skipped (generative flow)` only when no viable validation
 - **Benchmarks vs Perf**: May set `benchmarks` baseline; do NOT set `perf` in this flow (Review flow responsibility)
-- **Test naming**: Name tests by feature: `cpu_*`, `gpu_*`, `quantization_*`, `inference_*` to enable coverage reporting
-- **Commit linkage**: Example: `feat(bitnet): implement I2S quantization for GPU acceleration`
-- **Cross-validation**: Run against C++ implementation when available: `cargo run -p xtask -- crossval`
-- **Model validation**: Verify GGUF compatibility: `cargo run -p xtask -- verify --model <path>`
+- **Test naming**: Name tests by feature: `parser_*`, `lsp_*`, `lexer_*`, `highlight_*` to enable coverage reporting
+- **Commit linkage**: Example: `feat(perl-parser): implement enhanced builtin function parsing`
+- **Highlight validation**: Run Tree-sitter highlight tests when available: `cd xtask && cargo run highlight`
+- **LSP validation**: Verify protocol compliance: `cargo test -p perl-lsp --test lsp_comprehensive_e2e_test`
 
 Decision / Route
 - NEXT → <agent> | FINALIZE → <gate> (1 line; why)
@@ -345,7 +345,7 @@ Ensure every adapted agent meets these criteria:
 - [ ] Minimal domain-aware labels (`flow:*`, `state:*`, optional `topic:*`/`needs:*`)
 - [ ] Plain language reporting with NEXT/FINALIZE routing
 - [ ] cargo + xtask commands for Check Runs, Gates rows, and hop log updates
-- [ ] References docs/explanation/docs/reference storage convention
+- [ ] References docs/ storage convention following Diátaxis framework
 - [ ] Multiple "flow successful" paths clearly defined (task done, additional work needed, needs specialist, architectural issue)
 - [ ] API contract validation for real artifacts, not agent outputs
 - [ ] Integrates with Perl LSP-specific context (parser specs, LSP protocol compliance, TDD practices)
