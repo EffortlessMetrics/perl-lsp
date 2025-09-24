@@ -1,6 +1,6 @@
 # PR → Merge Integrative Flow
 
-You orchestrate the Integrative Flow: validate Ready PRs through gate-focused validation until they can be safely merged to main with objective receipts and MergeCode quality compliance.
+You orchestrate the Integrative Flow: validate Ready PRs through gate-focused validation until they can be safely merged to main with objective receipts and Perl LSP production readiness compliance.
 
 ## Starting Condition
 
@@ -29,39 +29,39 @@ You orchestrate the Integrative Flow: validate Ready PRs through gate-focused va
 |------|------------|-------------|---------|
 | Generative | `benchmarks` (establish baseline) | - | Create implementation foundation |
 | Review | Inherit baseline | `perf` (validate deltas) | Validate quality & readiness |
-| **Integrative** | Inherit metrics | `throughput` (SLO validation) | Validate production readiness |
+| **Integrative** | Inherit metrics | `parsing` (SLO validation) | Validate production readiness |
 
 **Flow Transition Criteria:**
 - **From Review:** All quality gates pass, performance deltas acceptable, Ready for production validation
-- **To Main:** All production gates pass including throughput SLOs, cross-validation complete, integration testing successful
+- **To Main:** All production gates pass including parsing SLOs, LSP server stability complete, workspace integration successful
 
 **Evidence Inheritance:**
 - Integrative inherits benchmarks + perf metrics from Review
-- Validates SLOs and production readiness (≤10s inference performance)
-- Performs final integration, compatibility, and production validation
+- Validates SLOs and production readiness (≤1ms parsing performance)
+- Performs final integration, compatibility, and LSP server validation
 
-## BitNet.rs Neural Network Validation
+## Perl LSP Production Validation
 
-**Required BitNet.rs Context for All Agents:**
-- **Quantization Accuracy:** I2S, TL1, TL2 ≥ 99% accuracy vs FP32 reference
-- **Cross-Validation:** `cargo run -p xtask -- crossval` - Rust vs C++ parity within 1e-5 tolerance
-- **Feature Compatibility:** `--no-default-features --features cpu|gpu` validation with fallback testing
-- **GGUF Format:** Model compatibility and tensor alignment validation
-- **Performance SLO:** Neural network inference ≤ 10 seconds for standard models (production validation)
-- **Build Commands:** Always specify feature flags (default features are empty)
+**Required Perl LSP Context for All Agents:**
+- **Parsing Performance:** ≤1ms for incremental updates with 70-99% node reuse efficiency
+- **LSP Protocol Compliance:** ~89% LSP features functional with comprehensive workspace support
+- **Cross-File Navigation:** 98% reference coverage with dual indexing (qualified/unqualified patterns)
+- **Package Testing:** `cargo test -p perl-parser`, `cargo test -p perl-lsp`, `cargo test -p perl-lexer` validation
+- **Performance SLO:** Perl parsing and LSP operations ≤1ms for production validation
+- **Threading Configuration:** Adaptive threading with `RUST_TEST_THREADS=2` for LSP tests
 
 **Evidence Format Standards:**
 ```
-tests: cargo test: 412/412 pass; CPU: 280/280, GPU: 132/132
-quantization: I2S: 99.8%, TL1: 99.6%, TL2: 99.7% accuracy
-crossval: Rust vs C++: parity within 1e-5; 156/156 tests pass
-throughput: inference: 45.2 tokens/sec; SLO: ≤10s (pass)
+tests: cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30
+parsing: 1-150μs per file, incremental: <1ms updates; SLO: pass
+lsp: ~89% features functional; workspace navigation: 98% coverage
+threading: RUST_TEST_THREADS=2; behavioral tests: 0.31s (5000x improvement)
 ```
 
 ## GitHub-Native Receipts (NO ceremony)
 
 **Commits:** Clear prefixes (`fix:`, `chore:`, `docs:`, `test:`, `perf:`)
-**Check Runs:** Gate results (`integrative:gate:tests`, `integrative:gate:mutation`, `integrative:gate:security`, `integrative:gate:perf`, `integrative:gate:throughput`, etc.)
+**Check Runs:** Gate results (`integrative:gate:tests`, `integrative:gate:mutation`, `integrative:gate:security`, `integrative:gate:perf`, `integrative:gate:parsing`, etc.)
 **Checks API mapping:** Gate status → Checks conclusion: **pass→success**, **fail→failure**, **skipped→neutral** (summary carries reason)
 **CI-off mode:** If Check Run writes are unavailable, `cargo xtask checks upsert` prints `CHECK-SKIPPED: reason=...` and exits success. Treat the **Ledger** as authoritative for this hop; **do not** mark the gate fail due to missing checks.
 **Idempotent updates:** When re-emitting the same gate on the same commit, find existing check by `name + head_sha` and PATCH to avoid duplicates
@@ -106,11 +106,11 @@ Single PR comment with anchored sections (created by first agent, updated by all
 
 ```bash
 # Check Runs (authoritative for maintainers)
-cargo xtask check --gate tests --pr <NUM> --status pass --summary "412/412 tests pass"
-cargo xtask checks upsert --name "integrative:gate:tests" --conclusion success --summary "cargo test: 412/412 pass; AC satisfied: 9/9; throughput: files:5012, time:2m00s, rate:0.40 min/1K; Δ vs last: −7%"
+gh api -X POST repos/:owner/:repo/check-runs -f name="integrative:gate:tests" -f head_sha="$(git rev-parse HEAD)" -f status=completed -f conclusion=success -f output[summary]="cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30"
+gh api -X POST repos/:owner/:repo/check-runs -f name="integrative:gate:parsing" -f head_sha="$(git rev-parse HEAD)" -f status=completed -f conclusion=success -f output[summary]="parsing: 1-150μs per file, incremental: <1ms updates; SLO: pass"
 
 # Gates table (human-readable status)
-gh pr comment <NUM> --body "| tests | pass | cargo test: 412/412 pass |"
+gh pr comment <NUM> --body "| tests | pass | cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30 |"
 
 # Hop log (progress tracking)
 gh pr comment <NUM> --body "- [initial-reviewer] T1 triage complete; NEXT→feature-matrix-checker"
@@ -118,28 +118,29 @@ gh pr comment <NUM> --body "- [initial-reviewer] T1 triage complete; NEXT→feat
 # Labels (domain-aware replacement)
 gh pr edit <NUM> --add-label "flow:integrative,state:in-progress"
 
-# MergeCode-specific commands (primary)
-cargo fmt --all --check                                           # Format validation
-cargo clippy --workspace --all-targets --all-features -- -D warnings    # Lint validation
-cargo test --workspace --all-features                             # Test execution
-cargo build --workspace --all-features                            # Build validation
-cargo bench --workspace                                           # Performance baseline
-cargo mutant --no-shuffle --timeout 60                            # Mutation testing
-cargo fuzz run <target> -- -max_total_time=300                    # Fuzz testing
+# Perl LSP-specific commands (primary)
+cargo fmt --workspace --check                                     # Format validation
+cargo clippy --workspace                                          # Lint validation
+cargo test                                                        # Test execution (adaptive threading)
+cargo test -p perl-parser                                         # Parser library tests
+cargo test -p perl-lsp                                           # LSP server integration tests
+RUST_TEST_THREADS=2 cargo test -p perl-lsp                       # Adaptive threading for LSP tests
+cargo build -p perl-lsp --release                                # LSP server build validation
+cargo build -p perl-parser --release                             # Parser library build validation
+cargo bench                                                       # Performance baseline and benchmarking
+cargo mutant --no-shuffle --timeout 60                           # Mutation testing
+cargo fuzz run <target> -- -max_total_time=300                   # Fuzz testing
 cargo audit                                                       # Security audit
 
-# MergeCode xtask integration
-cargo xtask check --fix                                           # Comprehensive validation
-cargo xtask build --all-parsers                                   # Feature-aware build
-./scripts/validate-features.sh                                    # Feature compatibility
-./scripts/pre-build-validate.sh                                   # Environment validation
-./scripts/check-contracts.sh                                      # API contract validation
+# Perl LSP xtask integration
+cd xtask && cargo run highlight                                   # Tree-sitter highlight integration testing
+cd xtask && cargo run dev --watch                                 # Development server with hot-reload
 
-# Quality gate validation (MergeCode throughput)
-cargo run --bin mergecode -- write . --stats --incremental        # Performance validation
-cargo run --bin mergecode -- profile metrics large-codebase      # Throughput test
+# Quality gate validation (Perl LSP parsing performance)
+cargo bench                                                       # Parsing performance validation
+cargo test -p perl-parser --test comprehensive_parsing_tests     # Full parsing validation
 
-# Fallback when xtask unavailable (only after gates pass)
+# Fallback when preferred tools unavailable (only after gates pass)
 gh pr merge <NUM> --squash --delete-branch
 ```
 
@@ -154,10 +155,10 @@ Agents may route to themselves: "NEXT → self (attempt 2/3)" for bounded retrie
 
 ## Gate Vocabulary (uniform across flows)
 
-**Canonical gates:** `freshness, hygiene, format, clippy, spec, api, tests, build, mutation, fuzz, security, perf, docs, features, benchmarks, throughput`
+**Canonical gates:** `freshness, format, clippy, spec, api, tests, build, features, mutation, fuzz, security, benchmarks, perf, docs, parsing`
 
 **Required gates (enforced via branch protection):**
-- **Integrative (PR → Merge):** `freshness, format, clippy, tests, build, security, docs, perf, throughput`
+- **Integrative (PR → Merge):** `freshness, format, clippy, tests, build, security, docs, perf, parsing`
 - **Hardening (Optional but recommended):** `mutation, fuzz, features, benchmarks`
 - Gates must have status `pass|fail|skipped` only
 - Check Run names follow pattern: `integrative:gate:<gate>` for this flow
@@ -167,12 +168,12 @@ Agents may route to themselves: "NEXT → self (attempt 2/3)" for bounded retrie
 | Gate       | Primary agent(s)                                | What counts as **pass** (Check Run summary)                              | Evidence to mirror in Ledger "Gates" |
 |------------|--------------------------------------------------|----------------------------------------------------------------------------|--------------------------------------|
 | freshness  | rebase-checker, rebase-helper                    | PR at base HEAD (or rebase completed)                                     | `base up-to-date @<sha>` |
-| format     | initial-reviewer, pr-cleanup                     | `cargo fmt --all --check` passes                                          | `rustfmt: all files formatted` |
-| clippy     | initial-reviewer, pr-cleanup                     | `cargo clippy --all-targets --all-features -- -D warnings` passes        | `clippy: no warnings` |
-| spec       | initial-reviewer                                 | Spec files in docs/explanation/ aligned post-rebase/cleanup                | `spec: aligned to docs/explanation/` |
+| format     | initial-reviewer, pr-cleanup                     | `cargo fmt --workspace --check` passes                                    | `rustfmt: all files formatted` |
+| clippy     | initial-reviewer, pr-cleanup                     | `cargo clippy --workspace` passes with zero warnings                      | `clippy: 0 warnings (workspace)` |
+| spec       | initial-reviewer                                 | Spec files in docs/ aligned post-rebase/cleanup (Diátaxis framework)      | `spec: aligned to docs/` |
 | api        | feature-matrix-checker, pr-doc-reviewer          | API contracts consistent; breaking changes documented                      | `api: additive/none` **or** `breaking + migration docs` |
-| tests      | test-runner, context-scout                       | `cargo test --workspace --all-features` passes (all tests green)          | `cargo test: <n>/<n> pass` |
-| build      | feature-matrix-checker, build-validator          | `cargo build --workspace --all-features` succeeds                         | `cargo build: success` |
+| tests      | test-runner, context-scout                       | `cargo test` passes (295+ tests including parser/lsp/lexer)               | `cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30` |
+| build      | feature-matrix-checker, build-validator          | `cargo build -p perl-lsp --release` and `cargo build -p perl-parser --release` succeed | `build: workspace ok; parser: ok, lsp: ok, lexer: ok` |
 | mutation   | mutation-tester, test-improver                   | `cargo mutant` shows mutation score meets threshold (≥80%)                | `mutation score: <NN>%` |
 | fuzz       | fuzz-tester                                      | `cargo fuzz` runs clean; no unreproduced crashers found                   | `fuzz: clean` **or** `repros added & fixed` |
 | security   | safety-scanner, dep-fixer                        | `cargo audit` clean; no known vulnerabilities                             | `cargo audit: clean` |
@@ -180,26 +181,26 @@ Agents may route to themselves: "NEXT → self (attempt 2/3)" for bounded retrie
 | docs       | pr-doc-reviewer, doc-fixer                       | Documentation complete; `cargo test --doc` passes; links valid            | `docs: complete; examples tested` |
 | features   | feature-matrix-checker                           | Feature combinations build and test successfully                          | `features: compatible` |
 | benchmarks | benchmark-runner                                 | Performance benchmarks complete without errors                            | `benchmarks: baseline established` |
-| throughput | pr-merge-prep                                    | MergeCode analysis throughput meets SLO (≤10 min for large codebases)     | `analysis: <size> in <time> → <rate> (pass)` **or** `throughput: N/A (no perf surface)` |
+| parsing    | pr-merge-prep                                    | Perl parsing performance meets SLO (≤1ms for incremental updates)        | `parsing: 1-150μs per file, incremental: <1ms updates; SLO: pass` **or** `skipped (N/A)` |
 
-**Required to merge (Integrative)**: `freshness, format, clippy, tests, build, security, docs, perf, throughput` *(allow `throughput` = **skipped-but-successful** when truly N/A; see check‑run mapping below)*.
+**Required to merge (Integrative)**: `freshness, format, clippy, tests, build, security, docs, perf, parsing` *(allow `parsing` = **skipped (N/A)** when truly N/A; see check‑run mapping below)*.
 
 **Integrative-Specific Policies:**
 
 **Pre-merge freshness re-check:**
 `pr-merge-prep` **must** re-check `integrative:gate:freshness` on current HEAD. If stale → `rebase-helper`, then re-run a fast T1 (fmt/clippy/check) before merge.
 
-**Throughput gate contract:**
-- Command: `cargo run --bin mergecode -- write . --stats --incremental`
-- Evidence grammar: `files:<N>, time:<MmSs>, rate:<R> min/1K; SLO: pass|fail`
-- In the progress comment, include **CPU model / cores** and a short 'limits' note (e.g., turbo off) to help future comparisons
-- When truly N/A: `integrative:gate:throughput = neutral` with `skipped (N/A: reason)`
+**Parsing gate contract:**
+- Command: `cargo bench` or `cargo test -p perl-parser --test comprehensive_parsing_tests`
+- Evidence grammar: `parsing:<files/sec>, completion:<ms/request>, navigation:<references/sec>; SLO: ≤1ms/update => <pass|fail>`
+- In the progress comment, include **parsing performance metrics** and LSP feature coverage to help future diagnosis
+- When truly N/A: `integrative:gate:parsing = neutral` with `skipped (N/A: no parsing surface)`
 
 **Bounded full matrix:**
 Run the **full** matrix but **bounded** (e.g., `max_crates=8`, `max_combos=12`, or ≤8m). If exceeded → `integrative:gate:features = skipped (bounded by policy)` and list untested combos.
 
-**Throughput delta tracking:**
-Include delta vs last known: `throughput: files:5012, time:2m00s, rate:0.40 min/1K; Δ vs last: −7%`
+**Parsing delta tracking:**
+Include delta vs baseline: `parsing: 1-150μs per file, completion: <100ms, navigation: 1000+ refs/sec; Δ vs baseline: +12%`
 
 **Corpus sync receipt:**
 Post-fuzz: `fuzz: clean; corpus synced → tests/fuzz/corpus (added 9)`
@@ -226,21 +227,24 @@ In `pr-merge-finalizer`: `closed: #123 #456; release-notes stub: .github/release
 **T6 - Integration:** End-to-end validation
 **T7 - Documentation:** Final docs validation
 
-## MergeCode Quality Requirements
+## Perl LSP Quality Requirements
 
-**Analysis Throughput SLO:** Large codebases (>10K files) ≤ 10 min
-- Bounded smoke tests with medium repos for quick validation
-- Report actual numbers: "5K files in 2m → 0.4 min/1K files (pass)"
+**Parsing Performance SLO:** Perl parsing and LSP operations ≤ 1ms for incremental updates
+- Bounded smoke tests with real Perl codebases for quick validation
+- Report actual numbers: "Parsing: 1-150μs per file (pass)"
+- Route to integrative-benchmark-runner for full validation if needed
 
-**Parser Stability Invariants:**
-- Tree-sitter parser versions must remain stable
-- Language-specific test cases must continue to pass
-- Include diff of parser configurations in Quality section
+**LSP Protocol Compliance Invariants:**
+- ~89% LSP features must be functional with comprehensive workspace support
+- Cross-file navigation must achieve 98% reference coverage with dual indexing
+- Include LSP feature coverage metrics in Quality section
 
-**Feature Flag Compatibility:**
-- All feature combinations must build successfully
-- Parser feature flags validated independently
-- Cache backend compatibility verified
+**Security Patterns:**
+- Memory safety validation using cargo audit for parser libraries
+- Input validation for Perl source file processing
+- Proper error handling in parsing and LSP protocol implementations
+- UTF-16/UTF-8 position mapping safety verification and boundary checks
+- Package-specific testing validation (`perl-parser`, `perl-lsp`, `perl-lexer`)
 
 ## Microloop Structure
 
@@ -278,21 +282,21 @@ In `pr-merge-finalizer`: `closed: #123 #456; release-notes stub: .github/release
 **Route:** `NEXT → rebase-checker` | Clean → `initial-reviewer`
 
 ### initial-reviewer
-**Do:** T1 validation (`cargo fmt --all --check`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, compilation)
+**Do:** T1 validation (`cargo fmt --workspace --check`, `cargo clippy --workspace`, compilation)
 **Gates:** Update `format` and `clippy` status
 **Route:** Pass → `feature-matrix-checker` | Issues → `pr-cleanup`
 
 ### pr-cleanup
-**Do:** Run `cargo fmt --all`, fix clippy warnings, resolve simple errors
+**Do:** Run `cargo fmt --workspace`, fix clippy warnings, resolve simple errors
 **Route:** `NEXT → initial-reviewer` (re-validate)
 
 ### feature-matrix-checker
-**Do:** T2 validation (all feature flag combinations using `./scripts/validate-features.sh`)
+**Do:** T2 validation (`cargo build -p perl-lsp --release`, `cargo build -p perl-parser --release`, feature combinations)
 **Gates:** Update `build` and `features` status
 **Route:** `FINALIZE → test-runner`
 
 ### test-runner
-**Do:** T3 validation (`cargo test --workspace --all-features`)
+**Do:** T3 validation (`cargo test`, `RUST_TEST_THREADS=2 cargo test -p perl-lsp`)
 **Gates:** Update `tests` status
 **Route:** Pass → `mutation-tester` | Fail → `context-scout`
 
@@ -320,7 +324,7 @@ In `pr-merge-finalizer`: `closed: #123 #456; release-notes stub: .github/release
 **Route:** `FINALIZE → benchmark-runner`
 
 ### benchmark-runner
-**Do:** T5 validation (`cargo bench --workspace`, performance regression detection)
+**Do:** T5 validation (`cargo bench`, Perl parsing performance regression detection)
 **Gates:** Update `perf` and `benchmarks` status
 **Route:** Regression detected → `perf-fixer` | Baseline OK → `pr-doc-reviewer`
 
@@ -342,9 +346,9 @@ In `pr-merge-finalizer`: `closed: #123 #456; release-notes stub: .github/release
 **Route:** All green → `pr-merge-prep` | Issues → Decision with needs-rework
 
 ### pr-merge-prep
-**Do:** Verify branch merge-readiness, run analysis throughput test, prepare linked PR for merge
-**Gates:** Update `throughput` status with analysis performance validation
-**Tests:** Report actual throughput: "5K files in 2m → 0.4 min/1K files (pass)"
+**Do:** Verify branch merge-readiness, run Perl parsing performance validation, prepare linked PR for merge
+**Gates:** Update `parsing` status with LSP performance validation
+**Tests:** Report actual parsing performance: "Parsing: 1-150μs per file, incremental: <1ms updates; SLO: pass"
 **Route:** **pr-merger** (PR ready for merge)
 
 
@@ -357,23 +361,23 @@ In `pr-merge-finalizer`: `closed: #123 #456; release-notes stub: .github/release
 **Do:** Verify merge success test, close linked issues
 **Route:** **FINALIZE** (PR fully integrated)
 
-## MergeCode Quality Validation Details
+## Perl LSP Quality Validation Details
 
-**Analysis Throughput Testing:**
-- Smoke test with medium-sized repositories for quick validation
-- Report actual time per file count with pass/fail vs 10 min SLO for large codebases
-- Include parser performance diff summary
+**Parsing Performance Testing:**
+- Smoke test with real Perl codebases for quick validation
+- Report actual parsing times with pass/fail vs ≤1ms SLO for incremental updates
+- Include LSP feature coverage and workspace navigation metrics
 
-**Parser Stability:**
-- Tree-sitter grammar versions must remain stable
-- Language-specific test cases validate parsing accuracy
-- Document any changes to parser configurations
+**LSP Server Stability:**
+- Tree-sitter highlight integration must pass (4/4 tests via `cd xtask && cargo run highlight`)
+- Perl parsing accuracy validation with comprehensive test coverage
+- Document any changes to parsing or LSP configurations
 
 **Security Patterns:**
-- Memory safety validation using cargo audit
-- Input validation for file processing
-- Proper error handling in parser implementations
-- Cache backend security verification
+- Memory safety validation using cargo audit for parser libraries
+- Input validation for Perl source file processing
+- Proper error handling in parsing and LSP protocol implementations
+- UTF-16/UTF-8 position mapping safety and boundary checks
 
 ## Progress Heuristics
 
@@ -381,21 +385,22 @@ Consider "progress" when these improve:
 - Validation tiers pass ↑
 - Test failures ↓, mutation score ↑ (target ≥80%)
 - Clippy warnings ↓, code quality ↑
-- Build failures ↓, feature compatibility ↑
+- Build failures ↓, package compatibility ↑ (perl-parser, perl-lsp, perl-lexer)
 - Security vulnerabilities ↓
 - Performance regressions ↓
-- Analysis throughput improvements ↑
+- Perl parsing performance improvements ↑ (<1ms incremental updates)
+- LSP feature coverage improvements ↑ (~89% functional)
 
 ## Worktree Discipline
 
 - **ONE writer at a time** (serialize agents that modify files)
 - **Read-only parallelism** only when guaranteed safe
 - **Natural iteration** with evidence of progress; orchestrator manages stopping
-- **Production validation authority** for final integration, compatibility, and merge readiness within this integrative flow iteration
+- **LSP production validation authority** for final integration, parsing performance, and merge readiness within this integrative flow iteration
 
 ## Success Criteria
 
-**Complete Integration:** PR merged to main with all required gates green (`freshness, format, clippy, tests, build, security, docs, perf, throughput`), MergeCode quality standards met, TDD practices validated
+**Complete Integration:** PR merged to main with all required gates green (`freshness, format, clippy, tests, build, security, docs, perf, parsing`), Perl LSP production quality standards met, LSP server stability validated
 **Needs Rework:** PR marked needs-rework with clear prioritized action plan and specific gate failures documented
 
-Begin with Ready PR and execute validation tiers systematically through the microloop structure, following MergeCode's Rust-first quality standards and comprehensive testing practices.
+Begin with Ready PR and execute validation tiers systematically through the microloop structure, following Perl LSP's cargo-first quality standards and comprehensive LSP server testing practices.
