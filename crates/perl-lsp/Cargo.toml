@@ -20,7 +20,7 @@ include = [
 ]
 
 [dependencies]
-perl-parser = { path = "../perl-parser", version = "0.8.8" }
+perl-parser = { path = "../perl-parser", version = "0.8.8", features = ["test-performance"] }
 lsp-types = "0.97.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.142"
@@ -44,6 +44,7 @@ workspace = true
 default = ["workspace"]  # Enable workspace indexing by default for cross-file features
 workspace = []  # Workspace-wide indexing for cross-file features
 test-compat = []  # Enables compatibility shim for old test API
+test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
 lsp-ga-lock = []
 experimental-features = []  # Experimental LSP features for testing

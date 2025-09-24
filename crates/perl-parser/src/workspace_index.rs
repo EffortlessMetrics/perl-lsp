@@ -2,6 +2,11 @@
 //!
 //! This module provides efficient indexing of symbols across an entire workspace,
 //! enabling features like find-references, rename, and workspace symbol search.
+//!
+//! # Related Modules
+//!
+//! See also [`crate::symbol`] for symbol extraction, [`crate::references`] for
+//! reference finding, and [`crate::semantic_tokens`] for semantic classification.
 
 use crate::Parser;
 use crate::ast::{Node, NodeKind};
@@ -477,6 +482,16 @@ impl WorkspaceIndex {
         }
 
         symbols
+    }
+
+    /// Check if the workspace index has symbols (soft readiness check)
+    ///
+    /// Returns true if the index contains any symbols, indicating that
+    /// at least some files have been indexed and the workspace is ready
+    /// for symbol-based operations like completion.
+    pub fn has_symbols(&self) -> bool {
+        let files = self.files.read().unwrap();
+        files.values().any(|file_index| !file_index.symbols.is_empty())
     }
 
     /// Search for symbols by query
@@ -1151,7 +1166,7 @@ pub mod lsp_adapter {
     /// # Examples
     ///
     /// ```rust
-    /// use perl_parser::workspace_index::{IxLocation, to_lsp_location};
+    /// use perl_parser::workspace_index::{Location as IxLocation, lsp_adapter::to_lsp_location};
     /// use lsp_types::Range;
     ///
     /// let ix_loc = IxLocation {
@@ -1188,7 +1203,7 @@ pub mod lsp_adapter {
     /// # Examples
     ///
     /// ```rust
-    /// use perl_parser::workspace_index::{IxLocation, to_lsp_locations};
+    /// use perl_parser::workspace_index::{Location as IxLocation, lsp_adapter::to_lsp_locations};
     /// use lsp_types::Range;
     ///
     /// let locations = vec![

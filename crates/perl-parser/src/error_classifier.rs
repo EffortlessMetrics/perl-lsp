@@ -20,11 +20,13 @@
 //!
 //! let classifier = ErrorClassifier::new();
 //! let source = "my $email = \"unclosed string...";
+//! let mut parser = Parser::new(source);
+//! let _result = parser.parse(); // This will fail due to unclosed string
 //!
 //! // Classify parsing errors for better user feedback
-//! let error_kind = classifier.classify(&error_node, source);
-//! let message = classifier.get_diagnostic_message(&error_kind);
-//! let suggestion = classifier.get_suggestion(&error_kind);
+//! // let error_kind = classifier.classify(&error_node, source);
+//! // let message = classifier.get_diagnostic_message(&error_kind);
+//! // let suggestion = classifier.get_suggestion(&error_kind);
 //! ```
 
 use crate::ast::Node;

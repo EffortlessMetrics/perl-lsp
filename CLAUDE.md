@@ -130,7 +130,7 @@ cargo test -p perl-parser --test missing_docs_ac_tests -- --nocapture  # Detaile
 cargo doc --no-deps --package perl-parser                       # Validate doc generation without warnings
 
 # Missing Documentation Warnings Infrastructure ⭐ **IMPLEMENTED: PR #160 (SPEC-149)**
-# Comprehensive documentation enforcement with `#![warn(missing_docs)]` enabled - Currently tracking 129 violations for systematic resolution
+# Comprehensive documentation enforcement with `#![warn(missing_docs)]` enabled - Currently tracking 605 violations for systematic resolution
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_missing_docs_warning_compilation  # Verify warnings enabled ✅
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_public_functions_documentation_presence  # Function docs (Phase 1 target)
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_public_structs_documentation_presence  # Struct/enum docs (Phase 1 target)
@@ -239,9 +239,11 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[File Completion Guide](docs/FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
 - **[Import Optimizer Guide](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Comprehensive import analysis and optimization
 - **[Threading Configuration Guide](docs/THREADING_CONFIGURATION_GUIDE.md)** - Adaptive threading and concurrency management
+- **[Conditional Documentation Compilation](docs/CONDITIONAL_DOCS_COMPILATION_STRATEGY.md)** - Performance-optimized missing_docs enforcement strategy
 
 ### Architecture Decision Records (ADRs)
 - **[ADR-001: Agent Architecture](docs/ADR_001_AGENT_ARCHITECTURE.md)** - 97 specialized agents and workflow coordination (PR #153)
+- **[ADR-002: API Documentation Infrastructure](docs/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)** - Comprehensive documentation enforcement and systematic resolution strategy (PR #160/SPEC-149)
 - **[Agent Orchestration](docs/AGENT_ORCHESTRATION.md)** - Agent ecosystem patterns and routing
 - **[Agent Customization Framework](docs/AGENT_CUSTOMIZER.md)** - Domain-specific agent adaptation
 
@@ -397,7 +399,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 - Production-stable incremental parsing with statistical validation
 - **API Documentation Infrastructure (PR #160/SPEC-149)**:
   - **Successfully Implemented**: `#![warn(missing_docs)]` enforcement with 12 acceptance criteria validation framework
-  - **Current Baseline**: 129 documentation violations tracked for systematic resolution across 4 phases
+  - **Current Baseline**: 605 documentation violations tracked for systematic resolution across 4 phases
   - **Enterprise-Grade Quality Assurance**: Property-based testing, edge case detection, and CI integration
   - **Implementation Strategy**: Phased approach targeting critical parser infrastructure first (Phase 1)
   - **Quality Standards**: Comprehensive API Documentation Standards with LSP workflow integration requirements

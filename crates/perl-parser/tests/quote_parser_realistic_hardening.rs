@@ -266,7 +266,7 @@ fn test_edge_cases_for_arithmetic_mutations() {
     // Cases with potential position calculation issues
     let position_cases = vec!["s/a/b/", "s#x#y#", "qr/test/"];
     for input in position_cases {
-        let (pattern, replacement, _) = extract_substitution_parts(input);
+        let (pattern, _replacement, _) = extract_substitution_parts(input);
         // Should extract something reasonable with correct arithmetic
         if !input.starts_with("qr") {
             assert!(

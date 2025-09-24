@@ -90,10 +90,10 @@ fn fuzz_dual_indexing_function_patterns() {
         );
 
         // Test that result is reasonable
-        if let Ok(parse_result) = result {
-            if let Ok(_ast) = parse_result {
-                // Parsing succeeded - AST structure could be validated here
-            }
+        if let Ok(parse_result) = result
+            && let Ok(_ast) = parse_result
+        {
+            // Parsing succeeded - AST structure could be validated here
         }
     }
 }
@@ -215,16 +215,15 @@ proptest! {
 
         prop_assert!(result.is_ok(), "Generated script caused crash: {}", script);
 
-        if let Ok(parse_result) = result {
-            // Basic AST consistency checks
-            if let Ok(_ast) = parse_result {
+        if let Ok(parse_result) = result
+            && let Ok(_ast) = parse_result {
+                // Basic AST consistency checks
                 // The fact that we got an Ok(ast) means parsing succeeded
                 // AST structure validation could be added here in the future
                 // - Check that functions are properly indexed
                 // - Verify dual indexing works
                 // - Validate UTF-8 safety in symbol names
             }
-        }
     }
 }
 
@@ -274,10 +273,10 @@ fn fuzz_performance_under_stress() {
         );
 
         // Memory usage should be reasonable (basic check)
-        if let Ok(parse_result) = result {
-            if let Ok(_ast) = parse_result {
-                // AST created successfully
-            }
+        if let Ok(parse_result) = result
+            && let Ok(_ast) = parse_result
+        {
+            // AST created successfully
         }
     }
 }
