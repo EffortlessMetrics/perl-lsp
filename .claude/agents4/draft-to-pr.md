@@ -40,22 +40,22 @@ You are the orchestrator for the Draft → Ready PR validation flow. Your job: i
 - Review validates performance deltas vs established baseline
 - Integrative inherits Review performance metrics for SLO validation
 
-## BitNet.rs Neural Network Validation
+## Perl LSP Ecosystem Validation
 
-**Required BitNet.rs Context for All Agents:**
-- **Quantization Accuracy:** I2S, TL1, TL2 ≥ 99% accuracy vs FP32 reference
-- **Cross-Validation:** `cargo run -p xtask -- crossval` - Rust vs C++ parity within 1e-5 tolerance
-- **Feature Compatibility:** `--no-default-features --features cpu|gpu` validation with fallback testing
-- **GGUF Format:** Model compatibility and tensor alignment validation
-- **Performance SLO:** Neural network inference ≤ 10 seconds for standard models
-- **Build Commands:** Always specify feature flags (default features are empty)
+**Required Perl LSP Context for All Agents:**
+- **Parsing Accuracy:** ~100% Perl 5 syntax coverage with comprehensive builtin function support
+- **Cross-Crate Validation:** perl-parser, perl-lsp, perl-lexer, perl-corpus integration testing
+- **Feature Compatibility:** Package-specific testing with adaptive threading configuration
+- **LSP Protocol:** ~89% LSP features functional with workspace navigation support
+- **Performance SLO:** Parsing 1-150μs per file, incremental updates <1ms
+- **Build Commands:** Workspace-aware with xtask automation and cargo fallbacks
 
 **Evidence Format Standards:**
 ```
-tests: cargo test: 412/412 pass; CPU: 280/280, GPU: 132/132
-quantization: I2S: 99.8%, TL1: 99.6%, TL2: 99.7% accuracy
-crossval: Rust vs C++: parity within 1e-5; 156/156 tests pass
-perf: inference: 45.2 tokens/sec; Δ vs baseline: +12%
+tests: cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30
+parsing: ~100% Perl syntax coverage; incremental: <1ms updates with 70-99% node reuse
+lsp: ~89% features functional; workspace navigation: 98% reference coverage
+perf: parsing: 1-150μs per file; Δ vs baseline: +12%
 ```
 
 ## GitHub-Native Receipts (NO ceremony)
@@ -114,20 +114,21 @@ gh pr comment <NUM> --body "- [test-runner] all pass; NEXT→mutation-tester"
 # Labels (domain-aware replacement)
 gh pr edit <NUM> --add-label "flow:review,state:ready"
 
-# MergeCode-specific commands (primary)
-cargo fmt --all --check                                                   # Format validation
-cargo clippy --workspace --all-targets --all-features -- -D warnings    # Lint validation
-cargo test --workspace --all-features                                    # Test execution
-cargo bench --workspace                                                  # Performance baseline
-cargo mutant --no-shuffle --timeout 60                                  # Mutation testing
-cargo fuzz run <target> -- -max_total_time=300                          # Fuzz testing
-cargo audit                                                             # Security audit
+# Perl LSP-specific commands (primary)
+cargo fmt --workspace                                                    # Format validation
+cargo clippy --workspace -- -D warnings                               # Lint validation
+cargo test                                                              # Comprehensive test suite (295+ tests)
+cargo test -p perl-parser                                              # Parser library tests
+cargo test -p perl-lsp                                                 # LSP server integration tests
+cargo bench                                                             # Performance benchmarks
+cd xtask && cargo run highlight                                        # Tree-sitter highlight testing
+RUST_TEST_THREADS=2 cargo test -p perl-lsp                           # Adaptive threading for LSP
 
-# MergeCode xtask integration
-cargo xtask check --fix                                                 # Comprehensive validation
-cargo xtask build --all-parsers                                         # Feature-aware build
-./scripts/validate-features.sh                                          # Feature compatibility
-./scripts/pre-build-validate.sh                                         # Environment validation
+# Perl LSP xtask integration
+cd xtask && cargo run dev --watch                                      # Development server with hot-reload
+cd xtask && cargo run optimize-tests                                   # Performance testing optimization
+cargo build -p perl-lsp --release                                     # LSP server binary
+cargo build -p perl-parser --release                                  # Parser library binary
 
 # Fallback when xtask unavailable
 git commit -m "fix: resolve clippy warnings in parser modules"
@@ -158,17 +159,17 @@ Agents may route to themselves: "NEXT → self (attempt 2/3)" for bounded retrie
 | Gate       | Primary agent(s)                                             | What counts as **pass** (Check Run summary)                                  | Evidence to mirror in Ledger "Gates" |
 |------------|---------------------------------------------------------------|--------------------------------------------------------------------------------|--------------------------------------|
 | freshness  | freshness-checker, rebase-helper                              | PR at base HEAD (or rebase completed)                                         | `base up-to-date @<sha>` |
-| format     | format-fixer, hygiene-finalizer                               | `cargo fmt --all --check` passes                                              | `rustfmt: all files formatted` |
-| clippy     | clippy-fixer, hygiene-finalizer                               | `cargo clippy --all-targets --all-features -- -D warnings` passes           | `clippy: no warnings` |
-| tests      | test-runner, impl-fixer, flake-detector, coverage-analyzer    | `cargo test --workspace --all-features` passes (all tests green)             | `cargo test: <n>/<n> pass` |
-| build      | build-validator, feature-tester                               | `cargo build --workspace --all-features` succeeds                            | `cargo build: success` |
-| mutation   | mutation-tester, test-hardener                                | `cargo mutant` shows mutation score meets threshold (≥80%)                   | `mutation score: <NN>%` |
-| fuzz       | fuzz-tester                                                   | `cargo fuzz` runs clean; no unreproduced crashers found                      | `fuzz: clean` **or** `repros added & fixed` |
-| security   | security-scanner, dep-fixer                                   | `cargo audit` clean; no known vulnerabilities                                 | `cargo audit: clean` |
-| perf       | performance-benchmark, perf-fixer                              | `cargo bench` shows no significant regression vs baseline                     | `cargo bench: no regression` |
-| docs       | docs-reviewer, docs-fixer                                     | Documentation complete, examples work, links valid                            | `docs: complete, links ok` |
-| features   | feature-validator                                             | Feature combinations build and test successfully                              | `features: compatible` |
-| benchmarks | benchmark-runner                                              | Performance benchmarks complete without errors                                | `benchmarks: baseline established` |
+| format     | format-fixer, hygiene-finalizer                               | `cargo fmt --workspace` clean                                                 | `rustfmt: all files formatted` |
+| clippy     | clippy-fixer, hygiene-finalizer                               | `cargo clippy --workspace -- -D warnings` passes                            | `clippy: 0 warnings (workspace)` |
+| tests      | test-runner, impl-fixer, flake-detector, coverage-analyzer    | `cargo test` passes (295+ tests); package-specific tests pass                | `cargo test: <n>/<n> pass; parser: <n>/<n>, lsp: <n>/<n>, lexer: <n>/<n>` |
+| build      | build-validator, feature-tester                               | `cargo build -p perl-lsp --release` and parser library succeed              | `build: workspace ok; parser: ok, lsp: ok, lexer: ok` |
+| mutation   | mutation-tester, test-hardener                                | Mutation testing score meets threshold (≥80%)                                | `score: NN% (≥80%); survivors: M` |
+| fuzz       | fuzz-tester                                                   | Fuzz testing runs clean; parsing robustness validated                        | `0 crashes (300s); corpus: C` **or** `repros fixed: R` |
+| security   | security-scanner, dep-fixer                                   | `cargo audit` clean; no known vulnerabilities                                 | `audit: clean` **or** `advisories: CVE-..., remediated` |
+| perf       | performance-benchmark, perf-fixer                              | Parsing performance within bounds (1-150μs per file)                         | `parsing: 1-150μs per file; Δ ≤ threshold` |
+| docs       | docs-reviewer, docs-fixer                                     | Documentation complete, examples tested, links valid                         | `examples tested: X/Y; links ok` |
+| features   | feature-validator                                             | Standard matrix tests pass (parser/lsp/lexer combinations)                   | `matrix: X/Y ok (parser/lsp/lexer)` **or** `smoke 3/3 ok` |
+| benchmarks | benchmark-runner                                              | Performance benchmarks establish parsing baseline                             | `inherit from Generative; validate parsing baseline` |
 
 **Required for promotion (Review)**: `freshness, format, clippy, tests, build, docs`. **Hardening gates** (`mutation, fuzz, security`) are recommended for critical code paths.
 
@@ -236,7 +237,7 @@ Require link to migration doc & release-note stub: `migration: docs/adr/NNNN-bre
 **Route:** `NEXT → freshness-checker` | Clean → `hygiene-finalizer`
 
 ### hygiene-finalizer
-**Do:** Run `cargo fmt --all`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, organize imports
+**Do:** Run `cargo fmt --workspace`, `cargo clippy --workspace -- -D warnings`, organize imports
 **Gates:** Update `format` and `clippy` status
 **Route:** All clean → `arch-reviewer` | Issues → retry with fixes
 
@@ -276,7 +277,7 @@ Require link to migration doc & release-note stub: `migration: docs/adr/NNNN-bre
 **Route:** `FINALIZE → test-runner`
 
 ### test-runner
-**Do:** Run `cargo test --workspace --all-features`
+**Do:** Run `cargo test` (295+ tests), `cargo test -p perl-parser`, `cargo test -p perl-lsp`, validate parsing accuracy and LSP protocol compliance
 **Gates:** Update `tests` status
 **Route:** Pass → `mutation-tester` | Fail → `impl-fixer`
 
@@ -297,12 +298,12 @@ Require link to migration doc & release-note stub: `migration: docs/adr/NNNN-bre
 **Route:** `FINALIZE → mutation-tester`
 
 ### mutation-tester
-**Do:** Run `cargo mutant --no-shuffle --timeout 60`, assess test strength
+**Do:** Run mutation testing, assess parsing robustness and test strength
 **Gates:** Update `mutation` status with score
 **Route:** Score ≥80% → `security-scanner` | Low score → `fuzz-tester`
 
 ### fuzz-tester
-**Do:** Run `cargo fuzz run <target> -- -max_total_time=300`, minimize reproducers
+**Do:** Run fuzz testing for parsing robustness, validate edge cases and syntax boundary handling
 **Gates:** Update `fuzz` status
 **Route:** Issues found → `impl-fixer` | Clean → `security-scanner`
 
@@ -320,7 +321,7 @@ Require link to migration doc & release-note stub: `migration: docs/adr/NNNN-bre
 **Route:** `FINALIZE → benchmark-runner`
 
 ### benchmark-runner
-**Do:** Run `cargo bench --workspace`, establish performance baseline
+**Do:** Run `cargo bench`, validate parsing performance (1-150μs per file), incremental parsing efficiency
 **Gates:** Update `perf` and `benchmarks` status
 **Route:** Regression detected → `perf-fixer` | Baseline OK → `docs-reviewer`
 
@@ -384,7 +385,7 @@ Consider "progress" when these improve:
 
 ## Success Criteria
 
-**Ready for Review:** All required gates pass (`freshness, format, clippy, tests, build, docs`), architecture aligned, TDD practices followed, feature compatibility validated
+**Ready for Review:** All required gates pass (`freshness, format, clippy, tests, build, docs`), parsing accuracy validated, LSP protocol compliance confirmed, TDD practices followed, cross-crate compatibility validated
 **Needs Rework:** Draft remains Draft with clear prioritized checklist and specific gate failures documented
 
-Begin with an open Draft PR and invoke agents proactively through the microloop structure, following MergeCode's TDD-driven, Rust-first development standards.
+Begin with an open Draft PR and invoke agents proactively through the microloop structure, following Perl LSP's TDD-driven, comprehensive parsing validation and LSP protocol compliance standards.
