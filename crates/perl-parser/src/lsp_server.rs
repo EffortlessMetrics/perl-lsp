@@ -9,6 +9,9 @@ use crate::{
     DiagnosticSeverity as InternalDiagnosticSeverity, DiagnosticsProvider, Parser,
     ast::{Node, NodeKind},
     call_hierarchy_provider::CallHierarchyProvider,
+    cancellation::{
+        GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, ProviderCleanupContext,
+    },
     code_actions_enhanced::EnhancedCodeActionsProvider,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     declaration::ParentMap,
@@ -81,6 +84,51 @@ fn cancelled_response(id: &serde_json::Value) -> JsonRpcResponse {
             message: "Request cancelled".into(),
             data: None,
         }),
+    }
+}
+
+/// Enhanced cancelled response with provider context and performance tracking
+fn enhanced_cancelled_response(
+    token: &PerlLspCancellationToken,
+    cleanup_context: Option<&ProviderCleanupContext>,
+) -> JsonRpcResponse {
+    let provider_name =
+        if let Some(context) = cleanup_context { &context.provider_type } else { token.provider() };
+
+    let method_name = provider_name.split('/').next_back().unwrap_or(provider_name);
+    let message = format!("Request cancelled - {} provider", method_name);
+
+    let mut data = json!({
+        "provider": provider_name,
+        "request_id": token.request_id(),
+        "timestamp": token.timestamp()
+    });
+
+    // Add performance tracking
+    let elapsed_ms = token.elapsed().as_millis() as u64;
+    if let Some(obj) = data.as_object_mut() {
+        obj.insert("latency_ms".to_string(), json!(elapsed_ms));
+    }
+
+    // Add cleanup context if available
+    if let Some(context) = cleanup_context {
+        if let Some(obj) = data.as_object_mut() {
+            obj.insert(
+                "cancelled_at_ms".to_string(),
+                json!(context.cancelled_at.elapsed().as_millis() as u64),
+            );
+
+            if let Some(params) = &context.request_params {
+                obj.insert("original_params".to_string(), params.clone());
+            }
+        }
+    }
+
+    JsonRpcResponse {
+        jsonrpc: "2.0".to_string(),
+        id: Some(token.request_id().clone()),
+        result: None,
+        error: Some(JsonRpcError { code: ERR_REQUEST_CANCELLED, message, data: Some(data) }),
     }
 }
 
@@ -530,23 +578,67 @@ impl LspServer {
     pub fn handle_request(&mut self, request: JsonRpcRequest) -> Option<JsonRpcResponse> {
         let id = request.id.clone();
 
-        // Handle $/cancelRequest notification
+        // Handle $/cancelRequest notification with enhanced context processing
         if request.method == "$/cancelRequest" {
-            if let Some(idv) = request.params.as_ref().and_then(|p| p.get("id")).cloned() {
-                self.cancel_mark(&idv);
+            if let Some(params) = request.params.as_ref() {
+                if let Some(idv) = params.get("id").cloned() {
+                    // Enhanced cancellation with provider context
+                    let start_time = Instant::now();
+
+                    // Use global registry for enhanced cancellation
+                    if let Ok(_cleanup_context) = GLOBAL_CANCELLATION_REGISTRY.cancel_request(&idv)
+                    {
+                        let latency = start_time.elapsed();
+
+                        // Log performance metrics for AC12 validation
+                        eprintln!(
+                            "Enhanced cancellation processed in {:?} for request {:?}",
+                            latency, idv
+                        );
+
+                        // Validate performance requirements (<50ms end-to-end response time)
+                        if latency.as_millis() > 50 {
+                            eprintln!("WARNING: Cancellation latency exceeded 50ms: {:?}", latency);
+                        }
+
+                        // Optional: Send response with enhanced context for client tracking
+                        // (Note: $/cancelRequest is typically a notification, but enhanced context
+                        // can be useful for debugging and performance analysis)
+                    }
+
+                    // Fallback to legacy cancellation for compatibility
+                    self.cancel_mark(&idv);
+                }
             }
             return None; // Notifications don't get responses
         }
 
-        // Check if this request has been cancelled
-        if let Some(ref id) = id {
-            if self.is_cancelled(id) {
-                return Some(JsonRpcResponse {
-                    jsonrpc: "2.0".to_string(),
-                    id: Some(id.clone()),
-                    result: None,
-                    error: Some(Self::request_cancelled()),
-                });
+        // Register cancellation token for non-notification requests FIRST
+        if let Some(ref request_id) = id {
+            let token = PerlLspCancellationToken::new(request_id.clone(), request.method.clone());
+
+            let cleanup_context =
+                ProviderCleanupContext::new(request.method.clone(), request.params.clone());
+
+            let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token);
+            let _ = GLOBAL_CANCELLATION_REGISTRY.register_cleanup(request_id, cleanup_context);
+        }
+
+        // Check if this request has been cancelled with enhanced context
+        if let Some(ref request_id) = id {
+            // Check both old and new cancellation systems for compatibility
+            if self.is_cancelled(request_id)
+                || GLOBAL_CANCELLATION_REGISTRY.is_cancelled(request_id)
+            {
+                // Try to get enhanced cancellation context
+                if let Some(token) = GLOBAL_CANCELLATION_REGISTRY.get_token(request_id) {
+                    let cleanup_context =
+                        GLOBAL_CANCELLATION_REGISTRY.cancel_request(request_id).ok().flatten();
+                    return Some(enhanced_cancelled_response(&token, cleanup_context.as_ref()));
+                } else {
+                    // Fallback to legacy cancellation response
+                    return Some(cancelled_response(request_id));
+                }
             }
         }
 
@@ -799,6 +891,22 @@ impl LspServer {
                 })
             }
         };
+
+        // Clean up cancellation token after request processing
+        if let Some(ref request_id) = id {
+            GLOBAL_CANCELLATION_REGISTRY.remove_request(request_id);
+        }
+
+        // Check for enhanced cancellation with provider context
+        if let Some(ref request_id) = id {
+            if let Some(token) = GLOBAL_CANCELLATION_REGISTRY.get_token(request_id) {
+                if token.is_cancelled() {
+                    let cleanup_context =
+                        GLOBAL_CANCELLATION_REGISTRY.cancel_request(request_id).ok().flatten();
+                    return Some(enhanced_cancelled_response(&token, cleanup_context.as_ref()));
+                }
+            }
+        }
 
         match result {
             Ok(Some(result)) => {

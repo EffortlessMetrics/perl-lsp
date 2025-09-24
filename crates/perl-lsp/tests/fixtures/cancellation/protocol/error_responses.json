@@ -1,0 +1,211 @@
+{
+  "cancellation_error_responses": [
+    {
+      "description": "Standard cancellation error response",
+      "request_id": 1,
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {
+          "code": -32800,
+          "message": "Request cancelled",
+          "data": {
+            "cancelled_at": "2024-01-15T10:30:45.123Z",
+            "provider": "completion",
+            "reason": "client_requested"
+          }
+        }
+      }
+    },
+    {
+      "description": "Cancellation error with provider context",
+      "request_id": "hover-12345",
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "hover-12345",
+        "error": {
+          "code": -32800,
+          "message": "Request cancelled during processing",
+          "data": {
+            "cancelled_at": "2024-01-15T10:30:47.456Z",
+            "provider": "hover",
+            "reason": "client_requested",
+            "processing_stage": "symbol_resolution",
+            "progress_percentage": 65
+          }
+        }
+      }
+    },
+    {
+      "description": "Cancellation error for definition request",
+      "request_id": "goto-def-67890",
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "goto-def-67890",
+        "error": {
+          "code": -32800,
+          "message": "Definition lookup cancelled",
+          "data": {
+            "cancelled_at": "2024-01-15T10:30:49.789Z",
+            "provider": "definition",
+            "reason": "client_requested",
+            "processing_stage": "cross_file_analysis",
+            "files_processed": 3,
+            "total_files": 8
+          }
+        }
+      }
+    },
+    {
+      "description": "Cancellation error for references request",
+      "request_id": 9999,
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 9999,
+        "error": {
+          "code": -32800,
+          "message": "References search cancelled",
+          "data": {
+            "cancelled_at": "2024-01-15T10:30:52.012Z",
+            "provider": "references",
+            "reason": "client_requested",
+            "processing_stage": "workspace_indexing",
+            "symbols_found": 12,
+            "files_remaining": 5
+          }
+        }
+      }
+    },
+    {
+      "description": "Cancellation error for workspace symbols",
+      "request_id": "symbols-abcdef",
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "symbols-abcdef",
+        "error": {
+          "code": -32800,
+          "message": "Workspace symbol search cancelled",
+          "data": {
+            "cancelled_at": "2024-01-15T10:30:54.345Z",
+            "provider": "workspaceSymbols",
+            "reason": "client_requested",
+            "processing_stage": "symbol_filtering",
+            "query": "process_data",
+            "matches_found": 24
+          }
+        }
+      }
+    }
+  ],
+  "timeout_scenarios": [
+    {
+      "description": "Timeout-based cancellation",
+      "request_id": "timeout-test",
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "timeout-test",
+        "error": {
+          "code": -32800,
+          "message": "Request cancelled due to timeout",
+          "data": {
+            "cancelled_at": "2024-01-15T10:31:00.000Z",
+            "provider": "completion",
+            "reason": "timeout",
+            "timeout_ms": 5000,
+            "elapsed_ms": 5001
+          }
+        }
+      }
+    }
+  ],
+  "resource_cleanup_scenarios": [
+    {
+      "description": "Cancellation with resource cleanup info",
+      "request_id": "cleanup-test",
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "cleanup-test",
+        "error": {
+          "code": -32800,
+          "message": "Request cancelled with resource cleanup",
+          "data": {
+            "cancelled_at": "2024-01-15T10:31:05.678Z",
+            "provider": "references",
+            "reason": "client_requested",
+            "cleanup_info": {
+              "threads_cancelled": 2,
+              "memory_freed_kb": 1024,
+              "files_closed": 5,
+              "temp_files_removed": 3
+            }
+          }
+        }
+      }
+    }
+  ],
+  "invalid_cancellation_scenarios": [
+    {
+      "description": "Cancellation for non-existent request",
+      "cancellation_request": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+          "id": "non-existent-123"
+        }
+      },
+      "expected_behavior": "ignore_silently"
+    },
+    {
+      "description": "Malformed cancellation request - missing params",
+      "cancellation_request": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest"
+      },
+      "expected_behavior": "log_warning_continue"
+    },
+    {
+      "description": "Malformed cancellation request - invalid id type",
+      "cancellation_request": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+          "id": null
+        }
+      },
+      "expected_behavior": "log_warning_continue"
+    }
+  ],
+  "performance_timing_data": [
+    {
+      "provider": "completion",
+      "scenarios": [
+        {
+          "description": "Fast cancellation - under 10ms",
+          "cancellation_latency_ms": 5,
+          "expected_response_time_ms": 8
+        },
+        {
+          "description": "Normal cancellation - under 50ms",
+          "cancellation_latency_ms": 25,
+          "expected_response_time_ms": 30
+        },
+        {
+          "description": "Slow cancellation - approaching limit",
+          "cancellation_latency_ms": 45,
+          "expected_response_time_ms": 49
+        }
+      ]
+    },
+    {
+      "provider": "references",
+      "scenarios": [
+        {
+          "description": "Complex workspace cancellation",
+          "cancellation_latency_ms": 35,
+          "expected_response_time_ms": 42,
+          "workspace_size_files": 100
+        }
+      ]
+    }
+  ]
+}

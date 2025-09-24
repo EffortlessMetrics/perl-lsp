@@ -1,0 +1,267 @@
+{
+  "valid_cancellation_requests": [
+    {
+      "description": "Valid $/cancelRequest for completion request",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+          "id": 1
+        }
+      },
+      "target_request_id": 1,
+      "provider": "completion"
+    },
+    {
+      "description": "Valid $/cancelRequest for hover request",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+          "id": "hover-12345"
+        }
+      },
+      "target_request_id": "hover-12345",
+      "provider": "hover"
+    },
+    {
+      "description": "Valid $/cancelRequest for definition request",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+          "id": "goto-def-67890"
+        }
+      },
+      "target_request_id": "goto-def-67890",
+      "provider": "definition"
+    },
+    {
+      "description": "Valid $/cancelRequest for references request",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+          "id": 9999
+        }
+      },
+      "target_request_id": 9999,
+      "provider": "references"
+    },
+    {
+      "description": "Valid $/cancelRequest for workspace symbols",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+          "id": "symbols-abcdef"
+        }
+      },
+      "target_request_id": "symbols-abcdef",
+      "provider": "workspaceSymbols"
+    }
+  ],
+  "provider_specific_requests": {
+    "completion": {
+      "original_request": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "textDocument/completion",
+        "params": {
+          "textDocument": {
+            "uri": "file:///test/completion.pl"
+          },
+          "position": {
+            "line": 10,
+            "character": 15
+          },
+          "context": {
+            "triggerKind": 1
+          }
+        }
+      },
+      "cancellation_request": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+          "id": 1
+        }
+      }
+    },
+    "hover": {
+      "original_request": {
+        "jsonrpc": "2.0",
+        "id": "hover-12345",
+        "method": "textDocument/hover",
+        "params": {
+          "textDocument": {
+            "uri": "file:///test/hover.pl"
+          },
+          "position": {
+            "line": 25,
+            "character": 8
+          }
+        }
+      },
+      "cancellation_request": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+          "id": "hover-12345"
+        }
+      }
+    },
+    "definition": {
+      "original_request": {
+        "jsonrpc": "2.0",
+        "id": "goto-def-67890",
+        "method": "textDocument/definition",
+        "params": {
+          "textDocument": {
+            "uri": "file:///test/definition.pl"
+          },
+          "position": {
+            "line": 42,
+            "character": 12
+          }
+        }
+      },
+      "cancellation_request": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+          "id": "goto-def-67890"
+        }
+      }
+    },
+    "references": {
+      "original_request": {
+        "jsonrpc": "2.0",
+        "id": 9999,
+        "method": "textDocument/references",
+        "params": {
+          "textDocument": {
+            "uri": "file:///test/references.pl"
+          },
+          "position": {
+            "line": 18,
+            "character": 6
+          },
+          "context": {
+            "includeDeclaration": true
+          }
+        }
+      },
+      "cancellation_request": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+          "id": 9999
+        }
+      }
+    },
+    "workspaceSymbols": {
+      "original_request": {
+        "jsonrpc": "2.0",
+        "id": "symbols-abcdef",
+        "method": "workspace/symbol",
+        "params": {
+          "query": "process_data"
+        }
+      },
+      "cancellation_request": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {
+          "id": "symbols-abcdef"
+        }
+      }
+    }
+  },
+  "concurrent_cancellation_scenarios": [
+    {
+      "description": "Multiple concurrent requests with individual cancellations",
+      "requests": [
+        {
+          "id": "concurrent-1",
+          "method": "textDocument/completion",
+          "cancellation": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {
+              "id": "concurrent-1"
+            }
+          }
+        },
+        {
+          "id": "concurrent-2",
+          "method": "textDocument/hover",
+          "cancellation": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {
+              "id": "concurrent-2"
+            }
+          }
+        },
+        {
+          "id": "concurrent-3",
+          "method": "textDocument/definition",
+          "cancellation": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {
+              "id": "concurrent-3"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "description": "Batch cancellation scenario",
+      "batch_cancellations": [
+        {
+          "jsonrpc": "2.0",
+          "method": "$/cancelRequest",
+          "params": {
+            "id": "batch-1"
+          }
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "$/cancelRequest",
+          "params": {
+            "id": "batch-2"
+          }
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "$/cancelRequest",
+          "params": {
+            "id": "batch-3"
+          }
+        }
+      ]
+    }
+  ],
+  "timing_scenarios": [
+    {
+      "description": "Early cancellation - before provider starts",
+      "timing": "early",
+      "cancellation_delay_ms": 1,
+      "expected_behavior": "immediate_cancellation"
+    },
+    {
+      "description": "Mid-processing cancellation",
+      "timing": "mid",
+      "cancellation_delay_ms": 50,
+      "expected_behavior": "graceful_cancellation"
+    },
+    {
+      "description": "Late cancellation - near completion",
+      "timing": "late",
+      "cancellation_delay_ms": 200,
+      "expected_behavior": "completion_or_cancellation"
+    }
+  ]
+}
