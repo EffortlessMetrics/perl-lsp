@@ -146,8 +146,8 @@ fn test_cancel_request_no_response() {
         }),
     );
 
-    // Drain any diagnostics or other notifications from didOpen
-    drain_until_quiet(&mut server, Duration::from_millis(100), Duration::from_millis(500));
+    // Drain any diagnostics or other notifications from didOpen (reduced timeout for performance)
+    drain_until_quiet(&mut server, Duration::from_millis(50), Duration::from_millis(200));
 
     // Check server is still alive before sending cancel
     assert!(server.is_alive(), "server exited before cancel test started");

@@ -100,10 +100,17 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
         v.push(c);
     }
 
-    // Fallback: use cargo run
+    // Try release binary if available
+    {
+        let mut c = Command::new("./target/release/perl-lsp");
+        c.arg("--stdio");
+        v.push(c);
+    }
+
+    // Fallback: use cargo run with release profile (avoid debug linking issues)
     {
         let mut c = Command::new("cargo");
-        c.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"]);
+        c.args(["run", "-q", "-p", "perl-lsp", "--release", "--", "--stdio"]);
         v.push(c);
     }
 
@@ -135,7 +142,14 @@ pub fn start_lsp_server() -> LspServer {
             }
         }
         spawned.unwrap_or_else(|| {
-            panic!("Failed to start perl-lsp via CARGO_BIN_EXE, PATH, or cargo run: {:?}", last_err)
+            eprintln!("Failed to start perl-lsp server - tried all methods:");
+            eprintln!("  1. CARGO_BIN_EXE_perl-lsp env var");
+            eprintln!("  2. CARGO_BIN_EXE_perl_lsp env var");
+            eprintln!("  3. perl-lsp from PATH");
+            eprintln!("  4. ./target/release/perl-lsp");
+            eprintln!("  5. cargo run --release -p perl-lsp");
+            eprintln!("Last error: {:?}", last_err);
+            panic!("Failed to start perl-lsp via any available method: {:?}", last_err)
         })
     };
 
@@ -468,8 +482,12 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
     }
 
     // wait specifically for id=1 - use extended timeout for initialization
-    let init_timeout = adaptive_timeout() * 2; // Double timeout for critical initialization
-    let resp = read_response_matching_i64(server, 1, init_timeout).expect("initialize response");
+    let init_timeout = adaptive_timeout() * 4; // Quadruple timeout for critical initialization due to linking issues
+    let resp = read_response_matching_i64(server, 1, init_timeout).unwrap_or_else(|| {
+        eprintln!("LSP server failed to respond to initialize request within {:?}", init_timeout);
+        eprintln!("Check if server started properly and is responding to JSON-RPC requests");
+        panic!("initialize response timeout - server may have crashed or is not responding")
+    });
 
     // Send initialized notification with a brief delay
     std::thread::sleep(Duration::from_millis(50));
