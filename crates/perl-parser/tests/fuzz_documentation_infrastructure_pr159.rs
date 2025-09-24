@@ -102,13 +102,19 @@ fn fuzz_enhanced_perl_parser_ast_invariants() {
             // Performance invariant: parsing should complete within reasonable time
             let elapsed = start_time.elapsed();
             if elapsed > Duration::from_millis(100) {
-                eprintln!("Warning: Slow parsing detected: {:?} for input length {}", elapsed, input.len());
+                eprintln!(
+                    "Warning: Slow parsing detected: {:?} for input length {}",
+                    elapsed,
+                    input.len()
+                );
             }
 
             match parse_result {
                 Ok(ast) => {
                     // AST structural invariants
-                    validate_ast_structure(&ast, &input)?;
+                    validate_ast_structure(&ast, &input).map_err(|_| {
+                        std::io::Error::new(std::io::ErrorKind::Other, "AST validation failed")
+                    })?;
                     Ok::<bool, std::io::Error>(true)
                 }
                 Err(_parse_error) => {
@@ -267,9 +273,7 @@ fn validate_node_ranges(
 /// Test LSP provider robustness under concurrent load and cancellation scenarios
 #[test]
 fn fuzz_lsp_provider_concurrent_robustness() {
-    fn test_lsp_concurrent_load(
-        input: String,
-    ) -> Result<(), proptest::test_runner::TestCaseError> {
+    fn test_lsp_concurrent_load(input: String) -> Result<(), proptest::test_runner::TestCaseError> {
         let result = panic::catch_unwind(|| {
             // Simulate concurrent LSP operations
             let mut parser = Parser::new(&input);
@@ -352,14 +356,17 @@ fn collect_symbols_recursive(node: &Node, symbols: &mut Vec<String>) {
         NodeKind::Variable { name, .. } => {
             symbols.push(name.clone());
         }
-        NodeKind::FunctionDefinition { name, .. } => {
-            symbols.push(name.clone());
+        NodeKind::Subroutine { name, .. } => {
+            if let Some(name) = name {
+                symbols.push(name.clone());
+            }
         }
         _ => {}
     }
 
     // Recursively process children using pattern matching
-    if symbols.len() < 1000 { // Prevent unbounded growth
+    if symbols.len() < 1000 {
+        // Prevent unbounded growth
         collect_symbols_from_children(node, symbols);
     }
 }
@@ -408,7 +415,8 @@ fn validate_syntax_recursive(node: &Node, diagnostics: &mut Vec<String>) {
     }
 
     // Recursively validate children using pattern matching
-    if diagnostics.len() < 100 { // Prevent unbounded growth
+    if diagnostics.len() < 100 {
+        // Prevent unbounded growth
         validate_syntax_from_children(node, diagnostics);
     }
 }
@@ -458,7 +466,8 @@ fn find_references_recursive(node: &Node, symbol: &str, references: &mut Vec<(us
     }
 
     // Recursively process children using pattern matching
-    if references.len() < 1000 { // Prevent unbounded growth
+    if references.len() < 1000 {
+        // Prevent unbounded growth
         find_references_from_children(node, symbol, references);
     }
 }
@@ -506,14 +515,15 @@ fn fuzz_documentation_incremental_parsing_integration() {
 
             // Both operations should complete without panics
             // Documentation infrastructure should not interfere with incremental parsing
-            (initial_ast.is_ok() || initial_ast.is_err()) &&
-            (modified_ast.is_ok() || modified_ast.is_err())
+            (initial_ast.is_ok() || initial_ast.is_err())
+                && (modified_ast.is_ok() || modified_ast.is_err())
         });
 
         prop_assert!(
             result.is_ok(),
             "Documentation infrastructure interfered with incremental parsing: initial={:?}, mod={:?}",
-            initial_content, modification
+            initial_content,
+            modification
         );
 
         Ok(())
@@ -549,9 +559,7 @@ fn fuzz_documentation_incremental_parsing_integration() {
 /// Memory safety and bounds checking stress test
 #[test]
 fn fuzz_memory_safety_bounds_checking() {
-    fn test_memory_safety(
-        input: String,
-    ) -> Result<(), proptest::test_runner::TestCaseError> {
+    fn test_memory_safety(input: String) -> Result<(), proptest::test_runner::TestCaseError> {
         let result = panic::catch_unwind(|| {
             // Test with various input sizes to stress memory allocation
             let mut parser = Parser::new(&input);
@@ -635,23 +643,17 @@ fn validate_memory_bounds_recursive(node: &Node, input: &str) -> bool {
 fn validate_memory_bounds_from_children(node: &Node, input: &str) -> bool {
     match &node.kind {
         NodeKind::Program { statements } => {
-            statements.iter().all(|statement| {
-                validate_memory_bounds_recursive(statement, input)
-            })
+            statements.iter().all(|statement| validate_memory_bounds_recursive(statement, input))
         }
         NodeKind::FunctionCall { args, .. } => {
-            args.iter().all(|arg| {
-                validate_memory_bounds_recursive(arg, input)
-            })
+            args.iter().all(|arg| validate_memory_bounds_recursive(arg, input))
         }
         NodeKind::Block { statements } => {
-            statements.iter().all(|statement| {
-                validate_memory_bounds_recursive(statement, input)
-            })
+            statements.iter().all(|statement| validate_memory_bounds_recursive(statement, input))
         }
         NodeKind::Binary { left, right, .. } => {
-            validate_memory_bounds_recursive(left, input) &&
-            validate_memory_bounds_recursive(right, input)
+            validate_memory_bounds_recursive(left, input)
+                && validate_memory_bounds_recursive(right, input)
         }
         _ => {
             // Other node types are considered valid

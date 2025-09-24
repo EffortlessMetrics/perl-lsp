@@ -35,10 +35,8 @@ mod mock_doc_analysis {
                 if content.starts_with("```rust") || content.starts_with("```") {
                     if in_rust_block {
                         // Nested rust blocks - malformed
-                        malformed.push(format!(
-                            "Line {}: Nested rust block in doctest",
-                            line_num + 1
-                        ));
+                        malformed
+                            .push(format!("Line {}: Nested rust block in doctest", line_num + 1));
                     }
                     in_rust_block = true;
                     rust_block_content.clear();
@@ -47,11 +45,11 @@ mod mock_doc_analysis {
                 } else if content == "```" && in_rust_block {
                     // End of rust block - validate content
                     if rust_block_content.trim().is_empty() {
-                        malformed.push(format!(
-                            "Line {}: Empty doctest block",
-                            block_start_line + 1
-                        ));
-                    } else if !rust_block_content.contains("assert") && !rust_block_content.contains("expect") {
+                        malformed
+                            .push(format!("Line {}: Empty doctest block", block_start_line + 1));
+                    } else if !rust_block_content.contains("assert")
+                        && !rust_block_content.contains("expect")
+                    {
                         // Target mutation: boolean logic in assertion checking
                         malformed.push(format!(
                             "Line {}: Doctest without assertions or expectations",
@@ -74,8 +72,8 @@ mod mock_doc_analysis {
                     // Track brace depth for balance checking
                     for ch in content.chars() {
                         match ch {
-                            '{' => brace_depth += 1,  // Target += vs -= mutations
-                            '}' => brace_depth -= 1,  // Target -= vs += mutations
+                            '{' => brace_depth += 1, // Target += vs -= mutations
+                            '}' => brace_depth -= 1, // Target -= vs += mutations
                             _ => {}
                         }
                     }
@@ -178,7 +176,9 @@ mod mock_doc_analysis {
                     match ref_type {
                         CrossRefType::Function => {
                             // Target boolean logic mutations in function validation
-                            if !known_functions.contains_key(&ref_text) && !is_external_reference(&ref_text) {
+                            if !known_functions.contains_key(&ref_text)
+                                && !is_external_reference(&ref_text)
+                            {
                                 invalid_refs.push(format!(
                                     "Line {}: Unknown function reference: [`{}`]",
                                     line_num + 1,
@@ -220,11 +220,11 @@ mod mock_doc_analysis {
 
         // Check for circular references (targets graph traversal mutations)
         for (func_name, line_refs) in reference_map {
-            if line_refs.len() > 3 {  // Target threshold mutations
+            if line_refs.len() > 3 {
+                // Target threshold mutations
                 invalid_refs.push(format!(
                     "Lines {:?}: Potential circular reference for: {}",
-                    line_refs,
-                    func_name
+                    line_refs, func_name
                 ));
             }
         }
@@ -241,7 +241,7 @@ mod mock_doc_analysis {
         // Target boolean logic mutations in placeholder detection
         placeholders.iter().any(|placeholder| content_lower.contains(&placeholder.to_lowercase()))
             || content.len() < 10  // Target comparison mutations
-            || content.split_whitespace().count() <= 2  // Target arithmetic mutations
+            || content.split_whitespace().count() <= 2 // Target arithmetic mutations
     }
 
     fn is_trivial_documentation(content: &str) -> bool {
@@ -258,7 +258,7 @@ mod mock_doc_analysis {
 
         // Target string matching mutations and boolean logic
         trivial_patterns.iter().any(|pattern| content_lower.contains(pattern))
-            || (content.chars().count() < 20 && !content.contains("example"))  // Target compound boolean mutations
+            || (content.chars().count() < 20 && !content.contains("example")) // Target compound boolean mutations
     }
 
     fn extract_function_name(line: &str) -> Option<String> {
@@ -267,7 +267,8 @@ mod mock_doc_analysis {
             let after_fn = &line[fn_pos + 3..];
             if let Some(paren_pos) = after_fn.find('(') {
                 let name = after_fn[..paren_pos].trim();
-                if !name.is_empty() {  // Target emptiness check mutations
+                if !name.is_empty() {
+                    // Target emptiness check mutations
                     return Some(name.to_string());
                 }
             }
@@ -307,7 +308,7 @@ mod mock_doc_analysis {
                         break;
                     } else if ch == '[' && chars.peek() == Some(&'`') {
                         // Nested reference
-                        nesting_level += 1;  // Target arithmetic mutations
+                        nesting_level += 1; // Target arithmetic mutations
                         ref_content.push(ch);
                     } else {
                         ref_content.push(ch);
@@ -317,9 +318,11 @@ mod mock_doc_analysis {
                 // Classify the reference (targets classification logic mutations)
                 let ref_type = if !found_end {
                     CrossRefType::Malformed
-                } else if ref_content.trim().is_empty() {  // Target trim and emptiness mutations
+                } else if ref_content.trim().is_empty() {
+                    // Target trim and emptiness mutations
                     CrossRefType::Empty
-                } else if nesting_level > 0 {  // Target comparison mutations
+                } else if nesting_level > 0 {
+                    // Target comparison mutations
                     CrossRefType::Nested
                 } else {
                     CrossRefType::Function
@@ -341,7 +344,7 @@ mod mock_doc_analysis {
         // Target string matching and boolean logic mutations
         external_refs.iter().any(|ext_ref| func_name.contains(ext_ref))
             || func_name.contains("::")  // Target substring search mutations
-            || func_name.starts_with("crate::")  // Target prefix check mutations
+            || func_name.starts_with("crate::") // Target prefix check mutations
     }
 }
 
@@ -372,7 +375,12 @@ mod documentation_boolean_logic_tests {
             assert!(!malformed.is_empty(), "Should detect malformed doctest in {}", test_name);
             println!("Detected malformed doctests in {}: {:?}", test_name, malformed);
         } else {
-            assert!(malformed.is_empty(), "Should not detect malformed doctest in {}: {:?}", test_name, malformed);
+            assert!(
+                malformed.is_empty(),
+                "Should not detect malformed doctest in {}: {:?}",
+                test_name,
+                malformed
+            );
         }
     }
 
@@ -394,10 +402,19 @@ mod documentation_boolean_logic_tests {
         let empty_docs = find_empty_doc_strings_hardened(&lines);
 
         if should_find_empty {
-            assert!(!empty_docs.is_empty(), "Should detect empty/trivial documentation in {}", test_name);
+            assert!(
+                !empty_docs.is_empty(),
+                "Should detect empty/trivial documentation in {}",
+                test_name
+            );
             println!("Detected empty documentation in {}: {:?}", test_name, empty_docs);
         } else {
-            assert!(empty_docs.is_empty(), "Should not detect empty documentation in {}: {:?}", test_name, empty_docs);
+            assert!(
+                empty_docs.is_empty(),
+                "Should not detect empty documentation in {}: {:?}",
+                test_name,
+                empty_docs
+            );
         }
     }
 
@@ -464,10 +481,19 @@ mod documentation_boolean_logic_tests {
         let invalid_refs = find_invalid_cross_references_hardened(&lines);
 
         if should_find_invalid {
-            assert!(!invalid_refs.is_empty(), "Should detect invalid cross-reference in {}", test_name);
+            assert!(
+                !invalid_refs.is_empty(),
+                "Should detect invalid cross-reference in {}",
+                test_name
+            );
             println!("Detected invalid cross-references in {}: {:?}", test_name, invalid_refs);
         } else {
-            assert!(invalid_refs.is_empty(), "Should not detect invalid cross-reference in {}: {:?}", test_name, invalid_refs);
+            assert!(
+                invalid_refs.is_empty(),
+                "Should not detect invalid cross-reference in {}: {:?}",
+                test_name,
+                invalid_refs
+            );
         }
     }
 }
@@ -482,11 +508,11 @@ mod documentation_arithmetic_mutation_tests {
     #[test]
     fn test_documentation_length_threshold_mutations() {
         let test_cases = vec![
-            ("", 0, true),           // Empty (threshold boundary)
-            ("a", 1, true),          // Single char (< threshold)
-            ("ab", 2, true),         // At boundary
-            ("abc", 3, true),        // Just above boundary (targets <= vs < mutations)
-            ("short", 5, true),      // Short content
+            ("", 0, true),              // Empty (threshold boundary)
+            ("a", 1, true),             // Single char (< threshold)
+            ("ab", 2, true),            // At boundary
+            ("abc", 3, true),           // Just above boundary (targets <= vs < mutations)
+            ("short", 5, true),         // Short content
             ("a bit longer", 14, true), // Medium content (targets threshold changes)
             ("this is a comprehensive description with sufficient detail", 59, false), // Long content
         ];
@@ -511,16 +537,19 @@ mod documentation_arithmetic_mutation_tests {
     #[test]
     fn test_word_count_threshold_mutations() {
         let test_cases = vec![
-            ("", 0, true),                      // Zero words
-            ("word", 1, true),                  // One word (boundary)
-            ("two words", 2, true),             // Two words (at boundary)
+            ("", 0, true),                                             // Zero words
+            ("word", 1, true),                                         // One word (boundary)
+            ("two words", 2, true),                                    // Two words (at boundary)
             ("three word sentence", 3, false), // Three words (above boundary)
             ("this has many more words in the description", 9, false), // Many words
         ];
 
         for (content, expected_word_count, should_be_trivial) in test_cases {
             let actual_word_count = content.split_whitespace().count();
-            assert_eq!(actual_word_count, expected_word_count, "Word count calculation mutation detected");
+            assert_eq!(
+                actual_word_count, expected_word_count,
+                "Word count calculation mutation detected"
+            );
 
             let formatted_line = format!("/// {}", content);
             let lines = vec![formatted_line.as_str()];
@@ -529,7 +558,11 @@ mod documentation_arithmetic_mutation_tests {
             if should_be_trivial {
                 assert!(!empty_docs.is_empty(), "Should detect trivial word count: '{}'", content);
             } else {
-                assert!(empty_docs.is_empty(), "Should not detect trivial word count: '{}'", content);
+                assert!(
+                    empty_docs.is_empty(),
+                    "Should not detect trivial word count: '{}'",
+                    content
+                );
             }
         }
     }
@@ -538,23 +571,19 @@ mod documentation_arithmetic_mutation_tests {
     #[test]
     fn test_brace_counting_arithmetic_mutations() {
         let test_cases = vec![
-            ("{ }", 0, false),          // Balanced braces
-            ("{ { } }", 0, false),      // Nested balanced braces
-            ("{", 1, true),             // Unbalanced opening
-            ("}", -1, true),            // Unbalanced closing
-            ("{ { }", 1, true),         // Missing closing brace
-            ("{ } }", -1, true),        // Extra closing brace
-            ("{ { { } } }", 0, false),  // Deep nesting but balanced
-            ("{ { { }", 2, true),       // Deep nesting unbalanced
+            ("{ }", 0, false),         // Balanced braces
+            ("{ { } }", 0, false),     // Nested balanced braces
+            ("{", 1, true),            // Unbalanced opening
+            ("}", -1, true),           // Unbalanced closing
+            ("{ { }", 1, true),        // Missing closing brace
+            ("{ } }", -1, true),       // Extra closing brace
+            ("{ { { } } }", 0, false), // Deep nesting but balanced
+            ("{ { { }", 2, true),      // Deep nesting unbalanced
         ];
 
         for (brace_content, expected_final_depth, should_be_unbalanced) in test_cases {
             let formatted_line = format!("/// {}", brace_content);
-            let lines = vec![
-                "/// ```rust",
-                formatted_line.as_str(),
-                "/// ```",
-            ];
+            let lines = vec!["/// ```rust", formatted_line.as_str(), "/// ```"];
 
             let malformed = find_malformed_doctests_hardened(&lines);
 
@@ -562,13 +591,17 @@ mod documentation_arithmetic_mutation_tests {
             let mut actual_depth = 0;
             for ch in brace_content.chars() {
                 match ch {
-                    '{' => actual_depth += 1,  // Test += mutations
-                    '}' => actual_depth -= 1,  // Test -= mutations
+                    '{' => actual_depth += 1, // Test += mutations
+                    '}' => actual_depth -= 1, // Test -= mutations
                     _ => {}
                 }
             }
 
-            assert_eq!(actual_depth, expected_final_depth, "Brace depth calculation mutation detected for: '{}'", brace_content);
+            assert_eq!(
+                actual_depth, expected_final_depth,
+                "Brace depth calculation mutation detected for: '{}'",
+                brace_content
+            );
 
             if should_be_unbalanced {
                 assert!(
@@ -589,7 +622,7 @@ mod documentation_arithmetic_mutation_tests {
     /// Test circular reference counting mutations
     #[test]
     fn test_circular_reference_counting_mutations() {
-        let reference_counts = vec![1, 2, 3, 4, 5, 10];  // Test various thresholds
+        let reference_counts = vec![1, 2, 3, 4, 5, 10]; // Test various thresholds
 
         for count in reference_counts {
             let mut lines = Vec::new();
@@ -603,14 +636,23 @@ mod documentation_arithmetic_mutation_tests {
             let invalid_refs = find_invalid_cross_references_hardened(&line_refs);
 
             // Test threshold boundary (currently set to > 3)
-            let should_detect_circular = count > 3;  // Target comparison mutations (>, >=, <, <=)
+            let should_detect_circular = count > 3; // Target comparison mutations (>, >=, <, <=)
 
-            let has_circular_warning = invalid_refs.iter().any(|r| r.contains("circular reference"));
+            let has_circular_warning =
+                invalid_refs.iter().any(|r| r.contains("circular reference"));
 
             if should_detect_circular {
-                assert!(has_circular_warning, "Should detect circular reference with {} references", count);
+                assert!(
+                    has_circular_warning,
+                    "Should detect circular reference with {} references",
+                    count
+                );
             } else {
-                assert!(!has_circular_warning, "Should not detect circular reference with {} references", count);
+                assert!(
+                    !has_circular_warning,
+                    "Should not detect circular reference with {} references",
+                    count
+                );
             }
         }
     }
@@ -733,7 +775,7 @@ mod documentation_ci_integration_tests {
                     "/// let x: i32 = \"not an integer\";  // Type mismatch",
                     "/// ```",
                 ],
-                true,  // Should detect issues even with compilation errors
+                true, // Should detect issues even with compilation errors
             ),
             (
                 "missing_dependencies",
@@ -743,7 +785,7 @@ mod documentation_ci_integration_tests {
                     "/// assert_eq!(Module::function(), 42);",
                     "/// ```",
                 ],
-                false,  // Should still validate structure despite missing deps
+                false, // Should still validate structure despite missing deps
             ),
             (
                 "malformed_syntax",
@@ -753,16 +795,12 @@ mod documentation_ci_integration_tests {
                     "/// assert_eq!(x, 1);",
                     "/// ```",
                 ],
-                false,  // Has assertion, so structure is valid
+                false, // Has assertion, so structure is valid
             ),
             (
                 "incomplete_doctest",
-                vec![
-                    "/// ```rust",
-                    "/// let x = 1;",
-                    "/// // Missing closing ```",
-                ],
-                true,  // Should detect unclosed doctest
+                vec!["/// ```rust", "/// let x = 1;", "/// // Missing closing ```"],
+                true, // Should detect unclosed doctest
             ),
         ];
 
@@ -771,7 +809,8 @@ mod documentation_ci_integration_tests {
             let empty_docs = find_empty_doc_strings_hardened(&lines);
             let invalid_refs = find_invalid_cross_references_hardened(&lines);
 
-            let has_validation_errors = !malformed.is_empty() || !empty_docs.is_empty() || !invalid_refs.is_empty();
+            let has_validation_errors =
+                !malformed.is_empty() || !empty_docs.is_empty() || !invalid_refs.is_empty();
 
             if should_fail_validation {
                 assert!(
@@ -811,7 +850,7 @@ mod documentation_ci_integration_tests {
                     "/// TODO: document this",
                     "pub fn undocumented_function() {}",
                 ],
-                "mixed",  // Some good, some bad
+                "mixed", // Some good, some bad
             ),
             (
                 "borderline_acceptable",
@@ -820,7 +859,7 @@ mod documentation_ci_integration_tests {
                     "/// Returns result or error on invalid input",
                     "pub fn borderline_function() {}",
                 ],
-                "acceptable",  // Just above threshold
+                "acceptable", // Just above threshold
             ),
             (
                 "comprehensive_with_errors",
@@ -831,13 +870,13 @@ mod documentation_ci_integration_tests {
                     "/// ",
                     "/// ```rust",
                     "/// // Doctest with unbalanced braces",
-                    "/// { let x = 1;",  // Missing closing brace
+                    "/// { let x = 1;", // Missing closing brace
                     "/// ```",
                     "/// ",
                     "/// See [`nonexistent_function`] for related functionality",
                     "pub fn comprehensive_function() {}",
                 ],
-                "mixed_with_errors",  // Good content but technical errors
+                "mixed_with_errors", // Good content but technical errors
             ),
         ];
 
@@ -850,22 +889,46 @@ mod documentation_ci_integration_tests {
 
             match expected_quality {
                 "mixed" => {
-                    assert!(total_issues > 0, "Mixed quality should have some issues in {}", scenario_name);
-                    assert!(total_issues < 5, "Mixed quality shouldn't have too many issues in {}", scenario_name);
+                    assert!(
+                        total_issues > 0,
+                        "Mixed quality should have some issues in {}",
+                        scenario_name
+                    );
+                    assert!(
+                        total_issues < 5,
+                        "Mixed quality shouldn't have too many issues in {}",
+                        scenario_name
+                    );
                 }
                 "acceptable" => {
-                    assert!(total_issues <= 1, "Acceptable quality should have minimal issues in {}", scenario_name);
+                    assert!(
+                        total_issues <= 1,
+                        "Acceptable quality should have minimal issues in {}",
+                        scenario_name
+                    );
                 }
                 "mixed_with_errors" => {
-                    assert!(total_issues >= 2, "Should detect technical errors in {}", scenario_name);
-                    assert!(malformed.len() > 0 || invalid_refs.len() > 0, "Should detect structural errors in {}", scenario_name);
+                    assert!(
+                        total_issues >= 2,
+                        "Should detect technical errors in {}",
+                        scenario_name
+                    );
+                    assert!(
+                        malformed.len() > 0 || invalid_refs.len() > 0,
+                        "Should detect structural errors in {}",
+                        scenario_name
+                    );
                 }
                 _ => {}
             }
 
             println!(
                 "Scenario '{}' quality assessment: {} total issues (malformed: {}, empty: {}, invalid: {})",
-                scenario_name, total_issues, malformed.len(), empty_docs.len(), invalid_refs.len()
+                scenario_name,
+                total_issues,
+                malformed.len(),
+                empty_docs.len(),
+                invalid_refs.len()
             );
         }
     }
