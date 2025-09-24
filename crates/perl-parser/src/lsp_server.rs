@@ -110,6 +110,8 @@ struct ClientCapabilities {
     implementation_link_support: bool,
     /// Supports dynamic registration for file watching
     dynamic_registration_support: bool,
+    /// Supports snippet syntax in completion items
+    snippet_support: bool,
 }
 
 /// LSP server that handles JSON-RPC communication
@@ -347,6 +349,23 @@ impl LspServer {
         output.flush()
     }
 
+    /// Send index-ready notification to inform clients that workspace indexing is available
+    fn send_index_ready_notification(&self) -> io::Result<()> {
+        #[cfg(feature = "workspace")]
+        let has_symbols =
+            self.workspace_index.as_ref().map(|idx| idx.has_symbols()).unwrap_or(false);
+
+        #[cfg(not(feature = "workspace"))]
+        let has_symbols = false;
+
+        self.notify(
+            "perl-lsp/index-ready",
+            json!({
+                "ready": has_symbols
+            }),
+        )
+    }
+
     /// Run the LSP server
     pub fn run(&mut self) -> io::Result<()> {
         let stdin = io::stdin();
@@ -541,6 +560,9 @@ impl LspServer {
                 if self.client_capabilities.dynamic_registration_support {
                     self.register_file_watchers_async();
                 }
+
+                // Send index-ready notification
+                let _ = self.send_index_ready_notification();
 
                 Ok(None)
             }
@@ -855,6 +877,16 @@ impl LspServer {
                 .and_then(|c| c.get("workspace"))
                 .and_then(|w| w.get("didChangeWatchedFiles"))
                 .and_then(|d| d.get("dynamicRegistration"))
+                .and_then(|b| b.as_bool())
+                .unwrap_or(false);
+
+            // Check if client supports snippet syntax in completion items
+            self.client_capabilities.snippet_support = params
+                .get("capabilities")
+                .and_then(|c| c.get("textDocument"))
+                .and_then(|td| td.get("completion"))
+                .and_then(|comp| comp.get("completionItem"))
+                .and_then(|ci| ci.get("snippetSupport"))
                 .and_then(|b| b.as_bool())
                 .unwrap_or(false);
 
@@ -1545,6 +1577,21 @@ impl LspServer {
         }
     }
 
+    /// Degrade snippet syntax to plaintext for clients that don't support snippets
+    fn degrade_snippet_to_plaintext(snippet: &str) -> String {
+        use regex::Regex;
+
+        // Remove snippet placeholders: ${1:placeholder} -> placeholder, $1 -> empty
+        let placeholder_re = Regex::new(r"\$\{(\d+):([^}]+)\}").unwrap();
+        let mut result = placeholder_re.replace_all(snippet, "$2").to_string();
+
+        // Remove simple placeholders: $1, $0, etc.
+        let simple_re = Regex::new(r"\$\d+").unwrap();
+        result = simple_re.replace_all(&result, "").to_string();
+
+        result
+    }
+
     /// Handle completion request
     fn handle_completion(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
@@ -1555,6 +1602,13 @@ impl LspServer {
             // Reject stale requests
             let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
             self.ensure_latest(uri, req_version)?;
+
+            // Check index readiness (soft wait, no sleeps) - provide basic completion if not ready
+            #[cfg(feature = "workspace")]
+            let index_ready = self.workspace_index.as_ref().is_some_and(|idx| idx.has_symbols());
+
+            #[cfg(not(feature = "workspace"))]
+            let index_ready = false;
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -1616,8 +1670,9 @@ impl LspServer {
                 };
 
                 // Add workspace-wide completions (functions and modules from other files)
+                // Only if index is ready (soft wait, no sleeps)
                 #[cfg(feature = "workspace")]
-                if let Some(ref workspace_index) = self.workspace_index {
+                if index_ready && let Some(ref workspace_index) = self.workspace_index {
                     // Get the current context to filter relevant completions
                     let text_before = &doc.text[..offset.min(doc.text.len())];
                     let prefix = text_before
@@ -1689,6 +1744,15 @@ impl LspServer {
                 let items: Vec<Value> = completions
                     .into_iter()
                     .map(|c| {
+                        // Determine insertTextFormat based on client capability and completion kind
+                        let is_snippet = c.kind == CompletionItemKind::Snippet;
+                        let insert_text_format =
+                            if is_snippet && self.client_capabilities.snippet_support {
+                                2 // Snippet format
+                            } else {
+                                1 // PlainText format
+                            };
+
                         let mut item = json!({
                             "label": c.label,
                             "kind": match c.kind {
@@ -1701,7 +1765,7 @@ impl LspServer {
                                 CompletionItemKind::Constant => 14,
                                 CompletionItemKind::Property => 7,
                             },
-                            "insertTextFormat": 1,  // 1=PlainText, 2=Snippet
+                            "insertTextFormat": insert_text_format,
                         });
 
                         // Only include detail if it has a value
@@ -1710,7 +1774,12 @@ impl LspServer {
                         }
 
                         // Only include insertText if it has a value
-                        if let Some(insert_text) = c.insert_text {
+                        if let Some(mut insert_text) = c.insert_text {
+                            // Degrade snippets to plaintext if client doesn't support snippets
+                            if is_snippet && !self.client_capabilities.snippet_support {
+                                // Remove snippet syntax: $1, $0, ${1:placeholder}, etc.
+                                insert_text = Self::degrade_snippet_to_plaintext(&insert_text);
+                            }
                             item["insertText"] = json!(insert_text);
                         }
 

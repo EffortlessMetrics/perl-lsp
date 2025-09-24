@@ -12,6 +12,11 @@
 //! - **Complete**: Primary consumer - provides syntax highlighting for code presentation
 //! - **Analyze**: Uses semantic classification for enhanced search and analysis
 //!
+//! # Related Modules
+//!
+//! See also [`crate::workspace_index`] for symbol indexing, [`crate::semantic`] for
+//! semantic analysis, and [`crate::completion`] for code completion integration.
+//!
 //! # Performance Characteristics
 //!
 //! - Memory usage: O(n) where n is token count in Perl script

@@ -76,8 +76,8 @@ This crate enforces enterprise-grade API documentation standards through `#![war
 # Run comprehensive documentation tests (12 acceptance criteria)
 cargo test --test missing_docs_ac_tests
 
-# Generate documentation without warnings
-cargo doc -p perl-parser --no-deps
+# Generate documentation without warnings (perl-parser crate only)
+cargo doc --no-deps --package perl-parser
 ```
 
 The documentation validation suite includes:

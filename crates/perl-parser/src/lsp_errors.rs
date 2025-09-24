@@ -154,6 +154,44 @@ pub fn internal_error(message: &str) -> Value {
     })
 }
 
+/// Create an invalid parameters error for LSP operations during Perl parsing workflow
+///
+/// # Arguments
+///
+/// * `message` - Descriptive error message about the parameter validation failure
+///
+/// # Returns
+///
+/// A [`JsonRpcError`] with INVALID_PARAMS code for LSP response
+///
+/// # Email Processing Context
+///
+/// Occurs when LSP clients send malformed parameters during Perl script analysis.
+/// Common when processing complex Perl structures where parameter validation ensures
+/// data integrity throughout the Parse → Index → Navigate → Complete → Analyze workflow.
+pub fn invalid_params_err(message: &str) -> JsonRpcError {
+    JsonRpcError { code: error_codes::INVALID_PARAMS, message: message.to_string(), data: None }
+}
+
+/// Create an internal error for unexpected failures during Perl parsing workflows
+///
+/// # Arguments
+///
+/// * `message` - Descriptive error message about the internal failure
+///
+/// # Returns
+///
+/// A [`JsonRpcError`] with INTERNAL_ERROR code for LSP response
+///
+/// # Email Processing Context
+///
+/// Used when unexpected internal failures occur during LSP workflow processing,
+/// such as memory allocation failures during large Perl codebase analysis or threading
+/// issues during concurrent Perl parsing operations. Recovery involves graceful degradation.
+pub fn internal_error_err(message: &str) -> JsonRpcError {
+    JsonRpcError { code: error_codes::INTERNAL_ERROR, message: message.to_string(), data: None }
+}
+
 /// Configuration structure for tracking which LSP features are advertised during Perl parsing
 ///
 /// This struct manages feature availability during LSP workflow operations, allowing

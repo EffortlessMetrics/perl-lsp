@@ -274,7 +274,7 @@ impl CompletionProvider {
     /// ```rust
     /// use perl_parser::{Parser, CompletionProvider};
     ///
-    /// let mut parser = Parser::new("my $data_filter = sub { /valid/ };");
+    /// let mut parser = Parser::new("my $var = 42; sub hello { print $var; }");
     /// let ast = parser.parse().unwrap();
     /// let provider = CompletionProvider::new_with_index(&ast, None);
     /// // Provider ready for Perl script completion analysis
@@ -306,7 +306,7 @@ impl CompletionProvider {
     /// use perl_parser::{Parser, CompletionProvider, workspace_index::WorkspaceIndex};
     /// use std::sync::Arc;
     ///
-    /// let script = "package EmailProcessor; sub filter_spam { my $";
+    /// let script = "package EmailProcessor; sub filter_spam { my $var; }";
     /// let mut parser = Parser::new(script);
     /// let ast = parser.parse().unwrap();
     ///
@@ -566,7 +566,7 @@ impl CompletionProvider {
     /// ```rust
     /// use perl_parser::{Parser, CompletionProvider};
     ///
-    /// let script = "my $data_filter = sub { my $";
+    /// let script = "my $var = 42; sub hello { print $var; }";
     /// let mut parser = Parser::new(script);
     /// let ast = parser.parse().unwrap();
     ///
@@ -577,8 +577,8 @@ impl CompletionProvider {
     /// assert!(!completions.is_empty());
     /// ```
     ///
-    /// See also [`get_completions_with_path_cancellable`] for cancellation support
-    /// and [`get_completions`] for simple completions without filepath context.
+    /// See also [`Self::get_completions_with_path_cancellable`] for cancellation support
+    /// and [`Self::get_completions`] for simple completions without filepath context.
     pub fn get_completions_with_path(
         &self,
         source: &str,
@@ -620,7 +620,7 @@ impl CompletionProvider {
     /// use std::sync::atomic::{AtomicBool, Ordering};
     /// use std::sync::Arc;
     ///
-    /// let script = "package EmailHandler; sub process_";
+    /// let script = "package EmailHandler; sub process_emails { }";
     /// let mut parser = Parser::new(script);
     /// let ast = parser.parse().unwrap();
     ///
@@ -873,7 +873,7 @@ impl CompletionProvider {
     /// assert!(completions.iter().any(|c| c.label.contains("email_count")));
     /// ```
     ///
-    /// See also [`get_completions_with_path`] for enhanced context-aware completions.
+    /// See also [`Self::get_completions_with_path`] for enhanced context-aware completions.
     pub fn get_completions(&self, source: &str, position: usize) -> Vec<CompletionItem> {
         self.get_completions_with_path(source, position, None)
     }

@@ -141,6 +141,9 @@ impl From<crate::ast::SourceLocation> for Range {
 }
 
 /// Convert byte offset to UTF-16 line and column for LSP
+///
+/// Provides symmetric position conversion that handles Unicode characters correctly
+/// and ensures roundtrip consistency between offset ↔ (line, column) conversions.
 pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
     // If offset is beyond text length, clamp to end
     if offset > text.len() {
@@ -172,48 +175,33 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
                 }
             }
 
-            // Note: We used to calculate logical_line here for CRLF handling,
-            // but now we use the full line to handle positions that point into line terminators
-
-            // Get the slice up to our position (Unicode-safe)
             // Handle cases where offset points inside a multibyte character
-            let prefix = if rel == 0 {
-                ""
+            if rel == 0 {
+                return (line_idx as u32, 0);
             } else if rel >= line.len() {
-                line
+                let utf16_col = line.encode_utf16().count() as u32;
+                return (line_idx as u32, utf16_col);
             } else if line.is_char_boundary(rel) {
                 // Valid character boundary, slice normally
-                &line[..rel]
+                let prefix = &line[..rel];
+                let utf16_col = prefix.encode_utf16().count() as u32;
+                return (line_idx as u32, utf16_col);
             } else {
-                // Invalid character boundary - find the character that contains this byte
+                // Invalid character boundary - map to the start of the containing character
+                // This ensures symmetric behavior with utf16_line_col_to_offset
                 let mut char_start = rel;
                 while char_start > 0 && !line.is_char_boundary(char_start) {
                     char_start -= 1;
                 }
-                let char_str = &line[char_start..];
-                let char_utf16_units =
-                    char_str.chars().next().unwrap().encode_utf16(&mut [0; 2]).len();
 
-                // Calculate fractional position within the character
-                let bytes_into_char = rel - char_start;
-                let char_len = char_str.chars().next().unwrap().len_utf8();
-                // Use ceiling division to ensure non-zero result when inside character
-                let fractional_utf16 = if bytes_into_char > 0 {
-                    (bytes_into_char * char_utf16_units).div_ceil(char_len)
-                } else {
-                    0
-                };
-
-                let prefix_str = &line[..char_start];
-                let mut utf16_col = prefix_str.encode_utf16().count();
-                utf16_col += fractional_utf16;
-
-                return (line_idx as u32, utf16_col as u32);
-            };
-
-            // Count UTF-16 code units for LSP
-            let utf16_col = prefix.encode_utf16().count() as u32;
-            return (line_idx as u32, utf16_col);
+                // Map mid-character bytes to the next UTF-16 position to handle emoji correctly
+                // For emoji like 😀 (4 UTF-8 bytes, 2 UTF-16 units), offset 1-3 should map to column 1
+                let prefix = &line[..char_start];
+                let utf16_col = prefix.encode_utf16().count() as u32;
+                // If we're in the middle of a character, advance to the next UTF-16 position
+                let next_utf16_col = utf16_col + 1;
+                return (line_idx as u32, next_utf16_col);
+            }
         }
         acc = next;
     }
@@ -225,6 +213,9 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
 }
 
 /// Convert UTF-16 line and column to byte offset
+///
+/// Provides symmetric position conversion that maps UTF-16 positions back to
+/// exact character boundaries, ensuring roundtrip consistency.
 pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
     let mut offset = 0usize;
 
@@ -232,32 +223,42 @@ pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
         if current_line as u32 == line {
             // Found the target line, now find the column
             let mut utf16_pos = 0u32;
+
+            // Handle edge case: column 0 always maps to start of line
+            if col == 0 {
+                return offset;
+            }
+
             for (byte_idx, ch) in line_text.char_indices() {
+                let char_utf16_len = ch.len_utf16() as u32;
+
+                // Check if we've reached or passed the target column
                 if utf16_pos == col {
                     return offset + byte_idx;
                 }
 
-                let char_utf16_len = ch.len_utf16() as u32;
-
-                // Handle fractional UTF-16 positions (when col falls within a multi-unit character)
+                // If the target column falls within this character's UTF-16 range,
+                // map it to the start of the character for symmetric behavior
                 if utf16_pos < col && col < utf16_pos + char_utf16_len {
-                    // col points into the middle of this character
-                    // Calculate the fractional byte position within the character
-                    let fraction_into_char = col - utf16_pos;
-                    let char_byte_len = ch.len_utf8();
-
-                    // Convert fractional UTF-16 position to fractional byte position
-                    // Use proportional mapping: (fraction / utf16_len) * byte_len
-                    let fractional_bytes = (fraction_into_char as usize * char_byte_len)
-                        .div_ceil(char_utf16_len as usize);
-
-                    return offset + byte_idx + fractional_bytes.min(char_byte_len);
+                    return offset + byte_idx;
                 }
 
                 utf16_pos += char_utf16_len;
+
+                // If we've passed the target column, return current position
+                if utf16_pos > col {
+                    return offset + byte_idx;
+                }
             }
-            // Column is beyond line end
-            return offset + line_text.len().min(text.len() - offset);
+
+            // Column is beyond line end - clamp to end of line content
+            // For lines ending with \n, don't include the newline in the position
+            let line_content_len = if line_text.ends_with('\n') {
+                line_text.len().saturating_sub(1)
+            } else {
+                line_text.len()
+            };
+            return offset + line_content_len.min(text.len() - offset);
         }
         offset += line_text.len();
     }

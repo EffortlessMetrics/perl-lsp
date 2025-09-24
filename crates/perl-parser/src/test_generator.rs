@@ -21,11 +21,13 @@
 //!
 //! ```rust
 //! use perl_parser::test_generator::{TestGenerator, TestFramework};
+//! use perl_parser::{Parser, ast::Node};
 //!
+//! let mut parser = Parser::new("sub add { my ($a, $b) = @_; return $a + $b; }");
+//! let ast = parser.parse().unwrap();
 //! let generator = TestGenerator::new(TestFramework::TestMore);
-//! let test_code = generator.generate_tests(&ast_node)?;
-//! println!("{}", test_code);
-//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! let test_cases = generator.generate_tests(&ast, "sub add { my ($a, $b) = @_; return $a + $b; }");
+//! println!("Generated {} test cases", test_cases.len());
 //! ```
 
 use crate::ast::{Node, NodeKind};
