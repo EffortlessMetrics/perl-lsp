@@ -103,7 +103,7 @@ Transform generic agent configurations to align with Perl LSP's specific Integra
 ## Gate Vocabulary (Integrative)
 
 Use only: freshness, format, clippy, spec, api, tests, build, features, mutation, fuzz,
-security, benchmarks, perf, docs, throughput
+security, benchmarks, perf, docs, parsing
 
 Status should be: **pass | fail | skipped** (use `skipped (reason)` for N/A).
 
@@ -139,7 +139,7 @@ Agents should populate the Story → Schema → Tests → Code table with concre
 Example Checks create:
 ```bash
 SHA=$(git rev-parse HEAD)
-NAME="integrative:gate:throughput"
+NAME="integrative:gate:parsing"
 SUMMARY="files:5012, time:2m00s, rate:0.40 min/1K; SLO: pass"
 
 gh api -X POST repos/:owner/:repo/check-runs \
@@ -230,7 +230,7 @@ Every customized agent must define these success scenarios with specific routing
 - **Flow successful: needs specialist** → route to appropriate specialist agent (test-hardener for robustness, mutation-tester for comprehensive coverage, fuzz-tester for edge case validation, security-scanner for vulnerability assessment)
 - **Flow successful: architectural issue** → route to architecture-reviewer for design validation and compatibility assessment
 - **Flow successful: performance regression** → route to perf-fixer for optimization and performance remediation
-- **Flow successful: throughput concern** → route to integrative-benchmark-runner for detailed performance analysis and SLO validation
+- **Flow successful: parsing concern** → route to integrative-benchmark-runner for detailed performance analysis and SLO validation
 - **Flow successful: security finding** → route to security-scanner for comprehensive security validation
 - **Flow successful: integration failure** → route to integration-tester for cross-component validation
 - **Flow successful: compatibility issue** → route to compatibility-validator for platform and feature compatibility assessment
@@ -290,15 +290,15 @@ Ensure every customized agent includes:
 - [ ] Plain language reporting with NEXT/FINALIZE routing
 - [ ] cargo + xtask commands for Check Runs, Gates rows, and hop log updates
 - [ ] Fallback chains (try alternatives before skipping)
-- [ ] References docs/explanation/docs/reference storage convention
+- [ ] References docs/ storage convention following Diátaxis framework
 - [ ] Multiple "flow successful" paths clearly defined (task done, additional work needed, needs specialist, architectural issue)
-- [ ] BitNet.rs performance validation where applicable (≤10 seconds for inference)
-- [ ] Security patterns integrated (memory safety, GPU memory safety, input validation)
-- [ ] Integration with BitNet.rs toolchain (cargo test, mutation, fuzz, audit, cross-validation)
+- [ ] Perl LSP performance validation where applicable (≤1ms for incremental updates)
+- [ ] Security patterns integrated (memory safety, UTF-16/UTF-8 position safety, input validation)
+- [ ] Integration with Perl LSP toolchain (cargo test, mutation, fuzz, audit, highlight testing)
 - [ ] Gate-focused pass/fail criteria with evidence
 - [ ] Evidence grammar compliance (scannable summaries)
 - [ ] Pre-merge freshness re-check (pr-merge-prep)
-- [ ] Throughput gate with proper evidence format
+- [ ] Parsing gate with proper evidence format
 - [ ] Bounded feature matrix with policy compliance
 - [ ] Package-specific testing (`-p perl-parser`, `-p perl-lsp`, `-p perl-lexer`)
 - [ ] Tree-sitter highlight integration testing when applicable
