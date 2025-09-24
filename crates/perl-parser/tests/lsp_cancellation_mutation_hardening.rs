@@ -14,7 +14,7 @@
 use perl_parser::workspace_index::WorkspaceIndex;
 use proptest::prelude::*;
 use rstest::*;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -53,11 +53,7 @@ impl MockLspState {
 
     /// Check if a request has been cancelled - targets boolean logic mutations
     fn is_cancelled(&self, id: &Value) -> bool {
-        if let Ok(set) = self.cancelled.lock() {
-            set.contains(id)
-        } else {
-            false
-        }
+        if let Ok(set) = self.cancelled.lock() { set.contains(id) } else { false }
     }
 
     /// Record request processing completion
@@ -202,10 +198,7 @@ mod cancellation_boolean_logic_tests {
         let state = MockLspState::new();
 
         // Test with empty set
-        assert!(
-            !state.is_cancelled(&json!(1)),
-            "Empty set should return false for any ID"
-        );
+        assert!(!state.is_cancelled(&json!(1)), "Empty set should return false for any ID");
 
         // Fill set with many entries to test performance boundaries
         let many_ids: Vec<Value> = (1..=1000).map(|i| json!(i)).collect();
@@ -287,7 +280,11 @@ mod workspace_cancellation_tests {
         match result {
             Err(msg) if msg.contains("Cancelled") => {
                 // Successfully cancelled
-                assert_eq!(state.operation_count(), 0, "Operation count should be reset after cancellation");
+                assert_eq!(
+                    state.operation_count(),
+                    0,
+                    "Operation count should be reset after cancellation"
+                );
             }
             Ok(_) => {
                 // Completed before cancellation - acceptable for this test
@@ -421,7 +418,10 @@ mod cancellation_timeout_tests {
         match result {
             "Cancelled" => {
                 // Successfully cancelled within timeout
-                assert!(state.is_cancelled(&request_id), "Request should remain marked as cancelled");
+                assert!(
+                    state.is_cancelled(&request_id),
+                    "Request should remain marked as cancelled"
+                );
             }
             "Timeout" => {
                 // Operation timed out before cancellation could be processed
@@ -473,8 +473,7 @@ mod cancellation_timeout_tests {
                 test_name
             );
             assert_eq!(
-                response["id"],
-                request_id,
+                response["id"], request_id,
                 "Request ID should be preserved in error response for {}",
                 test_name
             );
@@ -527,10 +526,7 @@ mod cancellation_timeout_tests {
 
         // Clear and verify
         state.cancel_clear(&request_id);
-        assert!(
-            !state.is_cancelled(&request_id),
-            "Clear should work after high contention"
-        );
+        assert!(!state.is_cancelled(&request_id), "Clear should work after high contention");
     }
 }
 

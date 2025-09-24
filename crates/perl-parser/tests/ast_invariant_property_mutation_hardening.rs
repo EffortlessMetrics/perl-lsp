@@ -11,7 +11,10 @@
 //! - Memory safety in concurrent AST operations
 //! - Position tracking and UTF-16 conversion edge cases
 
-use perl_parser::{Parser, ast::{Node, NodeKind}};
+use perl_parser::{
+    Parser,
+    ast::{Node, NodeKind},
+};
 use proptest::prelude::*;
 use rstest::*;
 use std::collections::{HashMap, HashSet};
@@ -109,7 +112,8 @@ mod ast_analysis {
             match kind {
                 NodeKind::Program { statements } => {
                     for (child_index, child) in statements.iter().enumerate() {
-                        if child_index < statements.len() {  // Target < vs <= mutations
+                        if child_index < statements.len() {
+                            // Target < vs <= mutations
                             self.analyze_node(child, parent, depth);
                         }
                     }
@@ -131,13 +135,13 @@ mod ast_analysis {
                         self.analyze_node(init, parent, depth);
                     }
                 }
-                NodeKind::FunctionCall { name, arguments, .. } => {
-                    self.analyze_node(name, parent, depth);
-                    for arg in arguments.iter() {
+                NodeKind::FunctionCall { name, args, .. } => {
+                    // name is String, not Node - no need to analyze it
+                    for arg in args.iter() {
                         self.analyze_node(arg, parent, depth);
                     }
                 }
-                NodeKind::StringLiteral { .. } | NodeKind::NumberLiteral { .. } | NodeKind::Variable { .. } => {
+                NodeKind::String { .. } | NodeKind::Number { .. } | NodeKind::Variable { .. } => {
                     // Terminal nodes - no children to analyze
                 }
                 // Add more cases as needed - this covers the main structural nodes
@@ -152,7 +156,8 @@ mod ast_analysis {
             let mut parent_child_consistent = true;
             for (child_ptr, parent_ptr) in &self.child_parent_map {
                 if let Some(siblings) = self.parent_child_map.get(parent_ptr) {
-                    if !siblings.contains(child_ptr) {  // Target negation mutations
+                    if !siblings.contains(child_ptr) {
+                        // Target negation mutations
                         parent_child_consistent = false;
                         break;
                     }
@@ -165,7 +170,8 @@ mod ast_analysis {
             // Check position sequence monotonicity (targets comparison mutations)
             let mut positions_monotonic = true;
             for window in self.position_sequence.windows(2) {
-                if window[0].0 > window[1].0 {  // Target > vs >= mutations
+                if window[0].0 > window[1].0 {
+                    // Target > vs >= mutations
                     positions_monotonic = false;
                     break;
                 }
@@ -178,7 +184,7 @@ mod ast_analysis {
             let all_reachable = self.nodes_visited.len() == self.total_nodes;
 
             // S-expression length reasonableness (targets length calculation mutations)
-            let sexp_reasonable = self.total_nodes > 0 && self.total_nodes < 10000;  // Reasonable bounds
+            let sexp_reasonable = self.total_nodes > 0 && self.total_nodes < 10000; // Reasonable bounds
 
             AstInvariants {
                 total_nodes: self.total_nodes,
@@ -198,11 +204,11 @@ mod ast_analysis {
             for &node_ptr in self.nodes_visited.iter() {
                 if !visited.contains(&node_ptr) {
                     if self.has_cycle_dfs(node_ptr, &mut visited, &mut rec_stack) {
-                        return false;  // Cycle detected
+                        return false; // Cycle detected
                     }
                 }
             }
-            true  // No cycles found
+            true // No cycles found
         }
 
         fn has_cycle_dfs(
@@ -222,7 +228,7 @@ mod ast_analysis {
                             return true;
                         }
                     } else if rec_stack.contains(&child_ptr) {
-                        return true;  // Back edge found - cycle detected
+                        return true; // Back edge found - cycle detected
                     }
                 }
             }
@@ -286,8 +292,7 @@ mod ast_construction_mutation_tests {
                 assert!(
                     invariants.sexp_length_reasonable,
                     "S-expression length should be reasonable for {}: {} nodes",
-                    test_name,
-                    invariants.total_nodes
+                    test_name, invariants.total_nodes
                 );
 
                 // Test S-expression generation doesn't crash
@@ -295,16 +300,34 @@ mod ast_construction_mutation_tests {
                 let sexp_inner = ast.to_sexp_inner();
 
                 assert!(!sexp.is_empty(), "S-expression should not be empty for {}", test_name);
-                assert!(!sexp_inner.is_empty(), "Inner S-expression should not be empty for {}", test_name);
+                assert!(
+                    !sexp_inner.is_empty(),
+                    "Inner S-expression should not be empty for {}",
+                    test_name
+                );
 
                 // Test S-expression structure validity (targets formatting mutations)
-                assert!(sexp.starts_with('(') && sexp.ends_with(')'), "S-expression should be properly parenthesized for {}", test_name);
-                assert!(sexp_inner.starts_with('(') && sexp_inner.ends_with(')'), "Inner S-expression should be properly parenthesized for {}", test_name);
+                assert!(
+                    sexp.starts_with('(') && sexp.ends_with(')'),
+                    "S-expression should be properly parenthesized for {}",
+                    test_name
+                );
+                assert!(
+                    sexp_inner.starts_with('(') && sexp_inner.ends_with(')'),
+                    "Inner S-expression should be properly parenthesized for {}",
+                    test_name
+                );
 
-                println!("✓ {} passed all invariant checks with {} nodes", test_name, invariants.total_nodes);
+                println!(
+                    "✓ {} passed all invariant checks with {} nodes",
+                    test_name, invariants.total_nodes
+                );
             }
             Err(e) => {
-                println!("⚠ {} failed to parse (acceptable for complex constructs): {}", test_name, e);
+                println!(
+                    "⚠ {} failed to parse (acceptable for complex constructs): {}",
+                    test_name, e
+                );
             }
         }
     }
@@ -421,22 +444,25 @@ mod ast_construction_mutation_tests {
 
         // Analyze results for consistency
         let final_results = results.lock().unwrap();
-        assert!(!final_results.is_empty(), "Should have collected results from concurrent operations");
+        assert!(
+            !final_results.is_empty(),
+            "Should have collected results from concurrent operations"
+        );
 
         // Check invariant consistency across all operations
-        for (thread_id, op_id, invariants, sexp_len, sexp_inner_len, duration) in final_results.iter() {
+        for (thread_id, op_id, invariants, sexp_len, sexp_inner_len, duration) in
+            final_results.iter()
+        {
             assert!(
                 invariants.parent_child_consistency,
                 "Parent-child consistency failed in thread {}, operation {}",
-                thread_id,
-                op_id
+                thread_id, op_id
             );
 
             assert!(
                 invariants.no_circular_references,
                 "Circular reference detected in thread {}, operation {}",
-                thread_id,
-                op_id
+                thread_id, op_id
             );
 
             assert!(
@@ -455,7 +481,10 @@ mod ast_construction_mutation_tests {
             );
         }
 
-        println!("✓ Concurrent operations completed successfully: {} total operations", final_results.len());
+        println!(
+            "✓ Concurrent operations completed successfully: {} total operations",
+            final_results.len()
+        );
     }
 }
 
@@ -492,7 +521,11 @@ mod sexp_generation_mutation_tests {
 
                 // Basic structural validation (targets formatting mutations)
                 assert!(!sexp.is_empty(), "S-expression should not be empty for {}", test_name);
-                assert!(!sexp_inner.is_empty(), "Inner S-expression should not be empty for {}", test_name);
+                assert!(
+                    !sexp_inner.is_empty(),
+                    "Inner S-expression should not be empty for {}",
+                    test_name
+                );
 
                 // Parenthesis balance (targets bracket counting mutations)
                 assert_eq!(
@@ -514,14 +547,19 @@ mod sexp_generation_mutation_tests {
                 // Length relationship (targets length calculation mutations)
                 // Both expressions should be meaningful (not just "()")
                 assert!(sexp.len() > 2, "S-expression should be meaningful for {}", test_name);
-                assert!(sexp_inner.len() > 2, "Inner S-expression should be meaningful for {}", test_name);
+                assert!(
+                    sexp_inner.len() > 2,
+                    "Inner S-expression should be meaningful for {}",
+                    test_name
+                );
 
                 // Test specific mutations in anonymous vs named subroutine handling
                 if test_name.contains("anonymous") {
                     // Anonymous subroutines should maintain expression statement wrapper
                     // This tests the name.is_none() condition at line 541 mentioned in the mutations
                     assert!(
-                        sexp_inner.contains("expression_statement") || sexp_inner.contains("subroutine"),
+                        sexp_inner.contains("expression_statement")
+                            || sexp_inner.contains("subroutine"),
                         "Anonymous subroutine should maintain proper structure: {}",
                         sexp_inner
                     );
@@ -542,8 +580,8 @@ mod sexp_generation_mutation_tests {
         let mut balance = 0;
         for ch in s.chars() {
             match ch {
-                '(' => balance += 1,  // Target += vs -= mutations
-                ')' => balance -= 1,  // Target -= vs += mutations
+                '(' => balance += 1, // Target += vs -= mutations
+                ')' => balance -= 1, // Target -= vs += mutations
                 _ => {}
             }
         }
@@ -573,8 +611,16 @@ mod sexp_generation_mutation_tests {
                 let sexp_inner = ast.to_sexp_inner();
 
                 // Verify S-expressions are well-formed despite special characters
-                assert!(!sexp.is_empty(), "S-expression should handle special characters in {}", test_name);
-                assert!(!sexp_inner.is_empty(), "Inner S-expression should handle special characters in {}", test_name);
+                assert!(
+                    !sexp.is_empty(),
+                    "S-expression should handle special characters in {}",
+                    test_name
+                );
+                assert!(
+                    !sexp_inner.is_empty(),
+                    "Inner S-expression should handle special characters in {}",
+                    test_name
+                );
 
                 // Check parenthesis balance is maintained with special characters
                 assert_eq!(
@@ -775,7 +821,7 @@ mod ast_real_world_integration_tests {
 
                 1;
                 "#,
-                "object_oriented_module"
+                "object_oriented_module",
             ),
             (
                 r#"
@@ -789,7 +835,7 @@ mod ast_real_world_integration_tests {
                 };
                 print "Sum: $sum\n";
                 "#,
-                "functional_programming_style"
+                "functional_programming_style",
             ),
             (
                 r#"
@@ -810,7 +856,7 @@ mod ast_real_world_integration_tests {
                     return $b;
                 }
                 "#,
-                "recursive_and_iterative_algorithms"
+                "recursive_and_iterative_algorithms",
             ),
             (
                 r#"
@@ -834,7 +880,7 @@ mod ast_real_world_integration_tests {
                     print "Path: $+{path}\n" if $+{path};
                 }
                 "#,
-                "complex_regex_with_named_captures"
+                "complex_regex_with_named_captures",
             ),
         ];
 
@@ -909,10 +955,7 @@ mod ast_real_world_integration_tests {
                     );
                 }
                 Err(e) => {
-                    println!(
-                        "⚠ Complex pattern {} failed to parse: {}",
-                        pattern_name, e
-                    );
+                    println!("⚠ Complex pattern {} failed to parse: {}", pattern_name, e);
                     // For complex patterns, parse failure might be acceptable
                     // The key test is that the parser doesn't crash
                 }
@@ -1004,17 +1047,11 @@ mod ast_real_world_integration_tests {
                     sexp_duration
                 );
 
-                assert!(
-                    !sexp.is_empty(),
-                    "S-expression should be generated for large AST"
-                );
+                assert!(!sexp.is_empty(), "S-expression should be generated for large AST");
 
                 println!(
                     "✓ Large program test passed: {} nodes, parse: {:?}, invariants: {:?}, sexp: {:?}",
-                    invariants.total_nodes,
-                    parse_duration,
-                    invariant_duration,
-                    sexp_duration
+                    invariants.total_nodes, parse_duration, invariant_duration, sexp_duration
                 );
             }
             Err(e) => {
