@@ -985,7 +985,8 @@ fn test_fixture_cleanup_validation_ac9() {
 
         // Memory estimation is imprecise in test environments, so use a more flexible validation
         // Allow some memory growth but ensure it's reasonable (under 10MB tolerance)
-        let memory_cleanup_effective = memory_growth_after_cleanup <= memory_growth_during_ops + 1024 * 1024; // 1MB tolerance for measurement imprecision
+        let memory_cleanup_effective =
+            memory_growth_after_cleanup <= memory_growth_during_ops + 1024 * 1024; // 1MB tolerance for measurement imprecision
         assert!(
             memory_cleanup_effective,
             "Memory cleanup should be effective: during_ops={}KB, after_cleanup={}KB",

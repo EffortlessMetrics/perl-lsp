@@ -624,20 +624,21 @@ impl LspServer {
             let needs_cancellation = matches!(
                 request.method.as_str(),
                 "textDocument/completion"
-                | "textDocument/hover"
-                | "textDocument/definition"
-                | "textDocument/references"
-                | "textDocument/documentSymbol"
-                | "textDocument/codeAction"
-                | "textDocument/formatting"
-                | "textDocument/rename"
-                | "workspace/symbol"
-                | "callHierarchy/incomingCalls"
-                | "callHierarchy/outgoingCalls"
+                    | "textDocument/hover"
+                    | "textDocument/definition"
+                    | "textDocument/references"
+                    | "textDocument/documentSymbol"
+                    | "textDocument/codeAction"
+                    | "textDocument/formatting"
+                    | "textDocument/rename"
+                    | "workspace/symbol"
+                    | "callHierarchy/incomingCalls"
+                    | "callHierarchy/outgoingCalls"
             );
 
             if needs_cancellation {
-                let token = PerlLspCancellationToken::new(request_id.clone(), request.method.clone());
+                let token =
+                    PerlLspCancellationToken::new(request_id.clone(), request.method.clone());
                 let cleanup_context =
                     ProviderCleanupContext::new(request.method.clone(), request.params.clone());
 
@@ -1935,18 +1936,27 @@ impl LspServer {
     }
 
     /// Handle completion request with cancellation support
-    fn handle_completion_cancellable(&self, params: Option<Value>, request_id: Option<&Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_completion_cancellable(
+        &self,
+        params: Option<Value>,
+        request_id: Option<&Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             // Create or get cancellation token for this request
             let token = if let Some(req_id) = request_id {
-                GLOBAL_CANCELLATION_REGISTRY.get_token(req_id)
-                    .unwrap_or_else(|| {
-                        let token = PerlLspCancellationToken::new(req_id.clone(), "textDocument/completion".to_string());
-                        let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
-                        token
-                    })
+                GLOBAL_CANCELLATION_REGISTRY.get_token(req_id).unwrap_or_else(|| {
+                    let token = PerlLspCancellationToken::new(
+                        req_id.clone(),
+                        "textDocument/completion".to_string(),
+                    );
+                    let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
+                    token
+                })
             } else {
-                PerlLspCancellationToken::new(serde_json::Value::Null, "textDocument/completion".to_string())
+                PerlLspCancellationToken::new(
+                    serde_json::Value::Null,
+                    "textDocument/completion".to_string(),
+                )
             };
 
             // Early cancellation check with relaxed read
@@ -2003,7 +2013,12 @@ impl LspServer {
                         CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
 
                     // Use cancellable provider method
-                    provider.get_completions_with_path_cancellable(&doc.text, offset, Some(uri), &cancel_fn)
+                    provider.get_completions_with_path_cancellable(
+                        &doc.text,
+                        offset,
+                        Some(uri),
+                        &cancel_fn,
+                    )
                 } else {
                     self.lexical_complete(&doc.text, offset)
                 };
@@ -2486,18 +2501,27 @@ impl LspServer {
     }
 
     /// Handle hover request with cancellation support
-    fn handle_hover_cancellable(&self, params: Option<Value>, request_id: Option<&Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_hover_cancellable(
+        &self,
+        params: Option<Value>,
+        request_id: Option<&Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             // Create or get cancellation token for this request
             let token = if let Some(req_id) = request_id {
-                GLOBAL_CANCELLATION_REGISTRY.get_token(req_id)
-                    .unwrap_or_else(|| {
-                        let token = PerlLspCancellationToken::new(req_id.clone(), "textDocument/hover".to_string());
-                        let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
-                        token
-                    })
+                GLOBAL_CANCELLATION_REGISTRY.get_token(req_id).unwrap_or_else(|| {
+                    let token = PerlLspCancellationToken::new(
+                        req_id.clone(),
+                        "textDocument/hover".to_string(),
+                    );
+                    let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
+                    token
+                })
             } else {
-                PerlLspCancellationToken::new(serde_json::Value::Null, "textDocument/hover".to_string())
+                PerlLspCancellationToken::new(
+                    serde_json::Value::Null,
+                    "textDocument/hover".to_string(),
+                )
             };
 
             // Early cancellation check with relaxed read
@@ -3399,18 +3423,27 @@ impl LspServer {
     }
 
     /// Handle definition request with cancellation support
-    fn handle_definition_cancellable(&self, params: Option<Value>, request_id: Option<&Value>) -> Result<Option<Value>, JsonRpcError> {
+    fn handle_definition_cancellable(
+        &self,
+        params: Option<Value>,
+        request_id: Option<&Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             // Create or get cancellation token for this request
             let token = if let Some(req_id) = request_id {
-                GLOBAL_CANCELLATION_REGISTRY.get_token(req_id)
-                    .unwrap_or_else(|| {
-                        let token = PerlLspCancellationToken::new(req_id.clone(), "textDocument/definition".to_string());
-                        let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
-                        token
-                    })
+                GLOBAL_CANCELLATION_REGISTRY.get_token(req_id).unwrap_or_else(|| {
+                    let token = PerlLspCancellationToken::new(
+                        req_id.clone(),
+                        "textDocument/definition".to_string(),
+                    );
+                    let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
+                    token
+                })
             } else {
-                PerlLspCancellationToken::new(serde_json::Value::Null, "textDocument/definition".to_string())
+                PerlLspCancellationToken::new(
+                    serde_json::Value::Null,
+                    "textDocument/definition".to_string(),
+                )
             };
 
             // Early cancellation check with relaxed read

@@ -303,11 +303,7 @@ impl CancellationRegistry {
 
         // Fallback: Check main storage
         if let Ok(tokens) = self.tokens.try_read() {
-            if let Some(token) = tokens.get(&key) {
-                token.is_cancelled_relaxed()
-            } else {
-                false
-            }
+            if let Some(token) = tokens.get(&key) { token.is_cancelled_relaxed() } else { false }
         } else {
             false
         }
