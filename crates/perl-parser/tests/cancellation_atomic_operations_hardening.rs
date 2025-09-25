@@ -15,8 +15,8 @@
 //! being masked by higher-level error handling.
 
 use perl_parser::cancellation::{
-    PerlLspCancellationToken, CancellationRegistry, CancellationMetrics,
-    GLOBAL_CANCELLATION_REGISTRY
+    CancellationMetrics, CancellationRegistry, GLOBAL_CANCELLATION_REGISTRY,
+    PerlLspCancellationToken,
 };
 use proptest::prelude::*;
 use serde_json::json;
@@ -68,13 +68,19 @@ mod atomic_state_transition_tests {
 
         // Test consistent false state - targets load operation stability
         for _ in 0..1000 {
-            assert!(!token.is_cancelled(), "is_cancelled() must consistently return false initially");
+            assert!(
+                !token.is_cancelled(),
+                "is_cancelled() must consistently return false initially"
+            );
         }
 
         // Cancel and test consistent true state - targets atomic store/load coordination
         token.cancel();
         for _ in 0..1000 {
-            assert!(token.is_cancelled(), "is_cancelled() must consistently return true after cancel");
+            assert!(
+                token.is_cancelled(),
+                "is_cancelled() must consistently return true after cancel"
+            );
         }
 
         // Test that cancellation is irreversible through public API - targets state immutability
@@ -111,17 +117,24 @@ mod atomic_state_transition_tests {
         let token = PerlLspCancellationToken::new(json!(4), "test".to_string());
 
         // Test initial state with relaxed check - targets likely() optimization
-        assert!(!token.is_cancelled_relaxed(),
-               "is_cancelled_relaxed() must return false initially");
+        assert!(
+            !token.is_cancelled_relaxed(),
+            "is_cancelled_relaxed() must return false initially"
+        );
 
         // Cancel and test relaxed check - targets optimization path
         token.cancel();
-        assert!(token.is_cancelled_relaxed(),
-               "is_cancelled_relaxed() must return true after cancellation");
+        assert!(
+            token.is_cancelled_relaxed(),
+            "is_cancelled_relaxed() must return true after cancellation"
+        );
 
         // Compare with regular check - targets optimization equivalence
-        assert_eq!(token.is_cancelled(), token.is_cancelled_relaxed(),
-                  "Relaxed and regular checks must be equivalent");
+        assert_eq!(
+            token.is_cancelled(),
+            token.is_cancelled_relaxed(),
+            "Relaxed and regular checks must be equivalent"
+        );
     }
 
     /// Test is_cancelled_hot_path() ultra-fast optimization mutations
@@ -130,19 +143,29 @@ mod atomic_state_transition_tests {
         let token = PerlLspCancellationToken::new(json!(5), "test".to_string());
 
         // Test hot path initial state
-        assert!(!token.is_cancelled_hot_path(),
-               "is_cancelled_hot_path() must return false initially");
+        assert!(
+            !token.is_cancelled_hot_path(),
+            "is_cancelled_hot_path() must return false initially"
+        );
 
         // Cancel and test hot path
         token.cancel();
-        assert!(token.is_cancelled_hot_path(),
-               "is_cancelled_hot_path() must return true after cancellation");
+        assert!(
+            token.is_cancelled_hot_path(),
+            "is_cancelled_hot_path() must return true after cancellation"
+        );
 
         // Verify all check methods are consistent - targets optimization correctness
-        assert_eq!(token.is_cancelled(), token.is_cancelled_hot_path(),
-                  "Hot path must be equivalent to regular check");
-        assert_eq!(token.is_cancelled_relaxed(), token.is_cancelled_hot_path(),
-                  "Hot path must be equivalent to relaxed check");
+        assert_eq!(
+            token.is_cancelled(),
+            token.is_cancelled_hot_path(),
+            "Hot path must be equivalent to regular check"
+        );
+        assert_eq!(
+            token.is_cancelled_relaxed(),
+            token.is_cancelled_hot_path(),
+            "Hot path must be equivalent to relaxed check"
+        );
     }
 
     /// Test atomic ordering mutations under concurrent access
@@ -162,9 +185,12 @@ mod atomic_state_transition_tests {
                     if thread_id % 2 == 0 {
                         // Canceller threads
                         token_clone.cancel();
-                        assert!(token_clone.is_cancelled(),
-                               "Cancel must be visible immediately in thread {}, iteration {}",
-                               thread_id, i);
+                        assert!(
+                            token_clone.is_cancelled(),
+                            "Cancel must be visible immediately in thread {}, iteration {}",
+                            thread_id,
+                            i
+                        );
                     } else {
                         // Checker threads
                         let state1 = token_clone.is_cancelled();
@@ -172,12 +198,16 @@ mod atomic_state_transition_tests {
                         let state3 = token_clone.is_cancelled_hot_path();
 
                         // All checks must be consistent - targets ordering mutations
-                        assert_eq!(state1, state2,
-                                  "Regular and relaxed checks inconsistent in thread {}, iteration {}",
-                                  thread_id, i);
-                        assert_eq!(state2, state3,
-                                  "Relaxed and hot path checks inconsistent in thread {}, iteration {}",
-                                  thread_id, i);
+                        assert_eq!(
+                            state1, state2,
+                            "Regular and relaxed checks inconsistent in thread {}, iteration {}",
+                            thread_id, i
+                        );
+                        assert_eq!(
+                            state2, state3,
+                            "Relaxed and hot path checks inconsistent in thread {}, iteration {}",
+                            thread_id, i
+                        );
                     }
 
                     // Small delay to allow interleaving
@@ -218,7 +248,8 @@ mod registry_coordination_hardening_tests {
         assert_eq!(registry.active_count(), 1, "Active count must be 1 after registration");
 
         // Test duplicate registration - targets HashMap key handling
-        let duplicate_token = PerlLspCancellationToken::new(json!(100), "duplicate_test".to_string());
+        let duplicate_token =
+            PerlLspCancellationToken::new(json!(100), "duplicate_test".to_string());
         let result2 = registry.register_token(duplicate_token);
         assert!(result2.is_ok(), "Duplicate registration should overwrite");
         assert_eq!(registry.active_count(), 1, "Active count should still be 1 after duplicate");
@@ -253,18 +284,24 @@ mod registry_coordination_hardening_tests {
         let token = PerlLspCancellationToken::new(request_id.clone(), "lookup_test".to_string());
 
         // Test lookup on empty registry - targets try_read() empty case
-        assert!(!registry.is_cancelled(&request_id),
-               "is_cancelled must return false for non-existent token");
+        assert!(
+            !registry.is_cancelled(&request_id),
+            "is_cancelled must return false for non-existent token"
+        );
 
         // Register uncancelled token and test
         registry.register_token(token.clone()).unwrap();
-        assert!(!registry.is_cancelled(&request_id),
-               "is_cancelled must return false for uncancelled token");
+        assert!(
+            !registry.is_cancelled(&request_id),
+            "is_cancelled must return false for uncancelled token"
+        );
 
         // Cancel token and test - targets atomic state with registry lookup
         token.cancel();
-        assert!(registry.is_cancelled(&request_id),
-               "is_cancelled must return true after token cancellation");
+        assert!(
+            registry.is_cancelled(&request_id),
+            "is_cancelled must return true after token cancellation"
+        );
     }
 
     /// Test cancel_request coordination mutations
@@ -363,27 +400,27 @@ mod registry_coordination_hardening_tests {
                     let request_id = json!(base_id + thread_id * 100 + i);
                     let token = PerlLspCancellationToken::new(
                         request_id.clone(),
-                        format!("thread_{}", thread_id)
+                        format!("thread_{}", thread_id),
                     );
 
                     match thread_id % 4 {
                         0 => {
                             // Register operations
                             let _ = registry_clone.register_token(token);
-                        },
+                        }
                         1 => {
                             // Cancel operations
                             let _ = registry_clone.cancel_request(&request_id);
-                        },
+                        }
                         2 => {
                             // Lookup operations
                             let _ = registry_clone.get_token(&request_id);
                             let _ = registry_clone.is_cancelled(&request_id);
-                        },
+                        }
                         3 => {
                             // Remove operations
                             registry_clone.remove_request(&request_id);
-                        },
+                        }
                         _ => unreachable!(),
                     }
 
@@ -422,15 +459,19 @@ mod performance_optimization_hardening_tests {
 
         // Test the common case (not cancelled) - should be optimized with likely()
         for _ in 0..1000 {
-            assert!(!token.is_cancelled_relaxed(),
-                   "Uncancelled state should be fast (likely branch)");
+            assert!(
+                !token.is_cancelled_relaxed(),
+                "Uncancelled state should be fast (likely branch)"
+            );
         }
 
         // Cancel and test the uncommon case - should be handled correctly despite unlikely()
         token.cancel();
         for _ in 0..1000 {
-            assert!(token.is_cancelled_relaxed(),
-                   "Cancelled state should work correctly (unlikely branch)");
+            assert!(
+                token.is_cancelled_relaxed(),
+                "Cancelled state should work correctly (unlikely branch)"
+            );
         }
     }
 
@@ -462,12 +503,21 @@ mod performance_optimization_hardening_tests {
         let duration3 = start3.elapsed();
 
         // All methods should be very fast (< 1ms for 10k iterations)
-        assert!(duration1 < Duration::from_millis(1),
-               "Regular check should be fast: {:?}", duration1);
-        assert!(duration2 < Duration::from_millis(1),
-               "Relaxed check should be fast: {:?}", duration2);
-        assert!(duration3 < Duration::from_millis(1),
-               "Hot path check should be fast: {:?}", duration3);
+        assert!(
+            duration1 < Duration::from_millis(1),
+            "Regular check should be fast: {:?}",
+            duration1
+        );
+        assert!(
+            duration2 < Duration::from_millis(1),
+            "Relaxed check should be fast: {:?}",
+            duration2
+        );
+        assert!(
+            duration3 < Duration::from_millis(1),
+            "Hot path check should be fast: {:?}",
+            duration3
+        );
 
         // Print performance comparison for visibility
         println!("Performance comparison ({}k iterations):", iterations / 1000);
@@ -519,7 +569,8 @@ mod performance_optimization_hardening_tests {
         // Fill cache beyond limit
         for i in 0..cache_size_limit + 20 {
             let request_id = json!(400 + i);
-            let token = PerlLspCancellationToken::new(request_id.clone(), "eviction_test".to_string());
+            let token =
+                PerlLspCancellationToken::new(request_id.clone(), "eviction_test".to_string());
             registry.register_token(token).unwrap();
 
             // Access to populate cache
@@ -531,7 +582,8 @@ mod performance_optimization_hardening_tests {
 
         // Test that operations still work after cache eviction
         let test_id = json!(400 + cache_size_limit + 50);
-        let test_token = PerlLspCancellationToken::new(test_id.clone(), "post_eviction".to_string());
+        let test_token =
+            PerlLspCancellationToken::new(test_id.clone(), "post_eviction".to_string());
         registry.register_token(test_token).unwrap();
 
         let result = registry.get_token(&test_id);
@@ -571,8 +623,7 @@ mod metrics_atomic_counter_hardening_tests {
         // Test multiple increments - targets atomic accumulation
         for i in 2..=10 {
             metrics.increment_registered();
-            assert_eq!(metrics.registered_count(), i,
-                      "Registered count must increment to {}", i);
+            assert_eq!(metrics.registered_count(), i, "Registered count must increment to {}", i);
         }
 
         // Test independent counter mutations
@@ -580,10 +631,16 @@ mod metrics_atomic_counter_hardening_tests {
         let initial_completed = metrics.completed_count();
 
         metrics.increment_registered();
-        assert_eq!(metrics.cancelled_count(), initial_cancelled,
-                  "Cancelled count must not change when incrementing registered");
-        assert_eq!(metrics.completed_count(), initial_completed,
-                  "Completed count must not change when incrementing registered");
+        assert_eq!(
+            metrics.cancelled_count(),
+            initial_cancelled,
+            "Cancelled count must not change when incrementing registered"
+        );
+        assert_eq!(
+            metrics.completed_count(),
+            initial_completed,
+            "Completed count must not change when incrementing registered"
+        );
     }
 
     /// Test metrics atomic load operations mutations
@@ -656,7 +713,9 @@ mod metrics_atomic_counter_hardening_tests {
         let threads_per_counter = num_threads / 3 + if num_threads % 3 > 0 { 1 } else { 0 };
         let expected_registered = if num_threads > 0 {
             (num_threads - num_threads / 3 - num_threads / 3) * increments_per_thread
-        } else { 0 };
+        } else {
+            0
+        };
         let expected_cancelled = (num_threads / 3) * increments_per_thread;
         let expected_completed = (num_threads / 3) * increments_per_thread;
 
@@ -670,15 +729,26 @@ mod metrics_atomic_counter_hardening_tests {
         let cancelled_threads = (0..num_threads).filter(|&i| i % 3 == 1).count();
         let completed_threads = (0..num_threads).filter(|&i| i % 3 == 2).count();
 
-        assert_eq!(final_registered, registered_threads as u64 * increments_per_thread as u64,
-                  "Concurrent registered increments must be correct");
-        assert_eq!(final_cancelled, cancelled_threads as u64 * increments_per_thread as u64,
-                  "Concurrent cancelled increments must be correct");
-        assert_eq!(final_completed, completed_threads as u64 * increments_per_thread as u64,
-                  "Concurrent completed increments must be correct");
+        assert_eq!(
+            final_registered,
+            registered_threads as u64 * increments_per_thread as u64,
+            "Concurrent registered increments must be correct"
+        );
+        assert_eq!(
+            final_cancelled,
+            cancelled_threads as u64 * increments_per_thread as u64,
+            "Concurrent cancelled increments must be correct"
+        );
+        assert_eq!(
+            final_completed,
+            completed_threads as u64 * increments_per_thread as u64,
+            "Concurrent completed increments must be correct"
+        );
 
-        println!("Concurrent metrics final counts: registered={}, cancelled={}, completed={}",
-                final_registered, final_cancelled, final_completed);
+        println!(
+            "Concurrent metrics final counts: registered={}, cancelled={}, completed={}",
+            final_registered, final_cancelled, final_completed
+        );
     }
 
     /// Test registry metrics integration mutations
@@ -696,18 +766,27 @@ mod metrics_atomic_counter_hardening_tests {
         let token = PerlLspCancellationToken::new(json!(500), "metrics_test".to_string());
         registry.register_token(token.clone()).unwrap();
 
-        assert_eq!(initial_metrics.registered_count(), 1,
-                  "Registered count must increment after token registration");
+        assert_eq!(
+            initial_metrics.registered_count(),
+            1,
+            "Registered count must increment after token registration"
+        );
 
         // Cancel request - should increment cancelled counter
         registry.cancel_request(&json!(500)).unwrap();
-        assert_eq!(initial_metrics.cancelled_count(), 1,
-                  "Cancelled count must increment after request cancellation");
+        assert_eq!(
+            initial_metrics.cancelled_count(),
+            1,
+            "Cancelled count must increment after request cancellation"
+        );
 
         // Remove request - should increment completed counter
         registry.remove_request(&json!(500));
-        assert_eq!(initial_metrics.completed_count(), 1,
-                  "Completed count must increment after request removal");
+        assert_eq!(
+            initial_metrics.completed_count(),
+            1,
+            "Completed count must increment after request removal"
+        );
 
         // Test metrics persistence - counters should not reset
         assert_eq!(initial_metrics.registered_count(), 1, "Registered count must persist");
@@ -733,14 +812,20 @@ mod metrics_atomic_counter_hardening_tests {
 
         // Test bounds - targets size_of + buffer calculation
         let min_expected = std::mem::size_of::<CancellationMetrics>();
-        assert!(overhead >= min_expected,
-               "Memory overhead must be at least size of struct: {} >= {}",
-               overhead, min_expected);
+        assert!(
+            overhead >= min_expected,
+            "Memory overhead must be at least size of struct: {} >= {}",
+            overhead,
+            min_expected
+        );
 
         let max_expected = min_expected + 2048; // Buffer should not exceed reasonable bounds
-        assert!(overhead <= max_expected,
-               "Memory overhead should not exceed reasonable bounds: {} <= {}",
-               overhead, max_expected);
+        assert!(
+            overhead <= max_expected,
+            "Memory overhead should not exceed reasonable bounds: {} <= {}",
+            overhead,
+            max_expected
+        );
     }
 }
 
@@ -757,8 +842,10 @@ mod global_registry_hardening_tests {
         let active_count_2 = GLOBAL_CANCELLATION_REGISTRY.active_count();
 
         // Multiple accesses should return consistent results
-        assert_eq!(active_count_1, active_count_2,
-                  "Global registry must be consistently initialized");
+        assert_eq!(
+            active_count_1, active_count_2,
+            "Global registry must be consistently initialized"
+        );
 
         // Test that global registry operations work
         let test_token = PerlLspCancellationToken::new(json!(600), "global_test".to_string());
@@ -787,7 +874,7 @@ mod global_registry_hardening_tests {
                     let request_id = json!(700 + thread_id * 100 + i);
                     let token = PerlLspCancellationToken::new(
                         request_id.clone(),
-                        format!("global_thread_{}", thread_id)
+                        format!("global_thread_{}", thread_id),
                     );
 
                     // Register token
@@ -949,7 +1036,7 @@ use proptest::test_runner::{Config, RngAlgorithm};
 /// Helper to configure proptest for more thorough testing
 fn proptest_config() -> Config {
     Config {
-        cases: 1000,  // Increase test cases for better mutation coverage
+        cases: 1000, // Increase test cases for better mutation coverage
         max_shrink_iters: 10000,
         rng_algorithm: RngAlgorithm::ChaCha,
         ..Config::default()
