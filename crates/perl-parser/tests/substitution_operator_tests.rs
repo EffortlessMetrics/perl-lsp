@@ -604,3 +604,123 @@ fn test_substitution_complex_nested_scenarios() {
         }
     }
 }
+
+// TARGETED MUTATION KILLER TESTS - Kill MUT_005 modifier validation mutation
+#[test]
+fn test_kill_mutation_modifier_character_matching() {
+    // This test specifically targets the modifier character pattern in parser_backup.rs
+    // Original: 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' => {
+    // Mutated:  'z' | 'q' | 'w' | 'n' | 'p' | 'k' | 'l' | 'v' => {
+
+    // Test that original valid modifiers work (this should pass with original code)
+    let valid_cases = vec![
+        ("s/test/repl/g", "g"),               // Tests 'g' character specifically
+        ("s/test/repl/i", "i"),               // Tests 'i' character specifically
+        ("s/test/repl/m", "m"),               // Tests 'm' character specifically
+        ("s/test/repl/s", "s"),               // Tests 's' character specifically
+        ("s/test/repl/x", "x"),               // Tests 'x' character specifically
+        ("s/test/repl/o", "o"),               // Tests 'o' character specifically
+        ("s/test/repl/e", "e"),               // Tests 'e' character specifically
+        ("s/test/repl/r", "r"),               // Tests 'r' character specifically
+        ("s/test/repl/gi", "gi"),             // Test combination
+        ("s/test/repl/gimsxoer", "gimsxoer"), // Test all valid modifiers
+    ];
+
+    for (code, expected_modifiers) in valid_cases {
+        let mut parser = Parser::new(code);
+        let ast =
+            parser.parse().unwrap_or_else(|_| panic!("Valid modifier '{}' should parse", code));
+
+        if let NodeKind::Program { statements } = &ast.kind {
+            if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
+                if let NodeKind::Substitution { modifiers, .. } = &expression.kind {
+                    assert_eq!(
+                        modifiers, expected_modifiers,
+                        "Valid modifier '{}' should be preserved - kills modifier char mutations",
+                        code
+                    );
+                }
+            }
+        }
+    }
+
+    // Test that mutated invalid modifier characters fail (this kills the mutation)
+    let invalid_mutated_cases = vec![
+        "s/test/repl/z",   // Tests mutated 'z' character (should fail with original code)
+        "s/test/repl/q",   // Tests mutated 'q' character (should fail with original code)
+        "s/test/repl/w",   // Tests mutated 'w' character (should fail with original code)
+        "s/test/repl/n",   // Tests mutated 'n' character (should fail with original code)
+        "s/test/repl/p",   // Tests mutated 'p' character (should fail with original code)
+        "s/test/repl/k",   // Tests mutated 'k' character (should fail with original code)
+        "s/test/repl/l",   // Tests mutated 'l' character (should fail with original code)
+        "s/test/repl/v",   // Tests mutated 'v' character (should fail with original code)
+        "s/test/repl/zq",  // Tests mutated character combination
+        "s/test/repl/zwn", // Tests multiple mutated characters
+    ];
+
+    for code in invalid_mutated_cases {
+        let mut parser = Parser::new(code);
+        let result = parser.parse();
+
+        // These should fail with the original code (valid modifiers: g,i,m,s,x,o,e,r)
+        // but would succeed with the mutation (invalid modifiers: z,q,w,n,p,k,l,v)
+        // By asserting they fail, we kill the mutation
+        assert!(
+            result.is_err(),
+            "Invalid mutated modifier '{}' should fail to parse - kills modifier character mutation",
+            code
+        );
+    }
+}
+
+// Additional targeted test for mixed valid/invalid modifiers to ensure precise character matching
+#[test]
+fn test_kill_mutation_mixed_modifier_validation() {
+    // Test mixed cases where some characters are valid and others are invalid
+    // This ensures the mutation cannot partially succeed
+
+    let mixed_cases = vec![
+        // Each case has some valid modifiers mixed with the mutated invalid ones
+        ("s/test/repl/gz", true), // 'g' valid, 'z' invalid (mutated char)
+        ("s/test/repl/iq", true), // 'i' valid, 'q' invalid (mutated char)
+        ("s/test/repl/mw", true), // 'm' valid, 'w' invalid (mutated char)
+        ("s/test/repl/sn", true), // 's' valid, 'n' invalid (mutated char)
+        ("s/test/repl/xp", true), // 'x' valid, 'p' invalid (mutated char)
+        ("s/test/repl/ok", true), // 'o' valid, 'k' invalid (mutated char)
+        ("s/test/repl/el", true), // 'e' valid, 'l' invalid (mutated char)
+        ("s/test/repl/rv", true), // 'r' valid, 'v' invalid (mutated char)
+        // Pure valid modifiers should work
+        ("s/test/repl/gim", false), // All valid
+        ("s/test/repl/sox", false), // All valid
+        ("s/test/repl/er", false),  // All valid
+    ];
+
+    for (code, should_fail) in mixed_cases {
+        let mut parser = Parser::new(code);
+        let result = parser.parse();
+
+        if should_fail {
+            assert!(
+                result.is_err(),
+                "Mixed modifier case '{}' with invalid chars should fail - kills modifier mutation",
+                code
+            );
+        } else {
+            assert!(result.is_ok(), "Pure valid modifier case '{}' should succeed", code);
+            if let Ok(ast) = result {
+                if let NodeKind::Program { statements } = &ast.kind {
+                    if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
+                        if let NodeKind::Substitution { modifiers, .. } = &expression.kind {
+                            // Verify valid modifiers are preserved
+                            assert!(
+                                !modifiers.is_empty(),
+                                "Valid modifiers should not be empty for '{}'",
+                                code
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

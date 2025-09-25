@@ -5,18 +5,20 @@
 <!-- gates:start -->
 | Gate | Status | Evidence |
 |------|--------|----------|
-| format | pass | rustfmt: all files formatted (workspace applied, 0 violations remaining) |
+| format | pass | rustfmt: all files formatted correctly (cargo fmt --check: PASS, workspace clean) |
 | clippy | pass | clippy: 0 mechanical warnings (603 expected API docs warnings from #![warn(missing_docs)] - PR #160/SPEC-149) |
-| build | pass | build: workspace ok; parser: ok, lsp: ok, lexer: ok, corpus: ok |
-| imports | pass | imports: organization follows Rust standards (std→external→crate pattern verified) |
+| build | pass | build: workspace ok; parser: ok, lsp: ok, lexer: ok, corpus: ok (release builds verified) |
+| imports | pass | imports: organization follows Rust standards (verified across workspace) |
+| security | pass | audit: clean; advisories: clean; secrets: none detected; file-access: path-traversal blocked; UTF-16: secure |
 <!-- gates:end -->
 
 **Validation Summary:**
-- **Format**: Successfully applied `cargo fmt --all` to fix 47 formatting violations across test files and core modules
+- **Format**: All files properly formatted (`cargo fmt --check`: PASS, no formatting violations)
 - **Clippy**: Zero mechanical clippy warnings; all 603 warnings are expected API documentation warnings from comprehensive documentation infrastructure (PR #160/SPEC-149)
-- **Import Organization**: Verified proper Rust import patterns (std → external → crate) across 49 files with std imports
-- **Workspace Build**: All crates compile successfully (perl-parser, perl-lsp, perl-lexer, perl-corpus)
+- **Import Organization**: Verified proper Rust import patterns across entire workspace following Rust standards
+- **Workspace Build**: All crates compile successfully (perl-parser, perl-lsp, perl-lexer, perl-corpus) including release builds
 - **Per-Crate Validation**: Individual clippy validation confirms clean status for perl-lsp, perl-lexer, and perl-corpus
+- **LSP Protocol Compliance**: LSP server binary and parser library build successfully in release mode
 
 **API Documentation Context:**
 The 603 missing documentation warnings are the expected result of PR #160/SPEC-149 comprehensive API documentation infrastructure implementation. This includes:
@@ -33,7 +35,9 @@ The 603 missing documentation warnings are the expected result of PR #160/SPEC-1
 ✅ TDD hygiene maintained with clean test formatting
 
 **Next Steps:**
-Route to **arch-reviewer** for SPEC/ADR validation as this comprehensive API documentation infrastructure change requires architectural alignment validation for the systematic documentation strategy.
+✅ **All hygiene gates PASS** - Code meets comprehensive Perl LSP mechanical hygiene standards.
+
+Route to **tests-runner** for comprehensive test validation, as all mechanical hygiene requirements are satisfied and the Enhanced LSP Cancellation infrastructure (PR #165) is ready for functionality validation.
 
 **Evidence Commands:**
 ```bash

@@ -100,10 +100,17 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
         v.push(c);
     }
 
-    // Fallback: use cargo run
+    // Try release binary if available
+    {
+        let mut c = Command::new("./target/release/perl-lsp");
+        c.arg("--stdio");
+        v.push(c);
+    }
+
+    // Fallback: use cargo run with release profile (avoid debug linking issues)
     {
         let mut c = Command::new("cargo");
-        c.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"]);
+        c.args(["run", "-q", "-p", "perl-lsp", "--release", "--", "--stdio"]);
         v.push(c);
     }
 
@@ -135,7 +142,14 @@ pub fn start_lsp_server() -> LspServer {
             }
         }
         spawned.unwrap_or_else(|| {
-            panic!("Failed to start perl-lsp via CARGO_BIN_EXE, PATH, or cargo run: {:?}", last_err)
+            eprintln!("Failed to start perl-lsp server - tried all methods:");
+            eprintln!("  1. CARGO_BIN_EXE_perl-lsp env var");
+            eprintln!("  2. CARGO_BIN_EXE_perl_lsp env var");
+            eprintln!("  3. perl-lsp from PATH");
+            eprintln!("  4. ./target/release/perl-lsp");
+            eprintln!("  5. cargo run --release -p perl-lsp");
+            eprintln!("Last error: {:?}", last_err);
+            panic!("Failed to start perl-lsp via any available method: {:?}", last_err)
         })
     };
 
@@ -266,10 +280,10 @@ fn default_timeout() -> Duration {
             let thread_count = max_concurrent_threads();
 
             match thread_count {
-                0..=2 => Duration::from_secs(45), // Heavily constrained: very long timeout
-                3..=4 => Duration::from_secs(25), // Moderately constrained: extended timeout
-                5..=8 => Duration::from_secs(15), // Lightly constrained: moderate timeout
-                _ => Duration::from_secs(10),     // Unconstrained: standard timeout
+                0..=2 => Duration::from_secs(10), // Heavily constrained: reduced from 45s to 10s
+                3..=4 => Duration::from_secs(7),  // Moderately constrained: reduced from 25s to 7s
+                5..=8 => Duration::from_secs(5),  // Lightly constrained: reduced from 15s to 5s
+                _ => Duration::from_secs(3),      // Unconstrained: reduced from 10s to 3s
             }
         })
 }
@@ -302,12 +316,12 @@ pub fn adaptive_timeout() -> Duration {
     let base_timeout = default_timeout();
     let thread_count = max_concurrent_threads();
 
-    // Logarithmic backoff with protection against extreme scenarios
+    // Reduced multipliers for faster test execution
     match thread_count {
-        0..=2 => base_timeout * 3,   // Heavily constrained: 3x base timeout
-        3..=4 => base_timeout * 2,   // Moderately constrained: 2x base timeout
-        5..=8 => base_timeout * 1_5, // Lightly constrained: 1.5x base timeout
-        _ => base_timeout,           // Unconstrained: standard timeout
+        0..=2 => base_timeout, // Heavily constrained: reduced from 3x to 1x
+        3..=4 => base_timeout, // Moderately constrained: reduced from 2x to 1x
+        5..=8 => base_timeout, // Lightly constrained: reduced from 1.5x to 1x
+        _ => base_timeout,     // Unconstrained: standard timeout
     }
 }
 
@@ -316,9 +330,9 @@ pub fn adaptive_timeout() -> Duration {
 pub fn adaptive_sleep_ms(base_ms: u64) -> Duration {
     let thread_count = max_concurrent_threads();
     let multiplier = match thread_count {
-        0..=2 => 4, // Extremely constrained: 4x sleep
-        3..=4 => 3, // Heavily constrained: 3x sleep
-        5..=8 => 2, // Moderately constrained: 2x sleep
+        0..=2 => 1, // Extremely constrained: reduced from 4x to 1x sleep
+        3..=4 => 1, // Heavily constrained: reduced from 3x to 1x sleep
+        5..=8 => 1, // Moderately constrained: reduced from 2x to 1x sleep
         _ => 1,     // Unconstrained: standard sleep
     };
     Duration::from_millis(base_ms * multiplier)
@@ -468,8 +482,16 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
     }
 
     // wait specifically for id=1 - use extended timeout for initialization
-    let init_timeout = adaptive_timeout() * 2; // Double timeout for critical initialization
-    let resp = read_response_matching_i64(server, 1, init_timeout).expect("initialize response");
+    // Enhanced timeout for LSP cancellation tests with environment-aware scaling
+    let base_multiplier = 2; // Base multiplier for critical initialization (reduced from 6x to 2x)
+    let thread_count = max_concurrent_threads();
+    let env_multiplier = if thread_count <= 2 { 2 } else { 1 }; // Extra time for constrained environments
+    let init_timeout = adaptive_timeout() * base_multiplier * env_multiplier;
+    let resp = read_response_matching_i64(server, 1, init_timeout).unwrap_or_else(|| {
+        eprintln!("LSP server failed to respond to initialize request within {:?}", init_timeout);
+        eprintln!("Check if server started properly and is responding to JSON-RPC requests");
+        panic!("initialize response timeout - server may have crashed or is not responding")
+    });
 
     // Send initialized notification with a brief delay
     std::thread::sleep(Duration::from_millis(50));
@@ -485,7 +507,7 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
 pub fn await_index_ready(server: &mut LspServer) {
     // Wait for perl-lsp/index-ready notification with a reasonable timeout
     if let Some(_notification) =
-        read_notification_method(server, "perl-lsp/index-ready", Duration::from_millis(1500))
+        read_notification_method(server, "perl-lsp/index-ready", Duration::from_millis(500))
     {
         eprintln!("Index ready notification received");
     } else {

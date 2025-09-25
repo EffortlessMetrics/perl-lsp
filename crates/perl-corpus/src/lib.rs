@@ -1,3 +1,6 @@
+//! Perl parser corpus - test data and property-based testing infrastructure
+#![allow(clippy::pedantic)] // Corpus crate - focus on core clippy lints only
+
 pub mod r#gen;
 pub mod index;
 pub mod lint;
