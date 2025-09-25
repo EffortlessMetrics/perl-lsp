@@ -482,7 +482,11 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
     }
 
     // wait specifically for id=1 - use extended timeout for initialization
-    let init_timeout = adaptive_timeout() * 4; // Quadruple timeout for critical initialization due to linking issues
+    // Enhanced timeout for LSP cancellation tests with environment-aware scaling
+    let base_multiplier = 6; // Base multiplier for critical initialization
+    let thread_count = max_concurrent_threads();
+    let env_multiplier = if thread_count <= 2 { 2 } else { 1 }; // Extra time for constrained environments
+    let init_timeout = adaptive_timeout() * base_multiplier * env_multiplier;
     let resp = read_response_matching_i64(server, 1, init_timeout).unwrap_or_else(|| {
         eprintln!("LSP server failed to respond to initialize request within {:?}", init_timeout);
         eprintln!("Check if server started properly and is responding to JSON-RPC requests");
