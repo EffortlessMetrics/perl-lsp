@@ -318,10 +318,10 @@ pub fn adaptive_timeout() -> Duration {
 
     // Reduced multipliers for faster test execution
     match thread_count {
-        0..=2 => base_timeout,       // Heavily constrained: reduced from 3x to 1x
-        3..=4 => base_timeout,       // Moderately constrained: reduced from 2x to 1x
-        5..=8 => base_timeout,       // Lightly constrained: reduced from 1.5x to 1x
-        _ => base_timeout,           // Unconstrained: standard timeout
+        0..=2 => base_timeout, // Heavily constrained: reduced from 3x to 1x
+        3..=4 => base_timeout, // Moderately constrained: reduced from 2x to 1x
+        5..=8 => base_timeout, // Lightly constrained: reduced from 1.5x to 1x
+        _ => base_timeout,     // Unconstrained: standard timeout
     }
 }
 
