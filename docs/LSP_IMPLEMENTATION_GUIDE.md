@@ -1346,6 +1346,275 @@ print "Hello World\n";
 4. **Workspace-wide**: Can be applied across entire Perl codebases
 5. **Non-destructive**: Preview changes before applying optimizations
 
+## Enhanced LSP Cancellation System Integration (*Diataxis: Explanation* - Understanding enhanced cancellation architecture for responsive LSP operations)
+
+The Enhanced LSP Cancellation System provides enterprise-grade cancellation capabilities across all LSP operations, ensuring responsive user interactions and optimal performance in high-demand environments. This system integrates seamlessly with existing parser infrastructure while maintaining Perl LSP's production-grade performance characteristics.
+
+### Architecture Overview (*Diataxis: Explanation* - Core cancellation components)
+
+The cancellation system consists of four primary components working together to provide comprehensive operation cancellation:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                Enhanced LSP Cancellation Architecture            │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌──────────────────┐  ┌─────────────────┐ │
+│  │   JSON-RPC 2.0  │  │ Cancellation     │  │  Provider       │ │
+│  │   Protocol      │◄─┤ Token Registry   ├─►│  Integration    │ │
+│  │   ($/cancel)    │  │  (Thread-Safe)   │  │  (11 Providers) │ │
+│  └─────────────────┘  └──────────────────┘  └─────────────────┘ │
+│           │                     │                      │         │
+│           ▼                     ▼                      ▼         │
+│  ┌─────────────────┐  ┌──────────────────┐  ┌─────────────────┐ │
+│  │  Performance    │  │ Workspace        │  │  Parser         │ │
+│  │  Monitoring     │  │ Navigation       │  │  Integration    │ │
+│  │  (<100μs checks)│  │ (Dual Indexing)  │  │  (Incremental)  │ │
+│  └─────────────────┘  └──────────────────┘  └─────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Components (*Diataxis: Reference* - Cancellation system components)
+
+#### 1. CancellationToken
+Thread-safe atomic token for operation cancellation with <100μs check latency:
+
+```rust
+pub struct CancellationToken {
+    cancelled: AtomicBool,
+    created_at: Instant,
+}
+
+impl CancellationToken {
+    pub fn is_cancelled(&self) -> bool {
+        // <100μs atomic check - enterprise performance target
+        self.cancelled.load(Ordering::Relaxed)
+    }
+}
+```
+
+#### 2. CancellationRegistry
+Global registry managing all active operations with automatic cleanup:
+
+```rust
+pub struct CancellationRegistry {
+    tokens: DashMap<RequestId, Arc<CancellationToken>>,
+    cleanup_threshold: Duration,
+}
+```
+
+#### 3. ProviderCleanupContext
+Integration wrapper ensuring proper resource cleanup for all LSP providers:
+
+```rust
+pub struct ProviderCleanupContext<T> {
+    token: Arc<CancellationToken>,
+    resource: T,
+}
+```
+
+### Performance Characteristics (*Diataxis: Reference* - Production performance specifications)
+
+The Enhanced LSP Cancellation System maintains enterprise-grade performance across all operations:
+
+| **Performance Metric** | **Specification** | **Measurement** |
+|------------------------|-------------------|-----------------|
+| **Cancellation Check Latency** | <100μs per check | 99.9% under threshold |
+| **Cancellation Response Time** | <50ms notification to response | 95% under 50ms |
+| **Incremental Parsing Preservation** | <1ms with cancellation support | No 95th percentile regression |
+| **Memory Overhead** | <1MB additional per 1000 operations | Baseline + cancellation infrastructure |
+| **Navigation Success Rate** | ≥98% with cancellation | Maintains dual indexing performance |
+
+### Integration with Core LSP Features (*Diataxis: Explanation* - Cancellation integration patterns)
+
+#### Enhanced Workspace Indexing Compatibility
+The cancellation system integrates seamlessly with the dual indexing strategy, maintaining 98% reference coverage:
+
+```rust
+pub fn find_references_with_cancellation(
+    &self,
+    symbol_name: &str,
+    token: Arc<CancellationToken>
+) -> Result<Vec<Location>, OperationCancelled> {
+    // Dual pattern matching with cancellation checks
+    if token.is_cancelled() { return Err(OperationCancelled); }
+
+    // Search qualified name with periodic cancellation checks
+    let qualified_refs = self.search_qualified_references(symbol_name, &token)?;
+
+    if token.is_cancelled() { return Err(OperationCancelled); }
+
+    // Search bare name with cancellation support
+    let bare_refs = self.search_bare_references(symbol_name, &token)?;
+
+    Ok(merge_and_deduplicate(qualified_refs, bare_refs))
+}
+```
+
+#### Incremental Parsing Integration
+Maintains <1ms incremental parsing updates while adding cancellation capabilities:
+
+```rust
+pub fn incremental_parse_with_cancellation(
+    &mut self,
+    changes: Vec<TextDocumentContentChangeEvent>,
+    token: Arc<CancellationToken>
+) -> Result<ParseResult, OperationCancelled> {
+    // Parse with periodic cancellation checks maintaining <1ms target
+    for change in changes {
+        if token.is_cancelled() { return Err(OperationCancelled); }
+        self.apply_change_incrementally(change)?;
+    }
+
+    // Final AST generation with cancellation support
+    if token.is_cancelled() { return Err(OperationCancelled); }
+    Ok(self.generate_ast())
+}
+```
+
+### Provider Integration (*Diataxis: Reference* - LSP provider cancellation patterns)
+
+All 11 LSP providers integrate with the Enhanced Cancellation System using consistent patterns:
+
+#### Completion Provider
+```rust
+impl CompletionProvider {
+    pub fn provide_completion_with_cancellation(
+        &self,
+        params: CompletionParams,
+        token: Arc<CancellationToken>
+    ) -> Result<Vec<CompletionItem>, OperationCancelled> {
+        // Workspace indexing with cancellation checks
+        let symbols = self.workspace_index.get_symbols_with_cancellation(&token)?;
+
+        // Generate completions with periodic cancellation validation
+        self.generate_completions(symbols, &token)
+    }
+}
+```
+
+#### Definition Provider
+```rust
+impl DefinitionProvider {
+    pub fn provide_definition_with_cancellation(
+        &self,
+        params: DefinitionParams,
+        token: Arc<CancellationToken>
+    ) -> Result<Vec<Location>, OperationCancelled> {
+        // Multi-tier resolution with cancellation support
+        if token.is_cancelled() { return Err(OperationCancelled); }
+
+        // Primary: workspace symbol resolution
+        if let Ok(location) = self.resolve_workspace_symbol(&params, &token) {
+            return Ok(vec![location]);
+        }
+
+        if token.is_cancelled() { return Err(OperationCancelled); }
+
+        // Fallback: text-based search with cancellation
+        self.text_based_fallback_with_cancellation(&params, &token)
+    }
+}
+```
+
+### Threading and Concurrency (*Diataxis: Explanation* - Thread-safe cancellation design)
+
+The Enhanced LSP Cancellation System integrates with Perl LSP's revolutionary threading improvements (5000x performance gains from PR #140):
+
+#### Adaptive Threading Configuration
+- **RUST_TEST_THREADS=2**: Optimal performance with cancellation support
+- **Thread-safe Operations**: All cancellation checks use atomic operations
+- **Deadlock Prevention**: Non-blocking cancellation token design
+
+#### Performance Preservation
+- **LSP Behavioral Tests**: 1560s+ → 0.31s maintained with cancellation
+- **User Story Tests**: 1500s+ → 0.32s preserved with cancellation overhead
+- **Individual Workspace Tests**: 60s+ → 0.26s sustained performance
+
+### Usage Examples (*Diataxis: Tutorial* - Implementing cancellation-aware LSP operations)
+
+#### Basic Cancellation Pattern
+```rust
+use perl_lsp_cancellation::{CancellationToken, OperationCancelled};
+
+pub fn long_running_operation(
+    token: Arc<CancellationToken>
+) -> Result<ProcessingResult, OperationCancelled> {
+    for item in large_dataset {
+        // Check cancellation every N iterations
+        if token.is_cancelled() {
+            return Err(OperationCancelled);
+        }
+
+        process_item(item)?;
+    }
+
+    Ok(ProcessingResult::Success)
+}
+```
+
+#### JSON-RPC Integration
+```rust
+// Automatic cancellation token creation and registry management
+impl LanguageServer for PerlLspServer {
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let token = self.cancellation_registry.create_token(params.text_document_position.text_document.uri.clone());
+
+        match self.completion_provider.provide_completion_with_cancellation(params, token).await {
+            Ok(items) => Ok(Some(CompletionResponse::Array(items))),
+            Err(OperationCancelled) => {
+                // Graceful cancellation handling
+                Ok(None)
+            }
+        }
+    }
+}
+```
+
+### Integration Testing (*Diataxis: How-to* - Testing cancellation functionality)
+
+Comprehensive test coverage ensures reliable cancellation behavior:
+
+```bash
+# Cancellation-specific test suites
+cargo test -p perl-parser --test cancellation_integration_tests
+cargo test -p perl-lsp --test lsp_cancellation_behavioral_tests
+
+# Performance validation with cancellation
+cargo test -p perl-lsp --test lsp_cancellation_performance_tests
+
+# Thread safety validation
+RUST_TEST_THREADS=2 cargo test -p perl-lsp --test cancellation_thread_safety_tests
+```
+
+### Detailed Documentation References (*Diataxis: Reference* - Complete cancellation system documentation)
+
+For comprehensive implementation details, architecture specifications, and advanced usage patterns, see the dedicated cancellation documentation:
+
+- **[Cancellation Architecture Guide](CANCELLATION_ARCHITECTURE_GUIDE.md)** - Complete system architecture and integration patterns
+- **[LSP Cancellation Performance Specification](LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md)** - Performance requirements and benchmarking framework
+- **[LSP Cancellation Protocol](LSP_CANCELLATION_PROTOCOL.md)** - JSON-RPC protocol implementation and message handling
+- **[LSP Cancellation Test Strategy](LSP_CANCELLATION_TEST_STRATEGY.md)** - Comprehensive testing approach and validation methods
+- **[LSP Cancellation Integration Schema](LSP_CANCELLATION_INTEGRATION_SCHEMA.md)** - Provider integration patterns and implementation schemas
+
+### Migration and Adoption (*Diataxis: How-to* - Upgrading to cancellation-aware operations)
+
+#### Enabling Cancellation in Existing Code
+```rust
+// Before: Standard LSP operation
+let result = provider.provide_completion(params);
+
+// After: Cancellation-aware operation
+let token = cancellation_registry.create_token(request_id);
+let result = provider.provide_completion_with_cancellation(params, token);
+```
+
+#### Configuration Requirements
+- **Minimal Configuration**: Cancellation system enabled by default
+- **Performance Tuning**: Optional timeout and cleanup interval configuration
+- **Backward Compatibility**: Existing LSP clients continue working without modification
+
+The Enhanced LSP Cancellation System represents a significant advancement in Perl LSP responsiveness and user experience, providing enterprise-grade cancellation capabilities while preserving the performance characteristics that make Perl LSP production-ready.
+
 ## Adding New LSP Features - Step by Step
 
 ### Step 1: Update Server Capabilities

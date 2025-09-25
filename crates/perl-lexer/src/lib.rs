@@ -102,7 +102,7 @@ pub struct PerlLexer<'a> {
     pending_heredocs: Vec<HeredocSpec>,
     /// Track the byte offset of the current line's start
     line_start_offset: usize,
-    /// If true, emit HeredocBody tokens; otherwise just consume them.
+    /// If true, emit `HeredocBody` tokens; otherwise just consume them.
     emit_heredoc_body_tokens: bool,
     /// Current quote operator being parsed
     current_quote_op: Option<quote_handler::QuoteOperatorInfo>,
@@ -137,7 +137,7 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
-    /// Create a new lexer that emits HeredocBody tokens (for LSP folding)
+    /// Create a new lexer that emits `HeredocBody` tokens (for LSP folding)
     pub fn with_body_tokens(input: &'a str) -> Self {
         let mut lexer = Self::new(input);
         lexer.emit_heredoc_body_tokens = true;
@@ -451,7 +451,8 @@ impl<'a> PerlLexer<'a> {
         } // End of loop
     }
 
-    /// Check budget and return UnknownRest token if exceeded
+    /// Check budget and return `UnknownRest` token if exceeded
+    #[allow(clippy::inline_always)] // Performance critical in lexer hot path
     #[inline(always)]
     fn budget_guard(&mut self, start: usize, depth: usize) -> Option<Token> {
         // Fast path: most calls won't hit limits
@@ -521,6 +522,7 @@ impl<'a> PerlLexer<'a> {
 
     // Internal helper methods
 
+    #[allow(clippy::inline_always)] // Performance critical in lexer hot path
     #[inline(always)]
     fn current_char(&self) -> Option<char> {
         if self.position < self.input_bytes.len() {
@@ -554,6 +556,7 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
+    #[allow(clippy::inline_always)] // Performance critical in lexer hot path
     #[inline(always)]
     fn advance(&mut self) {
         if self.position < self.input_bytes.len() {
@@ -605,7 +608,7 @@ impl<'a> PerlLexer<'a> {
                     }
                     // Continue outer loop if we processed any spaces
                     if self.position > start {
-                        continue;
+                        // Loop naturally continues to next iteration
                     }
                 }
                 b'\t' => {
@@ -617,7 +620,7 @@ impl<'a> PerlLexer<'a> {
                         self.position += 1;
                     }
                     if self.position > start {
-                        continue;
+                        // Loop naturally continues to next iteration
                     }
                 }
                 b'\r' | b'\n' => {
@@ -700,7 +703,7 @@ impl<'a> PerlLexer<'a> {
         }
 
         // Optional backslash disables interpolation, treat like single-quoted label
-        let _backslashed = if self.current_char() == Some('\\') {
+        let backslashed = if self.current_char() == Some('\\') {
             text.push('\\');
             self.advance();
             true
@@ -711,7 +714,7 @@ impl<'a> PerlLexer<'a> {
         // Parse delimiter
         let delimiter = if self.position < self.input.len() {
             match self.current_char() {
-                Some('"') if !_backslashed => {
+                Some('"') if !backslashed => {
                     // Double-quoted delimiter
                     text.push('"');
                     self.advance();
@@ -732,7 +735,7 @@ impl<'a> PerlLexer<'a> {
                     }
                     delim
                 }
-                Some('\'') if !_backslashed => {
+                Some('\'') if !backslashed => {
                     // Single-quoted delimiter
                     text.push('\'');
                     self.advance();
@@ -2294,7 +2297,7 @@ impl<'a> PerlLexer<'a> {
         let paired = quote_handler::paired_close(delim);
         let close = paired.unwrap_or(delim);
         let mut body = String::new();
-        let mut depth = if paired.is_some() { 1i32 } else { 0 };
+        let mut depth = i32::from(paired.is_some());
 
         while let Some(ch) = self.current_char() {
             if ch == '\\' {
@@ -2554,21 +2557,13 @@ fn is_compound_operator(first: char, second: char) -> bool {
         // Use lookup table approach for maximum performance
         match (first_byte, second_byte) {
             // Assignment operators
-            (b'+', b'=')
-            | (b'-', b'=')
-            | (b'*', b'=')
-            | (b'/', b'=')
-            | (b'%', b'=')
-            | (b'&', b'=')
-            | (b'|', b'=')
-            | (b'^', b'=')
-            | (b'.', b'=') => true,
+            (b'+' | b'-' | b'*' | b'/' | b'%' | b'&' | b'|' | b'^' | b'.', b'=') => true,
 
             // Comparison operators
-            (b'<', b'=') | (b'>', b'=') | (b'=', b'=') | (b'!', b'=') => true,
+            (b'<' | b'>' | b'=' | b'!', b'=') => true,
 
             // Pattern operators
-            (b'=', b'~') | (b'!', b'~') => true,
+            (b'=' | b'!', b'~') => true,
 
             // Increment/decrement
             (b'+', b'+') | (b'-', b'-') => true,
@@ -2582,8 +2577,7 @@ fn is_compound_operator(first: char, second: char) -> bool {
             // Other compound operators
             (b'*', b'*')
             | (b'/', b'/')
-            | (b'-', b'>')
-            | (b'=', b'>')
+            | (b'-' | b'=', b'>')
             | (b'.', b'.')
             | (b'~', b'~')
             | (b':', b':') => true,
@@ -2594,33 +2588,17 @@ fn is_compound_operator(first: char, second: char) -> bool {
         // Fallback for non-ASCII (should be rare)
         matches!(
             (first, second),
-            ('+', '=')
-                | ('-', '=')
-                | ('*', '=')
-                | ('/', '=')
-                | ('%', '=')
-                | ('&', '=')
-                | ('|', '=')
-                | ('^', '=')
-                | ('.', '=')
-                | ('<', '=')
-                | ('>', '=')
-                | ('=', '=')
-                | ('!', '=')
-                | ('=', '~')
-                | ('!', '~')
+            ('+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' | '.' | '<' | '>' | '=' | '!', '=')
+                | ('=' | '!' | '~', '~')
                 | ('+', '+')
-                | ('-', '-')
+                | ('-', '-' | '>')
                 | ('&', '&')
                 | ('|', '|')
                 | ('<', '<')
-                | ('>', '>')
+                | ('>' | '=', '>')
                 | ('*', '*')
                 | ('/', '/')
-                | ('-', '>')
-                | ('=', '>')
                 | ('.', '.')
-                | ('~', '~')
                 | (':', ':')
         )
     }
@@ -2661,7 +2639,7 @@ impl Checkpointable for PerlLexer<'_> {
     fn restore(&mut self, checkpoint: &LexerCheckpoint) {
         self.position = checkpoint.position;
         self.mode = checkpoint.mode;
-        self.delimiter_stack = checkpoint.delimiter_stack.clone();
+        self.delimiter_stack.clone_from(&checkpoint.delimiter_stack);
         self.in_prototype = checkpoint.in_prototype;
         self.prototype_depth = checkpoint.prototype_depth;
         self.current_pos = checkpoint.current_pos;

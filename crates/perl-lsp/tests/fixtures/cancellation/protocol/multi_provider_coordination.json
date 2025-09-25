@@ -1,0 +1,247 @@
+{
+  "multi_provider_scenarios": [
+    {
+      "description": "Concurrent requests across different providers",
+      "scenario_id": "multi_provider_concurrent",
+      "requests": [
+        {
+          "id": "mp-completion-1",
+          "provider": "completion",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": "mp-completion-1",
+            "method": "textDocument/completion",
+            "params": {
+              "textDocument": {"uri": "file:///test/multi.pl"},
+              "position": {"line": 5, "character": 10}
+            }
+          },
+          "cancellation": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": "mp-completion-1"}
+          },
+          "cancel_after_ms": 30
+        },
+        {
+          "id": "mp-hover-2",
+          "provider": "hover",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": "mp-hover-2",
+            "method": "textDocument/hover",
+            "params": {
+              "textDocument": {"uri": "file:///test/multi.pl"},
+              "position": {"line": 8, "character": 15}
+            }
+          },
+          "cancellation": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": "mp-hover-2"}
+          },
+          "cancel_after_ms": 50
+        },
+        {
+          "id": "mp-definition-3",
+          "provider": "definition",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": "mp-definition-3",
+            "method": "textDocument/definition",
+            "params": {
+              "textDocument": {"uri": "file:///test/multi.pl"},
+              "position": {"line": 12, "character": 20}
+            }
+          },
+          "cancellation": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": "mp-definition-3"}
+          },
+          "cancel_after_ms": 75
+        }
+      ]
+    },
+    {
+      "description": "Sequential requests with overlapping cancellations",
+      "scenario_id": "sequential_overlapping",
+      "requests": [
+        {
+          "id": "seq-1",
+          "provider": "references",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": "seq-1",
+            "method": "textDocument/references",
+            "params": {
+              "textDocument": {"uri": "file:///test/sequential.pl"},
+              "position": {"line": 3, "character": 7}
+            }
+          },
+          "start_delay_ms": 0,
+          "cancel_after_ms": 100
+        },
+        {
+          "id": "seq-2",
+          "provider": "completion",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": "seq-2",
+            "method": "textDocument/completion",
+            "params": {
+              "textDocument": {"uri": "file:///test/sequential.pl"},
+              "position": {"line": 6, "character": 12}
+            }
+          },
+          "start_delay_ms": 25,
+          "cancel_after_ms": 50
+        },
+        {
+          "id": "seq-3",
+          "provider": "workspaceSymbols",
+          "request": {
+            "jsonrpc": "2.0",
+            "id": "seq-3",
+            "method": "workspace/symbol",
+            "params": {"query": "test_function"}
+          },
+          "start_delay_ms": 50,
+          "cancel_after_ms": 75
+        }
+      ],
+      "cancellations": [
+        {
+          "jsonrpc": "2.0",
+          "method": "$/cancelRequest",
+          "params": {"id": "seq-2"}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "$/cancelRequest",
+          "params": {"id": "seq-1"}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "$/cancelRequest",
+          "params": {"id": "seq-3"}
+        }
+      ]
+    }
+  ],
+  "thread_safety_scenarios": [
+    {
+      "description": "High concurrency stress test",
+      "scenario_id": "thread_safety_stress",
+      "concurrent_requests": 20,
+      "providers": ["completion", "hover", "definition", "references"],
+      "cancellation_pattern": "random_timing",
+      "thread_count": 4,
+      "request_template": {
+        "jsonrpc": "2.0",
+        "id": "stress-{index}",
+        "method": "textDocument/{provider}",
+        "params": {
+          "textDocument": {"uri": "file:///test/stress.pl"},
+          "position": {"line": "{random_line}", "character": "{random_char}"}
+        }
+      },
+      "cancellation_template": {
+        "jsonrpc": "2.0",
+        "method": "$/cancelRequest",
+        "params": {"id": "stress-{index}"}
+      }
+    },
+    {
+      "description": "Race condition detection scenario",
+      "scenario_id": "race_condition_detection",
+      "rapid_fire_requests": [
+        {
+          "burst_size": 10,
+          "interval_ms": 1,
+          "provider": "completion",
+          "cancel_percentage": 50
+        },
+        {
+          "burst_size": 5,
+          "interval_ms": 2,
+          "provider": "hover",
+          "cancel_percentage": 80
+        }
+      ]
+    }
+  ],
+  "resource_coordination_scenarios": [
+    {
+      "description": "Shared resource cancellation coordination",
+      "scenario_id": "shared_resource_coordination",
+      "shared_resources": ["workspace_index", "file_system", "parser_cache"],
+      "requests": [
+        {
+          "id": "resource-1",
+          "provider": "completion",
+          "resources_used": ["workspace_index", "parser_cache"],
+          "priority": "high"
+        },
+        {
+          "id": "resource-2",
+          "provider": "references",
+          "resources_used": ["workspace_index", "file_system"],
+          "priority": "medium"
+        },
+        {
+          "id": "resource-3",
+          "provider": "workspaceSymbols",
+          "resources_used": ["workspace_index"],
+          "priority": "low"
+        }
+      ],
+      "cancellation_order": ["resource-3", "resource-1", "resource-2"],
+      "expected_behavior": {
+        "resource_cleanup_order": "reverse_priority",
+        "lock_release_timing": "immediate",
+        "cache_invalidation": "selective"
+      }
+    }
+  ],
+  "error_propagation_scenarios": [
+    {
+      "description": "Cancellation error propagation between providers",
+      "scenario_id": "error_propagation",
+      "primary_request": {
+        "id": "primary-def",
+        "provider": "definition",
+        "triggers_secondary": ["hover", "completion"]
+      },
+      "secondary_requests": [
+        {
+          "id": "secondary-hover",
+          "provider": "hover",
+          "depends_on": "primary-def"
+        },
+        {
+          "id": "secondary-completion",
+          "provider": "completion",
+          "depends_on": "primary-def"
+        }
+      ],
+      "cancellation_target": "primary-def",
+      "expected_propagation": {
+        "secondary_cancellations": ["secondary-hover", "secondary-completion"],
+        "error_codes": [-32800, -32800, -32800],
+        "cleanup_coordination": "cascading"
+      }
+    }
+  ],
+  "performance_coordination_data": [
+    {
+      "scenario": "coordinated_cancellation_latency",
+      "providers": ["completion", "hover", "definition"],
+      "expected_metrics": {
+        "individual_cancellation_latency_ms": {"max": 100, "p95": 50},
+        "coordinated_cancellation_latency_ms": {"max": 200, "p95": 100},
+        "resource_cleanup_time_ms": {"max": 50, "p95": 25}
+      }
+    }
+  ]
+}

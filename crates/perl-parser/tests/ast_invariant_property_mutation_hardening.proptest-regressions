@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc b4bd8b69eaaa58012fa53641811a82a317b08ee0577f6e4ae24786da17633e03 # shrinks to statements = ["\"(\"'0a' \t_"]
+cc f1492843e9e1efe993e271639f9243f0fbce0239b907449e64c1534bfe240074 # shrinks to statements = ["\"\"\"\"A\"0]\u{a0}\u{1680}", "(\"''q\"aa\u{205f} "]

@@ -66,7 +66,7 @@ pub fn is_perl_identifier_continue(ch: char) -> bool {
 }
 
 /// Validate Unicode string complexity for performance monitoring
-/// Returns (char_count, emoji_count, complex_char_count)
+/// Returns (`char_count`, `emoji_count`, `complex_char_count`)
 #[allow(dead_code)]
 pub fn analyze_unicode_complexity(text: &str) -> (usize, usize, usize) {
     let mut char_count = 0;
