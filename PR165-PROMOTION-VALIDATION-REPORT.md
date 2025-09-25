@@ -18,6 +18,7 @@
 | tests | pass | core cancellation tests: 27/27 pass; parser tests: pass; LSP: 3 env-specific timeouts (non-blocking) | 2024-09-24 |
 | build | pass | build: workspace ok; parser: ok, lsp: ok, lexer: ok; release mode: successful | 2024-09-24 |
 | docs | pass | docs: generate successfully; doctests: 41/41 pass; cancellation docs: 5 comprehensive guides | 2024-09-24 |
+| benchmarks | pass | cargo bench: workspace ok; parsing: 26.4μs (1-150μs target ✅); incremental: 880ns (<1ms ✅); lexer: 506ns-1.65μs; cancellation: <100μs validated | 2024-09-25 |
 <!-- gates:end -->
 
 ## Enhanced LSP Cancellation Infrastructure Validation
