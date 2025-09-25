@@ -52,8 +52,9 @@ impl InfrastructureTestFixture {
         // Setup test environment for infrastructure quality testing
         setup_infrastructure_test_environment(&mut server);
 
-        // Wait for infrastructure to stabilize
-        drain_until_quiet(&mut server, Duration::from_millis(1000), Duration::from_secs(30));
+        // Wait for infrastructure to stabilize with adaptive timeout
+        let adaptive_timeout = adaptive_timeout();
+        drain_until_quiet(&mut server, Duration::from_millis(800), adaptive_timeout);
 
         Self { server, resource_monitor, thread_safety_monitor, integration_validator }
     }

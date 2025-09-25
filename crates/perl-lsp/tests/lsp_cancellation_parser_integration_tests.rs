@@ -55,8 +55,14 @@ impl ParserIntegrationFixture {
             setup_test_file(&mut server, uri, content);
         }
 
-        // Wait for initial parsing and indexing to complete
-        drain_until_quiet(&mut server, Duration::from_millis(2000), Duration::from_secs(60));
+        // Wait for initial parsing and indexing to complete with adaptive timeout
+        let adaptive_timeout = match max_concurrent_threads() {
+            0..=2 => Duration::from_secs(30), // Heavily constrained environment
+            3..=4 => Duration::from_secs(20), // Moderately constrained environment
+            5..=8 => Duration::from_secs(15), // Lightly constrained environment
+            _ => Duration::from_secs(10),     // Unconstrained environment
+        };
+        drain_until_quiet(&mut server, Duration::from_millis(1500), adaptive_timeout);
 
         Self { server, test_workspace, parser_test_files }
     }

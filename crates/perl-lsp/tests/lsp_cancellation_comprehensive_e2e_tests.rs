@@ -52,8 +52,18 @@ impl E2ETestFixture {
         // Setup comprehensive test environment
         setup_e2e_test_workspace(&mut server);
 
-        // Wait for complete system initialization
-        drain_until_quiet(&mut server, Duration::from_millis(3000), Duration::from_secs(120));
+        // Wait for complete system initialization with adaptive timeout
+        let adaptive_initialization_timeout = match max_concurrent_threads() {
+            0..=2 => Duration::from_secs(45), // Heavily constrained environment
+            3..=4 => Duration::from_secs(25), // Moderately constrained environment
+            5..=8 => Duration::from_secs(15), // Lightly constrained environment
+            _ => Duration::from_secs(10),     // Unconstrained environment
+        };
+        drain_until_quiet(
+            &mut server,
+            Duration::from_millis(1500),
+            adaptive_initialization_timeout,
+        );
 
         Self { server, test_workspace, scenario_runner, performance_monitor }
     }

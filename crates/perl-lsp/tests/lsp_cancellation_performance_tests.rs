@@ -47,8 +47,9 @@ impl PerformanceTestFixture {
         // Setup test workspace for performance validation
         setup_performance_test_workspace(&mut server);
 
-        // Wait for initial indexing to stabilize
-        drain_until_quiet(&mut server, Duration::from_millis(1000), Duration::from_secs(30));
+        // Wait for initial indexing to stabilize with adaptive timeout
+        let adaptive_timeout = adaptive_timeout();
+        drain_until_quiet(&mut server, Duration::from_millis(800), adaptive_timeout);
 
         // Collect baseline measurements
         let baseline_measurements = collect_baseline_measurements(&mut server);
