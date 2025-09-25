@@ -458,3 +458,154 @@ fn test_quote_parser_utf8_safety() {
         "Unicode transliteration parsing"
     );
 }
+
+// TARGETED MUTATION KILLER TESTS - Designed to kill specific surviving mutants
+
+// Kill MUT_002: Mutation of && to || in !is_paired && !rest1.is_empty() condition
+// This test targets the specific logic branch where both conditions matter
+#[test]
+fn test_kill_mutation_logical_operator_substitution() {
+    // Test case 1: is_paired=true, rest1.is_empty()=false
+    // Original: !true && !false = false && true = false (no manual parsing)
+    // Mutated:  !true || !false = false || true = true (would do manual parsing incorrectly)
+    let (pattern, replacement, modifiers) = extract_substitution_parts("s{a}{b}");
+    assert_eq!(pattern, "a", "Paired delimiter pattern extraction");
+    assert_eq!(
+        replacement, "b",
+        "Paired delimiter replacement extraction - kills && to || mutation"
+    );
+    assert_eq!(modifiers, "", "Paired delimiter modifiers");
+
+    // Test case 2: is_paired=false, rest1.is_empty()=true
+    // This creates a situation where rest1 is empty for non-paired delimiters
+    // Original: !false && !true = true && false = false
+    // Mutated:  !false || !true = true || false = true (would trigger wrong branch)
+    let (pattern, replacement, modifiers) = extract_substitution_parts("s//");
+    assert_eq!(pattern, "", "Empty pattern for non-paired empty delimiter");
+    assert_eq!(
+        replacement, "",
+        "Empty replacement for non-paired empty delimiter - kills && to || mutation"
+    );
+    assert_eq!(modifiers, "", "Empty modifiers");
+
+    // Test case 3: is_paired=true, rest1.is_empty()=true
+    // Original: !true && !true = false && false = false
+    // Mutated:  !true || !true = false || false = false (same result, but tests paired logic)
+    let (pattern, replacement, modifiers) = extract_substitution_parts("s{}{}");
+    assert_eq!(pattern, "", "Empty pattern for paired delimiters");
+    assert_eq!(replacement, "", "Empty replacement for paired delimiters");
+    assert_eq!(modifiers, "", "Empty modifiers for paired delimiters");
+}
+
+// Kill MUT_002 with additional edge cases targeting the specific logic branches
+#[test]
+fn test_kill_mutation_logical_operator_boundary_cases() {
+    // Test edge case: non-paired delimiter with content (should trigger manual parsing)
+    // is_paired=false, rest1.is_empty()=false
+    // Original: !false && !false = true && true = true (triggers manual parsing)
+    // Mutated:  !false || !false = true || true = true (same result but we need to ensure correct parsing)
+    let (pattern, replacement, modifiers) = extract_substitution_parts("s/test/replace/g");
+    assert_eq!(pattern, "test", "Non-paired delimiter pattern with content");
+    assert_eq!(
+        replacement, "replace",
+        "Non-paired delimiter replacement with content - critical for && to || distinction"
+    );
+    assert_eq!(modifiers, "g", "Non-paired delimiter modifiers");
+
+    // Test single character content to stress boundary detection
+    let (pattern, replacement, modifiers) = extract_substitution_parts("s/a/b/");
+    assert_eq!(pattern, "a", "Single char pattern");
+    assert_eq!(replacement, "b", "Single char replacement - tests precise boundary logic");
+    assert_eq!(modifiers, "", "No modifiers");
+
+    // Test with escaped delimiters in content (complex rest1 content)
+    let (pattern, replacement, modifiers) = extract_substitution_parts("s/te\\/st/re\\/pl/");
+    assert_eq!(pattern, "te\\/st", "Pattern with escaped delimiter");
+    assert_eq!(
+        replacement, "re\\/pl",
+        "Replacement with escaped delimiter - kills && to || mutation in complex content"
+    );
+    assert_eq!(modifiers, "", "No modifiers");
+}
+
+// Kill MUT_005: Tests modifier character validation to ensure proper character matching
+#[test]
+fn test_kill_mutation_modifier_validation() {
+    // Test valid substitution modifiers - these should be preserved
+    let (_, _, modifiers) = extract_substitution_parts("s/test/repl/gimsx");
+    assert_eq!(
+        modifiers, "gimsx",
+        "Valid substitution modifiers should be preserved exactly - kills modifier character mutations"
+    );
+
+    let (_, _, modifiers) = extract_substitution_parts("s/test/repl/ger");
+    assert_eq!(
+        modifiers, "ger",
+        "Multiple valid modifiers preserved - kills invalid modifier character mutations"
+    );
+
+    let (_, _, modifiers) = extract_substitution_parts("s/test/repl/oex");
+    assert_eq!(
+        modifiers, "oex",
+        "More valid modifier combinations - ensures exact character matching"
+    );
+
+    // Test invalid modifiers should be filtered out (these should NOT be preserved)
+    let (_, _, modifiers) = extract_substitution_parts("s/test/repl/abc");
+    assert_eq!(
+        modifiers, "",
+        "Invalid modifiers abc should be filtered - kills modifier validation mutations"
+    );
+
+    let (_, _, modifiers) = extract_substitution_parts("s/test/repl/xyz");
+    assert_eq!(
+        modifiers, "x",
+        "Mixed modifiers xyz - only x is valid, kills modifier validation mutations"
+    );
+
+    let (_, _, modifiers) = extract_substitution_parts("s/test/repl/qwerty");
+    assert_eq!(
+        modifiers, "er",
+        "Mixed invalid/valid modifiers - only er should remain, kills modifier pattern mutations"
+    );
+
+    // Test transliteration modifiers (different valid set: c, d, s, r)
+    let (_, _, modifiers) = extract_transliteration_parts("tr/abc/xyz/cds");
+    assert_eq!(
+        modifiers, "cds",
+        "Valid transliteration modifiers preserved - kills modifier character mutations"
+    );
+
+    let (_, _, modifiers) = extract_transliteration_parts("tr/abc/xyz/abc");
+    assert_eq!(
+        modifiers, "c",
+        "Mixed transliteration modifiers - only c is valid, kills modifier validation mutations"
+    );
+}
+
+// Additional tests to ensure comprehensive logic branch coverage
+#[test]
+fn test_kill_mutation_comprehensive_logic_coverage() {
+    // Test that specifically exercises the problematic logic conditions
+
+    // Case: Non-paired delimiter, empty content after first delimiter
+    let (pattern, replacement, modifiers) = extract_substitution_parts("s##");
+    assert_eq!(pattern, "", "Empty pattern non-paired");
+    assert_eq!(replacement, "", "Empty replacement non-paired - exercises empty rest1 logic");
+    assert_eq!(modifiers, "", "Empty modifiers");
+
+    // Case: Paired delimiter, missing second delimiter (creates edge case)
+    let (pattern, replacement, modifiers) = extract_substitution_parts("s{test}");
+    assert_eq!(pattern, "test", "Pattern extracted even with missing second delimiter");
+    assert_eq!(
+        replacement, "",
+        "Missing second delimiter results in empty replacement - tests paired delimiter edge case"
+    );
+    assert_eq!(modifiers, "", "No modifiers when missing second delimiter");
+
+    // Case: Malformed paired delimiter (tests fallback logic)
+    let (pattern, _replacement, modifiers) = extract_substitution_parts("s{test}extra");
+    assert_eq!(pattern, "test", "Pattern from malformed paired delimiter");
+    // The replacement behavior may vary, but it should not crash
+    assert_eq!(modifiers, "", "Modifiers from malformed input");
+}

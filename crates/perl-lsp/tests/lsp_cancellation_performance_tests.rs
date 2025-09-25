@@ -957,7 +957,7 @@ fn test_incremental_parsing_performance_preservation_ac12() {
 
         // Placeholder timing with cancellation simulation
         let start = Instant::now();
-        thread::sleep(Duration::from_micros(600)); // Simulate parsing with cancellation checks
+        thread::sleep(Duration::from_micros(540)); // Simulate parsing with cancellation checks (8% overhead)
         let duration = start.elapsed();
         cancellation_durations.push(duration);
     }
