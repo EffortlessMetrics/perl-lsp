@@ -1,0 +1,20 @@
+crates/perl-parser/src/quote_parser.rs:217:33: replace + with - in extract_transliteration_parts
+crates/perl-parser/src/quote_parser.rs:13:9: replace && with || in extract_regex_parts
+crates/perl-parser/src/quote_parser.rs:9:5: replace extract_regex_parts -> (String, String) with (String::new(), "xyzzy".into())
+crates/perl-parser/src/quote_parser.rs:12:23: replace > with < in extract_regex_parts
+crates/perl-parser/src/quote_parser.rs:286:23: replace += with *= in extract_delimited_content
+crates/perl-parser/src/quote_parser.rs:13:12: delete ! in extract_regex_parts
+crates/perl-parser/src/quote_parser.rs:248:9: delete match arm '<' in get_closing_delimiter
+crates/perl-parser/src/quote_parser.rs:9:5: replace extract_regex_parts -> (String, String) with ("xyzzy".into(), String::new())
+crates/perl-parser/src/quote_parser.rs:12:23: replace > with == in extract_regex_parts
+crates/perl-parser/src/quote_parser.rs:136:30: replace match guard c == closing with true in extract_substitution_parts
+crates/perl-parser/src/quote_parser.rs:290:27: replace -= with += in extract_delimited_content
+crates/perl-parser/src/quote_parser.rs:137:41: replace + with - in extract_substitution_parts
+crates/perl-parser/src/quote_parser.rs:216:24: replace == with != in extract_transliteration_parts
+crates/perl-parser/src/quote_parser.rs:116:26: replace == with != in extract_substitution_parts
+crates/perl-parser/src/quote_parser.rs:160:5: replace extract_transliteration_parts -> (String, String, String) with ("xyzzy".into(), "xyzzy".into(), String::new())
+crates/perl-parser/src/quote_parser.rs:197:57: delete ! in extract_transliteration_parts
+crates/perl-parser/src/quote_parser.rs:137:41: replace + with * in extract_substitution_parts
+crates/perl-parser/src/quote_parser.rs:247:9: delete match arm '{' in get_closing_delimiter
+crates/perl-parser/src/quote_parser.rs:212:17: delete match arm '\\' in extract_transliteration_parts
+crates/perl-parser/src/quote_parser.rs:284:20: replace == with != in extract_delimited_content

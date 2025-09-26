@@ -75,7 +75,7 @@ pub enum PerlCommand {
     /// and uses the optimal execution strategy for maximum compatibility.
     RunTests {
         /// Path to the Perl test file to execute
-        file_path: String
+        file_path: String,
     },
     /// Run a specific test subroutine with enhanced error detection.
     ///
@@ -85,7 +85,7 @@ pub enum PerlCommand {
         /// Path to the Perl file containing the subroutine
         file_path: String,
         /// Name of the subroutine to execute
-        sub_name: String
+        sub_name: String,
     },
     /// Run a Perl file directly with the perl interpreter.
     ///
@@ -93,7 +93,7 @@ pub enum PerlCommand {
     /// and comprehensive error capture for development workflows.
     RunFile {
         /// Path to the Perl file to execute
-        file_path: String
+        file_path: String,
     },
     /// Debug a test file (placeholder for future DAP integration).
     ///
@@ -101,7 +101,7 @@ pub enum PerlCommand {
     /// a structured response indicating debugging support is planned.
     DebugTests {
         /// Path to the test file for debugging
-        file_path: String
+        file_path: String,
     },
 }
 

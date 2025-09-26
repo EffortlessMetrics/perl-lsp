@@ -1,0 +1,15 @@
+crates/perl-parser/src/quote_parser.rs:314:5: replace extract_substitution_modifiers -> String with "xyzzy".into()
+crates/perl-parser/src/quote_parser.rs:48:5: replace extract_substitution_parts -> (String, String, String) with (String::new(), String::new(), "xyzzy".into())
+crates/perl-parser/src/quote_parser.rs:256:26: replace != with == in extract_delimited_content
+crates/perl-parser/src/quote_parser.rs:48:5: replace extract_substitution_parts -> (String, String, String) with ("xyzzy".into(), String::new(), "xyzzy".into())
+crates/perl-parser/src/quote_parser.rs:100:33: replace + with * in extract_substitution_parts
+crates/perl-parser/src/quote_parser.rs:255:5: replace extract_delimited_content -> (String, &str) with (String::new(), "xyzzy")
+crates/perl-parser/src/quote_parser.rs:255:5: replace extract_delimited_content -> (String, &str) with ("xyzzy".into(), "")
+crates/perl-parser/src/quote_parser.rs:80:57: delete ! in extract_substitution_parts
+crates/perl-parser/src/quote_parser.rs:288:18: replace match guard c == close with true in extract_delimited_content
+crates/perl-parser/src/quote_parser.rs:48:5: replace extract_substitution_parts -> (String, String, String) with ("xyzzy".into(), "xyzzy".into(), "xyzzy".into())
+crates/perl-parser/src/quote_parser.rs:48:5: replace extract_substitution_parts -> (String, String, String) with (String::new(), "xyzzy".into(), "xyzzy".into())
+crates/perl-parser/src/quote_parser.rs:48:5: replace extract_substitution_parts -> (String, String, String) with ("xyzzy".into(), "xyzzy".into(), String::new())
+crates/perl-parser/src/quote_parser.rs:99:22: replace match guard c == closing with true in extract_substitution_parts
+crates/perl-parser/src/quote_parser.rs:297:33: replace + with - in extract_delimited_content
+crates/perl-parser/src/quote_parser.rs:288:18: replace match guard c == close with false in extract_delimited_content

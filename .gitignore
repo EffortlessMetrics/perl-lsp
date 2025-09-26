@@ -37,6 +37,7 @@ releases/
 mutants.out/
 mutants.out.old/
 mutants.out*
+mutants.out.old*
 .cargo/mutants.toml
 mutation_testing_report.md
 **/manual_mutation_test.rs

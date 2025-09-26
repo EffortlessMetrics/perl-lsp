@@ -2,26 +2,41 @@ use crate::ast::{Node, NodeKind};
 use crate::position_mapper::PositionMapper;
 use serde_json::{Value, json};
 
-/// Call Hierarchy Item
+/// Call hierarchy item representing a function or method in Perl code
+///
+/// This structure represents a single item in a call hierarchy, containing all the
+/// information needed to navigate to and display the function or method in LSP clients.
 #[derive(Debug, Clone)]
 pub struct CallHierarchyItem {
+    /// Name of the function or method
     pub name: String,
+    /// Symbol kind (e.g., "Function", "Method")
     pub kind: String,
+    /// URI of the file containing this symbol
     pub uri: String,
+    /// Full range of the symbol definition
     pub range: Range,
+    /// Range for the symbol name (for selection highlighting)
     pub selection_range: Range,
+    /// Optional additional detail about the symbol
     pub detail: Option<String>,
 }
 
+/// Text range in a document with start and end positions
 #[derive(Debug, Clone)]
 pub struct Range {
+    /// Start position of the range
     pub start: Position,
+    /// End position of the range
     pub end: Position,
 }
 
+/// Position in a text document (line and character)
 #[derive(Debug, Clone)]
 pub struct Position {
+    /// Line number (0-based)
     pub line: u32,
+    /// Character offset within the line (0-based)
     pub character: u32,
 }
 
@@ -33,6 +48,26 @@ pub struct CallHierarchyProvider {
 }
 
 impl CallHierarchyProvider {
+    /// Create a new call hierarchy provider for a source file
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - The source code content
+    /// * `uri` - The URI of the source file
+    ///
+    /// # Returns
+    ///
+    /// A new [`CallHierarchyProvider`] configured for the given source file
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use perl_parser::call_hierarchy_provider::CallHierarchyProvider;
+    ///
+    /// let source = "sub hello { print 'world'; }";
+    /// let uri = "file:///path/to/file.pl";
+    /// let provider = CallHierarchyProvider::new(source.to_string(), uri.to_string());
+    /// ```
     pub fn new(source: String, uri: String) -> Self {
         // Validate that URI is well-formed (basic security check)
         let uri = if uri.is_empty() { "file:///unknown".to_string() } else { uri };
@@ -457,17 +492,27 @@ impl CallHierarchyProvider {
     }
 }
 
-/// Incoming call information
+/// Incoming call information representing a caller of a function
+///
+/// This structure represents a function that calls the target function,
+/// including the location of the caller and all the ranges where it calls the target.
 #[derive(Debug, Clone)]
 pub struct CallHierarchyIncomingCall {
+    /// The function or method that is calling the target
     pub from: CallHierarchyItem,
+    /// All the ranges in the caller where it invokes the target function
     pub from_ranges: Vec<Range>,
 }
 
-/// Outgoing call information
+/// Outgoing call information representing a function being called
+///
+/// This structure represents a function that is called by the current function,
+/// including the location of the callee and all the ranges where it is called.
 #[derive(Debug, Clone)]
 pub struct CallHierarchyOutgoingCall {
+    /// The function or method being called
     pub to: CallHierarchyItem,
+    /// All the ranges in the current function where the target is called
     pub from_ranges: Vec<Range>,
 }
 
