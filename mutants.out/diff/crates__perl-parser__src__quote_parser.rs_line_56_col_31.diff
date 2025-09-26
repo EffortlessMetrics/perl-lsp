@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ replace != with == in extract_substitution_parts
+@@ -48,17 +48,17 @@
+     let content = text.strip_prefix('s').unwrap_or(text);
+ 
+     if content.is_empty() {
+         return (String::new(), String::new(), String::new());
+     }
+ 
+     let delimiter = content.chars().next().unwrap();
+     let closing = get_closing_delimiter(delimiter);
+-    let is_paired = delimiter != closing;
++    let is_paired = delimiter == /* ~ changed by cargo-mutants ~ */ closing;
+ 
+     // Parse first body (pattern)
+     let (pattern, rest1) = extract_delimited_content(content, delimiter, closing);
+ 
+     // For paired delimiters, skip whitespace and expect new delimiter
+     let rest2_owned;
+     let rest2 = if is_paired {
+         let trimmed = rest1.trim_start();

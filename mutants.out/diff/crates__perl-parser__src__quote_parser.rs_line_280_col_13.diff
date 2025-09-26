@@ -1,0 +1,24 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ delete match arm '\\' in extract_delimited_content
+@@ -272,20 +272,17 @@
+     for (i, ch) in chars {
+         if escaped {
+             body.push(ch);
+             escaped = false;
+             continue;
+         }
+ 
+         match ch {
+-            '\\' => {
+-                body.push(ch);
+-                escaped = true;
+-            }
++             /* ~ changed by cargo-mutants ~ */
+             c if c == open && is_paired => {
+                 body.push(ch);
+                 depth += 1;
+             }
+             c if c == close => {
+                 if is_paired {
+                     depth -= 1;
+                     if depth == 0 {

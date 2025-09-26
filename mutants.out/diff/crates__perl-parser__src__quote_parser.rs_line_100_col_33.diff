@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ replace + with * in extract_substitution_parts
+@@ -92,17 +92,17 @@
+             }
+ 
+             match ch {
+                 '\\' => {
+                     body.push(ch);
+                     escaped = true;
+                 }
+                 c if c == closing => {
+-                    end_pos = i + ch.len_utf8();
++                    end_pos = i * /* ~ changed by cargo-mutants ~ */ ch.len_utf8();
+                     break;
+                 }
+                 _ => body.push(ch),
+             }
+         }
+ 
+         (body, &rest1[end_pos..])
+     } else if is_paired {

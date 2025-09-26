@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ delete ! in extract_regex_parts
+@@ -5,17 +5,17 @@
+ ///
+ /// Extract pattern and modifiers from a regex-like token (qr, m, or bare //)
+ pub fn extract_regex_parts(text: &str) -> (String, String) {
+     // Handle different prefixes
+     let content = if let Some(stripped) = text.strip_prefix("qr") {
+         stripped
+     } else if text.starts_with('m')
+         && text.len() > 1
+-        && !text.chars().nth(1).unwrap().is_alphabetic()
++        &&  /* ~ changed by cargo-mutants ~ */text.chars().nth(1).unwrap().is_alphabetic()
+     {
+         &text[1..]
+     } else {
+         text
+     };
+ 
+     if content.is_empty() {
+         return (String::new(), String::new());

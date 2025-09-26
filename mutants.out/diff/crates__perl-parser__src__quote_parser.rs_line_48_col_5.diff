@@ -1,0 +1,127 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ replace extract_substitution_parts -> (String, String, String) with (String::new(), "xyzzy".into(), String::new())
+@@ -40,123 +40,17 @@
+ /// and handles various delimiter forms including:
+ /// - Non-paired delimiters: s/pattern/replacement/ (same delimiter for all parts)
+ /// - Paired delimiters: s{pattern}{replacement} (different open/close delimiters)
+ ///
+ /// For paired delimiters, properly handles nested delimiters within the pattern
+ /// or replacement parts. Returns (pattern, replacement, modifiers) as strings.
+ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
+     // Skip 's' prefix
+-    let content = text.strip_prefix('s').unwrap_or(text);
+-
+-    if content.is_empty() {
+-        return (String::new(), String::new(), String::new());
+-    }
+-
+-    let delimiter = content.chars().next().unwrap();
+-    let closing = get_closing_delimiter(delimiter);
+-    let is_paired = delimiter != closing;
+-
+-    // Parse first body (pattern)
+-    let (pattern, rest1) = extract_delimited_content(content, delimiter, closing);
+-
+-    // For paired delimiters, skip whitespace and expect new delimiter
+-    let rest2_owned;
+-    let rest2 = if is_paired {
+-        let trimmed = rest1.trim_start();
+-        // For paired delimiters like s{pattern}{replacement}, we expect another opening delimiter
+-        if trimmed.starts_with(delimiter) {
+-            // Keep the delimiter - don't strip it here since extract_delimited_content expects it
+-            trimmed
+-        } else {
+-            // If no second delimiter found, fall back to original rest
+-            rest1
+-        }
+-    } else {
+-        rest2_owned = format!("{}{}", delimiter, rest1);
+-        &rest2_owned
+-    };
+-
+-    // Parse second body (replacement)
+-    // For non-paired delimiters, we need special handling
+-    let (replacement, modifiers_str) = if !is_paired && !rest1.is_empty() {
+-        // Manually parse the replacement for non-paired delimiters
+-        let chars = rest1.char_indices();
+-        let mut body = String::new();
+-        let mut escaped = false;
+-        let mut end_pos = rest1.len();
+-
+-        for (i, ch) in chars {
+-            if escaped {
+-                body.push(ch);
+-                escaped = false;
+-                continue;
+-            }
+-
+-            match ch {
+-                '\\' => {
+-                    body.push(ch);
+-                    escaped = true;
+-                }
+-                c if c == closing => {
+-                    end_pos = i + ch.len_utf8();
+-                    break;
+-                }
+-                _ => body.push(ch),
+-            }
+-        }
+-
+-        (body, &rest1[end_pos..])
+-    } else if is_paired {
+-        // For paired delimiters, check if rest2 actually starts with the delimiter
+-        if rest2.starts_with(delimiter) {
+-            extract_delimited_content(rest2, delimiter, closing)
+-        } else {
+-            // Malformed paired delimiter - parse as non-paired fallback
+-            // This handles cases like s[test]replacement] where there's no second [
+-            // Special case: parentheses have different behavior (empty replacement)
+-            if delimiter == '(' {
+-                (String::new(), "")
+-            } else {
+-                let chars = rest2.char_indices();
+-                let mut body = String::new();
+-                let mut escaped = false;
+-                let mut end_pos = rest2.len();
+-
+-                for (i, ch) in chars {
+-                    if escaped {
+-                        body.push(ch);
+-                        escaped = false;
+-                        continue;
+-                    }
+-
+-                    match ch {
+-                        '\\' => {
+-                            body.push(ch);
+-                            escaped = true;
+-                        }
+-                        c if c == closing => {
+-                            end_pos = i + ch.len_utf8();
+-                            break;
+-                        }
+-                        _ => body.push(ch),
+-                    }
+-                }
+-
+-                (body, &rest2[end_pos..])
+-            }
+-        }
+-    } else {
+-        (String::new(), rest1)
+-    };
+-
+-    // Extract and validate only valid substitution modifiers
+-    let modifiers = extract_substitution_modifiers(modifiers_str);
+-
+-    (pattern, replacement, modifiers)
++    (String::new(), "xyzzy".into(), String::new()) /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ /// Extract search, replace, and modifiers from a transliteration token
+ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
+     // Skip 'tr' or 'y' prefix
+     let content = if let Some(stripped) = text.strip_prefix("tr") {
+         stripped
+     } else if let Some(stripped) = text.strip_prefix('y') {

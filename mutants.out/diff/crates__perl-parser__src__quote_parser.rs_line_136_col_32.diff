@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ replace == with != in extract_substitution_parts
+@@ -128,17 +128,17 @@
+                         continue;
+                     }
+ 
+                     match ch {
+                         '\\' => {
+                             body.push(ch);
+                             escaped = true;
+                         }
+-                        c if c == closing => {
++                        c if c != /* ~ changed by cargo-mutants ~ */ closing => {
+                             end_pos = i + ch.len_utf8();
+                             break;
+                         }
+                         _ => body.push(ch),
+                     }
+                 }
+ 
+                 (body, &rest2[end_pos..])

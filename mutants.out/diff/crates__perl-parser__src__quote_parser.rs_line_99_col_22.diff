@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ replace match guard c == closing with false in extract_substitution_parts
+@@ -91,17 +91,17 @@
+                 continue;
+             }
+ 
+             match ch {
+                 '\\' => {
+                     body.push(ch);
+                     escaped = true;
+                 }
+-                c if c == closing => {
++                c if false /* ~ changed by cargo-mutants ~ */ => {
+                     end_pos = i + ch.len_utf8();
+                     break;
+                 }
+                 _ => body.push(ch),
+             }
+         }
+ 
+         (body, &rest1[end_pos..])

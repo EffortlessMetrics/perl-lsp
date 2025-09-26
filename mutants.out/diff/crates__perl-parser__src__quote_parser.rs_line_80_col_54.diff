@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ replace && with || in extract_substitution_parts
+@@ -72,17 +72,17 @@
+         }
+     } else {
+         rest2_owned = format!("{}{}", delimiter, rest1);
+         &rest2_owned
+     };
+ 
+     // Parse second body (replacement)
+     // For non-paired delimiters, we need special handling
+-    let (replacement, modifiers_str) = if !is_paired && !rest1.is_empty() {
++    let (replacement, modifiers_str) = if !is_paired || /* ~ changed by cargo-mutants ~ */ !rest1.is_empty() {
+         // Manually parse the replacement for non-paired delimiters
+         let chars = rest1.char_indices();
+         let mut body = String::new();
+         let mut escaped = false;
+         let mut end_pos = rest1.len();
+ 
+         for (i, ch) in chars {
+             if escaped {

@@ -1,0 +1,46 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ replace extract_regex_parts -> (String, String) with ("xyzzy".into(), "xyzzy".into())
+@@ -1,42 +1,17 @@
+ /// Uniform quote operator parsing for the parser
+ ///
+ /// This module provides consistent parsing for quote-like operators,
+ /// properly extracting patterns, bodies, and modifiers.
+ ///
+ /// Extract pattern and modifiers from a regex-like token (qr, m, or bare //)
+ pub fn extract_regex_parts(text: &str) -> (String, String) {
+     // Handle different prefixes
+-    let content = if let Some(stripped) = text.strip_prefix("qr") {
+-        stripped
+-    } else if text.starts_with('m')
+-        && text.len() > 1
+-        && !text.chars().nth(1).unwrap().is_alphabetic()
+-    {
+-        &text[1..]
+-    } else {
+-        text
+-    };
+-
+-    if content.is_empty() {
+-        return (String::new(), String::new());
+-    }
+-
+-    // Get delimiter
+-    let delimiter = content.chars().next().unwrap();
+-    let closing = get_closing_delimiter(delimiter);
+-
+-    // Extract body and modifiers
+-    let (body, modifiers) = extract_delimited_content(content, delimiter, closing);
+-
+-    // Include delimiters in the pattern string for compatibility
+-    let pattern = format!("{}{}{}", delimiter, body, closing);
+-
+-    (pattern, modifiers.to_string())
++    ("xyzzy".into(), "xyzzy".into()) /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ /// Extract pattern, replacement, and modifiers from a substitution token
+ ///
+ /// This function parses substitution operators like s/pattern/replacement/flags
+ /// and handles various delimiter forms including:
+ /// - Non-paired delimiters: s/pattern/replacement/ (same delimiter for all parts)
+ /// - Paired delimiters: s{pattern}{replacement} (different open/close delimiters)

@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ delete match arm '{' in get_closing_delimiter
+@@ -239,17 +239,17 @@
+     (search, replacement, modifiers)
+ }
+ 
+ /// Get the closing delimiter for a given opening delimiter
+ fn get_closing_delimiter(open: char) -> char {
+     match open {
+         '(' => ')',
+         '[' => ']',
+-        '{' => '}',
++         /* ~ changed by cargo-mutants ~ */
+         '<' => '>',
+         _ => open,
+     }
+ }
+ 
+ /// Extract content between delimiters and return (content, rest)
+ fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &str) {
+     let mut chars = text.char_indices();

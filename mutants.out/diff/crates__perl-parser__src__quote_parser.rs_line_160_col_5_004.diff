@@ -1,0 +1,100 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ replace extract_transliteration_parts -> (String, String, String) with (String::new(), "xyzzy".into(), "xyzzy".into())
+@@ -152,96 +152,17 @@
+     let modifiers = extract_substitution_modifiers(modifiers_str);
+ 
+     (pattern, replacement, modifiers)
+ }
+ 
+ /// Extract search, replace, and modifiers from a transliteration token
+ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
+     // Skip 'tr' or 'y' prefix
+-    let content = if let Some(stripped) = text.strip_prefix("tr") {
+-        stripped
+-    } else if let Some(stripped) = text.strip_prefix('y') {
+-        stripped
+-    } else {
+-        text
+-    };
+-
+-    if content.is_empty() {
+-        return (String::new(), String::new(), String::new());
+-    }
+-
+-    let delimiter = content.chars().next().unwrap();
+-    let closing = get_closing_delimiter(delimiter);
+-    let is_paired = delimiter != closing;
+-
+-    // Parse first body (search pattern)
+-    let (search, rest1) = extract_delimited_content(content, delimiter, closing);
+-
+-    // For paired delimiters, skip whitespace and expect new delimiter
+-    let rest2_owned;
+-    let rest2 = if is_paired {
+-        let trimmed = rest1.trim_start();
+-        // For paired delimiters like tr{search}{replace}, we expect another opening delimiter
+-        if trimmed.starts_with(delimiter) {
+-            // Keep the delimiter - don't strip it since extract_delimited_content expects it
+-            trimmed
+-        } else {
+-            // If no second delimiter found, the replacement is empty
+-            ""
+-        }
+-    } else {
+-        rest2_owned = format!("{}{}", delimiter, rest1);
+-        &rest2_owned
+-    };
+-
+-    // Parse second body (replacement pattern)
+-    let (replacement, modifiers_str) = if !is_paired && !rest1.is_empty() {
+-        // Manually parse the replacement for non-paired delimiters
+-        let chars = rest1.char_indices();
+-        let mut body = String::new();
+-        let mut escaped = false;
+-        let mut end_pos = rest1.len();
+-
+-        for (i, ch) in chars {
+-            if escaped {
+-                body.push(ch);
+-                escaped = false;
+-                continue;
+-            }
+-
+-            match ch {
+-                '\\' => {
+-                    body.push(ch);
+-                    escaped = true;
+-                }
+-                c if c == closing => {
+-                    end_pos = i + ch.len_utf8();
+-                    break;
+-                }
+-                _ => body.push(ch),
+-            }
+-        }
+-
+-        (body, &rest1[end_pos..])
+-    } else if is_paired {
+-        extract_delimited_content(rest2, delimiter, closing)
+-    } else {
+-        (String::new(), rest1)
+-    };
+-
+-    // Extract and validate only valid transliteration modifiers
+-    // Security fix: Apply consistent validation for all delimiter types
+-    let modifiers = modifiers_str
+-        .chars()
+-        .take_while(|c| c.is_ascii_alphabetic())
+-        .filter(|&c| matches!(c, 'c' | 'd' | 's' | 'r'))
+-        .collect();
+-
+-    (search, replacement, modifiers)
++    (String::new(), "xyzzy".into(), "xyzzy".into()) /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ /// Get the closing delimiter for a given opening delimiter
+ fn get_closing_delimiter(open: char) -> char {
+     match open {
+         '(' => ')',
+         '[' => ']',
+         '{' => '}',

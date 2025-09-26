@@ -1,0 +1,21 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ replace match guard c == open && is_paired with false in extract_delimited_content
+@@ -276,17 +276,17 @@
+             continue;
+         }
+ 
+         match ch {
+             '\\' => {
+                 body.push(ch);
+                 escaped = true;
+             }
+-            c if c == open && is_paired => {
++            c if false /* ~ changed by cargo-mutants ~ */ => {
+                 body.push(ch);
+                 depth += 1;
+             }
+             c if c == close => {
+                 if is_paired {
+                     depth -= 1;
+                     if depth == 0 {
+                         end_pos = i + ch.len_utf8();

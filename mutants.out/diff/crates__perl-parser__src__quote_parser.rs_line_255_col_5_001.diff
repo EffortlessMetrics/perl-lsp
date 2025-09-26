@@ -1,0 +1,71 @@
+--- crates/perl-parser/src/quote_parser.rs
++++ replace extract_delimited_content -> (String, &str) with ("xyzzy".into(), "")
+@@ -247,67 +247,17 @@
+         '{' => '}',
+         '<' => '>',
+         _ => open,
+     }
+ }
+ 
+ /// Extract content between delimiters and return (content, rest)
+ fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &str) {
+-    let mut chars = text.char_indices();
+-    let is_paired = open != close;
+-
+-    // Skip opening delimiter
+-    if let Some((_, c)) = chars.next() {
+-        if c != open {
+-            return (String::new(), text);
+-        }
+-    } else {
+-        return (String::new(), "");
+-    }
+-
+-    let mut body = String::new();
+-    let mut depth = if is_paired { 1 } else { 0 };
+-    let mut escaped = false;
+-    let mut end_pos = text.len();
+-
+-    for (i, ch) in chars {
+-        if escaped {
+-            body.push(ch);
+-            escaped = false;
+-            continue;
+-        }
+-
+-        match ch {
+-            '\\' => {
+-                body.push(ch);
+-                escaped = true;
+-            }
+-            c if c == open && is_paired => {
+-                body.push(ch);
+-                depth += 1;
+-            }
+-            c if c == close => {
+-                if is_paired {
+-                    depth -= 1;
+-                    if depth == 0 {
+-                        end_pos = i + ch.len_utf8();
+-                        break;
+-                    }
+-                    body.push(ch);
+-                } else {
+-                    end_pos = i + ch.len_utf8();
+-                    break;
+-                }
+-            }
+-            _ => body.push(ch),
+-        }
+-    }
+-
+-    (body, &text[end_pos..])
++    ("xyzzy".into(), "") /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ /// Extract and validate substitution modifiers, returning only valid ones
+ ///
+ /// Valid Perl substitution modifiers are: g, i, m, s, x, o, e, r
+ /// This function provides panic-safe modifier validation for substitution operators,
+ /// filtering out invalid modifiers to prevent security vulnerabilities.
+ fn extract_substitution_modifiers(text: &str) -> String {
