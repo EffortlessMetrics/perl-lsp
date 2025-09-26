@@ -820,7 +820,9 @@ impl<'a> PerlLexer<'a> {
 
         // Fast byte check for digits - optimized bounds checking
         let bytes = self.input_bytes;
-        if self.position >= bytes.len() || !unsafe { bytes.get_unchecked(self.position) }.is_ascii_digit() {
+        if self.position >= bytes.len()
+            || !unsafe { bytes.get_unchecked(self.position) }.is_ascii_digit()
+        {
             return None;
         }
 
@@ -2510,25 +2512,75 @@ fn is_keyword(word: &str) -> bool {
     let keywords = KEYWORDS.get_or_init(|| {
         [
             // Single char keywords
-            "q", "m", "s", "y",
+            "q",
+            "m",
+            "s",
+            "y",
             // Two char keywords
-            "if", "do", "my", "or", "qq", "qw", "qr", "qx", "tr",
+            "if",
+            "do",
+            "my",
+            "or",
+            "qq",
+            "qw",
+            "qr",
+            "qx",
+            "tr",
             // Three char keywords
-            "sub", "our", "use", "and", "not", "xor", "die", "say", "for", "try", "END", "cmp",
+            "sub",
+            "our",
+            "use",
+            "and",
+            "not",
+            "xor",
+            "die",
+            "say",
+            "for",
+            "try",
+            "END",
+            "cmp",
             // Four char keywords
-            "else", "when", "next", "last", "redo", "goto", "eval", "warn", "INIT",
+            "else",
+            "when",
+            "next",
+            "last",
+            "redo",
+            "goto",
+            "eval",
+            "warn",
+            "INIT",
             // Five char keywords
-            "elsif", "while", "until", "local", "state", "given", "break", "print", "catch",
-            "BEGIN", "CHECK", "class", "undef",
+            "elsif",
+            "while",
+            "until",
+            "local",
+            "state",
+            "given",
+            "break",
+            "print",
+            "catch",
+            "BEGIN",
+            "CHECK",
+            "class",
+            "undef",
             // Six char keywords
-            "unless", "return", "method", "format",
+            "unless",
+            "return",
+            "method",
+            "format",
             // Seven char keywords
-            "require", "package", "default", "foreach", "finally",
+            "require",
+            "package",
+            "default",
+            "foreach",
+            "finally",
             // Eight char keywords
             "continue",
             // Nine char keywords
             "UNITCHECK",
-        ].into_iter().collect()
+        ]
+        .into_iter()
+        .collect()
     });
 
     // Fast length-based rejection for most cases
