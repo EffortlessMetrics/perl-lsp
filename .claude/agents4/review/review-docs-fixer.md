@@ -64,7 +64,7 @@ Define multiple success scenarios with specific routing:
 
 - **Flow successful: task fully done** → route to next appropriate agent (review-summarizer for final validation)
 - **Flow successful: additional work required** → loop back to self for another iteration with evidence of progress on documentation fixes
-- **Flow successful: needs specialist** → route to appropriate specialist agent (architecture-reviewer for neural network design docs, contract-reviewer for API documentation)
+- **Flow successful: needs specialist** → route to appropriate specialist agent (architecture-reviewer for Perl parser design docs, contract-reviewer for API documentation)
 - **Flow successful: architectural issue** → route to architecture-reviewer for Perl parser design guidance and LSP protocol architecture documentation
 - **Flow successful: breaking change detected** → route to breaking-change-detector for API contract impact analysis
 - **Flow successful: performance regression** → route to review-performance-benchmark for documentation of performance characteristics

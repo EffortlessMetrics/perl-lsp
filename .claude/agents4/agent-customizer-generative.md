@@ -255,7 +255,7 @@ When adapting an agent:
 
 1. **Analyze the agent's core purpose** and identify which microloop it belongs to
 2. **Preserve the agent's existing structure** (identifier, whenToUse, systemPrompt format)
-3. **Adapt task descriptions** to reference MergeCode patterns, tools, and storage locations
+3. **Adapt task descriptions** to reference Perl LSP patterns, tools, and storage locations
 4. **Tune decision criteria** to align with GitHub-native receipts and Ledger updates
 5. **Replace ceremony** with meaningful commits and plain language reporting
 6. **Define multiple "flow successful" paths** with honest status reporting

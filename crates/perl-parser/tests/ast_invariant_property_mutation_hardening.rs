@@ -25,7 +25,8 @@ use std::time::{Duration, Instant};
 /// Smart parentheses balance counter that handles quoted strings in S-expressions
 fn count_parentheses_balance(s: &str) -> i32 {
     let mut balance = 0;
-    let mut in_string = false;
+    let mut in_double_string = false;
+    let mut in_single_string = false;
     let mut escape_next = false;
     let mut chars = s.chars().peekable();
 
@@ -36,14 +37,17 @@ fn count_parentheses_balance(s: &str) -> i32 {
         }
 
         match ch {
-            '\\' if in_string => {
+            '\\' if (in_double_string || in_single_string) => {
                 escape_next = true;
             }
-            '"' => {
-                in_string = !in_string;
+            '"' if !in_single_string => {
+                in_double_string = !in_double_string;
             }
-            '(' if !in_string => balance += 1,
-            ')' if !in_string => balance -= 1,
+            '\'' if !in_double_string => {
+                in_single_string = !in_single_string;
+            }
+            '(' if !in_double_string && !in_single_string => balance += 1,
+            ')' if !in_double_string && !in_single_string => balance -= 1,
             _ => {}
         }
     }
