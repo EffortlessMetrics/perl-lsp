@@ -782,7 +782,7 @@ impl LspServer {
             "workspace/symbol/resolve" => self.handle_workspace_symbol_resolve(request.params),
 
             "textDocument/rename" => self.handle_rename_workspace(request.params),
-            "textDocument/codeAction" => self.handle_code_actions_pragmas(request.params),
+            "textDocument/codeAction" => self.handle_code_action(request.params),
             "codeAction/resolve" => self.handle_code_action_resolve(request.params),
             // PR 6: Semantic tokens
             "textDocument/semanticTokens/full" => self.handle_semantic_tokens(request.params),
