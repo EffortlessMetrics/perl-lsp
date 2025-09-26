@@ -518,6 +518,11 @@ pub struct CallHierarchyOutgoingCall {
 
 /// Convert to JSON for LSP
 impl CallHierarchyItem {
+    /// Convert the call hierarchy item to JSON format for LSP protocol.
+    ///
+    /// # Returns
+    /// A JSON value containing the item name, symbol kind, URI, and range information
+    /// compatible with LSP CallHierarchyItem specification.
     pub fn to_json(&self) -> Value {
         let mut item = json!({
             "name": self.name,
@@ -558,6 +563,10 @@ impl CallHierarchyItem {
 }
 
 impl CallHierarchyIncomingCall {
+    /// Convert the incoming call to JSON format for LSP protocol.
+    ///
+    /// # Returns
+    /// A JSON value containing the source item and ranges where the call originates.
     pub fn to_json(&self) -> Value {
         json!({
             "from": self.from.to_json(),
@@ -576,6 +585,10 @@ impl CallHierarchyIncomingCall {
 }
 
 impl CallHierarchyOutgoingCall {
+    /// Convert the outgoing call to JSON format for LSP protocol.
+    ///
+    /// # Returns
+    /// A JSON value containing the target item and ranges where the call is made.
     pub fn to_json(&self) -> Value {
         json!({
             "to": self.to.to_json(),

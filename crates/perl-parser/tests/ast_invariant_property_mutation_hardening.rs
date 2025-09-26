@@ -179,7 +179,7 @@ mod ast_analysis {
                         self.analyze_node(init, parent, depth);
                     }
                 }
-                NodeKind::FunctionCall { name, args, .. } => {
+                NodeKind::FunctionCall { name: _, args, .. } => {
                     // name is String, not Node - no need to analyze it
                     for arg in args.iter() {
                         self.analyze_node(arg, parent, depth);
@@ -759,7 +759,7 @@ mod ast_property_mutation_tests {
         #[test]
         fn property_position_tracking_consistency(
             num_statements in 1usize..10,
-            statement_length in 5usize..50
+            _statement_length in 5usize..50
         ) {
             let statements: Vec<String> = (0..num_statements)
                 .map(|i| format!("my $var_{} = {};", i, i))

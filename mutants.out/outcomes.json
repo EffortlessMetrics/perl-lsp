@@ -2302,11 +2302,3115 @@
           ]
         }
       ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 260,
+              "column": 14
+            },
+            "end": {
+              "line": 260,
+              "column": 16
+            }
+          },
+          "replacement": "==",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_260_col_14.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_260_col_14.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 74.200082359,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 16.574726187,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 288,
+              "column": 20
+            },
+            "end": {
+              "line": 288,
+              "column": 22
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_288_col_20.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_288_col_20.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 90.676539667,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 56.177062434,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 197,
+              "column": 43
+            },
+            "end": {
+              "line": 197,
+              "column": 44
+            }
+          },
+          "replacement": "",
+          "genre": "UnaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_197_col_43.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_197_col_43.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 108.068834012,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 77.443783475,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 160,
+              "column": 5
+            },
+            "end": {
+              "line": 239,
+              "column": 37
+            }
+          },
+          "replacement": "(String::new(), String::new(), \"xyzzy\".into())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_160_col_5_001.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_160_col_5_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 148.96360271,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 49.959606031,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 160,
+              "column": 5
+            },
+            "end": {
+              "line": 239,
+              "column": 37
+            }
+          },
+          "replacement": "(\"xyzzy\".into(), \"xyzzy\".into(), \"xyzzy\".into())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_160_col_5_002.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_160_col_5_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 126.140243709,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 30.679079163,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 100,
+              "column": 33
+            },
+            "end": {
+              "line": 100,
+              "column": 34
+            }
+          },
+          "replacement": "-",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_100_col_33_001.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_100_col_33_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 98.377951241,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 43.036679875,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 132,
+              "column": 25
+            },
+            "end": {
+              "line": 135,
+              "column": 26
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_132_col_25.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_132_col_25.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 65.777431475,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 48.602090925,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 284,
+              "column": 18
+            },
+            "end": {
+              "line": 284,
+              "column": 40
+            }
+          },
+          "replacement": "true",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_284_col_18.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_284_col_18.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 113.596835148,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 51.046286786,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 286,
+              "column": 23
+            },
+            "end": {
+              "line": 286,
+              "column": 25
+            }
+          },
+          "replacement": "-=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_286_col_23_001.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_286_col_23_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 140.870077959,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 12.142224054,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 255,
+              "column": 5
+            },
+            "end": {
+              "line": 305,
+              "column": 29
+            }
+          },
+          "replacement": "(String::new(), \"\")",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_255_col_5_002.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_255_col_5_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 113.642391877,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 53.367880655,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 99,
+              "column": 24
+            },
+            "end": {
+              "line": 99,
+              "column": 26
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_99_col_24.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_99_col_24.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 111.526578924,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 80.203880955,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_regex_parts",
+            "return_type": "-> (String, String)",
+            "span": {
+              "start": {
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "line": 35,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 12,
+              "column": 9
+            },
+            "end": {
+              "line": 12,
+              "column": 11
+            }
+          },
+          "replacement": "||",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_12_col_9.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_12_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 82.570519167,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 44.391233885,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 197,
+              "column": 54
+            },
+            "end": {
+              "line": 197,
+              "column": 56
+            }
+          },
+          "replacement": "||",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_197_col_54.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_197_col_54.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 135.777124003,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 96.744273933,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 80,
+              "column": 43
+            },
+            "end": {
+              "line": 80,
+              "column": 44
+            }
+          },
+          "replacement": "",
+          "genre": "UnaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_80_col_43.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_80_col_43.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 83.265682494,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 94.116428246,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_regex_parts",
+            "return_type": "-> (String, String)",
+            "span": {
+              "start": {
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "line": 35,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 12,
+              "column": 23
+            },
+            "end": {
+              "line": 12,
+              "column": 24
+            }
+          },
+          "replacement": ">=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_12_col_23_002.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_12_col_23_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 91.193986794,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 16.194979519,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 284,
+              "column": 18
+            },
+            "end": {
+              "line": 284,
+              "column": 40
+            }
+          },
+          "replacement": "false",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_284_col_18_001.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_284_col_18_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 100.264688793,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 7.172311044,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 136,
+              "column": 30
+            },
+            "end": {
+              "line": 136,
+              "column": 42
+            }
+          },
+          "replacement": "false",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_136_col_30_001.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_136_col_30_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 53.125156292,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 81.159317745,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 284,
+              "column": 28
+            },
+            "end": {
+              "line": 284,
+              "column": 30
+            }
+          },
+          "replacement": "||",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_284_col_28.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_284_col_28.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 90.350522855,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 63.998174805,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 160,
+              "column": 5
+            },
+            "end": {
+              "line": 239,
+              "column": 37
+            }
+          },
+          "replacement": "(String::new(), \"xyzzy\".into(), String::new())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_160_col_5_003.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_160_col_5_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 112.898735713,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 35.471352972,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 160,
+              "column": 5
+            },
+            "end": {
+              "line": 239,
+              "column": 37
+            }
+          },
+          "replacement": "(\"xyzzy\".into(), String::new(), \"xyzzy\".into())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_160_col_5_004.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_160_col_5_004.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 142.629318299,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 5.867276418,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 216,
+              "column": 22
+            },
+            "end": {
+              "line": 216,
+              "column": 34
+            }
+          },
+          "replacement": "true",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_216_col_22.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_216_col_22.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 49.608181597,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 67.609358533,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 255,
+              "column": 5
+            },
+            "end": {
+              "line": 305,
+              "column": 29
+            }
+          },
+          "replacement": "(\"xyzzy\".into(), \"xyzzy\")",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_255_col_5_003.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_255_col_5_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 175.501855978,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 13.466826744,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 280,
+              "column": 13
+            },
+            "end": {
+              "line": 283,
+              "column": 14
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_280_col_13.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_280_col_13.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 171.281439729,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 16.303695879,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 48,
+              "column": 5
+            },
+            "end": {
+              "line": 154,
+              "column": 38
+            }
+          },
+          "replacement": "(String::new(), String::new(), String::new())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_48_col_5_005.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_48_col_5_005.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 183.330138967,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 33.109253526,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 292,
+              "column": 37
+            },
+            "end": {
+              "line": 292,
+              "column": 38
+            }
+          },
+          "replacement": "*",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_292_col_37.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_292_col_37.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 110.630039269,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 86.783949583,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 56,
+              "column": 31
+            },
+            "end": {
+              "line": 56,
+              "column": 33
+            }
+          },
+          "replacement": "==",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_56_col_31.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_56_col_31.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 83.08211533,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 35.603014557,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "get_closing_delimiter",
+            "return_type": "-> char",
+            "span": {
+              "start": {
+                "line": 242,
+                "column": 1
+              },
+              "end": {
+                "line": 251,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 245,
+              "column": 9
+            },
+            "end": {
+              "line": 245,
+              "column": 20
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_245_col_9.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_245_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 119.354276489,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 9.438402352,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 136,
+              "column": 32
+            },
+            "end": {
+              "line": 136,
+              "column": 34
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_136_col_32.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_136_col_32.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 20.761509921,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 87.874384291,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_regex_parts",
+            "return_type": "-> (String, String)",
+            "span": {
+              "start": {
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "line": 35,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 9,
+              "column": 5
+            },
+            "end": {
+              "line": 34,
+              "column": 37
+            }
+          },
+          "replacement": "(\"xyzzy\".into(), \"xyzzy\".into())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_9_col_5_002.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_9_col_5_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 146.556643456,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 58.779636769,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 291,
+              "column": 30
+            },
+            "end": {
+              "line": 291,
+              "column": 32
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_291_col_30.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_291_col_30.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 102.154331806,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 52.682138936,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "get_closing_delimiter",
+            "return_type": "-> char",
+            "span": {
+              "start": {
+                "line": 242,
+                "column": 1
+              },
+              "end": {
+                "line": 251,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 244,
+              "column": 5
+            },
+            "end": {
+              "line": 250,
+              "column": 6
+            }
+          },
+          "replacement": "Default::default()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_244_col_5.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_244_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 112.941326061,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 53.206577825,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 292,
+              "column": 37
+            },
+            "end": {
+              "line": 292,
+              "column": 38
+            }
+          },
+          "replacement": "-",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_292_col_37_001.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_292_col_37_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 51.220714887,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 5.897223479,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "get_closing_delimiter",
+            "return_type": "-> char",
+            "span": {
+              "start": {
+                "line": 242,
+                "column": 1
+              },
+              "end": {
+                "line": 251,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 246,
+              "column": 9
+            },
+            "end": {
+              "line": 246,
+              "column": 20
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_246_col_9.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_246_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 92.271076667,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 75.677440342,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 297,
+              "column": 33
+            },
+            "end": {
+              "line": 297,
+              "column": 34
+            }
+          },
+          "replacement": "*",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_297_col_33_001.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_297_col_33_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 113.763411495,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 43.662290349,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_delimited_content",
+            "return_type": "-> (String, &str)",
+            "span": {
+              "start": {
+                "line": 253,
+                "column": 1
+              },
+              "end": {
+                "line": 306,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 290,
+              "column": 27
+            },
+            "end": {
+              "line": 290,
+              "column": 29
+            }
+          },
+          "replacement": "/=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_290_col_27_001.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_290_col_27_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 111.418416761,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 43.917996959999996,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_regex_parts",
+            "return_type": "-> (String, String)",
+            "span": {
+              "start": {
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "line": 35,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 9,
+              "column": 5
+            },
+            "end": {
+              "line": 34,
+              "column": 37
+            }
+          },
+          "replacement": "(String::new(), String::new())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_9_col_5_003.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_9_col_5_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 151.411189192,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 14.030003646,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 174,
+              "column": 31
+            },
+            "end": {
+              "line": 174,
+              "column": 33
+            }
+          },
+          "replacement": "==",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_174_col_31.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_174_col_31.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 75.553349459,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 63.439671745,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 95,
+              "column": 17
+            },
+            "end": {
+              "line": 98,
+              "column": 18
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_95_col_17.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_95_col_17.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 57.926159824,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 56.087654142,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 216,
+              "column": 22
+            },
+            "end": {
+              "line": 216,
+              "column": 34
+            }
+          },
+          "replacement": "false",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_216_col_22_001.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_216_col_22_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 117.086616406,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 111.3064947,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 80,
+              "column": 54
+            },
+            "end": {
+              "line": 80,
+              "column": 56
+            }
+          },
+          "replacement": "||",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_80_col_54.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_80_col_54.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 85.962737304,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 37.666701781,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 48,
+              "column": 5
+            },
+            "end": {
+              "line": 154,
+              "column": 38
+            }
+          },
+          "replacement": "(\"xyzzy\".into(), String::new(), String::new())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_48_col_5_006.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_48_col_5_006.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 112.456259424,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 108.302602135,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 160,
+              "column": 5
+            },
+            "end": {
+              "line": 239,
+              "column": 37
+            }
+          },
+          "replacement": "(String::new(), \"xyzzy\".into(), \"xyzzy\".into())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_160_col_5_005.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_160_col_5_005.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 109.274520558,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 13.111421557,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 160,
+              "column": 5
+            },
+            "end": {
+              "line": 239,
+              "column": 37
+            }
+          },
+          "replacement": "(\"xyzzy\".into(), String::new(), String::new())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_160_col_5_006.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_160_col_5_006.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 44.573529526,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 122.289817888,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 48,
+              "column": 5
+            },
+            "end": {
+              "line": 154,
+              "column": 38
+            }
+          },
+          "replacement": "(String::new(), \"xyzzy\".into(), String::new())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_48_col_5_007.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_48_col_5_007.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 165.686811358,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 15.795673524,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 217,
+              "column": 33
+            },
+            "end": {
+              "line": 217,
+              "column": 34
+            }
+          },
+          "replacement": "*",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_217_col_33_001.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_217_col_33_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 162.286827519,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 20.757848134,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "line": 155,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 99,
+              "column": 22
+            },
+            "end": {
+              "line": 99,
+              "column": 34
+            }
+          },
+          "replacement": "false",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_99_col_22_001.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_99_col_22_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 156.779931971,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 19.555545229,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_transliteration_parts",
+            "return_type": "-> (String, String, String)",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 1
+              },
+              "end": {
+                "line": 240,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 160,
+              "column": 5
+            },
+            "end": {
+              "line": 239,
+              "column": 37
+            }
+          },
+          "replacement": "(String::new(), String::new(), String::new())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_160_col_5_007.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_160_col_5_007.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 33.634722767,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 11.947155692,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "perl-parser",
+          "file": "crates/perl-parser/src/quote_parser.rs",
+          "function": {
+            "function_name": "extract_substitution_modifiers",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 308,
+                "column": 1
+              },
+              "end": {
+                "line": 318,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 314,
+              "column": 5
+            },
+            "end": {
+              "line": 317,
+              "column": 19
+            }
+          },
+          "replacement": "String::new()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__perl-parser__src__quote_parser.rs_line_314_col_5_001.log",
+      "diff_path": "diff/crates__perl-parser__src__quote_parser.rs_line_314_col_5_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 62.14543151,
+          "process_status": "Success",
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=perl-parser@0.8.8"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 26.853277021,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/steven/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=perl-parser@0.8.8",
+            "--test",
+            "quote_operator_tests"
+          ]
+        }
+      ]
     }
   ],
-  "total_mutants": 35,
-  "missed": 20,
-  "caught": 15,
+  "total_mutants": 83,
+  "missed": 52,
+  "caught": 31,
   "timeout": 0,
   "unviable": 0,
   "success": 0
