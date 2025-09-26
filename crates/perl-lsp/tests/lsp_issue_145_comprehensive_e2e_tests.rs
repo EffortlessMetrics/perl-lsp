@@ -165,7 +165,10 @@ fn create_comprehensive_workspace() -> (LspHarness, TempWorkspace) {
 
     // Initialize all documents
     harness
-        .open_document(&workspace.uri("lib/MyApp/DataProcessor.pm"), e2e_fixtures::REALISTIC_PERL_MODULE)
+        .open_document(
+            &workspace.uri("lib/MyApp/DataProcessor.pm"),
+            e2e_fixtures::REALISTIC_PERL_MODULE,
+        )
         .expect("Failed to open module file");
 
     harness
@@ -191,114 +194,121 @@ fn test_issue_145_complete_workflow() {
 
     // Step 1: Verify server capabilities include new features
     // Initialize the server to get capabilities
-    let init_result = harness.initialize_default()
-        .expect("Server should initialize successfully");
+    let init_result = harness.initialize_default().expect("Server should initialize successfully");
 
-    let capabilities = init_result.get("capabilities")
-        .expect("Initialize result should contain capabilities");
+    let capabilities =
+        init_result.get("capabilities").expect("Initialize result should contain capabilities");
 
     // Verify executeCommand capability
-    assert!(capabilities.get("executeCommandProvider").is_some(),
-        "Server should advertise executeCommandProvider");
+    assert!(
+        capabilities.get("executeCommandProvider").is_some(),
+        "Server should advertise executeCommandProvider"
+    );
 
     let execute_commands = capabilities["executeCommandProvider"]["commands"]
-        .as_array().expect("Commands should be array");
+        .as_array()
+        .expect("Commands should be array");
 
-    let has_critic_command = execute_commands.iter()
-        .any(|cmd| cmd.as_str() == Some("perl.runCritic"));
+    let has_critic_command =
+        execute_commands.iter().any(|cmd| cmd.as_str() == Some("perl.runCritic"));
     assert!(has_critic_command, "perl.runCritic command should be advertised");
 
     // Verify code action capability
-    assert!(capabilities.get("codeActionProvider").is_some(),
-        "Server should advertise codeActionProvider");
+    assert!(
+        capabilities.get("codeActionProvider").is_some(),
+        "Server should advertise codeActionProvider"
+    );
 
     // Step 2: Execute perl.runCritic command
-    let critic_result = harness.request_with_timeout(
-        "workspace/executeCommand",
-        json!({
-            "command": "perl.runCritic",
-            "arguments": [workspace.uri("lib/MyApp/DataProcessor.pm")]
-        }),
-        Duration::from_secs(10), // Extended timeout for comprehensive analysis
-    )
-    .expect("perl.runCritic command should execute successfully");
+    let critic_result = harness
+        .request_with_timeout(
+            "workspace/executeCommand",
+            json!({
+                "command": "perl.runCritic",
+                "arguments": [workspace.uri("lib/MyApp/DataProcessor.pm")]
+            }),
+            Duration::from_secs(10), // Extended timeout for comprehensive analysis
+        )
+        .expect("perl.runCritic command should execute successfully");
 
     // Validate critic results
-    assert_eq!(critic_result["status"].as_str(), Some("success"),
-        "Critic analysis should succeed");
+    assert_eq!(critic_result["status"].as_str(), Some("success"), "Critic analysis should succeed");
 
-    let violations = critic_result["violations"].as_array()
-        .expect("Should return violations array");
+    let violations =
+        critic_result["violations"].as_array().expect("Should return violations array");
 
     assert!(!violations.is_empty(), "Should detect policy violations in test file");
 
     // Should detect missing 'use strict;'
     let has_strict_violation = violations.iter().any(|v| {
-        v["policy"].as_str()
+        v["policy"]
+            .as_str()
             .map(|p| p.contains("RequireUseStrict") || p.contains("strict"))
             .unwrap_or(false)
     });
     assert!(has_strict_violation, "Should detect missing 'use strict;' violation");
 
     // Step 3: Request code actions to fix violations
-    let code_actions_result = harness.request_with_timeout(
-        "textDocument/codeAction",
-        json!({
-            "textDocument": {"uri": workspace.uri("lib/MyApp/DataProcessor.pm")},
-            "range": {
-                "start": {"line": 0, "character": 0},
-                "end": {"line": 10, "character": 0}
-            },
-            "context": {
-                "diagnostics": [],
-                "only": ["quickfix"]
-            }
-        }),
-        Duration::from_secs(3),
-    )
-    .expect("Code actions request should succeed");
+    let code_actions_result = harness
+        .request_with_timeout(
+            "textDocument/codeAction",
+            json!({
+                "textDocument": {"uri": workspace.uri("lib/MyApp/DataProcessor.pm")},
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 10, "character": 0}
+                },
+                "context": {
+                    "diagnostics": [],
+                    "only": ["quickfix"]
+                }
+            }),
+            Duration::from_secs(3),
+        )
+        .expect("Code actions request should succeed");
 
-    let actions = code_actions_result.as_array()
-        .expect("Should return code actions array");
+    let actions = code_actions_result.as_array().expect("Should return code actions array");
 
     // Step 4: Request refactoring actions
-    let refactor_actions_result = harness.request_with_timeout(
-        "textDocument/codeAction",
-        json!({
-            "textDocument": {"uri": workspace.uri("lib/MyApp/DataProcessor.pm")},
-            "range": {
-                "start": {"line": 18, "character": 8},  // Complex expression
-                "end": {"line": 20, "character": 0}
-            },
-            "context": {
-                "diagnostics": [],
-                "only": ["refactor"]
-            }
-        }),
-        Duration::from_secs(3),
-    )
-    .expect("Refactor actions request should succeed");
+    let refactor_actions_result = harness
+        .request_with_timeout(
+            "textDocument/codeAction",
+            json!({
+                "textDocument": {"uri": workspace.uri("lib/MyApp/DataProcessor.pm")},
+                "range": {
+                    "start": {"line": 18, "character": 8},  // Complex expression
+                    "end": {"line": 20, "character": 0}
+                },
+                "context": {
+                    "diagnostics": [],
+                    "only": ["refactor"]
+                }
+            }),
+            Duration::from_secs(3),
+        )
+        .expect("Refactor actions request should succeed");
 
-    let refactor_actions = refactor_actions_result.as_array()
-        .expect("Should return refactor actions array");
+    let refactor_actions =
+        refactor_actions_result.as_array().expect("Should return refactor actions array");
 
     // Step 5: Test import organization
-    let organize_imports_result = harness.request_with_timeout(
-        "textDocument/codeAction",
-        json!({
-            "textDocument": {"uri": workspace.uri("test_script.pl")},
-            "range": {
-                "start": {"line": 0, "character": 0},
-                "end": {"line": 10, "character": 0}
-            },
-            "context": {
-                "diagnostics": [],
-                "only": ["source.organizeImports"]
-            }
-        }),
-        Duration::from_secs(2),
-    )
-    .expect("Organize imports request should succeed");
+    let organize_imports_result = harness
+        .request_with_timeout(
+            "textDocument/codeAction",
+            json!({
+                "textDocument": {"uri": workspace.uri("test_script.pl")},
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 10, "character": 0}
+                },
+                "context": {
+                    "diagnostics": [],
+                    "only": ["source.organizeImports"]
+                }
+            }),
+            Duration::from_secs(2),
+        )
+        .expect("Organize imports request should succeed");
 
     // Validation - the complete workflow should work without errors
     assert!(true, "Complete Issue #145 workflow executed successfully");
@@ -314,14 +324,15 @@ fn test_cross_file_integration() {
     let script_uri = workspace.uri("test_script.pl");
 
     // Request symbols from both files to ensure indexing works
-    let module_symbols = harness.request_with_timeout(
-        "textDocument/documentSymbol",
-        json!({
-            "textDocument": {"uri": module_uri}
-        }),
-        Duration::from_secs(2),
-    )
-    .expect("Document symbols should work for module");
+    let module_symbols = harness
+        .request_with_timeout(
+            "textDocument/documentSymbol",
+            json!({
+                "textDocument": {"uri": module_uri}
+            }),
+            Duration::from_secs(2),
+        )
+        .expect("Document symbols should work for module");
 
     let script_symbols = harness.request_with_timeout(
         "textDocument/documentSymbol",
@@ -332,8 +343,10 @@ fn test_cross_file_integration() {
     );
 
     // Both files should be analyzed successfully
-    assert!(module_symbols.as_array().map(|a| !a.is_empty()).unwrap_or(false),
-        "Module should have symbols");
+    assert!(
+        module_symbols.as_array().map(|a| !a.is_empty()).unwrap_or(false),
+        "Module should have symbols"
+    );
 
     // Test definition lookup across files (if implemented)
     let definition_result = harness.request_with_timeout(
@@ -410,8 +423,8 @@ fn test_error_handling_integration() {
 
     // Should handle malformed requests gracefully
     assert!(
-        malformed_execute_result.is_err() ||
-        malformed_execute_result.as_ref().unwrap().get("error").is_some(),
+        malformed_execute_result.is_err()
+            || malformed_execute_result.as_ref().unwrap().get("error").is_some(),
         "Invalid executeCommand should be handled gracefully"
     );
 
@@ -497,33 +510,35 @@ fn test_lsp_protocol_compliance() {
     let (mut harness, workspace) = create_comprehensive_workspace();
 
     // Test executeCommand request/response format compliance
-    let execute_response = harness.request_with_timeout(
-        "workspace/executeCommand",
-        json!({
-            "command": "perl.runCritic",
-            "arguments": [workspace.uri("lib/MyApp/DataProcessor.pm")]
-        }),
-        Duration::from_secs(3),
-    )
-    .expect("executeCommand should return valid response");
+    let execute_response = harness
+        .request_with_timeout(
+            "workspace/executeCommand",
+            json!({
+                "command": "perl.runCritic",
+                "arguments": [workspace.uri("lib/MyApp/DataProcessor.pm")]
+            }),
+            Duration::from_secs(3),
+        )
+        .expect("executeCommand should return valid response");
 
     // Response should be JSON-RPC 2.0 compliant (verified by harness)
     assert!(execute_response.is_object(), "executeCommand response should be JSON object");
 
     // Test codeAction request/response format compliance
-    let code_action_response = harness.request_with_timeout(
-        "textDocument/codeAction",
-        json!({
-            "textDocument": {"uri": workspace.uri("lib/MyApp/DataProcessor.pm")},
-            "range": {
-                "start": {"line": 10, "character": 0},
-                "end": {"line": 20, "character": 0}
-            },
-            "context": {"diagnostics": []}
-        }),
-        Duration::from_secs(2),
-    )
-    .expect("codeAction should return valid response");
+    let code_action_response = harness
+        .request_with_timeout(
+            "textDocument/codeAction",
+            json!({
+                "textDocument": {"uri": workspace.uri("lib/MyApp/DataProcessor.pm")},
+                "range": {
+                    "start": {"line": 10, "character": 0},
+                    "end": {"line": 20, "character": 0}
+                },
+                "context": {"diagnostics": []}
+            }),
+            Duration::from_secs(2),
+        )
+        .expect("codeAction should return valid response");
 
     // Response should be array of CodeAction | Command
     assert!(code_action_response.is_array(), "codeAction response should be array");
@@ -537,8 +552,10 @@ fn test_lsp_protocol_compliance() {
             // Should have either edit OR command field
             let has_edit = action.get("edit").is_some();
             let has_command = action.get("command").is_some();
-            assert!(has_edit || has_command,
-                "Code action should have either edit or command field");
+            assert!(
+                has_edit || has_command,
+                "Code action should have either edit or command field"
+            );
         }
     }
 }
@@ -549,20 +566,24 @@ fn test_workspace_configuration_integration() {
     let (mut harness, workspace) = create_comprehensive_workspace();
 
     // Test that server respects workspace configuration (.perlcriticrc)
-    let critic_result = harness.request_with_timeout(
-        "workspace/executeCommand",
-        json!({
-            "command": "perl.runCritic",
-            "arguments": [workspace.uri("lib/MyApp/DataProcessor.pm")]
-        }),
-        Duration::from_secs(5),
-    )
-    .expect("perl.runCritic should respect workspace configuration");
+    let critic_result = harness
+        .request_with_timeout(
+            "workspace/executeCommand",
+            json!({
+                "command": "perl.runCritic",
+                "arguments": [workspace.uri("lib/MyApp/DataProcessor.pm")]
+            }),
+            Duration::from_secs(5),
+        )
+        .expect("perl.runCritic should respect workspace configuration");
 
     // The presence of .perlcriticrc should influence the analysis
     // (specific assertions depend on implementation details)
-    assert_eq!(critic_result["status"].as_str(), Some("success"),
-        "Critic should work with workspace configuration");
+    assert_eq!(
+        critic_result["status"].as_str(),
+        Some("success"),
+        "Critic should work with workspace configuration"
+    );
 }
 
 // ======================== Regression and Stability Testing ========================
@@ -609,29 +630,31 @@ fn test_resource_management() {
 
     // Execute multiple operations to test resource management
     for i in 0..5 {
-        let _critic_result = harness.request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("lib/MyApp/DataProcessor.pm")]
-            }),
-            Duration::from_secs(3),
-        )
-        .expect("Repeated critic requests should succeed");
+        let _critic_result = harness
+            .request_with_timeout(
+                "workspace/executeCommand",
+                json!({
+                    "command": "perl.runCritic",
+                    "arguments": [workspace.uri("lib/MyApp/DataProcessor.pm")]
+                }),
+                Duration::from_secs(3),
+            )
+            .expect("Repeated critic requests should succeed");
 
-        let _actions_result = harness.request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("lib/MyApp/DataProcessor.pm")},
-                "range": {
-                    "start": {"line": i * 5, "character": 0},
-                    "end": {"line": (i + 1) * 5, "character": 0}
-                },
-                "context": {"diagnostics": []}
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Repeated code action requests should succeed");
+        let _actions_result = harness
+            .request_with_timeout(
+                "textDocument/codeAction",
+                json!({
+                    "textDocument": {"uri": workspace.uri("lib/MyApp/DataProcessor.pm")},
+                    "range": {
+                        "start": {"line": i * 5, "character": 0},
+                        "end": {"line": (i + 1) * 5, "character": 0}
+                    },
+                    "context": {"diagnostics": []}
+                }),
+                Duration::from_secs(2),
+            )
+            .expect("Repeated code action requests should succeed");
 
         // Brief pause between operations
         std::thread::sleep(Duration::from_millis(100));

@@ -1,1 +1,1322 @@
-[]
+[
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::execute_command",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 49,
+          "column": 5
+        },
+        "end": {
+          "line": 78,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 51,
+        "column": 9
+      },
+      "end": {
+        "line": 77,
+        "column": 10
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::execute_command",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 49,
+          "column": 5
+        },
+        "end": {
+          "line": 78,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 52,
+        "column": 13
+      },
+      "end": {
+        "line": 55,
+        "column": 14
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::execute_command",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 49,
+          "column": 5
+        },
+        "end": {
+          "line": 78,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 56,
+        "column": 13
+      },
+      "end": {
+        "line": 59,
+        "column": 14
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::execute_command",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 49,
+          "column": 5
+        },
+        "end": {
+          "line": 78,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 60,
+        "column": 13
+      },
+      "end": {
+        "line": 67,
+        "column": 14
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::execute_command",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 49,
+          "column": 5
+        },
+        "end": {
+          "line": 78,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 68,
+        "column": 13
+      },
+      "end": {
+        "line": 71,
+        "column": 14
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::execute_command",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 49,
+          "column": 5
+        },
+        "end": {
+          "line": 78,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 72,
+        "column": 13
+      },
+      "end": {
+        "line": 75,
+        "column": 14
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_tests",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 80,
+          "column": 5
+        },
+        "end": {
+          "line": 100,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 82,
+        "column": 9
+      },
+      "end": {
+        "line": 99,
+        "column": 87
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_tests",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 80,
+          "column": 5
+        },
+        "end": {
+          "line": 100,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 83,
+        "column": 55
+      },
+      "end": {
+        "line": 83,
+        "column": 57
+      }
+    },
+    "replacement": "||",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_test_sub",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 102,
+          "column": 5
+        },
+        "end": {
+          "line": 117,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 105,
+        "column": 9
+      },
+      "end": {
+        "line": 116,
+        "column": 86
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_file",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 119,
+          "column": 5
+        },
+        "end": {
+          "line": 127,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 121,
+        "column": 9
+      },
+      "end": {
+        "line": 126,
+        "column": 53
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::debug_tests",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 129,
+          "column": 5
+        },
+        "end": {
+          "line": 138,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 133,
+        "column": 9
+      },
+      "end": {
+        "line": 137,
+        "column": 12
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 140,
+          "column": 5
+        },
+        "end": {
+          "line": 163,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 142,
+        "column": 9
+      },
+      "end": {
+        "line": 162,
+        "column": 38
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 140,
+          "column": 5
+        },
+        "end": {
+          "line": 163,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 145,
+        "column": 12
+      },
+      "end": {
+        "line": 145,
+        "column": 13
+      }
+    },
+    "replacement": "",
+    "genre": "UnaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_external_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 165,
+          "column": 5
+        },
+        "end": {
+          "line": 196,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 167,
+        "column": 9
+      },
+      "end": {
+        "line": 195,
+        "column": 10
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_external_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 165,
+          "column": 5
+        },
+        "end": {
+          "line": 196,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 182,
+        "column": 41
+      },
+      "end": {
+        "line": 182,
+        "column": 42
+      }
+    },
+    "replacement": "-",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_external_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 165,
+          "column": 5
+        },
+        "end": {
+          "line": 196,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 182,
+        "column": 41
+      },
+      "end": {
+        "line": 182,
+        "column": 42
+      }
+    },
+    "replacement": "*",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_external_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 165,
+          "column": 5
+        },
+        "end": {
+          "line": 196,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 183,
+        "column": 43
+      },
+      "end": {
+        "line": 183,
+        "column": 44
+      }
+    },
+    "replacement": "-",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_external_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 165,
+          "column": 5
+        },
+        "end": {
+          "line": 196,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 183,
+        "column": 43
+      },
+      "end": {
+        "line": 183,
+        "column": 44
+      }
+    },
+    "replacement": "*",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_builtin_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 198,
+          "column": 5
+        },
+        "end": {
+          "line": 247,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 200,
+        "column": 9
+      },
+      "end": {
+        "line": 246,
+        "column": 12
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_builtin_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 198,
+          "column": 5
+        },
+        "end": {
+          "line": 247,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 236,
+        "column": 33
+      },
+      "end": {
+        "line": 236,
+        "column": 34
+      }
+    },
+    "replacement": "-",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_builtin_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 198,
+          "column": 5
+        },
+        "end": {
+          "line": 247,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 236,
+        "column": 33
+      },
+      "end": {
+        "line": 236,
+        "column": 34
+      }
+    },
+    "replacement": "*",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_builtin_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 198,
+          "column": 5
+        },
+        "end": {
+          "line": 247,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 237,
+        "column": 35
+      },
+      "end": {
+        "line": 237,
+        "column": 36
+      }
+    },
+    "replacement": "-",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_builtin_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 198,
+          "column": 5
+        },
+        "end": {
+          "line": 247,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 237,
+        "column": 35
+      },
+      "end": {
+        "line": 237,
+        "column": 36
+      }
+    },
+    "replacement": "*",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::extract_file_path_argument",
+      "return_type": "-> Result<&'a str, String>",
+      "span": {
+        "start": {
+          "line": 249,
+          "column": 5
+        },
+        "end": {
+          "line": 255,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 251,
+        "column": 9
+      },
+      "end": {
+        "line": 254,
+        "column": 69
+      }
+    },
+    "replacement": "Ok(\"\")",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::extract_file_path_argument",
+      "return_type": "-> Result<&'a str, String>",
+      "span": {
+        "start": {
+          "line": 249,
+          "column": 5
+        },
+        "end": {
+          "line": 255,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 251,
+        "column": 9
+      },
+      "end": {
+        "line": 254,
+        "column": 69
+      }
+    },
+    "replacement": "Ok(\"xyzzy\")",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::is_test_file",
+      "return_type": "-> bool",
+      "span": {
+        "start": {
+          "line": 257,
+          "column": 5
+        },
+        "end": {
+          "line": 260,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 259,
+        "column": 9
+      },
+      "end": {
+        "line": 259,
+        "column": 93
+      }
+    },
+    "replacement": "true",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::is_test_file",
+      "return_type": "-> bool",
+      "span": {
+        "start": {
+          "line": 257,
+          "column": 5
+        },
+        "end": {
+          "line": 260,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 259,
+        "column": 9
+      },
+      "end": {
+        "line": 259,
+        "column": 93
+      }
+    },
+    "replacement": "false",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::is_test_file",
+      "return_type": "-> bool",
+      "span": {
+        "start": {
+          "line": 257,
+          "column": 5
+        },
+        "end": {
+          "line": 260,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 259,
+        "column": 64
+      },
+      "end": {
+        "line": 259,
+        "column": 66
+      }
+    },
+    "replacement": "&&",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::is_test_file",
+      "return_type": "-> bool",
+      "span": {
+        "start": {
+          "line": 257,
+          "column": 5
+        },
+        "end": {
+          "line": 260,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 259,
+        "column": 35
+      },
+      "end": {
+        "line": 259,
+        "column": 37
+      }
+    },
+    "replacement": "&&",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::format_command_result",
+      "return_type": "-> Value",
+      "span": {
+        "start": {
+          "line": 262,
+          "column": 5
+        },
+        "end": {
+          "line": 286,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 268,
+        "column": 9
+      },
+      "end": {
+        "line": 285,
+        "column": 17
+      }
+    },
+    "replacement": "Default::default()",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::format_command_result",
+      "return_type": "-> Value",
+      "span": {
+        "start": {
+          "line": 262,
+          "column": 5
+        },
+        "end": {
+          "line": 286,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 269,
+        "column": 24
+      },
+      "end": {
+        "line": 269,
+        "column": 25
+      }
+    },
+    "replacement": "",
+    "genre": "UnaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::normalize_file_path",
+      "return_type": "-> &'a str",
+      "span": {
+        "start": {
+          "line": 288,
+          "column": 5
+        },
+        "end": {
+          "line": 295,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 290,
+        "column": 9
+      },
+      "end": {
+        "line": 294,
+        "column": 10
+      }
+    },
+    "replacement": "\"\"",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::normalize_file_path",
+      "return_type": "-> &'a str",
+      "span": {
+        "start": {
+          "line": 288,
+          "column": 5
+        },
+        "end": {
+          "line": 295,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 290,
+        "column": 9
+      },
+      "end": {
+        "line": 294,
+        "column": 10
+      }
+    },
+    "replacement": "\"xyzzy\"",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::format_violation",
+      "return_type": "-> Value",
+      "span": {
+        "start": {
+          "line": 297,
+          "column": 5
+        },
+        "end": {
+          "line": 317,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 308,
+        "column": 9
+      },
+      "end": {
+        "line": 316,
+        "column": 11
+      }
+    },
+    "replacement": "Default::default()",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::format_critic_error",
+      "return_type": "-> Value",
+      "span": {
+        "start": {
+          "line": 319,
+          "column": 5
+        },
+        "end": {
+          "line": 328,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 321,
+        "column": 9
+      },
+      "end": {
+        "line": 327,
+        "column": 11
+      }
+    },
+    "replacement": "Default::default()",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::create_syntax_error_violation",
+      "return_type": "-> crate::perl_critic::Violation",
+      "span": {
+        "start": {
+          "line": 330,
+          "column": 5
+        },
+        "end": {
+          "line": 361,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 337,
+        "column": 9
+      },
+      "end": {
+        "line": 360,
+        "column": 10
+      }
+    },
+    "replacement": "Default::default()",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::create_syntax_error_violation",
+      "return_type": "-> crate::perl_critic::Violation",
+      "span": {
+        "start": {
+          "line": 330,
+          "column": 5
+        },
+        "end": {
+          "line": 361,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 339,
+        "column": 13
+      },
+      "end": {
+        "line": 346,
+        "column": 14
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::create_syntax_error_violation",
+      "return_type": "-> crate::perl_critic::Violation",
+      "span": {
+        "start": {
+          "line": 330,
+          "column": 5
+        },
+        "end": {
+          "line": 361,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 357,
+        "column": 94
+      },
+      "end": {
+        "line": 357,
+        "column": 95
+      }
+    },
+    "replacement": "-",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::create_syntax_error_violation",
+      "return_type": "-> crate::perl_critic::Violation",
+      "span": {
+        "start": {
+          "line": 330,
+          "column": 5
+        },
+        "end": {
+          "line": 361,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 357,
+        "column": 94
+      },
+      "end": {
+        "line": 357,
+        "column": 95
+      }
+    },
+    "replacement": "*",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::command_exists",
+      "return_type": "-> bool",
+      "span": {
+        "start": {
+          "line": 363,
+          "column": 5
+        },
+        "end": {
+          "line": 370,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 365,
+        "column": 9
+      },
+      "end": {
+        "line": 369,
+        "column": 30
+      }
+    },
+    "replacement": "true",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::command_exists",
+      "return_type": "-> bool",
+      "span": {
+        "start": {
+          "line": 363,
+          "column": 5
+        },
+        "end": {
+          "line": 370,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 365,
+        "column": 9
+      },
+      "end": {
+        "line": 369,
+        "column": 30
+      }
+    },
+    "replacement": "false",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "get_supported_commands",
+      "return_type": "-> Vec<String>",
+      "span": {
+        "start": {
+          "line": 373,
+          "column": 1
+        },
+        "end": {
+          "line": 382,
+          "column": 2
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 375,
+        "column": 5
+      },
+      "end": {
+        "line": 381,
+        "column": 6
+      }
+    },
+    "replacement": "vec![]",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "get_supported_commands",
+      "return_type": "-> Vec<String>",
+      "span": {
+        "start": {
+          "line": 373,
+          "column": 1
+        },
+        "end": {
+          "line": 382,
+          "column": 2
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 375,
+        "column": 5
+      },
+      "end": {
+        "line": 381,
+        "column": 6
+      }
+    },
+    "replacement": "vec![String::new()]",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "get_supported_commands",
+      "return_type": "-> Vec<String>",
+      "span": {
+        "start": {
+          "line": 373,
+          "column": 1
+        },
+        "end": {
+          "line": 382,
+          "column": 2
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 375,
+        "column": 5
+      },
+      "end": {
+        "line": 381,
+        "column": 6
+      }
+    },
+    "replacement": "vec![\"xyzzy\".into()]",
+    "genre": "FnValue"
+  }
+]

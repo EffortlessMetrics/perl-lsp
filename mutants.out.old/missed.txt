@@ -1,0 +1,43 @@
+crates/perl-parser/src/execute_command.rs:51:9: replace ExecuteCommandProvider::execute_command -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:52:13: delete match arm "perl.runTests" in ExecuteCommandProvider::execute_command
+crates/perl-parser/src/execute_command.rs:56:13: delete match arm "perl.runFile" in ExecuteCommandProvider::execute_command
+crates/perl-parser/src/execute_command.rs:60:13: delete match arm "perl.runTestSub" in ExecuteCommandProvider::execute_command
+crates/perl-parser/src/execute_command.rs:68:13: delete match arm "perl.debugTests" in ExecuteCommandProvider::execute_command
+crates/perl-parser/src/execute_command.rs:72:13: delete match arm "perl.runCritic" in ExecuteCommandProvider::execute_command
+crates/perl-parser/src/execute_command.rs:82:9: replace ExecuteCommandProvider::run_tests -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:83:55: replace && with || in ExecuteCommandProvider::run_tests
+crates/perl-parser/src/execute_command.rs:105:9: replace ExecuteCommandProvider::run_test_sub -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:121:9: replace ExecuteCommandProvider::run_file -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:133:9: replace ExecuteCommandProvider::debug_tests -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:142:9: replace ExecuteCommandProvider::run_critic -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:145:12: delete ! in ExecuteCommandProvider::run_critic
+crates/perl-parser/src/execute_command.rs:167:9: replace ExecuteCommandProvider::run_external_critic -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:182:41: replace + with - in ExecuteCommandProvider::run_external_critic
+crates/perl-parser/src/execute_command.rs:182:41: replace + with * in ExecuteCommandProvider::run_external_critic
+crates/perl-parser/src/execute_command.rs:183:43: replace + with - in ExecuteCommandProvider::run_external_critic
+crates/perl-parser/src/execute_command.rs:183:43: replace + with * in ExecuteCommandProvider::run_external_critic
+crates/perl-parser/src/execute_command.rs:200:9: replace ExecuteCommandProvider::run_builtin_critic -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:236:33: replace + with - in ExecuteCommandProvider::run_builtin_critic
+crates/perl-parser/src/execute_command.rs:236:33: replace + with * in ExecuteCommandProvider::run_builtin_critic
+crates/perl-parser/src/execute_command.rs:237:35: replace + with - in ExecuteCommandProvider::run_builtin_critic
+crates/perl-parser/src/execute_command.rs:237:35: replace + with * in ExecuteCommandProvider::run_builtin_critic
+crates/perl-parser/src/execute_command.rs:251:9: replace ExecuteCommandProvider::extract_file_path_argument -> Result<&'a str, String> with Ok("")
+crates/perl-parser/src/execute_command.rs:251:9: replace ExecuteCommandProvider::extract_file_path_argument -> Result<&'a str, String> with Ok("xyzzy")
+crates/perl-parser/src/execute_command.rs:259:9: replace ExecuteCommandProvider::is_test_file -> bool with true
+crates/perl-parser/src/execute_command.rs:259:9: replace ExecuteCommandProvider::is_test_file -> bool with false
+crates/perl-parser/src/execute_command.rs:259:64: replace || with && in ExecuteCommandProvider::is_test_file
+crates/perl-parser/src/execute_command.rs:259:35: replace || with && in ExecuteCommandProvider::is_test_file
+crates/perl-parser/src/execute_command.rs:268:9: replace ExecuteCommandProvider::format_command_result -> Value with Default::default()
+crates/perl-parser/src/execute_command.rs:269:24: delete ! in ExecuteCommandProvider::format_command_result
+crates/perl-parser/src/execute_command.rs:290:9: replace ExecuteCommandProvider::normalize_file_path -> &'a str with ""
+crates/perl-parser/src/execute_command.rs:290:9: replace ExecuteCommandProvider::normalize_file_path -> &'a str with "xyzzy"
+crates/perl-parser/src/execute_command.rs:308:9: replace ExecuteCommandProvider::format_violation -> Value with Default::default()
+crates/perl-parser/src/execute_command.rs:321:9: replace ExecuteCommandProvider::format_critic_error -> Value with Default::default()
+crates/perl-parser/src/execute_command.rs:339:13: delete match arm crate::ParseError::UnexpectedToken{location, ..} | crate::ParseError::SyntaxError{location, ..} in ExecuteCommandProvider::create_syntax_error_violation
+crates/perl-parser/src/execute_command.rs:357:94: replace + with - in ExecuteCommandProvider::create_syntax_error_violation
+crates/perl-parser/src/execute_command.rs:357:94: replace + with * in ExecuteCommandProvider::create_syntax_error_violation
+crates/perl-parser/src/execute_command.rs:365:9: replace ExecuteCommandProvider::command_exists -> bool with true
+crates/perl-parser/src/execute_command.rs:365:9: replace ExecuteCommandProvider::command_exists -> bool with false
+crates/perl-parser/src/execute_command.rs:375:5: replace get_supported_commands -> Vec<String> with vec![]
+crates/perl-parser/src/execute_command.rs:375:5: replace get_supported_commands -> Vec<String> with vec![String::new()]
+crates/perl-parser/src/execute_command.rs:375:5: replace get_supported_commands -> Vec<String> with vec!["xyzzy".into()]

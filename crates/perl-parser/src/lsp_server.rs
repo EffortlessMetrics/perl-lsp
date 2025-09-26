@@ -7632,11 +7632,17 @@ impl LspServer {
                     }
                 }
                 // New commands handled by ExecuteCommandProvider
-                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.debugTests" => {
+                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.debugTests"
+                | "perl.runCritic" => {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {
-                            return Err(JsonRpcError { code: -32603, message: e, data: None });
+                            // Return error as a response rather than JsonRpcError for graceful handling
+                            return Ok(Some(json!({
+                                "status": "error",
+                                "error": e,
+                                "message": format!("Command execution failed: {}", e)
+                            })));
                         }
                     }
                 }
@@ -7647,18 +7653,6 @@ impl LspServer {
                     return Ok(Some(
                         json!({"status": "started", "message": format!("Debug session {} initiated", command)}),
                     ));
-                }
-                // Perl::Critic command
-                "perl.runCritic" => {
-                    if let Some(file_uri) = arguments.first().and_then(|v| v.as_str()) {
-                        return self.run_perl_critic(file_uri);
-                    } else {
-                        return Err(JsonRpcError {
-                            code: -32602,
-                            message: "Missing file URI argument".to_string(),
-                            data: None,
-                        });
-                    }
                 }
                 _ => {
                     return Err(JsonRpcError {

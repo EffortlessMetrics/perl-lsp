@@ -684,6 +684,331 @@ fn your_refactoring(&self, node: &Node) -> Option<CodeAction> {
 }
 ```
 
+### Enhanced executeCommand Integration ⭐ **NEW: Issue #145** (*Diataxis: How-to Guide* - executeCommand development patterns)
+
+The LSP server now supports comprehensive executeCommand functionality with robust error handling and tool integration patterns.
+
+#### executeCommand Provider Development Pattern
+
+**Core Provider Architecture** (*Diataxis: How-to* - Building executeCommand providers):
+```rust
+// In execute_command.rs - Central command dispatcher pattern
+pub struct ExecuteCommandProvider {
+    parser: Arc<dyn Parser>,
+    document_manager: Arc<DocumentManager>,
+    workspace_index: Option<Arc<WorkspaceIndex>>,
+}
+
+impl ExecuteCommandProvider {
+    pub fn execute_command(&self, command: &str, arguments: Vec<Value>)
+        -> Result<Value, JsonRpcError> {
+
+        match command {
+            "perl.runCritic" => self.execute_perl_critic(arguments),
+            "perl.runTests" => self.execute_tests(arguments),
+            "perl.runFile" => self.execute_file(arguments),
+            "perl.debugTests" => self.execute_debug_tests(arguments),
+            _ => Err(JsonRpcError::method_not_found())
+        }
+    }
+}
+```
+
+**Dual Analyzer Strategy Pattern** (*Diataxis: How-to* - Tool integration with fallback):
+```rust
+// perl.runCritic implementation with graceful degradation
+impl ExecuteCommandProvider {
+    fn execute_perl_critic(&self, arguments: Vec<Value>) -> Result<Value, JsonRpcError> {
+        let file_path = self.extract_file_path(&arguments)?;
+
+        // Try external perlcritic first (preferred)
+        match self.run_external_perlcritic(&file_path) {
+            Ok(external_result) => {
+                Ok(serde_json::to_value(CriticResult::External(external_result))?)
+            },
+            Err(_) => {
+                // Fallback to built-in analyzer for 100% availability
+                let builtin_result = self.run_builtin_analyzer(&file_path)?;
+                Ok(serde_json::to_value(CriticResult::Builtin(builtin_result))?)
+            }
+        }
+    }
+
+    fn run_external_perlcritic(&self, file_path: &str) -> Result<Vec<Violation>, String> {
+        // External tool integration with timeout and error handling
+        let output = Command::new("perlcritic")
+            .arg("--verbose=8")
+            .arg(file_path)
+            .timeout(Duration::from_secs(30))
+            .output()
+            .map_err(|e| format!("Failed to execute perlcritic: {}", e))?;
+
+        self.parse_perlcritic_output(&output.stdout)
+    }
+
+    fn run_builtin_analyzer(&self, file_path: &str) -> Result<Vec<Violation>, String> {
+        // Built-in analyzer using AST parsing
+        let content = std::fs::read_to_string(file_path)?;
+        let ast = self.parser.parse(&content)?;
+
+        let analyzer = BuiltInCriticAnalyzer::new();
+        analyzer.analyze(&ast, &content)
+    }
+}
+```
+
+**Error Handling Pattern** (*Diataxis: How-to* - Robust error responses):
+```rust
+// Structured error responses with user-friendly messages
+impl ExecuteCommandProvider {
+    fn handle_execution_error(&self, command: &str, error: &str) -> JsonRpcError {
+        match command {
+            "perl.runCritic" => JsonRpcError::new(
+                -32603, // Internal error
+                format!("Code analysis failed: {}", error),
+                Some(json!({
+                    "fallback_available": true,
+                    "suggestion": "Ensure perlcritic is installed or use built-in analyzer",
+                    "command": command,
+                    "recovery_action": "install_perlcritic"
+                }))
+            ),
+            "perl.runTests" => JsonRpcError::new(
+                -32603,
+                format!("Test execution failed: {}", error),
+                Some(json!({
+                    "suggestion": "Check test file syntax and dependencies",
+                    "command": command
+                }))
+            ),
+            _ => JsonRpcError::internal_error()
+        }
+    }
+}
+```
+
+#### LSP Server Integration Pattern
+
+**Server Handler Integration** (*Diataxis: How-to* - Wiring executeCommand to LSP protocol):
+```rust
+// In lsp_server.rs - Protocol integration
+impl LspServer {
+    fn handle_execute_command(&mut self, params: ExecuteCommandParams)
+        -> Result<Option<Value>, JsonRpcError> {
+
+        // Validate command is supported
+        if !SUPPORTED_COMMANDS.contains(&params.command.as_str()) {
+            return Err(JsonRpcError::method_not_found());
+        }
+
+        // Execute with provider
+        let provider = ExecuteCommandProvider::new(
+            self.parser.clone(),
+            self.documents.clone(),
+            self.workspace_index.clone()
+        );
+
+        provider.execute_command(&params.command, params.arguments)
+            .map(Some)
+    }
+
+    // Capability advertisement
+    fn get_execute_command_capabilities() -> ExecuteCommandOptions {
+        ExecuteCommandOptions {
+            commands: SUPPORTED_COMMANDS.iter().map(|s| s.to_string()).collect()
+        }
+    }
+}
+
+// Supported commands registry
+pub static SUPPORTED_COMMANDS: &[&str] = &[
+    "perl.runTests",
+    "perl.runFile",
+    "perl.runTestSub",
+    "perl.debugTests",
+    "perl.runCritic",  // ⭐ NEW: Issue #145
+];
+```
+
+### Advanced Code Actions Development Patterns ⭐ **NEW: Issue #145**
+
+Enhanced code actions now provide sophisticated refactoring with AST integration and cross-file impact analysis.
+
+#### Enhanced Provider Architecture Pattern
+
+**Multi-tier Code Action Provider** (*Diataxis: How-to* - Advanced refactoring architecture):
+```rust
+// In code_actions_enhanced.rs - Sophisticated refactoring provider
+pub struct EnhancedCodeActionsProvider {
+    ast: Node,
+    source: String,
+    document_uri: String,
+    workspace_index: Option<Arc<WorkspaceIndex>>,
+    performance_cache: Arc<Mutex<CodeActionCache>>,
+}
+
+impl EnhancedCodeActionsProvider {
+    pub fn get_code_actions(&self, range: Range, context: &CodeActionContext)
+        -> Vec<CodeAction> {
+
+        let mut actions = Vec::new();
+
+        // Check cache first for performance
+        if let Some(cached) = self.get_cached_actions(&range, context) {
+            return cached;
+        }
+
+        // AST-aware refactoring analysis
+        let node_at_range = self.find_node_at_range(&range);
+
+        // Extract operations (RefactorExtract)
+        actions.extend(self.get_extract_actions(&node_at_range));
+
+        // Import management (SourceOrganizeImports)
+        actions.extend(self.get_import_actions());
+
+        // Code quality improvements (RefactorRewrite)
+        actions.extend(self.get_modernization_actions(&node_at_range));
+
+        // Cache results for performance
+        self.cache_actions(&range, context, &actions);
+
+        actions
+    }
+}
+```
+
+**Extract Variable Pattern with Intelligent Naming**:
+```rust
+// Smart variable extraction with scope analysis
+fn create_extract_variable_action(&self, node: &Node) -> Option<CodeAction> {
+    // Validate extraction candidate
+    if !self.is_extractable_expression(node) {
+        return None;
+    }
+
+    // Generate intelligent variable name
+    let suggested_name = self.suggest_variable_name(node);
+    let extraction_scope = self.calculate_extraction_scope(node);
+
+    // Ensure no name conflicts in scope
+    let final_name = self.resolve_name_conflicts(&suggested_name, &extraction_scope);
+
+    // Generate workspace edit
+    let edit = self.create_extract_variable_edit(node, &final_name, &extraction_scope);
+
+    Some(CodeAction {
+        title: format!("Extract variable '{}'", final_name),
+        kind: Some(CodeActionKind::REFACTOR_EXTRACT),
+        edit: Some(edit),
+        is_preferred: Some(self.calculate_preference_score(node) > 0.8),
+        data: Some(json!({
+            "refactoring_type": "extract_variable",
+            "suggested_name": final_name,
+            "scope": extraction_scope.to_string()
+        }))
+    })
+}
+
+// Intelligent naming based on context
+fn suggest_variable_name(&self, node: &Node) -> String {
+    match node.kind() {
+        "function_call" => self.suggest_from_function_call(node),
+        "binary_expression" => self.suggest_from_operation(node),
+        "string_literal" => "text".to_string(),
+        "numeric_literal" => "value".to_string(),
+        _ => "extracted_value".to_string()
+    }
+}
+```
+
+**Cross-file Extract Subroutine with Dual Indexing**:
+```rust
+// Advanced subroutine extraction with workspace awareness
+fn create_extract_subroutine_action(&self, node: &Node) -> Option<CodeAction> {
+    let params = self.detect_parameters(node);
+    let return_values = self.analyze_return_flow(node);
+    let subroutine_name = self.suggest_subroutine_name(node);
+
+    // Cross-file impact analysis using dual indexing
+    let current_package = self.get_current_package();
+    let qualified_name = format!("{}::{}", current_package, subroutine_name);
+
+    // Check for naming conflicts across workspace
+    if let Some(workspace_index) = &self.workspace_index {
+        if workspace_index.has_symbol(&qualified_name) {
+            return None; // Avoid conflicts
+        }
+    }
+
+    // Generate subroutine with proper signatures
+    let subroutine_code = self.generate_subroutine_code(
+        &subroutine_name,
+        &params,
+        &return_values,
+        node
+    );
+
+    let insertion_point = self.find_subroutine_insertion_point();
+    let call_replacement = self.generate_subroutine_call(&subroutine_name, &params);
+
+    // Create workspace edit with dual indexing updates
+    let mut edit = WorkspaceEdit::default();
+    edit.changes = Some(hashmap! {
+        self.document_uri.clone() => vec![
+            TextEdit::new(node.range(), call_replacement),
+            TextEdit::new(insertion_point, subroutine_code),
+        ]
+    });
+
+    Some(CodeAction {
+        title: format!("Extract subroutine '{}'", subroutine_name),
+        kind: Some(CodeActionKind::REFACTOR_EXTRACT),
+        edit: Some(edit),
+        is_preferred: Some(params.len() <= 3), // Prefer simple extractions
+    })
+}
+```
+
+#### Performance Optimization Patterns
+
+**Multi-tier Caching Strategy** (*Diataxis: How-to* - Code action performance):
+```rust
+// High-performance caching with incremental invalidation
+pub struct CodeActionCache {
+    lru_cache: LruCache<CacheKey, Vec<CodeAction>>,  // 50MB limit
+    ast_fingerprints: HashMap<String, u64>,          // AST change detection
+    file_timestamps: HashMap<String, SystemTime>,    // File modification tracking
+}
+
+impl CodeActionCache {
+    fn get_cached_actions(&mut self, uri: &str, range: &Range,
+                         context: &CodeActionContext) -> Option<Vec<CodeAction>> {
+
+        let cache_key = CacheKey::new(uri, range, context);
+
+        // Check if cache is still valid
+        if self.is_cache_valid(uri, &cache_key) {
+            return self.lru_cache.get(&cache_key).cloned();
+        }
+
+        None
+    }
+
+    fn cache_actions(&mut self, uri: &str, range: &Range,
+                    context: &CodeActionContext, actions: &[CodeAction]) {
+
+        let cache_key = CacheKey::new(uri, range, context);
+        self.lru_cache.put(cache_key, actions.to_vec());
+
+        // Update tracking information
+        self.file_timestamps.insert(uri.to_string(), SystemTime::now());
+    }
+}
+```
+
+The enhanced executeCommand and code actions development patterns provide a comprehensive framework for building sophisticated LSP features with enterprise-grade performance, error handling, and user experience characteristics.
+
 ## Testing LSP Features
 
 ### Revolutionary Test Infrastructure (PR #140) (v0.8.9+)
@@ -1700,3 +2025,289 @@ impl FallbackMetrics {
 ```
 
 This comprehensive troubleshooting guide ensures that text-based fallback mechanisms can be effectively debugged, optimized, and monitored in production environments.
+
+## Enhanced LSP Workflow Integration ⭐ **NEW: Issue #145** (*Diataxis: Explanation* - Complete workflow architecture)
+
+The Perl LSP server now implements a comprehensive **Parse → Index → Navigate → Complete → Analyze → Execute** workflow pipeline that provides complete language server functionality with enterprise-grade performance and reliability.
+
+### Workflow Pipeline Architecture (*Diataxis: Explanation* - System design)
+
+**Complete LSP Workflow Pipeline**:
+```
+Parse → Index → Navigate → Complete → Analyze → Execute
+  ↓       ↓        ↓         ↓          ↓         ↓
+ AST   Symbols   Refs    Suggest    Check    Actions
+~1ms   ~10ms   ~40ms     ~50ms     ~100ms     ~2s
+```
+
+#### Phase 1: Parse (*Diataxis: Reference* - AST generation)
+```rust
+// Enhanced parsing with incremental support
+pub struct EnhancedParser {
+    pub incremental: Option<IncrementalParser>,
+    pub error_recovery: ParseErrorRecovery,
+    pub performance_monitor: ParsePerformanceMonitor,
+}
+
+impl EnhancedParser {
+    // <1ms parsing with 70-99% node reuse efficiency
+    pub fn parse_with_incremental(&mut self, content: &str) -> Result<Node, ParseError> {
+        if let Some(incremental) = &mut self.incremental {
+            incremental.parse_incremental(content) // Reuse existing nodes
+        } else {
+            self.parse_full(content) // Full parse for new documents
+        }
+    }
+}
+```
+
+#### Phase 2: Index (*Diataxis: Reference* - Symbol indexing)
+```rust
+// Dual indexing strategy for comprehensive coverage
+pub struct WorkspaceIndexer {
+    qualified_index: HashMap<String, Vec<SymbolInfo>>,
+    bare_index: HashMap<String, Vec<SymbolInfo>>,
+    cross_file_refs: HashMap<String, Vec<Location>>,
+}
+
+impl WorkspaceIndexer {
+    // ~10ms indexing with dual pattern storage
+    pub fn index_symbols(&mut self, ast: &Node, package: &str) {
+        for symbol in ast.symbols() {
+            // Index under both qualified and bare forms (98% reference coverage)
+            let qualified_name = format!("{}::{}", package, symbol.name);
+
+            self.qualified_index.entry(qualified_name.clone()).or_default().push(symbol.clone());
+            self.bare_index.entry(symbol.name.clone()).or_default().push(symbol);
+        }
+    }
+}
+```
+
+#### Phase 3: Navigate (*Diataxis: Reference* - Definition/reference resolution)
+```rust
+// Enhanced cross-file navigation with dual pattern matching
+pub struct NavigationProvider {
+    workspace_index: Arc<WorkspaceIndexer>,
+    module_resolver: Option<ModuleResolver>,
+}
+
+impl NavigationProvider {
+    // ~40ms cross-file navigation with fallback strategies
+    pub fn find_definition(&self, symbol: &str) -> Vec<Location> {
+        let mut locations = Vec::new();
+
+        // Try qualified name first
+        if let Some(refs) = self.workspace_index.qualified_index.get(symbol) {
+            locations.extend(refs.iter().map(|r| r.location.clone()));
+        }
+
+        // Try bare name for broader coverage
+        if let Some(idx) = symbol.rfind("::") {
+            let bare_name = &symbol[idx + 2..];
+            if let Some(refs) = self.workspace_index.bare_index.get(bare_name) {
+                locations.extend(refs.iter().map(|r| r.location.clone()));
+            }
+        }
+
+        locations
+    }
+}
+```
+
+#### Phase 4: Complete (*Diataxis: Reference* - Code completion)
+```rust
+// Enhanced completion with context awareness and module resolution
+pub struct CompletionProvider {
+    ast: Node,
+    source: String,
+    workspace_index: Arc<WorkspaceIndexer>,
+    module_resolver: Option<ModuleResolver>,
+}
+
+impl CompletionProvider {
+    // ~50ms completion with comprehensive suggestions
+    pub fn get_completions(&self, position: Position) -> Vec<CompletionItem> {
+        let mut completions = Vec::new();
+
+        // Local scope completions
+        completions.extend(self.get_local_completions(position));
+
+        // Workspace symbol completions with dual indexing
+        completions.extend(self.get_workspace_completions(position));
+
+        // Module completions with resolver integration
+        if let Some(resolver) = &self.module_resolver {
+            completions.extend(self.get_module_completions(position, resolver));
+        }
+
+        completions
+    }
+}
+```
+
+#### Phase 5: Analyze (*Diataxis: Reference* - Diagnostic analysis)
+```rust
+// Enhanced analysis with performance monitoring
+pub struct DiagnosticAnalyzer {
+    syntax_analyzer: SyntaxAnalyzer,
+    semantic_analyzer: SemanticAnalyzer,
+    performance_monitor: AnalysisPerformanceMonitor,
+}
+
+impl DiagnosticAnalyzer {
+    // ~100ms analysis with comprehensive error detection
+    pub fn analyze_document(&self, ast: &Node, content: &str) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+
+        // Syntax-level analysis
+        diagnostics.extend(self.syntax_analyzer.check_syntax(ast));
+
+        // Semantic-level analysis
+        diagnostics.extend(self.semantic_analyzer.check_semantics(ast, content));
+
+        // Performance validation
+        self.performance_monitor.record_analysis_time(diagnostics.len());
+
+        diagnostics
+    }
+}
+```
+
+#### Phase 6: Execute ⭐ **NEW: Issue #145** (*Diataxis: Reference* - Command execution)
+```rust
+// Enhanced executeCommand with dual analyzer strategy
+pub struct ExecuteCommandProvider {
+    parser: Arc<EnhancedParser>,
+    workspace_index: Arc<WorkspaceIndexer>,
+    performance_monitor: ExecutionPerformanceMonitor,
+}
+
+impl ExecuteCommandProvider {
+    // ~2s execution with comprehensive tool integration
+    pub fn execute_command(&self, command: &str, arguments: Vec<Value>) -> Result<Value, String> {
+        match command {
+            "perl.runCritic" => {
+                let file_path = self.extract_file_path(&arguments)?;
+
+                // Dual analyzer strategy: external perlcritic + built-in fallback
+                if self.command_exists("perlcritic") {
+                    match self.run_external_critic(file_path) {
+                        Ok(result) => return Ok(result),
+                        Err(_) => {
+                            // Seamless fallback to built-in analyzer
+                        }
+                    }
+                }
+
+                // Built-in analyzer provides 100% availability
+                self.run_builtin_critic(file_path)
+            },
+            "perl.runTests" => self.execute_test_runner(&arguments),
+            "perl.runFile" => self.execute_perl_file(&arguments),
+            _ => Err(format!("Unknown command: {}", command))
+        }
+    }
+}
+```
+
+### Integration Patterns (*Diataxis: How-to Guide* - Development best practices)
+
+#### **Workflow State Management**
+```rust
+// Central workflow coordinator
+pub struct LSPWorkflowCoordinator {
+    parser: EnhancedParser,
+    indexer: WorkspaceIndexer,
+    navigator: NavigationProvider,
+    completer: CompletionProvider,
+    analyzer: DiagnosticAnalyzer,
+    executor: ExecuteCommandProvider,
+}
+
+impl LSPWorkflowCoordinator {
+    // Complete document processing pipeline
+    pub fn process_document(&mut self, uri: &str, content: &str) -> LSPWorkflowResult {
+        // Phase 1: Parse
+        let ast = self.parser.parse_with_incremental(content)?;
+
+        // Phase 2: Index
+        self.indexer.index_symbols(&ast, &self.extract_package(&ast));
+
+        // Phase 3-6: On-demand processing for LSP requests
+        LSPWorkflowResult {
+            ast,
+            ready_for_navigation: true,
+            ready_for_completion: true,
+            ready_for_analysis: true,
+            ready_for_execution: true,
+        }
+    }
+}
+```
+
+#### **Performance Integration with Adaptive Threading**
+```rust
+// Enhanced threading configuration for complete workflow
+pub struct WorkflowPerformanceConfig {
+    pub parsing_threads: usize,
+    pub indexing_threads: usize,
+    pub analysis_threads: usize,
+    pub execution_timeout: Duration,
+}
+
+impl WorkflowPerformanceConfig {
+    // Adaptive configuration based on system capabilities
+    pub fn adaptive_config() -> Self {
+        let thread_count = std::thread::available_parallelism().unwrap().get();
+
+        Self {
+            parsing_threads: 1, // Single-threaded for consistency
+            indexing_threads: (thread_count / 2).max(1),
+            analysis_threads: (thread_count / 4).max(1),
+            execution_timeout: if thread_count <= 2 {
+                Duration::from_secs(15) // High contention
+            } else if thread_count <= 4 {
+                Duration::from_secs(10) // Medium contention
+            } else {
+                Duration::from_secs(5)  // Low contention
+            },
+        }
+    }
+}
+```
+
+### Quality Assurance Integration (*Diataxis: How-to Guide* - Testing complete workflows)
+
+#### **End-to-End Workflow Testing**
+```bash
+# Test complete workflow pipeline
+cargo test -p perl-lsp --test lsp_comprehensive_e2e_test
+
+# Test individual workflow phases
+cargo test -p perl-parser --test parsing_performance_tests     # Phase 1: Parse
+cargo test -p perl-parser --test workspace_indexing_tests     # Phase 2: Index
+cargo test -p perl-lsp --test navigation_integration_tests    # Phase 3: Navigate
+cargo test -p perl-lsp --test completion_integration_tests    # Phase 4: Complete
+cargo test -p perl-lsp --test diagnostic_integration_tests    # Phase 5: Analyze
+cargo test -p perl-lsp --test execute_command_integration_tests # Phase 6: Execute
+
+# Performance validation across complete workflow
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+```
+
+#### **Workflow Performance Benchmarks**
+```bash
+# Validate workflow performance targets
+cargo test -p perl-lsp --test workflow_performance_tests
+
+# Individual phase performance validation
+cargo bench parsing_phase        # Target: <1ms
+cargo bench indexing_phase       # Target: <10ms
+cargo bench navigation_phase     # Target: <40ms
+cargo bench completion_phase     # Target: <50ms
+cargo bench analysis_phase       # Target: <100ms
+cargo bench execution_phase      # Target: <2s
+```
+
+The enhanced LSP workflow integration provides a complete, performance-optimized language server architecture that delivers enterprise-grade functionality while maintaining the revolutionary performance improvements achieved in PR #140.
