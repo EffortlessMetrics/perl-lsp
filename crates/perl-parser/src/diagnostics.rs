@@ -28,13 +28,14 @@
 //! use perl_parser::diagnostics::{DiagnosticsProvider, DiagnosticSeverity};
 //! use perl_parser::Parser;
 //!
-//! let code = "my $x = ; # syntax error";
+//! let code = "my $x = 42; # valid code";
 //! let mut parser = Parser::new(code);
 //! let ast = parser.parse().unwrap();
 //! let provider = DiagnosticsProvider::new(&ast, code.to_string());
 //!
 //! // Generate diagnostics for code
-//! let diagnostics = provider.get_diagnostics(code, None);
+//! let parse_errors = vec![]; // No parsing errors for this example
+//! let diagnostics = provider.get_diagnostics(&ast, &parse_errors, code);
 //! for diagnostic in diagnostics {
 //!     println!("{:?}: {} at {:?}", diagnostic.severity, diagnostic.message, diagnostic.range);
 //! }

@@ -38,17 +38,14 @@
 //! let options = RenameOptions::default();
 //!
 //! // Rename symbol at position
-//! let result = provider.rename(&ast, position, "greet_user", &options);
-//! match result {
-//!     Ok(rename_result) => {
-//!         if rename_result.is_valid {
-//!             println!("Rename successful, {} edits", rename_result.edits.len());
-//!             for edit in rename_result.edits {
-//!                 println!("Edit: {} -> {}", edit.location, edit.new_text);
-//!             }
-//!         }
+//! let result = provider.rename(position, "greet_user", &options);
+//! if result.is_valid {
+//!     println!("Rename successful, {} edits", result.edits.len());
+//!     for edit in result.edits {
+//!         println!("Edit: {} -> {}", edit.location, edit.new_text);
 //!     }
-//!     Err(err) => eprintln!("Rename failed: {}", err),
+//! } else if let Some(error) = &result.error {
+//!     eprintln!("Rename failed: {}", error);
 //! }
 //! ```
 

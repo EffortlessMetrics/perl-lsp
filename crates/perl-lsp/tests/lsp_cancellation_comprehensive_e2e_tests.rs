@@ -197,31 +197,27 @@ sub authenticate_user {
 
 /// Create comprehensive E2E test scenarios
 fn create_e2e_test_scenarios() -> Vec<E2ETestScenario> {
-    vec![
-        E2ETestScenario {
-            name: "basic_workflow_scenario".to_string(),
-            description: "Basic LSP workflow with cancellation".to_string(),
-            operations: vec![
-                E2EOperation {
-                    name: "hover_request".to_string(),
-                    lsp_method: "textDocument/hover".to_string(),
-                    params: json!({
-                        "textDocument": { "uri": "file:///app/main.pl" },
-                        "position": { "line": 15, "character": 10 }
-                    }),
-                    should_cancel: true,
-                    cancel_delay: Duration::from_millis(50),
-                    expected_outcome: ExpectedOutcome::Cancelled,
-                },
-            ],
-            performance_requirements: E2EPerformanceRequirements {
-                max_total_duration: Duration::from_secs(5),
-                max_memory_growth: 50 * 1024 * 1024, // 50MB
-                max_individual_operation: Duration::from_millis(2000),
-                min_cancellation_response_time: Duration::from_millis(50),
-            },
+    vec![E2ETestScenario {
+        name: "basic_workflow_scenario".to_string(),
+        description: "Basic LSP workflow with cancellation".to_string(),
+        operations: vec![E2EOperation {
+            name: "hover_request".to_string(),
+            lsp_method: "textDocument/hover".to_string(),
+            params: json!({
+                "textDocument": { "uri": "file:///app/main.pl" },
+                "position": { "line": 15, "character": 10 }
+            }),
+            should_cancel: true,
+            cancel_delay: Duration::from_millis(50),
+            expected_outcome: ExpectedOutcome::Cancelled,
+        }],
+        performance_requirements: E2EPerformanceRequirements {
+            max_total_duration: Duration::from_secs(5),
+            max_memory_growth: 50 * 1024 * 1024, // 50MB
+            max_individual_operation: Duration::from_millis(2000),
+            min_cancellation_response_time: Duration::from_millis(50),
         },
-    ]
+    }]
 }
 
 /// E2E test workspace for managing comprehensive test scenarios

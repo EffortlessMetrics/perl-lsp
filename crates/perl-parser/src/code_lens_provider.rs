@@ -32,17 +32,21 @@ pub struct Command {
     pub arguments: Option<Vec<Value>>,
 }
 
-/// LSP Range
+/// LSP Range representing a text selection between two positions
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Range {
+    /// Start position of the range (inclusive)
     pub start: Position,
+    /// End position of the range (exclusive)
     pub end: Position,
 }
 
-/// LSP Position
+/// LSP Position representing a cursor position in a document
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Position {
+    /// Zero-based line number
     pub line: u32,
+    /// Zero-based character offset within the line
     pub character: u32,
 }
 

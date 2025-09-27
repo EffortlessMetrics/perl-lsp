@@ -67,13 +67,13 @@
 //!
 //! println!("Generated {} semantic tokens", encoded_tokens.len());
 //! println!("Token types: {:?}", legend.token_types);
-//! println!("Token modifiers: {:?}", legend.token_modifiers);
+//! println!("Token modifiers: {:?}", legend.modifiers);
 //! ```
 //!
 //! ## Custom Token Classification
 //!
 //! ```
-//! use perl_parser::semantic_tokens::{EncodedToken, TokensLegend};
+//! use perl_parser::semantic_tokens::{EncodedToken, TokensLegend, legend};
 //! use perl_parser::semantic_tokens_provider::{SemanticTokenType, SemanticTokenModifier};
 //!
 //! // Create custom semantic tokens
