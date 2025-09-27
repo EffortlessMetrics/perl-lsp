@@ -417,7 +417,14 @@ impl ExecuteCommandProvider {
                     || e.contains("No such file or directory")
                     || e.contains("Failed to canonicalize")
                 {
-                    return Ok(self.format_critic_error(e, "none"));
+                    let user_friendly_error = if e.contains("No such file or directory")
+                        || e.contains("Failed to canonicalize")
+                    {
+                        "File not found"
+                    } else {
+                        &e
+                    };
+                    return Ok(self.format_critic_error(user_friendly_error.to_string(), "none"));
                 }
                 // Only security-related errors (workspace traversal) are still failures
                 if e.contains("Path traversal") || e.contains("outside workspace root") {
