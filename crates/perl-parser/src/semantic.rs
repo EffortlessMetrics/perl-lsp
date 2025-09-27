@@ -15,38 +15,59 @@ use std::sync::OnceLock;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SemanticTokenType {
     // Variables
+    /// Variable reference (scalar, array, or hash)
     Variable,
+    /// Variable declaration site
     VariableDeclaration,
+    /// Read-only variable (constant)
     VariableReadonly,
+    /// Function parameter
     Parameter,
 
     // Functions
+    /// Function/subroutine reference
     Function,
+    /// Function/subroutine declaration
     FunctionDeclaration,
+    /// Object method call
     Method,
 
     // Types
+    /// Class/package name
     Class,
+    /// Package namespace
     Namespace,
+    /// Type annotation (modern Perl)
     Type,
 
     // Keywords
+    /// Language keyword (if, while, etc.)
     Keyword,
+    /// Control flow keyword (return, next, last)
     KeywordControl,
+    /// Variable modifier (my, our, local, state)
     Modifier,
 
     // Literals
+    /// Numeric literal
     Number,
+    /// String literal
     String,
+    /// Regular expression
     Regex,
 
     // Comments
+    /// Regular comment
     Comment,
+    /// Documentation comment (POD)
     CommentDoc,
 
     // Other
+    /// Operator (+, -, =~, etc.)
     Operator,
+    /// Punctuation marks and delimiters
     Punctuation,
+    /// Code label for goto statements
     Label,
 }
 

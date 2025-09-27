@@ -93,9 +93,9 @@ print "Results: $result, $other, $complex\n";
 
         // Wait for indexing to complete with adaptive timeout
         let indexing_timeout = match max_concurrent_threads() {
-            0..=2 => Duration::from_secs(8),  // Constrained: reduced from 5s to reasonable limit
-            3..=4 => Duration::from_secs(4),  // Moderate: reduced timeout
-            _ => Duration::from_secs(3),      // Unconstrained: shorter timeout
+            0..=2 => Duration::from_secs(8), // Constrained: reduced from 5s to reasonable limit
+            3..=4 => Duration::from_secs(4), // Moderate: reduced timeout
+            _ => Duration::from_secs(3),     // Unconstrained: shorter timeout
         };
         drain_until_quiet(&mut server, Duration::from_millis(200), indexing_timeout);
 

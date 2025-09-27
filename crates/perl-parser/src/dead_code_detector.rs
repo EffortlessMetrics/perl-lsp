@@ -8,49 +8,77 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-/// Types of dead code
+/// Types of dead code detected during Perl script analysis
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeadCodeType {
+    /// Subroutine defined but never called
     UnusedSubroutine,
+    /// Variable declared but never used
     UnusedVariable,
+    /// Constant defined but never referenced
     UnusedConstant,
+    /// Package declared but never used
     UnusedPackage,
+    /// Code that can never be executed
     UnreachableCode,
+    /// Conditional branch that is never taken
     DeadBranch,
+    /// Module imported but never used
     UnusedImport,
+    /// Function exported but never used externally
     UnusedExport,
 }
 
-/// A piece of dead code
+/// A piece of dead code detected during analysis
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeadCode {
+    /// Type of dead code (subroutine, variable, etc.)
     pub code_type: DeadCodeType,
+    /// Name of the dead code element if available
     pub name: Option<String>,
+    /// File path where the dead code is located
     pub file_path: PathBuf,
+    /// Starting line number (1-based)
     pub start_line: usize,
+    /// Ending line number (1-based)
     pub end_line: usize,
+    /// Human-readable explanation of why this is considered dead code
     pub reason: String,
+    /// Confidence level (0.0-1.0) in the detection accuracy
     pub confidence: f32,
+    /// Optional suggestion for fixing the dead code
     pub suggestion: Option<String>,
 }
 
-/// Dead code analysis result
+/// Dead code analysis result for a Perl workspace
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DeadCodeAnalysis {
+    /// List of all dead code instances found
     pub dead_code: Vec<DeadCode>,
+    /// Statistical summary of dead code analysis
     pub stats: DeadCodeStats,
+    /// Number of files analyzed in the workspace
     pub files_analyzed: usize,
+    /// Total lines of code analyzed
     pub total_lines: usize,
 }
 
+/// Statistical summary of dead code analysis results
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct DeadCodeStats {
+    /// Number of unused subroutines detected
     pub unused_subroutines: usize,
+    /// Number of unused variables detected
     pub unused_variables: usize,
+    /// Number of unused constants detected
     pub unused_constants: usize,
+    /// Number of unused packages detected
     pub unused_packages: usize,
+    /// Number of unreachable code statements
     pub unreachable_statements: usize,
+    /// Number of dead conditional branches
     pub dead_branches: usize,
+    /// Total lines of dead code identified
     pub total_dead_lines: usize,
 }
 
@@ -61,6 +89,10 @@ pub struct DeadCodeDetector {
 }
 
 impl DeadCodeDetector {
+    /// Create a new dead code detector with the given workspace index
+    ///
+    /// # Arguments
+    /// * `workspace_index` - Indexed workspace containing symbol definitions and references
     pub fn new(workspace_index: WorkspaceIndex) -> Self {
         Self { workspace_index, entry_points: HashSet::new() }
     }
