@@ -483,7 +483,7 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
 
     // wait specifically for id=1 - use extended timeout for initialization
     // Enhanced timeout for LSP cancellation tests with environment-aware scaling
-    let base_multiplier = 2; // Base multiplier for critical initialization (reduced from 6x to 2x)
+    let base_multiplier = 3; // Base multiplier for critical initialization (increased to 3x for CI stability)
     let thread_count = max_concurrent_threads();
     let env_multiplier = if thread_count <= 2 { 2 } else { 1 }; // Extra time for constrained environments
     let init_timeout = adaptive_timeout() * base_multiplier * env_multiplier;

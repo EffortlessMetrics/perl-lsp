@@ -11,10 +11,8 @@ exclude = [
     "tree-sitter-perl",
     "tree-sitter-perl-c",  # Excluded: requires libclang-dev system package for bindgen (legacy C parser)
     "crates/tree-sitter-perl-rs",  # Excluded: requires libclang-dev system package for bindgen (Rust wrapper for tree-sitter-perl)
-    "crates/perl-parser-pest",  # Excluded: legacy Pest parser with bindgen dependency
-    "crates/parser-benchmarks",  # Excluded: benchmarking crate with potential dependencies
-    "crates/parser-tests",  # Excluded: test harness with potential dependencies
     "fuzz",  # Excluded: fuzz testing with specialized build requirements
+    "archive",  # Excluded: archived legacy components
 ]
 
 [workspace.dependencies]

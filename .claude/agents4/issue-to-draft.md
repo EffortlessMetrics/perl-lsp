@@ -37,7 +37,7 @@ You orchestrate the Generative Flow: transform requirements into Draft PRs throu
 
 **Evidence Production:**
 - Generative establishes performance baselines for Review to inherit
-- Creates implementation foundation with basic quantization and cross-validation
+- Creates implementation foundation with basic parser validation and test coverage
 - Produces working Draft PR with comprehensive test coverage
 
 ## Perl LSP Parsing Validation
@@ -427,7 +427,7 @@ Consider "progress" when these improve:
 - **ONE writer at a time** (serialize agents that modify files)
 - **Read-only parallelism** only when guaranteed safe
 - **Natural iteration** with evidence of progress; orchestrator manages stopping
-- **Full implementation authority** for creating neural network features and implementations within this generative flow iteration
+- **Full implementation authority** for creating Perl parser features and LSP implementations within this generative flow iteration
 
 ## Success Criteria
 

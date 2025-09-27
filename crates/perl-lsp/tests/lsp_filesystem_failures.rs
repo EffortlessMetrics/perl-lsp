@@ -1,5 +1,6 @@
 use serde_json::json;
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
@@ -234,8 +235,11 @@ fn test_symlink_loop() {
     let _ = fs::remove_file(link2);
 
     // Create symlink loop
-    std::os::unix::fs::symlink(link2, link1).unwrap();
-    std::os::unix::fs::symlink(link1, link2).unwrap();
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(link2, link1).unwrap();
+        std::os::unix::fs::symlink(link1, link2).unwrap();
+    }
 
     let uri = format!("file://{}", link1.display());
 
