@@ -15,14 +15,17 @@
 // Module declarations for fixture categories
 pub mod parser {
     pub mod comprehensive_syntax_fixtures;
+    pub mod modern_perl_syntax_fixtures;
 }
 
 pub mod lsp {
     pub mod protocol_mock_data;
+    pub mod concurrent_request_fixtures;
 }
 
 pub mod corpus {
     pub mod dual_indexing_corpus;
+    pub mod property_based_testing_fixtures;
 }
 
 pub mod builtins {
@@ -35,15 +38,35 @@ pub mod substitution {
 
 pub mod incremental {
     pub mod node_reuse_fixtures;
+    pub mod performance_validation_fixtures;
+}
+
+pub mod integration {
+    pub mod lsp_workflow_fixtures;
+}
+
+pub mod security {
+    pub mod security_validation_fixtures;
+}
+
+pub mod mocks {
+    pub mod test_infrastructure_mocks;
 }
 
 // Re-export all fixture types for easy access
 pub use parser::comprehensive_syntax_fixtures::*;
+pub use parser::modern_perl_syntax_fixtures::*;
 pub use lsp::protocol_mock_data::*;
+pub use lsp::concurrent_request_fixtures::*;
 pub use corpus::dual_indexing_corpus::*;
+pub use corpus::property_based_testing_fixtures::*;
 pub use builtins::enhanced_builtin_fixtures::*;
 pub use substitution::comprehensive_substitution_fixtures::*;
 pub use incremental::node_reuse_fixtures::*;
+pub use incremental::performance_validation_fixtures::*;
+pub use integration::lsp_workflow_fixtures::*;
+pub use security::security_validation_fixtures::*;
+pub use mocks::test_infrastructure_mocks::*;
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
