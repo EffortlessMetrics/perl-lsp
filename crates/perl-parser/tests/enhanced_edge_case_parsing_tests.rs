@@ -130,13 +130,7 @@ fn test_complex_regex_patterns() {
 
         // Verify regex operation is captured
         assert!(
-            sexp.contains("=~")
-                || sexp.contains("match")
-                || sexp.contains("regex")
-                || sexp.contains("substitution")
-                || sexp.contains("subst")
-                || sexp.contains("transliteration")
-                || sexp.contains("trans"),
+            sexp.contains("=~") || sexp.contains("match") || sexp.contains("regex"),
             "Regex operation not found in AST for: {}",
             input
         );
