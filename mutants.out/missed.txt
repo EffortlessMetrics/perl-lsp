@@ -1,33 +1,29 @@
-crates/perl-parser/src/quote_parser.rs:284:18: replace match guard c == open && is_paired with false in extract_delimited_content
-crates/perl-parser/src/quote_parser.rs:216:22: replace match guard c == closing with false in extract_transliteration_parts
-crates/perl-parser/src/quote_parser.rs:245:9: delete match arm '(' in get_closing_delimiter
-crates/perl-parser/src/quote_parser.rs:197:43: delete ! in extract_transliteration_parts
-crates/perl-parser/src/quote_parser.rs:246:9: delete match arm '[' in get_closing_delimiter
-crates/perl-parser/src/quote_parser.rs:137:41: replace + with * in extract_substitution_parts
-crates/perl-parser/src/quote_parser.rs:197:54: replace && with || in extract_transliteration_parts
-crates/perl-parser/src/quote_parser.rs:137:41: replace + with - in extract_substitution_parts
-crates/perl-parser/src/quote_parser.rs:174:31: replace != with == in extract_transliteration_parts
-crates/perl-parser/src/quote_parser.rs:9:5: replace extract_regex_parts -> (String, String) with ("xyzzy".into(), String::new())
-crates/perl-parser/src/quote_parser.rs:197:57: delete ! in extract_transliteration_parts
-crates/perl-parser/src/quote_parser.rs:12:23: replace > with == in extract_regex_parts
-crates/perl-parser/src/quote_parser.rs:292:37: replace + with * in extract_delimited_content
-crates/perl-parser/src/quote_parser.rs:56:31: replace != with == in extract_substitution_parts
-crates/perl-parser/src/quote_parser.rs:160:5: replace extract_transliteration_parts -> (String, String, String) with ("xyzzy".into(), "xyzzy".into(), String::new())
-crates/perl-parser/src/quote_parser.rs:290:27: replace -= with += in extract_delimited_content
-crates/perl-parser/src/quote_parser.rs:136:30: replace match guard c == closing with false in extract_substitution_parts
-crates/perl-parser/src/quote_parser.rs:9:5: replace extract_regex_parts -> (String, String) with (String::new(), "xyzzy".into())
-crates/perl-parser/src/quote_parser.rs:292:37: replace + with - in extract_delimited_content
-crates/perl-parser/src/quote_parser.rs:291:30: replace == with != in extract_delimited_content
-crates/perl-parser/src/quote_parser.rs:136:32: replace == with != in extract_substitution_parts
-crates/perl-parser/src/quote_parser.rs:160:5: replace extract_transliteration_parts -> (String, String, String) with (String::new(), String::new(), "xyzzy".into())
-crates/perl-parser/src/quote_parser.rs:160:5: replace extract_transliteration_parts -> (String, String, String) with ("xyzzy".into(), String::new(), "xyzzy".into())
-crates/perl-parser/src/quote_parser.rs:216:22: replace match guard c == closing with true in extract_transliteration_parts
-crates/perl-parser/src/quote_parser.rs:9:5: replace extract_regex_parts -> (String, String) with ("xyzzy".into(), "xyzzy".into())
-crates/perl-parser/src/quote_parser.rs:217:33: replace + with * in extract_transliteration_parts
-crates/perl-parser/src/quote_parser.rs:160:5: replace extract_transliteration_parts -> (String, String, String) with (String::new(), "xyzzy".into(), "xyzzy".into())
-crates/perl-parser/src/quote_parser.rs:217:33: replace + with - in extract_transliteration_parts
-crates/perl-parser/src/quote_parser.rs:247:9: delete match arm '{' in get_closing_delimiter
-crates/perl-parser/src/quote_parser.rs:160:5: replace extract_transliteration_parts -> (String, String, String) with ("xyzzy".into(), String::new(), String::new())
-crates/perl-parser/src/quote_parser.rs:286:23: replace += with *= in extract_delimited_content
-crates/perl-parser/src/quote_parser.rs:9:5: replace extract_regex_parts -> (String, String) with (String::new(), String::new())
-crates/perl-parser/src/quote_parser.rs:95:17: delete match arm '\\' in extract_substitution_parts
+crates/perl-parser/src/execute_command.rs:245:9: replace ExecuteCommandProvider::execute_command -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:246:13: delete match arm "perl.runTests" in ExecuteCommandProvider::execute_command
+crates/perl-parser/src/execute_command.rs:250:13: delete match arm "perl.runFile" in ExecuteCommandProvider::execute_command
+crates/perl-parser/src/execute_command.rs:254:13: delete match arm "perl.runTestSub" in ExecuteCommandProvider::execute_command
+crates/perl-parser/src/execute_command.rs:262:13: delete match arm "perl.debugTests" in ExecuteCommandProvider::execute_command
+crates/perl-parser/src/execute_command.rs:266:13: delete match arm "perl.runCritic" in ExecuteCommandProvider::execute_command
+crates/perl-parser/src/execute_command.rs:276:9: replace ExecuteCommandProvider::run_tests -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:277:55: replace && with || in ExecuteCommandProvider::run_tests
+crates/perl-parser/src/execute_command.rs:299:9: replace ExecuteCommandProvider::run_test_sub -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:315:9: replace ExecuteCommandProvider::run_file -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:327:9: replace ExecuteCommandProvider::debug_tests -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:336:9: replace ExecuteCommandProvider::run_critic -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:339:12: delete ! in ExecuteCommandProvider::run_critic
+crates/perl-parser/src/execute_command.rs:361:9: replace ExecuteCommandProvider::run_external_critic -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:379:49: replace + with - in ExecuteCommandProvider::run_external_critic
+crates/perl-parser/src/execute_command.rs:379:49: replace + with * in ExecuteCommandProvider::run_external_critic
+crates/perl-parser/src/execute_command.rs:380:51: replace + with - in ExecuteCommandProvider::run_external_critic
+crates/perl-parser/src/execute_command.rs:380:51: replace + with * in ExecuteCommandProvider::run_external_critic
+crates/perl-parser/src/execute_command.rs:399:9: replace ExecuteCommandProvider::run_builtin_critic -> Result<Value, String> with Ok(Default::default())
+crates/perl-parser/src/execute_command.rs:438:41: replace + with - in ExecuteCommandProvider::run_builtin_critic
+crates/perl-parser/src/execute_command.rs:438:41: replace + with * in ExecuteCommandProvider::run_builtin_critic
+crates/perl-parser/src/execute_command.rs:439:43: replace + with - in ExecuteCommandProvider::run_builtin_critic
+crates/perl-parser/src/execute_command.rs:439:43: replace + with * in ExecuteCommandProvider::run_builtin_critic
+crates/perl-parser/src/execute_command.rs:455:9: replace ExecuteCommandProvider::extract_file_path_argument -> Result<&'a str, String> with Ok("")
+crates/perl-parser/src/execute_command.rs:455:9: replace ExecuteCommandProvider::extract_file_path_argument -> Result<&'a str, String> with Ok("xyzzy")
+crates/perl-parser/src/execute_command.rs:463:9: replace ExecuteCommandProvider::is_test_file -> bool with true
+crates/perl-parser/src/execute_command.rs:463:9: replace ExecuteCommandProvider::is_test_file -> bool with false
+crates/perl-parser/src/execute_command.rs:463:64: replace || with && in ExecuteCommandProvider::is_test_file
+crates/perl-parser/src/execute_command.rs:463:35: replace || with && in ExecuteCommandProvider::is_test_file

@@ -1,119 +1,899 @@
 [
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
+    "file": "crates/perl-parser/src/execute_command.rs",
     "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
+      "function_name": "ExecuteCommandProvider::execute_command",
+      "return_type": "-> Result<Value, String>",
       "span": {
         "start": {
-          "line": 253,
-          "column": 1
+          "line": 191,
+          "column": 5
         },
         "end": {
-          "line": 306,
-          "column": 2
+          "line": 272,
+          "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 284,
-        "column": 18
+        "line": 245,
+        "column": 9
       },
       "end": {
-        "line": 284,
-        "column": 40
+        "line": 271,
+        "column": 10
       }
     },
-    "replacement": "false",
-    "genre": "MatchArmGuard"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 216,
-        "column": 22
-      },
-      "end": {
-        "line": 216,
-        "column": 34
-      }
-    },
-    "replacement": "false",
-    "genre": "MatchArmGuard"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 48,
-        "column": 5
-      },
-      "end": {
-        "line": 154,
-        "column": 38
-      }
-    },
-    "replacement": "(String::new(), \"xyzzy\".into(), String::new())",
+    "replacement": "Ok(Default::default())",
     "genre": "FnValue"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
+    "file": "crates/perl-parser/src/execute_command.rs",
     "function": {
-      "function_name": "get_closing_delimiter",
-      "return_type": "-> char",
+      "function_name": "ExecuteCommandProvider::execute_command",
+      "return_type": "-> Result<Value, String>",
       "span": {
         "start": {
-          "line": 242,
-          "column": 1
+          "line": 191,
+          "column": 5
         },
         "end": {
-          "line": 251,
-          "column": 2
+          "line": 272,
+          "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 244,
-        "column": 5
+        "line": 246,
+        "column": 13
       },
       "end": {
+        "line": 249,
+        "column": 14
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::execute_command",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 191,
+          "column": 5
+        },
+        "end": {
+          "line": 272,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
         "line": 250,
-        "column": 6
+        "column": 13
+      },
+      "end": {
+        "line": 253,
+        "column": 14
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::execute_command",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 191,
+          "column": 5
+        },
+        "end": {
+          "line": 272,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 254,
+        "column": 13
+      },
+      "end": {
+        "line": 261,
+        "column": 14
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::execute_command",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 191,
+          "column": 5
+        },
+        "end": {
+          "line": 272,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 262,
+        "column": 13
+      },
+      "end": {
+        "line": 265,
+        "column": 14
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::execute_command",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 191,
+          "column": 5
+        },
+        "end": {
+          "line": 272,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 266,
+        "column": 13
+      },
+      "end": {
+        "line": 269,
+        "column": 14
+      }
+    },
+    "replacement": "",
+    "genre": "MatchArm"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_tests",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 274,
+          "column": 5
+        },
+        "end": {
+          "line": 294,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 276,
+        "column": 9
+      },
+      "end": {
+        "line": 293,
+        "column": 87
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_tests",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 274,
+          "column": 5
+        },
+        "end": {
+          "line": 294,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 277,
+        "column": 55
+      },
+      "end": {
+        "line": 277,
+        "column": 57
+      }
+    },
+    "replacement": "||",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_test_sub",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 296,
+          "column": 5
+        },
+        "end": {
+          "line": 311,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 299,
+        "column": 9
+      },
+      "end": {
+        "line": 310,
+        "column": 86
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_file",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 313,
+          "column": 5
+        },
+        "end": {
+          "line": 321,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 315,
+        "column": 9
+      },
+      "end": {
+        "line": 320,
+        "column": 53
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::debug_tests",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 323,
+          "column": 5
+        },
+        "end": {
+          "line": 332,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 327,
+        "column": 9
+      },
+      "end": {
+        "line": 331,
+        "column": 12
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 334,
+          "column": 5
+        },
+        "end": {
+          "line": 357,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 336,
+        "column": 9
+      },
+      "end": {
+        "line": 356,
+        "column": 38
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 334,
+          "column": 5
+        },
+        "end": {
+          "line": 357,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 339,
+        "column": 12
+      },
+      "end": {
+        "line": 339,
+        "column": 13
+      }
+    },
+    "replacement": "",
+    "genre": "UnaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_external_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 359,
+          "column": 5
+        },
+        "end": {
+          "line": 395,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 361,
+        "column": 9
+      },
+      "end": {
+        "line": 394,
+        "column": 10
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_external_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 359,
+          "column": 5
+        },
+        "end": {
+          "line": 395,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 379,
+        "column": 49
+      },
+      "end": {
+        "line": 379,
+        "column": 50
+      }
+    },
+    "replacement": "-",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_external_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 359,
+          "column": 5
+        },
+        "end": {
+          "line": 395,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 379,
+        "column": 49
+      },
+      "end": {
+        "line": 379,
+        "column": 50
+      }
+    },
+    "replacement": "*",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_external_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 359,
+          "column": 5
+        },
+        "end": {
+          "line": 395,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 380,
+        "column": 51
+      },
+      "end": {
+        "line": 380,
+        "column": 52
+      }
+    },
+    "replacement": "-",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_external_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 359,
+          "column": 5
+        },
+        "end": {
+          "line": 395,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 380,
+        "column": 51
+      },
+      "end": {
+        "line": 380,
+        "column": 52
+      }
+    },
+    "replacement": "*",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_builtin_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 397,
+          "column": 5
+        },
+        "end": {
+          "line": 451,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 399,
+        "column": 9
+      },
+      "end": {
+        "line": 450,
+        "column": 12
+      }
+    },
+    "replacement": "Ok(Default::default())",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_builtin_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 397,
+          "column": 5
+        },
+        "end": {
+          "line": 451,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 438,
+        "column": 41
+      },
+      "end": {
+        "line": 438,
+        "column": 42
+      }
+    },
+    "replacement": "-",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_builtin_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 397,
+          "column": 5
+        },
+        "end": {
+          "line": 451,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 438,
+        "column": 41
+      },
+      "end": {
+        "line": 438,
+        "column": 42
+      }
+    },
+    "replacement": "*",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_builtin_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 397,
+          "column": 5
+        },
+        "end": {
+          "line": 451,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 439,
+        "column": 43
+      },
+      "end": {
+        "line": 439,
+        "column": 44
+      }
+    },
+    "replacement": "-",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::run_builtin_critic",
+      "return_type": "-> Result<Value, String>",
+      "span": {
+        "start": {
+          "line": 397,
+          "column": 5
+        },
+        "end": {
+          "line": 451,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 439,
+        "column": 43
+      },
+      "end": {
+        "line": 439,
+        "column": 44
+      }
+    },
+    "replacement": "*",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::extract_file_path_argument",
+      "return_type": "-> Result<&'a str, String>",
+      "span": {
+        "start": {
+          "line": 453,
+          "column": 5
+        },
+        "end": {
+          "line": 459,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 455,
+        "column": 9
+      },
+      "end": {
+        "line": 458,
+        "column": 69
+      }
+    },
+    "replacement": "Ok(\"\")",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::extract_file_path_argument",
+      "return_type": "-> Result<&'a str, String>",
+      "span": {
+        "start": {
+          "line": 453,
+          "column": 5
+        },
+        "end": {
+          "line": 459,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 455,
+        "column": 9
+      },
+      "end": {
+        "line": 458,
+        "column": 69
+      }
+    },
+    "replacement": "Ok(\"xyzzy\")",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::is_test_file",
+      "return_type": "-> bool",
+      "span": {
+        "start": {
+          "line": 461,
+          "column": 5
+        },
+        "end": {
+          "line": 464,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 463,
+        "column": 9
+      },
+      "end": {
+        "line": 463,
+        "column": 93
+      }
+    },
+    "replacement": "true",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::is_test_file",
+      "return_type": "-> bool",
+      "span": {
+        "start": {
+          "line": 461,
+          "column": 5
+        },
+        "end": {
+          "line": 464,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 463,
+        "column": 9
+      },
+      "end": {
+        "line": 463,
+        "column": 93
+      }
+    },
+    "replacement": "false",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::is_test_file",
+      "return_type": "-> bool",
+      "span": {
+        "start": {
+          "line": 461,
+          "column": 5
+        },
+        "end": {
+          "line": 464,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 463,
+        "column": 64
+      },
+      "end": {
+        "line": 463,
+        "column": 66
+      }
+    },
+    "replacement": "&&",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::is_test_file",
+      "return_type": "-> bool",
+      "span": {
+        "start": {
+          "line": 461,
+          "column": 5
+        },
+        "end": {
+          "line": 464,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 463,
+        "column": 35
+      },
+      "end": {
+        "line": 463,
+        "column": 37
+      }
+    },
+    "replacement": "&&",
+    "genre": "BinaryOperator"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::format_command_result",
+      "return_type": "-> Value",
+      "span": {
+        "start": {
+          "line": 466,
+          "column": 5
+        },
+        "end": {
+          "line": 490,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 472,
+        "column": 9
+      },
+      "end": {
+        "line": 489,
+        "column": 17
       }
     },
     "replacement": "Default::default()",
@@ -121,59 +901,29 @@
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
+    "file": "crates/perl-parser/src/execute_command.rs",
     "function": {
-      "function_name": "get_closing_delimiter",
-      "return_type": "-> char",
+      "function_name": "ExecuteCommandProvider::format_command_result",
+      "return_type": "-> Value",
       "span": {
         "start": {
-          "line": 242,
-          "column": 1
+          "line": 466,
+          "column": 5
         },
         "end": {
-          "line": 251,
-          "column": 2
+          "line": 490,
+          "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 245,
-        "column": 9
+        "line": 473,
+        "column": 24
       },
       "end": {
-        "line": 245,
-        "column": 20
-      }
-    },
-    "replacement": "",
-    "genre": "MatchArm"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 197,
-        "column": 43
-      },
-      "end": {
-        "line": 197,
-        "column": 44
+        "line": 473,
+        "column": 25
       }
     },
     "replacement": "",
@@ -181,2249 +931,179 @@
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
+    "file": "crates/perl-parser/src/execute_command.rs",
     "function": {
-      "function_name": "get_closing_delimiter",
-      "return_type": "-> char",
+      "function_name": "ExecuteCommandProvider::normalize_file_path",
+      "return_type": "-> &'a str",
       "span": {
         "start": {
-          "line": 242,
-          "column": 1
+          "line": 492,
+          "column": 5
         },
         "end": {
-          "line": 251,
-          "column": 2
+          "line": 499,
+          "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 246,
+        "line": 494,
         "column": 9
       },
       "end": {
-        "line": 246,
-        "column": 20
+        "line": 498,
+        "column": 10
       }
     },
-    "replacement": "",
-    "genre": "MatchArm"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 137,
-        "column": 41
-      },
-      "end": {
-        "line": 137,
-        "column": 42
-      }
-    },
-    "replacement": "*",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 197,
-        "column": 54
-      },
-      "end": {
-        "line": 197,
-        "column": 56
-      }
-    },
-    "replacement": "||",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 284,
-        "column": 18
-      },
-      "end": {
-        "line": 284,
-        "column": 40
-      }
-    },
-    "replacement": "true",
-    "genre": "MatchArmGuard"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 137,
-        "column": 41
-      },
-      "end": {
-        "line": 137,
-        "column": 42
-      }
-    },
-    "replacement": "-",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 288,
-        "column": 20
-      },
-      "end": {
-        "line": 288,
-        "column": 22
-      }
-    },
-    "replacement": "!=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 99,
-        "column": 22
-      },
-      "end": {
-        "line": 99,
-        "column": 34
-      }
-    },
-    "replacement": "true",
-    "genre": "MatchArmGuard"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 174,
-        "column": 31
-      },
-      "end": {
-        "line": 174,
-        "column": 33
-      }
-    },
-    "replacement": "==",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_regex_parts",
-      "return_type": "-> (String, String)",
-      "span": {
-        "start": {
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "line": 35,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 9,
-        "column": 5
-      },
-      "end": {
-        "line": 34,
-        "column": 37
-      }
-    },
-    "replacement": "(\"xyzzy\".into(), String::new())",
+    "replacement": "\"\"",
     "genre": "FnValue"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
+    "file": "crates/perl-parser/src/execute_command.rs",
     "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
+      "function_name": "ExecuteCommandProvider::normalize_file_path",
+      "return_type": "-> &'a str",
       "span": {
         "start": {
-          "line": 157,
-          "column": 1
+          "line": 492,
+          "column": 5
         },
         "end": {
-          "line": 240,
-          "column": 2
+          "line": 499,
+          "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 197,
-        "column": 57
-      },
-      "end": {
-        "line": 197,
-        "column": 58
-      }
-    },
-    "replacement": "",
-    "genre": "UnaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_regex_parts",
-      "return_type": "-> (String, String)",
-      "span": {
-        "start": {
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "line": 35,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 12,
-        "column": 23
-      },
-      "end": {
-        "line": 12,
-        "column": 24
-      }
-    },
-    "replacement": "==",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 255,
-        "column": 5
-      },
-      "end": {
-        "line": 305,
-        "column": 29
-      }
-    },
-    "replacement": "(String::new(), \"xyzzy\")",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 292,
-        "column": 37
-      },
-      "end": {
-        "line": 292,
-        "column": 38
-      }
-    },
-    "replacement": "*",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 56,
-        "column": 31
-      },
-      "end": {
-        "line": 56,
-        "column": 33
-      }
-    },
-    "replacement": "==",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 160,
-        "column": 5
-      },
-      "end": {
-        "line": 239,
-        "column": 37
-      }
-    },
-    "replacement": "(\"xyzzy\".into(), \"xyzzy\".into(), String::new())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 290,
-        "column": 27
-      },
-      "end": {
-        "line": 290,
-        "column": 29
-      }
-    },
-    "replacement": "+=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 136,
-        "column": 30
-      },
-      "end": {
-        "line": 136,
-        "column": 42
-      }
-    },
-    "replacement": "false",
-    "genre": "MatchArmGuard"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 288,
-        "column": 18
-      },
-      "end": {
-        "line": 288,
-        "column": 28
-      }
-    },
-    "replacement": "false",
-    "genre": "MatchArmGuard"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 48,
-        "column": 5
-      },
-      "end": {
-        "line": 154,
-        "column": 38
-      }
-    },
-    "replacement": "(String::new(), String::new(), String::new())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_regex_parts",
-      "return_type": "-> (String, String)",
-      "span": {
-        "start": {
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "line": 35,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 9,
-        "column": 5
-      },
-      "end": {
-        "line": 34,
-        "column": 37
-      }
-    },
-    "replacement": "(String::new(), \"xyzzy\".into())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 292,
-        "column": 37
-      },
-      "end": {
-        "line": 292,
-        "column": 38
-      }
-    },
-    "replacement": "-",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 291,
-        "column": 30
-      },
-      "end": {
-        "line": 291,
-        "column": 32
-      }
-    },
-    "replacement": "!=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 136,
-        "column": 32
-      },
-      "end": {
-        "line": 136,
-        "column": 34
-      }
-    },
-    "replacement": "!=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 160,
-        "column": 5
-      },
-      "end": {
-        "line": 239,
-        "column": 37
-      }
-    },
-    "replacement": "(String::new(), String::new(), \"xyzzy\".into())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 160,
-        "column": 5
-      },
-      "end": {
-        "line": 239,
-        "column": 37
-      }
-    },
-    "replacement": "(\"xyzzy\".into(), String::new(), \"xyzzy\".into())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 216,
-        "column": 22
-      },
-      "end": {
-        "line": 216,
-        "column": 34
-      }
-    },
-    "replacement": "true",
-    "genre": "MatchArmGuard"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_modifiers",
-      "return_type": "-> String",
-      "span": {
-        "start": {
-          "line": 308,
-          "column": 1
-        },
-        "end": {
-          "line": 318,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 314,
-        "column": 5
-      },
-      "end": {
-        "line": 317,
-        "column": 19
-      }
-    },
-    "replacement": "String::new()",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 48,
-        "column": 5
-      },
-      "end": {
-        "line": 154,
-        "column": 38
-      }
-    },
-    "replacement": "(\"xyzzy\".into(), \"xyzzy\".into(), \"xyzzy\".into())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_regex_parts",
-      "return_type": "-> (String, String)",
-      "span": {
-        "start": {
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "line": 35,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 9,
-        "column": 5
-      },
-      "end": {
-        "line": 34,
-        "column": 37
-      }
-    },
-    "replacement": "(\"xyzzy\".into(), \"xyzzy\".into())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 217,
-        "column": 33
-      },
-      "end": {
-        "line": 217,
-        "column": 34
-      }
-    },
-    "replacement": "*",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 160,
-        "column": 5
-      },
-      "end": {
-        "line": 239,
-        "column": 37
-      }
-    },
-    "replacement": "(String::new(), \"xyzzy\".into(), \"xyzzy\".into())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 99,
-        "column": 24
-      },
-      "end": {
-        "line": 99,
-        "column": 26
-      }
-    },
-    "replacement": "!=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 217,
-        "column": 33
-      },
-      "end": {
-        "line": 217,
-        "column": 34
-      }
-    },
-    "replacement": "-",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "get_closing_delimiter",
-      "return_type": "-> char",
-      "span": {
-        "start": {
-          "line": 242,
-          "column": 1
-        },
-        "end": {
-          "line": 251,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 247,
+        "line": 494,
         "column": 9
       },
       "end": {
-        "line": 247,
-        "column": 20
+        "line": 498,
+        "column": 10
       }
     },
-    "replacement": "",
-    "genre": "MatchArm"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 100,
-        "column": 33
-      },
-      "end": {
-        "line": 100,
-        "column": 34
-      }
-    },
-    "replacement": "*",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 297,
-        "column": 33
-      },
-      "end": {
-        "line": 297,
-        "column": 34
-      }
-    },
-    "replacement": "-",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 160,
-        "column": 5
-      },
-      "end": {
-        "line": 239,
-        "column": 37
-      }
-    },
-    "replacement": "(\"xyzzy\".into(), String::new(), String::new())",
+    "replacement": "\"xyzzy\"",
     "genre": "FnValue"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
+    "file": "crates/perl-parser/src/execute_command.rs",
     "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
+      "function_name": "ExecuteCommandProvider::format_violation",
+      "return_type": "-> Value",
       "span": {
         "start": {
-          "line": 253,
-          "column": 1
+          "line": 501,
+          "column": 5
         },
         "end": {
-          "line": 306,
-          "column": 2
+          "line": 521,
+          "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 255,
-        "column": 5
-      },
-      "end": {
-        "line": 305,
-        "column": 29
-      }
-    },
-    "replacement": "(\"xyzzy\".into(), \"xyzzy\")",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 286,
-        "column": 23
-      },
-      "end": {
-        "line": 286,
-        "column": 25
-      }
-    },
-    "replacement": "*=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_regex_parts",
-      "return_type": "-> (String, String)",
-      "span": {
-        "start": {
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "line": 35,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 9,
-        "column": 5
-      },
-      "end": {
-        "line": 34,
-        "column": 37
-      }
-    },
-    "replacement": "(String::new(), String::new())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 255,
-        "column": 5
-      },
-      "end": {
-        "line": 305,
-        "column": 29
-      }
-    },
-    "replacement": "(\"xyzzy\".into(), \"\")",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 95,
-        "column": 17
-      },
-      "end": {
-        "line": 98,
-        "column": 18
-      }
-    },
-    "replacement": "",
-    "genre": "MatchArm"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 286,
-        "column": 23
-      },
-      "end": {
-        "line": 286,
-        "column": 25
-      }
-    },
-    "replacement": "-=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_regex_parts",
-      "return_type": "-> (String, String)",
-      "span": {
-        "start": {
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "line": 35,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 13,
+        "line": 512,
         "column": 9
       },
       "end": {
-        "line": 13,
+        "line": 520,
         "column": 11
       }
     },
-    "replacement": "||",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 48,
-        "column": 5
-      },
-      "end": {
-        "line": 154,
-        "column": 38
-      }
-    },
-    "replacement": "(\"xyzzy\".into(), String::new(), String::new())",
+    "replacement": "Default::default()",
     "genre": "FnValue"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
+    "file": "crates/perl-parser/src/execute_command.rs",
     "function": {
-      "function_name": "extract_regex_parts",
-      "return_type": "-> (String, String)",
+      "function_name": "ExecuteCommandProvider::format_critic_error",
+      "return_type": "-> Value",
       "span": {
         "start": {
-          "line": 1,
-          "column": 1
+          "line": 523,
+          "column": 5
         },
         "end": {
-          "line": 35,
-          "column": 2
+          "line": 532,
+          "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 12,
-        "column": 23
-      },
-      "end": {
-        "line": 12,
-        "column": 24
-      }
-    },
-    "replacement": "<",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 290,
-        "column": 27
-      },
-      "end": {
-        "line": 290,
-        "column": 29
-      }
-    },
-    "replacement": "/=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 216,
-        "column": 24
-      },
-      "end": {
-        "line": 216,
-        "column": 26
-      }
-    },
-    "replacement": "!=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 288,
-        "column": 18
-      },
-      "end": {
-        "line": 288,
-        "column": 28
-      }
-    },
-    "replacement": "true",
-    "genre": "MatchArmGuard"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 160,
-        "column": 5
-      },
-      "end": {
-        "line": 239,
-        "column": 37
-      }
-    },
-    "replacement": "(String::new(), \"xyzzy\".into(), String::new())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_regex_parts",
-      "return_type": "-> (String, String)",
-      "span": {
-        "start": {
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "line": 35,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 12,
-        "column": 23
-      },
-      "end": {
-        "line": 12,
-        "column": 24
-      }
-    },
-    "replacement": ">=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 256,
-        "column": 26
-      },
-      "end": {
-        "line": 256,
-        "column": 28
-      }
-    },
-    "replacement": "==",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 284,
-        "column": 28
-      },
-      "end": {
-        "line": 284,
-        "column": 30
-      }
-    },
-    "replacement": "||",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 136,
-        "column": 30
-      },
-      "end": {
-        "line": 136,
-        "column": 42
-      }
-    },
-    "replacement": "true",
-    "genre": "MatchArmGuard"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "get_closing_delimiter",
-      "return_type": "-> char",
-      "span": {
-        "start": {
-          "line": 242,
-          "column": 1
-        },
-        "end": {
-          "line": 251,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 248,
+        "line": 525,
         "column": 9
       },
       "end": {
-        "line": 248,
-        "column": 20
-      }
-    },
-    "replacement": "",
-    "genre": "MatchArm"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_regex_parts",
-      "return_type": "-> (String, String)",
-      "span": {
-        "start": {
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "line": 35,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 13,
-        "column": 12
-      },
-      "end": {
-        "line": 13,
-        "column": 13
-      }
-    },
-    "replacement": "",
-    "genre": "UnaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 160,
-        "column": 5
-      },
-      "end": {
-        "line": 239,
-        "column": 37
-      }
-    },
-    "replacement": "(\"xyzzy\".into(), \"xyzzy\".into(), \"xyzzy\".into())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 212,
-        "column": 17
-      },
-      "end": {
-        "line": 215,
-        "column": 18
-      }
-    },
-    "replacement": "",
-    "genre": "MatchArm"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_regex_parts",
-      "return_type": "-> (String, String)",
-      "span": {
-        "start": {
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "line": 35,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 12,
-        "column": 9
-      },
-      "end": {
-        "line": 12,
+        "line": 531,
         "column": 11
       }
     },
-    "replacement": "||",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 297,
-        "column": 33
-      },
-      "end": {
-        "line": 297,
-        "column": 34
-      }
-    },
-    "replacement": "*",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 80,
-        "column": 57
-      },
-      "end": {
-        "line": 80,
-        "column": 58
-      }
-    },
-    "replacement": "",
-    "genre": "UnaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 80,
-        "column": 54
-      },
-      "end": {
-        "line": 80,
-        "column": 56
-      }
-    },
-    "replacement": "||",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 48,
-        "column": 5
-      },
-      "end": {
-        "line": 154,
-        "column": 38
-      }
-    },
-    "replacement": "(String::new(), \"xyzzy\".into(), \"xyzzy\".into())",
+    "replacement": "Default::default()",
     "genre": "FnValue"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
+    "file": "crates/perl-parser/src/execute_command.rs",
     "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
+      "function_name": "ExecuteCommandProvider::create_syntax_error_violation",
+      "return_type": "-> crate::perl_critic::Violation",
       "span": {
         "start": {
-          "line": 37,
-          "column": 1
+          "line": 534,
+          "column": 5
         },
         "end": {
-          "line": 155,
-          "column": 2
+          "line": 555,
+          "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 48,
-        "column": 5
+        "line": 541,
+        "column": 9
       },
       "end": {
-        "line": 154,
-        "column": 38
+        "line": 554,
+        "column": 10
       }
     },
-    "replacement": "(\"xyzzy\".into(), String::new(), \"xyzzy\".into())",
+    "replacement": "Default::default()",
     "genre": "FnValue"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
+    "file": "crates/perl-parser/src/execute_command.rs",
     "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
+      "function_name": "ExecuteCommandProvider::create_syntax_error_violation",
+      "return_type": "-> crate::perl_critic::Violation",
       "span": {
         "start": {
-          "line": 253,
-          "column": 1
+          "line": 534,
+          "column": 5
         },
         "end": {
-          "line": 306,
-          "column": 2
+          "line": 555,
+          "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 260,
-        "column": 14
+        "line": 551,
+        "column": 94
       },
       "end": {
-        "line": 260,
-        "column": 16
-      }
-    },
-    "replacement": "==",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 255,
-        "column": 5
-      },
-      "end": {
-        "line": 305,
-        "column": 29
-      }
-    },
-    "replacement": "(String::new(), \"\")",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
-      "span": {
-        "start": {
-          "line": 253,
-          "column": 1
-        },
-        "end": {
-          "line": 306,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 284,
-        "column": 20
-      },
-      "end": {
-        "line": 284,
-        "column": 22
-      }
-    },
-    "replacement": "!=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 99,
-        "column": 22
-      },
-      "end": {
-        "line": 99,
-        "column": 34
-      }
-    },
-    "replacement": "false",
-    "genre": "MatchArmGuard"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_modifiers",
-      "return_type": "-> String",
-      "span": {
-        "start": {
-          "line": 308,
-          "column": 1
-        },
-        "end": {
-          "line": 318,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 314,
-        "column": 5
-      },
-      "end": {
-        "line": 317,
-        "column": 19
-      }
-    },
-    "replacement": "\"xyzzy\".into()",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 116,
-        "column": 26
-      },
-      "end": {
-        "line": 116,
-        "column": 28
-      }
-    },
-    "replacement": "!=",
-    "genre": "BinaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 132,
-        "column": 25
-      },
-      "end": {
-        "line": 135,
-        "column": 26
-      }
-    },
-    "replacement": "",
-    "genre": "MatchArm"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 80,
-        "column": 43
-      },
-      "end": {
-        "line": 80,
-        "column": 44
-      }
-    },
-    "replacement": "",
-    "genre": "UnaryOperator"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 48,
-        "column": 5
-      },
-      "end": {
-        "line": 154,
-        "column": 38
-      }
-    },
-    "replacement": "(\"xyzzy\".into(), \"xyzzy\".into(), String::new())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_transliteration_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 157,
-          "column": 1
-        },
-        "end": {
-          "line": 240,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 160,
-        "column": 5
-      },
-      "end": {
-        "line": 239,
-        "column": 37
-      }
-    },
-    "replacement": "(String::new(), String::new(), String::new())",
-    "genre": "FnValue"
-  },
-  {
-    "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
-    "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
-      "span": {
-        "start": {
-          "line": 37,
-          "column": 1
-        },
-        "end": {
-          "line": 155,
-          "column": 2
-        }
-      }
-    },
-    "span": {
-      "start": {
-        "line": 100,
-        "column": 33
-      },
-      "end": {
-        "line": 100,
-        "column": 34
+        "line": 551,
+        "column": 95
       }
     },
     "replacement": "-",
@@ -2431,62 +1111,182 @@
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
+    "file": "crates/perl-parser/src/execute_command.rs",
     "function": {
-      "function_name": "extract_delimited_content",
-      "return_type": "-> (String, &str)",
+      "function_name": "ExecuteCommandProvider::create_syntax_error_violation",
+      "return_type": "-> crate::perl_critic::Violation",
       "span": {
         "start": {
-          "line": 253,
-          "column": 1
+          "line": 534,
+          "column": 5
         },
         "end": {
-          "line": 306,
-          "column": 2
+          "line": 555,
+          "column": 6
         }
       }
     },
     "span": {
       "start": {
-        "line": 280,
-        "column": 13
+        "line": 551,
+        "column": 94
       },
       "end": {
-        "line": 283,
-        "column": 14
+        "line": 551,
+        "column": 95
       }
     },
-    "replacement": "",
-    "genre": "MatchArm"
+    "replacement": "*",
+    "genre": "BinaryOperator"
   },
   {
     "package": "perl-parser",
-    "file": "crates/perl-parser/src/quote_parser.rs",
+    "file": "crates/perl-parser/src/execute_command.rs",
     "function": {
-      "function_name": "extract_substitution_parts",
-      "return_type": "-> (String, String, String)",
+      "function_name": "ExecuteCommandProvider::command_exists",
+      "return_type": "-> bool",
       "span": {
         "start": {
-          "line": 37,
+          "line": 557,
+          "column": 5
+        },
+        "end": {
+          "line": 564,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 559,
+        "column": 9
+      },
+      "end": {
+        "line": 563,
+        "column": 30
+      }
+    },
+    "replacement": "true",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "ExecuteCommandProvider::command_exists",
+      "return_type": "-> bool",
+      "span": {
+        "start": {
+          "line": 557,
+          "column": 5
+        },
+        "end": {
+          "line": 564,
+          "column": 6
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 559,
+        "column": 9
+      },
+      "end": {
+        "line": 563,
+        "column": 30
+      }
+    },
+    "replacement": "false",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "get_supported_commands",
+      "return_type": "-> Vec<String>",
+      "span": {
+        "start": {
+          "line": 567,
           "column": 1
         },
         "end": {
-          "line": 155,
+          "line": 603,
           "column": 2
         }
       }
     },
     "span": {
       "start": {
-        "line": 48,
+        "line": 596,
         "column": 5
       },
       "end": {
-        "line": 154,
-        "column": 38
+        "line": 602,
+        "column": 6
       }
     },
-    "replacement": "(String::new(), String::new(), \"xyzzy\".into())",
+    "replacement": "vec![]",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "get_supported_commands",
+      "return_type": "-> Vec<String>",
+      "span": {
+        "start": {
+          "line": 567,
+          "column": 1
+        },
+        "end": {
+          "line": 603,
+          "column": 2
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 596,
+        "column": 5
+      },
+      "end": {
+        "line": 602,
+        "column": 6
+      }
+    },
+    "replacement": "vec![String::new()]",
+    "genre": "FnValue"
+  },
+  {
+    "package": "perl-parser",
+    "file": "crates/perl-parser/src/execute_command.rs",
+    "function": {
+      "function_name": "get_supported_commands",
+      "return_type": "-> Vec<String>",
+      "span": {
+        "start": {
+          "line": 567,
+          "column": 1
+        },
+        "end": {
+          "line": 603,
+          "column": 2
+        }
+      }
+    },
+    "span": {
+      "start": {
+        "line": 596,
+        "column": 5
+      },
+      "end": {
+        "line": 602,
+        "column": 6
+      }
+    },
+    "replacement": "vec![\"xyzzy\".into()]",
     "genre": "FnValue"
   }
 ]
