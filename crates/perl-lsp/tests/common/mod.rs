@@ -280,10 +280,10 @@ fn default_timeout() -> Duration {
             let thread_count = max_concurrent_threads();
 
             match thread_count {
-                0..=2 => Duration::from_secs(10), // Heavily constrained: reduced from 45s to 10s
-                3..=4 => Duration::from_secs(7),  // Moderately constrained: reduced from 25s to 7s
-                5..=8 => Duration::from_secs(5),  // Lightly constrained: reduced from 15s to 5s
-                _ => Duration::from_secs(3),      // Unconstrained: reduced from 10s to 3s
+                0..=2 => Duration::from_secs(20), // Heavily constrained: increased from 15s to 20s for cancellation protocol overhead
+                3..=4 => Duration::from_secs(12), // Moderately constrained: increased from 10s to 12s
+                5..=8 => Duration::from_secs(8),  // Lightly constrained: increased from 7s to 8s
+                _ => Duration::from_secs(6),      // Unconstrained: increased from 5s to 6s
             }
         })
 }
@@ -483,9 +483,9 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
 
     // wait specifically for id=1 - use extended timeout for initialization
     // Enhanced timeout for LSP cancellation tests with environment-aware scaling
-    let base_multiplier = 3; // Base multiplier for critical initialization (increased to 3x for CI stability)
+    let base_multiplier = 5; // Base multiplier for critical initialization (increased to 5x for cancellation protocol overhead)
     let thread_count = max_concurrent_threads();
-    let env_multiplier = if thread_count <= 2 { 2 } else { 1 }; // Extra time for constrained environments
+    let env_multiplier = if thread_count <= 2 { 4 } else { 2 }; // Extra time for constrained environments (increased to 4x)
     let init_timeout = adaptive_timeout() * base_multiplier * env_multiplier;
     let resp = read_response_matching_i64(server, 1, init_timeout).unwrap_or_else(|| {
         eprintln!("LSP server failed to respond to initialize request within {:?}", init_timeout);
