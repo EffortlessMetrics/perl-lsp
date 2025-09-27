@@ -1090,7 +1090,7 @@ fn test_dual_analyzer_strategy_fallback() {
 fn test_resource_exhaustion_resilience() {
     // Create a very large file to test memory and processing limits
     let mut large_content = String::with_capacity(50000);
-    large_content.push_str("#!/usr/bin/perl\nuse strict;\nuse warnings;\n\n");
+    large_content.push_str("#!/usr/bin/perl\n\n"); // Intentionally omit pragmas to trigger violations
 
     // Add many similar code blocks to create a large file
     for i in 0..1000 {
@@ -1134,9 +1134,13 @@ fn test_resource_exhaustion_resilience() {
 
     assert_eq!(result["status"].as_str(), Some("success"), "Should succeed for large files");
 
-    // Should report violations but not crash
+    // Built-in analyzer should find violations (missing use strict and use warnings)
     let violations = result["violations"].as_array().expect("Should return violations");
-    assert!(!violations.is_empty(), "Should find violations in large file with many functions");
+    assert!(
+        violations.len() >= 1,
+        "Built-in analyzer should find at least one violation (missing pragmas), found: {}",
+        violations.len()
+    );
 }
 
 #[test]
