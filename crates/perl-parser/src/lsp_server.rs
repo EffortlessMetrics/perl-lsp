@@ -537,10 +537,7 @@ impl LspServer {
                         // Attempt to extract malformed content safely (no sensitive data logging)
                         let content_str = String::from_utf8_lossy(&content);
                         if content_str.len() > 100 {
-                            eprintln!(
-                                "LSP server: Malformed frame (truncated): {}...",
-                                &content_str[..100]
-                            );
+                            eprintln!("LSP server: Malformed frame (truncated): {}...", &content_str[..100]);
                         } else {
                             eprintln!("LSP server: Malformed frame: {}", content_str);
                         }
@@ -574,12 +571,7 @@ impl LspServer {
     }
 
     /// Create an enhanced error response with comprehensive context
-    fn enhanced_error(
-        code: i32,
-        message: &str,
-        error_type: &str,
-        method: Option<&str>,
-    ) -> JsonRpcError {
+    fn enhanced_error(code: i32, message: &str, error_type: &str, method: Option<&str>) -> JsonRpcError {
         let mut data = json!({
             "error_type": error_type,
             "context": "Enhanced LSP error response with comprehensive context",
@@ -598,15 +590,11 @@ impl LspServer {
             data["method"] = json!(method_name);
         }
 
-        JsonRpcError { code, message: message.to_string(), data: Some(data) }
-    }
-
-    /// Create a standard document not found error response
-    fn document_not_found_error() -> Value {
-        json!({
-            "status": "error",
-            "message": "Document not found"
-        })
+        JsonRpcError {
+            code,
+            message: message.to_string(),
+            data: Some(data),
+        }
     }
 
     /// Mark a request as cancelled
@@ -963,7 +951,7 @@ impl LspServer {
                     ERR_METHOD_NOT_FOUND,
                     &format!("Method '{}' not found or not supported", request.method),
                     "method_not_found",
-                    Some(&request.method),
+                    Some(&request.method)
                 ))
             }
         };
@@ -5306,58 +5294,7 @@ impl LspServer {
     }
 
     // === BEGIN_TEST_ONLY_POSITION_HELPERS ===
-    /// Convert byte offset to line/column position with UTF-16 awareness and CRLF safety.
-    ///
-    /// This method provides comprehensive position conversion for LSP protocol compliance,
-    /// handling Unicode characters (including emojis), CRLF line endings, and UTF-16
-    /// boundary protection as implemented in PR #153 security fixes.
-    ///
-    /// # Parameters
-    ///
-    /// * `content` - The source text content to analyze
-    /// * `offset` - Byte offset within the content to convert
-    ///
-    /// # Returns
-    ///
-    /// A tuple `(line, character)` where:
-    /// - `line` is the zero-based line number
-    /// - `character` is the zero-based UTF-16 code unit column position
-    ///
-    /// # Unicode and Emoji Handling
-    ///
-    /// Properly handles multi-byte UTF-8 characters and emoji by:
-    /// - Converting to UTF-16 code units for LSP protocol compliance
-    /// - Handling surrogate pairs for emojis (2 UTF-16 code units)
-    /// - Mid-character boundary detection for security
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use perl_parser::lsp_server::LspServer;
-    /// # let lsp = LspServer::new();
-    /// // Basic ASCII text
-    /// let content = "hello\nworld";
-    /// assert_eq!(lsp.offset_to_position(content, 0), (0, 0));  // 'h'
-    /// assert_eq!(lsp.offset_to_position(content, 6), (1, 0));  // 'w'
-    ///
-    /// // Emoji handling (emoji takes 2 UTF-16 code units)
-    /// let emoji_content = "hi 🚀 there";
-    /// let (line, col) = lsp.offset_to_position(emoji_content, 7); // after emoji
-    /// assert_eq!(line, 0);
-    /// assert_eq!(col, 5); // 'h', 'i', ' ', surrogate_pair(2), ' '
-    /// ```
-    ///
-    /// # Performance
-    ///
-    /// This method performs O(n) traversal for position conversion. For incremental
-    /// parsing with <1ms update requirements, prefer the cached `pos16_to_offset`
-    /// method which provides O(log n) performance using rope-based line indexing.
-    ///
-    /// # Security
-    ///
-    /// Implements UTF-16 boundary protection from PR #153 to prevent position
-    /// conversion vulnerabilities when handling offsets that fall within
-    /// multi-byte character boundaries.
+    /// Convert offset to line/column position (UTF-16 aware, CRLF safe)
     #[allow(deprecated)]
     pub fn offset_to_position(&self, content: &str, offset: usize) -> (u32, u32) {
         let mut line = 0u32;
@@ -5366,21 +5303,7 @@ impl LspServer {
         let mut chars = content.chars().peekable();
 
         while let Some(ch) = chars.next() {
-            let ch_len = ch.len_utf8();
-
-            // Check if we've exactly reached the offset
-            if byte_pos == offset {
-                return (line, col_utf16);
-            }
-
-            // Check if offset falls within this character
-            if byte_pos < offset && offset < byte_pos + ch_len {
-                // Offset is within this character, return current position
-                return (line, col_utf16);
-            }
-
-            // Check if we've passed the offset
-            if byte_pos > offset {
+            if byte_pos >= offset {
                 break;
             }
 
@@ -5402,19 +5325,19 @@ impl LspServer {
                         // Solo \r - treat as line ending
                         line += 1;
                         col_utf16 = 0;
-                        byte_pos += ch_len;
+                        byte_pos += ch.len_utf8();
                     }
                 }
                 '\n' => {
                     // LF (could be standalone or part of CRLF, but CRLF is handled above)
                     line += 1;
                     col_utf16 = 0;
-                    byte_pos += ch_len;
+                    byte_pos += ch.len_utf8();
                 }
                 _ => {
                     // Regular character
                     col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
-                    byte_pos += ch_len;
+                    byte_pos += ch.len_utf8();
                 }
             }
         }
@@ -5422,74 +5345,7 @@ impl LspServer {
         (line, col_utf16)
     }
 
-    /// Convert line/column position to byte offset with UTF-16 awareness and CRLF safety.
-    ///
-    /// This method provides comprehensive position-to-offset conversion for LSP protocol
-    /// compliance, handling Unicode characters (including emojis), CRLF line endings,
-    /// and UTF-16 boundary protection as implemented in PR #153 security fixes.
-    ///
-    /// # Parameters
-    ///
-    /// * `content` - The source text content to analyze
-    /// * `line` - Zero-based line number (LSP protocol standard)
-    /// * `character` - Zero-based UTF-16 code unit column position
-    ///
-    /// # Returns
-    ///
-    /// The byte offset within the content corresponding to the given position.
-    /// If the position is beyond the content bounds, returns the content length (EOF).
-    ///
-    /// # Unicode and Emoji Handling
-    ///
-    /// Properly handles multi-byte UTF-8 characters and emoji by:
-    /// - Interpreting `character` parameter as UTF-16 code units
-    /// - Handling surrogate pairs for emojis (2 UTF-16 code units per emoji)
-    /// - Mid-character boundary protection for security
-    /// - Mapping mid-character positions to character end boundaries
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use perl_parser::lsp_server::LspServer;
-    /// # let lsp = LspServer::new();
-    /// // Basic ASCII text
-    /// let content = "hello\nworld";
-    /// assert_eq!(lsp.position_to_offset(content, 0, 0), 0);  // 'h'
-    /// assert_eq!(lsp.position_to_offset(content, 1, 0), 6);  // 'w'
-    ///
-    /// // Emoji handling (emoji takes 2 UTF-16 code units)
-    /// let emoji_content = "hi 🚀 there";
-    /// let offset = lsp.position_to_offset(emoji_content, 0, 5); // after emoji
-    /// assert_eq!(offset, 7); // 'h' + 'i' + ' ' + emoji(4 bytes) = 7
-    /// ```
-    ///
-    /// # Line Ending Handling
-    ///
-    /// Supports both Unix (LF) and Windows (CRLF) line endings:
-    /// - CRLF pairs are treated as single line endings
-    /// - Positions within CRLF sequences are handled safely
-    /// - Maintains LSP protocol compliance for cross-platform editing
-    ///
-    /// # Performance
-    ///
-    /// This method performs O(n) traversal for position conversion. For incremental
-    /// parsing with <1ms update requirements in workspace navigation, prefer the cached
-    /// `pos16_to_offset` method which provides O(log n) performance using rope-based
-    /// line indexing.
-    ///
-    /// # Security
-    ///
-    /// Implements UTF-16 boundary protection from PR #153 to prevent position
-    /// conversion vulnerabilities. When a UTF-16 position falls within a multi-byte
-    /// character boundary, the position is mapped to the end of the character for safety.
-    ///
-    /// # LSP Protocol Integration
-    ///
-    /// Essential for LSP protocol compliance (~89% features functional) enabling:
-    /// - Accurate cursor positioning in editors supporting UTF-16
-    /// - Cross-file navigation with dual indexing strategy (98% reference coverage)
-    /// - Incremental parsing position tracking (<1ms updates)
-    /// - Workspace symbol resolution and completion positioning
+    /// Convert line/column position to offset (UTF-16 aware, CRLF safe)
     #[allow(deprecated)]
     pub fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
         let mut cur_line = 0u32;
@@ -5520,18 +5376,7 @@ impl LspServer {
                 _ => {
                     // Regular character - only count UTF-16 units on target line
                     if cur_line == line {
-                        let utf16_len = if ch.len_utf16() == 2 { 2 } else { 1 };
-                        // Check if we've reached the target position before processing this character
-                        if col_utf16 >= character {
-                            return byte_idx;
-                        }
-                        // Check if adding this character would exceed the target position
-                        if col_utf16 + utf16_len > character {
-                            // The target position falls within this character
-                            // Map it to the position after this character
-                            return byte_idx + ch.len_utf8();
-                        }
-                        col_utf16 += utf16_len;
+                        col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
                     }
                 }
             }
@@ -7818,21 +7663,6 @@ impl LspServer {
 
         if let Some(params) = params {
             let command = params["command"].as_str().unwrap_or("");
-
-            // LSP 3.17 compliance: arguments field is required even if empty
-            if !params.as_object().unwrap_or(&serde_json::Map::new()).contains_key("arguments") {
-                return Err(JsonRpcError {
-                    code: -32602, // InvalidParams
-                    message: "Missing required 'arguments' field in executeCommand request"
-                        .to_string(),
-                    data: Some(json!({
-                        "command": command,
-                        "errorType": "executeCommand",
-                        "originalError": "Missing 'arguments' field"
-                    })),
-                });
-            }
-
             let arguments = params["arguments"].as_array().cloned().unwrap_or_default();
 
             eprintln!("Executing command: {}", command);
@@ -7899,15 +7729,7 @@ impl LspServer {
             }
         }
 
-        // Missing params entirely
-        Err(JsonRpcError {
-            code: -32602, // InvalidParams
-            message: "Missing parameters for executeCommand request".to_string(),
-            data: Some(json!({
-                "errorType": "executeCommand",
-                "originalError": "Missing params"
-            })),
-        })
+        Ok(Some(json!({"status": "error", "message": "Invalid parameters"})))
     }
 
     /// Run a specific test
@@ -7947,7 +7769,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(Self::document_not_found_error()))
+        Ok(Some(json!({"status": "error", "message": "Document not found"})))
     }
 
     /// Run all tests in a file
@@ -7978,7 +7800,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(Self::document_not_found_error()))
+        Ok(Some(json!({"status": "error", "message": "Document not found"})))
     }
 
     /// Run Perl::Critic on a file
@@ -8089,7 +7911,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(Self::document_not_found_error()))
+        Ok(Some(json!({"status": "error", "message": "Document not found"})))
     }
 
     /// Handle workspace/configuration request
@@ -8508,121 +8330,11 @@ impl LspServer {
     }
 
     // Test-only public methods (enabled for unit tests or integration tests with expose_lsp_test_api)
-
-    /// Test-only wrapper for the `textDocument/didOpen` LSP notification handler.
-    ///
-    /// This method provides public access to the internal `handle_did_open` method for
-    /// testing and integration scenarios. It enables comprehensive testing of document
-    /// lifecycle management and workspace indexing functionality.
-    ///
-    /// # Parameters
-    ///
-    /// * `params` - Optional JSON value containing LSP `DidOpenTextDocumentParams`:
-    ///   - `textDocument.uri` - Document URI to open
-    ///   - `textDocument.languageId` - Language identifier (typically "perl")
-    ///   - `textDocument.version` - Document version number
-    ///   - `textDocument.text` - Full document content
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - Document successfully opened and indexed
-    /// * `Err(JsonRpcError)` - Document opening failed due to invalid parameters or indexing errors
-    ///
-    /// # Testing Context
-    ///
-    /// This method is only available when compiled with:
-    /// - Test configuration (`#[cfg(test)]`)
-    /// - Feature flag `expose_lsp_test_api` for integration testing
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # #[cfg(any(test, feature = "expose_lsp_test_api"))]
-    /// # {
-    /// # use perl_parser::lsp_server::PerlLsp;
-    /// # use serde_json::{json, Value};
-    /// # let lsp = PerlLsp::new();
-    /// let params = json!({
-    ///     "textDocument": {
-    ///         "uri": "file:///test.pl",
-    ///         "languageId": "perl",
-    ///         "version": 1,
-    ///         "text": "use strict;\nprint \"Hello, World!\\n\";"
-    ///     }
-    /// });
-    ///
-    /// let result = lsp.test_handle_did_open(Some(params));
-    /// assert!(result.is_ok());
-    /// # }
-    /// ```
-    ///
-    /// # Perl LSP Integration
-    ///
-    /// Essential for testing:
-    /// - Document parsing and AST generation
-    /// - Workspace indexing with dual pattern matching (98% reference coverage)
-    /// - Incremental parsing infrastructure (<1ms updates)
-    /// - Cross-file navigation and symbol resolution
-    /// - LSP protocol compliance validation (~89% features functional)
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub fn test_handle_did_open(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         self.handle_did_open(params)
     }
 
-    /// Test-only wrapper for the `textDocument/definition` LSP request handler.
-    ///
-    /// This method provides public access to the internal `handle_definition` method for
-    /// testing and integration scenarios. It enables comprehensive testing of go-to-definition
-    /// functionality, cross-file navigation, and symbol resolution with dual indexing strategy.
-    ///
-    /// # Parameters
-    ///
-    /// * `params` - Optional JSON value containing LSP `DefinitionParams`:
-    ///   - `textDocument.uri` - Document URI containing the symbol
-    ///   - `position.line` - Zero-based line number of the symbol
-    ///   - `position.character` - Zero-based UTF-16 character position
-    ///   - `context` - Optional definition context for enhanced resolution
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(Some(Value))` - JSON array of `Location` objects representing symbol definitions
-    /// * `Ok(None)` - No definitions found for the symbol at the given position
-    /// * `Err(JsonRpcError)` - Request failed due to invalid parameters or parsing errors
-    ///
-    /// # Testing Context
-    ///
-    /// This method is only available when compiled with:
-    /// - Test configuration (`#[cfg(test)]`)
-    /// - Feature flag `expose_lsp_test_api` for integration testing
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # #[cfg(any(test, feature = "expose_lsp_test_api"))]
-    /// # {
-    /// # use perl_parser::lsp_server::PerlLsp;
-    /// # use serde_json::{json, Value};
-    /// # let lsp = PerlLsp::new();
-    /// let params = json!({
-    ///     "textDocument": {"uri": "file:///test.pl"},
-    ///     "position": {"line": 5, "character": 10}
-    /// });
-    ///
-    /// let result = lsp.test_handle_definition(Some(params));
-    /// if let Ok(Some(locations)) = result {
-    ///     // Process definition locations
-    /// }
-    /// # }
-    /// ```
-    ///
-    /// # Perl LSP Integration
-    ///
-    /// Essential for testing:
-    /// - Package::subroutine definition resolution with dual indexing (98% coverage)
-    /// - Cross-file navigation and workspace symbol lookup
-    /// - Multi-tier fallback system (workspace → text search → fuzzy matching)
-    /// - UTF-16 position conversion for accurate symbol location
-    /// - LSP protocol compliance for go-to-definition requests
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub fn test_handle_definition(
         &self,
@@ -8631,62 +8343,6 @@ impl LspServer {
         self.handle_definition(params)
     }
 
-    /// Test-only wrapper for the `textDocument/references` LSP request handler.
-    ///
-    /// This method provides public access to the internal `handle_references` method for
-    /// testing and integration scenarios. It enables comprehensive testing of find-references
-    /// functionality, cross-file reference discovery, and dual-pattern reference matching.
-    ///
-    /// # Parameters
-    ///
-    /// * `params` - Optional JSON value containing LSP `ReferenceParams`:
-    ///   - `textDocument.uri` - Document URI containing the symbol
-    ///   - `position.line` - Zero-based line number of the symbol
-    ///   - `position.character` - Zero-based UTF-16 character position
-    ///   - `context.includeDeclaration` - Whether to include symbol declaration in results
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(Some(Value))` - JSON array of `Location` objects representing symbol references
-    /// * `Ok(None)` - No references found for the symbol at the given position
-    /// * `Err(JsonRpcError)` - Request failed due to invalid parameters or parsing errors
-    ///
-    /// # Testing Context
-    ///
-    /// This method is only available when compiled with:
-    /// - Test configuration (`#[cfg(test)]`)
-    /// - Feature flag `expose_lsp_test_api` for integration testing
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # #[cfg(any(test, feature = "expose_lsp_test_api"))]
-    /// # {
-    /// # use perl_parser::lsp_server::PerlLsp;
-    /// # use serde_json::{json, Value};
-    /// # let lsp = PerlLsp::new();
-    /// let params = json!({
-    ///     "textDocument": {"uri": "file:///test.pl"},
-    ///     "position": {"line": 5, "character": 10},
-    ///     "context": {"includeDeclaration": true}
-    /// });
-    ///
-    /// let result = lsp.test_handle_references(Some(params));
-    /// if let Ok(Some(references)) = result {
-    ///     // Process reference locations
-    /// }
-    /// # }
-    /// ```
-    ///
-    /// # Perl LSP Integration
-    ///
-    /// Essential for testing:
-    /// - Dual-pattern reference search with qualified/unqualified name matching
-    /// - Cross-file reference discovery with 98% reference coverage
-    /// - Workspace indexing validation for comprehensive symbol tracking
-    /// - UTF-16 position conversion for accurate reference location
-    /// - LSP protocol compliance for find-references requests
-    /// - Enhanced reference resolution with Package::function and bare function patterns
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub fn test_handle_references(
         &self,
@@ -8695,63 +8351,6 @@ impl LspServer {
         self.handle_references(params)
     }
 
-    /// Test-only wrapper for the `textDocument/completion` LSP request handler.
-    ///
-    /// This method provides public access to the internal `handle_completion` method for
-    /// testing and integration scenarios. It enables comprehensive testing of code completion
-    /// functionality, symbol suggestion, and context-aware completion with workspace indexing.
-    ///
-    /// # Parameters
-    ///
-    /// * `params` - Optional JSON value containing LSP `CompletionParams`:
-    ///   - `textDocument.uri` - Document URI containing the completion request
-    ///   - `position.line` - Zero-based line number of the completion position
-    ///   - `position.character` - Zero-based UTF-16 character position
-    ///   - `context` - Optional completion context (trigger kind, trigger character)
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(Some(Value))` - JSON object containing `CompletionList` or array of `CompletionItem`
-    /// * `Ok(None)` - No completions available at the given position
-    /// * `Err(JsonRpcError)` - Request failed due to invalid parameters or parsing errors
-    ///
-    /// # Testing Context
-    ///
-    /// This method is only available when compiled with:
-    /// - Test configuration (`#[cfg(test)]`)
-    /// - Feature flag `expose_lsp_test_api` for integration testing
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # #[cfg(any(test, feature = "expose_lsp_test_api"))]
-    /// # {
-    /// # use perl_parser::lsp_server::PerlLsp;
-    /// # use serde_json::{json, Value};
-    /// # let lsp = PerlLsp::new();
-    /// let params = json!({
-    ///     "textDocument": {"uri": "file:///test.pl"},
-    ///     "position": {"line": 5, "character": 10},
-    ///     "context": {"triggerKind": 1}
-    /// });
-    ///
-    /// let result = lsp.test_handle_completion(Some(params));
-    /// if let Ok(Some(completions)) = result {
-    ///     // Process completion items
-    /// }
-    /// # }
-    /// ```
-    ///
-    /// # Perl LSP Integration
-    ///
-    /// Essential for testing:
-    /// - Context-aware symbol completion with workspace indexing
-    /// - Package::subroutine completion with dual indexing strategy
-    /// - Builtin function and pragma completion (use strict, use warnings)
-    /// - Variable and method completion with scope analysis
-    /// - File path completion with enterprise security safeguards
-    /// - UTF-16 position conversion for accurate completion positioning
-    /// - LSP protocol compliance for completion requests with resolve support
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub fn test_handle_completion(
         &self,
