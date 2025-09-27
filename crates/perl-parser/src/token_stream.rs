@@ -21,6 +21,98 @@
 //! - Efficient token buffering reduces allocation overhead for large Perl scripts
 //! - Position tracking enables precise error reporting across complex Perl code
 //! - Token type simplification optimizes parser performance for common Perl script patterns
+//!
+//! # Usage Examples
+//!
+//! ## Basic Token Stream Creation
+//!
+//! ```
+//! use perl_parser::token_stream::{TokenStream, Token, TokenKind};
+//!
+//! let code = "my $x = 42;";
+//! let mut stream = TokenStream::new(code);
+//!
+//! // Peek at the next token without consuming it
+//! if let Ok(token) = stream.peek() {
+//!     println!("Next token: {:?} = '{}'", token.kind, token.text);
+//! }
+//!
+//! // Consume tokens one by one
+//! while let Ok(token) = stream.next() {
+//!     if token.kind == TokenKind::Eof { break; }
+//!     println!("Token: {:?} at position {}-{}", token.kind, token.start, token.end);
+//! }
+//! ```
+//!
+//! ## Advanced Token Manipulation
+//!
+//! ```
+//! use perl_parser::token_stream::{TokenStream, TokenKind};
+//!
+//! let code = "sub hello { print \"world\"; }";
+//! let mut stream = TokenStream::new(code);
+//!
+//! // Look ahead at the next token
+//! if let Ok(next_token) = stream.peek() {
+//!     println!("Next token: {:?}", next_token.kind);
+//! }
+//!
+//! // Look ahead at second token
+//! if let Ok(second_token) = stream.peek_second() {
+//!     println!("Second token: {:?}", second_token.kind);
+//! }
+//!
+//! // Process tokens with error handling
+//! match stream.next() {
+//!     Ok(token) => {
+//!         if token.kind == TokenKind::Identifier {
+//!             println!("Got identifier: {}", token.text);
+//!         } else {
+//!             println!("Found token: {:?}", token.kind);
+//!         }
+//!     }
+//!     Err(err) => eprintln!("Error getting token: {}", err),
+//! }
+//! ```
+//!
+//! ## Position Tracking and Error Reporting
+//!
+//! ```
+//! use perl_parser::token_stream::{TokenStream, TokenKind};
+//!
+//! let code = "my $invalid = ;"; // Syntax error
+//! let mut stream = TokenStream::new(code);
+//!
+//! while let Ok(token) = stream.next() {
+//!     if token.kind == TokenKind::Eof { break; }
+//!     // Use position information for precise error reporting
+//!     if token.text == ";" {
+//!         eprintln!("Found semicolon at position {}-{}",
+//!                  token.start, token.end);
+//!     }
+//! }
+//! ```
+//!
+//! ## LSP Integration Example
+//!
+//! ```no_run
+//! use perl_parser::{Parser, token_stream::TokenStream};
+//! use perl_parser::SemanticTokensProvider;
+//!
+//! let code = "package MyModule; sub new { my $class = shift; bless {}, $class; }";
+//! let mut stream = TokenStream::new(code);
+//! let mut parser = Parser::new(code); // Parser::new instead of from_token_stream
+//!
+//! // Parse for LSP semantic tokens
+//! match parser.parse() {
+//!     Ok(ast) => {
+//!         let provider = SemanticTokensProvider::new(code.to_string());
+//!         let tokens = provider.extract(&ast);
+//!         println!("Generated {} semantic tokens", tokens.len());
+//!     }
+//!     Err(err) => eprintln!("Parse error: {}", err),
+//! }
+//! ```
 
 use crate::error::{ParseError, ParseResult};
 use perl_lexer::{LexerMode, PerlLexer, Token as LexerToken, TokenType as LexerTokenType};

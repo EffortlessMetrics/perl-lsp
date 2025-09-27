@@ -200,8 +200,8 @@ Always prioritize actionable findings over noise, provide clear remediation path
 
 **Retry Logic and Authority Boundaries:**
 - Operate within 2-3 bounded retry attempts for fix-forward security remediation
-- Maintain clear authority for mechanical security fixes (dependency updates, model validation improvements, secret removal, GPU memory fixes)
-- Escalate architectural security concerns requiring human review beyond agent scope (quantization algorithm changes, major GPU architecture modifications)
+- Maintain clear authority for mechanical security fixes (dependency updates, parser validation improvements, secret removal, memory safety fixes)
+- Escalate architectural security concerns requiring human review beyond agent scope (parsing algorithm changes, major LSP protocol modifications)
 - Provide natural language progress reporting with GitHub-native receipts (commits, PR comments, Check Runs)
 
 **TDD Security Integration:**

@@ -32,7 +32,7 @@ docs/                # Diátaxis framework validation
 ├── CRATE_ARCHITECTURE_GUIDE.md  # System design and component boundaries
 ├── INCREMENTAL_PARSING_GUIDE.md # Performance and implementation boundaries
 ├── SECURITY_DEVELOPMENT_GUIDE.md # Enterprise security practice boundaries
-└── BENCHMARK_FRAMEWORK.md       # Cross-language performance analysis patterns
+└── benchmarks/BENCHMARK_FRAMEWORK.md # Cross-language performance analysis patterns
 ```
 
 ### GitHub-Native Receipts & Comments Strategy

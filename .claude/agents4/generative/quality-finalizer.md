@@ -146,7 +146,7 @@ highlight: tree-sitter integration validated
 - Bounded retry strategy (max 2 self-retries, then route forward with evidence)
 - Routing decision to appropriate specialist agent based on failure type
 - Single PR Ledger comment updated with failure details, evidence, and next steps
-- Specific BitNet.rs commands provided for remediation
+- Specific Perl LSP commands provided for remediation
 - Gates table shows mix of pass/fail/skipped with detailed evidence for failures
 
 **Mode 3: Partial Success with Specialist Routing (NEXT → appropriate-agent)**

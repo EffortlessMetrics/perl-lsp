@@ -21,6 +21,85 @@
 //! - Fast pattern matching via enum variants for common Perl script constructs
 //! - Location tracking for precise error reporting during large file processing
 //! - Clone optimization for concurrent processing across multiple email threads
+//!
+//! # Usage Examples
+//!
+//! ## Basic AST Construction
+//!
+//! ```
+//! use perl_parser::ast::{Node, NodeKind, SourceLocation};
+//!
+//! // Create a simple variable declaration node
+//! let location = SourceLocation { start: 0, end: 10 };
+//! let node = Node::new(
+//!     NodeKind::VariableDeclaration {
+//!         declarator: "my".to_string(),
+//!         variable: Box::new(Node::new(
+//!             NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+//!             location
+//!         )),
+//!         attributes: vec![],
+//!         initializer: None,
+//!     },
+//!     location
+//! );
+//! ```
+//!
+//! ## Tree-sitter S-expression Generation
+//!
+//! ```
+//! use perl_parser::{Parser, ast::Node};
+//!
+//! let code = "my $x = 42;";
+//! let mut parser = Parser::new(code);
+//! let ast = parser.parse().unwrap();
+//!
+//! // Convert to tree-sitter compatible format
+//! let sexp = ast.to_sexp();
+//! println!("S-expression: {}", sexp);
+//! ```
+//!
+//! ## AST Traversal and Analysis
+//!
+//! ```
+//! use perl_parser::ast::{Node, NodeKind};
+//!
+//! fn count_variables(node: &Node) -> usize {
+//!     let mut count = 0;
+//!     match &node.kind {
+//!         NodeKind::Variable { .. } => count += 1,
+//!         NodeKind::Program { statements } => {
+//!             for stmt in statements {
+//!                 count += count_variables(stmt);
+//!             }
+//!         }
+//!         _ => {} // Handle other node types as needed
+//!     }
+//!     count
+//! }
+//! ```
+//!
+//! ## LSP Integration Example
+//!
+//! ```no_run
+//! use perl_parser::{Parser, symbol::SymbolExtractor};
+//!
+//! // Parse Perl code and extract symbols for LSP
+//! let code = "sub hello { my $name = shift; print \"Hello, $name!\\n\"; }";
+//! let mut parser = Parser::new(code);
+//! let ast = parser.parse().unwrap();
+//!
+//! // Extract symbols for workspace indexing
+//! let extractor = SymbolExtractor::new();
+//! let symbol_table = extractor.extract(&ast);
+//!
+//! // Use symbols for LSP features like go-to-definition
+//! for (name, symbols) in &symbol_table.symbols {
+//!     for symbol in symbols {
+//!         println!("Found symbol: {} at {:?}", symbol.name, symbol.location);
+//!     }
+//! }
+//! ```
 
 use std::fmt;
 

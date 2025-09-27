@@ -45,7 +45,7 @@ docs/
 ├── CRATE_ARCHITECTURE_GUIDE.md  # System design cross-references
 ├── INCREMENTAL_PARSING_GUIDE.md # Performance benchmarks and citations
 ├── SECURITY_DEVELOPMENT_GUIDE.md # Security practices and CVE references
-├── BENCHMARK_FRAMEWORK.md       # Performance comparison links
+├── benchmarks/BENCHMARK_FRAMEWORK.md # Performance comparison links
 ├── BUILTIN_FUNCTION_PARSING.md  # Enhanced parsing specification
 ├── WORKSPACE_NAVIGATION_GUIDE.md # Cross-file navigation patterns
 ├── ROPE_INTEGRATION_GUIDE.md    # Document management references

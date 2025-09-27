@@ -5,20 +5,48 @@
 use crate::lsp_server::JsonRpcError;
 use serde_json::{Value, json};
 
-/// LSP error codes (from the spec)
+/// LSP error codes (from the LSP 3.18 specification)
+///
+/// These constants define standard error codes used throughout the Language Server Protocol
+/// for consistent error reporting during Perl parsing workflows.
 pub mod error_codes {
+    /// JSON-RPC parse error - invalid JSON received by the server
     pub const PARSE_ERROR: i32 = -32700;
+
+    /// Invalid JSON-RPC request - the request object is not valid
     pub const INVALID_REQUEST: i32 = -32600;
+
+    /// Method not found - the requested LSP method does not exist or is not supported
     pub const METHOD_NOT_FOUND: i32 = -32601;
+
+    /// Invalid method parameters - the request parameters are invalid or malformed
     pub const INVALID_PARAMS: i32 = -32602;
+
+    /// Internal server error - an error occurred within the LSP server
     pub const INTERNAL_ERROR: i32 = -32603;
+
+    /// Start of range for server error codes (reserved range: -32099 to -32000)
     pub const SERVER_ERROR_START: i32 = -32099;
+
+    /// End of range for server error codes (reserved range: -32099 to -32000)
     pub const SERVER_ERROR_END: i32 = -32000;
+
+    /// Server not initialized - the server has not been initialized with an initialize request
     pub const SERVER_NOT_INITIALIZED: i32 = -32002;
+
+    /// Unknown error code - an unknown error occurred in the server
     pub const UNKNOWN_ERROR_CODE: i32 = -32001;
+
+    /// Request cancelled - the request was cancelled by the client
     pub const REQUEST_CANCELLED: i32 = -32800;
+
+    /// Content modified - the document was modified after the request was sent
     pub const CONTENT_MODIFIED: i32 = -32801;
-    pub const SERVER_CANCELLED: i32 = -32802; // LSP 3.17: server-side cancellation
+
+    /// Server cancelled - the request was cancelled by the server (LSP 3.17+)
+    pub const SERVER_CANCELLED: i32 = -32802;
+
+    /// Request failed - the request failed due to server-side issues
     pub const REQUEST_FAILED: i32 = -32803;
 }
 
@@ -32,11 +60,17 @@ pub mod error_codes {
 ///
 /// A [`JsonRpcError`] with METHOD_NOT_FOUND code for client response
 ///
-/// # Email Processing Context
+/// # LSP Workflow Context
 ///
-/// This occurs when LSP clients request unsupported features during Perl script analysis
-/// in the LSP workflow. Common during IDE integration when processing large Perl files
-/// where certain language features may be disabled for performance optimization.
+/// This occurs when LSP clients request unsupported features during the
+/// Parse → Index → Navigate → Complete → Analyze pipeline. Common during IDE integration
+/// when processing large Perl files where certain language features may be disabled
+/// for performance optimization.
+///
+/// # Recovery Strategy
+/// - Log the unsupported method for telemetry
+/// - Provide alternative fallback methods if available
+/// - Gracefully degrade functionality without breaking LSP session
 ///
 /// # Examples
 ///
@@ -60,11 +94,17 @@ pub fn method_not_found(method: &str) -> JsonRpcError {
 ///
 /// A [`JsonRpcError`] indicating the method was not advertised in server capabilities
 ///
-/// # Email Processing Context
+/// # LSP Workflow Context
 ///
-/// Occurs when LSP clients attempt to use features not enabled during LSP workflow
-/// processing. This helps enforce capability boundaries during large-scale Perl analysis
-/// where resource constraints require selective feature enabling.
+/// Occurs when LSP clients attempt to use features not advertised in server capabilities
+/// during the Parse → Index → Navigate → Complete → Analyze workflow. This helps enforce
+/// capability boundaries during large-scale Perl analysis where resource constraints
+/// require selective feature enabling.
+///
+/// # Recovery Strategy
+/// - Check server capabilities before making requests
+/// - Implement graceful fallback for missing features
+/// - Update client expectations based on advertised capabilities
 ///
 /// # Examples
 ///
@@ -92,11 +132,18 @@ pub fn method_not_advertised() -> JsonRpcError {
 ///
 /// A [`JsonRpcError`] with SERVER_CANCELLED code (-32802) for LSP 3.17 compliance
 ///
-/// # Email Processing Context
+/// # LSP Workflow Context
 ///
 /// Used when long-running Perl analysis operations are cancelled to maintain system
-/// responsiveness during 50GB+ Perl file processing. Enables graceful cancellation
-/// of expensive operations like workspace-wide symbol indexing.
+/// responsiveness during large-scale codebase processing. Essential for:
+/// - Workspace-wide symbol indexing cancellation
+/// - Incremental parsing timeout handling
+/// - Resource-intensive completion request termination
+///
+/// # Recovery Strategy
+/// - Preserve partial results from cancelled operations
+/// - Implement resumable operations where possible
+/// - Return cached data when available
 ///
 /// # Examples
 ///

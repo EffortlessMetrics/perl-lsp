@@ -23,6 +23,67 @@
 //! - Time complexity: O(n) linear scanning with lexer integration
 //! - Optimized for large Perl codebase processing with efficient token classification
 //! - Thread-safe semantic token generation for concurrent script processing
+//!
+//! # Usage Examples
+//!
+//! ## Basic Semantic Token Generation
+//!
+//! ```no_run
+//! use perl_parser::{Parser, semantic_tokens::collect_semantic_tokens};
+//!
+//! let code = "package MyModule; sub greet { my $name = shift; print \"Hello, $name!\"; }";
+//! let mut parser = Parser::new(code);
+//! let ast = parser.parse().unwrap();
+//!
+//! // Generate semantic tokens for syntax highlighting
+//! let to_pos16 = |byte_pos: usize| {
+//!     // Simple line/column calculation for demonstration
+//!     let line = code[..byte_pos].matches('\n').count() as u32;
+//!     let last_line = code[..byte_pos].rfind('\n').map_or(0, |pos| pos + 1);
+//!     let col = (byte_pos - last_line) as u32;
+//!     (line, col)
+//! };
+//! let tokens = collect_semantic_tokens(&ast, code, &to_pos16);
+//! for token in tokens {
+//!     println!("Token: [{}, {}, {}, {}, {}]",
+//!              token[0], token[1], token[2], token[3], token[4]);
+//! }
+//! ```
+//!
+//! ## LSP Semantic Tokens Provider
+//!
+//! ```no_run
+//! use perl_parser::SemanticTokensProvider;
+//! use perl_parser::{Parser, semantic_tokens::legend};
+//!
+//! let provider = SemanticTokensProvider::new("my @array = (1, 2, 3); for my $item (@array) { print $item; }".to_string());
+//! let code = "my @array = (1, 2, 3); for my $item (@array) { print $item; }";
+//! let mut parser = Parser::new(code);
+//! let ast = parser.parse().unwrap();
+//!
+//! // Get encoded tokens for LSP response
+//! let encoded_tokens = provider.extract(&ast);
+//! let legend = legend();
+//!
+//! println!("Generated {} semantic tokens", encoded_tokens.len());
+//! println!("Token types: {:?}", legend.token_types);
+//! println!("Token modifiers: {:?}", legend.modifiers);
+//! ```
+//!
+//! ## Custom Token Classification
+//!
+//! ```
+//! use perl_parser::semantic_tokens::{EncodedToken, TokensLegend, legend};
+//! use perl_parser::semantic_tokens_provider::{SemanticTokenType, SemanticTokenModifier};
+//!
+//! // Create custom semantic tokens
+//! let custom_token: EncodedToken = [0, 0, 5, 1, 0];
+//! // Structure: [delta_line, delta_start, length, token_type, token_modifiers]
+//!
+//! // Use with existing legend
+//! let legend = legend();
+//! println!("Token type: {:?}", legend.token_types.get(custom_token[3] as usize));
+//! ```
 
 use crate::ast::{Node, NodeKind};
 use perl_lexer::{PerlLexer, TokenType};
