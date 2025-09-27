@@ -21,6 +21,7 @@
 use perl_parser::execute_command::{ExecuteCommandProvider, get_supported_commands};
 use serde_json::Value;
 use std::fs;
+use tempfile::NamedTempFile;
 
 // ============= RETURN VALUE BYPASS MUTATION KILLERS =============
 // Target: Functions returning Ok(Default::default()) instead of proper results

@@ -2230,7 +2230,11 @@ impl LspServer {
                                 InternalCodeActionKind::QuickFix => "quickfix",
                                 InternalCodeActionKind::Refactor => "refactor",
                                 InternalCodeActionKind::RefactorExtract => "refactor.extract",
-                                _ => "quickfix",
+                                InternalCodeActionKind::RefactorInline => "refactor.inline",
+                                InternalCodeActionKind::RefactorRewrite => "refactor.rewrite",
+                                InternalCodeActionKind::Source => "source",
+                                InternalCodeActionKind::SourceOrganizeImports => "source.organizeImports",
+                                InternalCodeActionKind::SourceFixAll => "source.fixAll",
                             },
                             "edit": {
                                 "changes": changes,
@@ -2275,8 +2279,11 @@ impl LspServer {
                                 InternalCodeActionKind::QuickFix => "quickfix",
                                 InternalCodeActionKind::Refactor => "refactor",
                                 InternalCodeActionKind::RefactorExtract => "refactor.extract",
+                                InternalCodeActionKind::RefactorInline => "refactor.inline",
                                 InternalCodeActionKind::RefactorRewrite => "refactor.rewrite",
-                                _ => "refactor",
+                                InternalCodeActionKind::Source => "source",
+                                InternalCodeActionKind::SourceOrganizeImports => "source.organizeImports",
+                                InternalCodeActionKind::SourceFixAll => "source.fixAll",
                             },
                             "edit": {
                                 "changes": changes,
@@ -7637,12 +7644,26 @@ impl LspServer {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {
-                            // Return error as a response rather than JsonRpcError for graceful handling
-                            return Ok(Some(json!({
-                                "status": "error",
-                                "error": e,
-                                "message": format!("Command execution failed: {}", e)
-                            })));
+                            // Return proper JSON-RPC error according to LSP 3.17 specification
+                            let error_code = if e.contains("Missing") || e.contains("argument") {
+                                -32602 // InvalidParams
+                            } else if e.contains("Unknown command") {
+                                -32601 // MethodNotFound
+                            } else if e.contains("Path traversal") || e.contains("security") {
+                                -32603 // InternalError (security)
+                            } else {
+                                -32603 // InternalError (general)
+                            };
+
+                            return Err(JsonRpcError {
+                                code: error_code,
+                                message: format!("Execute command failed: {}", e),
+                                data: Some(json!({
+                                    "command": command,
+                                    "errorType": "executeCommand",
+                                    "originalError": e
+                                })),
+                            });
                         }
                     }
                 }

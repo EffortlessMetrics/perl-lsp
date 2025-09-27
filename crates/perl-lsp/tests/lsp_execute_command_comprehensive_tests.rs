@@ -205,8 +205,15 @@ fn test_execute_command_protocol_compliance() {
         Duration::from_secs(2),
     );
 
-    // Should handle missing arguments gracefully
-    assert!(missing_args_result.is_ok(), "Missing arguments should be handled gracefully");
+    // Should return proper JSON-RPC error for missing arguments (LSP 3.17 compliance)
+    assert!(missing_args_result.is_err(), "Missing arguments should return JSON-RPC error");
+
+    // Verify it's the correct error code for invalid parameters
+    if let Err(error) = missing_args_result {
+        let error_str = format!("{:?}", error);
+        assert!(error_str.contains("-32602") || error_str.contains("InvalidParams"),
+                "Should return InvalidParams error code (-32602)");
+    }
 }
 
 #[test]
