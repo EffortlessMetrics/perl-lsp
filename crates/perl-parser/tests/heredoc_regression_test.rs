@@ -20,7 +20,6 @@ say 1;"#;
 }
 
 #[test]
-#[ignore]
 fn test_multiple_heredocs_single_line() {
     // Test multiple heredocs on one line (FIFO processing)
     let input = r#"print <<FIRST, <<SECOND;

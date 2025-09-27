@@ -28,7 +28,6 @@ fn print_scalar_in_simple_context() {
 }
 
 #[test]
-#[ignore] // Known issue: complex parser state management needed  
 fn print_scalar_after_my_inside_if() {
     let code = r#"
 my $y = 10;

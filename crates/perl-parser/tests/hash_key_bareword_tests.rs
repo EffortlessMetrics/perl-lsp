@@ -73,7 +73,6 @@ my @values = @h{$k1, $k2};
 }
 
 #[test]
-#[ignore]
 fn test_hash_slice_mixed_elements() {
     let source = r#"
 use strict;
