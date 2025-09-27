@@ -197,27 +197,31 @@ sub authenticate_user {
 
 /// Create comprehensive E2E test scenarios
 fn create_e2e_test_scenarios() -> Vec<E2ETestScenario> {
-    vec![E2ETestScenario {
-        name: "basic_workflow_scenario".to_string(),
-        description: "Basic LSP workflow with cancellation".to_string(),
-        operations: vec![E2EOperation {
-            name: "hover_request".to_string(),
-            lsp_method: "textDocument/hover".to_string(),
-            params: json!({
-                "textDocument": { "uri": "file:///app/main.pl" },
-                "position": { "line": 15, "character": 10 }
-            }),
-            should_cancel: true,
-            cancel_delay: Duration::from_millis(50),
-            expected_outcome: ExpectedOutcome::Cancelled,
-        }],
-        performance_requirements: E2EPerformanceRequirements {
-            max_total_duration: Duration::from_secs(5),
-            max_memory_growth: 50 * 1024 * 1024, // 50MB
-            max_individual_operation: Duration::from_millis(2000),
-            min_cancellation_response_time: Duration::from_millis(50),
+    vec![
+        E2ETestScenario {
+            name: "basic_workflow_scenario".to_string(),
+            description: "Basic LSP workflow with cancellation".to_string(),
+            operations: vec![
+                E2EOperation {
+                    name: "hover_request".to_string(),
+                    lsp_method: "textDocument/hover".to_string(),
+                    params: json!({
+                        "textDocument": { "uri": "file:///app/main.pl" },
+                        "position": { "line": 15, "character": 10 }
+                    }),
+                    should_cancel: true,
+                    cancel_delay: Duration::from_millis(50),
+                    expected_outcome: ExpectedOutcome::Cancelled,
+                },
+            ],
+            performance_requirements: E2EPerformanceRequirements {
+                max_total_duration: Duration::from_secs(5),
+                max_memory_growth: 50 * 1024 * 1024, // 50MB
+                max_individual_operation: Duration::from_millis(2000),
+                min_cancellation_response_time: Duration::from_millis(50),
+            },
         },
-    }]
+    ]
 }
 
 /// E2E test workspace for managing comprehensive test scenarios
@@ -492,35 +496,7 @@ fn estimate_memory_usage() -> usize {
 /// Complete end-to-end cancellation workflow test
 /// Tests all acceptance criteria integrated in realistic scenarios
 #[test]
-#[ignore] // TODO: E2E test infrastructure needs environment stabilization
 fn test_comprehensive_cancellation_workflow_e2e() {
-    // Enhanced constraint checking for comprehensive E2E cancellation tests
-    // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
-
-    // Force single-threaded execution for E2E cancellation tests to ensure reliability
-    // Multiple threads can cause race conditions in cancellation infrastructure
-    if thread_count != 1 {
-        eprintln!(
-            "Comprehensive E2E cancellation tests require RUST_TEST_THREADS=1 for reliability (current: {})",
-            thread_count
-        );
-        eprintln!(
-            "Run with: RUST_TEST_THREADS=1 cargo test test_comprehensive_cancellation_workflow_e2e"
-        );
-        return;
-    }
-
-    // Skip in CI environments where LSP infrastructure may be unstable
-    if std::env::var("CI").is_ok()
-        || std::env::var("GITHUB_ACTIONS").is_ok()
-        || std::env::var("CONTINUOUS_INTEGRATION").is_ok()
-    {
-        eprintln!("Skipping comprehensive E2E cancellation test in CI environment for stability");
-        return;
-    }
-
     let mut fixture = E2ETestFixture::new();
 
     println!("Starting comprehensive E2E cancellation workflow test");
@@ -580,7 +556,6 @@ fn test_comprehensive_cancellation_workflow_e2e() {
 
 /// Real-world usage pattern validation with cancellation
 #[test]
-#[ignore] // TODO: E2E test infrastructure needs environment stabilization
 fn test_real_world_usage_patterns_e2e() {
     let fixture = E2ETestFixture::new();
 
@@ -609,35 +584,7 @@ fn test_real_world_usage_patterns_e2e() {
 
 /// High-load cancellation behavior validation
 #[test]
-#[ignore] // TODO: E2E test infrastructure needs environment stabilization
 fn test_high_load_cancellation_behavior_e2e() {
-    // Enhanced constraint checking for high-load E2E cancellation tests
-    // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
-
-    // Force single-threaded execution for E2E cancellation tests to ensure reliability
-    // Multiple threads can cause race conditions in cancellation infrastructure
-    if thread_count != 1 {
-        eprintln!(
-            "High-load E2E cancellation tests require RUST_TEST_THREADS=1 for reliability (current: {})",
-            thread_count
-        );
-        eprintln!(
-            "Run with: RUST_TEST_THREADS=1 cargo test test_high_load_cancellation_behavior_e2e"
-        );
-        return;
-    }
-
-    // Skip in CI environments where LSP infrastructure may be unstable
-    if std::env::var("CI").is_ok()
-        || std::env::var("GITHUB_ACTIONS").is_ok()
-        || std::env::var("CONTINUOUS_INTEGRATION").is_ok()
-    {
-        eprintln!("Skipping high-load E2E cancellation test in CI environment for stability");
-        return;
-    }
-
     let mut fixture = E2ETestFixture::new();
 
     println!("Testing high-load cancellation behavior");

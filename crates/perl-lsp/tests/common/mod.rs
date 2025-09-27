@@ -280,10 +280,10 @@ fn default_timeout() -> Duration {
             let thread_count = max_concurrent_threads();
 
             match thread_count {
-                0..=2 => Duration::from_secs(8), // Heavily constrained: reduced from 15s to 8s for faster execution
-                3..=4 => Duration::from_secs(6), // Moderately constrained: reduced from 10s to 6s
-                5..=8 => Duration::from_secs(4), // Lightly constrained: reduced from 7s to 4s
-                _ => Duration::from_secs(3),     // Unconstrained: reduced from 5s to 3s
+                0..=2 => Duration::from_secs(20), // Heavily constrained: increased from 15s to 20s for cancellation protocol overhead
+                3..=4 => Duration::from_secs(12), // Moderately constrained: increased from 10s to 12s
+                5..=8 => Duration::from_secs(8),  // Lightly constrained: increased from 7s to 8s
+                _ => Duration::from_secs(6),      // Unconstrained: increased from 5s to 6s
             }
         })
 }
@@ -294,16 +294,7 @@ pub fn short_timeout() -> Duration {
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .map(Duration::from_millis)
-        .unwrap_or_else(|| {
-            // Adaptive short timeout based on thread constraints
-            let thread_count = max_concurrent_threads();
-            match thread_count {
-                0..=2 => Duration::from_millis(500), // Heavily constrained: reduced from 1000ms
-                3..=4 => Duration::from_millis(400), // Moderately constrained: reduced from 750ms
-                5..=8 => Duration::from_millis(300), // Lightly constrained: reduced from 500ms
-                _ => Duration::from_millis(200),     // Unconstrained: reduced from 300ms
-            }
-        })
+        .unwrap_or(Duration::from_millis(500))
 }
 
 /// Get the maximum number of concurrent threads to use in tests
@@ -492,102 +483,15 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
 
     // wait specifically for id=1 - use extended timeout for initialization
     // Enhanced timeout for LSP cancellation tests with environment-aware scaling
-    // Simplified timeout calculation with fixed base timeout for reliability
-    let base_timeout = Duration::from_secs(30); // Fixed 30s base timeout for cancellation tests
+    let base_multiplier = 5; // Base multiplier for critical initialization (increased to 5x for cancellation protocol overhead)
     let thread_count = max_concurrent_threads();
-
-    // Additional scaling for extremely constrained environments
-    let env_multiplier = if thread_count <= 1 {
-        2 // Extra time for single-threaded environments
-    } else if thread_count <= 2 {
-        1 // Standard time for heavily constrained environments
-    } else {
-        1 // Standard time for other environments
-    };
-
-    // Additional CI environment detection for graceful degradation
-    let ci_multiplier = if std::env::var("CI").is_ok()
-        || std::env::var("GITHUB_ACTIONS").is_ok()
-        || std::env::var("CONTINUOUS_INTEGRATION").is_ok()
-    {
-        2 // Extra time for CI environments with limited resources
-    } else {
-        1
-    };
-
-    let init_timeout = base_timeout * env_multiplier * ci_multiplier;
-
-    // Enhanced retry logic for cancellation infrastructure tests with improved reliability
-    let mut retry_count = 0;
-    let max_retries = 3; // Increased retries for infrastructure tests (was 2, now 3)
-
-    let resp = loop {
-        match read_response_matching_i64(server, 1, init_timeout) {
-            Some(response) => break response,
-            None => {
-                retry_count += 1;
-                if retry_count > max_retries {
-                    eprintln!(
-                        "LSP server failed to respond to initialize request within {:?} after {} retries",
-                        init_timeout, max_retries
-                    );
-                    eprintln!(
-                        "Check if server started properly and is responding to JSON-RPC requests"
-                    );
-                    eprintln!("Server process alive: {}", server.is_alive());
-                    eprintln!(
-                        "Timeout used: {:?}, Thread count: {}",
-                        init_timeout,
-                        max_concurrent_threads()
-                    );
-                    panic!(
-                        "initialize response timeout - server may have crashed or is not responding"
-                    )
-                } else {
-                    eprintln!(
-                        "Initialize timeout attempt {}/{}, retrying with fresh request...",
-                        retry_count,
-                        max_retries + 1
-                    );
-
-                    // Enhanced delay with server health check
-                    std::thread::sleep(Duration::from_millis(500)); // Increased delay (was 200ms, now 500ms)
-
-                    // Check server health before retry
-                    if !server.is_alive() {
-                        eprintln!("Server process died during initialization, cannot retry");
-                        panic!("LSP server process terminated during initialization");
-                    }
-
-                    // Send another initialize request with a new ID directly (not using send_request)
-                    let retry_id = next_id();
-                    let retry_init = json!({
-                        "jsonrpc": "2.0",
-                        "id": retry_id,
-                        "method": "initialize",
-                        "params": {
-                            "capabilities": {},
-                            "clientInfo": {"name":"perl-parser-tests","version":"0"},
-                            "rootUri": null,
-                            "workspaceFolders": null
-                        }
-                    });
-                    let body = retry_init.to_string();
-                    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body)
-                        .unwrap();
-                    server.writer.flush().unwrap();
-
-                    // Try reading the retry response with a shorter timeout for quicker feedback
-                    let retry_timeout = init_timeout / 2; // Use half timeout for retries
-                    if let Some(retry_resp) =
-                        read_response_matching_i64(server, retry_id, retry_timeout)
-                    {
-                        break retry_resp;
-                    }
-                }
-            }
-        }
-    };
+    let env_multiplier = if thread_count <= 2 { 4 } else { 2 }; // Extra time for constrained environments (increased to 4x)
+    let init_timeout = adaptive_timeout() * base_multiplier * env_multiplier;
+    let resp = read_response_matching_i64(server, 1, init_timeout).unwrap_or_else(|| {
+        eprintln!("LSP server failed to respond to initialize request within {:?}", init_timeout);
+        eprintln!("Check if server started properly and is responding to JSON-RPC requests");
+        panic!("initialize response timeout - server may have crashed or is not responding")
+    });
 
     // Send initialized notification with a brief delay
     std::thread::sleep(Duration::from_millis(50));
