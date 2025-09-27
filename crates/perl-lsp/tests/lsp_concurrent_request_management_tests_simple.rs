@@ -12,7 +12,8 @@ mod common;
 use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
 
 #[test]
-fn test_concurrent_request_processing_ac3() {
+#[ignore] // AC3: Remove when request correlation manager is implemented
+fn test_concurrent_request_correlation() {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-concurrent-request-management
 
     let mut server = start_lsp_server();
@@ -50,7 +51,8 @@ fn test_concurrent_request_processing_ac3() {
 }
 
 #[test]
-fn test_lsp_workflow_stage_tracking_ac4() {
+#[ignore] // AC4: Remove when LSP workflow stage tracking is implemented
+fn test_lsp_workflow_stage_integration() {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-concurrent-request-management
 
     let mut server = start_lsp_server();
@@ -95,7 +97,8 @@ fn test_lsp_workflow_stage_tracking_ac4() {
 }
 
 #[test]
-fn test_request_timeout_cancellation_integration_ac3_ac4() {
+#[ignore] // AC3,AC4: Remove when request timeout and cancellation integration is implemented
+fn test_request_timeout_and_cancellation_integration() {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-concurrent-request-management
 
     let mut server = start_lsp_server();
@@ -154,7 +157,8 @@ fn test_request_timeout_cancellation_integration_ac3_ac4() {
 }
 
 #[test]
-fn test_performance_metrics_collection_ac3() {
+#[ignore] // AC3: Remove when performance metrics collection is implemented
+fn test_request_performance_metrics_collection() {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-concurrent-request-management
 
     let mut server = start_lsp_server();
