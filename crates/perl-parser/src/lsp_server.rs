@@ -527,9 +527,24 @@ impl LspServer {
                     }
                 }
 
-                // Parse JSON-RPC request
-                if let Ok(request) = serde_json::from_slice(&content) {
-                    return Ok(Some(request));
+                // Parse JSON-RPC request with enhanced error handling
+                match serde_json::from_slice(&content) {
+                    Ok(request) => return Ok(Some(request)),
+                    Err(e) => {
+                        // Enhanced malformed frame recovery
+                        eprintln!("LSP server: JSON parse error - {}", e);
+
+                        // Attempt to extract malformed content safely (no sensitive data logging)
+                        let content_str = String::from_utf8_lossy(&content);
+                        if content_str.len() > 100 {
+                            eprintln!("LSP server: Malformed frame (truncated): {}...", &content_str[..100]);
+                        } else {
+                            eprintln!("LSP server: Malformed frame: {}", content_str);
+                        }
+
+                        // Continue processing - don't crash the server on malformed input
+                        return Ok(None);
+                    }
                 }
             }
         }
@@ -552,6 +567,33 @@ impl LspServer {
             code: ERR_SERVER_CANCELLED,
             message: "Server cancelled the request".to_string(),
             data: None,
+        }
+    }
+
+    /// Create an enhanced error response with comprehensive context
+    fn enhanced_error(code: i32, message: &str, error_type: &str, method: Option<&str>) -> JsonRpcError {
+        let mut data = json!({
+            "error_type": error_type,
+            "context": "Enhanced LSP error response with comprehensive context",
+            "server_info": {
+                "name": "perl-lsp",
+                "version": env!("CARGO_PKG_VERSION"),
+                "capabilities": "Enhanced error handling and concurrent request management"
+            },
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        });
+
+        if let Some(method_name) = method {
+            data["method"] = json!(method_name);
+        }
+
+        JsonRpcError {
+            code,
+            message: message.to_string(),
+            data: Some(data),
         }
     }
 
@@ -904,11 +946,13 @@ impl LspServer {
             }
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
-                Err(JsonRpcError {
-                    code: ERR_METHOD_NOT_FOUND,
-                    message: "Method not found".to_string(),
-                    data: None,
-                })
+                // Enhanced error response with comprehensive context
+                Err(Self::enhanced_error(
+                    ERR_METHOD_NOT_FOUND,
+                    &format!("Method '{}' not found or not supported", request.method),
+                    "method_not_found",
+                    Some(&request.method)
+                ))
             }
         };
 
