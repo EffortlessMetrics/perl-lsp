@@ -5,8 +5,8 @@ use std::time::Duration;
 
 mod common;
 use common::{
-    adaptive_timeout, initialize_lsp, read_response, read_response_timeout, send_notification,
-    send_raw, send_request, short_timeout, shutdown_and_exit, start_lsp_server,
+    initialize_lsp, read_response, read_response_timeout, send_notification, send_raw,
+    send_request, short_timeout, shutdown_and_exit, start_lsp_server,
 };
 
 /// Test suite for unhappy paths and error scenarios
@@ -682,37 +682,12 @@ fn test_binary_frame() {
     // Send actual binary junk as a frame body; behavior is implementation-defined
     send_raw(&mut server, b"Content-Length: 8\r\n\r\n\x00\x01\x02\x03\x04\x05\x06\x07");
 
-    // Enhanced timeout for binary frame handling with adaptive scaling
-    let binary_timeout = std::cmp::max(short_timeout(), Duration::from_millis(200));
-    let _maybe = read_response_timeout(&mut server, binary_timeout);
+    // Server might ignore or error, we just verify it doesn't hang or crash
+    let _maybe = read_response_timeout(&mut server, short_timeout());
     // Any behavior is acceptable - ignore, error, or notification
 
-    // Allow brief recovery time for server to process malformed input
-    std::thread::sleep(Duration::from_millis(50));
-
-    // Enhanced error handling: server may crash on malformed binary frames
-    // This is acceptable behavior for LSP servers when receiving non-UTF8 content
-    if let Ok(Some(_exit_status)) = server.process.try_wait() {
-        // Server crashed - this is acceptable for binary frame input
-        eprintln!("Server crashed on binary frame (acceptable behavior)");
-        return;
-    }
-
-    // If server survived, verify it's still responsive
-    let ping_response = send_request(
-        &mut server,
-        json!({
-            "jsonrpc": "2.0",
-            "id": 9999,
-            "method": "workspace/symbol",
-            "params": {
-                "query": "test"
-            }
-        }),
-    );
-
-    // Accept any valid response format
-    assert!(ping_response.is_object(), "Server should respond to requests after binary frame");
+    // Server must remain alive
+    assert!(server.process.try_wait().unwrap().is_none(), "server crashed on binary frame");
     shutdown_and_exit(&mut server);
 }
 
@@ -796,9 +771,7 @@ fn test_cancel_request() {
     let mut got_completion_response = false;
 
     while attempts < 3 && !got_completion_response {
-        // Enhanced timeout for cancellation protocol with adaptive scaling
-        let cancel_timeout = std::cmp::max(Duration::from_millis(500), adaptive_timeout() / 4);
-        let response = read_response_timeout(&mut server, cancel_timeout);
+        let response = read_response_timeout(&mut server, Duration::from_millis(1000));
 
         if let Some(resp) = response {
             // Check if this is a notification (has method, no id)
