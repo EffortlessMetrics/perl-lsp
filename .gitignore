@@ -61,3 +61,12 @@ run_mutation_test.sh
 # Integration artifacts
 .base_sha
 benchmark_results_*.txt
+
+# Large binary executables (should be built, not committed)
+test_perf
+examples/debug_super
+examples/debug_corpus_parser
+benchmarks/bench_lexer_pest
+**/debug_super
+**/debug_corpus_parser
+**/bench_lexer_pest
