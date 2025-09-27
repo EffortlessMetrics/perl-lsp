@@ -198,7 +198,7 @@ Status should be one of: pass | fail | skipped (use `skipped (reason)` for N/A).
 
 **Feature Smoke (Generative):**
 - After `impl-creator`, run a *curated* feature smoke:
-  ./scripts/validate-features.sh --policy smoke
+  ./scripts/validate_features.sh --policy smoke
   (≤3 combos: primary, none, max). Emit `generative:gate:features`.
 
 **Security (Optional in Generative):**

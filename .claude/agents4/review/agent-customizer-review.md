@@ -48,7 +48,9 @@ docs/                    # Documentation following Diátaxis framework
 ├── CRATE_ARCHITECTURE_GUIDE.md  # System design and components
 ├── INCREMENTAL_PARSING_GUIDE.md # Performance and implementation
 ├── SECURITY_DEVELOPMENT_GUIDE.md # Enterprise security practices
-└── BENCHMARK_FRAMEWORK.md       # Cross-language performance analysis
+└── benchmarks/
+    ├── BENCHMARK_FRAMEWORK.md   # Cross-language performance analysis
+    └── (other benchmark docs)
 
 crates/              # Workspace structure
 ├── perl-parser/      # Main parser library (production-ready recursive descent)
