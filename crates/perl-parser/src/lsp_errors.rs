@@ -5,20 +5,48 @@
 use crate::lsp_server::JsonRpcError;
 use serde_json::{Value, json};
 
-/// LSP error codes (from the spec)
+/// LSP error codes (from the LSP 3.18 specification)
+///
+/// These constants define standard error codes used throughout the Language Server Protocol
+/// for consistent error reporting during Perl parsing workflows.
 pub mod error_codes {
+    /// JSON-RPC parse error - invalid JSON received by the server
     pub const PARSE_ERROR: i32 = -32700;
+
+    /// Invalid JSON-RPC request - the request object is not valid
     pub const INVALID_REQUEST: i32 = -32600;
+
+    /// Method not found - the requested LSP method does not exist or is not supported
     pub const METHOD_NOT_FOUND: i32 = -32601;
+
+    /// Invalid method parameters - the request parameters are invalid or malformed
     pub const INVALID_PARAMS: i32 = -32602;
+
+    /// Internal server error - an error occurred within the LSP server
     pub const INTERNAL_ERROR: i32 = -32603;
+
+    /// Start of range for server error codes (reserved range: -32099 to -32000)
     pub const SERVER_ERROR_START: i32 = -32099;
+
+    /// End of range for server error codes (reserved range: -32099 to -32000)
     pub const SERVER_ERROR_END: i32 = -32000;
+
+    /// Server not initialized - the server has not been initialized with an initialize request
     pub const SERVER_NOT_INITIALIZED: i32 = -32002;
+
+    /// Unknown error code - an unknown error occurred in the server
     pub const UNKNOWN_ERROR_CODE: i32 = -32001;
+
+    /// Request cancelled - the request was cancelled by the client
     pub const REQUEST_CANCELLED: i32 = -32800;
+
+    /// Content modified - the document was modified after the request was sent
     pub const CONTENT_MODIFIED: i32 = -32801;
-    pub const SERVER_CANCELLED: i32 = -32802; // LSP 3.17: server-side cancellation
+
+    /// Server cancelled - the request was cancelled by the server (LSP 3.17+)
+    pub const SERVER_CANCELLED: i32 = -32802;
+
+    /// Request failed - the request failed due to server-side issues
     pub const REQUEST_FAILED: i32 = -32803;
 }
 

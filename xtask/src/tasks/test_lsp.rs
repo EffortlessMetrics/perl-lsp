@@ -1,6 +1,6 @@
 //! Test LSP features with demo scripts
 
-use color_eyre::eyre::{bail, Result};
+use color_eyre::eyre::{Result, bail};
 use std::fs;
 use std::path::Path;
 use std::process::Command;

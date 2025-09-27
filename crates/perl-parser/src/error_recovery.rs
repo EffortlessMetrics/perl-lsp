@@ -11,13 +11,35 @@ use crate::{
 };
 use perl_lexer::TokenType;
 
-/// Error information with recovery context
+/// Error information with recovery context for comprehensive Perl parsing error handling.
+///
+/// This structure encapsulates all information needed for intelligent error recovery
+/// in the Perl parser, enabling continued parsing after syntax errors and providing
+/// detailed diagnostic information for IDE integration.
+///
+/// # Examples
+///
+/// ```
+/// use perl_parser::error_recovery::ParseError;
+/// use perl_parser::position::{Position, Range};
+///
+/// let range = Range::new(Position::new(0, 1, 1), Position::new(5, 1, 6));
+/// let error = ParseError::new("Syntax error".to_string(), range)
+///     .with_expected(vec!["identifier".to_string()])
+///     .with_found("number".to_string())
+///     .with_hint("Did you mean to use a variable?".to_string());
+/// ```
 #[derive(Debug, Clone)]
 pub struct ParseError {
+    /// Human-readable error message describing the parsing issue
     pub message: String,
+    /// Source code range where the error occurred
     pub range: Range,
+    /// List of token types that were expected at this position
     pub expected: Vec<String>,
+    /// The token that was actually found instead of expected
     pub found: String,
+    /// Optional hint for error recovery or fixing the issue
     pub recovery_hint: Option<String>,
 }
 

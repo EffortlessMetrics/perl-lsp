@@ -258,7 +258,8 @@ fn test_substitution_comprehensive_fuzz() {
         Err(crashes) => {
             // Save crashes to fuzz directory for analysis
             let crash_log = crashes.join("\n");
-            std::fs::write("/tmp/substitution_fuzz_crashes.log", crash_log)
+            let crash_log_path = std::env::temp_dir().join("substitution_fuzz_crashes.log");
+            std::fs::write(&crash_log_path, crash_log)
                 .unwrap_or_else(|e| eprintln!("Failed to write crash log: {}", e));
 
             panic!("Found {} crashes in substitution operator parsing", crashes.len());

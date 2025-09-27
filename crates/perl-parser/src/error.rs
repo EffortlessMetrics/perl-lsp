@@ -16,6 +16,102 @@
 //!
 //! Error handling is optimized for large Perl codebase processing scenarios with minimal memory overhead
 //! and fast recovery paths to maintain enterprise-scale performance targets.
+//!
+//! # Usage Examples
+//!
+//! ## Basic Error Handling
+//!
+//! ```
+//! use perl_parser::{Parser, ParseError, ParseResult};
+//!
+//! fn parse_with_error_handling(code: &str) -> ParseResult<()> {
+//!     let mut parser = Parser::new(code);
+//!     match parser.parse() {
+//!         Ok(ast) => {
+//!             println!("Parsing successful");
+//!             Ok(())
+//!         }
+//!         Err(ParseError::UnexpectedEof) => {
+//!             eprintln!("Incomplete code: unexpected end of input");
+//!             Err(ParseError::UnexpectedEof)
+//!         }
+//!         Err(ParseError::UnexpectedToken { found, expected, location }) => {
+//!             eprintln!("Syntax error at position {}: found '{}', expected '{}'",
+//!                      location, found, expected);
+//!             Err(ParseError::UnexpectedToken { found, expected, location })
+//!         }
+//!         Err(e) => {
+//!             eprintln!("Parse error: {}", e);
+//!             Err(e)
+//!         }
+//!     }
+//! }
+//! ```
+//!
+//! ## Error Recovery in LSP Context
+//!
+//! ```no_run
+//! use perl_parser::{Parser, ParseError, error_recovery::ErrorRecovery};
+//!
+//! fn parse_with_recovery(code: &str) -> Vec<String> {
+//!     let mut parser = Parser::new(code);
+//!     let mut errors = Vec::new();
+//!
+//!     match parser.parse() {
+//!         Ok(_) => println!("Parse successful"),
+//!         Err(err) => {
+//!             // Log error for diagnostics
+//!             errors.push(format!("Parse error: {}", err));
+//!
+//!             // Attempt error recovery for LSP
+//!             match err {
+//!                 ParseError::UnexpectedToken { .. } => {
+//!                     // Continue parsing from next statement
+//!                     println!("Attempting recovery...");
+//!                 }
+//!                 ParseError::RecursionLimit => {
+//!                     // Use iterative parsing approach
+//!                     println!("Switching to iterative parsing...");
+//!                 }
+//!                 _ => {
+//!                     // Use fallback parsing strategy
+//!                     println!("Using fallback parsing...");
+//!                 }
+//!             }
+//!         }
+//!     }
+//!     errors
+//! }
+//! ```
+//!
+//! ## Comprehensive Error Context
+//!
+//! ```
+//! use perl_parser::ParseError;
+//!
+//! fn create_detailed_error() -> ParseError {
+//!     ParseError::UnexpectedToken {
+//!         found: "number".to_string(),
+//!         expected: "identifier".to_string(),
+//!         location: 10, // byte position 10
+//!     }
+//! }
+//!
+//! fn handle_error_with_context(error: &ParseError) {
+//!     match error {
+//!         ParseError::UnexpectedToken { found, expected, location } => {
+//!             println!("Syntax error at byte position {}: found '{}', expected '{}'",
+//!                     location, found, expected);
+//!         }
+//!         ParseError::UnexpectedEof => {
+//!             println!("Incomplete input: unexpected end of file");
+//!         }
+//!         _ => {
+//!             println!("Parse error: {}", error);
+//!         }
+//!     }
+//! }
+//! ```
 
 use thiserror::Error;
 

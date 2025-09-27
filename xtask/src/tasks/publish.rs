@@ -1,6 +1,6 @@
 //! Publishing functionality for crates and VSCode extension
 
-use color_eyre::eyre::{bail, Result};
+use color_eyre::eyre::{Result, bail};
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
