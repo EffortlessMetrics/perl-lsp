@@ -330,11 +330,7 @@ impl IgnoredTestGuardian {
 
     pub fn generate_trend_report(&self) -> TrendReport {
         let current_time = SystemTime::now();
-        let window_duration = if self.governance.reporting.monthly_summaries {
-            Duration::from_secs(30 * 24 * 3600)
-        } else {
-            Duration::from_secs(7 * 24 * 3600)
-        };
+        let window_duration = Duration::from_secs(self.governance.reporting.monthly_summaries as u64 * 30 * 24 * 3600);
 
         let recent_data: Vec<_> = self.baseline_tracker.historical_data
             .iter()

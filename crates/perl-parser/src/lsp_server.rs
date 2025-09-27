@@ -537,7 +537,10 @@ impl LspServer {
                         // Attempt to extract malformed content safely (no sensitive data logging)
                         let content_str = String::from_utf8_lossy(&content);
                         if content_str.len() > 100 {
-                            eprintln!("LSP server: Malformed frame (truncated): {}...", &content_str[..100]);
+                            eprintln!(
+                                "LSP server: Malformed frame (truncated): {}...",
+                                &content_str[..100]
+                            );
                         } else {
                             eprintln!("LSP server: Malformed frame: {}", content_str);
                         }
@@ -571,7 +574,12 @@ impl LspServer {
     }
 
     /// Create an enhanced error response with comprehensive context
-    fn enhanced_error(code: i32, message: &str, error_type: &str, method: Option<&str>) -> JsonRpcError {
+    fn enhanced_error(
+        code: i32,
+        message: &str,
+        error_type: &str,
+        method: Option<&str>,
+    ) -> JsonRpcError {
         let mut data = json!({
             "error_type": error_type,
             "context": "Enhanced LSP error response with comprehensive context",
@@ -590,11 +598,15 @@ impl LspServer {
             data["method"] = json!(method_name);
         }
 
-        JsonRpcError {
-            code,
-            message: message.to_string(),
-            data: Some(data),
-        }
+        JsonRpcError { code, message: message.to_string(), data: Some(data) }
+    }
+
+    /// Create a standard document not found error response
+    fn document_not_found_error() -> Value {
+        json!({
+            "status": "error",
+            "message": "Document not found"
+        })
     }
 
     /// Mark a request as cancelled
@@ -951,7 +963,7 @@ impl LspServer {
                     ERR_METHOD_NOT_FOUND,
                     &format!("Method '{}' not found or not supported", request.method),
                     "method_not_found",
-                    Some(&request.method)
+                    Some(&request.method),
                 ))
             }
         };
@@ -7663,6 +7675,21 @@ impl LspServer {
 
         if let Some(params) = params {
             let command = params["command"].as_str().unwrap_or("");
+
+            // LSP 3.17 compliance: arguments field is required even if empty
+            if !params.as_object().unwrap_or(&serde_json::Map::new()).contains_key("arguments") {
+                return Err(JsonRpcError {
+                    code: -32602, // InvalidParams
+                    message: "Missing required 'arguments' field in executeCommand request"
+                        .to_string(),
+                    data: Some(json!({
+                        "command": command,
+                        "errorType": "executeCommand",
+                        "originalError": "Missing 'arguments' field"
+                    })),
+                });
+            }
+
             let arguments = params["arguments"].as_array().cloned().unwrap_or_default();
 
             eprintln!("Executing command: {}", command);
@@ -7729,7 +7756,15 @@ impl LspServer {
             }
         }
 
-        Ok(Some(json!({"status": "error", "message": "Invalid parameters"})))
+        // Missing params entirely
+        Err(JsonRpcError {
+            code: -32602, // InvalidParams
+            message: "Missing parameters for executeCommand request".to_string(),
+            data: Some(json!({
+                "errorType": "executeCommand",
+                "originalError": "Missing params"
+            })),
+        })
     }
 
     /// Run a specific test
@@ -7769,7 +7804,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(json!({"status": "error", "message": "Document not found"})))
+        Ok(Some(Self::document_not_found_error()))
     }
 
     /// Run all tests in a file
@@ -7800,7 +7835,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(json!({"status": "error", "message": "Document not found"})))
+        Ok(Some(Self::document_not_found_error()))
     }
 
     /// Run Perl::Critic on a file
@@ -7911,7 +7946,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(json!({"status": "error", "message": "Document not found"})))
+        Ok(Some(Self::document_not_found_error()))
     }
 
     /// Handle workspace/configuration request
