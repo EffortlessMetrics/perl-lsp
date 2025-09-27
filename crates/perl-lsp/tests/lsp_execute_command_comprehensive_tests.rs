@@ -211,8 +211,10 @@ fn test_execute_command_protocol_compliance() {
     // Verify it's the correct error code for invalid parameters
     if let Err(error) = missing_args_result {
         let error_str = format!("{:?}", error);
-        assert!(error_str.contains("-32602") || error_str.contains("InvalidParams"),
-                "Should return InvalidParams error code (-32602)");
+        assert!(
+            error_str.contains("-32602") || error_str.contains("InvalidParams"),
+            "Should return InvalidParams error code (-32602)"
+        );
     }
 }
 
