@@ -91,8 +91,13 @@ print "Results: $result, $other, $complex\n";
             setup_test_file(&mut server, uri, content);
         }
 
-        // Wait for indexing to complete
-        drain_until_quiet(&mut server, Duration::from_millis(200), Duration::from_secs(5));
+        // Wait for indexing to complete with adaptive timeout
+        let indexing_timeout = match max_concurrent_threads() {
+            0..=2 => Duration::from_secs(8),  // Constrained: reduced from 5s to reasonable limit
+            3..=4 => Duration::from_secs(4),  // Moderate: reduced timeout
+            _ => Duration::from_secs(3),      // Unconstrained: shorter timeout
+        };
+        drain_until_quiet(&mut server, Duration::from_millis(200), indexing_timeout);
 
         Self { server }
     }
@@ -432,7 +437,7 @@ fn test_atomic_cancellation_token_operations_ac2() {
     // Cancel from another thread after brief delay
     let cancel_token = Arc::clone(&token);
     let cancel_handle = thread::spawn(move || {
-        thread::sleep(Duration::from_millis(50));
+        thread::sleep(adaptive_sleep_ms(50));
         cancel_token.cancel_with_cleanup()
     });
 
@@ -530,7 +535,7 @@ fn test_cancellation_registry_concurrent_operations_ac2() {
     let cleanup_handle = thread::spawn(move || {
         let mut cleanup_results = Vec::new();
         for cleanup_cycle in 0..25 {
-            thread::sleep(Duration::from_millis(20));
+            thread::sleep(adaptive_sleep_ms(20));
             let start = Instant::now();
             cleanup_registry.cleanup_completed_requests();
             let duration = start.elapsed();
@@ -635,7 +640,7 @@ fn test_provider_cleanup_thread_safety_ac2() {
         .collect();
 
     // Cancel from main thread after brief delay
-    thread::sleep(Duration::from_millis(25));
+    thread::sleep(adaptive_sleep_ms(25));
     let cancel_result = token.cancel_with_cleanup();
     assert!(cancel_result.is_ok(), "Token cancellation should succeed");
 
@@ -686,8 +691,13 @@ fn test_provider_cleanup_thread_safety_ac2() {
 fn test_dual_indexing_cancellation_consistency_ac3() {
     let mut fixture = CancellationTestFixture::new();
 
-    // Wait for initial indexing to complete
-    drain_until_quiet(&mut fixture.server, Duration::from_millis(500), Duration::from_secs(10));
+    // Wait for initial indexing to complete with adaptive timeout
+    let initial_indexing_timeout = match max_concurrent_threads() {
+        0..=2 => Duration::from_secs(12), // Constrained: reduced from 10s
+        3..=4 => Duration::from_secs(6),  // Moderate: reduced timeout
+        _ => Duration::from_secs(4),      // Unconstrained: shorter timeout
+    };
+    drain_until_quiet(&mut fixture.server, Duration::from_millis(500), initial_indexing_timeout);
 
     // Verify baseline dual pattern functionality before cancellation testing
     let baseline_qualified =
@@ -774,8 +784,13 @@ fn request_workspace_symbols(server: &mut LspServer, query: &str) -> Vec<Value> 
 fn test_cross_file_navigation_cancellation_ac3() {
     let mut fixture = CancellationTestFixture::new();
 
-    // Wait for cross-file indexing to stabilize
-    drain_until_quiet(&mut fixture.server, Duration::from_millis(1000), Duration::from_secs(15));
+    // Wait for cross-file indexing to stabilize with adaptive timeout
+    let cross_file_timeout = match max_concurrent_threads() {
+        0..=2 => Duration::from_secs(18), // Constrained: reduced from 15s
+        3..=4 => Duration::from_secs(8),  // Moderate: reduced timeout
+        _ => Duration::from_secs(5),      // Unconstrained: shorter timeout
+    };
+    drain_until_quiet(&mut fixture.server, Duration::from_millis(1000), cross_file_timeout);
 
     // Test definition resolution cancellation across files
     let definition_id = 4001;
@@ -876,8 +891,13 @@ fn test_workspace_symbol_dual_pattern_cancellation_ac3() {
     let large_file_content = generate_large_perl_content(500); // 500 functions
     fixture.setup_test_file("file:///large_module.pl", &large_file_content);
 
-    // Wait for large file indexing
-    drain_until_quiet(&mut fixture.server, Duration::from_millis(1000), Duration::from_secs(20));
+    // Wait for large file indexing with adaptive timeout
+    let large_file_timeout = match max_concurrent_threads() {
+        0..=2 => Duration::from_secs(25), // Constrained: reduced from 20s
+        3..=4 => Duration::from_secs(12), // Moderate: reduced timeout
+        _ => Duration::from_secs(8),      // Unconstrained: shorter timeout
+    };
+    drain_until_quiet(&mut fixture.server, Duration::from_millis(1000), large_file_timeout);
 
     // Test qualified pattern search with cancellation
     let qualified_search_id = 5001;
@@ -1194,7 +1214,7 @@ fn test_graceful_error_degradation_ac4() {
         send_notification(&mut fixture.server, malformed_request);
 
         // Brief pause to process
-        thread::sleep(Duration::from_millis(50));
+        thread::sleep(adaptive_sleep_ms(50));
 
         // Server should remain stable
         assert!(
@@ -1443,7 +1463,7 @@ fn test_concurrent_resource_cleanup_ac5() {
         }
 
         // Brief pause between waves for processing
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(adaptive_sleep_ms(100));
     }
 
     // Wait for all operations to settle

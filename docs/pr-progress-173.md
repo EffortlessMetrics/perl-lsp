@@ -17,7 +17,7 @@
 <!-- hops:start -->
 - **2025-09-27 Current**: ✅ **branch-freshness-verification-specialist** - Branch freshness validation completed
   - **Ancestry Check**: ✅ PASS - Branch includes all master commits (merge-base ancestor validation successful)
-  - **Commit Analysis**: 5 commits ahead, 0 commits behind master
+  - **Commit Analysis**: 7 commits ahead, 0 commits behind master
   - **Workspace Health**: 5 crates validated, cargo check successful with 605 expected docs warnings
   - **LSP Protocol**: Compilation successful, comprehensive test suite (295+ tests) functional
   - **Decision**: Route to `hygiene-finalizer` for next gate validation
@@ -28,7 +28,7 @@
 **Intent**: Validate branch freshness against master for Draft→Ready promotion in ignored tests systematic resolution PR #173
 
 **Observations**:
-- Branch `feat/issue-144-ignored-tests-systematic-resolution` at commit `524cad3d`
+- Branch `feat/issue-144-ignored-tests-systematic-resolution` at commit `d47f19c1`
 - Master at commit `3523cf51`
 - Merge base: `3523cf51` (branch is up-to-date with master)
 - Workspace: 5 crates (perl-parser, perl-lsp, perl-lexer, perl-corpus, xtask)
@@ -42,7 +42,7 @@
 
 **Evidence**:
 - **Ancestry check**: ✅ PASS (HEAD includes all base commits)
-- **Commits ahead**: 5 (all related to ignored test resolution and enhanced LSP error handling)
+- **Commits ahead**: 7 (all related to ignored test resolution and enhanced LSP error handling)
 - **Commits behind**: 0 (branch is current with master)
 - **Cargo workspace**: ✅ OK (5 crates compile successfully)
 - **Parser freshness**: ✅ VALIDATED (workspace integrity maintained, ~100% Perl syntax coverage)
@@ -53,7 +53,9 @@
 
 ## Branch Analysis
 
-### Commit Summary (5 commits ahead)
+### Commit Summary (7 commits ahead)
+- `d47f19c1` feat(benchmark): establish performance baseline and validate enhanced LSP error handling for PR #173
+- `74322323` fix: resolve execute command missing file test and LSP cancellation test stability
 - `524cad3d` feat(tests): Comprehensive ignored test resolution with enhanced LSP error handling
 - `468692e6` feat(lsp): Implement enhanced LSP error handling and reduce ignored tests by 25%
 - `4735cec5` feat(spec): define ignored tests systematic resolution specification for Issue #144
