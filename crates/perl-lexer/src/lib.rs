@@ -27,7 +27,8 @@
     clippy::uninlined_format_args
 )]
 
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::sync::{Arc, OnceLock};
 
 pub mod checkpoint;
 pub mod error;
@@ -238,10 +239,10 @@ impl<'a> PerlLexer<'a> {
                             (spec.body_start, spec.label.clone(), spec.allow_indent)
                         } else {
                             // Not in a heredoc body yet or at EOF
-                            (0, Arc::from(""), false)
+                            (0, empty_arc(), false)
                         }
                     } else {
-                        (0, Arc::from(""), false)
+                        (0, empty_arc(), false)
                     };
 
                 if body_start > 0 {
@@ -321,8 +322,8 @@ impl<'a> PerlLexer<'a> {
                             // Only emit HeredocBody if requested (for folding)
                             if self.emit_heredoc_body_tokens {
                                 return Some(Token {
-                                    token_type: TokenType::HeredocBody(Arc::from("")),
-                                    text: Arc::from(""),
+                                    token_type: TokenType::HeredocBody(empty_arc()),
+                                    text: empty_arc(),
                                     start: body_start,
                                     end: line_start,
                                 });
@@ -380,7 +381,7 @@ impl<'a> PerlLexer<'a> {
                 self.eof_emitted = true;
                 return Some(Token {
                     token_type: TokenType::EOF,
-                    text: Arc::from(""),
+                    text: empty_arc(),
                     start: self.position,
                     end: self.position,
                 });
@@ -527,7 +528,7 @@ impl<'a> PerlLexer<'a> {
     fn current_char(&self) -> Option<char> {
         if self.position < self.input_bytes.len() {
             // For ASCII, direct access is safe
-            let byte = self.input_bytes[self.position];
+            let byte = unsafe { *self.input_bytes.get_unchecked(self.position) };
             if byte < 128 {
                 Some(byte as char)
             } else {
@@ -539,12 +540,12 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn peek_char(&self, offset: usize) -> Option<char> {
         let pos = self.position + offset;
         if pos < self.input_bytes.len() {
             // For ASCII, direct access is safe
-            let byte = self.input_bytes[pos];
+            let byte = unsafe { *self.input_bytes.get_unchecked(pos) };
             if byte < 128 {
                 Some(byte as char)
             } else {
@@ -560,7 +561,7 @@ impl<'a> PerlLexer<'a> {
     #[inline(always)]
     fn advance(&mut self) {
         if self.position < self.input_bytes.len() {
-            let byte = self.input_bytes[self.position];
+            let byte = unsafe { *self.input_bytes.get_unchecked(self.position) };
             if byte < 128 {
                 // ASCII fast path
                 self.position += 1;
@@ -588,6 +589,7 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
+    #[inline]
     fn skip_whitespace_and_comments(&mut self) -> Option<()> {
         // Don't reset after_newline if we're at the start of a line
         if self.position > 0 && self.position != self.line_start_offset {
@@ -595,14 +597,14 @@ impl<'a> PerlLexer<'a> {
         }
 
         while self.position < self.input_bytes.len() {
-            let byte = self.input_bytes[self.position];
+            let byte = unsafe { *self.input_bytes.get_unchecked(self.position) };
             match byte {
                 // Fast path for ASCII whitespace - batch process
                 b' ' => {
                     // Batch skip spaces for better cache efficiency
                     let start = self.position;
                     while self.position < self.input_bytes.len()
-                        && self.input_bytes[self.position] == b' '
+                        && unsafe { *self.input_bytes.get_unchecked(self.position) } == b' '
                     {
                         self.position += 1;
                     }
@@ -615,7 +617,7 @@ impl<'a> PerlLexer<'a> {
                     // Batch skip tabs
                     let start = self.position;
                     while self.position < self.input_bytes.len()
-                        && self.input_bytes[self.position] == b'\t'
+                        && unsafe { *self.input_bytes.get_unchecked(self.position) } == b'\t'
                     {
                         self.position += 1;
                     }
@@ -812,19 +814,22 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
+    #[inline]
     fn try_number(&mut self) -> Option<Token> {
         let start = self.position;
 
         // Fast byte check for digits - optimized bounds checking
         let bytes = self.input_bytes;
-        if self.position >= bytes.len() || !bytes[self.position].is_ascii_digit() {
+        if self.position >= bytes.len()
+            || !unsafe { bytes.get_unchecked(self.position) }.is_ascii_digit()
+        {
             return None;
         }
 
         // Consume initial digits - unrolled for better performance
         let mut pos = self.position;
         while pos < bytes.len() {
-            let byte = bytes[pos];
+            let byte = unsafe { *bytes.get_unchecked(pos) };
             if byte.is_ascii_digit() || byte == b'_' {
                 pos += 1;
             } else {
@@ -834,7 +839,7 @@ impl<'a> PerlLexer<'a> {
         self.position = pos;
 
         // Check for decimal point - optimized with single bounds check
-        if pos < bytes.len() && bytes[pos] == b'.' {
+        if pos < bytes.len() && unsafe { *bytes.get_unchecked(pos) } == b'.' {
             // Peek ahead to see what follows the dot
             let has_following_digit = pos + 1 < bytes.len() && bytes[pos + 1].is_ascii_digit();
 
@@ -1242,6 +1247,7 @@ impl<'a> PerlLexer<'a> {
         !c.is_ascii_alphanumeric() && !c.is_whitespace() && !c.is_control()
     }
 
+    #[inline]
     fn try_identifier_or_keyword(&mut self) -> Option<Token> {
         let start = self.position;
         let ch = self.current_char()?;
@@ -2490,51 +2496,96 @@ impl<'a> PerlLexer<'a> {
     }
 }
 
-#[inline]
+// Pre-computed keyword hash for fast lookup
+static KEYWORDS: OnceLock<HashSet<&'static str>> = OnceLock::new();
+
+// Pre-allocated empty Arc to avoid repeated allocations
+static EMPTY_ARC: OnceLock<Arc<str>> = OnceLock::new();
+
+#[inline(always)]
+fn empty_arc() -> Arc<str> {
+    EMPTY_ARC.get_or_init(|| Arc::from("")).clone()
+}
+
+#[inline(always)]
 fn is_keyword(word: &str) -> bool {
-    // Fast length-based rejection, then direct lookup
+    let keywords = KEYWORDS.get_or_init(|| {
+        [
+            // Single char keywords
+            "q",
+            "m",
+            "s",
+            "y",
+            // Two char keywords
+            "if",
+            "do",
+            "my",
+            "or",
+            "qq",
+            "qw",
+            "qr",
+            "qx",
+            "tr",
+            // Three char keywords
+            "sub",
+            "our",
+            "use",
+            "and",
+            "not",
+            "xor",
+            "die",
+            "say",
+            "for",
+            "try",
+            "END",
+            "cmp",
+            // Four char keywords
+            "else",
+            "when",
+            "next",
+            "last",
+            "redo",
+            "goto",
+            "eval",
+            "warn",
+            "INIT",
+            // Five char keywords
+            "elsif",
+            "while",
+            "until",
+            "local",
+            "state",
+            "given",
+            "break",
+            "print",
+            "catch",
+            "BEGIN",
+            "CHECK",
+            "class",
+            "undef",
+            // Six char keywords
+            "unless",
+            "return",
+            "method",
+            "format",
+            // Seven char keywords
+            "require",
+            "package",
+            "default",
+            "foreach",
+            "finally",
+            // Eight char keywords
+            "continue",
+            // Nine char keywords
+            "UNITCHECK",
+        ]
+        .into_iter()
+        .collect()
+    });
+
+    // Fast length-based rejection for most cases
     match word.len() {
-        1 => matches!(word, "q" | "m" | "s" | "y"),
-        2 => matches!(word, "if" | "do" | "my" | "or" | "qq" | "qw" | "qr" | "qx" | "tr"),
-        3 => matches!(
-            word,
-            "sub"
-                | "our"
-                | "use"
-                | "and"
-                | "not"
-                | "xor"
-                | "die"
-                | "say"
-                | "for"
-                | "try"
-                | "END"
-                | "cmp"
-        ),
-        4 => matches!(
-            word,
-            "else" | "when" | "next" | "last" | "redo" | "goto" | "eval" | "warn" | "INIT"
-        ),
-        5 => matches!(
-            word,
-            "elsif"
-                | "while"
-                | "until"
-                | "local"
-                | "state"
-                | "given"
-                | "break"
-                | "print"
-                | "catch"
-                | "BEGIN"
-                | "CHECK"
-                | "class"
-                | "undef"
-        ),
-        6 => matches!(word, "unless" | "return" | "method" | "format"),
-        7 => matches!(word, "require" | "package" | "default" | "foreach" | "finally"),
-        8 => matches!(word, "continue"),
-        9 => matches!(word, "UNITCHECK"),
+        1..=9 => keywords.contains(word),
         _ => false,
     }
 }

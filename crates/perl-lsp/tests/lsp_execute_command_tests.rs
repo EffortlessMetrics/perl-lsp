@@ -18,6 +18,16 @@ fn setup_server() -> LspServer {
     };
 
     let _response = server.handle_request(init_request);
+
+    // Send the initialized notification to complete the handshake
+    let initialized_request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+        id: None,
+    };
+
+    let _initialized_response = server.handle_request(initialized_request);
     server
 }
 
@@ -159,7 +169,7 @@ fn test_execute_command_unknown() {
 
 #[test]
 fn test_execute_command_capabilities() {
-    let mut server = setup_server();
+    let mut server = LspServer::new();
 
     // Initialize and check capabilities
     let init_request = JsonRpcRequest {

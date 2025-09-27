@@ -391,11 +391,14 @@ pub enum FormatError {
     #[error(
         "perltidy not found: {0}\n\nTo install perltidy:\n  - CPAN: cpan Perl::Tidy\n  - Debian/Ubuntu: apt-get install perltidy\n  - RedHat/Fedora: yum install perltidy\n  - macOS: brew install perltidy\n  - Windows: cpan Perl::Tidy"
     )]
+    /// perltidy executable not found on system PATH
     PerltidyNotFound(String),
 
+    /// Error occurred during perltidy execution
     #[error("perltidy error: {0}")]
     PerltidyError(String),
 
+    /// I/O error during file operations
     #[error("IO error: {0}")]
     IoError(String),
 }

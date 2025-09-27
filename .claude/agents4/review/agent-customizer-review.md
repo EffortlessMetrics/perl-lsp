@@ -48,7 +48,9 @@ docs/                    # Documentation following Diátaxis framework
 ├── CRATE_ARCHITECTURE_GUIDE.md  # System design and components
 ├── INCREMENTAL_PARSING_GUIDE.md # Performance and implementation
 ├── SECURITY_DEVELOPMENT_GUIDE.md # Enterprise security practices
-└── BENCHMARK_FRAMEWORK.md       # Cross-language performance analysis
+└── benchmarks/
+    ├── BENCHMARK_FRAMEWORK.md   # Cross-language performance analysis
+    └── (other benchmark docs)
 
 crates/              # Workspace structure
 ├── perl-parser/      # Main parser library (production-ready recursive descent)
@@ -172,7 +174,7 @@ Examples:
 
 ### 1. Preserve Agent Structure
 
-**CRITICAL**: Do NOT change the agent's JSON format or core structure. Only adapt the systemPrompt content to MergeCode standards.
+**CRITICAL**: Do NOT change the agent's JSON format or core structure. Only adapt the systemPrompt content to Perl LSP standards.
 
 ### 2. Behavioral Tuning Focus Areas
 
@@ -276,7 +278,7 @@ Ensure every customized agent includes:
 - [ ] xtask automation with cargo fallbacks
 - [ ] Fallback chains (try alternatives before skipping)
 - [ ] Property-based testing awareness
-- [ ] Feature flag compatibility validation (bounded standard matrix: cpu/gpu/none)
+- [ ] Feature flag compatibility validation (bounded standard matrix: parser/lsp/lexer)
 - [ ] Performance regression detection
 - [ ] Semantic commit message validation
 - [ ] Documentation standards (Diátaxis framework)

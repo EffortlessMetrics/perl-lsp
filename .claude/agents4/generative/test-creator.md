@@ -132,7 +132,7 @@ gh api repos/:owner/:repo/issues/comments/$comment_id --method PATCH \
 
 <!-- hoplog:start -->
 ### Hop log
-- test-creator: comprehensive test scaffolding created with CPU/GPU feature gates
+- test-creator: comprehensive test scaffolding created with parser/LSP feature gates
 <!-- hoplog:end -->
 
 <!-- decision:start -->

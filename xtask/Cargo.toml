@@ -1,33 +1,33 @@
 [package]
 name = "xtask"
 version = "0.8.3"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-clap = { version = "4.5.42", features = ["derive"] }
+clap = { version = "4.5.48", features = ["derive"] }
 color-eyre = "0.6.5"
-cargo_metadata = "0.21.0"
+cargo_metadata = "0.22.0"
 duct = "1.1.0"
 walkdir = "2.5.0"
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.142"
-toml = "0.9.5"
-anyhow = "1.0.98"
+serde = { version = "1.0.227", features = ["derive"] }
+serde_json = "1.0.145"
+toml = "0.9.7"
+anyhow = "1.0.100"
 indicatif = "0.18.0"
-console = "0.16.0"
-chrono = { version = "0.4.41", features = ["serde"] }
+console = "0.16.1"
+chrono = { version = "0.4.42", features = ["serde"] }
 perl-parser = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", optional = true }
-regex = "1.11.1"
-serde_yaml = "0.9"
-bindgen = "0.72.0"
-peak_alloc = "0.3"
-procfs = "0.15"
+regex = "1.11.3"
+serde_yaml_ng = "0.10.0"
+bindgen = "0.72.1"
+peak_alloc = "0.3.0"
+procfs = "0.18.0"
 [dev-dependencies]
-tempfile = "3.8"
-assert_cmd = "2.0"
+tempfile = "3.23.0"
+assert_cmd = "2.0.17"
 
 [features]
 # Additional tasks that depend on legacy tree-sitter-perl crate
