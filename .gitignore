@@ -37,6 +37,7 @@ releases/
 mutants.out/
 mutants.out.old/
 mutants.out*
+mutants.out.old*
 .cargo/mutants.toml
 mutation_testing_report.md
 **/manual_mutation_test.rs
@@ -50,6 +51,9 @@ fuzz_results/
 INTEGRATION_COMPLETION_DIGEST.md
 *_analysis.md
 *_report.md
+*report*.md
+*status*.md
+*summary*.md
 
 # Temporary scripts and artifacts
 analyze_survivors.sh
@@ -60,3 +64,21 @@ run_mutation_test.sh
 # Integration artifacts
 .base_sha
 benchmark_results_*.txt
+
+# Archive directories (keep organized)
+archive/
+
+# Large binary executables (should be built, not committed)
+test_perf
+examples/debug_super
+examples/debug_corpus_parser
+benchmarks/bench_lexer_pest
+benches/bench_lexer_pest
+**/debug_super
+**/debug_corpus_parser
+**/bench_lexer_pest
+
+# Legacy test artifacts
+benchmark_tests/
+test_fixtures/
+lsp_test/

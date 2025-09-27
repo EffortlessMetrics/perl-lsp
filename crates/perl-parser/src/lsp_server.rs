@@ -782,7 +782,7 @@ impl LspServer {
             "workspace/symbol/resolve" => self.handle_workspace_symbol_resolve(request.params),
 
             "textDocument/rename" => self.handle_rename_workspace(request.params),
-            "textDocument/codeAction" => self.handle_code_actions_pragmas(request.params),
+            "textDocument/codeAction" => self.handle_code_action(request.params),
             "codeAction/resolve" => self.handle_code_action_resolve(request.params),
             // PR 6: Semantic tokens
             "textDocument/semanticTokens/full" => self.handle_semantic_tokens(request.params),
@@ -2230,7 +2230,11 @@ impl LspServer {
                                 InternalCodeActionKind::QuickFix => "quickfix",
                                 InternalCodeActionKind::Refactor => "refactor",
                                 InternalCodeActionKind::RefactorExtract => "refactor.extract",
-                                _ => "quickfix",
+                                InternalCodeActionKind::RefactorInline => "refactor.inline",
+                                InternalCodeActionKind::RefactorRewrite => "refactor.rewrite",
+                                InternalCodeActionKind::Source => "source",
+                                InternalCodeActionKind::SourceOrganizeImports => "source.organizeImports",
+                                InternalCodeActionKind::SourceFixAll => "source.fixAll",
                             },
                             "edit": {
                                 "changes": changes,
@@ -2275,8 +2279,11 @@ impl LspServer {
                                 InternalCodeActionKind::QuickFix => "quickfix",
                                 InternalCodeActionKind::Refactor => "refactor",
                                 InternalCodeActionKind::RefactorExtract => "refactor.extract",
+                                InternalCodeActionKind::RefactorInline => "refactor.inline",
                                 InternalCodeActionKind::RefactorRewrite => "refactor.rewrite",
-                                _ => "refactor",
+                                InternalCodeActionKind::Source => "source",
+                                InternalCodeActionKind::SourceOrganizeImports => "source.organizeImports",
+                                InternalCodeActionKind::SourceFixAll => "source.fixAll",
                             },
                             "edit": {
                                 "changes": changes,
@@ -7632,11 +7639,31 @@ impl LspServer {
                     }
                 }
                 // New commands handled by ExecuteCommandProvider
-                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.debugTests" => {
+                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.debugTests"
+                | "perl.runCritic" => {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {
-                            return Err(JsonRpcError { code: -32603, message: e, data: None });
+                            // Return proper JSON-RPC error according to LSP 3.17 specification
+                            let error_code = if e.contains("Missing") || e.contains("argument") {
+                                -32602 // InvalidParams
+                            } else if e.contains("Unknown command") {
+                                -32601 // MethodNotFound
+                            } else if e.contains("Path traversal") || e.contains("security") {
+                                -32603 // InternalError (security)
+                            } else {
+                                -32603 // InternalError (general)
+                            };
+
+                            return Err(JsonRpcError {
+                                code: error_code,
+                                message: format!("Execute command failed: {}", e),
+                                data: Some(json!({
+                                    "command": command,
+                                    "errorType": "executeCommand",
+                                    "originalError": e
+                                })),
+                            });
                         }
                     }
                 }
@@ -7647,18 +7674,6 @@ impl LspServer {
                     return Ok(Some(
                         json!({"status": "started", "message": format!("Debug session {} initiated", command)}),
                     ));
-                }
-                // Perl::Critic command
-                "perl.runCritic" => {
-                    if let Some(file_uri) = arguments.first().and_then(|v| v.as_str()) {
-                        return self.run_perl_critic(file_uri);
-                    } else {
-                        return Err(JsonRpcError {
-                            code: -32602,
-                            message: "Missing file URI argument".to_string(),
-                            data: None,
-                        });
-                    }
                 }
                 _ => {
                     return Err(JsonRpcError {

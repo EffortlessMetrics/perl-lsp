@@ -1,1 +1,0 @@
-// Benchmark crate for comparing Perl parser implementations

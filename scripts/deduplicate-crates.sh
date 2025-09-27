@@ -39,7 +39,7 @@ cat > Cargo.toml << 'EOF'
 [package]
 name = "tree-sitter-perl"
 version = "0.8.3"
-edition = "2021"
+edition = "2024"
 rust-version = "1.75"
 description = "Compatibility wrapper for perl-parser-pest (v2 Pest parser)"
 repository = "https://github.com/EffortlessSteven/tree-sitter-perl"

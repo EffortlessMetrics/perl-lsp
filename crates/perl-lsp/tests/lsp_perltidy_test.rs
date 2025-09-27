@@ -70,7 +70,7 @@ fn test_pragma_code_actions() {
 /// Test that formatting provider is advertised when perltidy is available
 #[test]
 fn test_formatting_provider_capability() {
-    let has_perltidy = which::which("perltidy").is_ok();
+    let has_perltidy = perl_parser::execute_command::command_exists("perltidy");
 
     let mut srv = LspServer::new();
 

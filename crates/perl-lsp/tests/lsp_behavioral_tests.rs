@@ -239,7 +239,7 @@ fn test_extract_variable_returns_edits() {
 }
 
 #[test]
-#[ignore = "executeCommand not implemented - required for perlcritic integration"]
+// AC2:runCritic - perl.runCritic command integration with diagnostic workflow
 fn test_critic_violations_emit_diagnostics() {
     let (mut harness, workspace) = create_test_server();
 
