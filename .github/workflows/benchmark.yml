@@ -44,8 +44,8 @@ jobs:
 
     - name: Run comparison benchmarks
       run: |
-        ./benchmark_all.sh > benchmark_results.txt 2>&1 || true
-        ./compare_all_levels.sh > comparison_results.txt 2>&1 || true
+        ./scripts/benchmark_all.sh > benchmark_results.txt 2>&1 || true
+        ./scripts/compare_all_levels.sh > comparison_results.txt 2>&1 || true
 
     - name: Store benchmark result
       uses: benchmark-action/github-action-benchmark@v1

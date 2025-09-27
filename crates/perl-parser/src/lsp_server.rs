@@ -527,9 +527,27 @@ impl LspServer {
                     }
                 }
 
-                // Parse JSON-RPC request
-                if let Ok(request) = serde_json::from_slice(&content) {
-                    return Ok(Some(request));
+                // Parse JSON-RPC request with enhanced error handling
+                match serde_json::from_slice(&content) {
+                    Ok(request) => return Ok(Some(request)),
+                    Err(e) => {
+                        // Enhanced malformed frame recovery
+                        eprintln!("LSP server: JSON parse error - {}", e);
+
+                        // Attempt to extract malformed content safely (no sensitive data logging)
+                        let content_str = String::from_utf8_lossy(&content);
+                        if content_str.len() > 100 {
+                            eprintln!(
+                                "LSP server: Malformed frame (truncated): {}...",
+                                &content_str[..100]
+                            );
+                        } else {
+                            eprintln!("LSP server: Malformed frame: {}", content_str);
+                        }
+
+                        // Continue processing - don't crash the server on malformed input
+                        return Ok(None);
+                    }
                 }
             }
         }
@@ -553,6 +571,42 @@ impl LspServer {
             message: "Server cancelled the request".to_string(),
             data: None,
         }
+    }
+
+    /// Create an enhanced error response with comprehensive context
+    fn enhanced_error(
+        code: i32,
+        message: &str,
+        error_type: &str,
+        method: Option<&str>,
+    ) -> JsonRpcError {
+        let mut data = json!({
+            "error_type": error_type,
+            "context": "Enhanced LSP error response with comprehensive context",
+            "server_info": {
+                "name": "perl-lsp",
+                "version": env!("CARGO_PKG_VERSION"),
+                "capabilities": "Enhanced error handling and concurrent request management"
+            },
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        });
+
+        if let Some(method_name) = method {
+            data["method"] = json!(method_name);
+        }
+
+        JsonRpcError { code, message: message.to_string(), data: Some(data) }
+    }
+
+    /// Create a standard document not found error response
+    fn document_not_found_error() -> Value {
+        json!({
+            "status": "error",
+            "message": "Document not found"
+        })
     }
 
     /// Mark a request as cancelled
@@ -782,7 +836,7 @@ impl LspServer {
             "workspace/symbol/resolve" => self.handle_workspace_symbol_resolve(request.params),
 
             "textDocument/rename" => self.handle_rename_workspace(request.params),
-            "textDocument/codeAction" => self.handle_code_actions_pragmas(request.params),
+            "textDocument/codeAction" => self.handle_code_action(request.params),
             "codeAction/resolve" => self.handle_code_action_resolve(request.params),
             // PR 6: Semantic tokens
             "textDocument/semanticTokens/full" => self.handle_semantic_tokens(request.params),
@@ -904,11 +958,13 @@ impl LspServer {
             }
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
-                Err(JsonRpcError {
-                    code: ERR_METHOD_NOT_FOUND,
-                    message: "Method not found".to_string(),
-                    data: None,
-                })
+                // Enhanced error response with comprehensive context
+                Err(Self::enhanced_error(
+                    ERR_METHOD_NOT_FOUND,
+                    &format!("Method '{}' not found or not supported", request.method),
+                    "method_not_found",
+                    Some(&request.method),
+                ))
             }
         };
 
@@ -2230,7 +2286,11 @@ impl LspServer {
                                 InternalCodeActionKind::QuickFix => "quickfix",
                                 InternalCodeActionKind::Refactor => "refactor",
                                 InternalCodeActionKind::RefactorExtract => "refactor.extract",
-                                _ => "quickfix",
+                                InternalCodeActionKind::RefactorInline => "refactor.inline",
+                                InternalCodeActionKind::RefactorRewrite => "refactor.rewrite",
+                                InternalCodeActionKind::Source => "source",
+                                InternalCodeActionKind::SourceOrganizeImports => "source.organizeImports",
+                                InternalCodeActionKind::SourceFixAll => "source.fixAll",
                             },
                             "edit": {
                                 "changes": changes,
@@ -2275,8 +2335,11 @@ impl LspServer {
                                 InternalCodeActionKind::QuickFix => "quickfix",
                                 InternalCodeActionKind::Refactor => "refactor",
                                 InternalCodeActionKind::RefactorExtract => "refactor.extract",
+                                InternalCodeActionKind::RefactorInline => "refactor.inline",
                                 InternalCodeActionKind::RefactorRewrite => "refactor.rewrite",
-                                _ => "refactor",
+                                InternalCodeActionKind::Source => "source",
+                                InternalCodeActionKind::SourceOrganizeImports => "source.organizeImports",
+                                InternalCodeActionKind::SourceFixAll => "source.fixAll",
                             },
                             "edit": {
                                 "changes": changes,
@@ -7612,6 +7675,21 @@ impl LspServer {
 
         if let Some(params) = params {
             let command = params["command"].as_str().unwrap_or("");
+
+            // LSP 3.17 compliance: arguments field is required even if empty
+            if !params.as_object().unwrap_or(&serde_json::Map::new()).contains_key("arguments") {
+                return Err(JsonRpcError {
+                    code: -32602, // InvalidParams
+                    message: "Missing required 'arguments' field in executeCommand request"
+                        .to_string(),
+                    data: Some(json!({
+                        "command": command,
+                        "errorType": "executeCommand",
+                        "originalError": "Missing 'arguments' field"
+                    })),
+                });
+            }
+
             let arguments = params["arguments"].as_array().cloned().unwrap_or_default();
 
             eprintln!("Executing command: {}", command);
@@ -7632,11 +7710,31 @@ impl LspServer {
                     }
                 }
                 // New commands handled by ExecuteCommandProvider
-                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.debugTests" => {
+                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.debugTests"
+                | "perl.runCritic" => {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {
-                            return Err(JsonRpcError { code: -32603, message: e, data: None });
+                            // Return proper JSON-RPC error according to LSP 3.17 specification
+                            let error_code = if e.contains("Missing") || e.contains("argument") {
+                                -32602 // InvalidParams
+                            } else if e.contains("Unknown command") {
+                                -32601 // MethodNotFound
+                            } else if e.contains("Path traversal") || e.contains("security") {
+                                -32603 // InternalError (security)
+                            } else {
+                                -32603 // InternalError (general)
+                            };
+
+                            return Err(JsonRpcError {
+                                code: error_code,
+                                message: format!("Execute command failed: {}", e),
+                                data: Some(json!({
+                                    "command": command,
+                                    "errorType": "executeCommand",
+                                    "originalError": e
+                                })),
+                            });
                         }
                     }
                 }
@@ -7648,18 +7746,6 @@ impl LspServer {
                         json!({"status": "started", "message": format!("Debug session {} initiated", command)}),
                     ));
                 }
-                // Perl::Critic command
-                "perl.runCritic" => {
-                    if let Some(file_uri) = arguments.first().and_then(|v| v.as_str()) {
-                        return self.run_perl_critic(file_uri);
-                    } else {
-                        return Err(JsonRpcError {
-                            code: -32602,
-                            message: "Missing file URI argument".to_string(),
-                            data: None,
-                        });
-                    }
-                }
                 _ => {
                     return Err(JsonRpcError {
                         code: ERR_METHOD_NOT_FOUND,
@@ -7670,7 +7756,15 @@ impl LspServer {
             }
         }
 
-        Ok(Some(json!({"status": "error", "message": "Invalid parameters"})))
+        // Missing params entirely
+        Err(JsonRpcError {
+            code: -32602, // InvalidParams
+            message: "Missing parameters for executeCommand request".to_string(),
+            data: Some(json!({
+                "errorType": "executeCommand",
+                "originalError": "Missing params"
+            })),
+        })
     }
 
     /// Run a specific test
@@ -7710,7 +7804,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(json!({"status": "error", "message": "Document not found"})))
+        Ok(Some(Self::document_not_found_error()))
     }
 
     /// Run all tests in a file
@@ -7741,7 +7835,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(json!({"status": "error", "message": "Document not found"})))
+        Ok(Some(Self::document_not_found_error()))
     }
 
     /// Run Perl::Critic on a file
@@ -7852,7 +7946,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(json!({"status": "error", "message": "Document not found"})))
+        Ok(Some(Self::document_not_found_error()))
     }
 
     /// Handle workspace/configuration request

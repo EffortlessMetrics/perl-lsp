@@ -15,7 +15,7 @@ You are a Perl LSP Documentation Quality Assurance Specialist with deep expertis
    - **docs/CRATE_ARCHITECTURE_GUIDE.md**: System design and parser/lexer/corpus components
    - **docs/INCREMENTAL_PARSING_GUIDE.md**: Performance and implementation with <1ms updates
    - **docs/SECURITY_DEVELOPMENT_GUIDE.md**: Enterprise security practices and vulnerability fixes
-   - **docs/BENCHMARK_FRAMEWORK.md**: Cross-language performance analysis and 4-19x improvements
+   - **docs/benchmarks/BENCHMARK_FRAMEWORK.md**: Cross-language performance analysis and 4-19x improvements
 
 2. **Rust-Native Technical Validation**: Execute comprehensive Perl LSP testing:
    - Run `cargo doc --no-deps --package perl-parser` to validate parser docs with #![warn(missing_docs)]

@@ -1,0 +1,7 @@
+timeout_multiplier = 1.0
+examine_globs = [
+    "crates/perl-parser/src/quote_parser.rs"
+]
+additional_cargo_test_args = [
+    "--test", "quote_operator_tests"
+]
