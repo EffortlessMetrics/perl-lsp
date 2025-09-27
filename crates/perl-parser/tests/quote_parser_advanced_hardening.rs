@@ -60,7 +60,7 @@ mod function_return_hardening {
             ("tr", ("", "", "")),
             ("y", ("", "", "")),
             ("tr/abc/xyz/", ("abc", "xyz", "")), // Fixed: actual behavior is (search, replacement, modifiers)
-            ("y/abc/xyz/", ("abc", "xyz", "")), // Fixed: consistent with tr behavior
+            ("y/abc/xyz/", ("abc", "xyz", "")),  // Fixed: consistent with tr behavior
         ];
 
         for (input, (expected_search, expected_replace, expected_mods)) in cases {

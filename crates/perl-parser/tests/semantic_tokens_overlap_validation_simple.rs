@@ -44,16 +44,28 @@ fn test_semantic_token_complex_code_generation() {
 
     // Test that we have tokens for different constructs
     let has_namespace = tokens.iter().any(|token| {
-        matches!(token.token_type, perl_parser::semantic_tokens_provider::SemanticTokenType::Namespace)
+        matches!(
+            token.token_type,
+            perl_parser::semantic_tokens_provider::SemanticTokenType::Namespace
+        )
     });
     let has_function = tokens.iter().any(|token| {
-        matches!(token.token_type, perl_parser::semantic_tokens_provider::SemanticTokenType::Function)
+        matches!(
+            token.token_type,
+            perl_parser::semantic_tokens_provider::SemanticTokenType::Function
+        )
     });
     let has_variable = tokens.iter().any(|token| {
-        matches!(token.token_type, perl_parser::semantic_tokens_provider::SemanticTokenType::Variable)
+        matches!(
+            token.token_type,
+            perl_parser::semantic_tokens_provider::SemanticTokenType::Variable
+        )
     });
 
-    assert!(has_namespace || has_function || has_variable, "Should have tokens for different code constructs");
+    assert!(
+        has_namespace || has_function || has_variable,
+        "Should have tokens for different code constructs"
+    );
 
     // Verify no overlaps
     verify_no_semantic_token_overlaps(&tokens);
@@ -86,10 +98,10 @@ fn test_semantic_token_utf8_handling() {
 #[test]
 fn test_semantic_token_edge_cases() {
     let test_cases = vec![
-        "my $a = 1;",                          // Single character tokens
-        ";;; # Empty statements",              // Minimal content
-        "my $abc = 123; my $def = 456;",      // Multiple variables
-        "package Test::Module; use strict;",  // Package and use statements
+        "my $a = 1;",                        // Single character tokens
+        ";;; # Empty statements",            // Minimal content
+        "my $abc = 123; my $def = 456;",     // Multiple variables
+        "package Test::Module; use strict;", // Package and use statements
     ];
 
     for code in test_cases {
@@ -100,7 +112,11 @@ fn test_semantic_token_edge_cases() {
 
             // Verify all tokens are valid
             for token in &tokens {
-                assert!(token.length > 0, "All tokens should have positive length in code: {}", code);
+                assert!(
+                    token.length > 0,
+                    "All tokens should have positive length in code: {}",
+                    code
+                );
             }
 
             // Verify no overlaps
@@ -126,7 +142,11 @@ fn test_semantic_token_idempotence() {
 
     for (i, (token1, token2)) in tokens1.iter().zip(tokens2.iter()).enumerate() {
         assert_eq!(token1.line, token2.line, "Token {} line should be identical", i);
-        assert_eq!(token1.start_char, token2.start_char, "Token {} start_char should be identical", i);
+        assert_eq!(
+            token1.start_char, token2.start_char,
+            "Token {} start_char should be identical",
+            i
+        );
         assert_eq!(token1.length, token2.length, "Token {} length should be identical", i);
         assert_eq!(token1.token_type, token2.token_type, "Token {} type should be identical", i);
     }
@@ -154,7 +174,10 @@ fn test_semantic_token_performance_characteristics() {
     let duration = start.elapsed();
 
     // Performance should be reasonable
-    assert!(duration.as_millis() < 1000, "Token generation should complete within 1s for 50 variables");
+    assert!(
+        duration.as_millis() < 1000,
+        "Token generation should complete within 1s for 50 variables"
+    );
 
     // Should generate reasonable number of tokens
     assert!(tokens.len() >= 50, "Should generate at least 50 tokens for 50 variables");
@@ -163,7 +186,8 @@ fn test_semantic_token_performance_characteristics() {
     verify_no_semantic_token_overlaps(&tokens);
 
     // Memory usage should be reasonable
-    let total_token_size = tokens.len() * std::mem::size_of::<perl_parser::semantic_tokens_provider::SemanticToken>();
+    let total_token_size =
+        tokens.len() * std::mem::size_of::<perl_parser::semantic_tokens_provider::SemanticToken>();
     assert!(total_token_size < 100_000, "Token memory usage should be reasonable");
 }
 
@@ -201,15 +225,15 @@ fn test_semantic_token_nested_structures() {
 }
 
 // Helper function to verify no overlaps exist in semantic token list
-fn verify_no_semantic_token_overlaps(tokens: &[perl_parser::semantic_tokens_provider::SemanticToken]) {
+fn verify_no_semantic_token_overlaps(
+    tokens: &[perl_parser::semantic_tokens_provider::SemanticToken],
+) {
     // Sort tokens by position for overlap checking
     let mut sorted_tokens: Vec<_> = tokens.iter().collect();
-    sorted_tokens.sort_by(|a, b| {
-        a.line.cmp(&b.line).then_with(|| a.start_char.cmp(&b.start_char))
-    });
+    sorted_tokens.sort_by(|a, b| a.line.cmp(&b.line).then_with(|| a.start_char.cmp(&b.start_char)));
 
     for i in 1..sorted_tokens.len() {
-        let prev_token = sorted_tokens[i-1];
+        let prev_token = sorted_tokens[i - 1];
         let curr_token = sorted_tokens[i];
 
         // Check for overlaps on the same line
@@ -218,8 +242,12 @@ fn verify_no_semantic_token_overlaps(tokens: &[perl_parser::semantic_tokens_prov
             assert!(
                 curr_token.start_char >= prev_end,
                 "Tokens overlap: prev[{}:{}-{}] curr[{}:{}-{}]",
-                prev_token.line, prev_token.start_char, prev_end,
-                curr_token.line, curr_token.start_char, curr_token.start_char + curr_token.length
+                prev_token.line,
+                prev_token.start_char,
+                prev_end,
+                curr_token.line,
+                curr_token.start_char,
+                curr_token.start_char + curr_token.length
             );
         }
     }

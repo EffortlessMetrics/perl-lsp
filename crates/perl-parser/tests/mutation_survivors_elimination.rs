@@ -1,3 +1,4 @@
+use perl_parser::Parser;
 /// Comprehensive mutation survivors elimination tests for PR #170 LSP executeCommand implementation
 ///
 /// Targets critical surviving mutants identified in mutation testing with ~48% score:
@@ -8,10 +9,8 @@
 ///
 /// Goal: Achieve ≥80% mutation score through focused, high-value test additions
 /// Labels: tests:hardening, mutation:elimination, pr170:executecommand
-
 use perl_parser::quote_parser::*;
-use perl_parser::semantic_tokens::{collect_semantic_tokens, EncodedToken};
-use perl_parser::Parser;
+use perl_parser::semantic_tokens::{EncodedToken, collect_semantic_tokens};
 
 /// UTF-8 boundary arithmetic tests targeting position calculation mutations
 mod utf8_boundary_arithmetic {
@@ -25,23 +24,17 @@ mod utf8_boundary_arithmetic {
         let utf8_cases = vec![
             // Basic single-byte ASCII baseline
             ("s/a/b/", "a", "b", ""),
-
             // 2-byte UTF-8 characters (U+00A0-U+07FF)
             ("s/café/test/", "café", "test", ""),
-
             // 3-byte UTF-8 characters (U+0800-U+FFFF)
             ("s/你好/hello/", "你好", "hello", ""),
-
             // 4-byte UTF-8 characters (U+10000-U+10FFFF) - emojis
             ("s/🦀/🔥/", "🦀", "🔥", ""),
             ("s/👨‍💻/dev/", "👨‍💻", "dev", ""), // Complex emoji with ZWJ
-
             // Mixed ASCII and UTF-8
             ("s/test🦀/new🔥/g", "test🦀", "new🔥", "g"),
-
             // Edge case: empty pattern with UTF-8 in replacement
             ("s//❤️/", "", "❤️", ""),
-
             // Edge case: UTF-8 at string boundaries
             ("s/❤️pattern❤️/💚replacement💚/gi", "❤️pattern❤️", "💚replacement💚", "gi"),
         ];
@@ -52,15 +45,18 @@ mod utf8_boundary_arithmetic {
             // These assertions will fail if + → - mutation breaks position calculation
             assert_eq!(
                 pattern, expected_pattern,
-                "UTF-8 position arithmetic failed for pattern in '{}'", input
+                "UTF-8 position arithmetic failed for pattern in '{}'",
+                input
             );
             assert_eq!(
                 replacement, expected_replacement,
-                "UTF-8 position arithmetic failed for replacement in '{}'", input
+                "UTF-8 position arithmetic failed for replacement in '{}'",
+                input
             );
             assert_eq!(
                 modifiers, expected_mods,
-                "UTF-8 position arithmetic failed for modifiers in '{}'", input
+                "UTF-8 position arithmetic failed for modifiers in '{}'",
+                input
             );
         }
     }
@@ -71,44 +67,50 @@ mod utf8_boundary_arithmetic {
         // Critical boundary cases where len() == threshold
         let regex_boundary_cases = vec![
             // Single character cases (len() == 1)
-            ("m", ("mm", "")),          // len() == 1, > 1 = false, >= 1 = true
+            ("m", ("mm", "")), // len() == 1, > 1 = false, >= 1 = true
             // Two character cases (len() == 2)
-            ("mx", ("mxm", "")),        // Boundary + 1
+            ("mx", ("mxm", "")), // Boundary + 1
             // UTF-8 boundary cases
-            ("m❤", ("❤❤", "")),         // Single UTF-8 char but multiple bytes - actual behavior
+            ("m❤", ("❤❤", "")), // Single UTF-8 char but multiple bytes - actual behavior
         ];
 
         let substitution_boundary_cases = vec![
-            ("s", ("", "", "")),        // len() == 1, different parsing path
-            ("s/", ("", "", "")),       // Incomplete delimiter
-            ("s🦀", ("", "", "")),       // UTF-8 with incomplete pattern
+            ("s", ("", "", "")),   // len() == 1, different parsing path
+            ("s/", ("", "", "")),  // Incomplete delimiter
+            ("s🦀", ("", "", "")), // UTF-8 with incomplete pattern
         ];
 
         for (input, (expected_pattern, expected_mods)) in regex_boundary_cases {
             let (pattern, modifiers) = extract_regex_parts(input);
             assert_eq!(
                 pattern, expected_pattern,
-                "Length boundary check failed for pattern '{}'", input
+                "Length boundary check failed for pattern '{}'",
+                input
             );
             assert_eq!(
                 modifiers, expected_mods,
-                "Length boundary check failed for modifiers '{}'", input
+                "Length boundary check failed for modifiers '{}'",
+                input
             );
         }
 
-        for (input, (expected_pattern, expected_repl, expected_mods)) in substitution_boundary_cases {
+        for (input, (expected_pattern, expected_repl, expected_mods)) in substitution_boundary_cases
+        {
             let (pattern, replacement, modifiers) = extract_substitution_parts(input);
             assert_eq!(
                 pattern, expected_pattern,
-                "Length boundary check failed for substitution pattern '{}'", input
+                "Length boundary check failed for substitution pattern '{}'",
+                input
             );
             assert_eq!(
                 replacement, expected_repl,
-                "Length boundary check failed for substitution replacement '{}'", input
+                "Length boundary check failed for substitution replacement '{}'",
+                input
             );
             assert_eq!(
                 modifiers, expected_mods,
-                "Length boundary check failed for substitution modifiers '{}'", input
+                "Length boundary check failed for substitution modifiers '{}'",
+                input
             );
         }
     }
@@ -123,14 +125,11 @@ mod utf8_boundary_arithmetic {
             ("s[test[inner]more][replacement]", "test[inner]more", "replacement"),
             ("s(open(nested)close)(new)", "open(nested)close", "new"),
             ("s<angle<nested>tag><result>", "angle<nested>tag", "result"),
-
             // Multiple level nesting (3+ levels)
             ("s{{{deep}}}{shallow}", "{{deep}}", "shallow"),
             ("s{a{b{c{d}e}f}g}{flat}", "a{b{c{d}e}f}g", "flat"),
-
             // Mixed nesting with different delimiters
             ("s{mix[ed]nest{ing}}{output}", "mix[ed]nest{ing}", "output"),
-
             // Edge case: maximum reasonable nesting
             ("s{{{{{{test}}}}}}{result}", "{{{{{test}}}}}", "result"),
         ];
@@ -142,17 +141,20 @@ mod utf8_boundary_arithmetic {
             // With /= mutation (depth /= 1), depth never changes, breaking parsing
             assert_eq!(
                 pattern, expected_pattern,
-                "Depth arithmetic mutation affected nested pattern parsing: '{}'", input
+                "Depth arithmetic mutation affected nested pattern parsing: '{}'",
+                input
             );
             assert_eq!(
                 replacement, expected_replacement,
-                "Depth arithmetic mutation affected nested replacement parsing: '{}'", input
+                "Depth arithmetic mutation affected nested replacement parsing: '{}'",
+                input
             );
 
             // Ensure no infinite loops or panics from broken depth tracking
             assert!(
                 !pattern.is_empty() || !replacement.is_empty(),
-                "Depth arithmetic mutation caused complete parsing failure: '{}'", input
+                "Depth arithmetic mutation caused complete parsing failure: '{}'",
+                input
             );
         }
     }
@@ -217,8 +219,7 @@ $var =~ tr/abc/xyz/;
                     assert!(
                         !overlaps,
                         "Semantic tokens overlap detected: Token {} [{}, {}, {}] overlaps with Token {} [{}, {}, {}]",
-                        i, line1, col1, token1[2],
-                        j, line2, col2, token2[2]
+                        i, line1, col1, token1[2], j, line2, col2, token2[2]
                     );
                 } else {
                     // Different lines: no overlap by definition
@@ -249,28 +250,16 @@ $var =~ tr/abc/xyz/;
         let tokens3 = collect_semantic_tokens(&ast, test_code, &to_pos16);
 
         // Idempotence: multiple calls should return identical results
-        assert_eq!(
-            tokens1, tokens2,
-            "Semantic tokens generation is not idempotent (call 1 vs 2)"
-        );
-        assert_eq!(
-            tokens2, tokens3,
-            "Semantic tokens generation is not idempotent (call 2 vs 3)"
-        );
-        assert_eq!(
-            tokens1, tokens3,
-            "Semantic tokens generation is not idempotent (call 1 vs 3)"
-        );
+        assert_eq!(tokens1, tokens2, "Semantic tokens generation is not idempotent (call 1 vs 2)");
+        assert_eq!(tokens2, tokens3, "Semantic tokens generation is not idempotent (call 2 vs 3)");
+        assert_eq!(tokens1, tokens3, "Semantic tokens generation is not idempotent (call 1 vs 3)");
     }
 
     /// Test semantic tokens permutation stability (order independence)
     #[test]
     fn test_semantic_tokens_permutation_stability() {
-        let test_cases = vec![
-            "my $a = 1; my $b = 2;",
-            "sub func1 {} sub func2 {}",
-            "package A; package B;",
-        ];
+        let test_cases =
+            vec!["my $a = 1; my $b = 2;", "sub func1 {} sub func2 {}", "package A; package B;"];
 
         for test_code in test_cases {
             let mut parser = Parser::new(test_code);
@@ -298,9 +287,14 @@ $var =~ tr/abc/xyz/;
 
                 // Validate ordering
                 assert!(
-                    current_line > prev_line || (current_line == prev_line && current_col >= prev_col),
+                    current_line > prev_line
+                        || (current_line == prev_line && current_col >= prev_col),
                     "Semantic tokens not properly ordered at index {}: prev=({},{}) current=({},{})",
-                    i, prev_line, prev_col, current_line, current_col
+                    i,
+                    prev_line,
+                    prev_col,
+                    current_line,
+                    current_col
                 );
 
                 prev_line = current_line;
@@ -336,13 +330,11 @@ $var =~ tr/abc/xyz/;
             // Validate that tokens have consistent priorities
             // Higher priority tokens should not be overridden by lower priority ones
             for token in &tokens {
-                assert!(
-                    token[2] > 0,
-                    "Token length should be positive: {:?}", token
-                );
+                assert!(token[2] > 0, "Token length should be positive: {:?}", token);
                 assert!(
                     token[3] < 50, // Reasonable token type index
-                    "Token type index should be reasonable: {:?}", token
+                    "Token type index should be reasonable: {:?}",
+                    token
                 );
             }
         }
@@ -374,12 +366,7 @@ mod paired_delimiter_comprehensive {
     /// Test all paired delimiter combinations with nesting
     #[test]
     fn test_all_paired_delimiter_combinations() {
-        let delimiter_pairs = vec![
-            ('(', ')'),
-            ('[', ']'),
-            ('{', '}'),
-            ('<', '>'),
-        ];
+        let delimiter_pairs = vec![('(', ')'), ('[', ']'), ('{', '}'), ('<', '>')];
 
         for (open, close) in &delimiter_pairs {
             // Simple paired delimiter
@@ -389,26 +376,28 @@ mod paired_delimiter_comprehensive {
             assert_eq!(replacement, "replacement", "Simple {} replacement failed", open);
 
             // Nested same delimiter
-            let nested_same = format!("s{}outer{}inner{}{}outer{}{open}result{close}",
-                                    open, open, close, close, close);
+            let nested_same = format!(
+                "s{}outer{}inner{}{}outer{}{open}result{close}",
+                open, open, close, close, close
+            );
             let (pattern, replacement, _) = extract_substitution_parts(&nested_same);
             let expected_pattern = format!("outer{}inner{}{}outer", open, close, close);
-            assert_eq!(
-                pattern, expected_pattern,
-                "Nested same {} delimiter failed", open
-            );
+            assert_eq!(pattern, expected_pattern, "Nested same {} delimiter failed", open);
             assert_eq!(replacement, "result", "Nested same {} replacement failed", open);
 
             // Mixed nesting with different delimiters
             for (inner_open, inner_close) in &delimiter_pairs {
                 if *inner_open != *open {
-                    let mixed = format!("s{}mix{}ed{}nest{}{open}out{close}",
-                                      open, inner_open, inner_close, close);
+                    let mixed = format!(
+                        "s{}mix{}ed{}nest{}{open}out{close}",
+                        open, inner_open, inner_close, close
+                    );
                     let (pattern, replacement, _) = extract_substitution_parts(&mixed);
                     let expected_mixed_pattern = format!("mix{}ed{}nest", inner_open, inner_close);
                     assert_eq!(
                         pattern, expected_mixed_pattern,
-                        "Mixed nesting {}/{} failed", open, inner_open
+                        "Mixed nesting {}/{} failed",
+                        open, inner_open
                     );
                     assert_eq!(replacement, "out", "Mixed nesting replacement failed");
                 }
@@ -425,11 +414,9 @@ mod paired_delimiter_comprehensive {
             ("s/test[)]/result/", "test[)]", "result"),
             ("s/check[>]/output/", "check[>]", "output"),
             ("s/nested[[][]]test/final/", "nested[[][]]test", "final"),
-
             // Character classes with ranges including delimiters
             ("s/range[a-}]/repl/", "range[a-}]", "repl"),
             ("s/range[(-)]test/result/", "range[(-)]test", "result"),
-
             // Escaped delimiters vs character classes
             ("s/escaped\\]/vs[]/class/", "escaped\\]", "vs[]"),
             ("s/test\\}/vs[}]/end/", "test\\}", "vs[}]"),
@@ -439,11 +426,13 @@ mod paired_delimiter_comprehensive {
             let (pattern, replacement, _) = extract_substitution_parts(input);
             assert_eq!(
                 pattern, expected_pattern,
-                "Character class shielding failed for pattern in '{}'", input
+                "Character class shielding failed for pattern in '{}'",
+                input
             );
             assert_eq!(
                 replacement, expected_replacement,
-                "Character class shielding failed for replacement in '{}'", input
+                "Character class shielding failed for replacement in '{}'",
+                input
             );
         }
     }
@@ -479,22 +468,25 @@ mod paired_delimiter_comprehensive {
             }
 
             // Add replacement
-            let _full_input = format!("s{}{}{{{}}}", pattern, pattern.chars().take(1).collect::<String>(), "repl");
+            let _full_input = format!(
+                "s{}{}{{{}}}",
+                pattern,
+                pattern.chars().take(1).collect::<String>(),
+                "repl"
+            );
             pattern.remove(0); // Remove first delimiter
             pattern.pop(); // Remove last delimiter
 
             let test_input = format!("s{}{{{}}}", pattern, "repl");
             let (actual_pattern, replacement, _) = extract_substitution_parts(&test_input);
 
-            assert_eq!(
-                replacement, "repl",
-                "Deep nesting level {} replacement failed", depth
-            );
+            assert_eq!(replacement, "repl", "Deep nesting level {} replacement failed", depth);
 
             // Should handle deep nesting without panicking
             assert!(
                 !actual_pattern.is_empty(),
-                "Deep nesting level {} should parse something", depth
+                "Deep nesting level {} should parse something",
+                depth
             );
         }
     }
@@ -510,16 +502,41 @@ mod property_based_mutation_tests {
         let forbidden_values = vec!["xyzzy", "sentinel", "mutation", "deadbeef"];
 
         let test_inputs = vec![
-            "", "q", "qq", "qqq",
-            "m", "mm", "m/", "m//", "m/test/",
-            "s", "ss", "s/", "s//", "s/a/b/",
-            "tr", "tr/", "tr//", "tr/a/b/",
-            "y", "y/", "y//", "y/a/b/",
-            "qr", "qr/", "qr//", "qr/test/",
+            "",
+            "q",
+            "qq",
+            "qqq",
+            "m",
+            "mm",
+            "m/",
+            "m//",
+            "m/test/",
+            "s",
+            "ss",
+            "s/",
+            "s//",
+            "s/a/b/",
+            "tr",
+            "tr/",
+            "tr//",
+            "tr/a/b/",
+            "y",
+            "y/",
+            "y//",
+            "y/a/b/",
+            "qr",
+            "qr/",
+            "qr//",
+            "qr/test/",
             // UTF-8 cases
-            "s/🦀/🔥/", "tr/café/test/", "m/你好/",
+            "s/🦀/🔥/",
+            "tr/café/test/",
+            "m/你好/",
             // Edge cases
-            "s{}{}", "s///", "tr{}{}", "m{}",
+            "s{}{}",
+            "s///",
+            "tr{}{}",
+            "m{}",
         ];
 
         for input in test_inputs {
@@ -579,36 +596,32 @@ mod property_based_mutation_tests {
     fn test_arithmetic_safety_invariants() {
         let edge_inputs = vec![
             // Single character boundaries
-            "s/a/b/", "m/x/", "tr/a/b/",
-
+            "s/a/b/",
+            "m/x/",
+            "tr/a/b/",
             // UTF-8 multi-byte boundaries
-            "s/🦀/test/", "m/❤️/", "tr/café/tea/",
-
+            "s/🦀/test/",
+            "m/❤️/",
+            "tr/café/tea/",
             // Empty and minimal cases
-            "s//", "m", "tr",
-
+            "s//",
+            "m",
+            "tr",
             // Deeply nested
             "s{{{{{test}}}}}{result}",
-
             // Mixed delimiters
             "s/test[}]more/repl/",
         ];
 
         for input in edge_inputs {
             // All parsing should complete without panic/overflow
-            let _regex_result = std::panic::catch_unwind(|| {
-                extract_regex_parts(input)
-            });
+            let _regex_result = std::panic::catch_unwind(|| extract_regex_parts(input));
             assert!(_regex_result.is_ok(), "extract_regex_parts panicked on '{}'", input);
 
-            let _sub_result = std::panic::catch_unwind(|| {
-                extract_substitution_parts(input)
-            });
+            let _sub_result = std::panic::catch_unwind(|| extract_substitution_parts(input));
             assert!(_sub_result.is_ok(), "extract_substitution_parts panicked on '{}'", input);
 
-            let _tr_result = std::panic::catch_unwind(|| {
-                extract_transliteration_parts(input)
-            });
+            let _tr_result = std::panic::catch_unwind(|| extract_transliteration_parts(input));
             assert!(_tr_result.is_ok(), "extract_transliteration_parts panicked on '{}'", input);
         }
     }
@@ -622,7 +635,6 @@ mod property_based_mutation_tests {
             ("s[test][result]", true),
             ("s(old)(new)", true),
             ("s<from><to>", true),
-
             // is_paired=false cases (same delimiter)
             ("s/pattern/replacement/", false),
             ("s#old#new#", false),
@@ -639,14 +651,18 @@ mod property_based_mutation_tests {
                 assert!(
                     !pattern.is_empty() && !replacement.is_empty(),
                     "Paired delimiter logic failed for '{}': pattern='{}', replacement='{}'",
-                    input, pattern, replacement
+                    input,
+                    pattern,
+                    replacement
                 );
             } else {
                 // Non-paired delimiters should also extract both parts correctly
                 assert!(
                     !pattern.is_empty() || !replacement.is_empty(),
                     "Non-paired delimiter logic failed for '{}': pattern='{}', replacement='{}'",
-                    input, pattern, replacement
+                    input,
+                    pattern,
+                    replacement
                 );
             }
         }
@@ -693,12 +709,14 @@ mod property_based_mutation_tests {
 
             // Verify ordering
             for i in 1..positions.len() {
-                let prev = positions[i-1];
+                let prev = positions[i - 1];
                 let curr = positions[i];
                 assert!(
                     prev.0 < curr.0 || (prev.0 == curr.0 && prev.1 <= curr.1),
                     "Semantic tokens not ordered: {:?} should come before {:?} in '{}'",
-                    prev, curr, test_code
+                    prev,
+                    curr,
+                    test_code
                 );
             }
         }
@@ -712,16 +730,12 @@ fn test_comprehensive_mutation_integration() {
     let complex_cases = vec![
         // UTF-8 + nesting + arithmetic + boolean logic
         "s{café{nested🦀}more}{new❤️{result}end}gi",
-
         // Deep nesting + UTF-8 + edge cases
         "s{{{{test🔥}}}}{{{result💚}}}",
-
         // Character classes + UTF-8 + mixed delimiters
         "s/pattern[🦀-🔥]test/replacement[❤️]/g",
-
         // Transliteration with UTF-8 and complex modifiers
         "tr{café🦀test}{new❤️result}cds",
-
         // Mixed quote operators
         "m{test[}]pattern}gi",
     ];

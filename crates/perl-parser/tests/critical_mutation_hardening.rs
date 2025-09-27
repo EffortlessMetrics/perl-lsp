@@ -1,3 +1,4 @@
+use perl_parser::Parser;
 /// Critical mutation hardening tests targeting PR #170 LSP executeCommand surviving mutants
 ///
 /// Focuses on high-impact mutations identified in testing with ~48% score:
@@ -8,10 +9,8 @@
 ///
 /// Goal: Strategic test additions to achieve ≥80% mutation score improvement
 /// Labels: tests:hardening, mutation:critical, pr170:core
-
 use perl_parser::quote_parser::*;
-use perl_parser::semantic_tokens::{collect_semantic_tokens, EncodedToken};
-use perl_parser::Parser;
+use perl_parser::semantic_tokens::{EncodedToken, collect_semantic_tokens};
 
 /// Critical UTF-8 arithmetic boundary tests targeting position calculation mutations
 #[test]
@@ -20,14 +19,12 @@ fn test_utf8_arithmetic_boundary_mutations() {
     let utf8_test_cases = vec![
         // Basic ASCII baseline
         ("s/a/b/", "a", "b"),
-
         // UTF-8 multi-byte characters that would break with arithmetic mutations
-        ("s/🦀/test/", "🦀", "test"),    // 4-byte emoji
-        ("s/café/new/", "café", "new"),  // 2-byte accented chars
-        ("s/你好/hi/", "你好", "hi"),     // 3-byte Chinese
-
+        ("s/🦀/test/", "🦀", "test"),   // 4-byte emoji
+        ("s/café/new/", "café", "new"), // 2-byte accented chars
+        ("s/你好/hi/", "你好", "hi"),   // 3-byte Chinese
         // Edge cases where + → - would cause underflow/overflow
-        ("s/❤️/💚/", "❤️", "💚"),        // Complex emoji
+        ("s/❤️/💚/", "❤️", "💚"), // Complex emoji
     ];
 
     for (input, expected_pattern, expected_replacement) in utf8_test_cases {
@@ -36,16 +33,21 @@ fn test_utf8_arithmetic_boundary_mutations() {
         // These assertions kill arithmetic boundary mutations
         assert_eq!(
             pattern, expected_pattern,
-            "UTF-8 arithmetic boundary mutation affects pattern: '{}'", input
+            "UTF-8 arithmetic boundary mutation affects pattern: '{}'",
+            input
         );
         assert_eq!(
             replacement, expected_replacement,
-            "UTF-8 arithmetic boundary mutation affects replacement: '{}'", input
+            "UTF-8 arithmetic boundary mutation affects replacement: '{}'",
+            input
         );
 
         // Ensure no panic from arithmetic underflow/overflow
-        assert!(!pattern.is_empty() || !replacement.is_empty(),
-               "UTF-8 arithmetic should not cause complete parsing failure: '{}'", input);
+        assert!(
+            !pattern.is_empty() || !replacement.is_empty(),
+            "UTF-8 arithmetic should not cause complete parsing failure: '{}'",
+            input
+        );
     }
 }
 
@@ -55,22 +57,27 @@ fn test_delimiter_boundary_length_mutations() {
     // Target >= → > mutations in length boundary checks
     let boundary_cases = vec![
         // Critical len() == 1 boundary (> 1 vs >= 1)
-        ("m", "mm"),       // Single char: len()=1, > 1=false, >= 1=true
-        ("s", ""),         // Single s prefix
-
+        ("m", "mm"), // Single char: len()=1, > 1=false, >= 1=true
+        ("s", ""),   // Single s prefix
         // UTF-8 boundary cases
-        ("m❤", "❤❤"),      // Multi-byte single character
+        ("m❤", "❤❤"), // Multi-byte single character
     ];
 
     for (input, expected_pattern) in boundary_cases {
         if input.starts_with('m') {
             let (pattern, _) = extract_regex_parts(input);
-            assert_eq!(pattern, expected_pattern,
-                      "Length boundary mutation affects regex: '{}'", input);
+            assert_eq!(
+                pattern, expected_pattern,
+                "Length boundary mutation affects regex: '{}'",
+                input
+            );
         } else {
             let (pattern, _, _) = extract_substitution_parts(input);
-            assert_eq!(pattern, expected_pattern,
-                      "Length boundary mutation affects substitution: '{}'", input);
+            assert_eq!(
+                pattern, expected_pattern,
+                "Length boundary mutation affects substitution: '{}'",
+                input
+            );
         }
     }
 }
@@ -89,10 +96,16 @@ fn test_depth_arithmetic_mutations() {
         let (pattern, replacement, _) = extract_substitution_parts(input);
 
         // With /= mutation, depth never decrements, breaking nested parsing
-        assert_eq!(pattern, expected_pattern,
-                  "Depth arithmetic mutation breaks nested pattern: '{}'", input);
-        assert_eq!(replacement, expected_replacement,
-                  "Depth arithmetic mutation breaks nested replacement: '{}'", input);
+        assert_eq!(
+            pattern, expected_pattern,
+            "Depth arithmetic mutation breaks nested pattern: '{}'",
+            input
+        );
+        assert_eq!(
+            replacement, expected_replacement,
+            "Depth arithmetic mutation breaks nested replacement: '{}'",
+            input
+        );
     }
 }
 
@@ -103,22 +116,26 @@ fn test_boolean_logic_mutations() {
     let logic_cases = vec![
         // is_paired=false, rest1.is_empty()=false: && gives true, || gives true (same)
         ("s/old/new/", "old", "new"),
-
         // is_paired=true, rest1.is_empty()=false: && gives false, || gives true (different)
         ("s{pattern}{replacement}", "pattern", "replacement"),
-
         // Test edge cases where logic matters
-        ("s//", "", ""),  // Both empty
+        ("s//", "", ""), // Both empty
     ];
 
     for (input, expected_pattern, expected_replacement) in logic_cases {
         let (pattern, replacement, _) = extract_substitution_parts(input);
 
         // Validate boolean logic produces expected results
-        assert_eq!(pattern, expected_pattern,
-                  "Boolean logic mutation affects pattern: '{}'", input);
-        assert_eq!(replacement, expected_replacement,
-                  "Boolean logic mutation affects replacement: '{}'", input);
+        assert_eq!(
+            pattern, expected_pattern,
+            "Boolean logic mutation affects pattern: '{}'",
+            input
+        );
+        assert_eq!(
+            replacement, expected_replacement,
+            "Boolean logic mutation affects replacement: '{}'",
+            input
+        );
     }
 }
 
@@ -153,9 +170,13 @@ fn test_semantic_token_overlap_property() {
                     let token1_end = col1 + token1[2];
                     let token2_start = col2;
 
-                    assert!(token1_end <= token2_start || col1 >= col2 + token2[2],
-                           "Semantic tokens overlap: Token {} and {} on line {}",
-                           i, j, line1);
+                    assert!(
+                        token1_end <= token2_start || col1 >= col2 + token2[2],
+                        "Semantic tokens overlap: Token {} and {} on line {}",
+                        i,
+                        j,
+                        line1
+                    );
                 }
             }
         }
@@ -183,17 +204,8 @@ fn decode_position(tokens: &[EncodedToken], index: usize) -> (u32, u32) {
 /// Critical function return value tests targeting FnValue → "xyzzy" mutations
 #[test]
 fn test_function_return_mutations() {
-    let test_inputs = vec![
-        "",
-        "qr",
-        "m",
-        "s",
-        "tr",
-        "y",
-        "s/test/repl/",
-        "tr/abc/xyz/",
-        "m/pattern/i",
-    ];
+    let test_inputs =
+        vec!["", "qr", "m", "s", "tr", "y", "s/test/repl/", "tr/abc/xyz/", "m/pattern/i"];
 
     for input in test_inputs {
         // Test all quote parser functions don't return sentinel "xyzzy"
@@ -204,12 +216,36 @@ fn test_function_return_mutations() {
         // Kill FnValue mutations that return "xyzzy"
         assert_ne!(regex_pattern, "xyzzy", "extract_regex_parts sentinel value for '{}'", input);
         assert_ne!(regex_mods, "xyzzy", "extract_regex_parts modifiers sentinel for '{}'", input);
-        assert_ne!(sub_pattern, "xyzzy", "extract_substitution_parts pattern sentinel for '{}'", input);
-        assert_ne!(sub_replacement, "xyzzy", "extract_substitution_parts replacement sentinel for '{}'", input);
-        assert_ne!(sub_mods, "xyzzy", "extract_substitution_parts modifiers sentinel for '{}'", input);
-        assert_ne!(tr_search, "xyzzy", "extract_transliteration_parts search sentinel for '{}'", input);
-        assert_ne!(tr_replace, "xyzzy", "extract_transliteration_parts replace sentinel for '{}'", input);
-        assert_ne!(tr_mods, "xyzzy", "extract_transliteration_parts modifiers sentinel for '{}'", input);
+        assert_ne!(
+            sub_pattern, "xyzzy",
+            "extract_substitution_parts pattern sentinel for '{}'",
+            input
+        );
+        assert_ne!(
+            sub_replacement, "xyzzy",
+            "extract_substitution_parts replacement sentinel for '{}'",
+            input
+        );
+        assert_ne!(
+            sub_mods, "xyzzy",
+            "extract_substitution_parts modifiers sentinel for '{}'",
+            input
+        );
+        assert_ne!(
+            tr_search, "xyzzy",
+            "extract_transliteration_parts search sentinel for '{}'",
+            input
+        );
+        assert_ne!(
+            tr_replace, "xyzzy",
+            "extract_transliteration_parts replace sentinel for '{}'",
+            input
+        );
+        assert_ne!(
+            tr_mods, "xyzzy",
+            "extract_transliteration_parts modifiers sentinel for '{}'",
+            input
+        );
     }
 }
 
@@ -222,10 +258,8 @@ fn test_paired_delimiter_critical_cases() {
         ("s[pattern][replacement]", "pattern", "replacement"),
         ("s(old)(new)", "old", "new"),
         ("s<from><to>", "from", "to"),
-
         // Single level nesting
         ("s{a{b}c}{repl}", "a{b}c", "repl"),
-
         // Character class shielding (delimiters inside [...] should not close)
         ("s/test[}]/result/", "test[}]", "result"),
         ("s/pattern[)]/replacement/", "pattern[)]", "replacement"),
@@ -234,10 +268,16 @@ fn test_paired_delimiter_critical_cases() {
     for (input, expected_pattern, expected_replacement) in critical_delimiter_cases {
         let (pattern, replacement, _) = extract_substitution_parts(input);
 
-        assert_eq!(pattern, expected_pattern,
-                  "Paired delimiter mutation affects pattern: '{}'", input);
-        assert_eq!(replacement, expected_replacement,
-                  "Paired delimiter mutation affects replacement: '{}'", input);
+        assert_eq!(
+            pattern, expected_pattern,
+            "Paired delimiter mutation affects pattern: '{}'",
+            input
+        );
+        assert_eq!(
+            replacement, expected_replacement,
+            "Paired delimiter mutation affects replacement: '{}'",
+            input
+        );
     }
 }
 
@@ -254,10 +294,16 @@ fn test_control_flow_mutations() {
         let (pattern, replacement, _) = extract_substitution_parts(input);
 
         // With false guard, nested delimiters aren't detected
-        assert_eq!(pattern, expected_pattern,
-                  "Control flow mutation affects nested detection: '{}'", input);
-        assert_eq!(replacement, expected_replacement,
-                  "Control flow mutation affects replacement: '{}'", input);
+        assert_eq!(
+            pattern, expected_pattern,
+            "Control flow mutation affects nested detection: '{}'",
+            input
+        );
+        assert_eq!(
+            replacement, expected_replacement,
+            "Control flow mutation affects replacement: '{}'",
+            input
+        );
     }
 }
 
@@ -275,19 +321,13 @@ fn test_comprehensive_property_validation() {
 
     for input in comprehensive_inputs {
         // Should handle all mutation scenarios without panic
-        let _regex_result = std::panic::catch_unwind(|| {
-            extract_regex_parts(input)
-        });
+        let _regex_result = std::panic::catch_unwind(|| extract_regex_parts(input));
         assert!(_regex_result.is_ok(), "Regex parsing panicked: '{}'", input);
 
-        let _sub_result = std::panic::catch_unwind(|| {
-            extract_substitution_parts(input)
-        });
+        let _sub_result = std::panic::catch_unwind(|| extract_substitution_parts(input));
         assert!(_sub_result.is_ok(), "Substitution parsing panicked: '{}'", input);
 
-        let _tr_result = std::panic::catch_unwind(|| {
-            extract_transliteration_parts(input)
-        });
+        let _tr_result = std::panic::catch_unwind(|| extract_transliteration_parts(input));
         assert!(_tr_result.is_ok(), "Transliteration parsing panicked: '{}'", input);
     }
 }
