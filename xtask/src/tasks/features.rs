@@ -251,7 +251,7 @@ fn verify_features() -> Result<()> {
                 // Insta snapshots have a header, find the actual YAML content
                 if let Some(yaml_start) = content.find("---\n") {
                     let yaml_content = &content[yaml_start + 4..];
-                    match serde_yaml::from_str::<serde_yaml::Value>(yaml_content) {
+                    match serde_yaml_ng::from_str::<serde_yaml_ng::Value>(yaml_content) {
                         Ok(yaml) => {
                             // Extract the advertised features from catalog
                             let catalog_advertised: std::collections::BTreeSet<String> = catalog
