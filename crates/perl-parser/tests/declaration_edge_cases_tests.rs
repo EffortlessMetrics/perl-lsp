@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod declaration_edge_cases_tests {
-    use perl_parser::Parser;
     use perl_parser::declaration::DeclarationProvider;
+    use perl_parser::Parser;
     use std::sync::Arc;
 
     fn parse_and_get_provider(code: &str) -> DeclarationProvider<'_> {

@@ -1,6 +1,6 @@
 use perl_parser::{
-    Parser,
     ast::{Node, NodeKind},
+    Parser,
 };
 
 fn print_ast_structure(node: &Node, depth: usize) {

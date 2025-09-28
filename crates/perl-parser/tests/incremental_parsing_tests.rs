@@ -1,6 +1,6 @@
 #![cfg(feature = "incremental")]
 
-use perl_parser::incremental::{Edit, IncrementalState, apply_edits};
+use perl_parser::incremental::{apply_edits, Edit, IncrementalState};
 
 #[test]
 fn test_incremental_state_creation() {

@@ -4,7 +4,7 @@
 //! which is essential for code formatting and refactoring tools.
 
 use perl_parser::trivia::Trivia;
-use perl_parser::trivia_parser::{TriviaPreservingParser, format_with_trivia};
+use perl_parser::trivia_parser::{format_with_trivia, TriviaPreservingParser};
 
 fn main() {
     println!("=== Trivia Preservation Demo ===\n");

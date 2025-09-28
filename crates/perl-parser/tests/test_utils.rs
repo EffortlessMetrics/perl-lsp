@@ -2,7 +2,7 @@
 
 /// Test utilities and helpers for LSP testing
 /// Provides common functionality to reduce code duplication
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

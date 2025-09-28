@@ -12,8 +12,8 @@
 //! - Position tracking and UTF-16 conversion edge cases
 
 use perl_parser::{
-    Parser,
     ast::{Node, NodeKind},
+    Parser,
 };
 use proptest::prelude::*;
 use rstest::*;

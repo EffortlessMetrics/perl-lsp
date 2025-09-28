@@ -1,5 +1,5 @@
 use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Cursor, Read, Write};
 use std::sync::{Arc, Mutex};
 
