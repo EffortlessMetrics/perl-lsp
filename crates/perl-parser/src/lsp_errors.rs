@@ -60,11 +60,17 @@ pub mod error_codes {
 ///
 /// A [`JsonRpcError`] with METHOD_NOT_FOUND code for client response
 ///
-/// # Email Processing Context
+/// # LSP Workflow Context
 ///
-/// This occurs when LSP clients request unsupported features during Perl script analysis
-/// in the LSP workflow. Common during IDE integration when processing large Perl files
-/// where certain language features may be disabled for performance optimization.
+/// This occurs when LSP clients request unsupported features during the
+/// Parse → Index → Navigate → Complete → Analyze pipeline. Common during IDE integration
+/// when processing large Perl files where certain language features may be disabled
+/// for performance optimization.
+///
+/// # Recovery Strategy
+/// - Log the unsupported method for telemetry
+/// - Provide alternative fallback methods if available
+/// - Gracefully degrade functionality without breaking LSP session
 ///
 /// # Examples
 ///
@@ -88,11 +94,17 @@ pub fn method_not_found(method: &str) -> JsonRpcError {
 ///
 /// A [`JsonRpcError`] indicating the method was not advertised in server capabilities
 ///
-/// # Email Processing Context
+/// # LSP Workflow Context
 ///
-/// Occurs when LSP clients attempt to use features not enabled during LSP workflow
-/// processing. This helps enforce capability boundaries during large-scale Perl analysis
-/// where resource constraints require selective feature enabling.
+/// Occurs when LSP clients attempt to use features not advertised in server capabilities
+/// during the Parse → Index → Navigate → Complete → Analyze workflow. This helps enforce
+/// capability boundaries during large-scale Perl analysis where resource constraints
+/// require selective feature enabling.
+///
+/// # Recovery Strategy
+/// - Check server capabilities before making requests
+/// - Implement graceful fallback for missing features
+/// - Update client expectations based on advertised capabilities
 ///
 /// # Examples
 ///
@@ -120,11 +132,18 @@ pub fn method_not_advertised() -> JsonRpcError {
 ///
 /// A [`JsonRpcError`] with SERVER_CANCELLED code (-32802) for LSP 3.17 compliance
 ///
-/// # Email Processing Context
+/// # LSP Workflow Context
 ///
 /// Used when long-running Perl analysis operations are cancelled to maintain system
-/// responsiveness during 50GB+ Perl file processing. Enables graceful cancellation
-/// of expensive operations like workspace-wide symbol indexing.
+/// responsiveness during large-scale codebase processing. Essential for:
+/// - Workspace-wide symbol indexing cancellation
+/// - Incremental parsing timeout handling
+/// - Resource-intensive completion request termination
+///
+/// # Recovery Strategy
+/// - Preserve partial results from cancelled operations
+/// - Implement resumable operations where possible
+/// - Return cached data when available
 ///
 /// # Examples
 ///
