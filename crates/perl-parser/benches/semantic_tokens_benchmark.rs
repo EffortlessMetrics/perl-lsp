@@ -1,7 +1,7 @@
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 use perl_parser::{
+    semantic_tokens_provider::{encode_semantic_tokens, SemanticTokensProvider},
     Parser,
-    semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
 };
 #[allow(unused_imports)] // Used in benchmark functions but clippy may not detect it
 use std::hint::black_box;

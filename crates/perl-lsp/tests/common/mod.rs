@@ -27,7 +27,7 @@
 // Error codes
 const ERR_TEST_TIMEOUT: i64 = -32000;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Mutex, OnceLock};

@@ -3,7 +3,7 @@
 //! Tests for snippets, templates, test runner integration, and advanced IDE features
 
 use perl_parser::{JsonRpcRequest, LspServer};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
 

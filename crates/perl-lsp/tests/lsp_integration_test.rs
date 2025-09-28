@@ -1,7 +1,7 @@
 //! Integration tests for the LSP server
 
 use perl_parser::LspServer;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::sync::mpsc;
 use std::time::Duration;

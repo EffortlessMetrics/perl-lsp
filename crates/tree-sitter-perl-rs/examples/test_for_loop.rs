@@ -1,6 +1,6 @@
 //! Test for loop parsing
 
-use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
+use tree_sitter_perl::{pure_rust_parser::AstNode, EnhancedFullParser};
 
 fn main() {
     println!("=== Testing For Loops ===\n");

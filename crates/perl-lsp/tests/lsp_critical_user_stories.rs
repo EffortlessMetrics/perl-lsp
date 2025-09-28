@@ -3,7 +3,7 @@
 //! Additional high-priority user stories for LSP features that Perl developers
 //! need in production environments.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 
 /// Extended test context for additional user stories

@@ -1,8 +1,8 @@
 //! Property tests for parser invariants and safety properties
 
 use perl_parser::{
-    Parser,
     ast::{Node, NodeKind},
+    Parser,
 };
 use proptest::prelude::*;
 use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};

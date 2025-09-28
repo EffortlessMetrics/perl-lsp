@@ -3,7 +3,7 @@
 #[cfg(feature = "incremental")]
 mod incremental_tests {
     use perl_parser::incremental_integration::{
-        DocumentParser, IncrementalConfig, byte_to_lsp_pos, lsp_pos_to_byte,
+        byte_to_lsp_pos, lsp_pos_to_byte, DocumentParser, IncrementalConfig,
     };
     use ropey::Rope;
     use serde_json::json;

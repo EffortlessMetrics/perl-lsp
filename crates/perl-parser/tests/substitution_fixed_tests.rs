@@ -1,5 +1,5 @@
 /// Fixed substitution operator tests with correct AST structure
-use perl_parser::{Parser, ast::NodeKind};
+use perl_parser::{ast::NodeKind, Parser};
 
 // Helper function to extract substitution node from AST
 fn extract_substitution<'a>(

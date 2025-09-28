@@ -14,7 +14,6 @@
 /// through comprehensive edge case validation and boundary condition testing.
 ///
 /// Labels: tests:mutation-hardening, tests:pr173-enhanced, tests:comprehensive-coverage
-
 use perl_parser::quote_parser::*;
 
 // MUTATION KILLER TARGET: extract_regex_parts() FnValue mutations
@@ -30,7 +29,10 @@ fn test_kill_extract_regex_parts_string_new_mutations() {
     // Test case 2: Single 'm' character handling - critical boundary case
     // Kills mutations where String::new() is returned instead of proper parsing
     let (pattern, modifiers) = extract_regex_parts("m");
-    assert_ne!(pattern, "", "Pattern should not be empty for single 'm' - kills String::new() FnValue mutation");
+    assert_ne!(
+        pattern, "",
+        "Pattern should not be empty for single 'm' - kills String::new() FnValue mutation"
+    );
     assert_eq!(pattern, "mm", "Single 'm' should return 'mm' as pattern");
     assert_eq!(modifiers, "", "Modifiers should be empty for single 'm'");
 
@@ -50,8 +52,14 @@ fn test_kill_extract_regex_parts_string_new_mutations() {
 
     // Test case 5: Complex regex with multiple components - ensures no String::new() returns
     let (pattern, modifiers) = extract_regex_parts("qr{test.*}ims");
-    assert_ne!(pattern, "", "Complex pattern must not be empty - kills String::new() FnValue mutation");
-    assert_ne!(modifiers, "", "Modifiers must not be empty - kills String::new() modifiers mutation");
+    assert_ne!(
+        pattern, "",
+        "Complex pattern must not be empty - kills String::new() FnValue mutation"
+    );
+    assert_ne!(
+        modifiers, "",
+        "Modifiers must not be empty - kills String::new() modifiers mutation"
+    );
     assert_eq!(pattern, "{test.*}", "Pattern extraction failed");
     assert_eq!(modifiers, "ims", "Modifiers extraction failed");
 }
@@ -63,15 +71,24 @@ fn test_kill_extract_substitution_parts_boolean_logic_mutations() {
     // Test case 1: Paired delimiter logic - specifically targets is_paired && conditions
     // If && is mutated to ||, the logic fails for paired delimiters
     let (pattern, replacement, modifiers) = extract_substitution_parts("s{test}{replace}g");
-    assert_eq!(pattern, "test", "Pattern parsing failed - kills && to || mutation in paired delimiter detection");
-    assert_eq!(replacement, "replace", "Replacement parsing failed - validates boolean logic integrity");
+    assert_eq!(
+        pattern, "test",
+        "Pattern parsing failed - kills && to || mutation in paired delimiter detection"
+    );
+    assert_eq!(
+        replacement, "replace",
+        "Replacement parsing failed - validates boolean logic integrity"
+    );
     assert_eq!(modifiers, "g", "Modifiers extraction failed");
 
     // Test case 2: Non-paired delimiter with complex escaping
     // Tests !is_paired && !rest1.is_empty() boundary conditions
     let (pattern, replacement, modifiers) = extract_substitution_parts("s/test\\/ed/repl\\/ace/gi");
     assert_eq!(pattern, "test\\/ed", "Escaped pattern failed - kills boolean logic mutations");
-    assert_eq!(replacement, "repl\\/ace", "Escaped replacement failed - validates && logic integrity");
+    assert_eq!(
+        replacement, "repl\\/ace",
+        "Escaped replacement failed - validates && logic integrity"
+    );
     assert_eq!(modifiers, "gi", "Modifiers should be 'gi'");
 
     // Test case 3: Edge case where second delimiter might be missing
@@ -89,9 +106,16 @@ fn test_kill_extract_substitution_parts_boolean_logic_mutations() {
     assert_eq!(replacement, "", "Parentheses special case handling failed");
 
     // Test case 5: Complex nested delimiters with boolean boundary conditions
-    let (pattern, replacement, modifiers) = extract_substitution_parts("s{test{nested}}{repl{nested}}g");
-    assert_eq!(pattern, "test{nested}", "Nested pattern parsing failed - kills complex boolean mutations");
-    assert_eq!(replacement, "repl{nested}", "Nested replacement parsing failed - validates boolean logic");
+    let (pattern, replacement, modifiers) =
+        extract_substitution_parts("s{test{nested}}{repl{nested}}g");
+    assert_eq!(
+        pattern, "test{nested}",
+        "Nested pattern parsing failed - kills complex boolean mutations"
+    );
+    assert_eq!(
+        replacement, "repl{nested}",
+        "Nested replacement parsing failed - validates boolean logic"
+    );
     assert_eq!(modifiers, "g", "Modifiers should be 'g'");
 }
 
@@ -103,14 +127,20 @@ fn test_kill_extract_transliteration_parts_boundary_mutations() {
     // Targets arithmetic mutations in position calculations (+ to -, += to -=)
     let (search, replacement, modifiers) = extract_transliteration_parts("tr/abc/xyz/d");
     assert_eq!(search, "abc", "Search pattern failed - kills position arithmetic mutations");
-    assert_eq!(replacement, "xyz", "Replacement pattern failed - validates position calculation integrity");
+    assert_eq!(
+        replacement, "xyz",
+        "Replacement pattern failed - validates position calculation integrity"
+    );
     assert_eq!(modifiers, "d", "Modifiers should be 'd'");
 
     // Test case 2: Paired delimiters with complex nesting
     // Tests position calculations where depth += 1 could be mutated to depth -= 1
     let (search, replacement, modifiers) = extract_transliteration_parts("tr{a{b}c}{x{y}z}s");
     assert_eq!(search, "a{b}c", "Nested search failed - kills depth arithmetic mutations");
-    assert_eq!(replacement, "x{y}z", "Nested replacement failed - validates depth calculation logic");
+    assert_eq!(
+        replacement, "x{y}z",
+        "Nested replacement failed - validates depth calculation logic"
+    );
     assert_eq!(modifiers, "s", "Modifiers should be 's'");
 
     // Test case 3: Escaped delimiter handling with position arithmetic
@@ -123,14 +153,20 @@ fn test_kill_extract_transliteration_parts_boundary_mutations() {
     // Test case 4: Edge case with missing second delimiter for paired delimiters
     // Tests boundary conditions where position arithmetic is critical
     let (search, replacement, modifiers) = extract_transliteration_parts("tr{test}incomplete");
-    assert_eq!(search, "test", "Search pattern should be 'test' - kills boundary arithmetic mutations");
+    assert_eq!(
+        search, "test",
+        "Search pattern should be 'test' - kills boundary arithmetic mutations"
+    );
     // For incomplete paired delimiters, replacement should be empty per logic
     assert_eq!(replacement, "", "Incomplete paired delimiter should result in empty replacement");
 
     // Test case 5: Y prefix with complex character ranges
     let (search, replacement, modifiers) = extract_transliteration_parts("y/a-z/A-Z/r");
     assert_eq!(search, "a-z", "Character range search failed - kills position boundary mutations");
-    assert_eq!(replacement, "A-Z", "Character range replacement failed - validates arithmetic integrity");
+    assert_eq!(
+        replacement, "A-Z",
+        "Character range replacement failed - validates arithmetic integrity"
+    );
     assert_eq!(modifiers, "r", "Modifiers should be 'r'");
 }
 
@@ -141,8 +177,14 @@ fn test_kill_match_guard_closing_delimiter_mutations() {
     // Test case 1: Critical closing delimiter detection in substitution
     // If c == closing is mutated to true/false, parsing fails catastrophically
     let (pattern, replacement, modifiers) = extract_substitution_parts("s/test/replace/");
-    assert_eq!(pattern, "test", "Pattern parsing failed - kills c == closing match guard mutations");
-    assert_eq!(replacement, "replace", "Replacement parsing failed - validates closing delimiter detection");
+    assert_eq!(
+        pattern, "test",
+        "Pattern parsing failed - kills c == closing match guard mutations"
+    );
+    assert_eq!(
+        replacement, "replace",
+        "Replacement parsing failed - validates closing delimiter detection"
+    );
 
     // Test case 2: Multiple closing delimiters where only the right one should match
     let (pattern, replacement, modifiers) = extract_substitution_parts("s/te/st/rep/lace/g");
@@ -152,19 +194,38 @@ fn test_kill_match_guard_closing_delimiter_mutations() {
 
     // Test case 3: Transliteration with critical closing delimiter detection
     let (search, replacement, modifiers) = extract_transliteration_parts("tr/a/b/c/x/y/z/");
-    assert_eq!(search, "a", "Search parsing stopped at first delimiter - validates closing delimiter detection");
-    assert_eq!(replacement, "b", "Replacement parsing follows delimiter logic - validates match guard");
-    assert_eq!(modifiers, "c", "Modifiers extracted from remaining text - validates position tracking");
+    assert_eq!(
+        search, "a",
+        "Search parsing stopped at first delimiter - validates closing delimiter detection"
+    );
+    assert_eq!(
+        replacement, "b",
+        "Replacement parsing follows delimiter logic - validates match guard"
+    );
+    assert_eq!(
+        modifiers, "c",
+        "Modifiers extracted from remaining text - validates position tracking"
+    );
 
     // Test case 4: Regex with closing delimiter in content
     let (pattern, modifiers) = extract_regex_parts("m/test\\/regex/i");
-    assert_eq!(pattern, "/test\\/regex/", "Regex with escaped delimiter failed - kills match guard mutations");
+    assert_eq!(
+        pattern, "/test\\/regex/",
+        "Regex with escaped delimiter failed - kills match guard mutations"
+    );
     assert_eq!(modifiers, "i", "Modifiers should be 'i'");
 
     // Test case 5: Paired delimiters where closing delimiter appears in nested context
-    let (pattern, replacement, modifiers) = extract_substitution_parts("s<test<nested>><repl<nested>>g");
-    assert_eq!(pattern, "test<nested>", "Nested angle brackets failed - kills closing delimiter match guard mutations");
-    assert_eq!(replacement, "repl<nested>", "Nested replacement failed - validates nested delimiter handling");
+    let (pattern, replacement, modifiers) =
+        extract_substitution_parts("s<test<nested>><repl<nested>>g");
+    assert_eq!(
+        pattern, "test<nested>",
+        "Nested angle brackets failed - kills closing delimiter match guard mutations"
+    );
+    assert_eq!(
+        replacement, "repl<nested>",
+        "Nested replacement failed - validates nested delimiter handling"
+    );
     assert_eq!(modifiers, "g", "Modifiers should be 'g'");
 }
 
@@ -202,28 +263,54 @@ fn test_kill_unary_operator_mutations() {
 fn test_kill_arithmetic_position_mutations() {
     // Test case 1: Complex nested structure requiring accurate position tracking
     let (pattern, replacement, _modifiers) = extract_substitution_parts("s{a{b{c}d}e}{x{y{z}w}v}g");
-    assert_eq!(pattern, "a{b{c}d}e", "Complex nesting failed - kills arithmetic position mutations");
-    assert_eq!(replacement, "x{y{z}w}v", "Complex replacement failed - validates position arithmetic");
+    assert_eq!(
+        pattern, "a{b{c}d}e",
+        "Complex nesting failed - kills arithmetic position mutations"
+    );
+    assert_eq!(
+        replacement, "x{y{z}w}v",
+        "Complex replacement failed - validates position arithmetic"
+    );
 
     // Test case 2: Long content with multiple escape sequences requiring position accuracy
-    let (pattern, replacement, _modifiers) = extract_substitution_parts("s/a\\\\b\\/c\\\\d/x\\\\y\\/z\\\\w/");
-    assert_eq!(pattern, "a\\\\b\\/c\\\\d", "Escape sequences failed - kills position increment mutations");
-    assert_eq!(replacement, "x\\\\y\\/z\\\\w", "Replacement escapes failed - validates arithmetic integrity");
+    let (pattern, replacement, _modifiers) =
+        extract_substitution_parts("s/a\\\\b\\/c\\\\d/x\\\\y\\/z\\\\w/");
+    assert_eq!(
+        pattern, "a\\\\b\\/c\\\\d",
+        "Escape sequences failed - kills position increment mutations"
+    );
+    assert_eq!(
+        replacement, "x\\\\y\\/z\\\\w",
+        "Replacement escapes failed - validates arithmetic integrity"
+    );
 
     // Test case 3: Transliteration with character position tracking
-    let (search, replacement, _modifiers) = extract_transliteration_parts("tr{abc{def}ghi}{xyz{uvw}rst}");
-    assert_eq!(search, "abc{def}ghi", "Position tracking in search failed - kills arithmetic mutations");
-    assert_eq!(replacement, "xyz{uvw}rst", "Position tracking in replacement failed - validates calculations");
+    let (search, replacement, _modifiers) =
+        extract_transliteration_parts("tr{abc{def}ghi}{xyz{uvw}rst}");
+    assert_eq!(
+        search, "abc{def}ghi",
+        "Position tracking in search failed - kills arithmetic mutations"
+    );
+    assert_eq!(
+        replacement, "xyz{uvw}rst",
+        "Position tracking in replacement failed - validates calculations"
+    );
 
     // Test case 4: Regex with multiple delimiter styles testing position arithmetic
     let (pattern, modifiers) = extract_regex_parts("qr<test<inner>content>ims");
-    assert_eq!(pattern, "<test<inner>content>", "Nested angle brackets failed - kills position arithmetic mutations");
+    assert_eq!(
+        pattern, "<test<inner>content>",
+        "Nested angle brackets failed - kills position arithmetic mutations"
+    );
     assert_eq!(modifiers, "ims", "Modifiers should be 'ims'");
 
     // Test case 5: Edge case with zero-length content requiring precise position handling
     let (pattern, replacement, modifiers) = extract_substitution_parts("s{}{}g");
     assert_eq!(pattern, "", "Empty pattern handling failed - kills zero-length position mutations");
-    assert_eq!(replacement, "", "Empty replacement handling failed - validates position boundary arithmetic");
+    assert_eq!(
+        replacement, "",
+        "Empty replacement handling failed - validates position boundary arithmetic"
+    );
     assert_eq!(modifiers, "g", "Modifiers should be 'g'");
 }
 
@@ -234,28 +321,62 @@ fn test_kill_comprehensive_mutation_combinations() {
     // Test case 1: Complex scenario combining boolean logic, arithmetic, and match guards
     let test_cases = vec![
         // (input, expected_pattern, expected_replacement, expected_modifiers, description)
-        ("s/a\\/b\\/c/x\\/y\\/z/gi", "a\\/b\\/c", "x\\/y\\/z", "gi", "Multiple escapes with boolean logic"),
+        (
+            "s/a\\/b\\/c/x\\/y\\/z/gi",
+            "a\\/b\\/c",
+            "x\\/y\\/z",
+            "gi",
+            "Multiple escapes with boolean logic",
+        ),
         ("s{a{b}c}{x{y}z}g", "a{b}c", "x{y}z", "g", "Paired delimiters with arithmetic"),
         ("tr[a-z][A-Z]d", "a-z", "A-Z", "d", "Character ranges with position tracking"),
         ("qr(test(nested))ims", "(test(nested))", "ims", "", "Complex regex with match guards"),
-        ("s|test\\|pipe|repl\\|pipe|g", "test\\|pipe", "repl\\|pipe", "g", "Pipe delimiters with escaping"),
+        (
+            "s|test\\|pipe|repl\\|pipe|g",
+            "test\\|pipe",
+            "repl\\|pipe",
+            "g",
+            "Pipe delimiters with escaping",
+        ),
     ];
 
-    for (input, expected_pattern, expected_replacement, expected_modifiers, description) in test_cases {
+    for (input, expected_pattern, expected_replacement, expected_modifiers, description) in
+        test_cases
+    {
         if input.starts_with("s") {
             let (pattern, replacement, modifiers) = extract_substitution_parts(input);
             assert_eq!(pattern, expected_pattern, "Pattern failed for {}: {}", description, input);
-            assert_eq!(replacement, expected_replacement, "Replacement failed for {}: {}", description, input);
-            assert_eq!(modifiers, expected_modifiers, "Modifiers failed for {}: {}", description, input);
+            assert_eq!(
+                replacement, expected_replacement,
+                "Replacement failed for {}: {}",
+                description, input
+            );
+            assert_eq!(
+                modifiers, expected_modifiers,
+                "Modifiers failed for {}: {}",
+                description, input
+            );
         } else if input.starts_with("tr") {
             let (search, replacement, modifiers) = extract_transliteration_parts(input);
             assert_eq!(search, expected_pattern, "Search failed for {}: {}", description, input);
-            assert_eq!(replacement, expected_replacement, "Replacement failed for {}: {}", description, input);
-            assert_eq!(modifiers, expected_modifiers, "Modifiers failed for {}: {}", description, input);
+            assert_eq!(
+                replacement, expected_replacement,
+                "Replacement failed for {}: {}",
+                description, input
+            );
+            assert_eq!(
+                modifiers, expected_modifiers,
+                "Modifiers failed for {}: {}",
+                description, input
+            );
         } else if input.starts_with("qr") || input.starts_with("m") {
             let (pattern, modifiers) = extract_regex_parts(input);
             assert_eq!(pattern, expected_pattern, "Pattern failed for {}: {}", description, input);
-            assert_eq!(modifiers, expected_replacement, "Modifiers failed for {}: {}", description, input); // Note: reusing replacement field for modifiers
+            assert_eq!(
+                modifiers, expected_replacement,
+                "Modifiers failed for {}: {}",
+                description, input
+            ); // Note: reusing replacement field for modifiers
         }
     }
 }
@@ -265,14 +386,24 @@ fn test_kill_comprehensive_mutation_combinations() {
 #[test]
 fn test_kill_boundary_condition_stress_cases() {
     // Test case 1: Maximum nesting depth to stress arithmetic position calculations
-    let (pattern, replacement, _modifiers) = extract_substitution_parts("s{{{{{test}}}}}{{{{{repl}}}}}g");
+    let (pattern, replacement, _modifiers) =
+        extract_substitution_parts("s{{{{{test}}}}}{{{{{repl}}}}}g");
     assert_eq!(pattern, "{{{{test}}}}", "Deep nesting failed - kills depth arithmetic mutations");
-    assert_eq!(replacement, "{{{{repl}}}}", "Deep replacement failed - validates depth calculation integrity");
+    assert_eq!(
+        replacement, "{{{{repl}}}}",
+        "Deep replacement failed - validates depth calculation integrity"
+    );
 
     // Test case 2: Alternating escape patterns to stress position arithmetic
     let (pattern, replacement, _modifiers) = extract_substitution_parts("s/\\\\\\//\\\\\\//");
-    assert_eq!(pattern, "\\\\\\/", "Alternating escapes failed - kills position increment mutations");
-    assert_eq!(replacement, "\\\\\\/", "Replacement escapes failed - validates position calculations");
+    assert_eq!(
+        pattern, "\\\\\\/",
+        "Alternating escapes failed - kills position increment mutations"
+    );
+    assert_eq!(
+        replacement, "\\\\\\/",
+        "Replacement escapes failed - validates position calculations"
+    );
 
     // Test case 3: Single character boundaries for all delimiter types
     let single_char_tests = vec![
@@ -288,13 +419,29 @@ fn test_kill_boundary_condition_stress_cases() {
         if input.starts_with("s") {
             let (pattern, replacement, modifiers) = extract_substitution_parts(input);
             assert_eq!(pattern, expected_pattern, "Single char pattern failed for: {}", input);
-            assert_eq!(replacement, expected_replacement, "Single char replacement failed for: {}", input);
-            assert_eq!(modifiers, expected_modifiers, "Single char modifiers failed for: {}", input);
+            assert_eq!(
+                replacement, expected_replacement,
+                "Single char replacement failed for: {}",
+                input
+            );
+            assert_eq!(
+                modifiers, expected_modifiers,
+                "Single char modifiers failed for: {}",
+                input
+            );
         } else if input.starts_with("tr") {
             let (search, replacement, modifiers) = extract_transliteration_parts(input);
             assert_eq!(search, expected_pattern, "Single char search failed for: {}", input);
-            assert_eq!(replacement, expected_replacement, "Single char replacement failed for: {}", input);
-            assert_eq!(modifiers, expected_modifiers, "Single char modifiers failed for: {}", input);
+            assert_eq!(
+                replacement, expected_replacement,
+                "Single char replacement failed for: {}",
+                input
+            );
+            assert_eq!(
+                modifiers, expected_modifiers,
+                "Single char modifiers failed for: {}",
+                input
+            );
         }
     }
 
