@@ -110,8 +110,6 @@ pub use parser::Parser;
 pub mod ast_v2;
 pub mod builtin_signatures;
 pub mod builtin_signatures_phf;
-/// LSP call hierarchy provider for function call navigation.
-pub mod call_hierarchy_provider;
 pub mod cancellation;
 pub mod capabilities;
 pub mod code_actions;
@@ -119,17 +117,9 @@ pub mod code_actions_enhanced;
 pub mod code_actions_pragmas;
 /// LSP code actions provider for automated refactoring and fixes.
 pub mod code_actions_provider;
-pub mod code_lens_provider;
 pub mod completion;
-pub mod dead_code_detector;
-pub mod debug_adapter;
-pub mod declaration;
 pub mod diagnostics;
 pub mod diagnostics_catalog;
-pub mod document_highlight;
-/// LSP document links provider for file and URL navigation.
-pub mod document_links;
-pub mod document_store;
 pub mod edit;
 pub mod error;
 /// Error classification and recovery strategies for parse failures.
@@ -138,20 +128,33 @@ pub mod error_recovery;
 pub mod execute_command;
 /// Feature flags and capability management for LSP server functionality.
 pub mod features;
-pub mod folding;
 pub mod formatting;
 pub mod implementation_provider;
-pub mod import_optimizer;
 #[cfg(feature = "incremental")]
 pub mod incremental;
-#[cfg(feature = "incremental")]
-pub mod incremental_advanced_reuse;
-#[cfg(feature = "incremental")]
-pub mod incremental_checkpoint;
 #[cfg(feature = "incremental")]
 pub mod incremental_document;
 #[cfg(feature = "incremental")]
 pub mod incremental_edit;
+pub mod lsp_errors;
+pub mod util;
+/// Unified refactoring engine for comprehensive code transformations.
+pub mod refactoring;
+/// LSP call hierarchy provider for function call navigation.
+pub mod call_hierarchy_provider;
+pub mod code_lens_provider;
+pub mod dead_code_detector;
+pub mod declaration;
+pub mod document_highlight;
+/// LSP document links provider for file and URL navigation.
+pub mod document_links;
+pub mod document_store;
+pub mod folding;
+pub mod import_optimizer;
+#[cfg(feature = "incremental")]
+pub mod incremental_advanced_reuse;
+#[cfg(feature = "incremental")]
+pub mod incremental_checkpoint;
 #[cfg(feature = "incremental")]
 pub mod incremental_handler_v2;
 #[cfg(feature = "incremental")]
@@ -170,38 +173,26 @@ pub mod line_index;
 /// LSP linked editing provider for synchronized symbol renaming.
 pub mod linked_editing;
 pub mod lsp_document_link;
-pub mod lsp_errors;
 pub mod lsp_on_type_formatting;
 pub mod lsp_selection_range;
 pub mod lsp_server;
 pub mod lsp_utils;
-/// Code modernization utilities for Perl best practices.
-pub mod modernize;
-/// Enhanced code modernization with refactoring capabilities.
-pub mod modernize_refactored;
 /// LSP on-type formatting provider for automatic code formatting.
 pub mod on_type_formatting;
 pub mod parser;
 pub mod parser_context;
-pub mod performance;
 pub mod perl_critic;
 pub mod perltidy;
 pub mod position;
 pub mod position_mapper;
 #[doc(hidden)]
 pub mod positions;
-pub mod pragma_tracker;
 /// Parser for Perl quote and quote-like operators.
 pub mod quote_parser;
 pub mod recovery_parser;
-/// Unified refactoring engine for comprehensive code transformations.
-pub mod refactoring;
 /// LSP references provider for symbol usage analysis.
 pub mod references;
 pub mod rename;
-/// Scope analysis for variable and subroutine resolution.
-#[allow(missing_docs)]
-pub mod scope_analyzer;
 /// LSP selection range provider for smart text selection.
 pub mod selection_range;
 pub mod semantic;
@@ -210,10 +201,6 @@ pub mod semantic_tokens;
 pub mod semantic_tokens_provider;
 pub mod signature_help;
 pub mod symbol;
-#[allow(missing_docs)]
-pub mod tdd_basic;
-/// TDD workflow integration for Test-Driven Development support.
-pub mod tdd_workflow;
 pub mod test_generator;
 /// Test execution and TDD support functionality.
 pub mod test_runner;
@@ -228,11 +215,24 @@ pub mod type_hierarchy;
 /// Type inference engine for Perl variable analysis.
 pub mod type_inference;
 pub mod uri;
-pub mod util;
 pub mod workspace_index;
 pub mod workspace_refactor;
 pub mod workspace_rename;
 pub mod workspace_symbols;
+/// TDD workflow integration for Test-Driven Development support.
+pub mod tdd_workflow;
+pub mod debug_adapter;
+/// Code modernization utilities for Perl best practices.
+pub mod modernize;
+/// Enhanced code modernization with refactoring capabilities.
+pub mod modernize_refactored;
+pub mod performance;
+pub mod pragma_tracker;
+/// Scope analysis for variable and subroutine resolution.
+#[allow(missing_docs)]
+pub mod scope_analyzer;
+#[allow(missing_docs)]
+pub mod tdd_basic;
 
 // Compatibility module for tests using old API
 #[cfg(any(test, feature = "test-compat"))]
@@ -308,8 +308,8 @@ pub use refactoring::{
     RefactoringResult, RefactoringScope, RefactoringType,
 };
 pub use tdd_workflow::{
-    AnnotationSeverity, CoverageAnnotation, TddAction, TddConfig, TddCycleResult, TddWorkflow,
-    TestType, WorkflowState, WorkflowStatus,
+    AnnotationSeverity, CoverageAnnotation, TddAction, TddConfig, TddCycleResult,
+    TddWorkflow, TestType, WorkflowState, WorkflowStatus,
 };
 
 #[cfg(test)]
