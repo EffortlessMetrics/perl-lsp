@@ -1,8 +1,8 @@
 [package]
 name = "perl-parser"
 version = "0.8.8"
-edition = "2021"
-rust-version = "1.89"
+edition = "2024"
+rust-version = "1.90"
 authors = ["Tree-sitter Perl Contributors"]
 description = "Native Perl parser (v3) — Tree-sitter-compatible kinds/fields/points; stable byte↔UTF-16 conversions"
 license = "MIT OR Apache-2.0"
