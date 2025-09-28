@@ -168,7 +168,7 @@ impl TddWorkflow {
     }
 
     fn generate_basic_test(&self, name: &str, params: &[String]) -> String {
-        let args = signature.as_ref().map(|s| vec![s]).unwrap_or_default().iter()
+        let args = params.iter()
             .enumerate()
             .map(|(i, _)| format!("'test_value_{}'", i))
             .collect::<Vec<_>>()
@@ -458,7 +458,7 @@ pub struct WorkflowStatus {
 /// LSP integration for TDD workflow
 pub mod lsp_integration {
     use super::*;
-    use tower_lsp::lsp_types::{
+    use lsp_types::{
         CodeAction, CodeActionKind, Command, Diagnostic as LspDiagnostic,
         DiagnosticSeverity, MessageType, Position, Range, TextEdit, WorkspaceEdit,
     };
@@ -467,7 +467,7 @@ pub mod lsp_integration {
     /// Convert TDD actions to LSP code actions
     pub fn tdd_actions_to_code_actions(
         actions: Vec<TddAction>,
-        uri: &tower_lsp::lsp_types::Url,
+        uri: &lsp_types::Url,
     ) -> Vec<CodeAction> {
         actions.into_iter().map(|action| {
             match action {
@@ -534,7 +534,7 @@ pub mod lsp_integration {
                     AnnotationSeverity::Info => DiagnosticSeverity::INFORMATION,
                     AnnotationSeverity::Hint => DiagnosticSeverity::HINT,
                 }),
-                code: Some(tower_lsp::lsp_types::NumberOrString::String("coverage".to_string())),
+                code: Some(lsp_types::NumberOrString::String("coverage".to_string())),
                 source: Some("TDD".to_string()),
                 message: ann.message,
                 ..Default::default()
