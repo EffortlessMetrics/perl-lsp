@@ -1,5 +1,5 @@
-use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
-use perl_parser::incremental::{Edit, IncrementalState, apply_edits};
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use perl_parser::incremental::{apply_edits, Edit, IncrementalState};
 use perl_parser::incremental_document::IncrementalDocument;
 use perl_parser::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 use std::hint::black_box;

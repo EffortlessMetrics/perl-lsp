@@ -1,5 +1,5 @@
 // Benchmark for position conversion performance
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 use perl_parser::positions::LineStartsCache;
 
 fn big_text() -> String {

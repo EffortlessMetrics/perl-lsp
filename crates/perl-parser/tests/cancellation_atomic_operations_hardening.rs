@@ -15,8 +15,8 @@
 //! being masked by higher-level error handling.
 
 use perl_parser::cancellation::{
-    CancellationMetrics, CancellationRegistry, GLOBAL_CANCELLATION_REGISTRY,
-    PerlLspCancellationToken,
+    CancellationMetrics, CancellationRegistry, PerlLspCancellationToken,
+    GLOBAL_CANCELLATION_REGISTRY,
 };
 use proptest::prelude::*;
 use serde_json::json;

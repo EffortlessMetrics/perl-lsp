@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod provider_version_guard_init {
-    use perl_parser::{Parser, declaration::DeclarationProvider};
+    use perl_parser::{declaration::DeclarationProvider, Parser};
     use std::sync::Arc;
 
     #[test]

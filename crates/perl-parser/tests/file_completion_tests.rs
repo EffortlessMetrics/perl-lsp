@@ -9,8 +9,8 @@
 //! - Context awareness (no completions in comments, etc.)
 
 use perl_parser::{CompletionItemKind, CompletionProvider, Parser};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 // Basic Functionality Tests (Existing)
 
@@ -24,11 +24,9 @@ fn completes_files_in_src_directory() {
     let completions = provider.get_completions(code, pos);
 
     // Should find completion.rs file
-    assert!(
-        completions
-            .iter()
-            .any(|c| c.label == "src/completion.rs" && c.kind == CompletionItemKind::File)
-    );
+    assert!(completions
+        .iter()
+        .any(|c| c.label == "src/completion.rs" && c.kind == CompletionItemKind::File));
 
     // Should provide proper file type information
     let completion_file = completions.iter().find(|c| c.label == "src/completion.rs");
