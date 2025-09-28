@@ -1,7 +1,7 @@
 //! Tests for workspace file operation handlers
 
 use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::sync::Arc;
 use std::sync::Mutex;
 

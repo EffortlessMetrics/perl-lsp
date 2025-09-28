@@ -1,6 +1,6 @@
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
-use perl_parser::textdoc::{Doc, PosEnc, apply_changes, byte_to_lsp_pos, lsp_pos_to_byte};
+use perl_parser::textdoc::{apply_changes, byte_to_lsp_pos, lsp_pos_to_byte, Doc, PosEnc};
 use ropey::Rope;
 use std::hint::black_box;
 

@@ -1,5 +1,5 @@
-use perl_parser::Parser;
 use perl_parser::workspace_index::WorkspaceIndex;
+use perl_parser::Parser;
 use proptest::prelude::*;
 use rstest::*;
 

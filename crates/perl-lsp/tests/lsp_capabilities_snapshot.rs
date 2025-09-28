@@ -3,7 +3,7 @@
 //! This test ensures that changes to advertised capabilities are intentional
 //! and tracked in changelog
 
-use perl_parser::capabilities::{BuildFlags, capabilities_json};
+use perl_parser::capabilities::{capabilities_json, BuildFlags};
 use serde_json::Value;
 
 /// Snapshot of production capabilities (v0.8.5)

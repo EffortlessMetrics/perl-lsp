@@ -1,5 +1,5 @@
 use crate::meta::Section;
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use regex::Regex;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 

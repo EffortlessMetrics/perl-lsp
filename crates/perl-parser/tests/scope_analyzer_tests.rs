@@ -1,7 +1,7 @@
 use perl_parser::{
-    Parser,
     pragma_tracker::PragmaTracker,
     scope_analyzer::{IssueKind, ScopeAnalyzer, ScopeIssue},
+    Parser,
 };
 
 fn analyze_code(code: &str) -> Vec<ScopeIssue> {
@@ -72,12 +72,14 @@ print %ENV;  # Built-in global should not trigger undefined
 
     let issues = analyze_code(code);
     // %ENV is a built-in global
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && (i.variable_name == "%ENV")));
+    assert!(!issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && (i.variable_name == "%ENV")));
     // local $custom_var should not trigger undefined either
-    assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-            && (i.variable_name == "$custom_var"))
-    );
+    assert!(!issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+            && (i.variable_name == "$custom_var")));
 }
 
 #[test]
@@ -172,12 +174,9 @@ print $inner;  # undefined
 "#;
 
     let issues = analyze_code(code);
-    assert!(
-        issues
-            .iter()
-            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-                && (i.variable_name == "$inner"))
-    );
+    assert!(issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && (i.variable_name == "$inner")));
 }
 
 #[test]
@@ -390,10 +389,10 @@ print $config{path};  # Should resolve $config{path} -> %config
 
     let issues = analyze_code(code);
     // $config{path} should be resolved to %config and not trigger undefined
-    assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-            && i.variable_name.contains("config"))
-    );
+    assert!(!issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+            && i.variable_name.contains("config")));
 }
 
 #[test]
@@ -407,10 +406,10 @@ print $items[1];  # Should resolve $items[1] -> @items
 
     let issues = analyze_code(code);
     // $items[0] and $items[1] should be resolved to @items and not trigger undefined
-    assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-            && i.variable_name.contains("items"))
-    );
+    assert!(!issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+            && i.variable_name.contains("items")));
 }
 
 #[test]
@@ -505,10 +504,10 @@ print @subset;
 
     let issues = analyze_code(code);
     // Array slice should not trigger undefined
-    assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-            && i.variable_name.contains("colors"))
-    );
+    assert!(!issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+            && i.variable_name.contains("colors")));
 }
 
 #[test]
@@ -522,10 +521,10 @@ print @values;
 
     let issues = analyze_code(code);
     // Hash slice should not trigger undefined
-    assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-            && i.variable_name.contains("settings"))
-    );
+    assert!(!issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+            && i.variable_name.contains("settings")));
 }
 
 #[test]
@@ -595,10 +594,10 @@ print $outer{inner};    # Should resolve to %outer
 
     let issues = analyze_code(code);
     // Recursive resolution should work
-    assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-            && i.variable_name.contains("outer"))
-    );
+    assert!(!issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+            && i.variable_name.contains("outer")));
 }
 
 #[test]
