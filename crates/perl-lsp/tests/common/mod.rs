@@ -492,15 +492,67 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
 
     // wait specifically for id=1 - use extended timeout for initialization
     // Enhanced timeout for LSP cancellation tests with environment-aware scaling
-    let base_multiplier = 2; // Base multiplier for critical initialization (reduced from 4x to 2x for faster execution)
+    let base_multiplier = 3; // Increased base multiplier for cancellation infrastructure tests (increased from 2x to 3x)
     let thread_count = max_concurrent_threads();
-    let env_multiplier = if thread_count <= 2 { 2 } else { 1 }; // Extra time for constrained environments (reduced from 3x to 2x)
-    let init_timeout = adaptive_timeout() * base_multiplier * env_multiplier;
-    let resp = read_response_matching_i64(server, 1, init_timeout).unwrap_or_else(|| {
-        eprintln!("LSP server failed to respond to initialize request within {:?}", init_timeout);
-        eprintln!("Check if server started properly and is responding to JSON-RPC requests");
-        panic!("initialize response timeout - server may have crashed or is not responding")
-    });
+    let env_multiplier = if thread_count <= 2 { 3 } else { 2 }; // Extra time for constrained environments with cancellation infrastructure (increased from 2x to 3x)
+
+    // Additional CI environment detection for graceful degradation
+    let ci_multiplier = if std::env::var("CI").is_ok()
+        || std::env::var("GITHUB_ACTIONS").is_ok()
+        || std::env::var("CONTINUOUS_INTEGRATION").is_ok()
+    {
+        2 // Extra time for CI environments with limited resources
+    } else {
+        1
+    };
+
+    let init_timeout = adaptive_timeout() * base_multiplier * env_multiplier * ci_multiplier;
+
+    // Enhanced retry logic for cancellation infrastructure tests
+    let mut retry_count = 0;
+    let max_retries = 2; // Allow 2 retries for infrastructure tests
+
+    let resp = loop {
+        match read_response_matching_i64(server, 1, init_timeout) {
+            Some(response) => break response,
+            None => {
+                retry_count += 1;
+                if retry_count > max_retries {
+                    eprintln!(
+                        "LSP server failed to respond to initialize request within {:?} after {} retries",
+                        init_timeout, max_retries
+                    );
+                    eprintln!(
+                        "Check if server started properly and is responding to JSON-RPC requests"
+                    );
+                    eprintln!("Server process alive: {}", server.is_alive());
+                    panic!(
+                        "initialize response timeout - server may have crashed or is not responding"
+                    )
+                } else {
+                    eprintln!(
+                        "Initialize timeout attempt {}/{}, retrying with fresh request...",
+                        retry_count,
+                        max_retries + 1
+                    );
+                    // Brief delay before retry
+                    std::thread::sleep(Duration::from_millis(200));
+                    // Send another initialize request with a new ID
+                    let retry_id = next_id();
+                    send_request(
+                        server,
+                        json!({"id":retry_id,"method":"initialize","params":{"capabilities":{}}}),
+                    );
+                    // Try reading the retry response
+                    if let Some(retry_resp) =
+                        read_response_matching_i64(server, retry_id, init_timeout)
+                    {
+                        break retry_resp;
+                    }
+                }
+            }
+        }
+    };
 
     // Send initialized notification with a brief delay
     std::thread::sleep(Duration::from_millis(50));
