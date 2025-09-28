@@ -16,6 +16,35 @@
 //! This integration enables safe, workspace-wide refactoring with comprehensive
 //! validation and conflict detection.
 //!
+//! # LSP Context Integration
+//!
+//! Implements `textDocument/rename` and `textDocument/prepareRename` LSP methods:
+//! - **Prepare rename**: Validates symbol at position is renameable
+//! - **Rename execution**: Generates workspace edits for all symbol references
+//! - **Cross-file refactoring**: Handles package-qualified symbol updates
+//! - **Conflict detection**: Prevents name collisions and scope violations
+//! - **Atomic operations**: Ensures all-or-nothing rename semantics
+//!
+//! # Client Capability Requirements
+//!
+//! Requires LSP client support for workspace edits and prepare rename:
+//! ```json
+//! {
+//!   "textDocument": {
+//!     "rename": {
+//!       "prepareSupport": true,
+//!       "prepareSupportDefaultBehavior": 1
+//!     }
+//!   },
+//!   "workspace": {
+//!     "workspaceEdit": {
+//!       "resourceOperations": ["create", "rename", "delete"],
+//!       "failureHandling": "textOnlyTransactional"
+//!     }
+//!   }
+//! }
+//! ```
+//!
 //! # Performance Characteristics
 //!
 //! - **Symbol resolution**: <50ms for typical file analysis
