@@ -90,12 +90,14 @@
 //! let ast = parser.parse().unwrap();
 //!
 //! // Extract symbols for workspace indexing
-//! let mut extractor = SymbolExtractor::new();
-//! let symbols = extractor.extract_symbols(&ast, "example.pl");
+//! let extractor = SymbolExtractor::new();
+//! let symbol_table = extractor.extract(&ast);
 //!
 //! // Use symbols for LSP features like go-to-definition
-//! for symbol in symbols {
-//!     println!("Found symbol: {} at {:?}", symbol.name, symbol.location);
+//! for (name, symbols) in &symbol_table.symbols {
+//!     for symbol in symbols {
+//!         println!("Found symbol: {} at {:?}", symbol.name, symbol.location);
+//!     }
 //! }
 //! ```
 

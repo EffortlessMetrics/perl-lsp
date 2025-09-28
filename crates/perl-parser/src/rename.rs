@@ -16,6 +16,35 @@
 //! This integration enables safe, workspace-wide refactoring with comprehensive
 //! validation and conflict detection.
 //!
+//! # LSP Context Integration
+//!
+//! Implements `textDocument/rename` and `textDocument/prepareRename` LSP methods:
+//! - **Prepare rename**: Validates symbol at position is renameable
+//! - **Rename execution**: Generates workspace edits for all symbol references
+//! - **Cross-file refactoring**: Handles package-qualified symbol updates
+//! - **Conflict detection**: Prevents name collisions and scope violations
+//! - **Atomic operations**: Ensures all-or-nothing rename semantics
+//!
+//! # Client Capability Requirements
+//!
+//! Requires LSP client support for workspace edits and prepare rename:
+//! ```json
+//! {
+//!   "textDocument": {
+//!     "rename": {
+//!       "prepareSupport": true,
+//!       "prepareSupportDefaultBehavior": 1
+//!     }
+//!   },
+//!   "workspace": {
+//!     "workspaceEdit": {
+//!       "resourceOperations": ["create", "rename", "delete"],
+//!       "failureHandling": "textOnlyTransactional"
+//!     }
+//!   }
+//! }
+//! ```
+//!
 //! # Performance Characteristics
 //!
 //! - **Symbol resolution**: <50ms for typical file analysis
@@ -38,17 +67,14 @@
 //! let options = RenameOptions::default();
 //!
 //! // Rename symbol at position
-//! let result = provider.rename(&ast, position, "greet_user", &options);
-//! match result {
-//!     Ok(rename_result) => {
-//!         if rename_result.is_valid {
-//!             println!("Rename successful, {} edits", rename_result.edits.len());
-//!             for edit in rename_result.edits {
-//!                 println!("Edit: {} -> {}", edit.location, edit.new_text);
-//!             }
-//!         }
+//! let result = provider.rename(position, "greet_user", &options);
+//! if result.is_valid {
+//!     println!("Rename successful, {} edits", result.edits.len());
+//!     for edit in result.edits {
+//!         println!("Edit: {} -> {}", edit.location, edit.new_text);
 //!     }
-//!     Err(err) => eprintln!("Rename failed: {}", err),
+//! } else if let Some(error) = &result.error {
+//!     eprintln!("Rename failed: {}", error);
 //! }
 //! ```
 

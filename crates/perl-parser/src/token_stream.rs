@@ -33,7 +33,7 @@
 //! let mut stream = TokenStream::new(code);
 //!
 //! // Peek at the next token without consuming it
-//! if let Some(token) = stream.peek() {
+//! if let Ok(token) = stream.peek() {
 //!     println!("Next token: {:?} = '{}'", token.kind, token.text);
 //! }
 //!
@@ -78,7 +78,7 @@
 //! ## Position Tracking and Error Reporting
 //!
 //! ```
-//! use perl_parser::token_stream::TokenStream;
+//! use perl_parser::token_stream::{TokenStream, TokenKind};
 //!
 //! let code = "my $invalid = ;"; // Syntax error
 //! let mut stream = TokenStream::new(code);
