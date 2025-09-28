@@ -7,7 +7,7 @@
 //!   cargo bench --bench scanner_benchmarks --features rust-scanner
 //!   cargo bench --bench scanner_benchmarks --features c-scanner
 
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
 
 // Import the trait once

@@ -2,7 +2,7 @@
 //!
 //! Compares Pure Rust, Legacy C, and Modern parser implementations
 
-use color_eyre::eyre::{Result, bail};
+use color_eyre::eyre::{bail, Result};
 use color_eyre::owo_colors::OwoColorize;
 use perl_parser::Parser as ModernParser;
 use serde_json;

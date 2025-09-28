@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod declaration_micro_tests {
-    use perl_parser::{Parser, declaration::DeclarationProvider};
+    use perl_parser::{declaration::DeclarationProvider, Parser};
     use rustc_hash::FxHashMap;
     use std::sync::Arc;
 

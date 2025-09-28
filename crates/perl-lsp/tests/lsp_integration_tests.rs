@@ -3,10 +3,10 @@
 #![allow(clippy::collapsible_if)]
 
 use perl_parser::{
+    code_lens_provider::{get_shebang_lens, CodeLensProvider},
     JsonRpcRequest, LspServer, Parser,
-    code_lens_provider::{CodeLensProvider, get_shebang_lens},
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 /// Helper to create a test LSP server instance
 fn create_test_server() -> LspServer {

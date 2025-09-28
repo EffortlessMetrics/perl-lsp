@@ -1,4 +1,4 @@
-use perl_parser::{Parser, quote_parser::extract_substitution_parts};
+use perl_parser::{quote_parser::extract_substitution_parts, Parser};
 
 #[test]
 fn test_fuzz_crash_xqn_heredoc() {

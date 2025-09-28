@@ -1,7 +1,7 @@
 /// Mutation hardening tests for position.rs
 /// These tests target specific mutation survivors to improve test coverage
 /// and eliminate edge cases that could lead to security vulnerabilities.
-use perl_parser::position::{Position, Range, offset_to_utf16_line_col, utf16_line_col_to_offset};
+use perl_parser::position::{offset_to_utf16_line_col, utf16_line_col_to_offset, Position, Range};
 
 /// Test the critical line advancement bug that was a mutation survivor
 /// This ensures that line numbers correctly increment when encountering newlines

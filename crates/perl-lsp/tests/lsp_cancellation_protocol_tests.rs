@@ -14,7 +14,7 @@
 
 #![allow(unused_imports)] // Some imports may not be used yet in scaffolding
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;

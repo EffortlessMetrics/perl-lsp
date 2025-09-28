@@ -2,7 +2,7 @@
 ///
 /// These tests systematically explore edge cases and boundary conditions
 /// in the substitution operator parsing logic.
-use perl_parser::{Parser, quote_parser::extract_substitution_parts};
+use perl_parser::{quote_parser::extract_substitution_parts, Parser};
 use std::panic;
 
 /// Test a batch of substitution operator inputs with invariant checking
