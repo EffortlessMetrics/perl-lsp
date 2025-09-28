@@ -1,7 +1,7 @@
 /// Comprehensive tests for substitution operator (s///) parsing
 /// This test module ensures complete coverage of the substitution operator
 /// including edge cases, modifiers, and special delimiters
-use perl_parser::{Parser, ast::NodeKind};
+use perl_parser::{ast::NodeKind, Parser};
 
 #[test]
 // #[ignore = "substitution operator not implemented"]

@@ -23,7 +23,11 @@ fn safe_content(lines: Vec<String>, terminator: &str) -> Vec<String> {
         .into_iter()
         .map(|line| {
             // If the line exactly matches the terminator, append a space
-            if line.trim() == terminator { format!("{} ", line) } else { line }
+            if line.trim() == terminator {
+                format!("{} ", line)
+            } else {
+                line
+            }
         })
         .collect()
 }

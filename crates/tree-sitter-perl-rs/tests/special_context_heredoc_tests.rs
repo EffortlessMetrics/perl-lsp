@@ -72,11 +72,9 @@ print $text;
         let (_processed, declarations) = parser.parse();
 
         // Should detect heredoc in s///e
-        assert!(
-            declarations
-                .iter()
-                .any(|d| d.terminator == "REPLACEMENT" || d.terminator == "EVAL_CONTEXT")
-        );
+        assert!(declarations
+            .iter()
+            .any(|d| d.terminator == "REPLACEMENT" || d.terminator == "EVAL_CONTEXT"));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use perl_parser::{
-    DiagnosticsProvider, Parser,
     ast::{Node, NodeKind},
+    DiagnosticsProvider, Parser,
 };
 
 fn trace_ast_nodes(node: &Node, depth: usize) {

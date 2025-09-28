@@ -1,4 +1,4 @@
-use perl_parser::{Parser, ast::NodeKind};
+use perl_parser::{ast::NodeKind, Parser};
 
 #[test]
 fn debug_substitution_parsing() {

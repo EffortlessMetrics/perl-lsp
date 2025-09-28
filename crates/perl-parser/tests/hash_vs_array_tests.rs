@@ -1,6 +1,6 @@
 #![allow(clippy::collapsible_if)]
 
-use perl_parser::{Parser, ast::NodeKind};
+use perl_parser::{ast::NodeKind, Parser};
 
 #[test]
 fn test_parenthesized_hash_with_fat_comma() {
