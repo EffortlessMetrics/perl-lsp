@@ -52,6 +52,7 @@ pub struct RefactoringEngine {
     #[cfg(feature = "workspace_refactor")]
     workspace_refactor: WorkspaceRefactor,
     #[cfg(not(feature = "workspace_refactor"))]
+    #[allow(dead_code)]
     workspace_refactor: temp_stubs::WorkspaceRefactor,
     /// Code modernization engine
     #[cfg(feature = "modernize")]
@@ -332,10 +333,10 @@ impl RefactoringEngine {
     // Private implementation methods
 
     fn generate_operation_id(&self) -> String {
-        format!("refactor_{}", std::time::SystemTime::now()
+        let duration = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs())
+            .unwrap_or_default();
+        format!("refactor_{}_{}", duration.as_secs(), duration.subsec_nanos())
     }
 
     fn validate_operation(&self, _operation_type: &RefactoringType, _files: &[PathBuf]) -> ParseResult<()> {
@@ -514,12 +515,25 @@ impl RefactoringEngine {
 
 impl Default for RefactoringEngine {
     fn default() -> Self {
-        Self::new().expect("Failed to create default refactoring engine")
+        // Provide safe default without panicking
+        Self {
+            config: RefactoringConfig::default(),
+            import_optimizer: crate::import_optimizer::ImportOptimizer::new(),
+            operation_history: Vec::new(),
+            #[cfg(feature = "workspace_refactor")]
+            workspace_refactor: crate::workspace_refactor::WorkspaceRefactor::new(),
+            #[cfg(not(feature = "workspace_refactor"))]
+            workspace_refactor: temp_stubs::WorkspaceRefactor,
+            #[cfg(feature = "modernize")]
+            modernize: crate::modernize::ModernizeEngine::new(),
+            #[cfg(not(feature = "modernize"))]
+            modernize: temp_stubs::ModernizeEngine::new(),
+        }
     }
 }
 
 // Temporary stub implementations for missing dependencies
-mod temp_stubs {
+pub mod temp_stubs {
     use super::*;
 
     #[derive(Debug)]
@@ -532,6 +546,11 @@ mod temp_stubs {
 
     #[derive(Debug)]
     pub struct ModernizeEngine;
+    impl Default for ModernizeEngine {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
     impl ModernizeEngine {
         pub fn new() -> Self {
             Self

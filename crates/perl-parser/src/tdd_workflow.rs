@@ -82,6 +82,7 @@ pub struct CoverageTracker {
     /// Line coverage data
     line_coverage: HashMap<PathBuf, Vec<LineCoverage>>,
     /// Branch coverage data
+    #[allow(dead_code)]
     branch_coverage: HashMap<PathBuf, Vec<BranchCoverage>>,
     /// Overall coverage percentage
     total_coverage: f64,
@@ -466,7 +467,7 @@ pub mod lsp_integration {
     /// Convert TDD actions to LSP code actions
     pub fn tdd_actions_to_code_actions(
         actions: Vec<TddAction>,
-        uri: &lsp_types::Uri,
+        _uri: &lsp_types::Uri,
     ) -> Vec<CodeAction> {
         actions.into_iter().map(|action| {
             match action {
@@ -577,7 +578,7 @@ mod tests {
 
         // Create a simple AST node for testing - this test validates the workflow exists
         let ast = Node::new(
-            NodeKind::Empty,
+            NodeKind::Undef,
             SourceLocation { start: 0, end: 0 }
         );
 
@@ -611,7 +612,7 @@ mod tests {
 
         // Create a simple AST node for testing
         let ast = Node::new(
-            NodeKind::Empty,
+            NodeKind::Undef,
             SourceLocation { start: 0, end: 0 }
         );
 

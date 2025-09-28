@@ -402,10 +402,9 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
             Some(CodeActionProviderCapability::Options(CodeActionOptions {
                 code_action_kinds: Some(vec![
                     CodeActionKind::QUICKFIX,
-                    CodeActionKind::REFACTOR,
-                    CodeActionKind::REFACTOR_EXTRACT,
-                    CodeActionKind::REFACTOR_INLINE,
-                    CodeActionKind::REFACTOR_REWRITE,
+                    // Only advertise refactoring capabilities that are fully implemented and tested
+                    // TODO: Add CodeActionKind::REFACTOR_EXTRACT when extract variable/subroutine tests pass
+                    // TODO: Add CodeActionKind::SOURCE_ORGANIZE_IMPORTS when import optimization is tested
                 ]),
                 resolve_provider: Some(true),
                 work_done_progress_options: WorkDoneProgressOptions::default(),
@@ -413,14 +412,8 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     }
 
     if build.execute_command {
-        let mut commands = vec![
-            "perl.tidy".to_string(),
-            "perl.critic".to_string(),
-            "perl.extractVariable".to_string(),
-            "perl.extractSubroutine".to_string(),
-        ];
-        // Advertise executeCommandProvider commands from the execute_command module
-        commands.extend(crate::execute_command::get_supported_commands());
+        // Only advertise commands that are actually implemented and tested
+        let commands = crate::execute_command::get_supported_commands();
         caps.execute_command_provider = Some(ExecuteCommandOptions {
             commands,
             work_done_progress_options: WorkDoneProgressOptions::default(),
