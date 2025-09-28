@@ -44,7 +44,7 @@
 //! - **External tool failures**: Automatic fallback to built-in analyzers
 //! - **Permission errors**: Clear error messages with resolution suggestions
 
-//! Execute command implementation for Perl LSP with dual analyzer strategy.
+//!   Execute command implementation for Perl LSP with dual analyzer strategy.
 //!
 //! This module provides comprehensive executeCommand support for the Perl Language Server,
 //! implementing a dual analyzer strategy that combines external tool integration with
@@ -235,9 +235,7 @@ impl ExecuteCommandProvider {
     /// let provider = ExecuteCommandProvider::new();
     /// ```
     pub fn new() -> Self {
-        Self {
-            workspace_root: None,
-        }
+        Self { workspace_root: None }
     }
 
     /// Create a new execute command provider with workspace root enforcement.
@@ -260,9 +258,7 @@ impl ExecuteCommandProvider {
     /// );
     /// ```
     pub fn with_workspace_root(workspace_root: Option<PathBuf>) -> Self {
-        Self {
-            workspace_root,
-        }
+        Self { workspace_root }
     }
 
     /// Execute a command with comprehensive error handling and argument validation.
@@ -411,8 +407,33 @@ impl ExecuteCommandProvider {
     /// Run Perl::Critic analysis using dual analyzer strategy with secure path resolution
     fn run_critic_secure(&self, arguments: &[Value]) -> Result<Value, String> {
         // Use secure path resolution with workspace enforcement
-        let canonical_path = self.resolve_path_from_args(arguments)
-            .map_err(|e| format!("Path resolution failed: {}", e))?;
+        let canonical_path = match self.resolve_path_from_args(arguments) {
+            Ok(path) => path,
+            Err(e) => {
+                // Handle all file access errors gracefully with structured error response
+                // This includes missing files, invalid paths, canonicalization failures, etc.
+                if e.contains("File not found")
+                    || e.contains("does not exist")
+                    || e.contains("No such file or directory")
+                    || e.contains("Failed to canonicalize")
+                {
+                    let user_friendly_error = if e.contains("No such file or directory")
+                        || e.contains("Failed to canonicalize")
+                    {
+                        "File not found"
+                    } else {
+                        &e
+                    };
+                    return Ok(self.format_critic_error(user_friendly_error.to_string(), "none"));
+                }
+                // Only security-related errors (workspace traversal) are still failures
+                if e.contains("Path traversal") || e.contains("outside workspace root") {
+                    return Err(format!("Path resolution failed: {}", e));
+                }
+                // All other errors are handled gracefully
+                return Ok(self.format_critic_error(e, "none"));
+            }
+        };
 
         // Dual analyzer strategy: external perlcritic with built-in fallback
         if command_exists("perlcritic") {
@@ -435,6 +456,8 @@ impl ExecuteCommandProvider {
     /// This method is deprecated and vulnerable to path traversal attacks.
     /// Use `run_critic_secure` instead for secure path resolution.
     #[deprecated(since = "0.8.9", note = "Use run_critic_secure for secure path resolution")]
+    #[allow(dead_code)]
+    #[allow(deprecated)]
     fn run_critic(&self, file_path: &str) -> Result<Value, String> {
         let normalized_path = self.normalize_file_path(file_path);
         let path = Path::new(normalized_path);
@@ -637,12 +660,14 @@ impl ExecuteCommandProvider {
 
         // Convert to PathBuf and canonicalize to resolve .. and . components
         let path = Path::new(normalized_path);
-        let canonical_path = path.canonicalize()
+        let canonical_path = path
+            .canonicalize()
             .map_err(|e| format!("Failed to canonicalize path '{}': {}", normalized_path, e))?;
 
         // Enforce workspace root boundaries if configured
         if let Some(ref workspace_root) = self.workspace_root {
-            let canonical_root = workspace_root.canonicalize()
+            let canonical_root = workspace_root
+                .canonicalize()
                 .map_err(|e| format!("Failed to canonicalize workspace root: {}", e))?;
 
             if !canonical_path.starts_with(&canonical_root) {
@@ -664,8 +689,9 @@ impl ExecuteCommandProvider {
         }
 
         // Check basic readability (this will fail fast if permissions are wrong)
-        std::fs::metadata(&canonical_path)
-            .map_err(|e| format!("Cannot read file metadata '{}': {}", canonical_path.display(), e))?;
+        std::fs::metadata(&canonical_path).map_err(|e| {
+            format!("Cannot read file metadata '{}': {}", canonical_path.display(), e)
+        })?;
 
         Ok(canonical_path)
     }
@@ -677,6 +703,7 @@ impl ExecuteCommandProvider {
     /// This method is deprecated and vulnerable to path traversal attacks.
     /// Use `resolve_path_from_args` instead for secure path resolution.
     #[deprecated(since = "0.8.9", note = "Use resolve_path_from_args for secure path resolution")]
+    #[allow(dead_code)]
     fn normalize_file_path<'a>(&self, file_path: &'a str) -> &'a str {
         if file_path.starts_with("file://") {
             file_path.strip_prefix("file://").unwrap_or(file_path)
@@ -1044,6 +1071,7 @@ print "Value: $variable\n";
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_normalize_file_path_uri_handling() {
         let provider = ExecuteCommandProvider::new();
 
@@ -1189,6 +1217,7 @@ print "Value: $variable\n";
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_run_critic_file_exists_check() {
         let provider = ExecuteCommandProvider::new();
 
@@ -1486,6 +1515,7 @@ print "Value: $variable\n";
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_normalize_file_path_not_hardcoded() {
         let provider = ExecuteCommandProvider::new();
 
@@ -1522,6 +1552,7 @@ print "Value: $variable\n";
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_run_critic_file_existence_logic() {
         let provider = ExecuteCommandProvider::new();
 
@@ -1617,15 +1648,19 @@ pub struct CommandExecutor {
     provider: ExecuteCommandProvider,
 }
 
+impl Default for CommandExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CommandExecutor {
     /// Create a new command executor with default configuration.
     ///
     /// The executor is initialized with workspace-agnostic configuration.
     /// For workspace-aware security enforcement, use `with_workspace_root`.
     pub fn new() -> Self {
-        Self {
-            provider: ExecuteCommandProvider::new(),
-        }
+        Self { provider: ExecuteCommandProvider::new() }
     }
 
     /// Create a new command executor with workspace root enforcement.
@@ -1637,9 +1672,7 @@ impl CommandExecutor {
     ///
     /// * `workspace_root` - The root directory path to enforce for security
     pub fn with_workspace_root(workspace_root: Option<PathBuf>) -> Self {
-        Self {
-            provider: ExecuteCommandProvider::with_workspace_root(workspace_root),
-        }
+        Self { provider: ExecuteCommandProvider::with_workspace_root(workspace_root) }
     }
 
     /// Execute a command with proper JSON-RPC error handling.
@@ -1679,7 +1712,10 @@ impl CommandExecutor {
                     -32602 // InvalidParams
                 } else if e.contains("Unknown command") {
                     -32601 // MethodNotFound
-                } else if e.contains("Path traversal") || e.contains("security") || e.contains("workspace root") {
+                } else if e.contains("Path traversal")
+                    || e.contains("security")
+                    || e.contains("workspace root")
+                {
                     -32603 // InternalError (security)
                 } else {
                     -32603 // InternalError (general)

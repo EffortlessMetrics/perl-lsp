@@ -590,13 +590,35 @@ impl IncrementalLspServer {
     fn handle_execute_command(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let command = params["command"].as_str().unwrap_or("");
+
+            // LSP 3.17 compliance: arguments field is required even if empty
+            if !params.as_object().unwrap_or(&serde_json::Map::new()).contains_key("arguments") {
+                return Err(JsonRpcError {
+                    code: -32602, // InvalidParams
+                    message: "Missing required 'arguments' field in executeCommand request".to_string(),
+                    data: Some(json!({
+                        "command": command,
+                        "errorType": "executeCommand",
+                        "originalError": "Missing 'arguments' field"
+                    })),
+                });
+            }
+
             let arguments = params["arguments"].as_array();
-            
+
             let executor = CommandExecutor::new();
             return executor.execute(command, arguments);
         }
-        
-        Ok(None)
+
+        // Missing params entirely
+        Err(JsonRpcError {
+            code: -32602, // InvalidParams
+            message: "Missing parameters for executeCommand request".to_string(),
+            data: Some(json!({
+                "errorType": "executeCommand",
+                "originalError": "Missing params"
+            })),
+        })
     }
     
     // Helper methods

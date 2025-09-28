@@ -25,10 +25,32 @@ else
   echo "Created baseline file with count: $baseline"
 fi
 
+# Enhanced reporting with budget validation
+target=25  # Issue #144 target: ≤25 ignored tests (49% reduction minimum)
+reduction=$((baseline - current))
+remaining=$((current - target))
+
 echo "Ignored tests: $current (baseline: $baseline)"
 echo "  - Integration tests: $current_tests"
 echo "  - Unit tests in src: $current_src"
+echo ""
+echo "Budget Analysis:"
+echo "  - Target: ≤$target tests (49% reduction from baseline)"
+echo "  - Current reduction: $reduction tests"
+echo "  - Remaining to target: $remaining tests"
 
+if [ "$current" -le "$target" ]; then
+  echo "  ✅ TARGET ACHIEVED: $current ≤ $target"
+  reduction_percent=$(( (reduction * 100) / baseline ))
+  echo "  📈 Reduction: $reduction_percent% (target: 49%+)"
+elif [ "$current" -le "$baseline" ]; then
+  echo "  🔄 PROGRESS: $current ≤ $baseline (baseline maintained)"
+  echo "  ⚠️  Need $remaining more reductions to reach target"
+else
+  echo "  ❌ REGRESSION: $current > $baseline"
+fi
+
+echo ""
 if [ "$current" -le "$baseline" ]; then
   echo "Check passed: ignored test count is within acceptable range"
   exit 0

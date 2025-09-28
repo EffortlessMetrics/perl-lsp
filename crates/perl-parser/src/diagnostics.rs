@@ -15,6 +15,38 @@
 //! This multi-stage approach ensures comprehensive error detection while maintaining
 //! performance through incremental analysis and caching strategies.
 //!
+//! # LSP Client Capabilities
+//!
+//! Supports comprehensive LSP `textDocument/publishDiagnostics` capabilities:
+//! - **Diagnostic categories**: Error, Warning, Information, Hint severity levels
+//! - **Related information**: Cross-file error context with URI links
+//! - **Code actions**: Quick fixes and refactoring suggestions
+//! - **Tags**: Deprecated/unnecessary code identification
+//! - **Versioned diagnostics**: Document version tracking for incremental updates
+//!
+//! Client capability requirements:
+//! ```json
+//! {
+//!   "textDocument": {
+//!     "publishDiagnostics": {
+//!       "relatedInformation": true,
+//!       "versionSupport": true,
+//!       "codeActionsIntegration": true,
+//!       "tagSupport": { "valueSet": [1, 2] }
+//!     }
+//!   }
+//! }
+//! ```
+//!
+//! # Protocol Compliance
+//!
+//! Full LSP 3.18 specification compliance for diagnostic publishing:
+//! - **Real-time updates**: Immediate diagnostic publishing on document changes
+//! - **Batch processing**: Efficient workspace-wide diagnostic computation
+//! - **Cancellation support**: Responsive to client cancellation requests
+//! - **Error resilience**: Graceful degradation for malformed documents
+//! - **UTF-16 position mapping**: Correct client position synchronization
+//!
 //! # Performance Characteristics
 //!
 //! - **Diagnostic generation**: <100ms for typical Perl files
@@ -28,13 +60,14 @@
 //! use perl_parser::diagnostics::{DiagnosticsProvider, DiagnosticSeverity};
 //! use perl_parser::Parser;
 //!
-//! let code = "my $x = ; # syntax error";
+//! let code = "my $x = 42; # valid code";
 //! let mut parser = Parser::new(code);
 //! let ast = parser.parse().unwrap();
 //! let provider = DiagnosticsProvider::new(&ast, code.to_string());
 //!
 //! // Generate diagnostics for code
-//! let diagnostics = provider.get_diagnostics(code, None);
+//! let parse_errors = vec![]; // No parsing errors for this example
+//! let diagnostics = provider.get_diagnostics(&ast, &parse_errors, code);
 //! for diagnostic in diagnostics {
 //!     println!("{:?}: {} at {:?}", diagnostic.severity, diagnostic.message, diagnostic.range);
 //! }

@@ -43,7 +43,7 @@
 //! // Generate code actions for diagnostics
 //! let actions = provider.get_code_actions(&ast, (0, code.len()), &diagnostics);
 //! for action in actions {
-//!     println!("Available action: {} ({})", action.title, action.kind);
+//!     println!("Available action: {} ({:?})", action.title, action.kind);
 //! }
 //! ```
 
