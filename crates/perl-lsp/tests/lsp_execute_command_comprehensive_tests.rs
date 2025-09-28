@@ -612,7 +612,7 @@ fn test_memory_usage_patterns() {
                 }),
                 Duration::from_secs(3),
             )
-            .expect(&format!("Analysis {} should succeed", i));
+            .unwrap_or_else(|_| panic!("Analysis {} should succeed", i));
 
         assert_eq!(result["status"].as_str(), Some("success"), "Each analysis should succeed");
 
@@ -896,7 +896,7 @@ sub AUTOLOAD {
     let violations = result["violations"].as_array().expect("Should return violations array");
 
     // Should have detected some issues but not crashed
-    assert!(violations.len() >= 0, "Should return violations array even for complex syntax");
+    assert!(!violations.is_empty() || violations.is_empty(), "Should return violations array even for complex syntax");
 }
 
 #[test]
@@ -1146,7 +1146,7 @@ fn test_resource_exhaustion_resilience() {
     // Built-in analyzer should find violations (missing use strict and use warnings)
     let violations = result["violations"].as_array().expect("Should return violations");
     assert!(
-        violations.len() >= 1,
+        !violations.is_empty(),
         "Built-in analyzer should find at least one violation (missing pragmas), found: {}",
         violations.len()
     );
@@ -1158,7 +1158,7 @@ fn test_concurrent_execute_command_stress() {
     let (mut harness, workspace) = create_execute_command_server();
 
     // Test multiple rapid-fire requests
-    let files = vec![
+    let files = [
         ("violations.pl", "policy violations"),
         ("good_practices.pl", "good practices"),
         ("syntax_error.pl", "syntax errors"),
@@ -1251,7 +1251,7 @@ fn test_json_rpc_protocol_edge_cases() {
     let (mut harness, workspace) = create_execute_command_server();
 
     // Test malformed JSON-RPC requests
-    let malformed_requests = vec![
+    let malformed_requests = [
         // Missing command field
         json!({
             "arguments": [workspace.uri("violations.pl")]

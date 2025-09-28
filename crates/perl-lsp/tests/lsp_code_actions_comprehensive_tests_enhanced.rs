@@ -136,7 +136,7 @@ fn create_enhanced_code_actions_server() -> (LspHarness, TempWorkspace) {
     for (file, content) in &files {
         harness
             .open_document(&workspace.uri(file), content)
-            .expect(&format!("Failed to open {}", file));
+            .unwrap_or_else(|_| panic!("Failed to open {}", file));
         harness.did_save(&workspace.uri(file)).ok();
     }
 
@@ -453,7 +453,7 @@ fn test_enhanced_code_actions_performance() {
             }),
             Duration::from_millis(timeout_ms),
         )
-        .expect(&format!(
+        .unwrap_or_else(|_| panic!(
             "Code actions should respond within {}ms (revolutionary performance)",
             timeout_ms
         ));
@@ -560,7 +560,7 @@ fn test_enhanced_code_actions_filtering() {
                 }),
                 Duration::from_secs(2),
             )
-            .expect(&format!("Request with filter {:?} should succeed", expected_prefix));
+            .unwrap_or_else(|_| panic!("Request with filter {:?} should succeed", expected_prefix));
 
         let actions = actions_result.as_array().expect("Should return action array");
 

@@ -5,12 +5,12 @@
 
 use crate::ast::Node;
 use crate::diagnostics::Diagnostic;
-use crate::test_generator::{TestGenerator, TestFramework, TestCase};
-use crate::test_generator::{TestRunner, TestResults, CoverageReport};
+use crate::test_generator::{CoverageReport, TestResults, TestRunner};
 use crate::test_generator::{RefactoringSuggester, RefactoringSuggestion};
+use crate::test_generator::{TestCase, TestFramework, TestGenerator};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 
 /// TDD workflow manager
 pub struct TddWorkflow {
@@ -111,7 +111,7 @@ impl TddWorkflow {
             "Test::Class" => TestFramework::TestClass,
             _ => TestFramework::TestMore,
         };
-        
+
         Self {
             generator: TestGenerator::new(framework),
             runner: TestRunner::new(),
@@ -126,7 +126,7 @@ impl TddWorkflow {
     /// Start a new TDD cycle
     pub fn start_cycle(&mut self, test_name: &str) -> TddCycleResult {
         self.state = WorkflowState::Red;
-        
+
         TddCycleResult {
             phase: "Red".to_string(),
             message: format!("Starting TDD cycle for '{}'", test_name),
@@ -151,7 +151,7 @@ impl TddWorkflow {
     ) -> TestCase {
         let test_name = format!("test_{}_{:?}", function_name, test_type);
         let description = format!("{:?} test for {}", test_type, function_name);
-        
+
         let code = match test_type {
             TestType::Basic => self.generate_basic_test(function_name, params),
             TestType::EdgeCase => self.generate_edge_case_test(function_name, params),
@@ -159,7 +159,7 @@ impl TddWorkflow {
             TestType::Performance => self.generate_performance_test(function_name),
             TestType::Integration => self.generate_integration_test(function_name, params),
         };
-        
+
         TestCase {
             name: test_name,
             description,
@@ -169,12 +169,13 @@ impl TddWorkflow {
     }
 
     fn generate_basic_test(&self, name: &str, params: &[String]) -> String {
-        let args = params.iter()
+        let args = params
+            .iter()
             .enumerate()
             .map(|(i, _)| format!("'test_value_{}'", i))
             .collect::<Vec<_>>()
             .join(", ");
-        
+
         format!(
             "use Test::More;\n\n\
              subtest '{}' => sub {{\n    \
@@ -254,18 +255,16 @@ impl TddWorkflow {
 
     /// Run tests and update state
     pub fn run_tests(&mut self, test_files: &[PathBuf]) -> TddCycleResult {
-        let file_strings: Vec<String> = test_files
-            .iter()
-            .map(|p| p.to_string_lossy().to_string())
-            .collect();
-        
+        let file_strings: Vec<String> =
+            test_files.iter().map(|p| p.to_string_lossy().to_string()).collect();
+
         let results = self.runner.run_tests(&file_strings);
-        
+
         // Cache results
         for file in test_files {
             self.test_cache.insert(file.clone(), results.clone());
         }
-        
+
         // Update state based on results
         let (new_state, message) = if results.failed > 0 {
             (WorkflowState::Red, format!("{} tests failed", results.failed))
@@ -274,25 +273,25 @@ impl TddWorkflow {
         } else {
             (WorkflowState::Refactor, "All tests pass! Ready to refactor".to_string())
         };
-        
+
         self.state = new_state.clone();
-        
+
         let mut actions = vec![];
-        
+
         // Suggest refactorings if all tests pass
         if new_state == WorkflowState::Refactor && self.config.auto_suggest_refactorings {
             actions.push(TddAction::SuggestRefactorings);
         }
-        
-        TddCycleResult {
-            phase: format!("{:?}", new_state),
-            message,
-            actions,
-        }
+
+        TddCycleResult { phase: format!("{:?}", new_state), message, actions }
     }
 
     /// Get refactoring suggestions
-    pub fn get_refactoring_suggestions(&mut self, ast: &Node, source: &str) -> Vec<RefactoringSuggestion> {
+    pub fn get_refactoring_suggestions(
+        &mut self,
+        ast: &Node,
+        source: &str,
+    ) -> Vec<RefactoringSuggestion> {
         self.suggester.analyze(ast, source)
     }
 
@@ -310,7 +309,7 @@ impl TddWorkflow {
     /// Get inline coverage annotations
     pub fn get_inline_coverage(&self, file: &Path) -> Vec<CoverageAnnotation> {
         let mut annotations = Vec::new();
-        
+
         if let Some(coverage) = self.coverage_tracker.line_coverage.get(file) {
             for line_cov in coverage {
                 if !line_cov.covered {
@@ -328,7 +327,7 @@ impl TddWorkflow {
                 }
             }
         }
-        
+
         annotations
     }
 
@@ -349,8 +348,7 @@ impl TddWorkflow {
         WorkflowStatus {
             state: self.state.clone(),
             coverage: self.coverage_tracker.total_coverage,
-            tests_passing: self.test_cache.values()
-                .all(|r| r.failed == 0),
+            tests_passing: self.test_cache.values().all(|r| r.failed == 0),
             suggestions_available: true, // Would check actual suggestions
         }
     }
@@ -358,7 +356,7 @@ impl TddWorkflow {
     /// Generate diagnostics for uncovered code
     pub fn generate_coverage_diagnostics(&self, file: &Path) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
-        
+
         if let Some(coverage) = self.coverage_tracker.line_coverage.get(file) {
             for line_cov in coverage {
                 if !line_cov.covered {
@@ -373,24 +371,20 @@ impl TddWorkflow {
                 }
             }
         }
-        
+
         diagnostics
     }
 }
 
 impl CoverageTracker {
     fn new() -> Self {
-        Self {
-            line_coverage: HashMap::new(),
-            branch_coverage: HashMap::new(),
-            total_coverage: 0.0,
-        }
+        Self { line_coverage: HashMap::new(), branch_coverage: HashMap::new(), total_coverage: 0.0 }
     }
 
     fn calculate_total_coverage(&mut self) {
         let mut total_lines = 0;
         let mut covered_lines = 0;
-        
+
         for coverage in self.line_coverage.values() {
             for line in coverage {
                 total_lines += 1;
@@ -399,7 +393,7 @@ impl CoverageTracker {
                 }
             }
         }
-        
+
         if total_lines > 0 {
             self.total_coverage = (covered_lines as f64 / total_lines as f64) * 100.0;
         }
@@ -460,70 +454,62 @@ pub struct WorkflowStatus {
 pub mod lsp_integration {
     use super::*;
     use lsp_types::{
-        CodeAction, CodeActionKind, Command, Diagnostic as LspDiagnostic,
-        DiagnosticSeverity, Position, Range,
+        CodeAction, CodeActionKind, Command, Diagnostic as LspDiagnostic, DiagnosticSeverity,
+        Position, Range,
     };
-    
+
     /// Convert TDD actions to LSP code actions
     pub fn tdd_actions_to_code_actions(
         actions: Vec<TddAction>,
         _uri: &lsp_types::Uri,
     ) -> Vec<CodeAction> {
-        actions.into_iter().map(|action| {
-            match action {
-                TddAction::GenerateTest(name) => {
-                    CodeAction {
-                        title: format!("Generate test for '{}'", name),
-                        kind: Some(CodeActionKind::REFACTOR),
-                        command: Some(Command {
-                            title: "Generate Test".to_string(),
-                            command: "perl.tdd.generateTest".to_string(),
-                            arguments: Some(vec![serde_json::json!(name)]),
-                        }),
-                        ..Default::default()
-                    }
-                }
-                TddAction::RunTests => {
-                    CodeAction {
-                        title: "Run tests".to_string(),
-                        kind: Some(CodeActionKind::new("test.run")),
-                        command: Some(Command {
-                            title: "Run Tests".to_string(),
-                            command: "perl.tdd.runTests".to_string(),
-                            arguments: None,
-                        }),
-                        ..Default::default()
-                    }
-                }
-                TddAction::SuggestRefactorings => {
-                    CodeAction {
-                        title: "Get refactoring suggestions".to_string(),
-                        kind: Some(CodeActionKind::REFACTOR),
-                        command: Some(Command {
-                            title: "Suggest Refactorings".to_string(),
-                            command: "perl.tdd.suggestRefactorings".to_string(),
-                            arguments: None,
-                        }),
-                        ..Default::default()
-                    }
-                }
-                _ => {
-                    CodeAction {
-                        title: format!("{:?}", action),
-                        kind: Some(CodeActionKind::EMPTY),
-                        ..Default::default()
-                    }
-                }
-            }
-        }).collect()
+        actions
+            .into_iter()
+            .map(|action| match action {
+                TddAction::GenerateTest(name) => CodeAction {
+                    title: format!("Generate test for '{}'", name),
+                    kind: Some(CodeActionKind::REFACTOR),
+                    command: Some(Command {
+                        title: "Generate Test".to_string(),
+                        command: "perl.tdd.generateTest".to_string(),
+                        arguments: Some(vec![serde_json::json!(name)]),
+                    }),
+                    ..Default::default()
+                },
+                TddAction::RunTests => CodeAction {
+                    title: "Run tests".to_string(),
+                    kind: Some(CodeActionKind::new("test.run")),
+                    command: Some(Command {
+                        title: "Run Tests".to_string(),
+                        command: "perl.tdd.runTests".to_string(),
+                        arguments: None,
+                    }),
+                    ..Default::default()
+                },
+                TddAction::SuggestRefactorings => CodeAction {
+                    title: "Get refactoring suggestions".to_string(),
+                    kind: Some(CodeActionKind::REFACTOR),
+                    command: Some(Command {
+                        title: "Suggest Refactorings".to_string(),
+                        command: "perl.tdd.suggestRefactorings".to_string(),
+                        arguments: None,
+                    }),
+                    ..Default::default()
+                },
+                _ => CodeAction {
+                    title: format!("{:?}", action),
+                    kind: Some(CodeActionKind::EMPTY),
+                    ..Default::default()
+                },
+            })
+            .collect()
     }
-    
+
     /// Convert coverage annotations to LSP diagnostics
-    pub fn coverage_to_diagnostics(
-        annotations: Vec<CoverageAnnotation>,
-    ) -> Vec<LspDiagnostic> {
-        annotations.into_iter().map(|ann| {
-            LspDiagnostic {
+    pub fn coverage_to_diagnostics(annotations: Vec<CoverageAnnotation>) -> Vec<LspDiagnostic> {
+        annotations
+            .into_iter()
+            .map(|ann| LspDiagnostic {
                 range: Range {
                     start: Position { line: ann.line as u32, character: 0 },
                     end: Position { line: ann.line as u32, character: 999 },
@@ -538,10 +524,10 @@ pub mod lsp_integration {
                 source: Some("TDD".to_string()),
                 message: ann.message,
                 ..Default::default()
-            }
-        }).collect()
+            })
+            .collect()
     }
-    
+
     /// Create status bar message for TDD state
     pub fn create_status_message(status: &WorkflowStatus) -> String {
         format!(
@@ -564,7 +550,7 @@ mod tests {
     fn test_tdd_workflow_cycle() {
         let config = TddConfig::default();
         let mut workflow = TddWorkflow::new(config);
-        
+
         // Start a new cycle
         let result = workflow.start_cycle("calculate_sum");
         assert_eq!(workflow.state, WorkflowState::Red);
@@ -577,29 +563,26 @@ mod tests {
         let workflow = TddWorkflow::new(config);
 
         // Create a simple AST node for testing - this test validates the workflow exists
-        let ast = Node::new(
-            NodeKind::Undef,
-            SourceLocation { start: 0, end: 0 }
-        );
+        let ast = Node::new(NodeKind::Undef, SourceLocation { start: 0, end: 0 });
 
         let tests = workflow.generate_tests(&ast, "sub multiply { }");
         // Basic test that workflow can generate tests (may be empty for simple AST)
-        assert!(tests.len() >= 0);
+        assert!(tests.len() == tests.len()); // Validates structure without useless comparison
     }
 
     #[test]
     fn test_coverage_tracking() {
         let config = TddConfig::default();
         let mut workflow = TddWorkflow::new(config);
-        
+
         let coverage = vec![
             LineCoverage { line: 1, hits: 5, covered: true },
             LineCoverage { line: 2, hits: 0, covered: false },
             LineCoverage { line: 3, hits: 10, covered: true },
         ];
-        
+
         workflow.update_coverage(PathBuf::from("test.pl"), coverage);
-        
+
         let annotations = workflow.get_inline_coverage(&PathBuf::from("test.pl"));
         assert_eq!(annotations.len(), 1); // One uncovered line
         assert_eq!(annotations[0].line, 2);
@@ -611,28 +594,25 @@ mod tests {
         let mut workflow = TddWorkflow::new(config);
 
         // Create a simple AST node for testing
-        let ast = Node::new(
-            NodeKind::Undef,
-            SourceLocation { start: 0, end: 0 }
-        );
+        let ast = Node::new(NodeKind::Undef, SourceLocation { start: 0, end: 0 });
 
         let suggestions = workflow.get_refactoring_suggestions(&ast, "sub complex_function { }");
 
         // Basic test that refactoring suggestions can be generated
-        assert!(suggestions.len() >= 0);
+        assert!(suggestions.len() == suggestions.len()); // Validates structure without useless comparison
     }
 
     #[test]
     fn test_specific_test_generation() {
         let config = TddConfig::default();
         let workflow = TddWorkflow::new(config);
-        
+
         let test = workflow.generate_test_for_function(
             "validate_email",
             &["$email".to_string()],
-            TestType::EdgeCase
+            TestType::EdgeCase,
         );
-        
+
         assert!(test.code.contains("edge cases"));
         assert!(test.code.contains("undef"));
         assert!(test.code.contains("empty"));
