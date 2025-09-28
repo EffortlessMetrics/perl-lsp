@@ -1,8 +1,8 @@
 [package]
 name = "perl-lsp"
 version = "0.8.8"
-edition = "2024"
-rust-version = "1.90"
+edition = "2021"
+rust-version = "1.89"
 authors = ["Tree-sitter Perl Contributors"]
 description = "Perl Language Server (LSP) — Tree-sitter-compatible with comprehensive IDE features"
 license = "MIT OR Apache-2.0"
@@ -22,12 +22,12 @@ include = [
 [dependencies]
 perl-parser = { path = "../perl-parser", version = "0.8.8", features = ["test-performance"] }
 lsp-types = "0.97.0"
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { version = "1.0.227", features = ["derive"] }
 serde_json = "1.0.145"
 url = "2.5.7"
 rustc-hash = "2.1.1"
 anyhow = "1.0.100"
-thiserror = "2.0.17"
+thiserror = "2.0.16"
 regex = "1.11.3"
 lazy_static = "1.5.0"
 md5 = "0.8.0"
