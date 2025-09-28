@@ -138,7 +138,8 @@ pub mod incremental_document;
 pub mod incremental_edit;
 pub mod lsp_errors;
 pub mod util;
-// pub mod refactoring; // TODO: Fix compilation errors
+/// Unified refactoring engine for comprehensive code transformations.
+pub mod refactoring;
 /// LSP call hierarchy provider for function call navigation.
 pub mod call_hierarchy_provider;
 pub mod code_lens_provider;
@@ -218,7 +219,8 @@ pub mod workspace_index;
 pub mod workspace_refactor;
 pub mod workspace_rename;
 pub mod workspace_symbols;
-// pub mod tdd_workflow;    // TODO: Fix compilation
+/// TDD workflow integration for Test-Driven Development support.
+pub mod tdd_workflow;
 pub mod debug_adapter;
 /// Code modernization utilities for Perl best practices.
 pub mod modernize;
@@ -299,6 +301,16 @@ pub use type_inference::{
     TypeInferenceEngine, TypeLocation,
 };
 pub use workspace_symbols::{WorkspaceSymbol, WorkspaceSymbolsProvider};
+
+// TDD workflow and refactoring exports
+pub use refactoring::{
+    ModernizationPattern, RefactoringConfig, RefactoringEngine, RefactoringOperation,
+    RefactoringResult, RefactoringScope, RefactoringType,
+};
+pub use tdd_workflow::{
+    AnnotationSeverity, CoverageAnnotation, TddAction, TddConfig, TddCycleResult,
+    TddWorkflow, TestType, WorkflowState, WorkflowStatus,
+};
 
 #[cfg(test)]
 mod tests {
