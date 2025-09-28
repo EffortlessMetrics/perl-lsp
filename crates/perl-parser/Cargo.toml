@@ -79,6 +79,8 @@ package-qualified = []  # Package-qualified subroutine resolution
 error-classifier-v2 = []  # Next generation error classification
 lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
 expose_lsp_test_api = []  # Expose test helpers for integration tests
+modernize = []  # Code modernization features for refactoring legacy Perl constructs
+workspace_refactor = []  # Advanced workspace refactoring capabilities
 
 [build-dependencies]
 serde = { version = "1.0.227", features = ["derive"] }

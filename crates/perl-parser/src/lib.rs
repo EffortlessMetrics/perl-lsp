@@ -138,7 +138,7 @@ pub mod incremental_document;
 pub mod incremental_edit;
 pub mod lsp_errors;
 pub mod util;
-// pub mod refactoring; // TODO: Fix compilation errors
+pub mod refactoring;
 /// LSP call hierarchy provider for function call navigation.
 pub mod call_hierarchy_provider;
 pub mod code_lens_provider;
@@ -218,7 +218,7 @@ pub mod workspace_index;
 pub mod workspace_refactor;
 pub mod workspace_rename;
 pub mod workspace_symbols;
-// pub mod tdd_workflow;    // TODO: Fix compilation
+pub mod tdd_workflow;
 pub mod debug_adapter;
 /// Code modernization utilities for Perl best practices.
 pub mod modernize;
