@@ -1,5 +1,5 @@
-use perl_parser::Parser;
 use perl_parser::scope_analyzer::ScopeAnalyzer;
+use perl_parser::Parser;
 
 fn main() {
     let codes = vec![

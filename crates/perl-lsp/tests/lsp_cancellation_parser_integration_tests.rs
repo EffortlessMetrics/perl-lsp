@@ -14,7 +14,7 @@
 
 #![allow(unused_imports, dead_code)] // Scaffolding may have unused imports initially
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;

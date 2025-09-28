@@ -1,4 +1,3 @@
-use perl_parser::Parser;
 /// Critical mutation hardening tests targeting PR #170 LSP executeCommand surviving mutants
 ///
 /// Focuses on high-impact mutations identified in testing with ~48% score:
@@ -10,7 +9,8 @@ use perl_parser::Parser;
 /// Goal: Strategic test additions to achieve ≥80% mutation score improvement
 /// Labels: tests:hardening, mutation:critical, pr170:core
 use perl_parser::quote_parser::*;
-use perl_parser::semantic_tokens::{EncodedToken, collect_semantic_tokens};
+use perl_parser::semantic_tokens::{collect_semantic_tokens, EncodedToken};
+use perl_parser::Parser;
 
 /// Critical UTF-8 arithmetic boundary tests targeting position calculation mutations
 #[test]

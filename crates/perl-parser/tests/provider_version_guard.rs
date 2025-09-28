@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod provider_version_guard {
-    use perl_parser::{Parser, declaration::DeclarationProvider, declaration::ParentMap};
+    use perl_parser::{declaration::DeclarationProvider, declaration::ParentMap, Parser};
     use std::sync::Arc;
 
     // Only meaningful in debug builds, where debug_assert! panics.
