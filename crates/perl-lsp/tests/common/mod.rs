@@ -280,10 +280,10 @@ fn default_timeout() -> Duration {
             let thread_count = max_concurrent_threads();
 
             match thread_count {
-                0..=2 => Duration::from_secs(30), // Heavily constrained: increased from 20s to 30s for cancellation protocol overhead
-                3..=4 => Duration::from_secs(18), // Moderately constrained: increased from 12s to 18s
-                5..=8 => Duration::from_secs(12), // Lightly constrained: increased from 8s to 12s
-                _ => Duration::from_secs(8),      // Unconstrained: increased from 6s to 8s
+                0..=2 => Duration::from_secs(8), // Heavily constrained: reduced from 15s to 8s for faster execution
+                3..=4 => Duration::from_secs(6), // Moderately constrained: reduced from 10s to 6s
+                5..=8 => Duration::from_secs(4), // Lightly constrained: reduced from 7s to 4s
+                _ => Duration::from_secs(3),     // Unconstrained: reduced from 5s to 3s
             }
         })
 }
@@ -294,7 +294,16 @@ pub fn short_timeout() -> Duration {
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .map(Duration::from_millis)
-        .unwrap_or(Duration::from_millis(500))
+        .unwrap_or_else(|| {
+            // Adaptive short timeout based on thread constraints
+            let thread_count = max_concurrent_threads();
+            match thread_count {
+                0..=2 => Duration::from_millis(500), // Heavily constrained: reduced from 1000ms
+                3..=4 => Duration::from_millis(400), // Moderately constrained: reduced from 750ms
+                5..=8 => Duration::from_millis(300), // Lightly constrained: reduced from 500ms
+                _ => Duration::from_millis(200),     // Unconstrained: reduced from 300ms
+            }
+        })
 }
 
 /// Get the maximum number of concurrent threads to use in tests
@@ -483,9 +492,9 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
 
     // wait specifically for id=1 - use extended timeout for initialization
     // Enhanced timeout for LSP cancellation tests with environment-aware scaling
-    let base_multiplier = 8; // Base multiplier for critical initialization (increased to 8x for cancellation protocol overhead)
+    let base_multiplier = 2; // Base multiplier for critical initialization (reduced from 4x to 2x for faster execution)
     let thread_count = max_concurrent_threads();
-    let env_multiplier = if thread_count <= 2 { 6 } else { 3 }; // Extra time for constrained environments (increased to 6x)
+    let env_multiplier = if thread_count <= 2 { 2 } else { 1 }; // Extra time for constrained environments (reduced from 3x to 2x)
     let init_timeout = adaptive_timeout() * base_multiplier * env_multiplier;
     let resp = read_response_matching_i64(server, 1, init_timeout).unwrap_or_else(|| {
         eprintln!("LSP server failed to respond to initialize request within {:?}", init_timeout);
