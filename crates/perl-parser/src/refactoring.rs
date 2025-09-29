@@ -36,7 +36,7 @@ use crate::error::{ParseError, ParseResult};
 // Import existing modules conditionally
 use crate::import_optimizer::ImportOptimizer;
 #[cfg(feature = "modernize")]
-use crate::modernize::ModernizeEngine;
+// ModernizeEngine will be resolved through conditional compilation
 #[cfg(feature = "workspace_refactor")]
 use crate::workspace_refactor::WorkspaceRefactor;
 use serde::{Deserialize, Serialize};
@@ -194,11 +194,11 @@ impl RefactoringEngine {
     pub fn with_config(config: RefactoringConfig) -> ParseResult<Self> {
         Ok(Self {
             #[cfg(feature = "workspace_refactor")]
-            workspace_refactor: WorkspaceRefactor::new()?,
+            workspace_refactor: WorkspaceRefactor::new(crate::workspace_index::WorkspaceIndex::new()),
             #[cfg(not(feature = "workspace_refactor"))]
             workspace_refactor: temp_stubs::WorkspaceRefactor::new()?,
             #[cfg(feature = "modernize")]
-            modernize: ModernizeEngine::new(),
+            modernize: crate::modernize::PerlModernizer::new(),
             #[cfg(not(feature = "modernize"))]
             modernize: temp_stubs::ModernizeEngine::new(),
             import_optimizer: ImportOptimizer::new(),
@@ -516,7 +516,7 @@ impl Default for RefactoringEngine {
             import_optimizer: crate::import_optimizer::ImportOptimizer::new(),
             operation_history: Vec::new(),
             #[cfg(feature = "workspace_refactor")]
-            workspace_refactor: crate::workspace_refactor::WorkspaceRefactor::new(),
+            workspace_refactor: crate::workspace_refactor::WorkspaceRefactor::new(crate::workspace_index::WorkspaceIndex::new()),
             #[cfg(not(feature = "workspace_refactor"))]
             workspace_refactor: temp_stubs::WorkspaceRefactor,
             #[cfg(feature = "modernize")]
