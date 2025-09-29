@@ -187,6 +187,33 @@ impl PerlModernizer {
 
         result
     }
+
+    /// Modernize a Perl file on disk based on specified patterns
+    pub fn modernize_file(
+        &mut self,
+        file: &std::path::Path,
+        _patterns: &[crate::refactoring::ModernizationPattern],
+    ) -> crate::ParseResult<usize> {
+        // Read file content
+        let content = std::fs::read_to_string(file)
+            .map_err(|e| crate::ParseError::syntax(format!("Failed to read file: {}", e), 0))?;
+
+        // Analyze and apply modernization
+        let suggestions = self.analyze(&content);
+        let modernized = self.apply(&content);
+
+        // Count changes (suggestions that were applied)
+        let changes = suggestions.iter().filter(|s| !s.manual_review_required).count();
+
+        // Write back if changes were made
+        if modernized != content {
+            std::fs::write(file, modernized).map_err(|e| {
+                crate::ParseError::syntax(format!("Failed to write file: {}", e), 0)
+            })?;
+        }
+
+        Ok(changes)
+    }
 }
 
 impl Default for PerlModernizer {

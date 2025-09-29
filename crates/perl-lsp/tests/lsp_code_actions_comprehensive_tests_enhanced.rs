@@ -142,7 +142,8 @@ fn create_enhanced_code_actions_server() -> (LspHarness, TempWorkspace) {
 /// Initialize harness and open documents for enhanced code actions tests
 fn initialize_enhanced_harness(harness: &mut LspHarness, workspace: &TempWorkspace) {
     // Initialize the server
-    harness.initialize_with_root(&workspace.root_uri, None)
+    harness
+        .initialize_with_root(&workspace.root_uri, None)
         .expect("Failed to initialize LSP server");
 
     // Open all documents

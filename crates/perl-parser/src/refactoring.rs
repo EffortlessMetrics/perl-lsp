@@ -35,8 +35,7 @@ use crate::ast::Node;
 use crate::error::{ParseError, ParseResult};
 // Import existing modules conditionally
 use crate::import_optimizer::ImportOptimizer;
-#[cfg(feature = "modernize")]
-// ModernizeEngine will be resolved through conditional compilation
+// ModernizeEngine and WorkspaceRefactor will be resolved through conditional compilation
 #[cfg(feature = "workspace_refactor")]
 use crate::workspace_refactor::WorkspaceRefactor;
 use serde::{Deserialize, Serialize};
@@ -56,7 +55,7 @@ pub struct RefactoringEngine {
     workspace_refactor: temp_stubs::WorkspaceRefactor,
     /// Code modernization engine
     #[cfg(feature = "modernize")]
-    modernize: ModernizeEngine,
+    modernize: crate::modernize::PerlModernizer,
     #[cfg(not(feature = "modernize"))]
     modernize: temp_stubs::ModernizeEngine,
     /// Import optimization engine
@@ -194,7 +193,9 @@ impl RefactoringEngine {
     pub fn with_config(config: RefactoringConfig) -> ParseResult<Self> {
         Ok(Self {
             #[cfg(feature = "workspace_refactor")]
-            workspace_refactor: WorkspaceRefactor::new(crate::workspace_index::WorkspaceIndex::new()),
+            workspace_refactor: WorkspaceRefactor::new(
+                crate::workspace_index::WorkspaceIndex::new(),
+            ),
             #[cfg(not(feature = "workspace_refactor"))]
             workspace_refactor: temp_stubs::WorkspaceRefactor::new()?,
             #[cfg(feature = "modernize")]
@@ -516,11 +517,13 @@ impl Default for RefactoringEngine {
             import_optimizer: crate::import_optimizer::ImportOptimizer::new(),
             operation_history: Vec::new(),
             #[cfg(feature = "workspace_refactor")]
-            workspace_refactor: crate::workspace_refactor::WorkspaceRefactor::new(crate::workspace_index::WorkspaceIndex::new()),
+            workspace_refactor: crate::workspace_refactor::WorkspaceRefactor::new(
+                crate::workspace_index::WorkspaceIndex::new(),
+            ),
             #[cfg(not(feature = "workspace_refactor"))]
             workspace_refactor: temp_stubs::WorkspaceRefactor,
             #[cfg(feature = "modernize")]
-            modernize: crate::modernize::ModernizeEngine::new(),
+            modernize: crate::modernize::PerlModernizer::new(),
             #[cfg(not(feature = "modernize"))]
             modernize: temp_stubs::ModernizeEngine::new(),
         }

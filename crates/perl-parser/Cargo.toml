@@ -65,12 +65,12 @@ path = "src/bin/perl-dap.rs"
 [features]
 default = ["workspace"]  # Enable workspace indexing by default for cross-file features
 cli = []
-incremental = ["anyhow"]
+incremental = ["anyhow", "workspace"]  # Incremental parsing requires workspace types
 workspace = []  # Workspace-wide indexing for cross-file features
 test-compat = []  # Enables compatibility shim for old test API
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
-lsp-ga-lock = []
+lsp-ga-lock = ["workspace"]  # LSP GA features require workspace types
 experimental-features = []  # Experimental LSP features for testing
 
 # Aspirational features for tests that should eventually pass
@@ -80,8 +80,8 @@ package-qualified = []  # Package-qualified subroutine resolution
 error-classifier-v2 = []  # Next generation error classification
 lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
 expose_lsp_test_api = []  # Expose test helpers for integration tests
-modernize = []  # Code modernization features for refactoring legacy Perl constructs
-workspace_refactor = []  # Advanced workspace refactoring capabilities
+modernize = ["workspace"]  # Code modernization features require workspace types
+workspace_refactor = ["workspace"]  # Advanced workspace refactoring requires workspace types
 
 [build-dependencies]
 serde = { version = "1.0.227", features = ["derive"] }

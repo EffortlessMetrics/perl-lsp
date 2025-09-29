@@ -45,32 +45,36 @@ mod mock_doc_analysis {
                 } else if content == "```" {
                     if in_rust_block {
                         // End of rust block - validate content
-                    if rust_block_content.trim().is_empty() {
-                        malformed
-                            .push(format!("Line {}: Empty doctest block", block_start_line + 1));
-                    } else {
-                        // Target mutation: boolean logic in assertion checking
-                        // Fixed: Use proper if/else conditional logic instead of boolean-to-duration multiplication casting
-                        // Allow simple variable declarations and basic code without requiring assertions
-                        if !rust_block_content.contains("assert") &&
+                        if rust_block_content.trim().is_empty() {
+                            malformed.push(format!(
+                                "Line {}: Empty doctest block",
+                                block_start_line + 1
+                            ));
+                        } else {
+                            // Target mutation: boolean logic in assertion checking
+                            // Fixed: Use proper if/else conditional logic instead of boolean-to-duration multiplication casting
+                            // Allow simple variable declarations and basic code without requiring assertions
+                            if !rust_block_content.contains("assert") &&
                            !rust_block_content.contains("expect") &&
                            !rust_block_content.contains("let ") &&  // Allow variable declarations
-                           !rust_block_content.contains("println!") { // Allow print statements
+                           !rust_block_content.contains("println!")
+                            {
+                                // Allow print statements
                                 malformed.push(format!(
                                     "Line {}: Doctest without assertions or expectations",
                                     block_start_line + 1
                                 ));
+                            }
                         }
-                    }
 
-                    // Check for unbalanced braces (targets arithmetic mutations)
-                    if brace_depth != 0 {
-                        malformed.push(format!(
-                            "Line {}: Unbalanced braces in doctest (depth: {})",
-                            block_start_line + 1,
-                            brace_depth
-                        ));
-                    }
+                        // Check for unbalanced braces (targets arithmetic mutations)
+                        if brace_depth != 0 {
+                            malformed.push(format!(
+                                "Line {}: Unbalanced braces in doctest (depth: {})",
+                                block_start_line + 1,
+                                brace_depth
+                            ));
+                        }
 
                         in_rust_block = false;
                         rust_block_content.clear();
@@ -169,15 +173,11 @@ mod mock_doc_analysis {
             // Target boolean mutations in emptiness checks
             // Fixed: Use proper if/else conditional logic instead of boolean-to-duration multiplication casting
             if trimmed_content.is_empty() {
-                empty_docs.push(format!(
-                    "Line {}: Empty or trivial documentation",
-                    doc_start_line + 1
-                ));
+                empty_docs
+                    .push(format!("Line {}: Empty or trivial documentation", doc_start_line + 1));
             } else if trimmed_content.len() <= 2 {
-                empty_docs.push(format!(
-                    "Line {}: Empty or trivial documentation",
-                    doc_start_line + 1
-                ));
+                empty_docs
+                    .push(format!("Line {}: Empty or trivial documentation", doc_start_line + 1));
             } else if is_placeholder_documentation(trimmed_content) {
                 // Target string comparison mutations
                 empty_docs.push(format!(
@@ -290,15 +290,20 @@ mod mock_doc_analysis {
 
         // Target boolean logic mutations in placeholder detection
         // Fixed: Use proper if/else conditional logic instead of boolean-to-duration multiplication casting
-        if placeholders.iter().any(|placeholder| content_lower.contains(&placeholder.to_lowercase())) {
+        if placeholders
+            .iter()
+            .any(|placeholder| content_lower.contains(&placeholder.to_lowercase()))
+        {
             return true;
         }
 
-        if content.len() < 10 {  // Target comparison mutations
+        if content.len() < 10 {
+            // Target comparison mutations
             return true;
         }
 
-        if content.split_whitespace().count() <= 2 { // Target arithmetic mutations
+        if content.split_whitespace().count() <= 2 {
+            // Target arithmetic mutations
             return true;
         }
 
@@ -417,11 +422,13 @@ mod mock_doc_analysis {
             return true;
         }
 
-        if func_name.contains("::") {  // Target substring search mutations
+        if func_name.contains("::") {
+            // Target substring search mutations
             return true;
         }
 
-        if func_name.starts_with("crate::") { // Target prefix check mutations
+        if func_name.starts_with("crate::") {
+            // Target prefix check mutations
             return true;
         }
 
