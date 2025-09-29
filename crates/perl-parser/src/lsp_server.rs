@@ -5315,7 +5315,21 @@ impl LspServer {
         let mut chars = content.chars().peekable();
 
         while let Some(ch) = chars.next() {
-            if byte_pos >= offset {
+            let ch_len = ch.len_utf8();
+
+            // Check if we've exactly reached the offset
+            if byte_pos == offset {
+                return (line, col_utf16);
+            }
+
+            // Check if offset falls within this character
+            if byte_pos < offset && offset < byte_pos + ch_len {
+                // Offset is within this character, return current position
+                return (line, col_utf16);
+            }
+
+            // Check if we've passed the offset
+            if byte_pos > offset {
                 break;
             }
 
@@ -5337,19 +5351,19 @@ impl LspServer {
                         // Solo \r - treat as line ending
                         line += 1;
                         col_utf16 = 0;
-                        byte_pos += ch.len_utf8();
+                        byte_pos += ch_len;
                     }
                 }
                 '\n' => {
                     // LF (could be standalone or part of CRLF, but CRLF is handled above)
                     line += 1;
                     col_utf16 = 0;
-                    byte_pos += ch.len_utf8();
+                    byte_pos += ch_len;
                 }
                 _ => {
                     // Regular character
                     col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
-                    byte_pos += ch.len_utf8();
+                    byte_pos += ch_len;
                 }
             }
         }
@@ -5388,7 +5402,18 @@ impl LspServer {
                 _ => {
                     // Regular character - only count UTF-16 units on target line
                     if cur_line == line {
-                        col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
+                        let utf16_len = if ch.len_utf16() == 2 { 2 } else { 1 };
+                        // Check if we've reached the target position before processing this character
+                        if col_utf16 >= character {
+                            return byte_idx;
+                        }
+                        // Check if adding this character would exceed the target position
+                        if col_utf16 + utf16_len > character {
+                            // The target position falls within this character
+                            // Map it to the position after this character
+                            return byte_idx + ch.len_utf8();
+                        }
+                        col_utf16 += utf16_len;
                     }
                 }
             }
