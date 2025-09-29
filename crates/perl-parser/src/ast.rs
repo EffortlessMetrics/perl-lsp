@@ -259,11 +259,14 @@ impl Node {
             }
 
             NodeKind::String { value, interpolated } => {
+                // Escape quotes in string value to prevent S-expression parsing issues
+                let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"");
+
                 // Format based on interpolation status
                 if *interpolated {
-                    format!("(string_interpolated \"{}\")", value)
+                    format!("(string_interpolated \"{}\")", escaped_value)
                 } else {
-                    format!("(string \"{}\")", value)
+                    format!("(string \"{}\")", escaped_value)
                 }
             }
 
