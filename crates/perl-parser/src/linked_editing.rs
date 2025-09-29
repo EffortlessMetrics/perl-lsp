@@ -95,6 +95,21 @@ fn find_pair(text: &str, start_byte: usize) -> Option<(usize, usize)> {
     None
 }
 
+/// Handles the `textDocument/linkedEditingRange` request.
+///
+/// This function finds a matching bracket or quote for the character at the given
+/// position and returns a `LinkedEditingRanges` object containing the ranges of
+/// the two matching characters.
+///
+/// # Arguments
+///
+/// * `text` - The content of the document.
+/// * `line` - The line number of the character.
+/// * `character` - The character offset on that line.
+///
+/// # Returns
+///
+/// An `Option<LinkedEditingRanges>` object.
 pub fn handle_linked_editing(text: &str, line: u32, character: u32) -> Option<LinkedEditingRanges> {
     let byte = utf16_line_col_to_offset(text, line, character);
     let (a, b) = find_pair(text, byte)?;

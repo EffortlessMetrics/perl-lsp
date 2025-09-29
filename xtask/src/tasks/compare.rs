@@ -740,12 +740,11 @@ fn run_scanner_benchmarks(feature: &str) -> Result<serde_json::Value> {
     for line in output_str.lines() {
         if let Ok(data) = serde_json::from_str::<serde_json::Value>(line)
             && let Some(event) = data.get("event")
-                && event == "bench"
-                    && let (Some(name), Some(measurements)) =
-                        (data.get("name"), data.get("measurements"))
-                    {
-                        results.insert(name.as_str().unwrap().to_string(), measurements.clone());
-                    }
+            && event == "bench"
+            && let (Some(name), Some(measurements)) = (data.get("name"), data.get("measurements"))
+        {
+            results.insert(name.as_str().unwrap().to_string(), measurements.clone());
+        }
     }
 
     Ok(serde_json::Value::Object(results))
@@ -1054,22 +1053,22 @@ fn display_summary(output_dir: &std::path::Path, _spinner: &ProgressBar) -> Resu
     let comparison_path = output_dir.join("comparison_results.json");
     if comparison_path.exists()
         && let Ok(content) = fs::read_to_string(&comparison_path)
-            && let Ok(comparison) = serde_json::from_str::<serde_json::Value>(&content)
-                && let Some(summary) = comparison.get("summary") {
-                    println!("\n📈 Key Metrics:");
-                    if let Some(overall) = summary.get("overall_performance") {
-                        if let Some(mean_diff) =
-                            overall.get("mean_time_difference_percent").and_then(|v| v.as_f64())
-                        {
-                            println!("  Mean Time Difference: {:.2}%", mean_diff);
-                        }
-                        if let Some(mean_speedup) =
-                            overall.get("mean_speedup_factor").and_then(|v| v.as_f64())
-                        {
-                            println!("  Mean Speedup Factor: {:.3}x", mean_speedup);
-                        }
-                    }
-                }
+        && let Ok(comparison) = serde_json::from_str::<serde_json::Value>(&content)
+        && let Some(summary) = comparison.get("summary")
+    {
+        println!("\n📈 Key Metrics:");
+        if let Some(overall) = summary.get("overall_performance") {
+            if let Some(mean_diff) =
+                overall.get("mean_time_difference_percent").and_then(|v| v.as_f64())
+            {
+                println!("  Mean Time Difference: {:.2}%", mean_diff);
+            }
+            if let Some(mean_speedup) = overall.get("mean_speedup_factor").and_then(|v| v.as_f64())
+            {
+                println!("  Mean Speedup Factor: {:.3}x", mean_speedup);
+            }
+        }
+    }
 
     Ok(())
 }

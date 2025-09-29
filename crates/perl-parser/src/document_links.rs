@@ -2,6 +2,22 @@
 use serde_json::{Value, json};
 use url::Url;
 
+/// Computes document links for a given Perl document.
+///
+/// This function scans the text for `use` and `require` statements and creates
+/// document links for them. It tries to resolve the module paths relative to the
+/// workspace roots. If a module cannot be resolved locally, it creates a link
+/// to its page on MetaCPAN.
+///
+/// # Arguments
+///
+/// * `uri` - The URI of the document being processed.
+/// * `text` - The content of the document.
+/// * `roots` - A slice of workspace root URLs to resolve modules against.
+///
+/// # Returns
+///
+/// A vector of `serde_json::Value` objects, each representing a document link.
 pub fn compute_links(uri: &str, text: &str, roots: &[Url]) -> Vec<Value> {
     let mut out = Vec::new();
 

@@ -6,25 +6,35 @@ use serde_json::{Value, json};
 /// Inlay Hint types according to LSP spec
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InlayHintKind {
+    /// An inlay hint for a type annotation.
     Type = 1,
+    /// An inlay hint for a parameter.
     Parameter = 2,
 }
 
 /// Position in a document
 #[derive(Debug, Clone)]
 pub struct Position {
+    /// The line number (0-based).
     pub line: u32,
+    /// The character offset on that line (0-based).
     pub character: u32,
 }
 
-/// An inlay hint
+/// An inlay hint.
 #[derive(Debug, Clone)]
 pub struct InlayHint {
+    /// The position of the hint.
     pub position: Position,
+    /// The label of the hint.
     pub label: String,
+    /// The kind of the hint.
     pub kind: InlayHintKind,
+    /// An optional tooltip for the hint.
     pub tooltip: Option<String>,
+    /// Whether to add padding to the left of the hint.
     pub padding_left: bool,
+    /// Whether to add padding to the right of the hint.
     pub padding_right: bool,
 }
 
@@ -37,9 +47,13 @@ pub struct InlayHintsProvider {
 /// Configuration for which hints to show
 #[derive(Debug, Clone)]
 pub struct InlayHintConfig {
+    /// Enable/disable parameter hints.
     pub parameter_hints: bool,
+    /// Enable/disable type hints.
     pub type_hints: bool,
+    /// Enable/disable hints for chained method calls.
     pub chained_hints: bool,
+    /// The maximum length of a hint label.
     pub max_length: usize,
 }
 
@@ -50,10 +64,12 @@ impl Default for InlayHintConfig {
 }
 
 impl InlayHintsProvider {
+    /// Creates a new `InlayHintsProvider` with default configuration.
     pub fn new(source: String) -> Self {
         Self { source, enabled_hints: InlayHintConfig::default() }
     }
 
+    /// Creates a new `InlayHintsProvider` with the given configuration.
     pub fn with_config(source: String, config: InlayHintConfig) -> Self {
         Self { source, enabled_hints: config }
     }
@@ -438,6 +454,7 @@ impl InlayHintsProvider {
 
 /// Convert InlayHint to JSON for LSP
 impl InlayHint {
+    /// Converts the inlay hint to a JSON value for LSP.
     pub fn to_json(&self) -> Value {
         let mut hint = json!({
             "position": {

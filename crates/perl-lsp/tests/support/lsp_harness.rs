@@ -170,7 +170,7 @@ impl LspHarness {
             let settle_time = if is_ci {
                 Duration::from_millis(100) // CI: extra settling time
             } else {
-                Duration::from_millis(50)  // Local: minimal settling time
+                Duration::from_millis(50) // Local: minimal settling time
             };
             thread::sleep(settle_time);
         }
@@ -339,7 +339,7 @@ impl LspHarness {
         let (max_attempts, initial_timeout, max_sleep) = if is_ci {
             (8, 300, 200) // CI: more attempts, longer timeouts
         } else if is_performance_test {
-            (3, 100, 50)  // Performance: fewer attempts, faster timeouts
+            (3, 100, 50) // Performance: fewer attempts, faster timeouts
         } else {
             (5, 200, 100) // Local: balanced approach
         };
@@ -738,8 +738,7 @@ impl LspHarness {
             || std::env::var("KUBERNETES_SERVICE_HOST").is_ok();
 
         // Detect WSL environment (often has different performance characteristics)
-        let is_wsl = std::env::var("WSL_DISTRO_NAME").is_ok()
-            || std::env::var("WSLENV").is_ok();
+        let is_wsl = std::env::var("WSL_DISTRO_NAME").is_ok() || std::env::var("WSLENV").is_ok();
 
         // Base timeout calculation with thread contention
         let base_timeout = match thread_count {
@@ -794,11 +793,7 @@ impl LspHarness {
         };
 
         // Try to send shutdown request
-        let _shutdown_result = self.request_with_timeout(
-            "shutdown",
-            json!({}),
-            shutdown_timeout,
-        );
+        let _shutdown_result = self.request_with_timeout("shutdown", json!({}), shutdown_timeout);
 
         // Send exit notification
         self.notify("exit", json!({}));
