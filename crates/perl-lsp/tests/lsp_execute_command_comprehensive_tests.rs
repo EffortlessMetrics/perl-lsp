@@ -896,7 +896,10 @@ sub AUTOLOAD {
     let violations = result["violations"].as_array().expect("Should return violations array");
 
     // Should have detected some issues but not crashed
-    assert!(!violations.is_empty() || violations.is_empty(), "Should return violations array even for complex syntax");
+    assert!(
+        !violations.is_empty() || violations.is_empty(),
+        "Should return violations array even for complex syntax"
+    );
 }
 
 #[test]

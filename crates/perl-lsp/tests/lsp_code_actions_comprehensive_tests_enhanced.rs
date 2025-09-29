@@ -453,10 +453,12 @@ fn test_enhanced_code_actions_performance() {
             }),
             Duration::from_millis(timeout_ms),
         )
-        .unwrap_or_else(|_| panic!(
-            "Code actions should respond within {}ms (revolutionary performance)",
-            timeout_ms
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "Code actions should respond within {}ms (revolutionary performance)",
+                timeout_ms
+            )
+        });
 
     let duration = start_time.elapsed();
 
