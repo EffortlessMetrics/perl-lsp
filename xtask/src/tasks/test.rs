@@ -31,14 +31,13 @@ pub fn run(
     let mut feature_strings = Vec::new();
 
     // Add features
-    if let Some(features) = &features {
-        if !features.is_empty() {
+    if let Some(features) = &features
+        && !features.is_empty() {
             let features_str = features.join(",");
             feature_strings.push(features_str);
             args.push("--features");
             args.push(feature_strings.last().unwrap());
         }
-    }
 
     // Add verbose flag
     if verbose {
@@ -90,12 +89,11 @@ pub fn run(
                     }
 
                     // Add features
-                    if let Some(ref feat) = features {
-                        if !feat.is_empty() {
+                    if let Some(ref feat) = features
+                        && !feat.is_empty() {
                             test_args.push("--features".to_string());
                             test_args.push(feat.join(","));
                         }
-                    }
 
                     test_args.push("--test".to_string());
                     test_args.push(test_name.to_string());

@@ -38,6 +38,7 @@ rustc-hash = "2.1.1"
 md5 = "0.8.0"
 phf = { version = "0.13.1", features = ["macros"] }
 walkdir = "2.5.0"
+globwalk = "0.9.1"
 
 # Unix-only dependency for signal handling
 [target.'cfg(unix)'.dependencies]

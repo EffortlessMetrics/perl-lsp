@@ -738,17 +738,14 @@ fn run_scanner_benchmarks(feature: &str) -> Result<serde_json::Value> {
     let mut results = serde_json::Map::new();
 
     for line in output_str.lines() {
-        if let Ok(data) = serde_json::from_str::<serde_json::Value>(line) {
-            if let Some(event) = data.get("event") {
-                if event == "bench" {
-                    if let (Some(name), Some(measurements)) =
+        if let Ok(data) = serde_json::from_str::<serde_json::Value>(line)
+            && let Some(event) = data.get("event")
+                && event == "bench"
+                    && let (Some(name), Some(measurements)) =
                         (data.get("name"), data.get("measurements"))
                     {
                         results.insert(name.as_str().unwrap().to_string(), measurements.clone());
                     }
-                }
-            }
-        }
     }
 
     Ok(serde_json::Value::Object(results))
@@ -1055,10 +1052,10 @@ fn display_summary(output_dir: &std::path::Path, _spinner: &ProgressBar) -> Resu
 
     // Try to display key metrics if comparison results exist
     let comparison_path = output_dir.join("comparison_results.json");
-    if comparison_path.exists() {
-        if let Ok(content) = fs::read_to_string(&comparison_path) {
-            if let Ok(comparison) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(summary) = comparison.get("summary") {
+    if comparison_path.exists()
+        && let Ok(content) = fs::read_to_string(&comparison_path)
+            && let Ok(comparison) = serde_json::from_str::<serde_json::Value>(&content)
+                && let Some(summary) = comparison.get("summary") {
                     println!("\n📈 Key Metrics:");
                     if let Some(overall) = summary.get("overall_performance") {
                         if let Some(mean_diff) =
@@ -1073,9 +1070,6 @@ fn display_summary(output_dir: &std::path::Path, _spinner: &ProgressBar) -> Resu
                         }
                     }
                 }
-            }
-        }
-    }
 
     Ok(())
 }

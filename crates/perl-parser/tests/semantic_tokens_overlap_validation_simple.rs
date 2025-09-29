@@ -218,7 +218,7 @@ fn test_semantic_token_nested_structures() {
 
     // Verify we have tokens across multiple lines
     let line_count = tokens.iter().map(|token| token.line).max().unwrap_or(0);
-    assert!(line_count >= 0, "Should have reasonable line numbers");
+    
 
     // Verify no overlaps in complex nested structure
     verify_no_semantic_token_overlaps(&tokens);
