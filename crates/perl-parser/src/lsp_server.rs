@@ -5333,8 +5333,8 @@ impl LspServer {
     /// # Examples
     ///
     /// ```rust
-    /// # use perl_parser::lsp_server::PerlLsp;
-    /// # let lsp = PerlLsp::new();
+    /// # use perl_parser::lsp_server::LspServer;
+    /// # let lsp = LspServer::new();
     /// // Basic ASCII text
     /// let content = "hello\nworld";
     /// assert_eq!(lsp.offset_to_position(content, 0), (0, 0));  // 'h'
@@ -5450,8 +5450,8 @@ impl LspServer {
     /// # Examples
     ///
     /// ```rust
-    /// # use perl_parser::lsp_server::PerlLsp;
-    /// # let lsp = PerlLsp::new();
+    /// # use perl_parser::lsp_server::LspServer;
+    /// # let lsp = LspServer::new();
     /// // Basic ASCII text
     /// let content = "hello\nworld";
     /// assert_eq!(lsp.position_to_offset(content, 0, 0), 0);  // 'h'
