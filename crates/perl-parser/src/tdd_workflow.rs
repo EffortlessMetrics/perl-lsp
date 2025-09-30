@@ -586,7 +586,7 @@ mod tests {
                             Node::new(
                                 NodeKind::MandatoryParameter {
                                     variable: Box::new(Node::new(
-                                        NodeKind::Variable { name: "$x".to_string(), is_invocant: false, sigil: "$".to_string() },
+                                        NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
                                         SourceLocation { start: 0, end: 2 }
                                     ))
                                 },
@@ -595,7 +595,7 @@ mod tests {
                             Node::new(
                                 NodeKind::MandatoryParameter {
                                     variable: Box::new(Node::new(
-                                        NodeKind::Variable { name: "$y".to_string(), is_invocant: false, sigil: "$".to_string() },
+                                        NodeKind::Variable { sigil: "$".to_string(), name: "y".to_string() },
                                         SourceLocation { start: 0, end: 2 }
                                     ))
                                 },
@@ -653,9 +653,8 @@ mod tests {
                                 NodeKind::MandatoryParameter {
                                     variable: Box::new(Node::new(
                                         NodeKind::Variable {
-                                            name: format!("$param{}", i),
-                                            is_invocant: false,
-                                            sigil: "$".to_string()
+                                            sigil: "$".to_string(),
+                                            name: format!("param{}", i)
                                         },
                                         SourceLocation { start: 0, end: 0 }
                                     ))
