@@ -30,7 +30,7 @@ pub struct TddWorkflow {
     config: TddConfig,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum WorkflowState {
     /// Writing test (Red phase)
     Red,
@@ -467,7 +467,7 @@ pub mod lsp_integration {
     /// Convert TDD actions to LSP code actions
     pub fn tdd_actions_to_code_actions(
         actions: Vec<TddAction>,
-        uri: &lsp_types::Url,
+        uri: &url::Url,
     ) -> Vec<CodeAction> {
         actions.into_iter().map(|action| {
             match action {
@@ -577,9 +577,34 @@ mod tests {
         let workflow = TddWorkflow::new(config);
         
         let ast = Node::new(
-            NodeKind::SubroutineDeclaration {
+            NodeKind::Subroutine {
                 name: Some("multiply".to_string()),
-                params: Some(vec!["$x".to_string(), "$y".to_string()]),
+                name_span: Some(SourceLocation { start: 0, end: 8 }),
+                signature: Some(Box::new(Node::new(
+                    NodeKind::Signature {
+                        parameters: vec![
+                            Node::new(
+                                NodeKind::MandatoryParameter {
+                                    variable: Box::new(Node::new(
+                                        NodeKind::Variable { name: "$x".to_string(), is_invocant: false, sigil: "$".to_string() },
+                                        SourceLocation { start: 0, end: 2 }
+                                    ))
+                                },
+                                SourceLocation { start: 0, end: 2 }
+                            ),
+                            Node::new(
+                                NodeKind::MandatoryParameter {
+                                    variable: Box::new(Node::new(
+                                        NodeKind::Variable { name: "$y".to_string(), is_invocant: false, sigil: "$".to_string() },
+                                        SourceLocation { start: 0, end: 2 }
+                                    ))
+                                },
+                                SourceLocation { start: 0, end: 2 }
+                            )
+                        ]
+                    },
+                    SourceLocation { start: 0, end: 0 }
+                ))),
                 body: Box::new(Node::new(
                     NodeKind::Block { statements: vec![] },
                     SourceLocation { start: 0, end: 0 }
@@ -618,9 +643,29 @@ mod tests {
         let mut workflow = TddWorkflow::new(config);
         
         let ast = Node::new(
-            NodeKind::SubroutineDeclaration {
+            NodeKind::Subroutine {
                 name: Some("complex_function".to_string()),
-                params: Some((0..8).map(|i| format!("$param{}", i)).collect()),
+                name_span: Some(SourceLocation { start: 0, end: 16 }),
+                signature: Some(Box::new(Node::new(
+                    NodeKind::Signature {
+                        parameters: (0..8).map(|i| {
+                            Node::new(
+                                NodeKind::MandatoryParameter {
+                                    variable: Box::new(Node::new(
+                                        NodeKind::Variable {
+                                            name: format!("$param{}", i),
+                                            is_invocant: false,
+                                            sigil: "$".to_string()
+                                        },
+                                        SourceLocation { start: 0, end: 0 }
+                                    ))
+                                },
+                                SourceLocation { start: 0, end: 0 }
+                            )
+                        }).collect()
+                    },
+                    SourceLocation { start: 0, end: 0 }
+                ))),
                 body: Box::new(Node::new(
                     NodeKind::Block { statements: vec![] },
                     SourceLocation { start: 0, end: 0 }
