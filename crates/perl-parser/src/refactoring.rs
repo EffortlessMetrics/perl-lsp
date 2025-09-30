@@ -29,7 +29,6 @@
 //! - modernize: Code modernization and best practice application
 //! - import_optimizer: Import statement optimization and cleanup
 
-use crate::ast::{Node, NodeKind};
 use crate::error::{ParseError, ParseResult};
 // Import existing modules conditionally
 #[cfg(feature = "workspace_refactor")]
@@ -521,21 +520,21 @@ mod temp_stubs {
     use super::*;
 
     #[derive(Debug)]
-    pub struct WorkspaceRefactor;
+    pub(super) struct WorkspaceRefactor;
     impl WorkspaceRefactor {
-        pub fn new() -> ParseResult<Self> {
+        pub(super) fn new() -> ParseResult<Self> {
             Ok(Self)
         }
     }
 
     #[derive(Debug)]
-    pub struct ModernizeEngine;
+    pub(super) struct ModernizeEngine;
     impl ModernizeEngine {
-        pub fn new() -> Self {
+        pub(super) fn new() -> Self {
             Self
         }
 
-        pub fn modernize_file(&mut self, _file: &Path, _patterns: &[ModernizationPattern]) -> ParseResult<usize> {
+        pub(super) fn modernize_file(&mut self, _file: &Path, _patterns: &[ModernizationPattern]) -> ParseResult<usize> {
             Ok(0)
         }
     }
