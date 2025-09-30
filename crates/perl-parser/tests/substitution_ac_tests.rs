@@ -1,6 +1,6 @@
 /// Acceptance Criteria tests for substitution operator (s///) parsing
 /// Each test is tagged with corresponding AC from ISSUE-147.story.md
-use perl_parser::{ast::NodeKind, Parser};
+use perl_parser::{Parser, ast::NodeKind};
 
 // AC1: Parse replacement text portion of substitution operator
 #[test]

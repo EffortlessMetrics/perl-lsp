@@ -4,7 +4,7 @@
 //! in the comprehensive E2E test suite. These represent real-world scenarios
 //! that Perl developers encounter daily.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 
 /// Test context helper for missing user stories

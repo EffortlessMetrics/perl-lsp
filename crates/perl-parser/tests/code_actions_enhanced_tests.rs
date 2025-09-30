@@ -52,9 +52,11 @@ sub process($data) {
 
     assert!(!shadow_actions.is_empty());
     assert!(shadow_actions.iter().any(|a| a.title.contains("Rename parameter")));
-    assert!(shadow_actions
-        .iter()
-        .any(|a| a.title.contains("$p_data") || a.title.contains("$data_param")));
+    assert!(
+        shadow_actions
+            .iter()
+            .any(|a| a.title.contains("$p_data") || a.title.contains("$data_param"))
+    );
 }
 
 #[test]

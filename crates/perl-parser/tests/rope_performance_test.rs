@@ -1,5 +1,5 @@
 use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
-use perl_parser::textdoc::{apply_changes, byte_to_lsp_pos, lsp_pos_to_byte, Doc, PosEnc};
+use perl_parser::textdoc::{Doc, PosEnc, apply_changes, byte_to_lsp_pos, lsp_pos_to_byte};
 use ropey::Rope;
 use std::time::Instant;
 

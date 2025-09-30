@@ -3,7 +3,7 @@
 //! This file contains tests for the remaining 15% of LSP user stories to achieve
 //! complete coverage of real-world Perl development scenarios.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 
 /// Test context for final user stories

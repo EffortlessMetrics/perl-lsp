@@ -184,9 +184,9 @@ fn test_directory_completion_with_slash() {
     let completions = provider.get_completions_with_path(code, pos, Some("."));
 
     // Should find lib directory with trailing slash
-    assert!(completions
-        .iter()
-        .any(|c| c.label == "lib/" && c.detail.as_ref().unwrap() == "directory"));
+    assert!(
+        completions.iter().any(|c| c.label == "lib/" && c.detail.as_ref().unwrap() == "directory")
+    );
 
     std::env::set_current_dir(old_cwd).ok();
 }
@@ -242,8 +242,8 @@ fn test_performance_limits() {
 #[test]
 #[serial]
 fn test_cancellation_support() {
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     let temp_dir = create_test_directory();
     let old_cwd = std::env::current_dir().unwrap();

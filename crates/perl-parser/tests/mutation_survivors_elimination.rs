@@ -1,3 +1,4 @@
+use perl_parser::Parser;
 /// Comprehensive mutation survivors elimination tests for PR #170 LSP executeCommand implementation
 ///
 /// Targets critical surviving mutants identified in mutation testing with ~48% score:
@@ -9,8 +10,7 @@
 /// Goal: Achieve ≥80% mutation score through focused, high-value test additions
 /// Labels: tests:hardening, mutation:elimination, pr170:executecommand
 use perl_parser::quote_parser::*;
-use perl_parser::semantic_tokens::{collect_semantic_tokens, EncodedToken};
-use perl_parser::Parser;
+use perl_parser::semantic_tokens::{EncodedToken, collect_semantic_tokens};
 
 /// UTF-8 boundary arithmetic tests targeting position calculation mutations
 mod utf8_boundary_arithmetic {

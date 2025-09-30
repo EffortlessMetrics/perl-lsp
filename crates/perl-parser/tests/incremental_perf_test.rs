@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use perl_parser::position_mapper::{apply_edit_utf8, Position, PositionMapper};
+    use perl_parser::position_mapper::{Position, PositionMapper, apply_edit_utf8};
     use std::time::Instant;
 
     #[test]
