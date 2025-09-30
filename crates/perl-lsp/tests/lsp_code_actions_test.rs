@@ -1,8 +1,8 @@
 use perl_parser::{
+    DiagnosticsProvider, Parser,
     code_actions_provider::{
         CodeActionKind as CodeActionKindV2, CodeActionsProvider as CodeActionsProviderV2,
     },
-    DiagnosticsProvider, Parser,
 };
 
 #[test]

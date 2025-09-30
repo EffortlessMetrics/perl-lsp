@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Returns comprehensive client capabilities for testing
 /// This ensures all tests use the same client configuration

@@ -13,7 +13,7 @@
 /// mapping and incremental parsing accuracy for LSP features.
 ///
 /// Labels: tests:hardening, mutation:score-improvement, position:tracking
-use perl_parser::position::{offset_to_utf16_line_col, Position, Range};
+use perl_parser::position::{Position, Range, offset_to_utf16_line_col};
 
 /// Test Range::overlaps logic to kill && → || logical operator mutations
 /// Targets critical mutation at position.rs:94:42 that corrupts position tracking

@@ -14,7 +14,7 @@
 use perl_parser::workspace_index::WorkspaceIndex;
 use proptest::prelude::*;
 use rstest::*;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -53,11 +53,7 @@ impl MockLspState {
 
     /// Check if a request has been cancelled - targets boolean logic mutations
     fn is_cancelled(&self, id: &Value) -> bool {
-        if let Ok(set) = self.cancelled.lock() {
-            set.contains(id)
-        } else {
-            false
-        }
+        if let Ok(set) = self.cancelled.lock() { set.contains(id) } else { false }
     }
 
     /// Record request processing completion

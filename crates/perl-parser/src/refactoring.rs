@@ -31,14 +31,14 @@
 
 use crate::error::{ParseError, ParseResult};
 // Import existing modules conditionally
-#[cfg(feature = "workspace_refactor")]
-use crate::workspace_refactor::WorkspaceRefactor;
+use crate::import_optimizer::ImportOptimizer;
 #[cfg(feature = "modernize")]
 use crate::modernize::ModernizeEngine;
-use crate::import_optimizer::ImportOptimizer;
+#[cfg(feature = "workspace_refactor")]
+use crate::workspace_refactor::WorkspaceRefactor;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 
 /// Unified refactoring engine that coordinates all refactoring operations
 ///
@@ -94,11 +94,7 @@ impl Default for RefactoringConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RefactoringType {
     /// Rename symbols across workspace
-    SymbolRename {
-        old_name: String,
-        new_name: String,
-        scope: RefactoringScope,
-    },
+    SymbolRename { old_name: String, new_name: String, scope: RefactoringScope },
     /// Extract methods from existing code
     ExtractMethod {
         method_name: String,
@@ -106,26 +102,13 @@ pub enum RefactoringType {
         end_position: (usize, usize),
     },
     /// Move code between files
-    MoveCode {
-        source_file: PathBuf,
-        target_file: PathBuf,
-        elements: Vec<String>,
-    },
+    MoveCode { source_file: PathBuf, target_file: PathBuf, elements: Vec<String> },
     /// Modernize legacy code patterns
-    Modernize {
-        patterns: Vec<ModernizationPattern>,
-    },
+    Modernize { patterns: Vec<ModernizationPattern> },
     /// Optimize imports across files
-    OptimizeImports {
-        remove_unused: bool,
-        sort_alphabetically: bool,
-        group_by_type: bool,
-    },
+    OptimizeImports { remove_unused: bool, sort_alphabetically: bool, group_by_type: bool },
     /// Inline variables or methods
-    Inline {
-        symbol_name: String,
-        all_occurrences: bool,
-    },
+    Inline { symbol_name: String, all_occurrences: bool },
 }
 
 /// Scope of refactoring operations
@@ -234,11 +217,8 @@ impl RefactoringEngine {
         }
 
         // Create backup if enabled
-        let backup_info = if self.config.create_backups {
-            Some(self.create_backup(&files)?)
-        } else {
-            None
-        };
+        let backup_info =
+            if self.config.create_backups { Some(self.create_backup(&files)?) } else { None };
 
         // Perform the operation
         let result = match operation_type.clone() {
@@ -251,12 +231,17 @@ impl RefactoringEngine {
             RefactoringType::MoveCode { source_file, target_file, elements } => {
                 self.perform_move_code(&source_file, &target_file, &elements)
             }
-            RefactoringType::Modernize { patterns } => {
-                self.perform_modernize(&patterns, &files)
-            }
-            RefactoringType::OptimizeImports { remove_unused, sort_alphabetically, group_by_type } => {
-                self.perform_optimize_imports(remove_unused, sort_alphabetically, group_by_type, &files)
-            }
+            RefactoringType::Modernize { patterns } => self.perform_modernize(&patterns, &files),
+            RefactoringType::OptimizeImports {
+                remove_unused,
+                sort_alphabetically,
+                group_by_type,
+            } => self.perform_optimize_imports(
+                remove_unused,
+                sort_alphabetically,
+                group_by_type,
+                &files,
+            ),
             RefactoringType::Inline { symbol_name, all_occurrences } => {
                 self.perform_inline(&symbol_name, all_occurrences, &files)
             }
@@ -285,18 +270,22 @@ impl RefactoringEngine {
     /// Rollback a previous refactoring operation
     pub fn rollback(&mut self, operation_id: &str) -> ParseResult<RefactoringResult> {
         // Find the operation in history
-        let operation = self.operation_history
-            .iter()
-            .find(|op| op.id == operation_id)
-            .ok_or_else(|| ParseError::syntax(format!("Operation {} not found", operation_id), 0))?;
+        let operation =
+            self.operation_history.iter().find(|op| op.id == operation_id).ok_or_else(|| {
+                ParseError::syntax(format!("Operation {} not found", operation_id), 0)
+            })?;
 
         if let Some(backup_info) = &operation.backup_info {
             // Restore files from backup
             let mut restored_count = 0;
             for (original, backup) in &backup_info.file_mappings {
                 if backup.exists() {
-                    std::fs::copy(backup, original)
-                        .map_err(|e| ParseError::syntax(format!("Failed to restore {}: {}", original.display(), e), 0))?;
+                    std::fs::copy(backup, original).map_err(|e| {
+                        ParseError::syntax(
+                            format!("Failed to restore {}: {}", original.display(), e),
+                            0,
+                        )
+                    })?;
                     restored_count += 1;
                 }
             }
@@ -329,13 +318,20 @@ impl RefactoringEngine {
     // Private implementation methods
 
     fn generate_operation_id(&self) -> String {
-        format!("refactor_{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs())
+        format!(
+            "refactor_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        )
     }
 
-    fn validate_operation(&self, _operation_type: &RefactoringType, _files: &[PathBuf]) -> ParseResult<()> {
+    fn validate_operation(
+        &self,
+        _operation_type: &RefactoringType,
+        _files: &[PathBuf],
+    ) -> ParseResult<()> {
         // TODO: Implement validation logic
         Ok(())
     }
@@ -362,7 +358,10 @@ impl RefactoringEngine {
                     success: true,
                     files_modified: 0,
                     changes_made: 0,
-                    warnings: vec![format!("Symbol rename from '{}' to '{}' not yet implemented", old_name, new_name)],
+                    warnings: vec![format!(
+                        "Symbol rename from '{}' to '{}' not yet implemented",
+                        old_name, new_name
+                    )],
                     errors: vec![],
                     operation_id: None,
                 })
@@ -459,8 +458,8 @@ impl RefactoringEngine {
         let mut modified_files = 0;
 
         for file in files {
-            let analysis = self.import_optimizer.analyze_file(file)
-                .map_err(|e| ParseError::syntax(e, 0))?;
+            let analysis =
+                self.import_optimizer.analyze_file(file).map_err(|e| ParseError::syntax(e, 0))?;
             let mut changes_made = 0;
 
             if remove_unused && !analysis.unused_imports.is_empty() {
@@ -534,7 +533,11 @@ mod temp_stubs {
             Self
         }
 
-        pub(super) fn modernize_file(&mut self, _file: &Path, _patterns: &[ModernizationPattern]) -> ParseResult<usize> {
+        pub(super) fn modernize_file(
+            &mut self,
+            _file: &Path,
+            _patterns: &[ModernizationPattern],
+        ) -> ParseResult<usize> {
             Ok(0)
         }
     }

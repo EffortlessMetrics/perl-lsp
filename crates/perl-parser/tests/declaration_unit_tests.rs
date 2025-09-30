@@ -1,4 +1,4 @@
-use perl_parser::{declaration::DeclarationProvider, Parser};
+use perl_parser::{Parser, declaration::DeclarationProvider};
 use std::sync::Arc;
 
 #[test]

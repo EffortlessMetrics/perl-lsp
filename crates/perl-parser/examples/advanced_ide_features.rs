@@ -3,8 +3,8 @@
 //! This example showcases code completion, signature help, and rename refactoring.
 
 use perl_parser::{
-    apply_rename_edits, CompletionProvider, Parser, RenameOptions, RenameProvider,
-    SignatureHelpProvider,
+    CompletionProvider, Parser, RenameOptions, RenameProvider, SignatureHelpProvider,
+    apply_rename_edits,
 };
 
 fn main() {

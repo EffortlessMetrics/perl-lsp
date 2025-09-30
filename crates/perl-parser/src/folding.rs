@@ -26,7 +26,7 @@ pub struct FoldingRange {
     /// Starting byte offset of the foldable region
     pub start_offset: usize, // Changed from start_line to start_offset
     /// Ending byte offset of the foldable region
-    pub end_offset: usize,   // Changed from end_line to end_offset
+    pub end_offset: usize, // Changed from end_line to end_offset
     /// Type of folding region for editor-specific handling
     pub kind: Option<FoldingRangeKind>,
 }

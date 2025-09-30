@@ -3,7 +3,7 @@
 //! Tests all 114 built-in function signatures to ensure they work correctly
 
 use perl_parser::{JsonRpcRequest, LspServer};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Helper to create and initialize a test server
 fn setup_server() -> LspServer {
@@ -84,10 +84,9 @@ fn test_file_operation_signatures() {
     assert!(result.is_some());
     let sig = result.unwrap();
     assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("seek"));
-    assert!(sig["signatures"][0]["label"]
-        .as_str()
-        .unwrap()
-        .contains("FILEHANDLE, POSITION, WHENCE"));
+    assert!(
+        sig["signatures"][0]["label"].as_str().unwrap().contains("FILEHANDLE, POSITION, WHENCE")
+    );
 
     // Test chmod signature - cursor after first comma
     let code = "chmod(0755, $file);";

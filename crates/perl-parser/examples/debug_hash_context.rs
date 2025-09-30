@@ -1,6 +1,6 @@
 use perl_parser::{
-    ast::{Node, NodeKind},
     Parser,
+    ast::{Node, NodeKind},
 };
 use std::collections::HashMap;
 

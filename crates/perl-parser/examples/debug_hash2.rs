@@ -1,4 +1,4 @@
-use perl_parser::{ast::NodeKind, Parser};
+use perl_parser::{Parser, ast::NodeKind};
 
 fn main() {
     let code = "{ key => 'value' }";
