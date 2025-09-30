@@ -697,7 +697,7 @@ impl TestRunner {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct TestResults {
     pub total: usize,
     pub passed: usize,
