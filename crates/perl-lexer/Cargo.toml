@@ -24,7 +24,7 @@ regex = "1.11.3"
 once_cell = "1.21.3"
 
 # For better error handling
-thiserror = "2.0.16"
+thiserror = "2.0.17"
 
 [dev-dependencies]
 criterion = "0.7.0"
