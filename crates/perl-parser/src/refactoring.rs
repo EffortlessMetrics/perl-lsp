@@ -47,8 +47,10 @@ use std::path::{Path, PathBuf};
 pub struct RefactoringEngine {
     /// Workspace-level refactoring operations
     #[cfg(feature = "workspace_refactor")]
+    #[allow(dead_code)]
     workspace_refactor: WorkspaceRefactor,
     #[cfg(not(feature = "workspace_refactor"))]
+    #[allow(dead_code)]
     workspace_refactor: temp_stubs::WorkspaceRefactor,
     /// Code modernization engine
     #[cfg(feature = "modernize")]

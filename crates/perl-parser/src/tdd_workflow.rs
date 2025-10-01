@@ -7,7 +7,7 @@ use crate::ast::Node;
 use crate::diagnostics::Diagnostic;
 use crate::test_generator::{CoverageReport, TestResults, TestRunner};
 use crate::test_generator::{RefactoringSuggester, RefactoringSuggestion};
-use crate::test_generator::{TestCase, TestFramework, TestGenerator, TestGeneratorOptions};
+use crate::test_generator::{TestCase, TestFramework, TestGenerator};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -82,6 +82,7 @@ pub struct CoverageTracker {
     /// Line coverage data
     line_coverage: HashMap<PathBuf, Vec<LineCoverage>>,
     /// Branch coverage data
+    #[allow(dead_code)]
     branch_coverage: HashMap<PathBuf, Vec<BranchCoverage>>,
     /// Overall coverage percentage
     total_coverage: f64,
@@ -454,12 +455,11 @@ pub mod lsp_integration {
     use super::*;
     use lsp_types::{
         CodeAction, CodeActionKind, Command, Diagnostic as LspDiagnostic, DiagnosticSeverity,
-        MessageType, Position, Range, TextEdit, WorkspaceEdit,
+        Position, Range,
     };
-    use std::collections::HashMap;
 
     /// Convert TDD actions to LSP code actions
-    pub fn tdd_actions_to_code_actions(actions: Vec<TddAction>, uri: &url::Url) -> Vec<CodeAction> {
+    pub fn tdd_actions_to_code_actions(actions: Vec<TddAction>, _uri: &url::Url) -> Vec<CodeAction> {
         actions
             .into_iter()
             .map(|action| match action {
