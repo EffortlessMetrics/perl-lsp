@@ -492,35 +492,7 @@ fn estimate_memory_usage() -> usize {
 /// Complete end-to-end cancellation workflow test
 /// Tests all acceptance criteria integrated in realistic scenarios
 #[test]
-#[ignore] // TODO: E2E test infrastructure needs environment stabilization
 fn test_comprehensive_cancellation_workflow_e2e() {
-    // Enhanced constraint checking for comprehensive E2E cancellation tests
-    // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
-
-    // Force single-threaded execution for E2E cancellation tests to ensure reliability
-    // Multiple threads can cause race conditions in cancellation infrastructure
-    if thread_count != 1 {
-        eprintln!(
-            "Comprehensive E2E cancellation tests require RUST_TEST_THREADS=1 for reliability (current: {})",
-            thread_count
-        );
-        eprintln!(
-            "Run with: RUST_TEST_THREADS=1 cargo test test_comprehensive_cancellation_workflow_e2e"
-        );
-        return;
-    }
-
-    // Skip in CI environments where LSP infrastructure may be unstable
-    if std::env::var("CI").is_ok()
-        || std::env::var("GITHUB_ACTIONS").is_ok()
-        || std::env::var("CONTINUOUS_INTEGRATION").is_ok()
-    {
-        eprintln!("Skipping comprehensive E2E cancellation test in CI environment for stability");
-        return;
-    }
-
     let mut fixture = E2ETestFixture::new();
 
     println!("Starting comprehensive E2E cancellation workflow test");
@@ -580,7 +552,6 @@ fn test_comprehensive_cancellation_workflow_e2e() {
 
 /// Real-world usage pattern validation with cancellation
 #[test]
-#[ignore] // TODO: E2E test infrastructure needs environment stabilization
 fn test_real_world_usage_patterns_e2e() {
     let fixture = E2ETestFixture::new();
 
@@ -609,35 +580,7 @@ fn test_real_world_usage_patterns_e2e() {
 
 /// High-load cancellation behavior validation
 #[test]
-#[ignore] // TODO: E2E test infrastructure needs environment stabilization
 fn test_high_load_cancellation_behavior_e2e() {
-    // Enhanced constraint checking for high-load E2E cancellation tests
-    // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
-
-    // Force single-threaded execution for E2E cancellation tests to ensure reliability
-    // Multiple threads can cause race conditions in cancellation infrastructure
-    if thread_count != 1 {
-        eprintln!(
-            "High-load E2E cancellation tests require RUST_TEST_THREADS=1 for reliability (current: {})",
-            thread_count
-        );
-        eprintln!(
-            "Run with: RUST_TEST_THREADS=1 cargo test test_high_load_cancellation_behavior_e2e"
-        );
-        return;
-    }
-
-    // Skip in CI environments where LSP infrastructure may be unstable
-    if std::env::var("CI").is_ok()
-        || std::env::var("GITHUB_ACTIONS").is_ok()
-        || std::env::var("CONTINUOUS_INTEGRATION").is_ok()
-    {
-        eprintln!("Skipping high-load E2E cancellation test in CI environment for stability");
-        return;
-    }
-
     let mut fixture = E2ETestFixture::new();
 
     println!("Testing high-load cancellation behavior");

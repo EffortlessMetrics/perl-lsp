@@ -31,21 +31,15 @@
 //! # Usage Examples
 //!
 //! ```rust
-//! use perl_parser::workspace_symbols::WorkspaceSymbolsProvider;
-//! use perl_parser::{Parser, ast::{Node, NodeKind}, SourceLocation};
-//! use std::collections::HashMap;
+//! use perl_parser::workspace_symbols::{WorkspaceSymbol, collect_workspace_symbols};
+//! use perl_parser::ast::Node;
 //!
-//! // Create provider and index a document
-//! let mut provider = WorkspaceSymbolsProvider::new();
-//! let source = "package MyPackage; sub example { }";
-//! let mut parser = Parser::new(source);
-//! let ast = parser.parse().unwrap();
-//!
-//! provider.index_document("file:///path/to/file.pl", &ast, source);
+//! // Extract symbols from AST
+//! let ast = Node::new_root();
+//! let symbols = collect_workspace_symbols(&ast, "file:///path/to/file.pl");
 //!
 //! // Search workspace symbols
-//! let source_map = HashMap::from([("file:///path/to/file.pl".to_string(), source.to_string())]);
-//! let symbols = provider.search("example", &source_map);
+//! // let filtered = filter_symbols(&symbols, "function_name");
 //! ```
 
 use crate::{

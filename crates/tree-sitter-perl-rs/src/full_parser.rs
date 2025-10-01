@@ -4,7 +4,7 @@
 //! context-sensitive slash disambiguation and multi-line heredoc parsing.
 
 use crate::error::ParseError;
-use crate::heredoc_parser::{parse_with_heredocs, HeredocDeclaration};
+use crate::heredoc_parser::{HeredocDeclaration, parse_with_heredocs};
 use crate::lexer_adapter::LexerAdapter;
 use crate::pure_rust_parser::{AstNode, PerlParser, PureRustPerlParser, Rule};
 use pest::Parser;

@@ -168,11 +168,7 @@ impl RuntimeHeredocHandler {
             }
         }
 
-        if in_heredoc {
-            Some(content_lines.join("\n"))
-        } else {
-            None
-        }
+        if in_heredoc { Some(content_lines.join("\n")) } else { None }
     }
 
     /// Static version of evaluate_heredoc for avoiding borrow conflicts

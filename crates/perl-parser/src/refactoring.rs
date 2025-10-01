@@ -29,13 +29,11 @@
 //! - modernize: Code modernization and best practice application
 //! - import_optimizer: Import statement optimization and cleanup
 
-// Node import will be used when implementing actual refactoring logic
-#[allow(unused_imports)]
-use crate::ast::Node;
 use crate::error::{ParseError, ParseResult};
 // Import existing modules conditionally
 use crate::import_optimizer::ImportOptimizer;
-// ModernizeEngine and WorkspaceRefactor will be resolved through conditional compilation
+#[cfg(feature = "modernize")]
+use crate::modernize::ModernizeEngine;
 #[cfg(feature = "workspace_refactor")]
 use crate::workspace_refactor::WorkspaceRefactor;
 use serde::{Deserialize, Serialize};
@@ -47,15 +45,16 @@ use std::path::{Path, PathBuf};
 /// Provides a single interface for all types of code transformations,
 /// from simple symbol renames to complex workspace restructuring.
 pub struct RefactoringEngine {
-    /// Workspace-level refactoring operations
+    /// Workspace-level refactoring operations (architectural placeholder for future implementation)
     #[cfg(feature = "workspace_refactor")]
+    #[allow(dead_code)]
     workspace_refactor: WorkspaceRefactor,
     #[cfg(not(feature = "workspace_refactor"))]
     #[allow(dead_code)]
     workspace_refactor: temp_stubs::WorkspaceRefactor,
     /// Code modernization engine
     #[cfg(feature = "modernize")]
-    modernize: crate::modernize::PerlModernizer,
+    modernize: ModernizeEngine,
     #[cfg(not(feature = "modernize"))]
     modernize: temp_stubs::ModernizeEngine,
     /// Import optimization engine
@@ -193,13 +192,11 @@ impl RefactoringEngine {
     pub fn with_config(config: RefactoringConfig) -> ParseResult<Self> {
         Ok(Self {
             #[cfg(feature = "workspace_refactor")]
-            workspace_refactor: WorkspaceRefactor::new(
-                crate::workspace_index::WorkspaceIndex::new(),
-            ),
+            workspace_refactor: WorkspaceRefactor::new()?,
             #[cfg(not(feature = "workspace_refactor"))]
             workspace_refactor: temp_stubs::WorkspaceRefactor::new()?,
             #[cfg(feature = "modernize")]
-            modernize: crate::modernize::PerlModernizer::new(),
+            modernize: ModernizeEngine::new(),
             #[cfg(not(feature = "modernize"))]
             modernize: temp_stubs::ModernizeEngine::new(),
             import_optimizer: ImportOptimizer::new(),
@@ -277,7 +274,10 @@ impl RefactoringEngine {
         // Find the operation in history
         let operation =
             self.operation_history.iter().find(|op| op.id == operation_id).ok_or_else(|| {
-                ParseError::syntax(format!("Operation {} not found", operation_id), 0)
+                ParseError::SyntaxError {
+                    message: format!("Operation {} not found", operation_id),
+                    location: 0,
+                }
             })?;
 
         if let Some(backup_info) = &operation.backup_info {
@@ -285,11 +285,9 @@ impl RefactoringEngine {
             let mut restored_count = 0;
             for (original, backup) in &backup_info.file_mappings {
                 if backup.exists() {
-                    std::fs::copy(backup, original).map_err(|e| {
-                        ParseError::syntax(
-                            format!("Failed to restore {}: {}", original.display(), e),
-                            0,
-                        )
+                    std::fs::copy(backup, original).map_err(|e| ParseError::SyntaxError {
+                        message: format!("Failed to restore {}: {}", original.display(), e),
+                        location: 0,
                     })?;
                     restored_count += 1;
                 }
@@ -304,7 +302,10 @@ impl RefactoringEngine {
                 operation_id: None,
             })
         } else {
-            Err(ParseError::syntax("No backup available for rollback", 0))
+            Err(ParseError::SyntaxError {
+                message: "No backup available for rollback".to_string(),
+                location: 0,
+            })
         }
     }
 
@@ -323,8 +324,9 @@ impl RefactoringEngine {
     // Private implementation methods
 
     fn generate_operation_id(&self) -> String {
-        let duration =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+        let duration = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
         format!("refactor_{}_{}", duration.as_secs(), duration.subsec_nanos())
     }
 
@@ -459,8 +461,10 @@ impl RefactoringEngine {
         let mut modified_files = 0;
 
         for file in files {
-            let analysis =
-                self.import_optimizer.analyze_file(file).map_err(|e| ParseError::syntax(e, 0))?;
+            let analysis = self
+                .import_optimizer
+                .analyze_file(file)
+                .map_err(|e| ParseError::SyntaxError { message: e, location: 0 })?;
             let mut changes_made = 0;
 
             if remove_unused && !analysis.unused_imports.is_empty() {
@@ -511,50 +515,30 @@ impl RefactoringEngine {
 
 impl Default for RefactoringEngine {
     fn default() -> Self {
-        // Provide safe default without panicking
-        Self {
-            config: RefactoringConfig::default(),
-            import_optimizer: crate::import_optimizer::ImportOptimizer::new(),
-            operation_history: Vec::new(),
-            #[cfg(feature = "workspace_refactor")]
-            workspace_refactor: crate::workspace_refactor::WorkspaceRefactor::new(
-                crate::workspace_index::WorkspaceIndex::new(),
-            ),
-            #[cfg(not(feature = "workspace_refactor"))]
-            workspace_refactor: temp_stubs::WorkspaceRefactor,
-            #[cfg(feature = "modernize")]
-            modernize: crate::modernize::PerlModernizer::new(),
-            #[cfg(not(feature = "modernize"))]
-            modernize: temp_stubs::ModernizeEngine::new(),
-        }
+        Self::new().expect("Failed to create default refactoring engine")
     }
 }
 
 // Temporary stub implementations for missing dependencies
-pub mod temp_stubs {
+mod temp_stubs {
     use super::*;
 
     #[derive(Debug)]
-    pub struct WorkspaceRefactor;
+    pub(super) struct WorkspaceRefactor;
     impl WorkspaceRefactor {
-        pub fn new() -> ParseResult<Self> {
+        pub(super) fn new() -> ParseResult<Self> {
             Ok(Self)
         }
     }
 
     #[derive(Debug)]
-    pub struct ModernizeEngine;
-    impl Default for ModernizeEngine {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
+    pub(super) struct ModernizeEngine;
     impl ModernizeEngine {
-        pub fn new() -> Self {
+        pub(super) fn new() -> Self {
             Self
         }
 
-        pub fn modernize_file(
+        pub(super) fn modernize_file(
             &mut self,
             _file: &Path,
             _patterns: &[ModernizationPattern],

@@ -5,7 +5,7 @@
 
 use crate::ast::{Node, NodeKind, SourceLocation};
 use crate::perl_lexer::{PerlLexer, TokenType as PLTokenType};
-use crate::token_compat::{from_perl_lexer_token, Token, TokenType};
+use crate::token_compat::{Token, TokenType, from_perl_lexer_token};
 use std::sync::Arc;
 
 pub struct WorkingParser {
@@ -370,11 +370,7 @@ impl WorkingParser {
     }
 
     fn check_token(&self, token_type: &TokenType) -> bool {
-        if self.is_at_end() {
-            false
-        } else {
-            &self.peek().token_type == token_type
-        }
+        if self.is_at_end() { false } else { &self.peek().token_type == token_type }
     }
 
     fn advance(&mut self) -> &Token {
@@ -409,11 +405,7 @@ impl WorkingParser {
     }
 
     fn consume(&mut self, token_type: &TokenType, message: &str) -> Result<&Token, String> {
-        if self.check_token(token_type) {
-            Ok(self.advance())
-        } else {
-            Err(message.to_string())
-        }
+        if self.check_token(token_type) { Ok(self.advance()) } else { Err(message.to_string()) }
     }
 }
 

@@ -29,7 +29,7 @@ pub fn sprinkle_whitespace(src: &str, seed: u64) -> String {
         // Don't insert whitespace inside strings or regexes
         if !in_string && !in_regex {
             // Randomly insert whitespace or comments
-            let choice = rng.gen_range(0..20);
+            let choice = rng.random_range(0..20);
             match choice {
                 0 => result.push(' '),
                 1 => result.push_str("  "),
@@ -155,13 +155,7 @@ mod tests {
         // Extract code content (no comments, no whitespace)
         let trans_str = transformed
             .lines()
-            .map(|line| {
-                if let Some(pos) = line.find('#') {
-                    &line[..pos]
-                } else {
-                    line
-                }
-            })
+            .map(|line| if let Some(pos) = line.find('#') { &line[..pos] } else { line })
             .collect::<Vec<_>>()
             .join("")
             .split_whitespace()

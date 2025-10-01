@@ -252,11 +252,7 @@ impl<'a> HeredocScanner<'a> {
             result.push(chars[self.position]);
             self.position += 1;
         }
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
+        if result.is_empty() { None } else { Some(result) }
     }
 }
 

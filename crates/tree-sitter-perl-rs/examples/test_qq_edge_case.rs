@@ -1,5 +1,5 @@
 //! Test specific qq edge case
-use tree_sitter_perl::{pure_rust_parser::AstNode, EnhancedFullParser};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     let code = r#"

@@ -7,7 +7,7 @@
 //! - Format declarations
 //! - Context-sensitive parsing
 
-use crate::enhanced_heredoc_lexer::{process_with_enhanced_heredocs, HeredocDeclaration};
+use crate::enhanced_heredoc_lexer::{HeredocDeclaration, process_with_enhanced_heredocs};
 use crate::error::ParseError;
 use crate::lexer_adapter::LexerAdapter;
 use crate::pure_rust_parser::{AstNode, PerlParser, PureRustPerlParser, Rule};

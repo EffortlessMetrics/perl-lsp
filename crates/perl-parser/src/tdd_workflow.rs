@@ -81,7 +81,7 @@ impl Default for TddConfig {
 pub struct CoverageTracker {
     /// Line coverage data
     line_coverage: HashMap<PathBuf, Vec<LineCoverage>>,
-    /// Branch coverage data
+    /// Branch coverage data (architectural placeholder for future implementation)
     #[allow(dead_code)]
     branch_coverage: HashMap<PathBuf, Vec<BranchCoverage>>,
     /// Overall coverage percentage
@@ -461,7 +461,7 @@ pub mod lsp_integration {
     /// Convert TDD actions to LSP code actions
     pub fn tdd_actions_to_code_actions(
         actions: Vec<TddAction>,
-        _uri: &lsp_types::Uri,
+        _uri: &url::Url,
     ) -> Vec<CodeAction> {
         actions
             .into_iter()
@@ -562,12 +562,23 @@ mod tests {
         let config = TddConfig::default();
         let workflow = TddWorkflow::new(config);
 
-        // Create a simple AST node for testing - this test validates the workflow exists
-        let ast = Node::new(NodeKind::Undef, SourceLocation { start: 0, end: 0 });
+        let ast = Node::new(
+            NodeKind::Subroutine {
+                name: Some("multiply".to_string()),
+                name_span: Some(SourceLocation { start: 4, end: 12 }),
+                signature: None,
+                body: Box::new(Node::new(
+                    NodeKind::Block { statements: vec![] },
+                    SourceLocation { start: 0, end: 0 },
+                )),
+                attributes: vec![],
+                prototype: None,
+            },
+            SourceLocation { start: 0, end: 0 },
+        );
 
         let tests = workflow.generate_tests(&ast, "sub multiply { }");
-        // Basic test that workflow can generate tests (may be empty for simple AST)
-        assert!(tests.len() == tests.len()); // Validates structure without useless comparison
+        assert!(!tests.is_empty());
     }
 
     #[test]
@@ -593,13 +604,50 @@ mod tests {
         let config = TddConfig::default();
         let mut workflow = TddWorkflow::new(config);
 
-        // Create a simple AST node for testing
-        let ast = Node::new(NodeKind::Undef, SourceLocation { start: 0, end: 0 });
+        // Create a subroutine with 8 parameters to trigger TooManyParameters suggestion
+        let parameters: Vec<Node> = (0..8)
+            .map(|i| {
+                Node::new(
+                    NodeKind::MandatoryParameter {
+                        variable: Box::new(Node::new(
+                            NodeKind::Variable {
+                                sigil: "$".to_string(),
+                                name: format!("param{}", i),
+                            },
+                            SourceLocation { start: 0, end: 0 },
+                        )),
+                    },
+                    SourceLocation { start: 0, end: 0 },
+                )
+            })
+            .collect();
+
+        let ast = Node::new(
+            NodeKind::Subroutine {
+                name: Some("complex_function".to_string()),
+                name_span: Some(SourceLocation { start: 4, end: 20 }),
+                signature: Some(Box::new(Node::new(
+                    NodeKind::Signature { parameters },
+                    SourceLocation { start: 0, end: 0 },
+                ))),
+                body: Box::new(Node::new(
+                    NodeKind::Block { statements: vec![] },
+                    SourceLocation { start: 0, end: 0 },
+                )),
+                attributes: vec![],
+                prototype: None,
+            },
+            SourceLocation { start: 0, end: 0 },
+        );
 
         let suggestions = workflow.get_refactoring_suggestions(&ast, "sub complex_function { }");
 
-        // Basic test that refactoring suggestions can be generated
-        assert!(suggestions.len() == suggestions.len()); // Validates structure without useless comparison
+        // Should suggest refactoring for too many parameters
+        assert!(
+            suggestions.iter().any(
+                |s| s.category == crate::test_generator::RefactoringCategory::TooManyParameters
+            )
+        );
     }
 
     #[test]

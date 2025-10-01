@@ -7,7 +7,7 @@ use crate::ast::{Node, NodeKind, SourceLocation};
 use crate::error::{ParseError, ParseErrorKind};
 use crate::perl_lexer::PerlLexer;
 use crate::regex_parser::RegexParser;
-use crate::token_compat::{from_perl_lexer_token, Token, TokenType};
+use crate::token_compat::{Token, TokenType, from_perl_lexer_token};
 use std::sync::Arc;
 
 /// Perl parser with proper memory management
@@ -1193,11 +1193,7 @@ impl<'a> ParserV2<'a> {
 
     fn parse_block_or_statement(&mut self) -> Result<Node, ParseError> {
         self.skip_whitespace();
-        if self.check(&TokenType::LeftBrace) {
-            self.parse_block()
-        } else {
-            self.parse_statement()
-        }
+        if self.check(&TokenType::LeftBrace) { self.parse_block() } else { self.parse_statement() }
     }
 
     fn parse_prototype(&mut self) -> Result<Arc<str>, ParseError> {

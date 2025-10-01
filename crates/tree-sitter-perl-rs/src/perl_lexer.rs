@@ -1139,7 +1139,7 @@ impl<'a> PerlLexer<'a> {
         while self.position < self.input.len() {
             if self.peek_str("\n=cut") {
                 self.position += 5; // Skip "\n=cut"
-                                    // Skip to end of line
+                // Skip to end of line
                 self.skip_line();
                 break;
             }
@@ -1918,7 +1918,7 @@ impl<'a> PerlLexer<'a> {
                         b'<' => self.position += 1, // <<
                         b'=' => {
                             self.position += 1; // <=
-                                                // Check for <=> (spaceship operator)
+                            // Check for <=> (spaceship operator)
                             if self.position < self.input.len()
                                 && self.input.as_bytes()[self.position] == b'>'
                             {
