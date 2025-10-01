@@ -4,6 +4,20 @@ use crate::positions::{Position, Range, pos_in_range};
 use serde_json::Value;
 use serde_json::json;
 
+/// Generates inlay hints for function and method parameters.
+///
+/// This function traverses the AST and identifies function calls, adding inlay
+/// hints for parameter names based on a predefined list of common Perl functions.
+///
+/// # Arguments
+///
+/// * `ast` - The root node of the AST to traverse.
+/// * `to_pos16` - A function that converts a byte offset to a (line, character) tuple.
+/// * `range` - An optional range to filter the inlay hints.
+///
+/// # Returns
+///
+/// A vector of `serde_json::Value` objects, each representing an inlay hint.
 pub fn parameter_hints(
     ast: &Node,
     to_pos16: &impl Fn(usize) -> (u32, u32),
@@ -67,6 +81,20 @@ pub fn parameter_hints(
     out
 }
 
+/// Generates inlay hints for trivial types.
+///
+/// This function traverses the AST and adds inlay hints for literals such as
+/// numbers, strings, and code references.
+///
+/// # Arguments
+///
+/// * `ast` - The root node of the AST to traverse.
+/// * `to_pos16` - A function that converts a byte offset to a (line, character) tuple.
+/// * `range` - An optional range to filter the inlay hints.
+///
+/// # Returns
+///
+/// A vector of `serde_json::Value` objects, each representing an inlay hint.
 pub fn trivial_type_hints(
     ast: &Node,
     to_pos16: &impl Fn(usize) -> (u32, u32),

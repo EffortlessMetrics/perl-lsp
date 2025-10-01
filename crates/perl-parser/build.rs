@@ -162,25 +162,46 @@ fn generate_feature_catalog() {
             code.push_str("#[allow(dead_code, clippy::all)]\n\n");
 
             // Constants
+            code.push_str("/// Current parser version extracted from features.toml metadata\n");
             code.push_str(&format!("pub const VERSION: &str = {:?};\n", catalog.meta.version));
+            code.push_str("/// LSP protocol version supported by this parser implementation\n");
             code.push_str(&format!(
                 "pub const LSP_VERSION: &str = {:?};\n",
                 catalog.meta.lsp_version
             ));
+            code.push_str(
+                "/// Compliance percentage of advertised GA features vs trackable features\n",
+            );
             code.push_str(&format!("pub const COMPLIANCE_PERCENT: f32 = {:.2};\n\n", percent));
 
             // Feature struct
+            code.push_str(
+                "/// Represents a single LSP feature with its metadata and implementation status\n",
+            );
             code.push_str("#[derive(Debug, Clone)]\n");
             code.push_str("pub struct Feature {\n");
+            code.push_str(
+                "    /// Unique identifier for this feature (e.g., \"textDocument/hover\")\n",
+            );
             code.push_str("    pub id: &'static str,\n");
+            code.push_str(
+                "    /// LSP specification reference or version where this feature is defined\n",
+            );
             code.push_str("    pub spec: &'static str,\n");
+            code.push_str("    /// Functional area this feature belongs to (e.g., \"completion\", \"diagnostics\")\n");
             code.push_str("    pub area: &'static str,\n");
+            code.push_str("    /// Implementation maturity level: \"experimental\", \"preview\", \"ga\", \"planned\", \"production\"\n");
             code.push_str("    pub maturity: &'static str,\n");
+            code.push_str("    /// Whether this feature is advertised to LSP clients in server capabilities\n");
             code.push_str("    pub advertised: bool,\n");
+            code.push_str("    /// Human-readable description of the feature's functionality\n");
             code.push_str("    pub description: &'static str,\n");
             code.push_str("}\n\n");
 
             // All features array
+            code.push_str(
+                "/// Comprehensive catalog of all LSP features with their implementation status\n",
+            );
             code.push_str("pub const ALL_FEATURES: &[Feature] = &[\n");
             for feature in &catalog.feature {
                 code.push_str("    Feature {\n");
@@ -207,6 +228,10 @@ fn generate_feature_catalog() {
             code.push_str("];\n\n");
 
             // Advertised features function
+            code.push_str("/// Returns a list of feature IDs that are advertised to LSP clients\n");
+            code.push_str(
+                "/// Only includes GA/production features that are ready for client consumption\n",
+            );
             code.push_str("pub fn advertised_features() -> Vec<&'static str> {\n");
             code.push_str("    vec![\n");
             for id in &advertised {
@@ -216,11 +241,19 @@ fn generate_feature_catalog() {
             code.push_str("}\n\n");
 
             // Has feature function
+            code.push_str("/// Checks if a specific feature ID is advertised and available\n");
+            code.push_str(
+                "/// Returns true only for GA/production features ready for client use\n",
+            );
             code.push_str("pub fn has_feature(id: &str) -> bool {\n");
             code.push_str("    advertised_features().contains(&id)\n");
             code.push_str("}\n\n");
 
             // Compliance percent function
+            code.push_str("/// Returns the current LSP compliance percentage as a float\n");
+            code.push_str(
+                "/// Calculated as (advertised GA features / trackable features) * 100\n",
+            );
             code.push_str("pub fn compliance_percent() -> f32 {\n");
             code.push_str("    COMPLIANCE_PERCENT\n");
             code.push_str("}\n");
@@ -235,13 +268,27 @@ fn generate_feature_catalog() {
             let mut code = String::new();
             code.push_str("// Auto-generated minimal catalog - features.toml not found\n\n");
             code.push_str("#![allow(dead_code)]\n\n");
+            code.push_str(
+                "/// Minimal feature structure for fallback when features.toml is not available\n",
+            );
             code.push_str("pub struct Feature { }\n");
+            code.push_str("/// Fallback parser version when features.toml is not available\n");
             code.push_str("pub const VERSION: &str = \"0.8.5\";\n");
+            code.push_str("/// Fallback LSP version when features.toml is not available\n");
             code.push_str("pub const LSP_VERSION: &str = \"3.18\";\n");
+            code.push_str(
+                "/// Fallback compliance percentage when features.toml is not available\n",
+            );
             code.push_str("pub const COMPLIANCE_PERCENT: f32 = 0.0;\n");
+            code.push_str(
+                "/// Empty features array for fallback when features.toml is not available\n",
+            );
             code.push_str("pub const ALL_FEATURES: &[Feature] = &[];\n");
+            code.push_str("/// Returns empty list when features.toml is not available\n");
             code.push_str("pub fn advertised_features() -> Vec<&'static str> { vec![] }\n");
+            code.push_str("/// Always returns false when features.toml is not available\n");
             code.push_str("pub fn has_feature(_id: &str) -> bool { false }\n");
+            code.push_str("/// Returns zero compliance when features.toml is not available\n");
             code.push_str("pub fn compliance_percent() -> f32 { 0.0 }\n");
 
             let out_dir = env::var("OUT_DIR").unwrap();

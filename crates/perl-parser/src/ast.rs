@@ -259,13 +259,8 @@ impl Node {
             }
 
             NodeKind::String { value, interpolated } => {
-                // Escape special characters to ensure valid S-expression syntax
-                let escaped_value = value
-                    .replace("\\", "\\\\")  // Escape backslashes first
-                    .replace("\"", "\\\"")  // Escape double quotes
-                    .replace("\n", "\\n")   // Escape newlines
-                    .replace("\t", "\\t")   // Escape tabs
-                    .replace("\r", "\\r");  // Escape carriage returns
+                // Escape quotes in string value to prevent S-expression parsing issues
+                let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"");
 
                 // Format based on interpolation status
                 if *interpolated {
