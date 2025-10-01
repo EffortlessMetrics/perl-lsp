@@ -604,11 +604,32 @@ mod tests {
         let config = TddConfig::default();
         let mut workflow = TddWorkflow::new(config);
 
+        // Create a subroutine with 8 parameters to trigger TooManyParameters suggestion
+        let parameters: Vec<Node> = (0..8)
+            .map(|i| {
+                Node::new(
+                    NodeKind::MandatoryParameter {
+                        variable: Box::new(Node::new(
+                            NodeKind::Variable {
+                                sigil: "$".to_string(),
+                                name: format!("param{}", i),
+                            },
+                            SourceLocation { start: 0, end: 0 },
+                        )),
+                    },
+                    SourceLocation { start: 0, end: 0 },
+                )
+            })
+            .collect();
+
         let ast = Node::new(
             NodeKind::Subroutine {
                 name: Some("complex_function".to_string()),
                 name_span: Some(SourceLocation { start: 4, end: 20 }),
-                signature: None,
+                signature: Some(Box::new(Node::new(
+                    NodeKind::Signature { parameters },
+                    SourceLocation { start: 0, end: 0 },
+                ))),
                 body: Box::new(Node::new(
                     NodeKind::Block { statements: vec![] },
                     SourceLocation { start: 0, end: 0 },

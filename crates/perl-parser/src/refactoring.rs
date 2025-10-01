@@ -324,13 +324,10 @@ impl RefactoringEngine {
     // Private implementation methods
 
     fn generate_operation_id(&self) -> String {
-        format!(
-            "refactor_{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()
-        )
+        let duration = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
+        format!("refactor_{}_{}", duration.as_secs(), duration.subsec_nanos())
     }
 
     fn validate_operation(
