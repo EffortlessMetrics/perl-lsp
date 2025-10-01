@@ -33,12 +33,17 @@
 //!
 //! ```rust
 //! use perl_parser::workspace_index::{WorkspaceIndex, SymbolKey, SymKind};
+//! use std::sync::Arc;
 //!
-//! let mut index = WorkspaceIndex::new();
+//! let index = WorkspaceIndex::new();
 //!
-//! // Index a Perl file
-//! let symbol_key = SymbolKey::new("example", SymKind::Sub, "MyPackage");
-//! // index.add_symbol(uri, symbol_key, location);
+//! // Create a symbol key for indexing
+//! let symbol_key = SymbolKey {
+//!     pkg: Arc::from("MyPackage"),
+//!     name: Arc::from("example"),
+//!     sigil: None,
+//!     kind: SymKind::Sub,
+//! };
 //!
 //! // Find symbol definitions
 //! let definitions = index.find_definition("MyPackage::example");

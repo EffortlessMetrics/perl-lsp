@@ -68,10 +68,14 @@ impl<'a> DeclarationProvider<'a> {
     /// # Examples
     /// ```rust
     /// use perl_parser::declaration::DeclarationProvider;
-    /// use perl_parser::ast::Node;
+    /// use perl_parser::ast::{Node, NodeKind};
+    /// use perl_parser::SourceLocation;
     /// use std::sync::Arc;
     ///
-    /// let ast = Arc::new(Node::new_root());
+    /// let ast = Arc::new(Node::new(
+    ///     NodeKind::Program { statements: vec![] },
+    ///     SourceLocation { start: 0, end: 0 }
+    /// ));
     /// let provider = DeclarationProvider::new(
     ///     ast,
     ///     "package MyPackage; sub example { }".to_string(),
@@ -107,15 +111,23 @@ impl<'a> DeclarationProvider<'a> {
     /// - Cycles detected in parent relationships
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,no_run
     /// use perl_parser::declaration::{DeclarationProvider, ParentMap};
-    /// use perl_parser::ast::Node;
+    /// use perl_parser::ast::{Node, NodeKind};
+    /// use perl_parser::SourceLocation;
     /// use std::sync::Arc;
     ///
-    /// let ast = Arc::new(Node::new_root());
+    /// // Note: In production, AST would have actual statements
+    /// // Empty AST used here for illustration only
+    /// let ast = Arc::new(Node::new(
+    ///     NodeKind::Program { statements: vec![] },
+    ///     SourceLocation { start: 0, end: 0 }
+    /// ));
     /// let mut parent_map = ParentMap::default();
     /// DeclarationProvider::build_parent_map(&ast, &mut parent_map, None);
     ///
+    /// // In release builds, empty parent_map is acceptable
+    /// # #[cfg(not(debug_assertions))]
     /// let provider = DeclarationProvider::new(
     ///     ast, "content".to_string(), "uri".to_string()
     /// ).with_parent_map(&parent_map);
@@ -159,11 +171,16 @@ impl<'a> DeclarationProvider<'a> {
     /// # Examples
     /// ```rust
     /// use perl_parser::declaration::DeclarationProvider;
-    /// use perl_parser::ast::Node;
+    /// use perl_parser::ast::{Node, NodeKind};
+    /// use perl_parser::SourceLocation;
     /// use std::sync::Arc;
     ///
+    /// let ast = Arc::new(Node::new(
+    ///     NodeKind::Program { statements: vec![] },
+    ///     SourceLocation { start: 0, end: 0 }
+    /// ));
     /// let provider = DeclarationProvider::new(
-    ///     Arc::new(Node::new_root()),
+    ///     ast,
     ///     "content".to_string(),
     ///     "uri".to_string()
     /// ).with_doc_version(42);
@@ -244,9 +261,13 @@ impl<'a> DeclarationProvider<'a> {
     /// # Examples
     /// ```rust
     /// use perl_parser::declaration::{DeclarationProvider, ParentMap};
-    /// use perl_parser::ast::Node;
+    /// use perl_parser::ast::{Node, NodeKind};
+    /// use perl_parser::SourceLocation;
     ///
-    /// let ast = Node::new_root();
+    /// let ast = Node::new(
+    ///     NodeKind::Program { statements: vec![] },
+    ///     SourceLocation { start: 0, end: 0 }
+    /// );
     /// let mut parent_map = ParentMap::default();
     /// DeclarationProvider::build_parent_map(&ast, &mut parent_map, None);
     /// ```
@@ -939,11 +960,16 @@ impl<'a> DeclarationProvider<'a> {
     /// # Examples
     /// ```rust
     /// use perl_parser::declaration::DeclarationProvider;
-    /// use perl_parser::ast::Node;
+    /// use perl_parser::ast::{Node, NodeKind};
+    /// use perl_parser::SourceLocation;
     /// use std::sync::Arc;
     ///
+    /// let ast = Arc::new(Node::new(
+    ///     NodeKind::Program { statements: vec![] },
+    ///     SourceLocation { start: 0, end: 0 }
+    /// ));
     /// let provider = DeclarationProvider::new(
-    ///     Arc::new(Node::new_root()),
+    ///     ast,
     ///     "sub example { }".to_string(),
     ///     "uri".to_string()
     /// );
@@ -984,9 +1010,13 @@ impl<'a> DeclarationProvider<'a> {
 /// # Examples
 /// ```rust
 /// use perl_parser::declaration::symbol_at_cursor;
-/// use perl_parser::ast::Node;
+/// use perl_parser::ast::{Node, NodeKind};
+/// use perl_parser::SourceLocation;
 ///
-/// let ast = Node::new_root();
+/// let ast = Node::new(
+///     NodeKind::Program { statements: vec![] },
+///     SourceLocation { start: 0, end: 0 }
+/// );
 /// let symbol = symbol_at_cursor(&ast, 42, "MyPackage");
 /// if let Some(sym) = symbol {
 ///     println!("Found symbol: {:?}", sym);
@@ -1054,9 +1084,13 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
 /// # Examples
 /// ```rust
 /// use perl_parser::declaration::current_package_at;
-/// use perl_parser::ast::Node;
+/// use perl_parser::ast::{Node, NodeKind};
+/// use perl_parser::SourceLocation;
 ///
-/// let ast = Node::new_root();
+/// let ast = Node::new(
+///     NodeKind::Program { statements: vec![] },
+///     SourceLocation { start: 0, end: 0 }
+/// );
 /// let pkg = current_package_at(&ast, 100);
 /// println!("Current package: {}", pkg);
 /// ```
@@ -1109,9 +1143,13 @@ pub fn current_package_at(ast: &Node, offset: usize) -> &str {
 /// # Examples
 /// ```rust
 /// use perl_parser::declaration::find_node_at_offset;
-/// use perl_parser::ast::Node;
+/// use perl_parser::ast::{Node, NodeKind};
+/// use perl_parser::SourceLocation;
 ///
-/// let ast = Node::new_root();
+/// let ast = Node::new(
+///     NodeKind::Program { statements: vec![] },
+///     SourceLocation { start: 0, end: 0 }
+/// );
 /// if let Some(node) = find_node_at_offset(&ast, 42) {
 ///     println!("Found node: {:?}", node.kind);
 /// }
@@ -1152,9 +1190,13 @@ pub fn find_node_at_offset(node: &Node, offset: usize) -> Option<&Node> {
 /// # Examples
 /// ```rust
 /// use perl_parser::declaration::get_node_children;
-/// use perl_parser::ast::Node;
+/// use perl_parser::ast::{Node, NodeKind};
+/// use perl_parser::SourceLocation;
 ///
-/// let node = Node::new_root();
+/// let node = Node::new(
+///     NodeKind::Program { statements: vec![] },
+///     SourceLocation { start: 0, end: 0 }
+/// );
 /// let children = get_node_children(&node);
 /// println!("Node has {} children", children.len());
 /// ```

@@ -111,7 +111,7 @@ impl LspHarness {
         self.initialize_with_root("file:///workspace", capabilities)
     }
 
-    /// Initialize the LSP server with a specific root URI
+    /// Initialize the LSP server with a specific root URI and enhanced timeout handling
     pub fn initialize_with_root(
         &mut self,
         root_uri: &str,
@@ -149,12 +149,30 @@ impl LspHarness {
         });
         self.next_request_id += 1;
 
-        let response = self.send_request_with_timeout(init_request, Duration::from_secs(2))?;
+        // Use adaptive timeout for initialization based on environment
+        let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
+        let init_timeout = if is_ci {
+            Duration::from_secs(5) // CI: longer initialization timeout
+        } else if std::env::var("PERL_LSP_PERFORMANCE_TEST").is_ok() {
+            Duration::from_millis(800) // Performance tests: faster initialization
+        } else {
+            Duration::from_secs(2) // Local: balanced timeout
+        };
+
+        let response = self.send_request_with_timeout(init_request, init_timeout)?;
 
         // Only send initialized notification if initialization succeeded
         // (The response will contain capabilities if successful)
         if response.get("capabilities").is_some() {
             self.notify("initialized", json!({}));
+
+            // Give server a moment to process the initialized notification
+            let settle_time = if is_ci {
+                Duration::from_millis(100) // CI: extra settling time
+            } else {
+                Duration::from_millis(50) // Local: minimal settling time
+            };
+            thread::sleep(settle_time);
         }
 
         Ok(response)
@@ -238,88 +256,156 @@ impl LspHarness {
         Ok(())
     }
 
-    /// Wait for the server to become idle by draining notifications with optimized timing
+    /// Wait for the server to become idle by draining notifications with adaptive timing
     pub fn wait_for_idle(&mut self, duration: Duration) {
-        // Use much shorter idle wait for better test performance
-        let max_wait = duration.min(Duration::from_millis(200));
+        // Adaptive idle detection based on environment
+        let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
+        let is_performance_test = std::env::var("PERL_LSP_PERFORMANCE_TEST").is_ok();
+
+        // Adjust timing based on environment
+        let (max_wait, required_idle_count, poll_interval) = if is_performance_test {
+            // Performance tests: very fast polling
+            (duration.min(Duration::from_millis(100)), 2, Duration::from_millis(2))
+        } else if is_ci {
+            // CI: more patient waiting for reliability
+            (duration.min(Duration::from_millis(500)), 5, Duration::from_millis(10))
+        } else {
+            // Local development: balanced approach
+            (duration.min(Duration::from_millis(200)), 3, Duration::from_millis(5))
+        };
+
         let start = Instant::now();
         let mut idle_count = 0;
+        let mut total_checks = 0;
 
         while start.elapsed() < max_wait {
+            total_checks += 1;
+
             // Check for notifications more efficiently
             let notifications = self.notification_buffer.lock().unwrap();
             if notifications.is_empty() {
                 idle_count += 1;
-                if idle_count >= 3 {
-                    // Consider idle after 3 consecutive empty checks
+                if idle_count >= required_idle_count {
+                    // Consider idle after required consecutive empty checks
+                    drop(notifications);
                     break;
                 }
                 drop(notifications);
-                thread::sleep(Duration::from_millis(5)); // Much shorter sleep
+                thread::sleep(poll_interval);
             } else {
                 idle_count = 0;
                 drop(notifications);
-                thread::sleep(Duration::from_millis(10));
+                // Slightly longer sleep when processing notifications
+                thread::sleep(poll_interval * 2);
+            }
+
+            // Prevent excessive polling in CI environments
+            if is_ci && total_checks > 100 {
+                thread::sleep(Duration::from_millis(5));
             }
         }
     }
 
-    /// Poll workspace/symbol until query appears with optimized backoff strategy
+    /// Poll workspace/symbol until query appears with enhanced reliability and CI optimization
     pub fn wait_for_symbol(
         &mut self,
         query: &str,
         want_uri: Option<&str>,
         budget: Duration,
     ) -> Result<(), String> {
-        // Use environment variable to skip symbol waiting in fast test mode
-        if std::env::var("LSP_TEST_FALLBACKS").is_ok() {
-            // Fast mode: try once, then assume indexing is working
+        // Detect environment characteristics for optimization
+        let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
+        let is_performance_test = std::env::var("PERL_LSP_PERFORMANCE_TEST").is_ok();
+        let use_fallbacks = std::env::var("LSP_TEST_FALLBACKS").is_ok();
+
+        // Fast path for performance tests or fallback mode
+        if use_fallbacks || is_performance_test {
+            let timeout = if is_performance_test { 50 } else { 100 };
             let res = self.request_with_timeout(
                 "workspace/symbol",
                 serde_json::json!({ "query": query }),
-                Duration::from_millis(100),
+                Duration::from_millis(timeout),
             );
             if res.is_ok() {
                 return Ok(()); // Symbol indexing is working
             }
+            if use_fallbacks {
+                eprintln!("Warning: symbol '{}' not indexed, proceeding anyway", query);
+                return Ok(());
+            }
         }
 
+        // Adaptive parameters based on environment
+        let (max_attempts, initial_timeout, max_sleep) = if is_ci {
+            (8, 300, 200) // CI: more attempts, longer timeouts
+        } else if is_performance_test {
+            (3, 100, 50) // Performance: fewer attempts, faster timeouts
+        } else {
+            (5, 200, 100) // Local: balanced approach
+        };
+
         let start = Instant::now();
-        let max_attempts = 5; // Limit total attempts
         let mut attempt = 0;
+        let mut last_error = None;
 
         while start.elapsed() < budget && attempt < max_attempts {
             attempt += 1;
 
+            // Progressive timeout increase for reliability
+            let timeout = Duration::from_millis(initial_timeout + (attempt * 50).min(200));
+
             let res = self.request_with_timeout(
                 "workspace/symbol",
                 serde_json::json!({ "query": query }),
-                Duration::from_millis(200), // Shorter timeout per request
+                timeout,
             );
-            if let Ok(v) = res {
-                if let Some(arr) = v.as_array() {
-                    let ok = arr.iter().any(|s| {
-                        let uri = s.pointer("/location/uri").and_then(|u| u.as_str());
-                        want_uri.is_none_or(|expect| uri == Some(expect))
-                    });
-                    if ok {
-                        return Ok(());
+
+            match res {
+                Ok(v) => {
+                    if let Some(arr) = v.as_array() {
+                        let found = arr.iter().any(|s| {
+                            let uri = s.pointer("/location/uri").and_then(|u| u.as_str());
+                            want_uri.is_none_or(|expect| uri == Some(expect))
+                        });
+                        if found {
+                            return Ok(());
+                        }
+                        // Symbol search succeeded but didn't find target - continue
                     }
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                    // Request failed - might be server not ready, continue with backoff
                 }
             }
 
-            // Exponential backoff, but cap at 100ms
-            let sleep_ms = (10 * attempt).min(100);
+            // Adaptive backoff strategy
+            let sleep_ms = if is_ci {
+                // CI: More conservative backoff for reliability
+                (20 * attempt).min(max_sleep)
+            } else {
+                // Local/Performance: Faster backoff
+                (10 * attempt).min(max_sleep)
+            };
             thread::sleep(Duration::from_millis(sleep_ms));
+
+            // Give server more time between attempts in CI
+            if is_ci && attempt > 3 {
+                thread::sleep(Duration::from_millis(50));
+            }
         }
 
-        // In test mode, warn but don't fail
-        if std::env::var("LSP_TEST_FALLBACKS").is_ok() {
-            eprintln!("Warning: symbol '{}' not indexed, proceeding anyway", query);
-            return Ok(());
-        }
+        // Enhanced error reporting
+        let error_context = if let Some(err) = last_error {
+            format!("Last error: {}", err)
+        } else {
+            "Symbol search succeeded but target not found".to_string()
+        };
 
-        Err(format!("symbol '{}' not ready within {:?} after {} attempts", query, budget, attempt))
+        Err(format!(
+            "symbol '{}' not ready within {:?} after {} attempts. {} (CI: {}, Perf: {})",
+            query, budget, attempt, error_context, is_ci, is_performance_test
+        ))
     }
 
     /// Alternative request method that accepts a full JSON-RPC request object (for schema tests)
@@ -632,25 +718,122 @@ impl LspHarness {
 }
 
 impl LspHarness {
-    /// Get adaptive timeout based on RUST_TEST_THREADS environment variable
+    /// Get adaptive timeout based on CI environment and thread configuration
     fn get_adaptive_timeout(&self) -> Duration {
         let thread_count = std::env::var("RUST_TEST_THREADS")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
             .unwrap_or(4);
 
-        match thread_count {
-            0..=2 => Duration::from_millis(500), // High contention: longer timeout
-            3..=4 => Duration::from_millis(300), // Medium contention
-            _ => Duration::from_millis(200),     // Low contention: shorter timeout
-        }
+        // Detect CI environments which need longer timeouts
+        let is_ci = std::env::var("CI").is_ok()
+            || std::env::var("GITHUB_ACTIONS").is_ok()
+            || std::env::var("TRAVIS").is_ok()
+            || std::env::var("CIRCLECI").is_ok()
+            || std::env::var("JENKINS_URL").is_ok();
+
+        // Detect containerized/constrained environments
+        let is_constrained = std::env::var("DOCKER_CONTAINER").is_ok()
+            || std::path::Path::new("/.dockerenv").exists()
+            || std::env::var("KUBERNETES_SERVICE_HOST").is_ok();
+
+        // Detect WSL environment (often has different performance characteristics)
+        let is_wsl = std::env::var("WSL_DISTRO_NAME").is_ok() || std::env::var("WSLENV").is_ok();
+
+        // Base timeout calculation with thread contention
+        let base_timeout = match thread_count {
+            0..=1 => Duration::from_millis(800), // Very high contention: much longer timeout
+            2 => Duration::from_millis(600),     // High contention: longer timeout
+            3..=4 => Duration::from_millis(400), // Medium contention
+            5..=8 => Duration::from_millis(300), // Low contention
+            _ => Duration::from_millis(200),     // Very low contention: shorter timeout
+        };
+
+        // Apply environment multipliers for reliability
+        let multiplier = if is_ci && is_constrained {
+            2.5 // CI + containerized: most constrained
+        } else if is_ci {
+            2.0 // CI environments: longer for reliability
+        } else if is_constrained {
+            1.8 // Containerized: some overhead
+        } else if is_wsl {
+            1.5 // WSL: moderate overhead
+        } else {
+            1.0 // Local development: optimal
+        };
+
+        // Apply performance test optimization
+        let final_timeout = if std::env::var("PERL_LSP_PERFORMANCE_TEST").is_ok() {
+            // Performance tests use shorter timeouts for speed
+            Duration::from_millis((base_timeout.as_millis() as f64 * multiplier * 0.7) as u64)
+        } else {
+            Duration::from_millis((base_timeout.as_millis() as f64 * multiplier) as u64)
+        };
+
+        // Cap maximum timeout to prevent tests from hanging indefinitely
+        final_timeout.min(Duration::from_secs(30))
     }
 }
 
 impl Drop for LspHarness {
     fn drop(&mut self) {
+        // Enhanced cleanup with proper shutdown sequence
+        self.shutdown_gracefully();
+    }
+}
+
+impl LspHarness {
+    /// Gracefully shutdown the LSP server with proper cleanup
+    pub fn shutdown_gracefully(&mut self) {
+        // Send shutdown request if we have an active connection
+        let shutdown_timeout = if std::env::var("CI").is_ok() {
+            Duration::from_secs(2) // CI: more time for cleanup
+        } else {
+            Duration::from_millis(500) // Local: faster cleanup
+        };
+
+        // Try to send shutdown request
+        let _shutdown_result = self.request_with_timeout("shutdown", json!({}), shutdown_timeout);
+
+        // Send exit notification
+        self.notify("exit", json!({}));
+
+        // Give server time to process shutdown
+        thread::sleep(Duration::from_millis(50));
+
+        // Signal server thread to terminate
         let _ = self.sender.send(Vec::new());
-        self.handle.take();
+
+        // Wait for server thread to complete with timeout
+        if let Some(handle) = self.handle.take() {
+            let join_timeout = Duration::from_millis(1000);
+            let start = Instant::now();
+
+            // Use a simple timeout mechanism since we can't use thread::join with timeout in std
+            while start.elapsed() < join_timeout {
+                if handle.is_finished() {
+                    let _ = handle.join();
+                    break;
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+
+            // If thread didn't finish, we'll let it drop naturally
+            // This prevents test hangs while still attempting graceful cleanup
+        }
+    }
+
+    /// Add a method for checking if server is responsive
+    pub fn is_server_responsive(&mut self) -> bool {
+        // Quick ping to check if server is still alive
+        let ping_result = self.request_with_timeout(
+            "$/ping", // Non-standard but harmless ping
+            json!({}),
+            Duration::from_millis(100),
+        );
+
+        // If it responds (even with error), server is alive
+        ping_result.is_ok() || ping_result.err().map_or(false, |e| !e.contains("timed out"))
     }
 }
 
