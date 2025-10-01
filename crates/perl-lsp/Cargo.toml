@@ -2,7 +2,7 @@
 name = "perl-lsp"
 version = "0.8.8"
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.90"
 authors = ["Tree-sitter Perl Contributors"]
 description = "Perl Language Server (LSP) — Tree-sitter-compatible with comprehensive IDE features"
 license = "MIT OR Apache-2.0"

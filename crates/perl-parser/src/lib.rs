@@ -194,6 +194,7 @@ pub mod pragma_tracker;
 /// Parser for Perl quote and quote-like operators.
 pub mod quote_parser;
 pub mod recovery_parser;
+/// Unified refactoring engine for comprehensive code transformations.
 pub mod refactoring;
 /// LSP references provider for symbol usage analysis.
 pub mod references;
@@ -211,6 +212,7 @@ pub mod signature_help;
 pub mod symbol;
 #[allow(missing_docs)]
 pub mod tdd_basic;
+/// TDD workflow integration for Test-Driven Development support.
 pub mod tdd_workflow;
 pub mod test_generator;
 /// Test execution and TDD support functionality.
@@ -299,6 +301,16 @@ pub use type_inference::{
     TypeInferenceEngine, TypeLocation,
 };
 pub use workspace_symbols::{WorkspaceSymbol, WorkspaceSymbolsProvider};
+
+// TDD workflow and refactoring exports
+pub use refactoring::{
+    ModernizationPattern, RefactoringConfig, RefactoringEngine, RefactoringOperation,
+    RefactoringResult, RefactoringScope, RefactoringType,
+};
+pub use tdd_workflow::{
+    AnnotationSeverity, CoverageAnnotation, TddAction, TddConfig, TddCycleResult, TddWorkflow,
+    TestType, WorkflowState, WorkflowStatus,
+};
 
 #[cfg(test)]
 mod tests {
