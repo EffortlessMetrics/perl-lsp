@@ -563,9 +563,10 @@ mod tests {
         let workflow = TddWorkflow::new(config);
 
         let ast = Node::new(
-            NodeKind::SubroutineDeclaration {
+            NodeKind::Subroutine {
                 name: Some("multiply".to_string()),
-                params: Some(vec!["$x".to_string(), "$y".to_string()]),
+                name_span: Some(SourceLocation { start: 4, end: 12 }),
+                signature: None,
                 body: Box::new(Node::new(
                     NodeKind::Block { statements: vec![] },
                     SourceLocation { start: 0, end: 0 },
@@ -604,9 +605,10 @@ mod tests {
         let mut workflow = TddWorkflow::new(config);
 
         let ast = Node::new(
-            NodeKind::SubroutineDeclaration {
+            NodeKind::Subroutine {
                 name: Some("complex_function".to_string()),
-                params: Some((0..8).map(|i| format!("$param{}", i)).collect()),
+                name_span: Some(SourceLocation { start: 4, end: 20 }),
+                signature: None,
                 body: Box::new(Node::new(
                     NodeKind::Block { statements: vec![] },
                     SourceLocation { start: 0, end: 0 },
