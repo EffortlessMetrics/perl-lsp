@@ -51,7 +51,8 @@
       "perl.runTests",
       "perl.runFile",
       "perl.runTestSub",
-      "perl.debugTests"
+      "perl.debugTests",
+      "perl.runCritic"
     ]
   },
   "experimental": {
