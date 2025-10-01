@@ -55,27 +55,46 @@ enum DebugState {
     Terminated,
 }
 
-/// DAP message types
+/// Represents a DAP message, which can be a request, response, or event.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum DapMessage {
+    /// A request from the client to the debug adapter.
     #[serde(rename = "request")]
-    Request { seq: i64, command: String, arguments: Option<Value> },
+    Request {
+        /// Sequence number of the request.
+        seq: i64,
+        /// The command to execute.
+        command: String,
+        /// Arguments for the command.
+        arguments: Option<Value>,
+    },
+    /// A response from the debug adapter to a client request.
     #[serde(rename = "response")]
     Response {
+        /// Sequence number of the response.
         seq: i64,
+        /// Sequence number of the corresponding request.
         request_seq: i64,
+        /// Indicates whether the request was successful.
         success: bool,
+        /// The command that was executed.
         command: String,
+        /// The body of the response.
         #[serde(skip_serializing_if = "Option::is_none")]
         body: Option<Value>,
+        /// An optional message providing additional information.
         #[serde(skip_serializing_if = "Option::is_none")]
         message: Option<String>,
     },
+    /// An event from the debug adapter to the client.
     #[serde(rename = "event")]
     Event {
+        /// Sequence number of the event.
         seq: i64,
+        /// The type of event.
         event: String,
+        /// The body of the event.
         #[serde(skip_serializing_if = "Option::is_none")]
         body: Option<Value>,
     },

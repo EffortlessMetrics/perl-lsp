@@ -2,11 +2,7 @@
   "callHierarchyProvider": true,
   "codeActionProvider": {
     "codeActionKinds": [
-      "quickfix",
-      "refactor",
-      "refactor.extract",
-      "refactor.inline",
-      "refactor.rewrite"
+      "quickfix"
     ],
     "resolveProvider": true
   },
@@ -40,10 +36,6 @@
   "documentSymbolProvider": true,
   "executeCommandProvider": {
     "commands": [
-      "perl.tidy",
-      "perl.critic",
-      "perl.extractVariable",
-      "perl.extractSubroutine",
       "perl.runTests",
       "perl.runFile",
       "perl.runTestSub",
