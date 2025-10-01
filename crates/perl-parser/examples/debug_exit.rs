@@ -1,6 +1,6 @@
 //! Debug exit parsing
-use perl_parser::token_stream::{TokenKind, TokenStream};
 use perl_parser::Parser;
+use perl_parser::token_stream::{TokenKind, TokenStream};
 
 fn main() {
     let tests = vec!["exit", "print"];

@@ -5,8 +5,8 @@
 
 use crate::pratt_parser::PrattParser;
 use pest::{
-    iterators::{Pair, Pairs},
     Parser,
+    iterators::{Pair, Pairs},
 };
 use pest_derive::Parser;
 use stacker;

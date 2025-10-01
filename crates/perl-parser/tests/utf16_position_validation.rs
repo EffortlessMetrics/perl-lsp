@@ -1,5 +1,5 @@
 use lsp_types::Position;
-use perl_parser::textdoc::{byte_to_lsp_pos, lsp_pos_to_byte, PosEnc};
+use perl_parser::textdoc::{PosEnc, byte_to_lsp_pos, lsp_pos_to_byte};
 use ropey::Rope;
 
 /// Comprehensive validation of UTF-8/UTF-16 position conversion accuracy

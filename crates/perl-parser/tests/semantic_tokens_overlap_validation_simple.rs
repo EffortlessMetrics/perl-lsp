@@ -3,7 +3,7 @@
 /// to ensure robust token generation and position validation.
 ///
 /// Labels: tests:semantic-tokens, tests:mutation-hardening
-use perl_parser::{semantic_tokens_provider::SemanticTokensProvider, Parser};
+use perl_parser::{Parser, semantic_tokens_provider::SemanticTokensProvider};
 
 // Test basic semantic token generation without overlaps
 #[test]

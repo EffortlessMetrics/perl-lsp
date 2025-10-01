@@ -1,7 +1,7 @@
 #[cfg(feature = "pure-rust")]
 use pest::Parser;
 #[cfg(feature = "pure-rust")]
-use tree_sitter_perl::{pure_rust_parser::Rule, PerlParser};
+use tree_sitter_perl::{PerlParser, pure_rust_parser::Rule};
 
 #[cfg(feature = "pure-rust")]
 fn main() {

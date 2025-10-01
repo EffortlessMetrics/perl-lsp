@@ -1,5 +1,5 @@
 //! Test indirect object syntax
-use tree_sitter_perl::{pure_rust_parser::AstNode, EnhancedFullParser};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     println!("=== Testing Indirect Object Syntax ===\n");

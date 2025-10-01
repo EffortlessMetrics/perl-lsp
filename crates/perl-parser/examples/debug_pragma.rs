@@ -1,4 +1,4 @@
-use perl_parser::{pragma_tracker::PragmaTracker, Parser};
+use perl_parser::{Parser, pragma_tracker::PragmaTracker};
 
 fn main() {
     let code = r#"use strict;

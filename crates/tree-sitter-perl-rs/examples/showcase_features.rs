@@ -2,10 +2,10 @@
 
 use std::io::Cursor;
 use tree_sitter_perl::{
+    EnhancedFullParser,
     error_recovery::{ErrorRecoveryParser, RecoveryStrategy},
     sexp_formatter::SexpFormatter,
     streaming_parser::{ParseEvent, StreamConfig, StreamingParser},
-    EnhancedFullParser,
 };
 
 fn main() {

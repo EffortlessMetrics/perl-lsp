@@ -1,6 +1,6 @@
 //! Test code reference parsing specifically
 
-use tree_sitter_perl::{pure_rust_parser::AstNode, EnhancedFullParser};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     println!("=== Testing Code References ===\n");
