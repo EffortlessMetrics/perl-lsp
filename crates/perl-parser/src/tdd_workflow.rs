@@ -30,7 +30,7 @@ pub struct TddWorkflow {
     config: TddConfig,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum WorkflowState {
     /// Writing test (Red phase)
     Red,
@@ -467,7 +467,7 @@ pub mod lsp_integration {
     /// Convert TDD actions to LSP code actions
     pub fn tdd_actions_to_code_actions(
         actions: Vec<TddAction>,
-        uri: &lsp_types::Url,
+        uri: &url::Url,
     ) -> Vec<CodeAction> {
         actions.into_iter().map(|action| {
             match action {
