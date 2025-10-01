@@ -289,7 +289,10 @@ impl RefactoringEngine {
         let operation = self.operation_history
             .iter()
             .find(|op| op.id == operation_id)
-            .ok_or_else(|| ParseError::Generic(format!("Operation {} not found", operation_id)))?;
+            .ok_or_else(|| ParseError::SyntaxError {
+                message: format!("Operation {} not found", operation_id),
+                location: 0
+            })?;
 
         if let Some(backup_info) = &operation.backup_info {
             // Restore files from backup
@@ -297,7 +300,10 @@ impl RefactoringEngine {
             for (original, backup) in &backup_info.file_mappings {
                 if backup.exists() {
                     std::fs::copy(backup, original)
-                        .map_err(|e| ParseError::Generic(format!("Failed to restore {}: {}", original.display(), e)))?;
+                        .map_err(|e| ParseError::SyntaxError {
+                            message: format!("Failed to restore {}: {}", original.display(), e),
+                            location: 0
+                        })?;
                     restored_count += 1;
                 }
             }
@@ -311,7 +317,10 @@ impl RefactoringEngine {
                 operation_id: None,
             })
         } else {
-            Err(ParseError::Generic("No backup available for rollback".to_string()))
+            Err(ParseError::SyntaxError {
+                message: "No backup available for rollback".to_string(),
+                location: 0
+            })
         }
     }
 
@@ -460,7 +469,8 @@ impl RefactoringEngine {
         let mut modified_files = 0;
 
         for file in files {
-            let analysis = self.import_optimizer.analyze_file(file)?;
+            let analysis = self.import_optimizer.analyze_file(file)
+                .map_err(|e| ParseError::SyntaxError { message: e, location: 0 })?;
             let mut changes_made = 0;
 
             if remove_unused && !analysis.unused_imports.is_empty() {
@@ -520,21 +530,21 @@ mod temp_stubs {
     use super::*;
 
     #[derive(Debug)]
-    pub struct WorkspaceRefactor;
+    pub(super) struct WorkspaceRefactor;
     impl WorkspaceRefactor {
-        pub fn new() -> ParseResult<Self> {
+        pub(super) fn new() -> ParseResult<Self> {
             Ok(Self)
         }
     }
 
     #[derive(Debug)]
-    pub struct ModernizeEngine;
+    pub(super) struct ModernizeEngine;
     impl ModernizeEngine {
-        pub fn new() -> Self {
+        pub(super) fn new() -> Self {
             Self
         }
 
-        pub fn modernize_file(&mut self, _file: &Path, _patterns: &[ModernizationPattern]) -> ParseResult<usize> {
+        pub(super) fn modernize_file(&mut self, _file: &Path, _patterns: &[ModernizationPattern]) -> ParseResult<usize> {
             Ok(0)
         }
     }

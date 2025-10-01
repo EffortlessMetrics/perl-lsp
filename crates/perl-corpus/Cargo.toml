@@ -2,7 +2,7 @@
 name = "perl-corpus"
 rust-version = "1.89"
 version = "0.8.8"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Test corpus management and generators for Perl parsers"
 readme = "README.md"
