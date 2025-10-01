@@ -356,9 +356,9 @@ END
         assert!(!declarations.is_empty(), "Should find heredoc in s///e");
 
         // Should have special context marker
-        assert!(
-            declarations.iter().any(|d| d.terminator == "EVAL_CONTEXT" || d.terminator == "END")
-        );
+        assert!(declarations
+            .iter()
+            .any(|d| d.terminator == "EVAL_CONTEXT" || d.terminator == "END"));
     }
 
     #[test]

@@ -323,7 +323,7 @@ impl RefactoringEngine {
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
-                .as_secs()
+                .as_nanos()
         )
     }
 
@@ -558,8 +558,9 @@ mod tests {
         let engine = RefactoringEngine::new().unwrap();
         let id1 = engine.generate_operation_id();
         let id2 = engine.generate_operation_id();
-        assert_ne!(id1, id2);
+        assert_ne!(id1, id2, "Operation IDs should be unique (nanosecond precision)");
         assert!(id1.starts_with("refactor_"));
+        assert!(id2.starts_with("refactor_"));
     }
 
     #[test]

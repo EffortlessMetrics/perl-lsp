@@ -4,7 +4,7 @@
 //! without loading them entirely into memory. It processes files in chunks
 //! and emits parse events as it goes.
 
-use crate::enhanced_heredoc_lexer::{HeredocDeclaration, process_with_enhanced_heredocs};
+use crate::enhanced_heredoc_lexer::{process_with_enhanced_heredocs, HeredocDeclaration};
 use crate::error::ParseError;
 use crate::lexer_adapter::LexerAdapter;
 use crate::pure_rust_parser::{AstNode, PerlParser, Rule};
@@ -362,11 +362,9 @@ print "After POD\n";
         let mut parser = StreamingParser::new(cursor, StreamConfig::default());
         let events: Vec<_> = parser.parse().collect();
 
-        assert!(
-            events
-                .iter()
-                .any(|e| matches!(e, ParseEvent::SpecialSection { kind: SectionKind::Pod, .. }))
-        );
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, ParseEvent::SpecialSection { kind: SectionKind::Pod, .. })));
     }
 
     #[test]
