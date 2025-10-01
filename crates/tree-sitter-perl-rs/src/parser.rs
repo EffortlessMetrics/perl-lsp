@@ -6,7 +6,7 @@
 use crate::ast::{Node, NodeKind, SourceLocation};
 use crate::error::{ParseError, ParseErrorKind};
 use crate::perl_lexer::PerlLexer;
-use crate::token_compat::{Token, TokenType, from_perl_lexer_token};
+use crate::token_compat::{from_perl_lexer_token, Token, TokenType};
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -469,7 +469,11 @@ impl<'a> Parser<'a> {
 
     /// Get previous token location
     fn previous_location(&self) -> usize {
-        if self.current > 0 { self.tokens[self.current - 1].start } else { 0 }
+        if self.current > 0 {
+            self.tokens[self.current - 1].start
+        } else {
+            0
+        }
     }
 
     /// Create location spanning two nodes

@@ -72,7 +72,9 @@ print %ENV;  # Built-in global should not trigger undefined
 
     let issues = analyze_code(code);
     // %ENV is a built-in global
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && (i.variable_name == "%ENV")));
+    assert!(!issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && (i.variable_name == "%ENV")));
     // local $custom_var should not trigger undefined either
     assert!(
         !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)

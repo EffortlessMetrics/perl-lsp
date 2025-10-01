@@ -177,7 +177,11 @@ fn pattern_type(pattern: &AntiPattern) -> &'static str {
 }
 
 fn truncate_string(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len { s.to_string() } else { format!("{}...", &s[..max_len]) }
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len])
+    }
 }
 
 /// Builder for creating ExtendedAstNode with proper diagnostics
