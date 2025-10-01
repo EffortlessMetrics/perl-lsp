@@ -682,11 +682,7 @@ impl HeredocRecovery {
             pos += 1;
         }
 
-        if pos > start_pos {
-            Some((input[start_pos..pos].to_string(), pos))
-        } else {
-            None
-        }
+        if pos > start_pos { Some((input[start_pos..pos].to_string(), pos)) } else { None }
     }
 }
 

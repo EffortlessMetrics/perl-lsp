@@ -1,5 +1,5 @@
 //! Test example for formatting features
-use tree_sitter_perl::{pure_rust_parser::AstNode, EnhancedFullParser};
+use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 
 fn main() {
     println!("=== Tree-sitter Perl Formatting Demo ===\n");

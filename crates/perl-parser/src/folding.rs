@@ -42,11 +42,8 @@ pub struct FoldingRange {
 /// - `Region`: Code blocks, subroutines, packages
 #[derive(Debug, Clone)]
 pub enum FoldingRangeKind {
-    /// Folding range for a comment.
     Comment,
-    /// Folding range for a block of import statements.
     Imports,
-    /// Folding range for a generic region of code.
     Region,
 }
 
@@ -57,7 +54,6 @@ impl Default for FoldingRangeExtractor {
 }
 
 impl FoldingRangeExtractor {
-    /// Creates a new `FoldingRangeExtractor`.
     pub fn new() -> Self {
         Self { ranges: Vec::new() }
     }

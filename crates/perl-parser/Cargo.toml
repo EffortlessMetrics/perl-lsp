@@ -2,7 +2,7 @@
 name = "perl-parser"
 version = "0.8.8"
 edition = "2024"
-rust-version = "1.90"
+rust-version = "1.89"
 authors = ["Tree-sitter Perl Contributors"]
 description = "Native Perl parser (v3) — Tree-sitter-compatible kinds/fields/points; stable byte↔UTF-16 conversions"
 license = "MIT OR Apache-2.0"
@@ -38,7 +38,6 @@ rustc-hash = "2.1.1"
 md5 = "0.8.0"
 phf = { version = "0.13.1", features = ["macros"] }
 walkdir = "2.5.0"
-globwalk = "0.9.1"
 
 # Unix-only dependency for signal handling
 [target.'cfg(unix)'.dependencies]
@@ -65,12 +64,12 @@ path = "src/bin/perl-dap.rs"
 [features]
 default = ["workspace"]  # Enable workspace indexing by default for cross-file features
 cli = []
-incremental = ["anyhow", "workspace"]  # Incremental parsing requires workspace types
+incremental = ["anyhow"]
 workspace = []  # Workspace-wide indexing for cross-file features
 test-compat = []  # Enables compatibility shim for old test API
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
-lsp-ga-lock = ["workspace"]  # LSP GA features require workspace types
+lsp-ga-lock = []
 experimental-features = []  # Experimental LSP features for testing
 
 # Aspirational features for tests that should eventually pass
@@ -80,8 +79,8 @@ package-qualified = []  # Package-qualified subroutine resolution
 error-classifier-v2 = []  # Next generation error classification
 lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
 expose_lsp_test_api = []  # Expose test helpers for integration tests
-modernize = ["workspace"]  # Code modernization features require workspace types
-workspace_refactor = ["workspace"]  # Advanced workspace refactoring requires workspace types
+workspace_refactor = []  # Workspace-wide refactoring capabilities
+modernize = []  # Code modernization transformations
 
 [build-dependencies]
 serde = { version = "1.0.227", features = ["derive"] }
