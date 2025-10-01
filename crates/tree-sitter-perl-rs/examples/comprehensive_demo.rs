@@ -1,6 +1,6 @@
 //! Comprehensive demonstration of tree-sitter-perl capabilities
 use tree_sitter_perl::{
-    EnhancedFullParser, pure_rust_parser::AstNode, sexp_formatter::SexpFormatter,
+    pure_rust_parser::AstNode, sexp_formatter::SexpFormatter, EnhancedFullParser,
 };
 
 fn main() {
@@ -232,7 +232,11 @@ fn collect_stats_recursive(node: &AstNode, depth: usize, stats: &mut Stats) {
 }
 
 fn truncate(s: &str, max_len: usize) -> &str {
-    if s.len() <= max_len { s } else { &s[..max_len.min(s.len())] }
+    if s.len() <= max_len {
+        s
+    } else {
+        &s[..max_len.min(s.len())]
+    }
 }
 
 #[derive(Default)]

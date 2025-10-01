@@ -305,7 +305,11 @@ impl ErrorRecoveryParser {
                     }
                 }
 
-                if consumed > 0 { Some(position + consumed) } else { None }
+                if consumed > 0 {
+                    Some(position + consumed)
+                } else {
+                    None
+                }
             }
         }
     }

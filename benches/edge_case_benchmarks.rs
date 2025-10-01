@@ -1,6 +1,6 @@
 //! Benchmarks for edge case detection and handling performance
 
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 
 #[cfg(feature = "pure-rust")]
 use criterion::BenchmarkId;

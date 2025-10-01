@@ -1,6 +1,6 @@
 //! Debug heredoc parsing to understand AST structure
 
-use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
+use tree_sitter_perl::{pure_rust_parser::AstNode, EnhancedFullParser};
 
 fn main() {
     println!("=== Heredoc Debugging ===\n");
