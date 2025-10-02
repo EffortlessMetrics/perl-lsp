@@ -74,6 +74,7 @@ impl<'source> SimpleParser<'source> {
             Token::Our => "our",
             Token::Local => "local",
             unexpected => {
+                // Note: This parser only supports my/our/local (no 'state' keyword support)
                 return Err(format!(
                     "Expected variable declaration keyword (my/our/local), found {:?} at position {}",
                     unexpected, self.current_pos

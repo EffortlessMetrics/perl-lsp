@@ -116,9 +116,13 @@ impl<'source> SimpleParser<'source> {
             Token::Local => "local",
             Token::State => "state",
             unexpected => {
+                // Error: Unexpected token in variable declaration context
+                // Expected one of: my, our, local, state
+                // This error occurs when the parser encounters an invalid token after parsing
+                // statement-level context that requires a variable declaration keyword.
                 return Err(format!(
-                    "Expected variable declaration keyword (my/our/local/state), found {:?} at position {}",
-                    unexpected, self.position
+                    "Expected variable declaration keyword (my/our/local/state), found {:?}",
+                    unexpected
                 ));
             }
         };

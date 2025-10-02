@@ -127,12 +127,13 @@ impl PatternDetector for FormatHeredocDetector {
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         let AntiPattern::FormatHeredoc { format_name, .. } = pattern else {
-            // This detector should only receive FormatHeredoc patterns.
-            // If we receive a different pattern type, it's a programming error in the detection pipeline.
+            // Defensive programming: This detector should only receive FormatHeredoc patterns
+            // through the anti-pattern detection pipeline. If we receive a different pattern
+            // type, it indicates a programming error in the pipeline routing logic.
             panic!(
-                "FormatHeredocDetector received incompatible pattern type: {:?}. \
-                 This indicates a bug in the anti-pattern detection pipeline. \
-                 Expected: AntiPattern::FormatHeredoc, Found: {:?}",
+                "FormatHeredocDetector received incompatible pattern type. \
+                 Expected: AntiPattern::FormatHeredoc, Found: {:?} (discriminant: {:?}). \
+                 This indicates a bug in the anti-pattern detection pipeline routing.",
                 pattern,
                 std::mem::discriminant(pattern)
             );
@@ -203,12 +204,13 @@ impl PatternDetector for BeginTimeHeredocDetector {
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         let AntiPattern::BeginTimeHeredoc { side_effects, .. } = pattern else {
-            // This detector should only receive BeginTimeHeredoc patterns.
-            // If we receive a different pattern type, it's a programming error in the detection pipeline.
+            // Defensive programming: This detector should only receive BeginTimeHeredoc patterns
+            // through the anti-pattern detection pipeline. If we receive a different pattern
+            // type, it indicates a programming error in the pipeline routing logic.
             panic!(
-                "BeginTimeHeredocDetector received incompatible pattern type: {:?}. \
-                 This indicates a bug in the anti-pattern detection pipeline. \
-                 Expected: AntiPattern::BeginTimeHeredoc, Found: {:?}",
+                "BeginTimeHeredocDetector received incompatible pattern type. \
+                 Expected: AntiPattern::BeginTimeHeredoc, Found: {:?} (discriminant: {:?}). \
+                 This indicates a bug in the anti-pattern detection pipeline routing.",
                 pattern,
                 std::mem::discriminant(pattern)
             );
@@ -264,12 +266,13 @@ impl PatternDetector for DynamicDelimiterDetector {
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         let AntiPattern::DynamicHeredocDelimiter { expression, .. } = pattern else {
-            // This detector should only receive DynamicHeredocDelimiter patterns.
-            // If we receive a different pattern type, it's a programming error in the detection pipeline.
+            // Defensive programming: This detector should only receive DynamicHeredocDelimiter patterns
+            // through the anti-pattern detection pipeline. If we receive a different pattern
+            // type, it indicates a programming error in the pipeline routing logic.
             panic!(
-                "DynamicDelimiterDetector received incompatible pattern type: {:?}. \
-                 This indicates a bug in the anti-pattern detection pipeline. \
-                 Expected: AntiPattern::DynamicHeredocDelimiter, Found: {:?}",
+                "DynamicDelimiterDetector received incompatible pattern type. \
+                 Expected: AntiPattern::DynamicHeredocDelimiter, Found: {:?} (discriminant: {:?}). \
+                 This indicates a bug in the anti-pattern detection pipeline routing.",
                 pattern,
                 std::mem::discriminant(pattern)
             );

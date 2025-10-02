@@ -281,9 +281,16 @@ impl TokenParser {
                         list: Box::new(list),
                         block: Box::new(block),
                     }),
+                    // Error: Invalid for-loop structure detected
+                    // Valid structures:
+                    //   - C-style: for (init; condition; update) { body }
+                    //   - Foreach: for my $var (list) { body }
+                    // This error indicates the parser found an incompatible combination of for-loop
+                    // components that doesn't match either of the valid Perl for-loop patterns.
                     _ => Err(Simple::custom(
                         span,
-                        "Invalid for-loop structure: for-loops require either (init; condition; update) for C-style loops or (variable in list) for foreach loops, but found incompatible combination"
+                        "Invalid for-loop structure: for-loops require either (init; condition; update) \
+                         for C-style loops or (variable in list) for foreach loops, but found incompatible combination"
                     )),
                 }
             })
@@ -387,14 +394,18 @@ impl TokenParser {
         ))
         .map_infix(|left, op, right| {
             match op {
-                // Defensive error handling: The Pratt parser should handle ternary operators
-                // at the appropriate precedence level. If we reach this point, it indicates
-                // a bug in the Pratt parser precedence configuration.
+                // Defensive programming: The Pratt parser should handle ternary operators (?)
+                // at the appropriate precedence level through the dedicated ternary operator
+                // configuration. If we reach this point in the infix position handler, it
+                // indicates a bug in the Pratt parser precedence configuration or operator
+                // routing logic.
                 Question => {
                     panic!(
                         "Unexpected ternary operator '?' in infix position. \
                          This should be handled by the Pratt parser precedence system. \
-                         This error indicates a potential bug in the parser implementation."
+                         Found: operator={:?}, left={:?}, right={:?}. \
+                         This error indicates a potential bug in the parser implementation.",
+                        op, left, right
                     );
                 }
                 _ => AstNode::BinaryOp {
