@@ -239,6 +239,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[File Completion Guide](docs/FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
 - **[Import Optimizer Guide](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Comprehensive import analysis and optimization
 - **[Threading Configuration Guide](docs/THREADING_CONFIGURATION_GUIDE.md)** - Adaptive threading and concurrency management
+- **[Error Handling Strategy Guide](docs/ERROR_HANDLING_STRATEGY.md)** - Defensive programming principles and guard condition patterns (Issue #178)
 - **[Conditional Documentation Compilation](docs/CONDITIONAL_DOCS_COMPILATION_STRATEGY.md)** - Performance-optimized missing_docs enforcement strategy
 
 ### Architecture Decision Records (ADRs)
