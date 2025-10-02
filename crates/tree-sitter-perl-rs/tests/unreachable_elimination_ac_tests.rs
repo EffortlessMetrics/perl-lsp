@@ -175,7 +175,10 @@ fn test_ac5_format_heredoc_detector_exhaustive_matching() {
     // uses exhaustive matching (let-else or match with fallback) instead of unreachable!()
 
     // Test passes to verify that the defensive pattern is documented and implemented
-    assert!(true, "Defensive error handling verified - FormatHeredocDetector exhaustive matching in place");
+    assert!(
+        true,
+        "Defensive error handling verified - FormatHeredocDetector exhaustive matching in place"
+    );
 }
 
 // AC:5 - Anti-Pattern Detector Exhaustive Matching (BeginTimeHeredocDetector)
@@ -198,7 +201,10 @@ fn test_ac5_begin_time_heredoc_detector_exhaustive_matching() {
     // uses exhaustive matching (let-else or match with fallback) instead of unreachable!()
 
     // Test passes to verify that the defensive pattern is documented and implemented
-    assert!(true, "Defensive error handling verified - BeginTimeHeredocDetector exhaustive matching in place");
+    assert!(
+        true,
+        "Defensive error handling verified - BeginTimeHeredocDetector exhaustive matching in place"
+    );
 }
 
 // AC:5 - Anti-Pattern Detector Exhaustive Matching (DynamicDelimiterDetector)
@@ -221,7 +227,10 @@ fn test_ac5_dynamic_delimiter_detector_exhaustive_matching() {
     // uses exhaustive matching (let-else or match with fallback) instead of unreachable!()
 
     // Test passes to verify that the defensive pattern is documented and implemented
-    assert!(true, "Defensive error handling verified - DynamicDelimiterDetector exhaustive matching in place");
+    assert!(
+        true,
+        "Defensive error handling verified - DynamicDelimiterDetector exhaustive matching in place"
+    );
 }
 
 // AC:6 - Regression Test for simple_parser_v2.rs:118
@@ -333,7 +342,10 @@ fn test_regression_anti_pattern_detector_line_142_format_heredoc_unreachable_pat
     // with exhaustive matching (let-else or match with fallback) for pattern type validation.
 
     // Test passes to verify the defensive pattern is in place
-    assert!(true, "Regression verified - anti_pattern_detector.rs:142 has defensive error handling");
+    assert!(
+        true,
+        "Regression verified - anti_pattern_detector.rs:142 has defensive error handling"
+    );
 }
 
 // AC:6 - Regression Test for anti_pattern_detector.rs:215
@@ -354,7 +366,10 @@ fn test_regression_anti_pattern_detector_line_215_begin_time_heredoc_unreachable
     // with exhaustive matching for pattern type validation.
 
     // Test passes to verify the defensive pattern is in place
-    assert!(true, "Regression verified - anti_pattern_detector.rs:215 has defensive error handling");
+    assert!(
+        true,
+        "Regression verified - anti_pattern_detector.rs:215 has defensive error handling"
+    );
 }
 
 // AC:6 - Regression Test for anti_pattern_detector.rs:262
@@ -375,7 +390,10 @@ fn test_regression_anti_pattern_detector_line_262_dynamic_delimiter_unreachable_
     // with exhaustive matching for pattern type validation.
 
     // Test passes to verify the defensive pattern is in place
-    assert!(true, "Regression verified - anti_pattern_detector.rs:262 has defensive error handling");
+    assert!(
+        true,
+        "Regression verified - anti_pattern_detector.rs:262 has defensive error handling"
+    );
 }
 
 // AC:8 - Production Code Audit for unreachable!()
@@ -476,7 +494,10 @@ fn test_ac4_question_token_error_message_format_validation() {
     // assumption and indicate that reaching this code path suggests a bug.
 
     // Test passes to verify format compliance is documented
-    assert!(true, "Question token error message format validation verified - API contract followed");
+    assert!(
+        true,
+        "Question token error message format validation verified - API contract followed"
+    );
 }
 
 // AC:5 - Anti-Pattern Detector Panic Message Validation
@@ -501,7 +522,10 @@ fn test_ac5_anti_pattern_detector_panic_message_format_validation() {
     // required components for debugging pattern type mismatches.
 
     // Test passes to verify format compliance is documented
-    assert!(true, "Anti-pattern detector panic message format validation verified - API contract followed");
+    assert!(
+        true,
+        "Anti-pattern detector panic message format validation verified - API contract followed"
+    );
 }
 
 // AC:1, AC3, AC4 - Parser Error Position Tracking Validation
@@ -547,7 +571,10 @@ fn test_parser_error_lsp_diagnostic_conversion_validation() {
     // following the Parse → Diagnostics workflow stage.
 
     // Test passes to verify LSP integration is documented
-    assert!(true, "LSP diagnostic conversion validation verified - error-to-diagnostic mapping in place");
+    assert!(
+        true,
+        "LSP diagnostic conversion validation verified - error-to-diagnostic mapping in place"
+    );
 }
 
 // Performance Validation - Happy Path Zero Overhead

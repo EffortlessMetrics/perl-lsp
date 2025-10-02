@@ -50,7 +50,10 @@ fn test_mutation_variable_declaration_error_messages() {
     // AC:10
     // Property-based test for error message quality
     // Expected: All error messages contain essential keywords
-    assert!(true, "Variable declaration error message quality verified - conceptual test for proptest patterns");
+    assert!(
+        true,
+        "Variable declaration error message quality verified - conceptual test for proptest patterns"
+    );
 }
 
 // Property-Based Testing - Error Position Accuracy
@@ -94,7 +97,10 @@ fn test_mutation_for_loop_error_structural_explanations() {
     // AC:10
     // Property-based test for for-loop error messages
     // Expected: Structural explanations with valid forms described
-    assert!(true, "For-loop error structural explanations verified - conceptual test for proptest patterns");
+    assert!(
+        true,
+        "For-loop error structural explanations verified - conceptual test for proptest patterns"
+    );
 }
 
 // Mutation Survivor Elimination - String Constant Mutation
@@ -138,7 +144,10 @@ fn test_mutation_survivor_arithmetic_operator_changes() {
     // AC:10
     // Test arithmetic operator mutation resistance
     // Expected: Position calculations remain accurate
-    assert!(true, "Arithmetic operator mutation resistance verified - position calculations accurate");
+    assert!(
+        true,
+        "Arithmetic operator mutation resistance verified - position calculations accurate"
+    );
 }
 
 // Mutation Survivor Elimination - Boolean Condition Mutation
@@ -226,7 +235,10 @@ fn test_mutation_error_message_format_consistency() {
     // AC:10
     // Property-based test for format consistency
     // Expected: All error messages follow API contract format
-    assert!(true, "Error message format consistency verified - conceptual test for proptest patterns");
+    assert!(
+        true,
+        "Error message format consistency verified - conceptual test for proptest patterns"
+    );
 }
 
 // Property-Based Testing - Error Recovery State Consistency
@@ -248,7 +260,10 @@ fn test_mutation_error_recovery_state_consistency() {
     // AC:10
     // Property-based test for state consistency after errors
     // Expected: Parser state remains consistent
-    assert!(true, "Error recovery state consistency verified - conceptual test for proptest patterns");
+    assert!(
+        true,
+        "Error recovery state consistency verified - conceptual test for proptest patterns"
+    );
 }
 
 // Edge Case Mutation - Empty Input
