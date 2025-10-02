@@ -46,10 +46,7 @@ fn test_ac2_lexer_substitution_operator_error_handling() {
     // AC:2
     // Test lexer substitution operator error handling
     // Expected: TokenType::Error for invalid operators (e.g., 'm' with delimiter)
-    assert!(
-        false,
-        "Not implemented - replace unreachable! in lib.rs:1385 with diagnostic token emission"
-    );
+    panic!("Not implemented - replace unreachable! in lib.rs:1385 with diagnostic token emission");
 }
 
 // AC:2 - Multiple Invalid Operators Test
@@ -66,10 +63,7 @@ fn test_ac2_multiple_invalid_substitution_operators() {
     // AC:2
     // Test multiple invalid operators in sequence
     // Expected: Multiple TokenType::Error tokens with descriptive messages
-    assert!(
-        false,
-        "Not implemented - validate lexer handles multiple invalid operators"
-    );
+    panic!("Not implemented - validate lexer handles multiple invalid operators");
 }
 
 // AC:2 - Error Token Position Accuracy
@@ -86,10 +80,7 @@ fn test_ac2_error_token_position_accuracy() {
     // AC:2
     // Test error token position information
     // Expected: Accurate start/end byte offsets for LSP range
-    assert!(
-        false,
-        "Not implemented - validate error token position accuracy"
-    );
+    panic!("Not implemented - validate error token position accuracy");
 }
 
 // AC:6 - Regression Test for lexer lib.rs:1385 unreachable path
@@ -106,10 +97,7 @@ fn test_regression_lexer_lib_line_1385_unreachable_path() {
     // AC:6
     // Directly trigger the previously-unreachable path
     // Expected: TokenType::Error instead of panic
-    assert!(
-        false,
-        "Not implemented - regression test for lib.rs:1385 unreachable! path"
-    );
+    panic!("Not implemented - regression test for lib.rs:1385 unreachable! path");
 }
 
 // AC:6 - Regression Test with Guard Bypass
@@ -126,10 +114,7 @@ fn test_regression_guard_bypass_scenarios() {
     // AC:6
     // Test operators that bypass guard but aren't s/tr/y
     // Expected: Error tokens instead of panic
-    assert!(
-        false,
-        "Not implemented - regression test for guard bypass scenarios"
-    );
+    panic!("Not implemented - regression test for guard bypass scenarios");
 }
 
 // AC:7 - Documentation Presence Validation
@@ -148,10 +133,7 @@ fn test_ac7_lexer_documentation_presence() {
     // AC:7
     // Verify no unreachable!() at line 1385 and documentation present
     // Expected: unreachable!() removed, error handling documented
-    assert!(
-        false,
-        "Not implemented - validate documentation for error handling in lib.rs"
-    );
+    panic!("Not implemented - validate documentation for error handling in lib.rs");
 }
 
 // AC:7 - Error Message Documentation Validation
@@ -171,10 +153,7 @@ fn test_ac7_error_message_documentation_compliance() {
     // AC:7
     // Validate error messages follow documented format
     // Expected: All components present in error messages
-    assert!(
-        false,
-        "Not implemented - validate error message format compliance"
-    );
+    panic!("Not implemented - validate error message format compliance");
 }
 
 // AC:10 - Mutation Hardening: Error Message Quality
@@ -191,10 +170,7 @@ fn test_mutation_lexer_error_message_quality() {
     // AC:10
     // Property-based test for error message quality
     // Expected: All error messages contain "unexpected", "expected", "position"
-    assert!(
-        false,
-        "Not implemented - property-based testing for error message quality with proptest"
-    );
+    panic!("Not implemented - property-based testing for error message quality with proptest");
 }
 
 // AC:10 - Mutation Hardening: Error Token Position Accuracy
@@ -211,10 +187,7 @@ fn test_mutation_error_token_position_tracking() {
     // AC:10
     // Property-based test for position accuracy
     // Expected: Error token positions match input positions
-    assert!(
-        false,
-        "Not implemented - property-based testing for position tracking with proptest"
-    );
+    panic!("Not implemented - property-based testing for position tracking with proptest");
 }
 
 // AC:10 - Mutation Hardening: Error Recovery Continuation
@@ -231,10 +204,7 @@ fn test_mutation_error_recovery_continuation() {
     // AC:10
     // Property-based test for error recovery
     // Expected: Lexer continues after errors, collects multiple error tokens
-    assert!(
-        false,
-        "Not implemented - property-based testing for error recovery with proptest"
-    );
+    panic!("Not implemented - property-based testing for error recovery with proptest");
 }
 
 // AC:10 - Mutation Hardening: Arc<str> Message Storage
@@ -251,10 +221,7 @@ fn test_mutation_arc_str_message_storage() {
     // AC:10
     // Test Arc<str> storage for error messages
     // Expected: Error messages use Arc<str> efficiently
-    assert!(
-        false,
-        "Not implemented - validate Arc<str> storage for error messages"
-    );
+    panic!("Not implemented - validate Arc<str> storage for error messages");
 }
 
 // LSP Integration - Lexer Error to Diagnostic Conversion
@@ -273,10 +240,7 @@ fn test_lexer_error_lsp_diagnostic_conversion() {
     // AC:2, LSP Integration
     // Validate error token to diagnostic conversion
     // Expected: DiagnosticSeverity::ERROR, accurate Range, source attribution
-    assert!(
-        false,
-        "Not implemented - validate LSP diagnostic conversion from error tokens"
-    );
+    panic!("Not implemented - validate LSP diagnostic conversion from error tokens");
 }
 
 // LSP Integration - Multiple Error Tokens Diagnostic Collection
@@ -293,10 +257,7 @@ fn test_multiple_error_tokens_diagnostic_collection() {
     // AC:2, LSP Integration
     // Validate multiple error tokens produce multiple diagnostics
     // Expected: Each error token maps to an LSP diagnostic
-    assert!(
-        false,
-        "Not implemented - validate multiple error diagnostic collection"
-    );
+    panic!("Not implemented - validate multiple error diagnostic collection");
 }
 
 // Performance - Happy Path Zero Overhead
@@ -313,10 +274,7 @@ fn test_performance_happy_path_zero_overhead() {
     // Performance validation
     // Validate zero overhead in happy path tokenization
     // Expected: <1% variance in tokenization throughput
-    assert!(
-        false,
-        "Not implemented - validate happy path performance with zero overhead"
-    );
+    panic!("Not implemented - validate happy path performance with zero overhead");
 }
 
 // Performance - Error Path Budget Compliance
@@ -333,10 +291,7 @@ fn test_performance_error_path_budget_compliance() {
     // Performance validation
     // Validate error path overhead stays within <5μs budget
     // Expected: Error token creation completes within performance budget
-    assert!(
-        false,
-        "Not implemented - validate error path performance budget compliance"
-    );
+    panic!("Not implemented - validate error path performance budget compliance");
 }
 
 // Edge Cases - Empty Operator
@@ -352,10 +307,7 @@ fn test_edge_case_empty_operator() {
     // AC:2, Edge Cases
     // Test empty operator string handling
     // Expected: Graceful error token or skip
-    assert!(
-        false,
-        "Not implemented - validate empty operator edge case handling"
-    );
+    panic!("Not implemented - validate empty operator edge case handling");
 }
 
 // Edge Cases - Unicode Operators
@@ -372,10 +324,7 @@ fn test_edge_case_unicode_operators() {
     // AC:2, Edge Cases
     // Test Unicode character handling in operator position
     // Expected: Graceful error token with Unicode-safe message
-    assert!(
-        false,
-        "Not implemented - validate Unicode operator edge case handling"
-    );
+    panic!("Not implemented - validate Unicode operator edge case handling");
 }
 
 // Edge Cases - Very Long Operator Strings
@@ -392,10 +341,7 @@ fn test_edge_case_very_long_operator_strings() {
     // AC:2, Edge Cases
     // Test very long operator string handling
     // Expected: Graceful error token with truncated or bounded message
-    assert!(
-        false,
-        "Not implemented - validate long operator string edge case handling"
-    );
+    panic!("Not implemented - validate long operator string edge case handling");
 }
 
 // Token Stream Validity - Error Tokens Integration
@@ -412,10 +358,7 @@ fn test_token_stream_validity_error_integration() {
     // AC:2, Token Stream
     // Test error token integration in token stream
     // Expected: Parser can process mixed valid/error token streams
-    assert!(
-        false,
-        "Not implemented - validate error token integration in token streams"
-    );
+    panic!("Not implemented - validate error token integration in token streams");
 }
 
 // Error Message Clarity - User-Facing Messages
@@ -432,8 +375,5 @@ fn test_error_message_clarity_user_facing() {
     // AC:7, Error Messages
     // Test error message clarity for users
     // Expected: Messages explain what's wrong and how to fix it
-    assert!(
-        false,
-        "Not implemented - validate error message clarity and actionability"
-    );
+    panic!("Not implemented - validate error message clarity and actionability");
 }
