@@ -126,20 +126,29 @@ impl PatternDetector for FormatHeredocDetector {
     }
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
-        if let AntiPattern::FormatHeredoc { format_name, .. } = pattern {
-            Diagnostic {
-                severity: Severity::Warning,
-                pattern: pattern.clone(),
-                message: format!("Format '{}' uses heredoc syntax", format_name),
-                explanation: "Perl formats are deprecated since Perl 5.8. Their interaction with heredocs can cause parsing ambiguities and maintenance issues.".to_string(),
-                suggested_fix: Some("Consider using sprintf, printf, or a templating module like Template::Toolkit instead:\n\nmy $report = sprintf(\"%-20s %10s\\n\", $name, $value);".to_string()),
-                references: vec![
-                    "perldoc perlform".to_string(),
-                    "https://perldoc.perl.org/perldiag#Use-of-uninitialized-value-in-format".to_string(),
-                ],
-            }
-        } else {
-            unreachable!()
+        let AntiPattern::FormatHeredoc { format_name, .. } = pattern else {
+            // Defensive programming: This detector should only receive FormatHeredoc patterns
+            // through the anti-pattern detection pipeline. If we receive a different pattern
+            // type, it indicates a programming error in the pipeline routing logic.
+            panic!(
+                "FormatHeredocDetector received incompatible pattern type. \
+                 Expected: AntiPattern::FormatHeredoc, Found: {:?} (discriminant: {:?}). \
+                 This indicates a bug in the anti-pattern detection pipeline routing.",
+                pattern,
+                std::mem::discriminant(pattern)
+            );
+        };
+
+        Diagnostic {
+            severity: Severity::Warning,
+            pattern: pattern.clone(),
+            message: format!("Format '{}' uses heredoc syntax", format_name),
+            explanation: "Perl formats are deprecated since Perl 5.8. Their interaction with heredocs can cause parsing ambiguities and maintenance issues.".to_string(),
+            suggested_fix: Some("Consider using sprintf, printf, or a templating module like Template::Toolkit instead:\n\nmy $report = sprintf(\"%-20s %10s\\n\", $name, $value);".to_string()),
+            references: vec![
+                "perldoc perlform".to_string(),
+                "https://perldoc.perl.org/perldiag#Use-of-uninitialized-value-in-format".to_string(),
+            ],
         }
     }
 }
@@ -194,25 +203,34 @@ impl PatternDetector for BeginTimeHeredocDetector {
     }
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
-        if let AntiPattern::BeginTimeHeredoc { side_effects, .. } = pattern {
-            let effects_str = if side_effects.is_empty() {
-                "No obvious side effects detected".to_string()
-            } else {
-                format!("Detected side effects: {}", side_effects.join(", "))
-            };
+        let AntiPattern::BeginTimeHeredoc { side_effects, .. } = pattern else {
+            // Defensive programming: This detector should only receive BeginTimeHeredoc patterns
+            // through the anti-pattern detection pipeline. If we receive a different pattern
+            // type, it indicates a programming error in the pipeline routing logic.
+            panic!(
+                "BeginTimeHeredocDetector received incompatible pattern type. \
+                 Expected: AntiPattern::BeginTimeHeredoc, Found: {:?} (discriminant: {:?}). \
+                 This indicates a bug in the anti-pattern detection pipeline routing.",
+                pattern,
+                std::mem::discriminant(pattern)
+            );
+        };
 
-            Diagnostic {
-                severity: Severity::Warning,
-                pattern: pattern.clone(),
-                message: "Heredoc in BEGIN block detected".to_string(),
-                explanation: format!("BEGIN blocks execute at compile time, making heredocs difficult to parse statically. {}", effects_str),
-                suggested_fix: Some("Move heredoc initialization to INIT block or runtime:\n\nour $config;\nINIT {\n    $config = <<'END';\n    ...\nEND\n}".to_string()),
-                references: vec![
-                    "perldoc perlmod#BEGIN,-UNITCHECK,-CHECK,-INIT-and-END".to_string(),
-                ],
-            }
+        let effects_str = if side_effects.is_empty() {
+            "No obvious side effects detected".to_string()
         } else {
-            unreachable!()
+            format!("Detected side effects: {}", side_effects.join(", "))
+        };
+
+        Diagnostic {
+            severity: Severity::Warning,
+            pattern: pattern.clone(),
+            message: "Heredoc in BEGIN block detected".to_string(),
+            explanation: format!("BEGIN blocks execute at compile time, making heredocs difficult to parse statically. {}", effects_str),
+            suggested_fix: Some("Move heredoc initialization to INIT block or runtime:\n\nour $config;\nINIT {\n    $config = <<'END';\n    ...\nEND\n}".to_string()),
+            references: vec![
+                "perldoc perlmod#BEGIN,-UNITCHECK,-CHECK,-INIT-and-END".to_string(),
+            ],
         }
     }
 }
@@ -247,19 +265,28 @@ impl PatternDetector for DynamicDelimiterDetector {
     }
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
-        if let AntiPattern::DynamicHeredocDelimiter { expression, .. } = pattern {
-            Diagnostic {
-                severity: Severity::Error,
-                pattern: pattern.clone(),
-                message: format!("Dynamic heredoc delimiter: {}", expression),
-                explanation: "Heredoc delimiters computed at runtime cannot be parsed statically. This makes the code unpredictable and potentially insecure.".to_string(),
-                suggested_fix: Some("Use a static delimiter with variable interpolation inside the heredoc:\n\nmy $content = <<\"END\";\nDynamic value: $variable\nEND".to_string()),
-                references: vec![
-                    "perldoc perlop#'<<EOF'".to_string(),
-                ],
-            }
-        } else {
-            unreachable!()
+        let AntiPattern::DynamicHeredocDelimiter { expression, .. } = pattern else {
+            // Defensive programming: This detector should only receive DynamicHeredocDelimiter patterns
+            // through the anti-pattern detection pipeline. If we receive a different pattern
+            // type, it indicates a programming error in the pipeline routing logic.
+            panic!(
+                "DynamicDelimiterDetector received incompatible pattern type. \
+                 Expected: AntiPattern::DynamicHeredocDelimiter, Found: {:?} (discriminant: {:?}). \
+                 This indicates a bug in the anti-pattern detection pipeline routing.",
+                pattern,
+                std::mem::discriminant(pattern)
+            );
+        };
+
+        Diagnostic {
+            severity: Severity::Error,
+            pattern: pattern.clone(),
+            message: format!("Dynamic heredoc delimiter: {}", expression),
+            explanation: "Heredoc delimiters computed at runtime cannot be parsed statically. This makes the code unpredictable and potentially insecure.".to_string(),
+            suggested_fix: Some("Use a static delimiter with variable interpolation inside the heredoc:\n\nmy $content = <<\"END\";\nDynamic value: $variable\nEND".to_string()),
+            references: vec![
+                "perldoc perlop#'<<EOF'".to_string(),
+            ],
         }
     }
 }
