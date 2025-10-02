@@ -127,9 +127,11 @@ impl PatternDetector for FormatHeredocDetector {
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         let AntiPattern::FormatHeredoc { format_name, .. } = pattern else {
-            // Defensive programming: This detector should only receive FormatHeredoc patterns
-            // through the anti-pattern detection pipeline. If we receive a different pattern
-            // type, it indicates a programming error in the pipeline routing logic.
+            // Defensive programming: Guard condition validates pipeline routing invariants.
+            // Expected: AntiPattern::FormatHeredoc pattern from anti-pattern detection pipeline
+            // Cause: Programming error in pipeline routing logic or type system violation
+            // Impact: Prevents silent data corruption; fails fast for debugging
+            // See: docs/ERROR_HANDLING_STRATEGY.md for guard condition patterns
             panic!(
                 "FormatHeredocDetector received incompatible pattern type. \
                  Expected: AntiPattern::FormatHeredoc, Found: {:?} (discriminant: {:?}). \
@@ -204,9 +206,11 @@ impl PatternDetector for BeginTimeHeredocDetector {
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         let AntiPattern::BeginTimeHeredoc { side_effects, .. } = pattern else {
-            // Defensive programming: This detector should only receive BeginTimeHeredoc patterns
-            // through the anti-pattern detection pipeline. If we receive a different pattern
-            // type, it indicates a programming error in the pipeline routing logic.
+            // Defensive programming: Guard condition validates pipeline routing invariants.
+            // Expected: AntiPattern::BeginTimeHeredoc pattern from anti-pattern detection pipeline
+            // Cause: Programming error in pipeline routing logic or type system violation
+            // Impact: Prevents silent data corruption; fails fast for debugging
+            // See: docs/ERROR_HANDLING_STRATEGY.md for guard condition patterns
             panic!(
                 "BeginTimeHeredocDetector received incompatible pattern type. \
                  Expected: AntiPattern::BeginTimeHeredoc, Found: {:?} (discriminant: {:?}). \
@@ -266,9 +270,11 @@ impl PatternDetector for DynamicDelimiterDetector {
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         let AntiPattern::DynamicHeredocDelimiter { expression, .. } = pattern else {
-            // Defensive programming: This detector should only receive DynamicHeredocDelimiter patterns
-            // through the anti-pattern detection pipeline. If we receive a different pattern
-            // type, it indicates a programming error in the pipeline routing logic.
+            // Defensive programming: Guard condition validates pipeline routing invariants.
+            // Expected: AntiPattern::DynamicHeredocDelimiter pattern from anti-pattern detection pipeline
+            // Cause: Programming error in pipeline routing logic or type system violation
+            // Impact: Prevents silent data corruption; fails fast for debugging
+            // See: docs/ERROR_HANDLING_STRATEGY.md for guard condition patterns
             panic!(
                 "DynamicDelimiterDetector received incompatible pattern type. \
                  Expected: AntiPattern::DynamicHeredocDelimiter, Found: {:?} (discriminant: {:?}). \
