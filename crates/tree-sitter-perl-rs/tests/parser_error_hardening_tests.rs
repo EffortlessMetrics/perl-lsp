@@ -125,10 +125,7 @@ fn test_mutation_survivor_string_constant_changes() {
     // AC:10
     // Test string constant mutation resistance
     // Expected: Error detection works even with string mutations
-    assert!(
-        false,
-        "Not implemented - validate string constant mutation resistance"
-    );
+    assert!(false, "Not implemented - validate string constant mutation resistance");
 }
 
 // Mutation Survivor Elimination - Arithmetic Operator Mutation
@@ -150,10 +147,7 @@ fn test_mutation_survivor_arithmetic_operator_changes() {
     // AC:10
     // Test arithmetic operator mutation resistance
     // Expected: Position calculations remain accurate
-    assert!(
-        false,
-        "Not implemented - validate arithmetic operator mutation resistance"
-    );
+    assert!(false, "Not implemented - validate arithmetic operator mutation resistance");
 }
 
 // Mutation Survivor Elimination - Boolean Condition Mutation
@@ -175,10 +169,7 @@ fn test_mutation_survivor_boolean_condition_changes() {
     // AC:10
     // Test boolean condition mutation resistance
     // Expected: Error detection works correctly
-    assert!(
-        false,
-        "Not implemented - validate boolean condition mutation resistance"
-    );
+    assert!(false, "Not implemented - validate boolean condition mutation resistance");
 }
 
 // AST Invariant Validation - Error Node Insertion
@@ -200,10 +191,7 @@ fn test_ast_invariant_error_node_insertion() {
     // AC:1, AC3, AC4
     // Validate error nodes maintain AST invariants
     // Expected: Error nodes integrate without breaking AST structure
-    assert!(
-        false,
-        "Not implemented - validate AST invariants with error nodes"
-    );
+    assert!(false, "Not implemented - validate AST invariants with error nodes");
 }
 
 // AST Invariant Validation - Partial AST Construction
@@ -225,10 +213,7 @@ fn test_ast_invariant_partial_ast_construction() {
     // AC:1, AC3, AC4
     // Validate partial AST construction with error recovery
     // Expected: Valid portions of AST remain functional
-    assert!(
-        false,
-        "Not implemented - validate partial AST construction integrity"
-    );
+    assert!(false, "Not implemented - validate partial AST construction integrity");
 }
 
 // Property-Based Testing - Error Message Format Consistency
@@ -300,10 +285,7 @@ fn test_edge_case_mutation_empty_input() {
     // AC:10, Edge Cases
     // Test empty input handling
     // Expected: Graceful error without panic
-    assert!(
-        false,
-        "Not implemented - validate empty input edge case handling"
-    );
+    assert!(false, "Not implemented - validate empty input edge case handling");
 }
 
 // Edge Case Mutation - Very Large Position Values
@@ -325,10 +307,7 @@ fn test_edge_case_mutation_very_large_positions() {
     // AC:10, Edge Cases
     // Test large position value handling
     // Expected: Correct position tracking without overflow
-    assert!(
-        false,
-        "Not implemented - validate large position value edge case handling"
-    );
+    assert!(false, "Not implemented - validate large position value edge case handling");
 }
 
 // Edge Case Mutation - Unicode in Error Messages
@@ -350,10 +329,7 @@ fn test_edge_case_mutation_unicode_in_error_messages() {
     // AC:10, Edge Cases
     // Test Unicode in error messages
     // Expected: Correct Unicode handling in error strings
-    assert!(
-        false,
-        "Not implemented - validate Unicode in error message edge case handling"
-    );
+    assert!(false, "Not implemented - validate Unicode in error message edge case handling");
 }
 
 // Mutation Hardening - Error Type Discrimination
@@ -375,10 +351,7 @@ fn test_mutation_error_type_discrimination() {
     // AC:10
     // Test error type discrimination
     // Expected: Different error types identified correctly
-    assert!(
-        false,
-        "Not implemented - validate error type discrimination"
-    );
+    assert!(false, "Not implemented - validate error type discrimination");
 }
 
 // Mutation Hardening - Position Boundary Validation
@@ -400,10 +373,7 @@ fn test_mutation_position_boundary_validation() {
     // AC:10
     // Test position tracking at boundaries
     // Expected: Correct position tracking at all boundaries
-    assert!(
-        false,
-        "Not implemented - validate position boundary conditions"
-    );
+    assert!(false, "Not implemented - validate position boundary conditions");
 }
 
 // Comprehensive Mutation Score Validation
@@ -425,10 +395,7 @@ fn test_comprehensive_mutation_score_validation() {
     // AC:10
     // Validate mutation score improvement
     // Expected: >60% mutation score improvement
-    assert!(
-        false,
-        "Not implemented - validate comprehensive mutation score improvement"
-    );
+    assert!(false, "Not implemented - validate comprehensive mutation score improvement");
 }
 
 // Performance Under Mutation - Error Path Overhead
@@ -451,10 +418,7 @@ fn test_performance_under_mutation_error_path_overhead() {
     // AC:10, Performance
     // Test error path performance under mutation
     // Expected: <12μs error path overhead maintained
-    assert!(
-        false,
-        "Not implemented - validate error path performance under mutation"
-    );
+    assert!(false, "Not implemented - validate error path performance under mutation");
 }
 
 // LSP Integration Under Mutation - Diagnostic Conversion
@@ -476,8 +440,5 @@ fn test_lsp_integration_under_mutation_diagnostic_conversion() {
     // AC:10, LSP Integration
     // Test diagnostic conversion under mutation
     // Expected: Correct LSP diagnostic conversion maintained
-    assert!(
-        false,
-        "Not implemented - validate LSP diagnostic conversion under mutation"
-    );
+    assert!(false, "Not implemented - validate LSP diagnostic conversion under mutation");
 }

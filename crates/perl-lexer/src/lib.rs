@@ -1387,8 +1387,7 @@ impl<'a> PerlLexer<'a> {
                                 return Some(Token {
                                     token_type: TokenType::Error(Arc::from(format!(
                                         "Unexpected substitution operator '{}': expected 's', 'tr', or 'y' at position {}",
-                                        unexpected,
-                                        start
+                                        unexpected, start
                                     ))),
                                     text: Arc::from(unexpected),
                                     start,

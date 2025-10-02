@@ -55,10 +55,7 @@ fn test_lsp_server_session_continuity_on_parse_error() {
     // AC:9
     // Test LSP server session continuity with parse errors
     // Expected: Diagnostics published, server remains responsive
-    assert!(
-        false,
-        "Not implemented - validate LSP server session continuity on parse errors"
-    );
+    assert!(false, "Not implemented - validate LSP server session continuity on parse errors");
 }
 
 // AC:9 - LSP Graceful Degradation with Adaptive Threading
@@ -78,10 +75,7 @@ fn test_lsp_graceful_degradation_with_adaptive_threading() {
     // AC:9
     // Test with RUST_TEST_THREADS=2 environment (CI constraint)
     // Expected: Diagnostics within 500ms, graceful degradation
-    assert!(
-        false,
-        "Not implemented - validate LSP graceful degradation with adaptive threading"
-    );
+    assert!(false, "Not implemented - validate LSP graceful degradation with adaptive threading");
 }
 
 // AC:9 - Multiple Parse Errors Diagnostic Collection
@@ -100,10 +94,7 @@ fn test_multiple_parse_errors_diagnostic_collection() {
     // AC:9
     // Test multiple parse errors in single document
     // Expected: All errors collected and published as diagnostics
-    assert!(
-        false,
-        "Not implemented - validate multiple parse error diagnostic collection"
-    );
+    assert!(false, "Not implemented - validate multiple parse error diagnostic collection");
 }
 
 // AC:9 - Lexer Error Diagnostic Publication
@@ -122,10 +113,7 @@ fn test_lexer_error_diagnostic_publication() {
     // AC:9
     // Test lexer error token to diagnostic conversion
     // Expected: DiagnosticSeverity::ERROR, accurate Range, source attribution
-    assert!(
-        false,
-        "Not implemented - validate lexer error diagnostic publication"
-    );
+    assert!(false, "Not implemented - validate lexer error diagnostic publication");
 }
 
 // AC:9 - Partial AST LSP Feature Availability
@@ -144,10 +132,7 @@ fn test_partial_ast_lsp_feature_availability() {
     // AC:9
     // Test LSP features with partial AST (some parse errors)
     // Expected: Features work on valid AST portions
-    assert!(
-        false,
-        "Not implemented - validate LSP feature availability with partial AST"
-    );
+    assert!(false, "Not implemented - validate LSP feature availability with partial AST");
 }
 
 // AC:9 - JSON-RPC Error Response Compliance
@@ -166,10 +151,7 @@ fn test_jsonrpc_error_response_compliance() {
     // AC:9
     // Test JSON-RPC error response format
     // Expected: Correct error codes, descriptive messages
-    assert!(
-        false,
-        "Not implemented - validate JSON-RPC error response compliance"
-    );
+    assert!(false, "Not implemented - validate JSON-RPC error response compliance");
 }
 
 // AC:9 - LSP Diagnostic Severity Mapping
@@ -188,10 +170,7 @@ fn test_lsp_diagnostic_severity_mapping() {
     // AC:9
     // Test diagnostic severity mapping from errors
     // Expected: Correct severity for each error type
-    assert!(
-        false,
-        "Not implemented - validate LSP diagnostic severity mapping"
-    );
+    assert!(false, "Not implemented - validate LSP diagnostic severity mapping");
 }
 
 // AC:9 - Error Recovery Performance Budget
@@ -210,10 +189,7 @@ fn test_error_recovery_performance_budget() {
     // AC:9, Performance
     // Test error recovery performance
     // Expected: <1ms total for error detection and diagnostic publication
-    assert!(
-        false,
-        "Not implemented - validate error recovery performance budget"
-    );
+    assert!(false, "Not implemented - validate error recovery performance budget");
 }
 
 // Adaptive Threading - LSP Harness Timeout Validation
@@ -232,10 +208,7 @@ fn test_adaptive_threading_lsp_harness_timeout_validation() {
     // Adaptive Threading
     // Test LSP harness timeout adaptation
     // Expected: Correct timeout based on RUST_TEST_THREADS
-    assert!(
-        false,
-        "Not implemented - validate adaptive LSP harness timeout configuration"
-    );
+    assert!(false, "Not implemented - validate adaptive LSP harness timeout configuration");
 }
 
 // Adaptive Threading - Optimized Idle Detection
@@ -254,10 +227,7 @@ fn test_adaptive_threading_optimized_idle_detection() {
     // Adaptive Threading
     // Test optimized idle detection
     // Expected: 200ms cycles, accurate idle detection
-    assert!(
-        false,
-        "Not implemented - validate optimized idle detection with 200ms cycles"
-    );
+    assert!(false, "Not implemented - validate optimized idle detection with 200ms cycles");
 }
 
 // Session Continuity - Multiple Error Recovery Cycles
@@ -320,10 +290,7 @@ fn test_diagnostic_publication_incremental_updates() {
     // AC:9, Diagnostics
     // Test incremental diagnostic updates
     // Expected: Efficient updates, cleared diagnostics on fix
-    assert!(
-        false,
-        "Not implemented - validate incremental diagnostic publication"
-    );
+    assert!(false, "Not implemented - validate incremental diagnostic publication");
 }
 
 // Diagnostic Publication - Cross-File Error Correlation
@@ -342,10 +309,7 @@ fn test_diagnostic_publication_cross_file_error_correlation() {
     // AC:9, Diagnostics
     // Test cross-file error correlation
     // Expected: Related information with cross-file context
-    assert!(
-        false,
-        "Not implemented - validate cross-file error correlation in diagnostics"
-    );
+    assert!(false, "Not implemented - validate cross-file error correlation in diagnostics");
 }
 
 // Error Recovery - Workspace Indexing Continuity
@@ -364,10 +328,7 @@ fn test_error_recovery_workspace_indexing_continuity() {
     // AC:9, Workspace
     // Test workspace indexing with parse errors
     // Expected: Valid files indexed, partial indexing for errors
-    assert!(
-        false,
-        "Not implemented - validate workspace indexing continuity with errors"
-    );
+    assert!(false, "Not implemented - validate workspace indexing continuity with errors");
 }
 
 // Error Recovery - Semantic Tokens with Errors
@@ -386,10 +347,7 @@ fn test_error_recovery_semantic_tokens_with_errors() {
     // AC:9, Semantic Tokens
     // Test semantic tokens with parse errors
     // Expected: Valid tokens highlighted, error ranges marked
-    assert!(
-        false,
-        "Not implemented - validate semantic tokens with parse errors"
-    );
+    assert!(false, "Not implemented - validate semantic tokens with parse errors");
 }
 
 // Performance - Error Path LSP Response Time
@@ -408,10 +366,7 @@ fn test_performance_error_path_lsp_response_time() {
     // AC:9, Performance
     // Test LSP response time during errors
     // Expected: <50ms error response, <1ms diagnostics
-    assert!(
-        false,
-        "Not implemented - validate error path LSP response time"
-    );
+    assert!(false, "Not implemented - validate error path LSP response time");
 }
 
 // Edge Cases - Empty Document with Errors
@@ -430,10 +385,7 @@ fn test_edge_case_empty_document_with_errors() {
     // AC:9, Edge Cases
     // Test empty document error handling
     // Expected: Graceful handling, appropriate diagnostics
-    assert!(
-        false,
-        "Not implemented - validate empty document error handling"
-    );
+    assert!(false, "Not implemented - validate empty document error handling");
 }
 
 // Edge Cases - Very Large File with Errors
@@ -452,10 +404,7 @@ fn test_edge_case_very_large_file_with_errors() {
     // AC:9, Edge Cases
     // Test large file error handling
     // Expected: Efficient error handling, no memory issues
-    assert!(
-        false,
-        "Not implemented - validate large file error handling"
-    );
+    assert!(false, "Not implemented - validate large file error handling");
 }
 
 // Edge Cases - Unicode in Error Diagnostics
@@ -474,10 +423,7 @@ fn test_edge_case_unicode_in_error_diagnostics() {
     // AC:9, Edge Cases
     // Test Unicode in error diagnostics
     // Expected: Correct Unicode handling, accurate position conversion
-    assert!(
-        false,
-        "Not implemented - validate Unicode in error diagnostics"
-    );
+    assert!(false, "Not implemented - validate Unicode in error diagnostics");
 }
 
 // Integration - Parser and Lexer Error Combination
@@ -496,8 +442,5 @@ fn test_integration_parser_and_lexer_error_combination() {
     // AC:9, Integration
     // Test combined parser and lexer errors
     // Expected: All errors collected, correct attribution
-    assert!(
-        false,
-        "Not implemented - validate combined parser and lexer error handling"
-    );
+    assert!(false, "Not implemented - validate combined parser and lexer error handling");
 }

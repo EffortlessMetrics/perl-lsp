@@ -214,10 +214,7 @@ fn test_regression_simple_parser_line_76_unreachable_path() {
     // AC:6
     // Directly trigger the previously-unreachable path
     // Expected: Descriptive error instead of panic
-    assert!(
-        false,
-        "Not implemented - regression test for simple_parser.rs:76 unreachable! path"
-    );
+    assert!(false, "Not implemented - regression test for simple_parser.rs:76 unreachable! path");
 }
 
 // AC:6 - Regression Test for token_parser.rs:284 (For-Loop Tuple Validation)
@@ -234,10 +231,7 @@ fn test_regression_token_parser_line_284_for_loop_unreachable_path() {
     // AC:6
     // Test invalid for-loop combinations
     // Expected: Descriptive error instead of panic
-    assert!(
-        false,
-        "Not implemented - regression test for token_parser.rs:284 unreachable! path"
-    );
+    assert!(false, "Not implemented - regression test for token_parser.rs:284 unreachable! path");
 }
 
 // AC:6 - Regression Test for token_parser.rs:388 (Question Token)
@@ -254,10 +248,7 @@ fn test_regression_token_parser_line_388_question_token_unreachable_path() {
     // AC:6
     // Attempt to construct scenario where Question token reaches map_infix
     // Expected: Descriptive error instead of panic
-    assert!(
-        false,
-        "Not implemented - regression test for token_parser.rs:388 unreachable! path"
-    );
+    assert!(false, "Not implemented - regression test for token_parser.rs:388 unreachable! path");
 }
 
 // AC:6 - Regression Test for anti_pattern_detector.rs:142
@@ -331,10 +322,7 @@ fn test_ac8_production_code_audit_no_undocumented_unreachable() {
     // AC:8
     // Verify no undocumented unreachable!() in production code
     // Expected: Zero occurrences of unreachable!() without safety documentation
-    assert!(
-        false,
-        "Not implemented - audit production code for unreachable!() macros"
-    );
+    assert!(false, "Not implemented - audit production code for unreachable!() macros");
 }
 
 // AC:1 - Error Message Format Validation
@@ -376,10 +364,7 @@ fn test_ac3_for_loop_error_message_format_validation() {
     // AC:3
     // Validate error message format compliance for for-loop errors
     // Expected: Structural explanation with valid vs invalid forms
-    assert!(
-        false,
-        "Not implemented - validate error message format for for-loop errors"
-    );
+    assert!(false, "Not implemented - validate error message format for for-loop errors");
 }
 
 // AC:4 - Question Token Error Message Format Validation
@@ -398,10 +383,7 @@ fn test_ac4_question_token_error_message_format_validation() {
     // AC:4
     // Validate error message format compliance for question token errors
     // Expected: Pratt parser explanation with bug indication
-    assert!(
-        false,
-        "Not implemented - validate error message format for question token errors"
-    );
+    assert!(false, "Not implemented - validate error message format for question token errors");
 }
 
 // AC:5 - Anti-Pattern Detector Panic Message Validation
@@ -441,10 +423,7 @@ fn test_parser_error_position_tracking_validation() {
     // AC:1, AC3, AC4
     // Validate position information in error messages
     // Expected: All errors include "at position {byte_offset}"
-    assert!(
-        false,
-        "Not implemented - validate position tracking in parser errors"
-    );
+    assert!(false, "Not implemented - validate position tracking in parser errors");
 }
 
 // AC:1, AC3, AC4 - LSP Diagnostic Conversion Validation
@@ -463,10 +442,7 @@ fn test_parser_error_lsp_diagnostic_conversion_validation() {
     // AC:1, AC3, AC4
     // Validate LSP diagnostic conversion from parser errors
     // Expected: DiagnosticSeverity::ERROR, accurate Range, source attribution
-    assert!(
-        false,
-        "Not implemented - validate LSP diagnostic conversion for parser errors"
-    );
+    assert!(false, "Not implemented - validate LSP diagnostic conversion for parser errors");
 }
 
 // Performance Validation - Happy Path Zero Overhead
@@ -483,10 +459,7 @@ fn test_performance_happy_path_zero_overhead() {
     // Performance validation
     // Validate zero overhead in happy path parsing
     // Expected: <1% variance in parsing throughput
-    assert!(
-        false,
-        "Not implemented - validate happy path performance with zero overhead"
-    );
+    assert!(false, "Not implemented - validate happy path performance with zero overhead");
 }
 
 // Performance Validation - Error Path Budget Compliance
@@ -503,8 +476,5 @@ fn test_performance_error_path_budget_compliance() {
     // Performance validation
     // Validate error path overhead stays within <12μs budget
     // Expected: Error handling completes within performance budget
-    assert!(
-        false,
-        "Not implemented - validate error path performance budget compliance"
-    );
+    assert!(false, "Not implemented - validate error path performance budget compliance");
 }

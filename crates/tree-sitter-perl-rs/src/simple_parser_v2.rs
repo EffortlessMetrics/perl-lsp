@@ -118,8 +118,7 @@ impl<'source> SimpleParser<'source> {
             unexpected => {
                 return Err(format!(
                     "Expected variable declaration keyword (my/our/local/state), found {:?} at position {}",
-                    unexpected,
-                    self.position
+                    unexpected, self.position
                 ));
             }
         };
