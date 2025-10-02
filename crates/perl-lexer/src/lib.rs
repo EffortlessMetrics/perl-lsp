@@ -1382,7 +1382,19 @@ impl<'a> PerlLexer<'a> {
                             "tr" | "y" => {
                                 return self.parse_transliteration(start);
                             }
-                            _ => unreachable!(),
+                            unexpected => {
+                                // Return diagnostic token instead of panicking
+                                return Some(Token {
+                                    token_type: TokenType::Error(Arc::from(format!(
+                                        "Unexpected substitution operator '{}': expected 's', 'tr', or 'y' at position {}",
+                                        unexpected,
+                                        start
+                                    ))),
+                                    text: Arc::from(unexpected),
+                                    start,
+                                    end: self.position,
+                                });
+                            }
                         }
                     }
                 }

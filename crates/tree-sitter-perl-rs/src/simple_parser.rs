@@ -73,7 +73,13 @@ impl<'source> SimpleParser<'source> {
             Token::My => "my",
             Token::Our => "our",
             Token::Local => "local",
-            _ => unreachable!(),
+            unexpected => {
+                return Err(format!(
+                    "Expected variable declaration keyword (my/our/local), found {:?} at position {}",
+                    unexpected,
+                    self.current_pos
+                ));
+            }
         };
 
         let var = self.parse_variable()?;
