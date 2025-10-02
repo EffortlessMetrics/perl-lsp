@@ -297,7 +297,10 @@ fn test_mutation_lexer_error_message_quality() {
     // AC:10
     // Property-based test for error message quality
     // Expected: All error messages contain "unexpected", "expected", "position"
-    assert!(true, "Error message quality validation verified - conceptual test for proptest patterns");
+    assert!(
+        true,
+        "Error message quality validation verified - conceptual test for proptest patterns"
+    );
 }
 
 // AC:10 - Mutation Hardening: Error Token Position Accuracy
@@ -348,7 +351,10 @@ fn test_mutation_arc_str_message_storage() {
     // AC:10
     // Test Arc<str> storage for error messages
     // Expected: Error messages use Arc<str> efficiently
-    assert!(true, "Arc<str> storage validation verified - efficient error message storage in place");
+    assert!(
+        true,
+        "Arc<str> storage validation verified - efficient error message storage in place"
+    );
 }
 
 // LSP Integration - Lexer Error to Diagnostic Conversion
@@ -367,7 +373,10 @@ fn test_lexer_error_lsp_diagnostic_conversion() {
     // AC:2, LSP Integration
     // Validate error token to diagnostic conversion
     // Expected: DiagnosticSeverity::ERROR, accurate Range, source attribution
-    assert!(true, "LSP diagnostic conversion verified - error token to diagnostic mapping in place");
+    assert!(
+        true,
+        "LSP diagnostic conversion verified - error token to diagnostic mapping in place"
+    );
 }
 
 // LSP Integration - Multiple Error Tokens Diagnostic Collection
@@ -384,7 +393,10 @@ fn test_multiple_error_tokens_diagnostic_collection() {
     // AC:2, LSP Integration
     // Validate multiple error tokens produce multiple diagnostics
     // Expected: Each error token maps to an LSP diagnostic
-    assert!(true, "Multiple error diagnostic collection verified - comprehensive error reporting in place");
+    assert!(
+        true,
+        "Multiple error diagnostic collection verified - comprehensive error reporting in place"
+    );
 }
 
 // Performance - Happy Path Zero Overhead

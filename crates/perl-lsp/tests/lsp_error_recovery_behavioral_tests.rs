@@ -55,7 +55,10 @@ fn test_lsp_server_session_continuity_on_parse_error() {
     // AC:9
     // Test LSP server session continuity with parse errors
     // Expected: Diagnostics published, server remains responsive
-    assert!(true, "LSP server session continuity verified - diagnostics published, server responsive");
+    assert!(
+        true,
+        "LSP server session continuity verified - diagnostics published, server responsive"
+    );
 }
 
 // AC:9 - LSP Graceful Degradation with Adaptive Threading
@@ -75,7 +78,10 @@ fn test_lsp_graceful_degradation_with_adaptive_threading() {
     // AC:9
     // Test with RUST_TEST_THREADS=2 environment (CI constraint)
     // Expected: Diagnostics within 500ms, graceful degradation
-    assert!(true, "LSP graceful degradation with adaptive threading verified - performance within budget");
+    assert!(
+        true,
+        "LSP graceful degradation with adaptive threading verified - performance within budget"
+    );
 }
 
 // AC:9 - Multiple Parse Errors Diagnostic Collection
@@ -94,7 +100,10 @@ fn test_multiple_parse_errors_diagnostic_collection() {
     // AC:9
     // Test multiple parse errors in single document
     // Expected: All errors collected and published as diagnostics
-    assert!(true, "Multiple parse error diagnostic collection verified - comprehensive error reporting");
+    assert!(
+        true,
+        "Multiple parse error diagnostic collection verified - comprehensive error reporting"
+    );
 }
 
 // AC:9 - Lexer Error Diagnostic Publication
@@ -113,7 +122,10 @@ fn test_lexer_error_diagnostic_publication() {
     // AC:9
     // Test lexer error token to diagnostic conversion
     // Expected: DiagnosticSeverity::ERROR, accurate Range, source attribution
-    assert!(true, "Lexer error diagnostic publication verified - error token to diagnostic conversion");
+    assert!(
+        true,
+        "Lexer error diagnostic publication verified - error token to diagnostic conversion"
+    );
 }
 
 // AC:9 - Partial AST LSP Feature Availability
@@ -132,7 +144,10 @@ fn test_partial_ast_lsp_feature_availability() {
     // AC:9
     // Test LSP features with partial AST (some parse errors)
     // Expected: Features work on valid AST portions
-    assert!(true, "Partial AST LSP feature availability verified - features work on valid portions");
+    assert!(
+        true,
+        "Partial AST LSP feature availability verified - features work on valid portions"
+    );
 }
 
 // AC:9 - JSON-RPC Error Response Compliance
@@ -170,7 +185,10 @@ fn test_lsp_diagnostic_severity_mapping() {
     // AC:9
     // Test diagnostic severity mapping from errors
     // Expected: Correct severity for each error type
-    assert!(true, "LSP diagnostic severity mapping verified - correct severity for each error type");
+    assert!(
+        true,
+        "LSP diagnostic severity mapping verified - correct severity for each error type"
+    );
 }
 
 // AC:9 - Error Recovery Performance Budget
@@ -275,7 +293,10 @@ fn test_session_continuity_error_during_lsp_operation() {
     // work correctly even when there are parse errors, using partial AST.
 
     // Test passes to verify error-resilient LSP operations are documented
-    assert!(true, "Error during LSP operation verified - operations complete or gracefully degrade");
+    assert!(
+        true,
+        "Error during LSP operation verified - operations complete or gracefully degrade"
+    );
 }
 
 // Diagnostic Publication - Incremental Updates
@@ -294,7 +315,10 @@ fn test_diagnostic_publication_incremental_updates() {
     // AC:9, Diagnostics
     // Test incremental diagnostic updates
     // Expected: Efficient updates, cleared diagnostics on fix
-    assert!(true, "Incremental diagnostic publication verified - efficient updates, cleared on fix");
+    assert!(
+        true,
+        "Incremental diagnostic publication verified - efficient updates, cleared on fix"
+    );
 }
 
 // Diagnostic Publication - Cross-File Error Correlation
@@ -332,7 +356,10 @@ fn test_error_recovery_workspace_indexing_continuity() {
     // AC:9, Workspace
     // Test workspace indexing with parse errors
     // Expected: Valid files indexed, partial indexing for errors
-    assert!(true, "Workspace indexing continuity verified - valid files indexed, partial for errors");
+    assert!(
+        true,
+        "Workspace indexing continuity verified - valid files indexed, partial for errors"
+    );
 }
 
 // Error Recovery - Semantic Tokens with Errors
@@ -351,7 +378,10 @@ fn test_error_recovery_semantic_tokens_with_errors() {
     // AC:9, Semantic Tokens
     // Test semantic tokens with parse errors
     // Expected: Valid tokens highlighted, error ranges marked
-    assert!(true, "Semantic tokens with errors verified - valid tokens highlighted, error ranges marked");
+    assert!(
+        true,
+        "Semantic tokens with errors verified - valid tokens highlighted, error ranges marked"
+    );
 }
 
 // Performance - Error Path LSP Response Time
@@ -389,7 +419,10 @@ fn test_edge_case_empty_document_with_errors() {
     // AC:9, Edge Cases
     // Test empty document error handling
     // Expected: Graceful handling, appropriate diagnostics
-    assert!(true, "Empty document error handling verified - graceful handling, appropriate diagnostics");
+    assert!(
+        true,
+        "Empty document error handling verified - graceful handling, appropriate diagnostics"
+    );
 }
 
 // Edge Cases - Very Large File with Errors
@@ -446,5 +479,8 @@ fn test_integration_parser_and_lexer_error_combination() {
     // AC:9, Integration
     // Test combined parser and lexer errors
     // Expected: All errors collected, correct attribution
-    assert!(true, "Combined parser and lexer errors verified - all errors collected, correct attribution");
+    assert!(
+        true,
+        "Combined parser and lexer errors verified - all errors collected, correct attribution"
+    );
 }
