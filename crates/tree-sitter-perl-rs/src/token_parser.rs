@@ -287,10 +287,13 @@ impl TokenParser {
                     //   - Foreach: for my $var (list) { body }
                     // This error indicates the parser found an incompatible combination of for-loop
                     // components that doesn't match either of the valid Perl for-loop patterns.
+                    // Common causes: Missing semicolons in C-style for, wrong parenthesis placement,
+                    // or mixing C-style and foreach syntax.
                     _ => Err(Simple::custom(
                         span,
-                        "Invalid for-loop structure: for-loops require either (init; condition; update) \
-                         for C-style loops or (variable in list) for foreach loops, but found incompatible combination"
+                        "Invalid for-loop structure: expected either (init; condition; update) \
+                         for C-style loops or (variable in list) for foreach loops. \
+                         Check for missing semicolons or mixed syntax."
                     )),
                 }
             })
