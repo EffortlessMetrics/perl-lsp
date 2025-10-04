@@ -101,8 +101,8 @@ proptest! {
         );
 
         // If line is within bounds, column should be reasonable
-        if line < line_count {
-            if let Some(line_text) = text.lines().nth(line as usize) {
+        if line < line_count
+            && let Some(line_text) = text.lines().nth(line as usize) {
                 let line_utf16_len = line_text.encode_utf16().count() as u32;
                 prop_assert!(
                     col <= line_utf16_len,
@@ -110,7 +110,6 @@ proptest! {
                     col, line_utf16_len, line, offset, text
                 );
             }
-        }
     }
 
     /// Property: Monotonicity - later byte offsets should not produce earlier positions

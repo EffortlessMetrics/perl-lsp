@@ -833,7 +833,7 @@ impl LspHarness {
         );
 
         // If it responds (even with error), server is alive
-        ping_result.is_ok() || ping_result.err().map_or(false, |e| !e.contains("timed out"))
+        ping_result.is_ok() || ping_result.err().is_some_and(|e| !e.contains("timed out"))
     }
 }
 

@@ -911,7 +911,7 @@ fn test_incremental_parsing_performance_preservation_ac12() {
     }
 
     let _content = generate_large_perl_content(5000); // 5K lines for realistic testing
-    let _changes = vec![
+    let _changes = [
         TextChange {
             range: Range::new(Position::new(100, 0), Position::new(100, 0)),
             text: "# Added comment for testing\n".to_string(),

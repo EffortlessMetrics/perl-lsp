@@ -273,7 +273,7 @@ fn test_modern_perl_features() {
         "use experimental 'signatures'; sub add($x, $y) { $x + $y }",
     ];
 
-    for (_i, input) in test_cases.iter().enumerate() {
+    for input in test_cases.iter() {
         let mut parser = Parser::new(input);
         let result = parser.parse();
 

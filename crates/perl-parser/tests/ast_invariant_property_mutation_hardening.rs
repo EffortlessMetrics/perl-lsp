@@ -40,9 +40,9 @@ fn count_parentheses_balance(s: &str) -> i32 {
     let mut in_double_string = false;
     let mut in_single_string = false;
     let mut escape_next = false;
-    let mut chars = normalized.chars().peekable();
+    let chars = normalized.chars().peekable();
 
-    while let Some(ch) = chars.next() {
+    for ch in chars {
         if escape_next {
             escape_next = false;
             continue;
@@ -137,7 +137,7 @@ mod ast_analysis {
             // Record parent-child relationships (targets relationship mutations)
             if let Some(parent_ptr) = parent {
                 self.child_parent_map.insert(node_ptr, parent_ptr);
-                self.parent_child_map.entry(parent_ptr).or_insert_with(Vec::new).push(node_ptr);
+                self.parent_child_map.entry(parent_ptr).or_default().push(node_ptr);
             }
 
             // Record position information (targets position arithmetic mutations)
@@ -246,10 +246,10 @@ mod ast_analysis {
             let mut rec_stack = HashSet::new();
 
             for &node_ptr in self.nodes_visited.iter() {
-                if !visited.contains(&node_ptr) {
-                    if self.has_cycle_dfs(node_ptr, &mut visited, &mut rec_stack) {
-                        return false; // Cycle detected
-                    }
+                if !visited.contains(&node_ptr)
+                    && self.has_cycle_dfs(node_ptr, &mut visited, &mut rec_stack)
+                {
+                    return false; // Cycle detected
                 }
             }
             true // No cycles found

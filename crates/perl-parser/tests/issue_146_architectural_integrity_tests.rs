@@ -15,7 +15,7 @@ mod issue_146_tests {
     fn test_tdd_workflow_compilation_fix() {
         // Test that tdd_workflow.rs compiles without the undefined signature error
         let output = Command::new("cargo")
-            .args(&["check", "--package", "perl-parser", "--message-format", "json"])
+            .args(["check", "--package", "perl-parser", "--message-format", "json"])
             .output()
             .expect("Failed to run cargo check");
 
@@ -113,7 +113,7 @@ mod integration_tests {
     #[test]
     fn test_full_crate_compilation() {
         let output = Command::new("cargo")
-            .args(&["build", "--package", "perl-parser"])
+            .args(["build", "--package", "perl-parser"])
             .output()
             .expect("Failed to run cargo build");
 
@@ -128,7 +128,7 @@ mod integration_tests {
     #[test]
     fn test_clippy_compliance() {
         let output = Command::new("cargo")
-            .args(&["clippy", "--package", "perl-parser", "--", "-D", "warnings"])
+            .args(["clippy", "--package", "perl-parser", "--", "-D", "warnings"])
             .output()
             .expect("Failed to run cargo clippy");
 
@@ -147,7 +147,7 @@ mod integration_tests {
         // after tdd_workflow.rs and refactoring.rs are restored
 
         let output = Command::new("cargo")
-            .args(&["test", "--package", "perl-lsp", "--test", "lsp_comprehensive_e2e_test"])
+            .args(["test", "--package", "perl-lsp", "--test", "lsp_comprehensive_e2e_test"])
             .output()
             .expect("Failed to run LSP E2E tests");
 

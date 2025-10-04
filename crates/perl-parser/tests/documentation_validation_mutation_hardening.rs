@@ -206,10 +206,10 @@ mod mock_doc_analysis {
 
         // First pass: collect function definitions
         for (line_num, line) in lines.iter().enumerate() {
-            if line.contains("fn ") || line.contains("pub fn ") {
-                if let Some(func_name) = extract_function_name(line) {
-                    known_functions.insert(func_name, line_num);
-                }
+            if (line.contains("fn ") || line.contains("pub fn "))
+                && let Some(func_name) = extract_function_name(line)
+            {
+                known_functions.insert(func_name, line_num);
             }
         }
 
@@ -226,14 +226,14 @@ mod mock_doc_analysis {
                         CrossRefType::Function => {
                             // Target boolean logic mutations in function validation
                             // Fixed: Use proper if/else conditional logic instead of boolean-to-duration multiplication casting
-                            if !known_functions.contains_key(&ref_text) {
-                                if !is_external_reference(&ref_text) {
-                                    invalid_refs.push(format!(
-                                        "Line {}: Unknown function reference: [`{}`]",
-                                        line_num + 1,
-                                        ref_text
-                                    ));
-                                }
+                            if !known_functions.contains_key(&ref_text)
+                                && !is_external_reference(&ref_text)
+                            {
+                                invalid_refs.push(format!(
+                                    "Line {}: Unknown function reference: [`{}`]",
+                                    line_num + 1,
+                                    ref_text
+                                ));
                             }
                         }
                         CrossRefType::Malformed => {
@@ -1002,7 +1002,7 @@ mod documentation_ci_integration_tests {
                         scenario_name
                     );
                     assert!(
-                        malformed.len() > 0 || invalid_refs.len() > 0,
+                        !malformed.is_empty() || !invalid_refs.is_empty(),
                         "Should detect structural errors in {}",
                         scenario_name
                     );

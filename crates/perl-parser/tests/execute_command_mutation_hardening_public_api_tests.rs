@@ -21,7 +21,6 @@
 use perl_parser::execute_command::{ExecuteCommandProvider, get_supported_commands};
 use serde_json::Value;
 use std::fs;
-use tempfile::NamedTempFile;
 
 // ============= RETURN VALUE BYPASS MUTATION KILLERS =============
 // Target: Functions returning Ok(Default::default()) instead of proper results
@@ -284,7 +283,7 @@ fn test_parameter_validation_comprehensive() {
         );
 
         // Test with invalid argument types
-        let invalid_args = vec![
+        let invalid_args = [
             vec![Value::Null],
             vec![Value::Bool(true)],
             vec![Value::Number(serde_json::Number::from(123))],
@@ -445,7 +444,7 @@ fn test_response_structure_validation() {
 
         // Verify severity is reasonable
         let severity = first_violation["severity"].as_u64().unwrap();
-        assert!(severity >= 1 && severity <= 5, "Severity should be 1-5, got: {}", severity);
+        assert!((1..=5).contains(&severity), "Severity should be 1-5, got: {}", severity);
     }
 
     // Clean up

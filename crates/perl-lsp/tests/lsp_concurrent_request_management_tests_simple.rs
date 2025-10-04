@@ -161,7 +161,7 @@ fn test_performance_metrics_collection_ac3() {
     initialize_lsp(&mut server);
 
     // Test different types of requests to collect varied metrics
-    let request_types = vec![
+    let request_types = [
         "textDocument/documentSymbol",
         "textDocument/hover",
         "textDocument/definition",

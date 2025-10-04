@@ -694,7 +694,7 @@ fn test_error_recovery_state_consistency() {
 #[test]
 // Test complete workflow integration
 fn test_complete_workflow_integration() {
-    let (mut harness, workspace) = create_execute_command_server();
+    let (harness, workspace) = create_execute_command_server();
 
     // Test the complete workflow: open -> analyze -> results
     let workflow_content = r#"#!/usr/bin/perl
