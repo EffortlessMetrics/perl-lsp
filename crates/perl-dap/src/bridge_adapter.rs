@@ -27,6 +27,9 @@
 use anyhow::{Context, Result};
 use std::process::{Child, Command, Stdio};
 
+/// Perl debugger flag to activate DAP protocol mode in Perl::LanguageServer
+const PLS_DAP_FLAG: &str = "-d:LanguageServer::DAP";
+
 /// Bridge adapter that proxies DAP messages to Perl::LanguageServer
 ///
 /// This adapter spawns Perl::LanguageServer in DAP mode and forwards
@@ -79,9 +82,8 @@ impl BridgeAdapter {
             crate::platform::resolve_perl_path().context("Failed to find perl binary on PATH")?;
 
         // Spawn Perl::LanguageServer in DAP mode
-        // The -d:LanguageServer::DAP flag activates DAP protocol mode
         let child = Command::new(perl_path)
-            .arg("-d:LanguageServer::DAP")
+            .arg(PLS_DAP_FLAG)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())

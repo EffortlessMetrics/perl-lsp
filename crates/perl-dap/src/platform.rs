@@ -37,6 +37,18 @@ use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
+/// Platform-specific path separator for environment variables like PERL5LIB and PATH
+#[cfg(windows)]
+const PATH_SEPARATOR: char = ';';
+#[cfg(not(windows))]
+const PATH_SEPARATOR: char = ':';
+
+/// Platform-specific Perl executable name
+#[cfg(windows)]
+const PERL_EXECUTABLE: &str = "perl.exe";
+#[cfg(not(windows))]
+const PERL_EXECUTABLE: &str = "perl";
+
 /// Resolve the perl binary path on the current platform
 ///
 /// This function searches for the perl binary on the system PATH.
@@ -65,17 +77,9 @@ pub fn resolve_perl_path() -> Result<PathBuf> {
     // Get PATH environment variable
     let path_env = env::var("PATH").context("PATH environment variable not set")?;
 
-    // Platform-specific executable name
-    #[cfg(windows)]
-    let perl_exe = "perl.exe";
-    #[cfg(not(windows))]
-    let perl_exe = "perl";
-
-    // Search PATH directories
-    let path_separator = if cfg!(windows) { ';' } else { ':' };
-
-    for path_dir in path_env.split(path_separator) {
-        let perl_path = PathBuf::from(path_dir).join(perl_exe);
+    // Search PATH directories for perl executable
+    for path_dir in path_env.split(PATH_SEPARATOR) {
+        let perl_path = PathBuf::from(path_dir).join(PERL_EXECUTABLE);
         if perl_path.exists() && perl_path.is_file() {
             return Ok(perl_path);
         }
@@ -186,12 +190,11 @@ pub fn setup_environment(include_paths: &[PathBuf]) -> HashMap<String, String> {
 
     if !include_paths.is_empty() {
         // Join paths with platform-specific separator
-        let path_separator = if cfg!(windows) { ';' } else { ':' };
         let perl5lib = include_paths
             .iter()
             .map(|p| p.to_string_lossy().to_string())
             .collect::<Vec<_>>()
-            .join(&path_separator.to_string());
+            .join(&PATH_SEPARATOR.to_string());
 
         env.insert("PERL5LIB".to_string(), perl5lib);
     }
