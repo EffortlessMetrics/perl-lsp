@@ -31,7 +31,7 @@
 //! cargo bench -p perl-dap -- --measurement-time 5
 //! ```
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use perl_dap::configuration::{AttachConfiguration, LaunchConfiguration};
 use perl_dap::platform::{
     format_command_args, normalize_path, resolve_perl_path, setup_environment,
@@ -319,11 +319,7 @@ fn benchmark_arg_formatting(c: &mut Criterion) {
     });
 
     group.bench_function("arg_formatting_with_spaces", |b| {
-        let args = vec![
-            "simple".to_string(),
-            "with space".to_string(),
-            "another arg".to_string(),
-        ];
+        let args = vec!["simple".to_string(), "with space".to_string(), "another arg".to_string()];
         b.iter(|| {
             black_box(format_command_args(black_box(&args)));
         })
