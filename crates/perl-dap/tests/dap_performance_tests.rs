@@ -5,7 +5,6 @@
 //! Specification: docs/DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-performance-benchmarks
 
 use anyhow::Result;
-use std::time::Instant;
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-step-continue-latency
 #[tokio::test]
