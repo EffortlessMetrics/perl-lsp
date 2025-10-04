@@ -39,6 +39,28 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// Validate that a path exists and is a file
+fn validate_file_exists(path: &Path, description: &str) -> Result<()> {
+    if !path.exists() {
+        anyhow::bail!("{} does not exist: {}", description, path.display());
+    }
+    if !path.is_file() {
+        anyhow::bail!("{} is not a file: {}", description, path.display());
+    }
+    Ok(())
+}
+
+/// Validate that a path exists and is a directory
+fn validate_directory_exists(path: &Path, description: &str) -> Result<()> {
+    if !path.exists() {
+        anyhow::bail!("{} does not exist: {}", description, path.display());
+    }
+    if !path.is_dir() {
+        anyhow::bail!("{} is not a directory: {}", description, path.display());
+    }
+    Ok(())
+}
+
 /// Launch configuration for starting a new Perl debugging session
 ///
 /// This configuration is used when starting a new Perl process for debugging.
@@ -165,30 +187,16 @@ impl LaunchConfiguration {
     /// ```
     pub fn validate(&self) -> Result<()> {
         // Verify program exists
-        if !self.program.exists() {
-            anyhow::bail!("Program file does not exist: {}", self.program.display());
-        }
-
-        if !self.program.is_file() {
-            anyhow::bail!("Program path is not a file: {}", self.program.display());
-        }
+        validate_file_exists(&self.program, "Program file")?;
 
         // Verify working directory exists (if specified)
         if let Some(ref cwd) = self.cwd {
-            if !cwd.exists() {
-                anyhow::bail!("Working directory does not exist: {}", cwd.display());
-            }
-
-            if !cwd.is_dir() {
-                anyhow::bail!("Working directory is not a directory: {}", cwd.display());
-            }
+            validate_directory_exists(cwd, "Working directory")?;
         }
 
         // Verify perl binary exists (if specified)
-        if let Some(ref perl_path) = self.perl_path
-            && !perl_path.exists()
-        {
-            anyhow::bail!("Perl binary does not exist: {}", perl_path.display());
+        if let Some(ref perl_path) = self.perl_path {
+            validate_file_exists(perl_path, "Perl binary")?;
         }
 
         Ok(())
@@ -244,7 +252,8 @@ pub fn create_launch_json_snippet() -> String {
         "cwd": "${workspaceFolder}",
         "env": {}
     });
-    serde_json::to_string_pretty(&json).unwrap()
+    serde_json::to_string_pretty(&json)
+        .expect("Failed to serialize launch.json snippet - this is a bug")
 }
 
 /// Create an attach.json configuration snippet
@@ -275,7 +284,8 @@ pub fn create_attach_json_snippet() -> String {
         "port": 13603,
         "timeout": 5000
     });
-    serde_json::to_string_pretty(&json).unwrap()
+    serde_json::to_string_pretty(&json)
+        .expect("Failed to serialize attach.json snippet - this is a bug")
 }
 
 #[cfg(test)]

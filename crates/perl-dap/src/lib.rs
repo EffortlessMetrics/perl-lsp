@@ -99,17 +99,40 @@ pub use configuration::{
     create_launch_json_snippet,
 };
 
-/// Placeholder for DAP server configuration
+/// DAP server configuration (Phase 2 placeholder)
+///
+/// This configuration structure will be enhanced in Phase 2 (AC5-AC12) to support:
+/// - Session management settings
+/// - Breakpoint validation options
+/// - Performance tuning parameters
+/// - Security constraints
 pub struct DapConfig {
+    /// Logging level for DAP operations
     pub log_level: String,
 }
 
-/// Placeholder for DAP server
+/// DAP server (Phase 2 placeholder)
+///
+/// This server will be fully implemented in Phase 2 (AC5-AC12) with:
+/// - Native Rust DAP protocol implementation
+/// - AST-based breakpoint validation
+/// - Lazy variable expansion
+/// - Safe evaluation context
 pub struct DapServer {
+    /// Server configuration
     pub config: DapConfig,
 }
 
 impl DapServer {
+    /// Create a new DAP server instance
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Server configuration
+    ///
+    /// # Errors
+    ///
+    /// Currently always succeeds. Phase 2 will add validation and initialization errors.
     pub fn new(config: DapConfig) -> anyhow::Result<Self> {
         Ok(Self { config })
     }
