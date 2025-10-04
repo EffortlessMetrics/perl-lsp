@@ -741,7 +741,7 @@ fn test_cancel_request() {
     // Send a completion request without waiting for response
     send_raw(
         &mut server,
-        &format!(
+        format!(
             "Content-Length: {}\r\n\r\n{}",
             serde_json::to_string(&json!({
                 "jsonrpc": "2.0",

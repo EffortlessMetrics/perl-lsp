@@ -219,15 +219,17 @@ fn test_utf16_consistency_validation() {
 
             // Column should reset to 0 or low value at line boundaries
             // Only check if offset is at a valid character boundary
-            if offset > 0 && offset <= text.len() && text.is_char_boundary(offset) {
-                if text[..offset].ends_with('\n') || text[..offset].ends_with('\r') {
-                    assert!(
-                        col < 10,
-                        "Column {} should be small after line break at offset {}",
-                        col,
-                        offset
-                    );
-                }
+            if offset > 0
+                && offset <= text.len()
+                && text.is_char_boundary(offset)
+                && (text[..offset].ends_with('\n') || text[..offset].ends_with('\r'))
+            {
+                assert!(
+                    col < 10,
+                    "Column {} should be small after line break at offset {}",
+                    col,
+                    offset
+                );
             }
         }
     }

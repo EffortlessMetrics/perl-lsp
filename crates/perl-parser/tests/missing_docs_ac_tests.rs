@@ -95,10 +95,10 @@ mod doc_validation_helpers {
             }
 
             // Check documentation style
-            if line.trim_start().starts_with("///") {
-                if let Some(violation) = check_doc_style_violation(file_path, line_num, line) {
-                    analysis.style_violations.push(violation);
-                }
+            if line.trim_start().starts_with("///")
+                && let Some(violation) = check_doc_style_violation(file_path, line_num, line)
+            {
+                analysis.style_violations.push(violation);
             }
         }
 
@@ -134,7 +134,7 @@ mod doc_validation_helpers {
 
     /// Checks if documentation includes PSTX pipeline integration context
     fn has_pipeline_integration_docs(lines: &[&str], item_line: usize) -> bool {
-        let doc_range_start = if item_line > 10 { item_line - 10 } else { 0 };
+        let doc_range_start = item_line.saturating_sub(10);
         let doc_range = &lines[doc_range_start..item_line];
 
         doc_range.iter().any(|line| {
@@ -226,7 +226,7 @@ mod doc_validation_helpers {
         // Performance optimization: Use more efficient cargo doc validation
         // Strategy: Enable missing_docs warnings specifically for doc generation
         let output = Command::new("cargo")
-            .args(&["doc", "--no-deps", "--package", "perl-parser"])
+            .args(["doc", "--no-deps", "--package", "perl-parser"])
             .env("RUSTFLAGS", "-W missing_docs") // Force warnings for doc validation
             .current_dir(package_dir)
             .output()
@@ -458,7 +458,7 @@ mod doc_validation_helpers {
                 && line.trim_start().starts_with("pub fn")
             {
                 // Check if there's documentation above this line
-                let doc_range_start = if line_num > 10 { line_num - 10 } else { 0 };
+                let doc_range_start = line_num.saturating_sub(10);
                 let doc_range = &lines[doc_range_start..line_num];
                 let doc_text = doc_range
                     .iter()
@@ -679,12 +679,10 @@ mod missing_docs_tests {
 
                 if !has_documentation {
                     missing_docs.push(format!("{}:{}: {}", module, line_num + 1, line.trim()));
-                } else {
-                    if let Some(incomplete_info) =
-                        check_function_doc_completeness(module, line_num, line, &lines)
-                    {
-                        incomplete_docs.push(incomplete_info);
-                    }
+                } else if let Some(incomplete_info) =
+                    check_function_doc_completeness(module, line_num, line, &lines)
+                {
+                    incomplete_docs.push(incomplete_info);
                 }
             }
         }
@@ -704,7 +702,7 @@ mod missing_docs_tests {
         function_line: &str,
         all_lines: &[&str],
     ) -> Option<String> {
-        let doc_range_start = if line_num > 20 { line_num - 20 } else { 0 };
+        let doc_range_start = line_num.saturating_sub(20);
         let doc_range = &all_lines[doc_range_start..line_num];
         let doc_text = extract_doc_text(doc_range);
 
@@ -831,10 +829,10 @@ mod missing_docs_tests {
 
         for module in modules {
             let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path) {
-                if let Some(missing_info) = check_performance_doc_completeness(module, &content) {
-                    missing_docs.push(missing_info);
-                }
+            if let Ok(content) = fs::read_to_string(&module_path)
+                && let Some(missing_info) = check_performance_doc_completeness(module, &content)
+            {
+                missing_docs.push(missing_info);
             }
         }
 
@@ -956,10 +954,10 @@ mod missing_docs_tests {
 
                 if !analysis.has_module_docs {
                     missing_module_docs.push(module.to_string());
-                } else {
-                    if let Some(incomplete_info) = check_module_doc_completeness(module, &content) {
-                        incomplete_module_docs.push(incomplete_info);
-                    }
+                } else if let Some(incomplete_info) =
+                    check_module_doc_completeness(module, &content)
+                {
+                    incomplete_module_docs.push(incomplete_info);
                 }
             }
         }
@@ -1074,10 +1072,10 @@ mod missing_docs_tests {
 
         for module in modules {
             let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path) {
-                if !has_usage_examples(&content) {
-                    missing_examples.push(module.to_string());
-                }
+            if let Ok(content) = fs::read_to_string(&module_path)
+                && !has_usage_examples(&content)
+            {
+                missing_examples.push(module.to_string());
             }
         }
 
@@ -1137,10 +1135,10 @@ mod missing_docs_tests {
 
         for module in modules {
             let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path) {
-                if !has_valid_doctests(&content) {
-                    missing_doctests.push(module.to_string());
-                }
+            if let Ok(content) = fs::read_to_string(&module_path)
+                && !has_valid_doctests(&content)
+            {
+                missing_doctests.push(module.to_string());
             }
         }
 
@@ -1241,7 +1239,7 @@ mod missing_docs_tests {
 
     /// Checks if error documentation includes workflow context
     fn has_workflow_context(lines: &[&str], error_line: usize) -> bool {
-        let doc_range_start = if error_line > 10 { error_line - 10 } else { 0 };
+        let doc_range_start = error_line.saturating_sub(10);
         let doc_range = &lines[doc_range_start..error_line];
         let doc_text = extract_doc_text(doc_range).to_lowercase();
 
@@ -1316,10 +1314,10 @@ mod missing_docs_tests {
 
         for module in modules {
             let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path) {
-                if !has_cross_references(&content) {
-                    missing_cross_refs.push(module.to_string());
-                }
+            if let Ok(content) = fs::read_to_string(&module_path)
+                && !has_cross_references(&content)
+            {
+                missing_cross_refs.push(module.to_string());
             }
         }
 

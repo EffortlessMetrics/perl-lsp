@@ -489,7 +489,7 @@ impl IntegrationValidator {
             test_name: test.name.clone(),
             success,
             duration: test_duration,
-            response: response,
+            response,
         }
     }
 }
@@ -883,7 +883,7 @@ fn test_infrastructure_cleanup_and_resource_management_ac9() {
     // Test scaffolding validation
     let resource_summary = fixture.resource_monitor.get_resource_summary();
     assert!(
-        resource_summary.memory_snapshots.len() > 0,
+        !resource_summary.memory_snapshots.is_empty(),
         "Should have baseline memory measurements"
     );
 
@@ -1796,7 +1796,7 @@ fn test_existing_lsp_utilities_integration(server: &mut LspServer) {
     // Test max_concurrent_threads functionality
     let thread_count = max_concurrent_threads();
     assert!(
-        thread_count >= 1 && thread_count <= 1000,
+        (1..=1000).contains(&thread_count),
         "max_concurrent_threads should return reasonable count: {}",
         thread_count
     );

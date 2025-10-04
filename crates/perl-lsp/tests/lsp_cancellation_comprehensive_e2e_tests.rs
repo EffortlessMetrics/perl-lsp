@@ -561,7 +561,7 @@ fn test_real_world_usage_patterns_e2e() {
         println!("Testing real-world pattern: {}", pattern.name);
 
         // Test scaffolding validation
-        assert!(pattern.sequence.len() > 0, "Pattern should have steps");
+        assert!(!pattern.sequence.is_empty(), "Pattern should have steps");
         assert!(
             pattern.cancellation_likelihood >= 0.0 && pattern.cancellation_likelihood <= 1.0,
             "Cancellation likelihood should be valid probability"
@@ -634,14 +634,14 @@ fn test_high_load_cancellation_behavior_e2e() {
 fn create_high_load_operations(count: usize) -> Vec<HighLoadOperation> {
     let mut operations = Vec::new();
 
-    let file_targets = vec![
+    let file_targets = [
         "file:///app/main.pl",
         "file:///app/lib/TestModule.pm",
         "file:///app/lib/Database/Manager.pm",
         "file:///app/lib/Authentication/Service.pm",
     ];
 
-    let methods = vec![
+    let methods = [
         "textDocument/hover",
         "textDocument/completion",
         "textDocument/definition",

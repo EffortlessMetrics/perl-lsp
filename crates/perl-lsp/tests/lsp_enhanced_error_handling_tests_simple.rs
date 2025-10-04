@@ -5,11 +5,7 @@
 //! AC1: Enhanced LSP Error Response System
 //! AC2: Malformed Frame Recovery System
 
-use serde_json::json;
-use std::time::Duration;
-
 mod common;
-use common::{initialize_lsp, send_raw_message, send_request, start_lsp_server};
 
 #[test]
 fn test_enhanced_error_response_structure() {

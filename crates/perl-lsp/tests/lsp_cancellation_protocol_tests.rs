@@ -290,7 +290,7 @@ fn test_multiple_provider_cancellation_with_context_ac1() {
             if let Some(error) = resp.get("error") {
                 assert_eq!(error["code"].as_i64(), Some(-32800));
                 let message = error["message"].as_str().unwrap();
-                let method_name = method.split('/').last().unwrap_or(method);
+                let method_name = method.split('/').next_back().unwrap_or(method);
                 assert!(
                     message.to_lowercase().contains(&method_name.to_lowercase()),
                     "Error message should reference specific provider: {}",
@@ -1080,9 +1080,9 @@ fn test_enhanced_error_response_handling_ac4() {
                 let message = error["message"].as_str().expect("Error should have message");
                 assert!(
                     message.contains(scenario_name)
-                        || message
-                            .to_lowercase()
-                            .contains(&method.split('/').last().unwrap_or(method).to_lowercase()),
+                        || message.to_lowercase().contains(
+                            &method.split('/').next_back().unwrap_or(method).to_lowercase()
+                        ),
                     "Error message should reference provider: {}",
                     scenario_name
                 );
