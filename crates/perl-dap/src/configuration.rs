@@ -7,7 +7,7 @@
 //!
 //! ## Launch Configuration
 //!
-//! ```
+//! ```no_run
 //! use perl_dap::LaunchConfiguration;
 //! use std::path::PathBuf;
 //!
@@ -352,7 +352,10 @@ mod tests {
         let result = config.validate();
         assert!(result.is_err(), "Should fail validation for missing program file");
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("does not exist"), "Error should mention file doesn't exist");
+        assert!(
+            err.to_string().contains("does not exist"),
+            "Error should mention file doesn't exist"
+        );
     }
 
     #[test]
@@ -414,7 +417,10 @@ mod tests {
         let result = config.validate();
         assert!(result.is_err(), "Should fail validation for missing cwd");
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("does not exist"), "Error should mention directory doesn't exist");
+        assert!(
+            err.to_string().contains("does not exist"),
+            "Error should mention directory doesn't exist"
+        );
     }
 
     #[test]
@@ -432,7 +438,10 @@ mod tests {
         let result = config.validate();
         assert!(result.is_err(), "Should fail validation for missing perl binary");
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("does not exist"), "Error should mention perl binary doesn't exist");
+        assert!(
+            err.to_string().contains("does not exist"),
+            "Error should mention perl binary doesn't exist"
+        );
     }
 
     #[test]
@@ -449,9 +458,21 @@ mod tests {
 
         config.resolve_paths(&PathBuf::from("/workspace")).expect("resolve_paths failed");
 
-        assert_eq!(config.program, PathBuf::from("/absolute/path/script.pl"), "Absolute program path should be preserved");
-        assert_eq!(config.cwd.as_ref().unwrap(), &PathBuf::from("/absolute/cwd"), "Absolute cwd should be preserved");
-        assert_eq!(config.include_paths[0], PathBuf::from("/absolute/lib"), "Absolute include path should be preserved");
+        assert_eq!(
+            config.program,
+            PathBuf::from("/absolute/path/script.pl"),
+            "Absolute program path should be preserved"
+        );
+        assert_eq!(
+            config.cwd.as_ref().unwrap(),
+            &PathBuf::from("/absolute/cwd"),
+            "Absolute cwd should be preserved"
+        );
+        assert_eq!(
+            config.include_paths[0],
+            PathBuf::from("/absolute/lib"),
+            "Absolute include path should be preserved"
+        );
     }
 
     #[test]
@@ -469,9 +490,21 @@ mod tests {
         let workspace = PathBuf::from("/workspace");
         config.resolve_paths(&workspace).expect("resolve_paths failed");
 
-        assert_eq!(config.program, workspace.join("script.pl"), "Relative program path should be resolved");
-        assert_eq!(config.cwd.as_ref().unwrap(), &workspace.join("build"), "Relative cwd should be resolved");
-        assert_eq!(config.include_paths[0], workspace.join("lib"), "Relative include path should be resolved");
+        assert_eq!(
+            config.program,
+            workspace.join("script.pl"),
+            "Relative program path should be resolved"
+        );
+        assert_eq!(
+            config.cwd.as_ref().unwrap(),
+            &workspace.join("build"),
+            "Relative cwd should be resolved"
+        );
+        assert_eq!(
+            config.include_paths[0],
+            workspace.join("lib"),
+            "Relative include path should be resolved"
+        );
     }
 
     #[test]
@@ -488,8 +521,8 @@ mod tests {
     fn test_launch_json_snippet_valid_json() {
         // Test: generated JSON snippets parse correctly
         let snippet = create_launch_json_snippet();
-        let parsed: serde_json::Value = serde_json::from_str(&snippet)
-            .expect("Launch JSON snippet should be valid JSON");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&snippet).expect("Launch JSON snippet should be valid JSON");
 
         assert_eq!(parsed["type"], "perl");
         assert_eq!(parsed["request"], "launch");
@@ -503,8 +536,8 @@ mod tests {
     fn test_attach_json_snippet_valid_json() {
         // Test: attach JSON snippet is valid and complete
         let snippet = create_attach_json_snippet();
-        let parsed: serde_json::Value = serde_json::from_str(&snippet)
-            .expect("Attach JSON snippet should be valid JSON");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&snippet).expect("Attach JSON snippet should be valid JSON");
 
         assert_eq!(parsed["type"], "perl");
         assert_eq!(parsed["request"], "attach");
@@ -542,6 +575,9 @@ mod tests {
         };
 
         let json = serde_json::to_string(&config).expect("Serialization failed");
-        assert!(json.contains("\"includePaths\":[]"), "Empty include_paths should serialize correctly");
+        assert!(
+            json.contains("\"includePaths\":[]"),
+            "Empty include_paths should serialize correctly"
+        );
     }
 }

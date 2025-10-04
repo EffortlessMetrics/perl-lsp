@@ -45,7 +45,7 @@
 //!
 //! ## Creating Launch Configuration
 //!
-//! ```
+//! ```no_run
 //! use perl_dap::LaunchConfiguration;
 //! use std::path::PathBuf;
 //!
