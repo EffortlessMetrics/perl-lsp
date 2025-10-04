@@ -4,7 +4,7 @@
 //!
 //! Specification: docs/DAP_IMPLEMENTATION_SPECIFICATION.md#performance-specifications
 
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::time::Duration;
 
 /// Benchmark breakpoint operations (AC14)
