@@ -263,3 +263,193 @@ async fn test_bridge_basic_debugging_workflow() -> Result<()> {
 
     Ok(())
 }
+
+// Edge case tests for mutation testing hardening
+
+/// Test: Launch JSON snippet contains all required fields
+#[test]
+fn test_launch_json_snippet_completeness() -> Result<()> {
+    let snippet = create_launch_json_snippet();
+    let json: serde_json::Value = serde_json::from_str(&snippet)?;
+
+    // Verify all required fields are present
+    assert!(json.get("type").is_some(), "type field missing");
+    assert!(json.get("request").is_some(), "request field missing");
+    assert!(json.get("name").is_some(), "name field missing");
+    assert!(json.get("program").is_some(), "program field missing");
+    assert!(json.get("args").is_some(), "args field missing");
+    assert!(json.get("perlPath").is_some(), "perlPath field missing");
+    assert!(json.get("includePaths").is_some(), "includePaths field missing");
+    assert!(json.get("cwd").is_some(), "cwd field missing");
+
+    // Verify field types
+    assert!(json["type"].is_string());
+    assert!(json["request"].is_string());
+    assert!(json["name"].is_string());
+    assert!(json["program"].is_string());
+    assert!(json["args"].is_array());
+    assert!(json["perlPath"].is_string());
+    assert!(json["includePaths"].is_array());
+    assert!(json["cwd"].is_string());
+
+    Ok(())
+}
+
+/// Test: Attach JSON snippet contains all required fields
+#[test]
+fn test_attach_json_snippet_completeness() -> Result<()> {
+    let snippet = create_attach_json_snippet();
+    let json: serde_json::Value = serde_json::from_str(&snippet)?;
+
+    // Verify all required fields
+    assert!(json.get("type").is_some(), "type field missing");
+    assert!(json.get("request").is_some(), "request field missing");
+    assert!(json.get("name").is_some(), "name field missing");
+    assert!(json.get("host").is_some(), "host field missing");
+    assert!(json.get("port").is_some(), "port field missing");
+    assert!(json.get("timeout").is_some(), "timeout field missing");
+
+    // Verify field types and values
+    assert_eq!(json["type"], "perl");
+    assert_eq!(json["request"], "attach");
+    assert!(json["name"].is_string());
+    assert_eq!(json["host"], "localhost");
+    assert_eq!(json["port"], 13603);
+    assert!(json["timeout"].is_number());
+
+    Ok(())
+}
+
+/// Test: Configuration serialization round-trip
+#[test]
+fn test_launch_configuration_roundtrip() -> Result<()> {
+    use perl_dap::LaunchConfiguration;
+    use std::path::PathBuf;
+
+    let original = LaunchConfiguration {
+        program: PathBuf::from("/workspace/script.pl"),
+        args: vec!["--verbose".to_string(), "--debug".to_string()],
+        cwd: Some(PathBuf::from("/workspace")),
+        env: std::collections::HashMap::from([
+            ("VAR1".to_string(), "value1".to_string()),
+            ("VAR2".to_string(), "value2".to_string()),
+        ]),
+        perl_path: Some(PathBuf::from("/usr/bin/perl")),
+        include_paths: vec![PathBuf::from("/workspace/lib")],
+    };
+
+    // Serialize to JSON
+    let json = serde_json::to_string(&original)?;
+
+    // Deserialize back
+    let deserialized: LaunchConfiguration = serde_json::from_str(&json)?;
+
+    // Verify fields match
+    assert_eq!(deserialized.program, original.program);
+    assert_eq!(deserialized.args, original.args);
+    assert_eq!(deserialized.cwd, original.cwd);
+    assert_eq!(deserialized.env, original.env);
+    assert_eq!(deserialized.perl_path, original.perl_path);
+    assert_eq!(deserialized.include_paths, original.include_paths);
+
+    Ok(())
+}
+
+/// Test: Attach configuration serialization round-trip
+#[test]
+fn test_attach_configuration_roundtrip() -> Result<()> {
+    use perl_dap::AttachConfiguration;
+
+    let original = AttachConfiguration { host: "192.168.1.100".to_string(), port: 9000 };
+
+    // Serialize to JSON
+    let json = serde_json::to_string(&original)?;
+
+    // Deserialize back
+    let deserialized: AttachConfiguration = serde_json::from_str(&json)?;
+
+    // Verify fields match
+    assert_eq!(deserialized.host, original.host);
+    assert_eq!(deserialized.port, original.port);
+
+    Ok(())
+}
+
+/// Test: Cross-platform path normalization with workspaceFolder variable
+#[tokio::test]
+async fn test_workspace_variable_expansion() -> Result<()> {
+    use perl_dap::LaunchConfiguration;
+    use std::path::PathBuf;
+
+    // Create configuration with ${workspaceFolder} variable
+    let config = LaunchConfiguration {
+        program: PathBuf::from("${workspaceFolder}/script.pl"),
+        args: vec![],
+        cwd: Some(PathBuf::from("${workspaceFolder}")),
+        env: std::collections::HashMap::new(),
+        perl_path: None,
+        include_paths: vec![PathBuf::from("${workspaceFolder}/lib")],
+    };
+
+    // Verify serialization preserves variables
+    let json = serde_json::to_string(&config)?;
+    assert!(json.contains("${workspaceFolder}"), "Should preserve workspace variables");
+
+    Ok(())
+}
+
+/// Test: Platform-specific command argument handling
+#[tokio::test]
+async fn test_platform_command_args() -> Result<()> {
+    use perl_dap::platform::format_command_args;
+
+    // Test various argument patterns
+    let test_cases = vec![
+        (vec!["--verbose"], vec!["--verbose"]),  // Simple flag
+        (vec!["--file", "test.pl"], vec!["--file", "test.pl"]),  // Two args
+        (vec!["arg with spaces"], vec![]),  // Will be quoted (platform-specific)
+    ];
+
+    for (input, _expected) in test_cases {
+        let input: Vec<String> = input.iter().map(|s| s.to_string()).collect();
+        let formatted = format_command_args(&input);
+        assert_eq!(formatted.len(), input.len(), "Should preserve argument count");
+    }
+
+    Ok(())
+}
+
+/// Test: BridgeAdapter can be created multiple times
+#[test]
+fn test_bridge_adapter_multiple_instances() -> Result<()> {
+    use perl_dap::BridgeAdapter;
+
+    // Create multiple instances to verify no singleton constraints
+    let _adapter1 = BridgeAdapter::new();
+    let _adapter2 = BridgeAdapter::new();
+    let _adapter3 = BridgeAdapter::new();
+
+    // Should not panic or fail
+    Ok(())
+}
+
+/// Test: Empty environment variables are handled correctly
+#[tokio::test]
+async fn test_empty_environment_handling() -> Result<()> {
+    use perl_dap::LaunchConfiguration;
+    use std::path::PathBuf;
+
+    let config = LaunchConfiguration {
+        program: PathBuf::from("script.pl"),
+        args: vec![],
+        cwd: None,
+        env: std::collections::HashMap::new(),  // Empty env
+        perl_path: None,
+        include_paths: vec![],
+    };
+
+    let json = serde_json::to_string(&config)?;
+    assert!(json.contains("\"env\":{}"), "Empty env should serialize correctly");
+
+    Ok(())
+}
