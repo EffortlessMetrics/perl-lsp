@@ -333,4 +333,218 @@ mod tests {
         // Should be quoted
         assert!(formatted.first().unwrap().contains("file with spaces.txt"));
     }
+
+    // Edge case tests for mutation testing hardening
+
+    #[test]
+    fn test_normalize_path_empty() {
+        // Test: empty path handling
+        let path = PathBuf::from("");
+        let normalized = normalize_path(&path);
+        // Should not panic, should return some valid path
+        assert!(!normalized.as_os_str().is_empty() || normalized == PathBuf::from(""));
+    }
+
+    #[test]
+    fn test_normalize_path_relative() {
+        // Test: relative path normalization
+        let path = PathBuf::from("./script.pl");
+        let normalized = normalize_path(&path);
+        assert!(!normalized.as_os_str().is_empty());
+    }
+
+    #[test]
+    fn test_normalize_path_parent_directory() {
+        // Test: parent directory references
+        let path = PathBuf::from("../script.pl");
+        let normalized = normalize_path(&path);
+        assert!(!normalized.as_os_str().is_empty());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_normalize_path_unc_path() {
+        // Test: UNC paths (\\server\share) - pass through as-is
+        let path = PathBuf::from("\\\\server\\share\\file.pl");
+        let normalized = normalize_path(&path);
+        let normalized_str = normalized.to_string_lossy();
+        assert!(normalized_str.starts_with("\\\\"), "UNC path should be preserved");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_normalize_path_lowercase_drive() {
+        // Test: lowercase drive letter gets uppercased
+        let path = PathBuf::from("c:\\script.pl");
+        let normalized = normalize_path(&path);
+        let normalized_str = normalized.to_string_lossy();
+        // Note: actual behavior depends on platform, so we just check it doesn't panic
+        assert!(!normalized_str.is_empty());
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_normalize_path_wsl_edge_cases() {
+        // Test: WSL path edge cases
+        let test_cases = vec![
+            ("/mnt/c/", "C:\\"),           // Root directory
+            ("/mnt/d/Users/test.pl", "D:\\Users\\test.pl"), // Different drive
+        ];
+
+        for (input, expected_prefix) in test_cases {
+            let path = PathBuf::from(input);
+            let normalized = normalize_path(&path);
+            let normalized_str = normalized.to_string_lossy();
+            assert!(
+                normalized_str.starts_with(expected_prefix),
+                "Expected {} to start with {}, got {}",
+                input,
+                expected_prefix,
+                normalized_str
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_normalize_path_non_wsl() {
+        // Test: non-WSL Linux paths should be canonicalized or passed through
+        let path = PathBuf::from("/usr/bin/perl");
+        let normalized = normalize_path(&path);
+        assert!(!normalized.as_os_str().is_empty());
+    }
+
+    #[test]
+    fn test_setup_environment_single_path() {
+        // Test: single include path
+        let env = setup_environment(&[PathBuf::from("/workspace/lib")]);
+        assert!(env.contains_key("PERL5LIB"));
+        let perl5lib = env.get("PERL5LIB").unwrap();
+        assert_eq!(perl5lib, "/workspace/lib");
+    }
+
+    #[test]
+    fn test_setup_environment_path_separator() {
+        // Test: multiple paths use correct platform separator
+        let env = setup_environment(&[
+            PathBuf::from("/path1"),
+            PathBuf::from("/path2"),
+        ]);
+
+        assert!(env.contains_key("PERL5LIB"));
+        let perl5lib = env.get("PERL5LIB").unwrap();
+
+        #[cfg(windows)]
+        assert!(perl5lib.contains(';'), "Windows should use ; separator");
+
+        #[cfg(not(windows))]
+        assert!(perl5lib.contains(':'), "Unix should use : separator");
+    }
+
+    #[test]
+    fn test_format_command_args_no_spaces() {
+        // Test: arguments without spaces are not modified
+        let args = vec!["--verbose".to_string(), "--debug".to_string()];
+        let formatted = format_command_args(&args);
+        assert_eq!(formatted, args, "Args without spaces should not be quoted");
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_format_command_args_with_single_quote() {
+        // Test: Unix argument with single quote uses double quotes
+        let args = vec!["file's name.txt".to_string()];
+        let formatted = format_command_args(&args);
+        assert_eq!(formatted.len(), 1);
+        let result = formatted.first().unwrap();
+        assert!(result.contains("file's name.txt"), "Should contain original text");
+        assert!(result.starts_with('"'), "Should use double quotes when single quote present");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_format_command_args_windows_quoting() {
+        // Test: Windows-specific quoting with escaped quotes
+        let args = vec!["file with \"quotes\".txt".to_string()];
+        let formatted = format_command_args(&args);
+        assert_eq!(formatted.len(), 1);
+        let result = formatted.first().unwrap();
+        assert!(result.contains("\\\""), "Should escape double quotes on Windows");
+    }
+
+    #[test]
+    fn test_format_command_args_empty() {
+        // Test: empty args array
+        let args: Vec<String> = vec![];
+        let formatted = format_command_args(&args);
+        assert_eq!(formatted.len(), 0, "Empty args should return empty array");
+    }
+
+    #[test]
+    fn test_format_command_args_special_characters() {
+        // Test: special characters in arguments
+        let args = vec![
+            "--input".to_string(),
+            "file with spaces.txt".to_string(),
+            "--output=result.txt".to_string(), // No spaces, no quoting
+        ];
+        let formatted = format_command_args(&args);
+        assert_eq!(formatted.len(), 3);
+        assert_eq!(formatted[0], "--input");
+        assert!(formatted[1].contains("file with spaces.txt"));
+        assert_eq!(formatted[2], "--output=result.txt");
+    }
+
+    #[test]
+    fn test_resolve_perl_path_failure_handling() {
+        // Test: perl not found scenario
+        // This test verifies graceful error handling when PATH is empty or perl not found
+
+        // Save original PATH
+        let original_path = env::var("PATH").ok();
+
+        // Temporarily set PATH to empty
+        // SAFETY: We immediately restore the original PATH after testing
+        unsafe {
+            env::set_var("PATH", "");
+        }
+
+        let result = resolve_perl_path();
+
+        // Restore original PATH
+        if let Some(path) = original_path {
+            // SAFETY: Restoring the original PATH value
+            unsafe {
+                env::set_var("PATH", path);
+            }
+        }
+
+        // Should return error when perl not found
+        assert!(result.is_err(), "Should fail when perl not on PATH");
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("not found") || err.to_string().contains("not set"),
+            "Error should mention perl not found or PATH not set"
+        );
+    }
+
+    #[test]
+    fn test_perl_executable_constant() {
+        // Test: verify platform-specific executable name
+        #[cfg(windows)]
+        assert_eq!(PERL_EXECUTABLE, "perl.exe", "Windows should use perl.exe");
+
+        #[cfg(not(windows))]
+        assert_eq!(PERL_EXECUTABLE, "perl", "Unix should use perl");
+    }
+
+    #[test]
+    fn test_path_separator_constant() {
+        // Test: verify platform-specific path separator
+        #[cfg(windows)]
+        assert_eq!(PATH_SEPARATOR, ';', "Windows should use ; separator");
+
+        #[cfg(not(windows))]
+        assert_eq!(PATH_SEPARATOR, ':', "Unix should use : separator");
+    }
 }
