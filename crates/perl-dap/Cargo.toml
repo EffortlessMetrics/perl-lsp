@@ -1,0 +1,108 @@
+[package]
+name = "perl-dap"
+version = "0.1.0"
+edition = "2024"
+authors = ["Tree-sitter Perl Contributors"]
+description = "Debug Adapter Protocol server for Perl"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "perl-dap"
+path = "src/main.rs"
+
+[lib]
+name = "perl_dap"
+path = "src/lib.rs"
+
+[dependencies]
+# Core parser integration
+perl-parser = { path = "../perl-parser" }
+
+# LSP types reuse (Position, Range, Location, etc.)
+lsp-types = "0.97.0"
+
+# JSON serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Rope for position mapping (reuse from perl-parser)
+ropey = "1.6"
+
+# Process management
+# Note: tokio-process not needed (using tokio::process)
+
+[dev-dependencies]
+# Property-based testing (AC13)
+proptest = "1.0"
+
+# Performance benchmarking (AC14, AC15)
+criterion = "0.5"
+
+# Test fixtures
+tempfile = "3.0"
+
+# Golden transcript validation (AC13)
+serde_yaml = "0.9"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.28", features = ["signal"] }  # For SIGINT handling (AC9)
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["processthreadsapi"] }  # For Ctrl+C (AC9)
+
+# Test targets with acceptance criteria mapping
+[[test]]
+name = "bridge_integration_tests"
+path = "tests/bridge_integration_tests.rs"
+# AC1-AC4: Bridge to Perl::LanguageServer DAP
+
+[[test]]
+name = "dap_adapter_tests"
+path = "tests/dap_adapter_tests.rs"
+# AC5-AC12: Native Rust adapter implementation
+
+[[test]]
+name = "dap_golden_transcript_tests"
+path = "tests/dap_golden_transcript_tests.rs"
+# AC13: Comprehensive integration tests with golden transcripts
+
+[[test]]
+name = "dap_breakpoint_matrix_tests"
+path = "tests/dap_breakpoint_matrix_tests.rs"
+# AC13, AC14: Breakpoint validation edge cases
+
+[[test]]
+name = "dap_performance_tests"
+path = "tests/dap_performance_tests.rs"
+# AC14, AC15: Performance benchmarks and baselines
+
+[[test]]
+name = "dap_security_tests"
+path = "tests/dap_security_tests.rs"
+# AC16: Security validation (path traversal, safe eval, timeout, Unicode)
+
+[[test]]
+name = "dap_dependency_tests"
+path = "tests/dap_dependency_tests.rs"
+# AC18: Dependency management and installation strategy
+
+[[test]]
+name = "dap_packaging_tests"
+path = "tests/dap_packaging_tests.rs"
+# AC19: Binary packaging and cross-platform distribution
+
+[[bench]]
+name = "dap_benchmarks"
+path = "benches/dap_benchmarks.rs"
+harness = false
