@@ -405,9 +405,9 @@ async fn test_platform_command_args() -> Result<()> {
 
     // Test various argument patterns
     let test_cases = vec![
-        (vec!["--verbose"], vec!["--verbose"]),  // Simple flag
-        (vec!["--file", "test.pl"], vec!["--file", "test.pl"]),  // Two args
-        (vec!["arg with spaces"], vec![]),  // Will be quoted (platform-specific)
+        (vec!["--verbose"], vec!["--verbose"]), // Simple flag
+        (vec!["--file", "test.pl"], vec!["--file", "test.pl"]), // Two args
+        (vec!["arg with spaces"], vec![]),      // Will be quoted (platform-specific)
     ];
 
     for (input, _expected) in test_cases {
@@ -443,7 +443,7 @@ async fn test_empty_environment_handling() -> Result<()> {
         program: PathBuf::from("script.pl"),
         args: vec![],
         cwd: None,
-        env: std::collections::HashMap::new(),  // Empty env
+        env: std::collections::HashMap::new(), // Empty env
         perl_path: None,
         include_paths: vec![],
     };

@@ -387,7 +387,7 @@ mod tests {
     fn test_normalize_path_wsl_edge_cases() {
         // Test: WSL path edge cases
         let test_cases = vec![
-            ("/mnt/c/", "C:\\"),           // Root directory
+            ("/mnt/c/", "C:\\"),                            // Root directory
             ("/mnt/d/Users/test.pl", "D:\\Users\\test.pl"), // Different drive
         ];
 
@@ -426,10 +426,7 @@ mod tests {
     #[test]
     fn test_setup_environment_path_separator() {
         // Test: multiple paths use correct platform separator
-        let env = setup_environment(&[
-            PathBuf::from("/path1"),
-            PathBuf::from("/path2"),
-        ]);
+        let env = setup_environment(&[PathBuf::from("/path1"), PathBuf::from("/path2")]);
 
         assert!(env.contains_key("PERL5LIB"));
         let perl5lib = env.get("PERL5LIB").unwrap();
