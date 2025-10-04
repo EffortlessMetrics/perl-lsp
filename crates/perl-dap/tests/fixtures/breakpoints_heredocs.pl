@@ -13,9 +13,10 @@ END_TEXT
     return $result;
 }
 
-my $another_heredoc = <<"END_INTERPOLATED";  # Breakpoint on heredoc start should work (line 16)
+my $test_var = "test";
+my $another_heredoc = <<"END_INTERPOLATED";  # Breakpoint on heredoc start should work (line 17)
 Interpolated heredoc
-with $variables
+with $test_var
 END_INTERPOLATED
 
 print "Done\n";  # Breakpoint should work here (line 21)
