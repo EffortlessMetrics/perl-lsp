@@ -5,6 +5,7 @@ members = [
     "crates/perl-parser",
     "crates/perl-corpus",
     "crates/perl-lsp",
+    "crates/perl-dap",
     "xtask",
 ]
 exclude = [
