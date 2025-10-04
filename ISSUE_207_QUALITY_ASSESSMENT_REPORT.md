@@ -28,7 +28,7 @@ All 8 quality gates have been successfully validated for Phase 1 DAP implementat
 | Gate | Status | Evidence | Notes |
 |------|--------|----------|-------|
 | **spec** | ✅ pass | 5 specification docs created, 100% API compliance | Complete technical specifications |
-| **api** | ✅ pass | Verified against perl-parser integration | DAP bridge contracts validated |
+| **api** | ✅ pass (additive) | New perl-dap v0.1.0, no existing API changes | contract: cargo check: workspace ok; docs: 18/18 examples pass; api: additive |
 | **format** | ✅ pass | cargo fmt clean, all code formatted | Zero formatting deviations |
 | **clippy** | ⚠️ pass* | 0 perl-dap warnings (484 perl-parser warnings) | *perl-parser dependency issue (tracked separately) |
 | **tests** | ✅ pass | 53/53 passing (100% pass rate) | 37 unit + 16 integration tests |
