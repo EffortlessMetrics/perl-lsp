@@ -1,0 +1,415 @@
+{
+  "description": "Mock responses from Devel::TSPerlDAP Perl shim for testing DAP adapter without running actual Perl debugger",
+  "set_breakpoints": {
+    "request": {
+      "file": "/path/to/script.pl",
+      "lines": [5, 10, 15, 20]
+    },
+    "response": {
+      "file": "/path/to/script.pl",
+      "breakpoints": [
+        {
+          "line": 5,
+          "verified": false,
+          "reason": "Line contains only comments"
+        },
+        {
+          "line": 10,
+          "verified": true,
+          "id": 1
+        },
+        {
+          "line": 15,
+          "verified": true,
+          "id": 2
+        },
+        {
+          "line": 20,
+          "verified": true,
+          "id": 3
+        }
+      ]
+    }
+  },
+  "stack_trace": {
+    "request": {
+      "thread_id": 1
+    },
+    "response": {
+      "frames": [
+        {
+          "id": 0,
+          "package": "main",
+          "sub": "test_function",
+          "file": "/path/to/script.pl",
+          "line": 10,
+          "column": 5
+        },
+        {
+          "id": 1,
+          "package": "main",
+          "sub": "helper_function",
+          "file": "/path/to/script.pl",
+          "line": 25,
+          "column": 1
+        },
+        {
+          "id": 2,
+          "package": "main",
+          "sub": "<main>",
+          "file": "/path/to/script.pl",
+          "line": 50,
+          "column": 1
+        }
+      ],
+      "total_frames": 3
+    }
+  },
+  "scopes": {
+    "request": {
+      "frame_id": 0
+    },
+    "response": {
+      "frame_id": 0,
+      "scopes": [
+        {
+          "name": "Locals",
+          "variables_reference": 1000,
+          "expensive": false,
+          "variables": {
+            "$x": {
+              "type": "scalar",
+              "value": 42,
+              "reference": 0
+            },
+            "$name": {
+              "type": "scalar",
+              "value": "\"John Doe\"",
+              "reference": 0
+            },
+            "@arr": {
+              "type": "array",
+              "value": "ARRAY(3 elements)",
+              "reference": 2000,
+              "indexed_variables": 3
+            }
+          }
+        },
+        {
+          "name": "Package (main)",
+          "variables_reference": 3000,
+          "expensive": true,
+          "variables": {
+            "$main::global": {
+              "type": "scalar",
+              "value": 100,
+              "reference": 0
+            },
+            "%main::config": {
+              "type": "hash",
+              "value": "HASH(5 keys)",
+              "reference": 4000,
+              "named_variables": 5
+            }
+          }
+        }
+      ]
+    }
+  },
+  "variables": {
+    "array_expansion": {
+      "request": {
+        "variables_reference": 2000,
+        "start": 0,
+        "count": 10
+      },
+      "response": {
+        "variables": [
+          {
+            "name": "[0]",
+            "value": "1",
+            "type": "scalar",
+            "variables_reference": 0
+          },
+          {
+            "name": "[1]",
+            "value": "2",
+            "type": "scalar",
+            "variables_reference": 0
+          },
+          {
+            "name": "[2]",
+            "value": "3",
+            "type": "scalar",
+            "variables_reference": 0
+          }
+        ]
+      }
+    },
+    "hash_expansion": {
+      "request": {
+        "variables_reference": 4000
+      },
+      "response": {
+        "variables": [
+          {
+            "name": "{debug}",
+            "value": "1",
+            "type": "scalar",
+            "variables_reference": 0
+          },
+          {
+            "name": "{timeout}",
+            "value": "30",
+            "type": "scalar",
+            "variables_reference": 0
+          },
+          {
+            "name": "{log_level}",
+            "value": "\"info\"",
+            "type": "scalar",
+            "variables_reference": 0
+          },
+          {
+            "name": "{retry_count}",
+            "value": "3",
+            "type": "scalar",
+            "variables_reference": 0
+          },
+          {
+            "name": "{paths}",
+            "value": "ARRAY(2 elements)",
+            "type": "array",
+            "variables_reference": 5000,
+            "indexed_variables": 2
+          }
+        ]
+      }
+    },
+    "nested_array_expansion": {
+      "request": {
+        "variables_reference": 5000
+      },
+      "response": {
+        "variables": [
+          {
+            "name": "[0]",
+            "value": "\"/usr/lib/perl5\"",
+            "type": "scalar",
+            "variables_reference": 0
+          },
+          {
+            "name": "[1]",
+            "value": "\"/usr/local/lib/perl5\"",
+            "type": "scalar",
+            "variables_reference": 0
+          }
+        ]
+      }
+    },
+    "unicode_variables": {
+      "request": {
+        "variables_reference": 1000
+      },
+      "response": {
+        "variables": [
+          {
+            "name": "$emoji",
+            "value": "\"🦀 Rust Perl LSP\"",
+            "type": "scalar",
+            "variables_reference": 0
+          },
+          {
+            "name": "$japanese",
+            "value": "\"こんにちは世界\"",
+            "type": "scalar",
+            "variables_reference": 0
+          },
+          {
+            "name": "$arabic",
+            "value": "\"مرحبا بالعالم\"",
+            "type": "scalar",
+            "variables_reference": 0
+          }
+        ]
+      }
+    },
+    "large_data_truncation": {
+      "request": {
+        "variables_reference": 1000
+      },
+      "response": {
+        "variables": [
+          {
+            "name": "$large_string",
+            "value": "\"<1024 bytes truncated>...\"",
+            "type": "scalar",
+            "variables_reference": 0,
+            "truncated": true,
+            "full_size": 15000
+          }
+        ]
+      }
+    }
+  },
+  "evaluate": {
+    "simple_expression": {
+      "request": {
+        "expression": "$x + $y",
+        "frame_id": 0,
+        "context": "watch"
+      },
+      "response": {
+        "result": "62",
+        "type": "scalar",
+        "variables_reference": 0
+      }
+    },
+    "string_concatenation": {
+      "request": {
+        "expression": "$first . ' ' . $last",
+        "frame_id": 0,
+        "context": "watch"
+      },
+      "response": {
+        "result": "\"John Doe\"",
+        "type": "scalar",
+        "variables_reference": 0
+      }
+    },
+    "array_access": {
+      "request": {
+        "expression": "$arr[1]",
+        "frame_id": 0,
+        "context": "watch"
+      },
+      "response": {
+        "result": "2",
+        "type": "scalar",
+        "variables_reference": 0
+      }
+    },
+    "hash_access": {
+      "request": {
+        "expression": "$hash{key}",
+        "frame_id": 0,
+        "context": "watch"
+      },
+      "response": {
+        "result": "\"value\"",
+        "type": "scalar",
+        "variables_reference": 0
+      }
+    },
+    "side_effects_blocked": {
+      "request": {
+        "expression": "$x = 99",
+        "frame_id": 0,
+        "context": "watch"
+      },
+      "response": {
+        "error": "Side effects not allowed without explicit opt-in",
+        "error_code": "SecurityError::SideEffectsNotAllowed"
+      }
+    },
+    "system_call_blocked": {
+      "request": {
+        "expression": "system('ls')",
+        "frame_id": 0,
+        "context": "watch"
+      },
+      "response": {
+        "error": "System calls are not allowed in evaluate",
+        "error_code": "SecurityError::SystemCallNotAllowed"
+      }
+    }
+  },
+  "continue_next_step": {
+    "continue": {
+      "request": {
+        "thread_id": 1
+      },
+      "response": {
+        "all_threads_continued": true
+      },
+      "event": {
+        "type": "stopped",
+        "reason": "breakpoint",
+        "thread_id": 1,
+        "all_threads_stopped": true
+      }
+    },
+    "next": {
+      "request": {
+        "thread_id": 1
+      },
+      "response": {
+        "success": true
+      },
+      "event": {
+        "type": "stopped",
+        "reason": "step",
+        "thread_id": 1,
+        "all_threads_stopped": true
+      }
+    },
+    "step_in": {
+      "request": {
+        "thread_id": 1
+      },
+      "response": {
+        "success": true
+      },
+      "event": {
+        "type": "stopped",
+        "reason": "step",
+        "thread_id": 1,
+        "all_threads_stopped": true
+      }
+    },
+    "step_out": {
+      "request": {
+        "thread_id": 1
+      },
+      "response": {
+        "success": true
+      },
+      "event": {
+        "type": "stopped",
+        "reason": "step",
+        "thread_id": 1,
+        "all_threads_stopped": true
+      }
+    }
+  },
+  "error_scenarios": {
+    "invalid_frame_id": {
+      "request": {
+        "frame_id": 999
+      },
+      "response": {
+        "error": "Invalid frame ID: 999",
+        "error_code": "DebugError::InvalidFrameId"
+      }
+    },
+    "invalid_variables_reference": {
+      "request": {
+        "variables_reference": 999999
+      },
+      "response": {
+        "error": "Invalid variables reference: 999999",
+        "error_code": "DebugError::InvalidVariablesReference"
+      }
+    },
+    "debuggee_terminated": {
+      "request": {
+        "command": "stackTrace",
+        "thread_id": 1
+      },
+      "response": {
+        "error": "Debuggee process has terminated",
+        "error_code": "DebugError::ProcessTerminated"
+      }
+    }
+  }
+}
