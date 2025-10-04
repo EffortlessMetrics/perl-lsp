@@ -37,7 +37,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Launch configuration for starting a new Perl debugging session
 ///
@@ -109,17 +109,17 @@ impl LaunchConfiguration {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn resolve_paths(&mut self, workspace_root: &PathBuf) -> Result<()> {
+    pub fn resolve_paths(&mut self, workspace_root: &Path) -> Result<()> {
         // Resolve program path
         if !self.program.is_absolute() {
             self.program = workspace_root.join(&self.program);
         }
 
         // Resolve working directory
-        if let Some(ref mut cwd) = self.cwd {
-            if !cwd.is_absolute() {
-                *cwd = workspace_root.join(&cwd);
-            }
+        if let Some(ref mut cwd) = self.cwd
+            && !cwd.is_absolute()
+        {
+            *cwd = workspace_root.join(&cwd);
         }
 
         // Resolve include paths
@@ -185,10 +185,10 @@ impl LaunchConfiguration {
         }
 
         // Verify perl binary exists (if specified)
-        if let Some(ref perl_path) = self.perl_path {
-            if !perl_path.exists() {
-                anyhow::bail!("Perl binary does not exist: {}", perl_path.display());
-            }
+        if let Some(ref perl_path) = self.perl_path
+            && !perl_path.exists()
+        {
+            anyhow::bail!("Perl binary does not exist: {}", perl_path.display());
         }
 
         Ok(())

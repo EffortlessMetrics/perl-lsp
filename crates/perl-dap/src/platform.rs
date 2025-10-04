@@ -112,15 +112,16 @@ pub fn normalize_path(path: &std::path::Path) -> PathBuf {
     // Handle WSL path translation (/mnt/c → C:\)
     #[cfg(target_os = "linux")]
     {
-        if let Some(path_str) = path.to_str() {
-            if path_str.starts_with("/mnt/") && path_str.len() > 6 {
-                // Extract drive letter (e.g., /mnt/c → C:)
-                let drive_letter = &path_str[5..6];
-                let rest = &path_str[6..];
-                let windows_path =
-                    format!("{}:{}", drive_letter.to_uppercase(), rest.replace('/', "\\"));
-                return PathBuf::from(windows_path);
-            }
+        if let Some(path_str) = path.to_str()
+            && path_str.starts_with("/mnt/")
+            && path_str.len() > 6
+        {
+            // Extract drive letter (e.g., /mnt/c → C:)
+            let drive_letter = &path_str[5..6];
+            let rest = &path_str[6..];
+            let windows_path =
+                format!("{}:{}", drive_letter.to_uppercase(), rest.replace('/', "\\"));
+            return PathBuf::from(windows_path);
         }
     }
 
