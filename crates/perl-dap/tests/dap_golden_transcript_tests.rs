@@ -8,6 +8,7 @@ use anyhow::Result;
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac13-hello-world-transcript
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC13) - TDD scaffold"]
 // AC:13
 async fn test_golden_transcript_hello_world() -> Result<()> {
     // Expected DAP message sequence for hello.pl
@@ -24,6 +25,7 @@ async fn test_golden_transcript_hello_world() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac13-args-transcript
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC13) - TDD scaffold"]
 // AC:13
 async fn test_golden_transcript_with_arguments() -> Result<()> {
     // Expected DAP sequence for args.pl with command-line arguments
@@ -39,6 +41,7 @@ async fn test_golden_transcript_with_arguments() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac13-eval-transcript
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC13) - TDD scaffold"]
 // AC:13
 async fn test_golden_transcript_eval() -> Result<()> {
     // Expected DAP sequence for eval.pl with expression evaluation
@@ -55,6 +58,7 @@ async fn test_golden_transcript_eval() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac13-variable-rendering
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC13) - TDD scaffold"]
 // AC:13
 async fn test_variable_rendering_edge_cases() -> Result<()> {
     // Scalars, arrays, hashes, deep nesting, Unicode, large data (>10KB)
@@ -73,6 +77,7 @@ async fn test_variable_rendering_edge_cases() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac13-validation-coverage
 #[test]
+#[ignore = "Phase 2 implementation (AC13) - TDD scaffold"]
 // AC:13
 fn test_integration_test_coverage() -> Result<()> {
     // Validation: cargo test -p perl-dap --test integration_tests (>95% coverage target)

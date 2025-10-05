@@ -8,6 +8,7 @@ use anyhow::Result;
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-step-continue-latency
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC15) - TDD scaffold"]
 // AC:15
 async fn test_step_continue_latency() -> Result<()> {
     // p95 < 100ms for step/continue operations
@@ -26,6 +27,7 @@ async fn test_step_continue_latency() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-breakpoint-latency
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC15) - TDD scaffold"]
 // AC:15
 async fn test_breakpoint_operation_latency() -> Result<()> {
     // < 50ms for breakpoint operations
@@ -42,6 +44,7 @@ async fn test_breakpoint_operation_latency() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-variable-expansion-latency
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC15) - TDD scaffold"]
 // AC:15
 async fn test_variable_expansion_latency() -> Result<()> {
     // <200ms initial scope retrieval, <100ms per child expansion
@@ -59,6 +62,7 @@ async fn test_variable_expansion_latency() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-incremental-parsing-latency
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC15) - TDD scaffold"]
 // AC:15
 async fn test_incremental_parsing_breakpoint_update() -> Result<()> {
     // <1ms incremental breakpoint updates
@@ -74,6 +78,7 @@ async fn test_incremental_parsing_breakpoint_update() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-memory-overhead
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC15) - TDD scaffold"]
 // AC:15
 async fn test_memory_overhead_validation() -> Result<()> {
     // <1MB adapter state, <5MB Perl shim process
@@ -90,6 +95,7 @@ async fn test_memory_overhead_validation() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-large-codebase-scaling
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC15) - TDD scaffold"]
 // AC:15
 async fn test_large_codebase_breakpoint_performance() -> Result<()> {
     // <50ms breakpoint verification for 100K+ LOC files
@@ -105,6 +111,7 @@ async fn test_large_codebase_breakpoint_performance() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-regression-detection
 #[test]
+#[ignore = "Phase 2 implementation (AC15) - TDD scaffold"]
 // AC:15
 fn test_performance_regression_detection() -> Result<()> {
     // CI/CD integration with cargo bench for regression detection

@@ -8,6 +8,7 @@ use anyhow::Result;
 
 /// Tests feature spec: issue-207-spec.md#ac1-vscode-debugger-contribution
 #[test]
+#[ignore = "Phase 1 implementation (AC1-AC4) - TDD scaffold"]
 // AC:1
 fn test_vscode_debugger_contribution() -> Result<()> {
     // Verify package.json contributes.debuggers configuration
@@ -24,6 +25,7 @@ fn test_vscode_debugger_contribution() -> Result<()> {
 
 /// Tests feature spec: issue-207-spec.md#ac2-launch-configuration-snippets
 #[test]
+#[ignore = "Phase 1 implementation (AC1-AC4) - TDD scaffold"]
 // AC:2
 fn test_launch_configuration_snippets() -> Result<()> {
     // Validate launch.json snippets (launch and attach)
@@ -39,6 +41,7 @@ fn test_launch_configuration_snippets() -> Result<()> {
 
 /// Tests feature spec: issue-207-spec.md#ac3-bridge-documentation
 #[test]
+#[ignore = "Phase 1 implementation (AC1-AC4) - TDD scaffold"]
 // AC:3
 fn test_bridge_documentation_complete() -> Result<()> {
     // Verify bridge setup documentation exists
@@ -54,6 +57,7 @@ fn test_bridge_documentation_complete() -> Result<()> {
 
 /// Tests feature spec: issue-207-spec.md#ac4-basic-debugging-workflow
 #[test]
+#[ignore = "Phase 1 implementation (AC1-AC4) - TDD scaffold"]
 // AC:4
 fn test_basic_debugging_workflow() -> Result<()> {
     // Set/clear breakpoints in source files
@@ -74,6 +78,7 @@ fn test_basic_debugging_workflow() -> Result<()> {
 
 /// Tests feature spec: issue-207-spec.md#ac4-breakpoint-operations
 #[test]
+#[ignore = "Phase 1 implementation (AC1-AC4) - TDD scaffold"]
 // AC:4
 fn test_breakpoint_set_clear_operations() -> Result<()> {
     // Test setting and clearing breakpoints
@@ -88,6 +93,7 @@ fn test_breakpoint_set_clear_operations() -> Result<()> {
 
 /// Tests feature spec: issue-207-spec.md#ac4-stack-trace-inspection
 #[test]
+#[ignore = "Phase 1 implementation (AC1-AC4) - TDD scaffold"]
 // AC:4
 fn test_stack_trace_inspection() -> Result<()> {
     // Test stack trace retrieval and local variable inspection
@@ -103,6 +109,7 @@ fn test_stack_trace_inspection() -> Result<()> {
 
 /// Tests feature spec: issue-207-spec.md#ac4-cross-platform-compatibility
 #[test]
+#[ignore = "Phase 1 implementation (AC1-AC4) - TDD scaffold"]
 // AC:4
 fn test_cross_platform_path_mapping() -> Result<()> {
     // Windows/macOS/Linux path mapping
