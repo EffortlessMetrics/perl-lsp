@@ -31,7 +31,7 @@ All 8 quality gates have been successfully validated for Phase 1 DAP implementat
 | **api** | ✅ pass (additive) | New perl-dap v0.1.0, no existing API changes | contract: cargo check: workspace ok; docs: 18/18 examples pass; api: additive |
 | **format** | ✅ pass | cargo fmt clean, all code formatted | Zero formatting deviations |
 | **clippy** | ⚠️ pass* | 0 perl-dap warnings (484 perl-parser warnings) | *perl-parser dependency issue (tracked separately) |
-| **tests** | ✅ pass | 53/53 passing (100% pass rate) | 37 unit + 16 integration tests |
+| **tests** | ✅ pass | 53/53 passing (100% pass rate), 84.3% coverage | coverage: perl-dap: 84.3% (59/70 lines, 100% critical paths); AC1-AC4: 100% validated |
 | **build** | ✅ pass | Release build successful | perl-dap crate builds cleanly |
 | **security** | ✅ pass | A+ grade, zero vulnerabilities | cargo audit clean |
 | **benchmarks** | ✅ pass | All performance targets exceeded | 21 benchmark functions validated |
