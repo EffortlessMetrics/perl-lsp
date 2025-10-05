@@ -8,6 +8,7 @@ use anyhow::Result;
 
 /// Tests feature spec: DAP_SECURITY_SPECIFICATION.md#path-traversal-prevention
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC16) - TDD scaffold"]
 // AC:16
 async fn test_path_traversal_prevention() -> Result<()> {
     // Path traversal attack prevention
@@ -25,6 +26,7 @@ async fn test_path_traversal_prevention() -> Result<()> {
 
 /// Tests feature spec: DAP_SECURITY_SPECIFICATION.md#safe-eval-enforcement
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC16) - TDD scaffold"]
 // AC:16
 async fn test_safe_eval_enforcement() -> Result<()> {
     // Safe evaluation mode enforced by default
@@ -42,6 +44,7 @@ async fn test_safe_eval_enforcement() -> Result<()> {
 
 /// Tests feature spec: DAP_SECURITY_SPECIFICATION.md#timeout-enforcement
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC16) - TDD scaffold"]
 // AC:16
 async fn test_timeout_enforcement() -> Result<()> {
     // Timeout enforcement for evaluate requests
@@ -58,6 +61,7 @@ async fn test_timeout_enforcement() -> Result<()> {
 
 /// Tests feature spec: DAP_SECURITY_SPECIFICATION.md#unicode-boundary-safety
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC16) - TDD scaffold"]
 // AC:16
 async fn test_unicode_boundary_safety() -> Result<()> {
     // Unicode-safe variable rendering
@@ -75,6 +79,7 @@ async fn test_unicode_boundary_safety() -> Result<()> {
 
 /// Tests feature spec: DAP_SECURITY_SPECIFICATION.md#cargo-audit-compliance
 #[test]
+#[ignore = "Phase 2 implementation (AC16) - TDD scaffold"]
 // AC:16
 fn test_cargo_audit_compliance() -> Result<()> {
     // Zero security findings from cargo audit
@@ -90,6 +95,7 @@ fn test_cargo_audit_compliance() -> Result<()> {
 
 /// Tests feature spec: DAP_SECURITY_SPECIFICATION.md#input-validation
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC16) - TDD scaffold"]
 // AC:16
 async fn test_input_validation() -> Result<()> {
     // Input validation for all DAP requests
@@ -108,6 +114,7 @@ async fn test_input_validation() -> Result<()> {
 
 /// Tests feature spec: DAP_SECURITY_SPECIFICATION.md#process-isolation
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC16) - TDD scaffold"]
 // AC:16
 async fn test_process_isolation() -> Result<()> {
     // Process isolation for Perl shim

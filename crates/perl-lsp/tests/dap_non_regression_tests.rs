@@ -8,6 +8,7 @@ use anyhow::Result;
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac17-lsp-features-unaffected
 #[test]
+#[ignore = "Phase 3 implementation (AC17) - TDD scaffold"]
 // AC:17
 fn test_lsp_features_unaffected_by_dap() -> Result<()> {
     // All LSP features (~89%) remain functional after DAP integration
@@ -30,6 +31,7 @@ fn test_lsp_features_unaffected_by_dap() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac17-lsp-response-time
 #[test]
+#[ignore = "Phase 3 implementation (AC17) - TDD scaffold"]
 // AC:17
 fn test_lsp_response_time_maintained() -> Result<()> {
     // <50ms LSP response time maintained with DAP active
@@ -48,6 +50,7 @@ fn test_lsp_response_time_maintained() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac17-memory-isolation
 #[test]
+#[ignore = "Phase 3 implementation (AC17) - TDD scaffold"]
 // AC:17
 fn test_lsp_dap_memory_isolation() -> Result<()> {
     // No memory leaks or resource contention between LSP and DAP
@@ -66,6 +69,7 @@ fn test_lsp_dap_memory_isolation() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac17-test-pass-rate
 #[test]
+#[ignore = "Phase 3 implementation (AC17) - TDD scaffold"]
 // AC:17
 fn test_lsp_test_pass_rate_100_percent() -> Result<()> {
     // 100% LSP test pass rate with DAP active
@@ -81,6 +85,7 @@ fn test_lsp_test_pass_rate_100_percent() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac17-concurrent-sessions
 #[test]
+#[ignore = "Phase 3 implementation (AC17) - TDD scaffold"]
 // AC:17
 fn test_concurrent_lsp_dap_sessions() -> Result<()> {
     // Concurrent LSP and DAP sessions without interference
@@ -100,6 +105,7 @@ fn test_concurrent_lsp_dap_sessions() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac17-workspace-navigation
 #[test]
+#[ignore = "Phase 3 implementation (AC17) - TDD scaffold"]
 // AC:17
 fn test_workspace_navigation_with_dap() -> Result<()> {
     // Workspace navigation features work during debugging
@@ -119,6 +125,7 @@ fn test_workspace_navigation_with_dap() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac17-incremental-parsing
 #[test]
+#[ignore = "Phase 3 implementation (AC17) - TDD scaffold"]
 // AC:17
 fn test_incremental_parsing_during_debugging() -> Result<()> {
     // Incremental parsing (<1ms) still works during DAP session

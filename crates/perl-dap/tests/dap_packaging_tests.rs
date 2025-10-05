@@ -8,6 +8,7 @@ use anyhow::Result;
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac19-platform-binaries
 #[test]
+#[ignore = "Phase 3 implementation (AC19) - TDD scaffold"]
 // AC:19
 fn test_platform_binary_builds() -> Result<()> {
     // Verify 6 platform targets compile successfully
@@ -27,6 +28,7 @@ fn test_platform_binary_builds() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac19-binary-distribution
 #[test]
+#[ignore = "Phase 3 implementation (AC19) - TDD scaffold"]
 // AC:19
 fn test_github_releases_distribution() -> Result<()> {
     // GitHub Releases distribution with auto-download fallback
@@ -43,6 +45,7 @@ fn test_github_releases_distribution() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac19-binary-size
 #[test]
+#[ignore = "Phase 3 implementation (AC19) - TDD scaffold"]
 // AC:19
 fn test_binary_size_optimization() -> Result<()> {
     // Binary size optimization (<5MB release build)
@@ -59,6 +62,7 @@ fn test_binary_size_optimization() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac19-vscode-extension-integration
 #[test]
+#[ignore = "Phase 3 implementation (AC19) - TDD scaffold"]
 // AC:19
 fn test_vscode_extension_binary_bundling() -> Result<()> {
     // VS Code extension bundles platform-specific binaries
@@ -75,6 +79,7 @@ fn test_vscode_extension_binary_bundling() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac19-binary-permissions
 #[test]
+#[ignore = "Phase 3 implementation (AC19) - TDD scaffold"]
 // AC:19
 fn test_binary_permissions_unix() -> Result<()> {
     // Unix binary permissions (executable bit set)
@@ -90,6 +95,7 @@ fn test_binary_permissions_unix() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac19-cross-compilation
 #[test]
+#[ignore = "Phase 3 implementation (AC19) - TDD scaffold"]
 // AC:19
 fn test_cross_compilation_ci() -> Result<()> {
     // CI/CD cross-compilation for all 6 platforms

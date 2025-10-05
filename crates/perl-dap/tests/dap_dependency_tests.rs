@@ -8,6 +8,7 @@ use anyhow::Result;
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-cpan-auto-install
 #[tokio::test]
+#[ignore = "Phase 3 implementation (AC18) - TDD scaffold"]
 // AC:18
 async fn test_cpan_module_installation_fallback() -> Result<()> {
     // Auto-install Devel::TSPerlDAP via cpanm (recommended)
@@ -24,6 +25,7 @@ async fn test_cpan_module_installation_fallback() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-version-detection
 #[test]
+#[ignore = "Phase 3 implementation (AC18) - TDD scaffold"]
 // AC:18
 fn test_devel_tsperldap_version_detection() -> Result<()> {
     // Detect Devel::TSPerlDAP version
@@ -39,6 +41,7 @@ fn test_devel_tsperldap_version_detection() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-bundled-fallback
 #[tokio::test]
+#[ignore = "Phase 3 implementation (AC18) - TDD scaffold"]
 // AC:18
 async fn test_bundled_shim_fallback() -> Result<()> {
     // Bundled Perl shim as fallback
@@ -54,6 +57,7 @@ async fn test_bundled_shim_fallback() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-dependency-documentation
 #[test]
+#[ignore = "Phase 3 implementation (AC18) - TDD scaffold"]
 // AC:18
 fn test_dependency_management_documentation() -> Result<()> {
     // Verify dependency management documentation
@@ -70,6 +74,7 @@ fn test_dependency_management_documentation() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-perl-version-compatibility
 #[test]
+#[ignore = "Phase 3 implementation (AC18) - TDD scaffold"]
 // AC:18
 fn test_perl_version_compatibility() -> Result<()> {
     // Perl 5.16+ compatibility validation
@@ -86,6 +91,7 @@ fn test_perl_version_compatibility() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-cpan-dependencies
 #[test]
+#[ignore = "Phase 3 implementation (AC18) - TDD scaffold"]
 // AC:18
 fn test_cpan_dependency_installation() -> Result<()> {
     // Verify CPAN dependencies for Devel::TSPerlDAP

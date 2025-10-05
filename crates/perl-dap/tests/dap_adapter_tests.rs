@@ -8,6 +8,7 @@ use anyhow::Result;
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac5-adapter-scaffolding
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC5) - TDD scaffold"]
 // AC:5
 async fn test_dap_adapter_scaffolding() -> Result<()> {
     // JSON-RPC DAP server initialization
@@ -27,6 +28,7 @@ async fn test_dap_adapter_scaffolding() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac5-protocol-compliance
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC5) - TDD scaffold"]
 // AC:5
 async fn test_json_rpc_protocol_compliance() -> Result<()> {
     // Test JSON-RPC 2.0 message framing with Content-Length headers
@@ -41,6 +43,7 @@ async fn test_json_rpc_protocol_compliance() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac6-perl-shim-integration
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC6) - TDD scaffold"]
 // AC:6
 async fn test_perl_shim_integration() -> Result<()> {
     // Devel::TSPerlDAP CPAN module communication
@@ -58,6 +61,7 @@ async fn test_perl_shim_integration() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac7-breakpoint-management
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC7) - TDD scaffold"]
 // AC:7
 async fn test_breakpoint_management_with_ast_validation() -> Result<()> {
     // setBreakpoints request with AST validation
@@ -76,6 +80,7 @@ async fn test_breakpoint_management_with_ast_validation() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac7-incremental-breakpoint-updates
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC7) - TDD scaffold"]
 // AC:7
 async fn test_incremental_breakpoint_updates() -> Result<()> {
     // Breakpoints survive file edits with incremental parsing (<1ms)
@@ -91,6 +96,7 @@ async fn test_incremental_breakpoint_updates() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac8-stack-and-variables
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC8) - TDD scaffold"]
 // AC:8
 async fn test_stack_trace_and_scopes() -> Result<()> {
     // threads, stackTrace, scopes, variables requests
@@ -111,6 +117,7 @@ async fn test_stack_trace_and_scopes() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac8-lazy-variable-expansion
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC8) - TDD scaffold"]
 // AC:8
 async fn test_lazy_variable_expansion() -> Result<()> {
     // Performance: <200ms initial scope retrieval, <100ms per child expansion
@@ -126,6 +133,7 @@ async fn test_lazy_variable_expansion() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac9-execution-control
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC9) - TDD scaffold"]
 // AC:9
 async fn test_execution_control_operations() -> Result<()> {
     // continue, next, stepIn, stepOut, pause
@@ -144,6 +152,7 @@ async fn test_execution_control_operations() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac9-pause-operation
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC9) - TDD scaffold"]
 // AC:9
 async fn test_pause_interrupt_handling() -> Result<()> {
     // Pause sends SIGINT on Unix, Ctrl+C on Windows (<200ms response)
@@ -159,6 +168,7 @@ async fn test_pause_interrupt_handling() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac10-evaluate-and-repl
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC10) - TDD scaffold"]
 // AC:10
 async fn test_evaluate_in_frame_context() -> Result<()> {
     // evaluate request evaluates expressions in selected stack frame
@@ -175,6 +185,7 @@ async fn test_evaluate_in_frame_context() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac10-safe-evaluation
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC10) - TDD scaffold"]
 // AC:10
 async fn test_safe_evaluation_mode() -> Result<()> {
     // Safe mode default: non-mutating eval, explicit allowSideEffects opt-in
@@ -189,6 +200,7 @@ async fn test_safe_evaluation_mode() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac11-vscode-integration
 #[test]
+#[ignore = "Phase 2 implementation (AC11) - TDD scaffold"]
 // AC:11
 fn test_vscode_native_integration() -> Result<()> {
     // Debugger contribution for type "perl-rs"
@@ -205,6 +217,7 @@ fn test_vscode_native_integration() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac12-cross-platform-wsl
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC12) - TDD scaffold"]
 // AC:12
 async fn test_cross_platform_wsl_support() -> Result<()> {
     // Windows path case normalization

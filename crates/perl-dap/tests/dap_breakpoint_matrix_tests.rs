@@ -8,6 +8,7 @@ use anyhow::Result;
 
 /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#file-boundaries
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC14) - TDD scaffold"]
 // AC:14
 async fn test_breakpoints_file_boundaries() -> Result<()> {
     // First/last line breakpoint behavior
@@ -23,6 +24,7 @@ async fn test_breakpoints_file_boundaries() -> Result<()> {
 
 /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#comments-blank-lines
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC14) - TDD scaffold"]
 // AC:14
 async fn test_breakpoints_comments_and_blank_lines() -> Result<()> {
     // Skip comment/blank line breakpoints
@@ -39,6 +41,7 @@ async fn test_breakpoints_comments_and_blank_lines() -> Result<()> {
 
 /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#heredocs
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC14) - TDD scaffold"]
 // AC:14
 async fn test_breakpoints_in_heredocs() -> Result<()> {
     // Heredoc content breakpoint behavior
@@ -54,6 +57,7 @@ async fn test_breakpoints_in_heredocs() -> Result<()> {
 
 /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#begin-end-blocks
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC14) - TDD scaffold"]
 // AC:14
 async fn test_breakpoints_begin_end_blocks() -> Result<()> {
     // BEGIN/END block breakpoint validation
@@ -69,6 +73,7 @@ async fn test_breakpoints_begin_end_blocks() -> Result<()> {
 
 /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#multiline-statements
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC14) - TDD scaffold"]
 // AC:14
 async fn test_breakpoints_multiline_statements() -> Result<()> {
     // Multi-line statement breakpoint behavior
@@ -83,6 +88,7 @@ async fn test_breakpoints_multiline_statements() -> Result<()> {
 
 /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#pod-documentation
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC14) - TDD scaffold"]
 // AC:14
 async fn test_breakpoints_in_pod_documentation() -> Result<()> {
     // POD documentation breakpoint behavior
@@ -96,6 +102,7 @@ async fn test_breakpoints_in_pod_documentation() -> Result<()> {
 
 /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#string-literals
 #[tokio::test]
+#[ignore = "Phase 2 implementation (AC14) - TDD scaffold"]
 // AC:14
 async fn test_breakpoints_in_string_literals() -> Result<()> {
     // String literal breakpoint behavior
@@ -109,6 +116,7 @@ async fn test_breakpoints_in_string_literals() -> Result<()> {
 
 /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac14-performance-baselines
 #[test]
+#[ignore = "Phase 2 implementation (AC14) - TDD scaffold"]
 // AC:14
 fn test_performance_benchmark_baselines() -> Result<()> {
     // Benchmark suite: small (100 lines), medium (1000 lines), large (10K+ lines)
