@@ -631,16 +631,15 @@ fn test_kill_mutation_modifier_character_matching() {
         let ast =
             parser.parse().unwrap_or_else(|_| panic!("Valid modifier '{}' should parse", code));
 
-        if let NodeKind::Program { statements } = &ast.kind {
-            if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
-                if let NodeKind::Substitution { modifiers, .. } = &expression.kind {
-                    assert_eq!(
-                        modifiers, expected_modifiers,
-                        "Valid modifier '{}' should be preserved - kills modifier char mutations",
-                        code
-                    );
-                }
-            }
+        if let NodeKind::Program { statements } = &ast.kind
+            && let NodeKind::ExpressionStatement { expression } = &statements[0].kind
+            && let NodeKind::Substitution { modifiers, .. } = &expression.kind
+        {
+            assert_eq!(
+                modifiers, expected_modifiers,
+                "Valid modifier '{}' should be preserved - kills modifier char mutations",
+                code
+            );
         }
     }
 
@@ -707,19 +706,17 @@ fn test_kill_mutation_mixed_modifier_validation() {
             );
         } else {
             assert!(result.is_ok(), "Pure valid modifier case '{}' should succeed", code);
-            if let Ok(ast) = result {
-                if let NodeKind::Program { statements } = &ast.kind {
-                    if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
-                        if let NodeKind::Substitution { modifiers, .. } = &expression.kind {
-                            // Verify valid modifiers are preserved
-                            assert!(
-                                !modifiers.is_empty(),
-                                "Valid modifiers should not be empty for '{}'",
-                                code
-                            );
-                        }
-                    }
-                }
+            if let Ok(ast) = result
+                && let NodeKind::Program { statements } = &ast.kind
+                && let NodeKind::ExpressionStatement { expression } = &statements[0].kind
+                && let NodeKind::Substitution { modifiers, .. } = &expression.kind
+            {
+                // Verify valid modifiers are preserved
+                assert!(
+                    !modifiers.is_empty(),
+                    "Valid modifiers should not be empty for '{}'",
+                    code
+                );
             }
         }
     }

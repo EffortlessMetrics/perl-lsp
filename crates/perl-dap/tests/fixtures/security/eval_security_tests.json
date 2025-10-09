@@ -1,0 +1,188 @@
+{
+  "description": "Safe evaluation security test cases for DAP evaluate requests",
+  "test_cases": [
+    {
+      "name": "safe_scalar_evaluation",
+      "expression": "$x + $y",
+      "frame_variables": {
+        "$x": 10,
+        "$y": 20
+      },
+      "expected_result": 30,
+      "should_allow": true,
+      "side_effects": false,
+      "reason": "Simple arithmetic expression without side effects"
+    },
+    {
+      "name": "safe_string_concatenation",
+      "expression": "$name . ' ' . $surname",
+      "frame_variables": {
+        "$name": "John",
+        "$surname": "Doe"
+      },
+      "expected_result": "John Doe",
+      "should_allow": true,
+      "side_effects": false,
+      "reason": "String concatenation without side effects"
+    },
+    {
+      "name": "safe_array_access",
+      "expression": "$array[0]",
+      "frame_variables": {
+        "@array": [1, 2, 3]
+      },
+      "expected_result": 1,
+      "should_allow": true,
+      "side_effects": false,
+      "reason": "Array element access without side effects"
+    },
+    {
+      "name": "safe_hash_access",
+      "expression": "$hash{key}",
+      "frame_variables": {
+        "%hash": {"key": "value"}
+      },
+      "expected_result": "value",
+      "should_allow": true,
+      "side_effects": false,
+      "reason": "Hash element access without side effects"
+    },
+    {
+      "name": "dangerous_system_call",
+      "expression": "system('rm -rf /')",
+      "should_allow": false,
+      "reason": "Dangerous system call blocked",
+      "expected_error": "SecurityError::SystemCallNotAllowed"
+    },
+    {
+      "name": "dangerous_exec_call",
+      "expression": "exec('cat /etc/passwd')",
+      "should_allow": false,
+      "reason": "Dangerous exec call blocked",
+      "expected_error": "SecurityError::ExecNotAllowed"
+    },
+    {
+      "name": "dangerous_backticks",
+      "expression": "`cat /etc/passwd`",
+      "should_allow": false,
+      "reason": "Backtick command execution blocked",
+      "expected_error": "SecurityError::CommandExecutionNotAllowed"
+    },
+    {
+      "name": "dangerous_qx_operator",
+      "expression": "qx/ls -la/",
+      "should_allow": false,
+      "reason": "qx// command execution blocked",
+      "expected_error": "SecurityError::CommandExecutionNotAllowed"
+    },
+    {
+      "name": "dangerous_eval_string",
+      "expression": "eval 'system(\"cat /etc/passwd\")'",
+      "should_allow": false,
+      "reason": "Nested eval with system call blocked",
+      "expected_error": "SecurityError::NestedEvalNotAllowed"
+    },
+    {
+      "name": "dangerous_do_file",
+      "expression": "do '/etc/passwd'",
+      "should_allow": false,
+      "reason": "do FILE execution blocked",
+      "expected_error": "SecurityError::FileExecutionNotAllowed"
+    },
+    {
+      "name": "dangerous_require",
+      "expression": "require '/etc/passwd'",
+      "should_allow": false,
+      "reason": "require with arbitrary path blocked",
+      "expected_error": "SecurityError::RequireNotAllowed"
+    },
+    {
+      "name": "file_operation_open",
+      "expression": "open(my $fh, '>', '/tmp/test.txt')",
+      "should_allow": false,
+      "reason": "File operations require side effects opt-in",
+      "expected_error": "SecurityError::SideEffectsNotAllowed"
+    },
+    {
+      "name": "file_operation_open_with_opt_in",
+      "expression": "open(my $fh, '>', '/tmp/test.txt')",
+      "allow_side_effects": true,
+      "should_allow": true,
+      "side_effects": true,
+      "reason": "File operations allowed with explicit opt-in"
+    },
+    {
+      "name": "assignment_without_opt_in",
+      "expression": "$x = 42",
+      "should_allow": false,
+      "reason": "Variable assignment requires side effects opt-in",
+      "expected_error": "SecurityError::SideEffectsNotAllowed"
+    },
+    {
+      "name": "assignment_with_opt_in",
+      "expression": "$x = 42",
+      "allow_side_effects": true,
+      "should_allow": true,
+      "side_effects": true,
+      "reason": "Variable assignment allowed with explicit opt-in"
+    },
+    {
+      "name": "method_call_without_side_effects",
+      "expression": "$object->get_value()",
+      "frame_variables": {
+        "$object": {"__type": "MyClass"}
+      },
+      "should_allow": true,
+      "side_effects": false,
+      "reason": "Method call without apparent side effects"
+    },
+    {
+      "name": "package_variable_access",
+      "expression": "$main::global_var",
+      "should_allow": true,
+      "side_effects": false,
+      "reason": "Package variable access without side effects"
+    },
+    {
+      "name": "infinite_loop_timeout",
+      "expression": "while(1){}",
+      "timeout_ms": 5000,
+      "should_allow": false,
+      "reason": "Infinite loop should timeout",
+      "expected_error": "SecurityError::EvaluationTimeout"
+    },
+    {
+      "name": "recursive_data_structure",
+      "expression": "$ref",
+      "frame_variables": {
+        "$ref": {"__circular": true}
+      },
+      "should_allow": true,
+      "side_effects": false,
+      "reason": "Circular reference detection and safe rendering"
+    },
+    {
+      "name": "unicode_safe_evaluation",
+      "expression": "$emoji . $text",
+      "frame_variables": {
+        "$emoji": "🦀",
+        "$text": "こんにちは"
+      },
+      "expected_result": "🦀こんにちは",
+      "should_allow": true,
+      "side_effects": false,
+      "reason": "Unicode-safe string operations"
+    },
+    {
+      "name": "large_data_truncation",
+      "expression": "$large_string",
+      "frame_variables": {
+        "$large_string": {"__size": 15000, "__content": "x"}
+      },
+      "should_allow": true,
+      "side_effects": false,
+      "reason": "Large data should be truncated at 10KB",
+      "truncated": true
+    }
+  ]
+}

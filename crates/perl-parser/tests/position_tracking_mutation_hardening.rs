@@ -352,7 +352,7 @@ print $x;
         "MUTATION KILL: Non-overlapping ranges should not overlap"
     );
 
-    assert!(test_range.len() > 0, "MUTATION KILL: Range should have positive length");
+    assert!(!test_range.is_empty(), "MUTATION KILL: Range should have positive length");
 
-    assert!(other_range.len() > 0, "MUTATION KILL: Other range should have positive length");
+    assert!(!other_range.is_empty(), "MUTATION KILL: Other range should have positive length");
 }

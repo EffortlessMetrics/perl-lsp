@@ -1,0 +1,123 @@
+{
+  "name": "stepping_sequence",
+  "description": "Continue, next, stepIn, stepOut operations",
+  "fixture": "tests/fixtures/hello.pl",
+  "messages": [
+    {
+      "seq": 10,
+      "type": "request",
+      "command": "continue",
+      "arguments": {
+        "threadId": 1
+      }
+    },
+    {
+      "seq": 10,
+      "type": "response",
+      "request_seq": 10,
+      "success": true,
+      "command": "continue",
+      "body": {
+        "allThreadsContinued": true
+      }
+    },
+    {
+      "seq": 11,
+      "type": "event",
+      "event": "continued",
+      "body": {
+        "threadId": 1,
+        "allThreadsContinued": true
+      }
+    },
+    {
+      "seq": 12,
+      "type": "event",
+      "event": "stopped",
+      "body": {
+        "reason": "breakpoint",
+        "description": "Paused on breakpoint",
+        "threadId": 1,
+        "allThreadsStopped": true
+      }
+    },
+    {
+      "seq": 13,
+      "type": "request",
+      "command": "next",
+      "arguments": {
+        "threadId": 1
+      }
+    },
+    {
+      "seq": 13,
+      "type": "response",
+      "request_seq": 13,
+      "success": true,
+      "command": "next"
+    },
+    {
+      "seq": 14,
+      "type": "event",
+      "event": "stopped",
+      "body": {
+        "reason": "step",
+        "description": "Paused on step",
+        "threadId": 1,
+        "allThreadsStopped": true
+      }
+    },
+    {
+      "seq": 15,
+      "type": "request",
+      "command": "stepIn",
+      "arguments": {
+        "threadId": 1
+      }
+    },
+    {
+      "seq": 15,
+      "type": "response",
+      "request_seq": 15,
+      "success": true,
+      "command": "stepIn"
+    },
+    {
+      "seq": 16,
+      "type": "event",
+      "event": "stopped",
+      "body": {
+        "reason": "step",
+        "description": "Paused on step in",
+        "threadId": 1,
+        "allThreadsStopped": true
+      }
+    },
+    {
+      "seq": 17,
+      "type": "request",
+      "command": "stepOut",
+      "arguments": {
+        "threadId": 1
+      }
+    },
+    {
+      "seq": 17,
+      "type": "response",
+      "request_seq": 17,
+      "success": true,
+      "command": "stepOut"
+    },
+    {
+      "seq": 18,
+      "type": "event",
+      "event": "stopped",
+      "body": {
+        "reason": "step",
+        "description": "Paused on step out",
+        "threadId": 1,
+        "allThreadsStopped": true
+      }
+    }
+  ]
+}

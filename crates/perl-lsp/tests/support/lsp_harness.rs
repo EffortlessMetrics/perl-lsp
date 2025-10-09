@@ -56,6 +56,7 @@ pub struct LspHarness {
     notification_buffer: Arc<Mutex<VecDeque<Value>>>,
     next_request_id: i32,
     handle: Option<thread::JoinHandle<()>>,
+    canceled_ids: Arc<Mutex<Vec<i32>>>, // Track canceled request IDs
 }
 
 struct SendableServer(LspServer);
@@ -92,6 +93,7 @@ impl LspHarness {
             notification_buffer,
             next_request_id: 1,
             handle: Some(handle),
+            canceled_ids: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -715,6 +717,113 @@ impl LspHarness {
             }),
         )
     }
+
+    /// Send a cancellation request for a specific request ID
+    /// Returns immediately - does NOT wait for confirmation
+    /// Use assert_no_response_for_canceled() to verify cancellation worked
+    pub fn cancel(&mut self, request_id: i32) {
+        // Track this as a canceled ID
+        self.canceled_ids.lock().unwrap().push(request_id);
+
+        // Send $/cancelRequest notification
+        self.notify(
+            "$/cancelRequest",
+            json!({
+                "id": request_id
+            }),
+        );
+    }
+
+    /// Assert that no response was received for a canceled request ID
+    /// This verifies that the cancellation was successful
+    pub fn assert_no_response_for_canceled(&mut self, request_id: i32, timeout: Duration) {
+        let start = Instant::now();
+
+        // Wait for timeout period to ensure no response arrives
+        while start.elapsed() < timeout {
+            let output = self.output_buffer.lock().unwrap();
+            let output_str = String::from_utf8_lossy(&output);
+
+            // Check if we got a response for this ID
+            if output_str.contains(&format!("\"id\":{}", request_id))
+                || output_str.contains(&format!("\"id\": {}", request_id))
+            {
+                drop(output);
+                panic!("Received response for canceled request ID {}", request_id);
+            }
+            drop(output);
+
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        // Success - no response was received
+    }
+
+    /// Normalize file path for cross-platform testing (Windows/WSL/Unix)
+    pub fn normalize_path(path: &str) -> String {
+        // Detect WSL and convert Windows paths if needed
+        if cfg!(target_os = "linux") && std::env::var("WSL_DISTRO_NAME").is_ok() {
+            // In WSL, convert Windows paths like C:\foo to /mnt/c/foo
+            if path.len() >= 3 && path.chars().nth(1) == Some(':') {
+                let drive = path.chars().next().unwrap().to_lowercase();
+                let rest = path[2..].replace('\\', "/");
+                return format!("/mnt/{}{}", drive, rest);
+            }
+        }
+
+        // On Windows, normalize to forward slashes for file:// URIs
+        if cfg!(target_os = "windows") {
+            return path.replace('\\', "/");
+        }
+
+        // Unix paths are already normalized
+        path.to_string()
+    }
+
+    /// Wait for a specific notification to arrive (barrier pattern)
+    /// Returns the notification params if found, or error if timeout
+    pub fn wait_for_notification(
+        &mut self,
+        method: &str,
+        timeout: Duration,
+    ) -> Result<Value, String> {
+        let start = Instant::now();
+
+        while start.elapsed() < timeout {
+            let mut notifications = self.notification_buffer.lock().unwrap();
+
+            // Search for matching notification
+            if let Some(pos) = notifications
+                .iter()
+                .position(|n| n.get("method").and_then(|m| m.as_str()) == Some(method))
+            {
+                let notif = notifications.remove(pos).unwrap();
+                drop(notifications);
+
+                return Ok(notif.get("params").cloned().unwrap_or(json!({})));
+            }
+
+            drop(notifications);
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        Err(format!("Notification '{}' not received within {:?}", method, timeout))
+    }
+
+    /// Synchronization barrier - wait for all pending server operations to complete
+    /// This replaces "sleep and hope" patterns with deterministic synchronization
+    pub fn barrier(&mut self) {
+        // Send a dummy request that forces the server to process all pending work
+        // We use workspace/symbol with empty query as it's lightweight
+        let _ = self.request_with_timeout(
+            "workspace/symbol",
+            json!({"query": "__barrier__"}),
+            Duration::from_millis(500),
+        );
+
+        // Drain any notifications that arrived
+        self.wait_for_idle(Duration::from_millis(100));
+    }
 }
 
 impl LspHarness {
@@ -833,7 +942,7 @@ impl LspHarness {
         );
 
         // If it responds (even with error), server is alive
-        ping_result.is_ok() || ping_result.err().map_or(false, |e| !e.contains("timed out"))
+        ping_result.is_ok() || ping_result.err().is_some_and(|e| !e.contains("timed out"))
     }
 }
 
@@ -866,6 +975,59 @@ impl Write for TestWriter {
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
+}
+
+// ======================== PHASE 1 STABILIZATION HELPERS ========================
+
+/// Spawn LSP server with clean environment - Phase 1 stable interface
+/// Returns a harness that is NOT yet initialized (call handshake_initialize separately)
+pub fn spawn_lsp() -> LspHarness {
+    // Set predictable environment for LSP server
+    // SAFETY: We're in a test environment where modifying environment variables
+    // is acceptable. These changes only affect the current test process.
+    unsafe {
+        std::env::set_var("RUST_LOG", "warn"); // Reduce noise in test output
+        std::env::remove_var("PERL_LSP_PERFORMANCE_TEST"); // Ensure consistent behavior
+    }
+
+    LspHarness::new_raw()
+}
+
+/// Perform LSP handshake: initialize → wait for response → initialized notification
+/// This is the deterministic initialization sequence for Phase 1
+pub fn handshake_initialize(
+    harness: &mut LspHarness,
+    root_uri: Option<&str>,
+) -> Result<Value, String> {
+    let root = root_uri.unwrap_or("file:///test");
+
+    // Step 1: Send initialize request
+    let capabilities = json!({
+        "textDocument": {
+            "completion": {
+                "completionItem": {
+                    "snippetSupport": true
+                }
+            },
+            "hover": {
+                "contentFormat": ["markdown", "plaintext"]
+            }
+        }
+    });
+
+    let init_response = harness.initialize_with_root(root, Some(capabilities))?;
+
+    // Step 2: Already sent initialized notification in initialize_with_root
+    // Step 3: Barrier to ensure server is fully ready
+    harness.barrier();
+
+    Ok(init_response)
+}
+
+/// Gracefully shutdown LSP server - Phase 1 stable interface
+/// This is a convenience wrapper around LspHarness::shutdown_gracefully
+pub fn shutdown_graceful(harness: &mut LspHarness) {
+    harness.shutdown_gracefully();
 }
 
 // Convenience macros

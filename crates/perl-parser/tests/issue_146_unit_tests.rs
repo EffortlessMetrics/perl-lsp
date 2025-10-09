@@ -221,7 +221,7 @@ mod quality_assurance_tests {
     #[test]
     fn test_build_without_warnings() {
         let output = Command::new("cargo")
-            .args(&["build", "--package", "perl-parser"])
+            .args(["build", "--package", "perl-parser"])
             .output()
             .expect("Failed to run cargo build");
 
@@ -237,7 +237,7 @@ mod quality_assurance_tests {
     #[test]
     fn test_test_suite_passes() {
         let output = Command::new("cargo")
-            .args(&["test", "--package", "perl-parser", "--lib"])
+            .args(["test", "--package", "perl-parser", "--lib"])
             .output()
             .expect("Failed to run tests");
 

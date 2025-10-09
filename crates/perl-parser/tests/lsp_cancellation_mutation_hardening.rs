@@ -72,10 +72,10 @@ impl MockLspState {
 
     /// End concurrent operation
     fn end_operation(&self) {
-        if let Ok(mut ops) = self.concurrent_operations.lock() {
-            if *ops > 0 {
-                *ops -= 1;
-            }
+        if let Ok(mut ops) = self.concurrent_operations.lock()
+            && *ops > 0
+        {
+            *ops -= 1;
         }
     }
 
@@ -641,7 +641,7 @@ mod cancellation_integration_tests {
             state_clone.start_operation();
 
             // Simulate complex LSP workflow: parse -> index -> complete -> navigate
-            let steps = vec![
+            let steps = [
                 "parse_document",
                 "update_workspace_index",
                 "generate_completions",
