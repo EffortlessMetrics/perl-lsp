@@ -12,7 +12,7 @@
 
 | Gate | Status | Evidence |
 |------|--------|----------|
-| **freshness** | ✅ pass | Base up-to-date with master @e753a10e, semantic commits validated |
+| **freshness** | ❌ fail | Branch stale: 2 commits behind master (merge base @2997d630, master now @e753a10e) |
 | **format** | ✅ pass | cargo fmt --workspace clean (0 formatting issues) |
 | **clippy** | ✅ pass | cargo clippy --workspace clean (0 production warnings) |
 | **tests** | ✅ pass | 558/558 tests passing (100% pass rate) |
@@ -20,7 +20,8 @@
 | **docs** | ✅ pass | Diátaxis 4/4, 18/18 doctests, DAP_USER_GUIDE.md comprehensive |
 | **mutation** | ✅ pass | 71.8% mutation score (≥60% Phase 1 target) |
 | **security** | ✅ pass | A+ grade (0 vulnerabilities detected) |
-| **perf** | ✅ pass | EXCELLENT (14,970x-28,400,000x faster) |
+| **perf** | ✅ pass | parsing:4-17µs/file (59x-250x SLO margin), lsp:5000x improvements maintained, dap:14,970x-28,400,000x faster |
+| **benchmarks** | ✅ pass | parsing:16.8µs simple/4.6µs complex/10.5µs lexer, test suite:272 tests 0.29s, regression:+16.1% simple (acceptable variance) |
 | **coverage** | ✅ pass | 100% test pass rate (558/558) |
 | **contract** | ✅ pass | API classification validated (additive enhancement) |
 | **architecture** | ✅ pass | Bridge adapter pattern validated with Phase 1 specs |
@@ -74,6 +75,8 @@
 | 2025-10-04T23:12:15Z | freshness-checker | Branch freshness validated, rebase required | rebase-helper |
 | 2025-10-04 | promotion-validator | All 12 gates validated (98/100 quality score) | review-ready-promoter |
 | 2025-10-04 | review-ready-promoter | Draft → Ready promotion complete ✅ | integrative-workflow |
+| 2025-10-09 | benchmark-runner | Parsing SLO validation complete. Parsing: 4-17µs (59x-250x SLO margin), LSP: 5000x improvements maintained, DAP: 14,970x-28,400,000x faster, test suite: 272 tests 0.29s. Regression: +16.1% simple script (acceptable variance, 59x SLO margin). Performance gate: PASS | pr-doc-reviewer |
+| 2025-10-09 | integrative-merger | Freshness re-check FAILED: branch stale (2 commits behind master: PRs #205, #206 merged). Merge base @2997d630, master now @e753a10e. Gate: integrative:gate:freshness = fail | rebase-helper |
 
 <!-- hoplog:end -->
 
@@ -82,42 +85,39 @@
 <!-- decision:start -->
 ### Routing Decision
 
-**NEXT → Human Code Review → Integrative Workflow**
+**State**: BLOCKED
+**Why**: Freshness gate failed - branch is stale (2 commits behind master). PRs #205 (Issue #178 unreachable elimination) and #206 (Issue #178 test enhancement) have been merged to master since this branch was last updated.
+**Next**: ROUTE → rebase-helper for freshness remediation, then re-run T1 validation (fmt/clippy/check)
 
-**Rationale**: PR #209 has successfully completed comprehensive quality validation with all 12 gates passing and a quality score of 98/100 (Excellent). The PR is now ready for human code review.
-
-**Promotion Evidence**:
+**Blocking Evidence**:
 ```
-promotion: Draft → Ready for Review ✅
-pr-status: OPEN (non-draft) @d9792e41
-pr-labels: flow:review, state:ready, enhancement, documentation, security
-base-branch: master @e753a10e (up-to-date)
-gates: 12/12 PASS
-quality-score: 98/100 (Excellent)
-test-results: 558/558 passing (100%)
-mutation-score: 71.8% (≥60% Phase 1 target)
-security-grade: A+ (0 vulnerabilities)
-performance: EXCELLENT (14,970x-28,400,000x faster)
-api-classification: additive enhancement (perl-dap crate)
-docs-compliance: Diátaxis 4/4, 18/18 doctests
-summary-comment: posted to PR #209
-timestamp: 2025-10-04
-commit: @d9792e41
+integrative:gate:freshness = fail
+merge-base: @2997d630 (2 commits behind)
+master-head: @e753a10e (includes PRs #205, #206)
+branch-head: @4621aa0e (feat/207-dap-support-specifications)
+commits-behind: 2
+reason: Branch must be rebased to current master before final merge validation
+method: git-merge-base-check
+result: stale-branch-detected
 ```
 
-**Next Steps for Human Reviewers**:
-1. Code review: Bridge adapter architecture validation
-2. Cross-platform logic: Path normalization review
-3. Security patterns: Enterprise security verification
-4. Documentation accuracy: User guide alignment check
-5. API contract review: Additive enhancement validation
-6. Approve when satisfied
+**Required Actions**:
+1. ⚠️ **IMMEDIATE**: Rebase branch to master@e753a10e
+2. ⚠️ **REQUIRED**: Re-run T1 fast validation (cargo fmt/clippy/check)
+3. ⚠️ **REQUIRED**: Re-validate all integrative gates on fresh HEAD
+4. ⚠️ **THEN**: Resume final merge readiness validation with parsing SLO check
 
-**Handoff to Integrative Workflow** (after approval):
-- Final integration validation
-- Merge coordination
-- Release preparation (if applicable)
-- Changelog updates
+**Previous Gate Status** (pre-freshness failure):
+- format: ✅ pass
+- clippy: ✅ pass
+- tests: ✅ pass (558/558)
+- build: ✅ pass
+- docs: ✅ pass (72/83 doctests)
+- security: ✅ pass (A+ grade)
+- perf: ✅ pass (4-17µs parsing, 59x-250x SLO margin)
+- mutation: ✅ pass (71.8% score)
+
+**BLOCKED on freshness** - cannot proceed to parsing SLO validation until rebase complete.
 
 <!-- decision:end -->
 
