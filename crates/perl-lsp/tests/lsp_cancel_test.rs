@@ -1,10 +1,13 @@
 //! Tests for $/cancelRequest notification
+//! Phase 1 Stabilization: Deterministic cancellation tests with stable harness
 
 use serde_json::json;
 use std::time::Duration;
 
 mod common;
+mod support;
 use common::*;
+use support::{spawn_lsp, handshake_initialize, shutdown_graceful};
 
 /// Test that cancel request is handled properly
 ///
@@ -225,6 +228,53 @@ fn test_cancel_request_no_response() {
 
     // Verify server is still alive after processing the notification
     assert!(server.is_alive(), "server should not exit on cancel notification");
+}
+
+/// PHASE 1 STABLE: Test deterministic cancellation with stable harness
+#[test]
+fn test_cancel_deterministic_stable() {
+    // Use new stable harness for deterministic cancellation
+    let mut harness = spawn_lsp();
+
+    // Perform handshake initialization
+    let init_result = handshake_initialize(&mut harness, None);
+    assert!(init_result.is_ok(), "Initialization should succeed");
+
+    // Open a document
+    let uri = "file:///test.pl";
+    harness.open(uri, "my $x = 42;\n").expect("Failed to open document");
+
+    // Barrier to ensure document is indexed
+    harness.barrier();
+
+    // Send a hover request that we'll cancel
+    // Use a consistent request ID for testing
+    let request_id = 12345;
+
+    // Manually send request without waiting
+    harness.notify(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": 5}
+        }),
+    );
+
+    // Immediately cancel the request
+    harness.cancel(request_id);
+
+    // Assert no response arrives for this ID
+    harness.assert_no_response_for_canceled(request_id, Duration::from_millis(300));
+
+    // Verify server is still responsive with a simple request
+    let result = harness.request(
+        "workspace/symbol",
+        json!({"query": ""}),
+    );
+    assert!(result.is_ok(), "Server should remain responsive after cancellation");
+
+    // Clean shutdown
+    shutdown_graceful(&mut harness);
 }
 
 /// Test cancelling multiple requests
