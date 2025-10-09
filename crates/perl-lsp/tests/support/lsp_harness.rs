@@ -746,7 +746,8 @@ impl LspHarness {
 
             // Check if we got a response for this ID
             if output_str.contains(&format!("\"id\":{}", request_id))
-                || output_str.contains(&format!("\"id\": {}", request_id)) {
+                || output_str.contains(&format!("\"id\": {}", request_id))
+            {
                 drop(output);
                 panic!("Received response for canceled request ID {}", request_id);
             }
@@ -792,9 +793,10 @@ impl LspHarness {
             let mut notifications = self.notification_buffer.lock().unwrap();
 
             // Search for matching notification
-            if let Some(pos) = notifications.iter().position(|n| {
-                n.get("method").and_then(|m| m.as_str()) == Some(method)
-            }) {
+            if let Some(pos) = notifications
+                .iter()
+                .position(|n| n.get("method").and_then(|m| m.as_str()) == Some(method))
+            {
                 let notif = notifications.remove(pos).unwrap();
                 drop(notifications);
 
@@ -993,7 +995,10 @@ pub fn spawn_lsp() -> LspHarness {
 
 /// Perform LSP handshake: initialize → wait for response → initialized notification
 /// This is the deterministic initialization sequence for Phase 1
-pub fn handshake_initialize(harness: &mut LspHarness, root_uri: Option<&str>) -> Result<Value, String> {
+pub fn handshake_initialize(
+    harness: &mut LspHarness,
+    root_uri: Option<&str>,
+) -> Result<Value, String> {
     let root = root_uri.unwrap_or("file:///test");
 
     // Step 1: Send initialize request

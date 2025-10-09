@@ -7,7 +7,7 @@ use std::time::Duration;
 mod common;
 mod support;
 use common::*;
-use support::{spawn_lsp, handshake_initialize, shutdown_graceful};
+use support::{handshake_initialize, shutdown_graceful, spawn_lsp};
 
 /// Test that cancel request is handled properly
 ///
@@ -267,10 +267,7 @@ fn test_cancel_deterministic_stable() {
     harness.assert_no_response_for_canceled(request_id, Duration::from_millis(300));
 
     // Verify server is still responsive with a simple request
-    let result = harness.request(
-        "workspace/symbol",
-        json!({"query": ""}),
-    );
+    let result = harness.request("workspace/symbol", json!({"query": ""}));
     assert!(result.is_ok(), "Server should remain responsive after cancellation");
 
     // Clean shutdown
