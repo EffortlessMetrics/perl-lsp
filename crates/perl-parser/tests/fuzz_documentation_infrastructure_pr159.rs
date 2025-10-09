@@ -112,9 +112,8 @@ fn fuzz_enhanced_perl_parser_ast_invariants() {
             match parse_result {
                 Ok(ast) => {
                     // AST structural invariants
-                    validate_ast_structure(&ast, &input).map_err(|_| {
-                        std::io::Error::new(std::io::ErrorKind::Other, "AST validation failed")
-                    })?;
+                    validate_ast_structure(&ast, &input)
+                        .map_err(|_| std::io::Error::other("AST validation failed"))?;
                     Ok::<bool, std::io::Error>(true)
                 }
                 Err(_parse_error) => {

@@ -9,3 +9,10 @@ pub mod test_helpers;
 // NOTE: test_helpers module exists but may not be used in all test contexts
 #[allow(unused_imports)]
 pub use test_helpers::*;
+
+// Re-export Phase 1 stabilization helpers for easy access
+pub use lsp_harness::{handshake_initialize, shutdown_graceful, spawn_lsp};
+
+// Re-export types that tests may need
+#[allow(unused_imports)]
+pub use lsp_harness::{LspHarness, TempWorkspace};

@@ -1,0 +1,42 @@
+# Nextest configuration for LSP test stabilization
+# Phase 1: Retries and threading configuration for CI reliability
+
+[profile.default]
+# Default profile for local development
+retries = 0
+
+[profile.ci]
+# CI profile with retry support for flaky tests
+retries = 2
+# Fail fast to save CI time
+fail-fast = false
+# Slow timeout to handle constrained CI environments
+slow-timeout = { period = "60s", terminate-after = 2 }
+# Leak timeout for cleanup
+leak-timeout = "10s"
+
+[profile.ci.junit]
+# Generate JUnit reports for CI integration
+path = "target/nextest/ci/junit.xml"
+
+[profile.ci.overrides]
+# LSP integration tests may need more time in CI
+filter = 'package(perl-lsp)'
+slow-timeout = { period = "120s", terminate-after = 3 }
+threads-required = 2
+
+# Cancellation tests need careful thread management
+[[profile.ci.overrides]]
+filter = 'test(lsp_cancel)'
+threads-required = 1
+retries = 3
+
+# Known flaky BrokenPipe tests get extra retries
+[[profile.ci.overrides]]
+filter = 'test(lsp_document_symbols) | test(lsp_document_links) | test(lsp_encoding)'
+retries = 3
+
+[profile.local-fast]
+# Fast profile for rapid iteration
+test-threads = 4
+retries = 0

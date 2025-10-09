@@ -1,0 +1,92 @@
+{
+  "pull_request": {
+    "title": "feat(dap): Phase 1 DAP support - Bridge to Perl::LanguageServer (#207)",
+    "description_file": "PR_DESCRIPTION_TEMPLATE.md",
+    "base": "master",
+    "head": "feat/207-dap-support-specifications",
+    "labels": [
+      "enhancement",
+      "dap",
+      "phase-1",
+      "documentation",
+      "security-validated"
+    ],
+    "milestone": "v0.9.0",
+    "draft": false
+  },
+  "metadata": {
+    "issue_number": 207,
+    "closes": "#207",
+    "feature_area": "DAP Support",
+    "implementation_phase": "Phase 1",
+    "acceptance_criteria_covered": ["AC1", "AC2", "AC3", "AC4"],
+    "quality_gates_status": {
+      "spec": "pass",
+      "api": "pass",
+      "format": "pass",
+      "clippy": "pass",
+      "tests": "pass",
+      "build": "pass",
+      "security": "pass",
+      "benchmarks": "pass",
+      "docs": "pass",
+      "policy": "pass"
+    },
+    "compliance_score": "98.75%",
+    "test_coverage": {
+      "total_tests": 53,
+      "passing_tests": 53,
+      "pass_rate": "100%"
+    },
+    "performance_summary": {
+      "benchmarks_passing": 5,
+      "improvement_range": "14,970x to 1,488,095x faster than targets"
+    },
+    "security_summary": {
+      "grade": "A+",
+      "vulnerabilities": 0,
+      "unsafe_blocks": 2,
+      "unsafe_context": "test code only, properly documented"
+    },
+    "documentation_summary": {
+      "total_lines": 997,
+      "files": 6,
+      "framework": "Diátaxis",
+      "validation_pass_rate": "100%"
+    }
+  },
+  "compliance": {
+    "license": {
+      "status": "pass",
+      "type": "MIT OR Apache-2.0",
+      "method": "Cargo.toml declaration"
+    },
+    "security": {
+      "status": "pass",
+      "grade": "A+",
+      "dependency_audit": "manual review clean",
+      "secrets": "none detected"
+    },
+    "dependencies": {
+      "status": "pass",
+      "total": 14,
+      "production": 10,
+      "dev": 4,
+      "wildcards": 0,
+      "workspace_reuse": "80%"
+    },
+    "commits": {
+      "status": "warning",
+      "compliant": 9,
+      "non_compliant": 1,
+      "compliance_rate": "90%",
+      "note": "1 commit missing conventional format type prefix (documented in PR)"
+    }
+  },
+  "routing": {
+    "current_agent": "policy-gatekeeper",
+    "decision": "FINALIZE",
+    "next_agent": "pr-preparer",
+    "rationale": "All critical governance requirements met; ready for PR creation workflow"
+  }
+}

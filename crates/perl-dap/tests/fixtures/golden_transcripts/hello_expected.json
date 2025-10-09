@@ -1,0 +1,118 @@
+{
+  "description": "Golden transcript for hello.pl debugging session",
+  "fixture": "tests/fixtures/hello.pl",
+  "sequence": [
+    {
+      "type": "request",
+      "command": "initialize",
+      "arguments": {
+        "adapterID": "perl",
+        "linesStartAt1": true,
+        "columnsStartAt1": true
+      }
+    },
+    {
+      "type": "response",
+      "command": "initialize",
+      "success": true,
+      "body": {
+        "supportsConfigurationDoneRequest": true,
+        "supportsEvaluateForHovers": true,
+        "supportsConditionalBreakpoints": false
+      }
+    },
+    {
+      "type": "request",
+      "command": "launch",
+      "arguments": {
+        "program": "${workspaceFolder}/tests/fixtures/hello.pl",
+        "args": [],
+        "stopOnEntry": false
+      }
+    },
+    {
+      "type": "response",
+      "command": "launch",
+      "success": true
+    },
+    {
+      "type": "event",
+      "event": "initialized"
+    },
+    {
+      "type": "request",
+      "command": "setBreakpoints",
+      "arguments": {
+        "source": {
+          "path": "${workspaceFolder}/tests/fixtures/hello.pl"
+        },
+        "breakpoints": [
+          {"line": 9}
+        ]
+      }
+    },
+    {
+      "type": "response",
+      "command": "setBreakpoints",
+      "success": true,
+      "body": {
+        "breakpoints": [
+          {"verified": true, "line": 9}
+        ]
+      }
+    },
+    {
+      "type": "request",
+      "command": "continue",
+      "arguments": {
+        "threadId": 1
+      }
+    },
+    {
+      "type": "response",
+      "command": "continue",
+      "success": true
+    },
+    {
+      "type": "event",
+      "event": "stopped",
+      "body": {
+        "reason": "breakpoint",
+        "threadId": 1
+      }
+    },
+    {
+      "type": "request",
+      "command": "stackTrace",
+      "arguments": {
+        "threadId": 1
+      }
+    },
+    {
+      "type": "response",
+      "command": "stackTrace",
+      "success": true,
+      "body": {
+        "stackFrames": [
+          {
+            "name": "greet",
+            "source": {
+              "path": "${workspaceFolder}/tests/fixtures/hello.pl"
+            },
+            "line": 9
+          }
+        ]
+      }
+    },
+    {
+      "type": "request",
+      "command": "disconnect",
+      "arguments": {}
+    },
+    {
+      "type": "response",
+      "command": "disconnect",
+      "success": true
+    }
+  ]
+}

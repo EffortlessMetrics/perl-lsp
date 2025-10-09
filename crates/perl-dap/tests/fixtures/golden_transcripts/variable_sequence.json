@@ -1,0 +1,237 @@
+{
+  "name": "variable_sequence",
+  "description": "Stack traces, scopes, and variable expansion",
+  "fixture": "tests/fixtures/hello.pl",
+  "messages": [
+    {
+      "seq": 20,
+      "type": "request",
+      "command": "stackTrace",
+      "arguments": {
+        "threadId": 1,
+        "startFrame": 0,
+        "levels": 20
+      }
+    },
+    {
+      "seq": 20,
+      "type": "response",
+      "request_seq": 20,
+      "success": true,
+      "command": "stackTrace",
+      "body": {
+        "stackFrames": [
+          {
+            "id": 1,
+            "name": "main::greet",
+            "source": {
+              "name": "hello.pl",
+              "path": "${workspaceFolder}/tests/fixtures/hello.pl"
+            },
+            "line": 9,
+            "column": 5,
+            "presentationHint": "normal"
+          },
+          {
+            "id": 2,
+            "name": "main::<main>",
+            "source": {
+              "name": "hello.pl",
+              "path": "${workspaceFolder}/tests/fixtures/hello.pl"
+            },
+            "line": 14,
+            "column": 1,
+            "presentationHint": "normal"
+          }
+        ],
+        "totalFrames": 2
+      }
+    },
+    {
+      "seq": 21,
+      "type": "request",
+      "command": "scopes",
+      "arguments": {
+        "frameId": 1
+      }
+    },
+    {
+      "seq": 21,
+      "type": "response",
+      "request_seq": 21,
+      "success": true,
+      "command": "scopes",
+      "body": {
+        "scopes": [
+          {
+            "name": "Locals",
+            "variablesReference": 1000,
+            "expensive": false,
+            "presentationHint": "locals"
+          },
+          {
+            "name": "Package (main)",
+            "variablesReference": 2000,
+            "expensive": true,
+            "presentationHint": "globals"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 22,
+      "type": "request",
+      "command": "variables",
+      "arguments": {
+        "variablesReference": 1000
+      }
+    },
+    {
+      "seq": 22,
+      "type": "response",
+      "request_seq": 22,
+      "success": true,
+      "command": "variables",
+      "body": {
+        "variables": [
+          {
+            "name": "$name",
+            "value": "\"World\"",
+            "type": "scalar",
+            "variablesReference": 0,
+            "presentationHint": {
+              "kind": "data"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "seq": 23,
+      "type": "request",
+      "command": "variables",
+      "arguments": {
+        "variablesReference": 2000
+      }
+    },
+    {
+      "seq": 23,
+      "type": "response",
+      "request_seq": 23,
+      "success": true,
+      "command": "variables",
+      "body": {
+        "variables": [
+          {
+            "name": "$message",
+            "value": "\"World\"",
+            "type": "scalar",
+            "variablesReference": 0,
+            "presentationHint": {
+              "kind": "data"
+            }
+          },
+          {
+            "name": "$result",
+            "value": "\"Greeted World\"",
+            "type": "scalar",
+            "variablesReference": 0,
+            "presentationHint": {
+              "kind": "data"
+            }
+          },
+          {
+            "name": "@array_example",
+            "value": "ARRAY(3 elements)",
+            "type": "array",
+            "variablesReference": 3000,
+            "indexedVariables": 3,
+            "presentationHint": {
+              "kind": "data"
+            }
+          },
+          {
+            "name": "%hash_example",
+            "value": "HASH(2 keys)",
+            "type": "hash",
+            "variablesReference": 4000,
+            "namedVariables": 2,
+            "presentationHint": {
+              "kind": "data"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "seq": 24,
+      "type": "request",
+      "command": "variables",
+      "arguments": {
+        "variablesReference": 3000,
+        "start": 0,
+        "count": 10
+      }
+    },
+    {
+      "seq": 24,
+      "type": "response",
+      "request_seq": 24,
+      "success": true,
+      "command": "variables",
+      "body": {
+        "variables": [
+          {
+            "name": "[0]",
+            "value": "1",
+            "type": "scalar",
+            "variablesReference": 0
+          },
+          {
+            "name": "[1]",
+            "value": "2",
+            "type": "scalar",
+            "variablesReference": 0
+          },
+          {
+            "name": "[2]",
+            "value": "3",
+            "type": "scalar",
+            "variablesReference": 0
+          }
+        ]
+      }
+    },
+    {
+      "seq": 25,
+      "type": "request",
+      "command": "variables",
+      "arguments": {
+        "variablesReference": 4000
+      }
+    },
+    {
+      "seq": 25,
+      "type": "response",
+      "request_seq": 25,
+      "success": true,
+      "command": "variables",
+      "body": {
+        "variables": [
+          {
+            "name": "{key1}",
+            "value": "\"value1\"",
+            "type": "scalar",
+            "variablesReference": 0
+          },
+          {
+            "name": "{key2}",
+            "value": "\"value2\"",
+            "type": "scalar",
+            "variablesReference": 0
+          }
+        ]
+      }
+    }
+  ]
+}

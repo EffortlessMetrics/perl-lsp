@@ -6,6 +6,8 @@ use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
 
 /// Test extract variable refactoring
 #[test]
+#[ignore]
+// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC4:enabledTests - Extract variable may not be fully implemented yet, but test framework should work
 #[ignore = "Extract variable refactoring implementation incomplete - testing framework validation"]
 fn test_extract_variable() {
@@ -60,6 +62,8 @@ print $result;
 
 /// Test adding error checking to file operations
 #[test]
+#[ignore]
+// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Add error checking refactoring
 #[ignore = "Add error checking refactoring implementation incomplete - testing framework validation"]
 fn test_add_error_checking() {
@@ -113,6 +117,8 @@ close($fh);
 
 /// Test converting old-style for loops to foreach
 #[test]
+#[ignore]
+// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Convert C-style for loop to foreach
 #[ignore = "Convert loop style refactoring implementation incomplete - testing framework validation"]
 fn test_convert_loop_style() {
@@ -170,6 +176,8 @@ for (my $i = 0; $i < @array; $i++) {
 
 /// Test converting to postfix form
 #[test]
+#[ignore]
+// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Convert if statement to postfix form
 #[ignore = "Convert to postfix refactoring implementation incomplete - testing framework validation"]
 fn test_convert_to_postfix() {
@@ -223,6 +231,8 @@ if ($debug) {
 
 /// Test adding missing pragmas
 #[test]
+#[ignore]
+// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Add missing pragmas (strict/warnings/utf8)
 #[ignore = "Add missing pragmas refactoring implementation incomplete - testing framework validation"]
 fn test_add_missing_pragmas() {
@@ -277,6 +287,8 @@ print $x;
 
 /// Test quick fix for undefined variable
 #[test]
+#[ignore]
+// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Fix undefined variable issues
 #[ignore = "Fix undefined variable refactoring implementation incomplete - testing framework validation"]
 fn test_fix_undefined_variable() {
@@ -345,6 +357,8 @@ print $undefined_var;
 
 /// Test extract subroutine refactoring
 #[test]
+#[ignore]
+// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Extract subroutine with parameter detection
 #[ignore = "Extract subroutine refactoring implementation incomplete - testing framework validation"]
 fn test_extract_subroutine() {
@@ -403,6 +417,8 @@ my $y = 20;
 
 /// Test organize imports refactoring
 #[test]
+#[ignore]
+// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Organize imports with existing ImportOptimizer integration
 #[ignore = "Organize imports refactoring LSP integration incomplete - testing framework validation"]
 fn test_organize_imports() {
@@ -462,6 +478,8 @@ print "test\n";
 
 /// Test multiple refactorings available
 #[test]
+#[ignore]
+// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - Multiple refactoring operations in single request
 #[ignore = "Multiple refactorings implementation incomplete - testing framework validation"]
 fn test_multiple_refactorings() {

@@ -1,0 +1,74 @@
+{
+  "name": "breakpoint_sequence",
+  "description": "Set breakpoints with AST validation",
+  "fixture": "tests/fixtures/hello.pl",
+  "messages": [
+    {
+      "seq": 5,
+      "type": "request",
+      "command": "setBreakpoints",
+      "arguments": {
+        "source": {
+          "name": "hello.pl",
+          "path": "${workspaceFolder}/tests/fixtures/hello.pl"
+        },
+        "lines": [5, 9, 14],
+        "breakpoints": [
+          {"line": 5},
+          {"line": 9},
+          {"line": 14}
+        ],
+        "sourceModified": false
+      }
+    },
+    {
+      "seq": 5,
+      "type": "response",
+      "request_seq": 5,
+      "success": true,
+      "command": "setBreakpoints",
+      "body": {
+        "breakpoints": [
+          {
+            "id": 1,
+            "verified": false,
+            "line": 5,
+            "message": "Line contains only comments",
+            "source": {
+              "path": "${workspaceFolder}/tests/fixtures/hello.pl"
+            }
+          },
+          {
+            "id": 2,
+            "verified": true,
+            "line": 9,
+            "source": {
+              "path": "${workspaceFolder}/tests/fixtures/hello.pl"
+            }
+          },
+          {
+            "id": 3,
+            "verified": true,
+            "line": 14,
+            "source": {
+              "path": "${workspaceFolder}/tests/fixtures/hello.pl"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "seq": 6,
+      "type": "event",
+      "event": "breakpoint",
+      "body": {
+        "reason": "changed",
+        "breakpoint": {
+          "id": 1,
+          "verified": false,
+          "message": "Line contains only comments"
+        }
+      }
+    }
+  ]
+}
