@@ -3,8 +3,8 @@ use serde_json::json;
 
 /// Test that ensures LSP capabilities match GA contract
 /// This prevents accidental drift where we advertise features that don't work
+/// PHASE 1 RE-ENABLED: Pure API contract test, no I/O, safe for CI
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_ga_capabilities_contract() {
     let mut server = LspServer::new();
 

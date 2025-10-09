@@ -60,7 +60,10 @@ jobs:
       with:
         path: target
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-    
+
+    - name: Install nextest
+      uses: taiki-e/install-action@nextest
+
     - name: Check formatting
       run: cargo fmt --all -- --check
       continue-on-error: ${{ matrix.experimental == true }}
@@ -72,25 +75,24 @@ jobs:
     - name: Build
       run: cargo build --all --verbose
     
-    - name: Run LSP tests (capped)
+    - name: Run LSP tests with nextest (Phase 1 stabilization)
       run: |
-        cargo test -p perl-lsp --test lsp_e2e_user_stories -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_builtins_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_edge_cases_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_integration_tests -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_integration_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_code_actions_tests -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_performance_benchmarks -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_formatting_e2e -- --test-threads=${{ env.RUST_TEST_THREADS }}
-        cargo test -p perl-lsp --test lsp_master_integration_test -- --test-threads=${{ env.RUST_TEST_THREADS }}
+        # Use nextest with CI profile for retries and improved parallelism
+        cargo nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
+      env:
+        CI: true
+        GITHUB_ACTIONS: true
     
     - name: Run LSP smoke test
       run: scripts/lsp-smoke.sh
       if: matrix.os == 'ubuntu-latest'
       shell: bash
     
-    - name: Run all parser tests (capped)
-      run: cargo test --all --verbose -- --test-threads=${{ env.RUST_TEST_THREADS }}
+    - name: Run all parser tests with nextest
+      run: cargo nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
+      env:
+        CI: true
+        GITHUB_ACTIONS: true
     
     - name: Build release binary
       run: cargo build -p perl-lsp --release
