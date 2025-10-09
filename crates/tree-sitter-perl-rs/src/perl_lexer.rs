@@ -1273,7 +1273,7 @@ impl<'a> PerlLexer<'a> {
         }
 
         // Check for regex-like constructs first
-        if (ch == b'/'
+        if ch == b'/'
             || (self.mode == LexerMode::ExpectTerm
                 && (self.peek_str("s/")
                     || self.peek_str("s{")
@@ -1282,7 +1282,7 @@ impl<'a> PerlLexer<'a> {
                     || self.peek_str("tr/")
                     || self.peek_str("y/")
                     || self.peek_str("qr/")
-                    || self.peek_str("qr{"))))
+                    || self.peek_str("qr{")))
         {
             if let Some(token) = self.scan_regex_like() {
                 self.update_mode(&token.token_type);

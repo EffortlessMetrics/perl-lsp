@@ -35,9 +35,9 @@ use crate::import_optimizer::ImportOptimizer;
 #[cfg(feature = "modernize")]
 use crate::modernize::PerlModernizer as ModernizeEngine;
 #[cfg(feature = "workspace_refactor")]
-use crate::workspace_refactor::WorkspaceRefactor;
-#[cfg(feature = "workspace_refactor")]
 use crate::workspace_index::WorkspaceIndex;
+#[cfg(feature = "workspace_refactor")]
+use crate::workspace_refactor::WorkspaceRefactor;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
