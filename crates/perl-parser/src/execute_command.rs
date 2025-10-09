@@ -410,26 +410,43 @@ impl ExecuteCommandProvider {
         let canonical_path = match self.resolve_path_from_args(arguments) {
             Ok(path) => path,
             Err(e) => {
-                // Handle all file access errors gracefully with structured error response
-                // This includes missing files, invalid paths, canonicalization failures, etc.
+                // Missing arguments are validation errors - must fail with Err
+                if e.contains("Missing file path argument") {
+                    return Err(e);
+                }
+
+                // Handle file not found errors gracefully with structured error response
+                // IMPORTANT: Preserve the path in the error message for debugging
                 if e.contains("File not found")
                     || e.contains("does not exist")
                     || e.contains("No such file or directory")
                     || e.contains("Failed to canonicalize")
                 {
-                    let user_friendly_error = if e.contains("No such file or directory")
-                        || e.contains("Failed to canonicalize")
-                    {
-                        "File not found"
+                    // Extract and preserve the full error message which includes the path
+                    let error_message = if e.contains("Failed to canonicalize") {
+                        // Extract path from "Failed to canonicalize path 'X': Y"
+                        if let Some(start) = e.find("'") {
+                            if let Some(end) = e[start + 1..].find("'") {
+                                let path = &e[start + 1..start + 1 + end];
+                                format!("File not found: {}", path)
+                            } else {
+                                "File not found".to_string()
+                            }
+                        } else {
+                            "File not found".to_string()
+                        }
                     } else {
-                        &e
+                        // For "File not found: X" errors, preserve as-is
+                        e.clone()
                     };
-                    return Ok(self.format_critic_error(user_friendly_error.to_string(), "none"));
+                    return Ok(self.format_critic_error(error_message, "none"));
                 }
-                // Only security-related errors (workspace traversal) are still failures
+
+                // Security-related errors (workspace traversal) are failures
                 if e.contains("Path traversal") || e.contains("outside workspace root") {
                     return Err(format!("Path resolution failed: {}", e));
                 }
+
                 // All other errors are handled gracefully
                 return Ok(self.format_critic_error(e, "none"));
             }
