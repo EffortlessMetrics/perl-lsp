@@ -30,11 +30,13 @@ result: stale-branch-detected
 ## Validation Details
 
 **Git Status Check**:
+
 - Current branch: `feat/207-dap-support-specifications`
 - Working tree: Has uncommitted changes (ledger updates)
 - Branch status: Up to date with origin (but origin is stale)
 
 **Freshness Analysis**:
+
 - ❌ Merge base is 2 commits behind master
 - ❌ PRs #205 and #206 merged to master after this branch diverged
 - ❌ Branch needs rebase to include latest master changes
@@ -59,6 +61,7 @@ Per Integrative Pre-Merge Readiness Validator protocol:
 ## Impact
 
 **Blocked Operations**:
+
 - ❌ Cannot proceed to parsing SLO validation (Phase 3)
 - ❌ Cannot execute thread-constrained LSP testing (Phase 3)
 - ❌ Cannot perform final merge readiness assessment
@@ -71,6 +74,7 @@ Per Integrative Pre-Merge Readiness Validator protocol:
 This is a **required Phase 1 gate** in the Integrative Pre-Merge Readiness Validator flow. All subsequent validation phases (parsing SLO, thread-constrained testing, comprehensive test re-run, production workspace indexing) are blocked until freshness is restored.
 
 **Previous Gate Status** (pre-freshness failure):
+
 - ✅ format: pass
 - ✅ clippy: pass
 - ✅ tests: pass (558/558)

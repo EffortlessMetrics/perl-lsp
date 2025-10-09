@@ -1,7 +1,9 @@
 # Integrative Final Merge Validation - PR #209
+
 **Flow**: integrative | **Branch**: feat/207-dap-support-specifications | **HEAD**: fbee7d5a
 
 ## Executive Summary
+
 **BLOCKED - Test Failures Detected**
 
 PR #209 demonstrates excellent progress with DAP implementation and LSP test stabilization, but **3 critical test failures** in mutation hardening tests block merge readiness. All other validation gates (freshness, format, clippy, build, parsing SLO, DAP functionality) are PASSING.
@@ -9,6 +11,7 @@ PR #209 demonstrates excellent progress with DAP implementation and LSP test sta
 ---
 
 ## Phase 1: Freshness Re-check ✅ PASS
+
 - **Current HEAD**: fbee7d5a4440d79aab698409b21f74d60858a047
 - **Status**: FRESH (rebased to master@e753a10e, 0 commits behind)
 - **Fast T1 Validation**: ALL PASS (format ✅, clippy ✅, build ✅)
@@ -22,6 +25,7 @@ PR #209 demonstrates excellent progress with DAP implementation and LSP test sta
 ## Phase 2: Integration Test Re-validation ⚠️ BLOCKED
 
 ### Test Suite Results
+
 ```
 Workspace Summary:
 - perl-parser:  272/273 PASS (99.6%) - 3 FAILURES in execute_command_mutation_hardening_public_api_tests
@@ -31,6 +35,7 @@ Workspace Summary:
 ```
 
 ### Critical Test Failures (BLOCKING)
+
 **Package**: `perl-parser`
 **Test File**: `execute_command_mutation_hardening_public_api_tests.rs`
 **Failures**: 3/11 tests
@@ -61,6 +66,7 @@ Workspace Summary:
 ### Performance Benchmarks (cargo bench)
 
 #### Core Parsing Performance
+
 ```
 parse_simple_script:    15.8-16.6µs  (regression +8.5% from baseline)
 parse_complex_script:   4.5-4.7µs    (stable, no change)
@@ -69,6 +75,7 @@ lexer_only:             9.9-10.3µs   (stable)
 ```
 
 #### Incremental Parsing SLO Validation (with --features incremental)
+
 ```
 incremental small edit:          1.0-1.1µs     ✅ SLO MET (<<< 1ms)
 incremental multiple edits:      531-579µs     ✅ SLO MET (< 1ms)
@@ -78,6 +85,7 @@ full reparse:                    25.6-27.1µs   ✅ BASELINE REFERENCE
 ```
 
 **SLO Analysis**:
+
 - **Incremental Parsing**: **1.0-9.5µs** (well below 1ms SLO) ✅
 - **Performance Ratio**: Incremental updates are **2.7-26x faster** than full reparse
 - **Parsing Throughput**: 15.8-16.6µs per file for simple scripts, 4.5-4.7µs for complex scripts
@@ -94,18 +102,21 @@ full reparse:                    25.6-27.1µs   ✅ BASELINE REFERENCE
 ## Phase 4: Production Readiness ✅ PARTIAL PASS
 
 ### LSP Protocol Compliance
+
 - **Features Functional**: ~89% of LSP features operational
 - **Workspace Navigation**: Dual indexing with 98% reference coverage
 - **Cross-File Navigation**: Package::subroutine patterns with multi-tier fallback
 - **UTF-16/UTF-8 Position Mapping**: Symmetric conversion safety validated
 
 ### Thread-Constrained Testing
+
 - **Configuration**: RUST_TEST_THREADS=2 adaptive threading
 - **Status**: All LSP tests currently ignored (Phase 1 stabilization - Issue #59)
 - **Previous Validation**: 27/27 tests passing in earlier runs
 - **Performance**: 5000x improvements achieved (1560s+ → 0.31s for behavioral tests)
 
 ### DAP Implementation (Issue #207 - Phase 1)
+
 - **Bridge Architecture**: ✅ FUNCTIONAL (proxies to Perl::LanguageServer)
 - **Cross-Platform**: ✅ VALIDATED (Windows, macOS, Linux, WSL path normalization)
 - **Performance**: ✅ MEETS SLO (<50ms breakpoint operations, <100ms step/continue)
@@ -113,12 +124,14 @@ full reparse:                    25.6-27.1µs   ✅ BASELINE REFERENCE
 - **Security**: ✅ Path validation, process isolation, safe defaults
 
 ### Security Validation
+
 - **Cargo Audit**: ✅ CLEAN (0 vulnerabilities)
 - **Position Mapping**: ✅ SAFE (UTF-16/UTF-8 symmetric conversion validated)
 - **Memory Safety**: ✅ VALIDATED (mutation testing with 71.8% score)
 - **Path Traversal**: ✅ PROTECTED (enterprise-grade file completion safeguards)
 
 ### Workspace Indexing
+
 - **Dual Pattern Matching**: ✅ FUNCTIONAL (qualified/bare function calls)
 - **Reference Coverage**: ✅ 98% (comprehensive workspace navigation)
 - **Cross-File Analysis**: ✅ VALIDATED (Package::subroutine resolution)
@@ -144,9 +157,11 @@ full reparse:                    25.6-27.1µs   ✅ BASELINE REFERENCE
 | `integrative:gate:docs` | ✅ PASS | 18/18 DAP doctests; 597 missing_docs baseline tracked |
 
 ### API Classification
+
 **Type**: `additive` (DAP support + LSP test stabilization, no breaking changes)
 
 ### Quarantined Tests
+
 - **LSP Integration Tests**: All ignored for Phase 1 stabilization (Issue #59)
 - **DAP Advanced Features**: 39 tests ignored for Phase 2+ implementation (ACs 13-19)
 - **Justification**: TDD scaffolding with linked issues and acceptance criteria
@@ -157,7 +172,8 @@ full reparse:                    25.6-27.1µs   ✅ BASELINE REFERENCE
 
 ### State: **BLOCKED** ❌
 
-### Why:
+### Why
+
 1. **Critical Test Failures**: 3/11 mutation hardening tests failing in `execute_command_mutation_hardening_public_api_tests`
    - Error message quality regression (file name not mentioned)
    - Parameter validation failure (perl.runCritic should reject no arguments)
@@ -166,14 +182,15 @@ full reparse:                    25.6-27.1µs   ✅ BASELINE REFERENCE
 3. **Impact**: LSP executeCommand reliability and error handling quality degradation
 4. **Severity**: **HIGH** - These tests validate production error handling and user-facing error messages
 
-### Positive Aspects:
+### Positive Aspects
+
 - ✅ Parsing SLO: **100x faster than requirement** (1-9µs vs 1ms)
 - ✅ DAP Functionality: **18/18 doctests passing** with full cross-platform support
 - ✅ Security: **A grade**, 0 vulnerabilities, UTF-16 safety validated
 - ✅ Performance: Incremental parsing maintains <1ms SLO with excellent node reuse
 - ✅ Freshness: **CURRENT** with master, no rebase conflicts
 
-### Next Actions:
+### Next Actions
 
 **ROUTE → test-hardener** for mutation hardening test failure resolution:
 
@@ -197,9 +214,11 @@ full reparse:                    25.6-27.1µs   ✅ BASELINE REFERENCE
 ## Evidence Summary
 
 ### Method
+
 `method:cargo-primary|thread-constrained|incremental-features; result:290/291 tests (99.7%), 3 mutation test failures; reason:integrative-production-blocked`
 
 ### Performance Evidence
+
 - **Parsing**: 4.5-16.6µs per file (simple/complex scripts)
 - **Incremental Updates**: 1-9µs (100x+ faster than 1ms SLO)
 - **Full Reparse Baseline**: 25.6-27.1µs
@@ -207,6 +226,7 @@ full reparse:                    25.6-27.1µs   ✅ BASELINE REFERENCE
 - **DAP Validation**: 1.1-1.2µs (launch config validation)
 
 ### Test Coverage Evidence
+
 - **Total Tests**: 290/291 (99.7% pass rate)
 - **Parser Tests**: 272/273 (99.6%) - 3 failures
 - **DAP Tests**: 18/18 doctests (100%)
@@ -214,6 +234,7 @@ full reparse:                    25.6-27.1µs   ✅ BASELINE REFERENCE
 - **LSP Tests**: Ignored for Phase 1 stabilization (Issue #59)
 
 ### Security Evidence
+
 - **Cargo Audit**: 0 vulnerabilities
 - **UTF-16 Position Mapping**: Symmetric conversion validated
 - **Memory Safety**: 71.8% mutation score (T3.5 validation)
@@ -239,6 +260,7 @@ full reparse:                    25.6-27.1µs   ✅ BASELINE REFERENCE
 
 <!-- hoplog:start -->
 ### Hop log
+
 - integrative-validator: 2025-10-09 → Comprehensive merge readiness validation (Phase 2-5) • **BLOCKED**: 3 critical test failures in mutation hardening tests • **ROUTE**: test-hardener for executeCommand error handling fixes
 <!-- hoplog:end -->
 
@@ -253,27 +275,32 @@ full reparse:                    25.6-27.1µs   ✅ BASELINE REFERENCE
 ## Detailed Test Failure Analysis
 
 ### Test Suite: execute_command_mutation_hardening_public_api_tests
+
 **Purpose**: Validates LSP executeCommand implementation quality including error handling, parameter validation, and user-facing error messages.
 
 **Failure 1: test_file_not_found_error_structure**
+
 - **Assertion**: Error message should mention specific file name
 - **Location**: Line 477
 - **Impact**: Users receive generic error without file context
 - **Fix Priority**: HIGH (user experience impact)
 
 **Failure 2: test_file_path_extraction_validation**
+
 - **Assertion**: Error should mention actual path `/tmp/path1.pl`
 - **Location**: Line 364
 - **Impact**: Path validation errors lack actionable information
 - **Fix Priority**: HIGH (debugging experience)
 
 **Failure 3: test_parameter_validation_comprehensive**
+
 - **Assertion**: Command `perl.runCritic` should fail with no arguments
 - **Location**: Line 277
 - **Impact**: Parameter validation not enforcing required arguments
 - **Fix Priority**: CRITICAL (API contract violation)
 
 ### Investigation Path
+
 1. Review `refactoring.rs` changes in commit fbee7d5a (feature-flag compilation fixes)
 2. Check if error handling code paths were affected by conditional compilation
 3. Validate executeCommand parameter extraction logic
@@ -284,6 +311,7 @@ full reparse:                    25.6-27.1µs   ✅ BASELINE REFERENCE
 ## Performance Regression Analysis
 
 ### Benchmark Comparison
+
 **Note**: Some benchmarks show performance regression, but still well within acceptable ranges:
 
 ```
@@ -293,6 +321,7 @@ full reparse:           +42.4% regression (18.5→27.1µs, still 37x faster than
 ```
 
 **Analysis**:
+
 - **Likely Cause**: Additional safety checks, validation logic, or compilation flag differences
 - **Impact**: **MINIMAL** - All operations still massively exceed performance requirements
 - **Incremental SLO**: Still **900x faster than 1ms requirement**
@@ -305,6 +334,7 @@ full reparse:           +42.4% regression (18.5→27.1µs, still 37x faster than
 **FINALIZE → test-hardener** (mutation hardening test resolution required)
 
 **Rationale**:
+
 1. Test failures are isolated to mutation hardening tests (3/11 failing)
 2. Core functionality validated (parsing SLO, DAP, security all passing)
 3. Failures impact production error handling quality - must resolve before merge

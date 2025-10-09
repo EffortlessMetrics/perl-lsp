@@ -37,6 +37,7 @@ Per the **Integrative Pre-Merge Readiness Validator protocol**:
 > **Phase 1: Freshness Re-check (REQUIRED)**: Execute git status and git log --oneline -5, check if current HEAD is fresh against base branch. **If stale**: emit `integrative:gate:freshness = fail` and **route to `rebase-helper`**. **If fresh**: emit `integrative:gate:freshness = pass` and proceed.
 
 **Blocked Operations**:
+
 - ❌ Phase 2: Required Integrative Gates Validation (cannot validate on stale branch)
 - ❌ Phase 3: Comprehensive Perl LSP Production Validation (parsing SLO, thread-constrained testing)
 - ❌ Phase 4: Integrative Gate Decision Logic (all dependent gates blocked)
@@ -47,6 +48,7 @@ Per the **Integrative Pre-Merge Readiness Validator protocol**:
 **Immediate Remediation Required**:
 
 1. ⚠️ **REBASE TO MASTER** (Priority 1):
+
    ```bash
    git fetch origin
    git rebase origin/master
@@ -55,6 +57,7 @@ Per the **Integrative Pre-Merge Readiness Validator protocol**:
    ```
 
 2. ⚠️ **RE-RUN T1 VALIDATION** (Priority 2):
+
    ```bash
    cargo fmt --workspace --check        # Formatting validation
    cargo clippy --workspace --all-features  # Zero warnings enforcement
@@ -91,6 +94,7 @@ Per the **Integrative Pre-Merge Readiness Validator protocol**:
 **Next**: ROUTE → **rebase-helper** for freshness remediation
 
 **Evidence**:
+
 ```
 integrative:gate:freshness = fail (branch stale: 2 commits behind)
 method: git-merge-base-check
@@ -104,6 +108,7 @@ routing: rebase-helper → T1-validator → integrative-merger
 ## Next Steps
 
 **Rebase Workflow**:
+
 1. rebase-helper: Execute git rebase to bring branch current with master@e753a10e
 2. T1-validator: Re-run fast validation (fmt/clippy/check) on fresh HEAD
 3. integrative-merger: Resume Phase 2-5 validation with parsing SLO check

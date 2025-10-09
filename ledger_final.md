@@ -35,18 +35,21 @@
 ### Trace Log
 
 **Intake Processing** (2025-10-04T23:04:39Z)
+
 - Toolchain validated: cargo 1.90.0, rustc 1.90.0, rustfmt 1.8.0, clippy 0.1.90
 - PR metadata captured: #209 (feat/207-dap-support-specifications → master)
 - Labels initialized: flow:review, state:in-progress
 - Check run created: review:gate:intake with status=success
 
 **Freshness Validation** (2025-10-04T23:12:15Z)
+
 - Branch status: behind master by 1 commit (rebase required)
 - Merge base: @2997d630
 - Commits ahead: 18, behind: 1
 - Clean rebase path validated
 
 **Comprehensive Quality Validation** (2025-10-04)
+
 - All required gates: PASS (6/6)
 - All hardening gates: PASS (3/3)
 - All quality gates: PASS (3/3)
@@ -57,6 +60,7 @@
 - Performance: EXCELLENT (14,970x-28,400,000x faster)
 
 **Promotion Complete** (2025-10-04)
+
 - PR status: Draft → Ready for Review ✅
 - Labels updated: state:ready applied
 - Comprehensive quality summary posted
@@ -90,6 +94,7 @@
 **Next**: ROUTE → rebase-helper for freshness remediation, then re-run T1 validation (fmt/clippy/check)
 
 **Blocking Evidence**:
+
 ```
 integrative:gate:freshness = fail
 merge-base: @2997d630 (2 commits behind)
@@ -102,12 +107,14 @@ result: stale-branch-detected
 ```
 
 **Required Actions**:
+
 1. ⚠️ **IMMEDIATE**: Rebase branch to master@e753a10e
 2. ⚠️ **REQUIRED**: Re-run T1 fast validation (cargo fmt/clippy/check)
 3. ⚠️ **REQUIRED**: Re-validate all integrative gates on fresh HEAD
 4. ⚠️ **THEN**: Resume final merge readiness validation with parsing SLO check
 
 **Previous Gate Status** (pre-freshness failure):
+
 - format: ✅ pass
 - clippy: ✅ pass
 - tests: ✅ pass (558/558)
