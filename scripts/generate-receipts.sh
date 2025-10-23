@@ -19,10 +19,18 @@ RUST_TEST_THREADS=2 cargo +stable test --workspace --exclude xtask --all-feature
 echo "=== Parsing Test Results ==="
 if [ -f "${ARTIFACTS_DIR}/test-output.txt" ]; then
   # Extract test result lines (format: "test result: ok. 272 passed; 0 failed; 818 ignored; 0 measured; 0 filtered out")
-  # Sum all results across crates
-  TOTAL_PASSED=$(grep "test result:" "${ARTIFACTS_DIR}/test-output.txt" | awk '{sum += $4} END {print sum+0}')
-  TOTAL_FAILED=$(grep "test result:" "${ARTIFACTS_DIR}/test-output.txt" | awk '{sum += $6} END {print sum+0}')
-  TOTAL_IGNORED=$(grep "test result:" "${ARTIFACTS_DIR}/test-output.txt" | awk '{sum += $8} END {print sum+0}')
+  # Sum all results across crates (tolerant of missing output)
+  RESULTS="$(grep -E '^[[:space:]]*test result:' "${ARTIFACTS_DIR}/test-output.txt" || true)"
+  if [ -z "$RESULTS" ]; then
+    echo "Warning: no test summaries found; treating as zeroes" >&2
+    TOTAL_PASSED=0
+    TOTAL_FAILED=0
+    TOTAL_IGNORED=0
+  else
+    TOTAL_PASSED=$(echo "$RESULTS" | awk '{sum += $4} END {print sum+0}')
+    TOTAL_FAILED=$(echo "$RESULTS" | awk '{sum += $6} END {print sum+0}')
+    TOTAL_IGNORED=$(echo "$RESULTS" | awk '{sum += $8} END {print sum+0}')
+  fi
 
   # Calculate totals
   ACTIVE_TESTS=$((TOTAL_PASSED + TOTAL_FAILED))
