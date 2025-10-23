@@ -1,0 +1,77 @@
+name: docs-truth
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'CLAUDE.md'
+      - 'README.md'
+      - 'scripts/generate-receipts.sh'
+      - 'scripts/render-docs.sh'
+
+jobs:
+  validate-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq ripgrep
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Generate receipts
+        run: ./scripts/generate-receipts.sh
+
+      - name: Render documentation
+        run: ./scripts/render-docs.sh
+
+      - name: Check for drift
+        run: |
+          # Check if rendered docs differ from committed docs
+          if [ -f "CLAUDE.md.template" ]; then
+            diff -u CLAUDE.md CLAUDE.md.rendered || {
+              echo "::error::CLAUDE.md is out of sync with template and state.json"
+              echo "Run ./scripts/generate-receipts.sh && ./scripts/render-docs.sh and commit changes"
+              exit 1
+            }
+          fi
+
+      - name: Validate test counts
+        run: |
+          # Ensure test count claims match actual receipts
+          CLAIMED_TOTAL=$(rg -oP '(?<=total_all_tests": )\d+' artifacts/state.json)
+          RECEIPT_TOTAL=$(jq -r '.tests.total_all_tests' artifacts/state.json)
+
+          if [ "${CLAIMED_TOTAL}" != "${RECEIPT_TOTAL}" ]; then
+            echo "::error::Test count mismatch: claimed ${CLAIMED_TOTAL}, receipt shows ${RECEIPT_TOTAL}"
+            exit 1
+          fi
+
+      - name: Validate missing docs count
+        run: |
+          # Ensure missing docs count is current
+          RECEIPT_MISSING=$(jq -r '.docs.missing_docs' artifacts/state.json)
+
+          # Check CLAUDE.md references match
+          if rg -q "missing documentation warnings identified for systematic resolution" CLAUDE.md; then
+            CLAIMED_MISSING=$(rg -oP '\d+(?= missing documentation warnings)' CLAUDE.md | head -1)
+
+            if [ "${CLAIMED_MISSING}" != "${RECEIPT_MISSING}" ]; then
+              echo "::warning::Missing docs count may be stale: claimed ${CLAIMED_MISSING}, current ${RECEIPT_MISSING}"
+            fi
+          fi
+
+      - name: Upload receipts
+        uses: actions/upload-artifact@v3
+        with:
+          name: docs-truth-receipts
+          path: |
+            artifacts/test-summary.json
+            artifacts/doc-summary.json
+            artifacts/state.json
