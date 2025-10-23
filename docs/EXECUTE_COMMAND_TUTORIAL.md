@@ -16,7 +16,7 @@ The `workspace/executeCommand` LSP method (Issue #145) adds powerful command exe
 
 ### Prerequisites
 
-- Perl LSP server v0.8.9+ installed and running
+- Perl LSP server v0.8.8+ installed and running
 - Basic understanding of LSP protocol and your LSP-compatible editor
 - Perl development environment with test files
 

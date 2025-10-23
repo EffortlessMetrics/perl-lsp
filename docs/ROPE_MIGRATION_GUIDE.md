@@ -73,7 +73,7 @@ use crate::textdoc::Doc;
 let doc = Doc::new(content, version);
 ```
 
-#### After (v0.8.9+ with Rope optimization):
+#### After (v0.8.8+ with Rope optimization):
 ```rust
 // Enhanced approach - leverages Rope optimizations
 use crate::textdoc::{Doc, lsp_pos_to_byte, byte_to_lsp_pos, PosEnc};
@@ -330,7 +330,7 @@ If you encounter issues during migration:
 ## Timeline and Support
 
 ### Release Schedule
-- **v0.8.9**: Rope integration released (PR #100)
+- **v0.8.8**: Rope integration released (PR #100)
 - **v0.9.0**: Future enhancements based on feedback
 - **Support**: Ongoing support for migration questions
 

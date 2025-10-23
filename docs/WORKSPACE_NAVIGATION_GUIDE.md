@@ -1,8 +1,8 @@
-# Workspace Navigation Guide (v0.8.9+)
+# Workspace Navigation Guide (v0.8.8+)
 
 ## Overview
 
-The v0.8.9+ releases introduce production-stable workspace navigation with comprehensive AST traversal enhancements, **dual function call indexing** for 98% reference coverage improvement, import optimization improvements, and enhanced scope analysis capabilities. The breakthrough dual indexing architecture ensures comprehensive cross-file navigation regardless of whether functions are called with bare names or qualified package names.
+The v0.8.8+ releases introduce production-stable workspace navigation with comprehensive AST traversal enhancements, **dual function call indexing** for 98% reference coverage improvement, import optimization improvements, and enhanced scope analysis capabilities. The breakthrough dual indexing architecture ensures comprehensive cross-file navigation regardless of whether functions are called with bare names or qualified package names.
 
 ## Enhanced AST Traversal Patterns
 
@@ -146,7 +146,7 @@ $Utils::GLOBAL_CONFIG = {};  # Cross-file reference resolution
 Utils::utility_function();  # Enhanced call hierarchy navigation
 ```
 
-### Step 3: Dual Function Call Indexing (v0.8.9+) (*Diataxis: Tutorial* - Understanding enhanced cross-file navigation)
+### Step 3: Dual Function Call Indexing (v0.8.8+) (*Diataxis: Tutorial* - Understanding enhanced cross-file navigation)
 
 The enhanced workspace navigation now supports **production-stable dual indexing** for function calls, achieving **98% reference coverage improvement** and dramatically improving cross-file reference finding:
 
@@ -253,7 +253,7 @@ cargo test -p perl-parser workspace_index workspace_rename
 # Test TDD basic functionality enhancements
 cargo test -p perl-parser tdd_basic
 
-# Test dual function call indexing (v0.8.9+)
+# Test dual function call indexing (v0.8.8+)
 cargo test -p perl-parser --test dual_function_call_indexing_test
 cargo test -p perl-parser test_dual_indexing_comprehensive_coverage
 cargo test -p perl-parser workspace_dual_pattern_reference_search

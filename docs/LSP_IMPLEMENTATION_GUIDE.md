@@ -321,9 +321,9 @@ fn test_position_conversion_security() {
 }
 ```
 
-## Enhanced Workspace Indexing (v0.8.9+) - Dual Indexing Strategy (*Diataxis: Explanation* - Understanding the dual reference approach)
+## Enhanced Workspace Indexing (v0.8.8+) - Dual Indexing Strategy (*Diataxis: Explanation* - Understanding the dual reference approach)
 
-The v0.8.9+ releases introduce a breakthrough dual indexing strategy for function call references that dramatically improves cross-file LSP navigation. This enhancement indexes functions under both qualified (`Package::function`) and bare (`function`) names, enabling comprehensive reference finding regardless of how functions are called.
+The v0.8.8+ releases introduce a breakthrough dual indexing strategy for function call references that dramatically improves cross-file LSP navigation. This enhancement indexes functions under both qualified (`Package::function`) and bare (`function`) names, enabling comprehensive reference finding regardless of how functions are called.
 
 ### Architectural Decision: Why Dual Indexing? (*Diataxis: Explanation* - Design rationale)
 
@@ -2188,7 +2188,7 @@ fn handle_incremental_feature(&mut self, params: FeatureParams) -> Result<Respon
 }
 ```
 
-### Pattern 4: Workspace Refactoring Features (NEW v0.8.9)
+### Pattern 4: Workspace Refactoring Features (NEW v0.8.8)
 
 For comprehensive cross-file refactoring operations:
 
@@ -2355,11 +2355,11 @@ impl LspServer {
 4. **Integration**: Clean conversion between internal types and LSP format
 5. **Extensibility**: Easy to add new refactoring operations
 
-## Enhanced Cross-File Navigation with Dual Indexing Strategy (v0.8.9+) (*Diataxis: Explanation* - Understanding advanced function call indexing)
+## Enhanced Cross-File Navigation with Dual Indexing Strategy (v0.8.8+) (*Diataxis: Explanation* - Understanding advanced function call indexing)
 
 ### Overview (*Diataxis: Explanation* - Design decisions and concepts)
 
-The v0.8.9+ release introduces a **production-stable dual indexing strategy** for function calls that achieves **98% reference coverage improvement** and significantly improves cross-file navigation and reference finding. This enhancement addresses the complexity of Perl's flexible function call syntax where functions can be called with bare names or fully qualified package names, ensuring comprehensive detection across all usage patterns with enhanced Unicode processing and atomic performance tracking.
+The v0.8.8+ release introduces a **production-stable dual indexing strategy** for function calls that achieves **98% reference coverage improvement** and significantly improves cross-file navigation and reference finding. This enhancement addresses the complexity of Perl's flexible function call syntax where functions can be called with bare names or fully qualified package names, ensuring comprehensive detection across all usage patterns with enhanced Unicode processing and atomic performance tracking.
 
 ### Technical Implementation (*Diataxis: Reference* - Algorithm specifications)
 
@@ -2566,11 +2566,11 @@ The dual indexing strategy seamlessly integrates with existing LSP features, ach
 
 ### CompletionProvider API Reference (**Diataxis: Reference**)
 
-The CompletionProvider has been enhanced with pluggable module resolver support in v0.8.9. This section provides comprehensive API documentation for the updated interface.
+The CompletionProvider has been enhanced with pluggable module resolver support in v0.8.8. This section provides comprehensive API documentation for the updated interface.
 
 #### Constructor Methods
 
-##### `new_with_index_and_source` (Enhanced v0.8.9)
+##### `new_with_index_and_source` (Enhanced v0.8.8)
 ```rust
 pub fn new_with_index_and_source(
     ast: &Node,
@@ -2739,7 +2739,7 @@ pub struct CompletionItem {
 
 #### Migration Guide
 
-**From v0.8.8 to v0.8.9:**
+**From v0.8.8 to v0.8.8:**
 ```rust
 // OLD (v0.8.8)
 let provider = CompletionProvider::new_with_index_and_source(
@@ -2748,7 +2748,7 @@ let provider = CompletionProvider::new_with_index_and_source(
     workspace_index
 );
 
-// NEW (v0.8.9) - add module resolver parameter
+// NEW (v0.8.8) - add module resolver parameter
 let provider = CompletionProvider::new_with_index_and_source(
     &ast,
     source,
@@ -2772,7 +2772,7 @@ The semantic tokens provider has been redesigned for thread-safety with exceptio
 #### Core Architecture - Thread-Safe Provider Pattern
 
 ```rust
-// Thread-safe semantic tokens provider (v0.8.9+)
+// Thread-safe semantic tokens provider (v0.8.8+)
 pub struct SemanticTokensProvider {
     source: String,  // Immutable source text
     // No mutable shared state for thread safety
@@ -3128,7 +3128,7 @@ pub fn adaptive_sleep_ms(base_ms: u64) -> Duration {
 
 #### CI Test Configuration (**Diataxis: How-to** - Production testing practices)
 
-**Thread Limiting for CI Reliability (v0.8.9+)**:
+**Thread Limiting for CI Reliability (v0.8.8+)**:
 
 LSP tests benefit from controlled threading in CI environments to improve reliability and reduce resource contention. The GitHub Actions workflow now uses:
 
@@ -3245,9 +3245,9 @@ vscode.commands.registerCommand('perl.extractVariable', async (args) => {
 
 ## Performance Considerations
 
-### Comprehensive LSP Performance Optimizations (v0.8.9+ with PR #140) (**Diataxis: Explanation**)
+### Comprehensive LSP Performance Optimizations (v0.8.8+ with PR #140) (**Diataxis: Explanation**)
 
-The v0.8.9 release enhanced by PR #140 introduces transformative performance optimizations that achieve revolutionary test reliability and speed. These optimizations maintain 100% API compatibility while delivering unprecedented performance gains:
+The v0.8.8 release enhanced by PR #140 introduces transformative performance optimizations that achieve revolutionary test reliability and speed. These optimizations maintain 100% API compatibility while delivering unprecedented performance gains:
 
 **Strategic Performance Achievements**:
 - **5000x faster**: LSP behavioral test execution
@@ -3353,7 +3353,7 @@ const YIELD_INTERVAL: usize = 32;    // Cooperative yielding frequency
 - Workspace symbol search: Unbounded processing time
 - Memory usage: Unlimited symbol processing
 
-**After Optimization (v0.8.9)**:
+**After Optimization (v0.8.8)**:
 - `test_completion_detail_formatting`: 0.26 seconds (99.5% improvement)
 - All tests pass with `LSP_TEST_FALLBACKS=1`: <10 seconds total
 - Memory usage: Capped by result and processing limits
@@ -3372,12 +3372,12 @@ struct LspCache {
     workspace_symbols: Arc<RwLock<SymbolIndex>>,
     type_cache: Arc<RwLock<TypeCache>>,
     
-    // Intelligent subtree cache with symbol priority (v0.8.9+)
+    // Intelligent subtree cache with symbol priority (v0.8.8+)
     // Preserves critical LSP symbols (packages, use statements, subroutines) 
     // during memory pressure using 4-tier priority system
     subtree_cache: IncrementalDocument::SubtreeCache,
     
-    // Performance monitoring (v0.8.9+)
+    // Performance monitoring (v0.8.8+)
     performance_metrics: Arc<Mutex<PerformanceMetrics>>,
 }
 ```
@@ -4215,7 +4215,7 @@ The ModuleResolver component represents a significant architectural improvement 
 
 #### **Why Refactor Module Resolution?**
 
-**Problem**: Prior to v0.8.9, module resolution logic was embedded within individual LSP features, leading to:
+**Problem**: Prior to v0.8.8, module resolution logic was embedded within individual LSP features, leading to:
 - **Code Duplication**: Similar module resolution logic scattered across completion, hover, and navigation features
 - **Maintenance Overhead**: Changes to module resolution required updates in multiple locations
 - **Inconsistent Behavior**: Different features might resolve modules differently due to implementation divergence
@@ -4801,7 +4801,7 @@ The DAP implementation follows enterprise security practices:
 
 ### Testing Strategy (*Diataxis: Reference* - DAP test coverage)
 
-**Comprehensive Test Suite** (53/53 tests passing):
+**Comprehensive Test Suite** (71/71 tests passing):
 
 ```bash
 # Core functionality tests

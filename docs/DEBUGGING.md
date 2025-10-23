@@ -119,7 +119,7 @@ The Perl Language Server extension automatically detects and uses the debug adap
 
 ## Troubleshooting
 
-### Workspace Build Issues (v0.8.9+)
+### Workspace Build Issues (v0.8.8+)
 
 #### "Cannot find parser.c" or "libclang not found"
 The workspace uses an exclusion strategy to avoid these system dependency issues:

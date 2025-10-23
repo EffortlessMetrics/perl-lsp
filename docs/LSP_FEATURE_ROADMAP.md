@@ -215,12 +215,12 @@ fn handle_code_lens(params) -> Vec<CodeLens> {
 }
 ```
 
-### 3.3 Inlay Hints (**Enhanced v0.8.9+**)
+### 3.3 Inlay Hints (**Enhanced v0.8.8+**)
 **LSP Methods:**
 - `textDocument/inlayHint`
 - `inlayHint/resolve`
 
-**Enhanced Features (v0.8.9+):**
+**Enhanced Features (v0.8.8+):**
 - **Accurate Positioning**: Fixed positioning for parenthesized function calls (e.g., `push(@arr, "x")` shows hint at `@arr`, not `(`)
 - **Consistent Parameter Labels**: Standardized case for built-in function parameters (`ARRAY`, `FILEHANDLE`)
 - **Built-in Function Support**: Comprehensive coverage for all major Perl built-ins
@@ -368,7 +368,7 @@ interface TestResult {
 | Semantic Tokens | High | Medium | **P1** | v0.7.0 |
 | Code Lens | Medium | High | **P1** | v0.7.0 |
 | Call Hierarchy | High | Medium | **P2** | v0.7.0 |
-| Inlay Hints | Medium | Medium | **✅ ENHANCED** | v0.8.9+ |
+| Inlay Hints | Medium | Medium | **✅ ENHANCED** | v0.8.8+ |
 | Test Runner | High | High | **P1** | v0.8.0 |
 | Folding Ranges | Low | Low | **P3** | v0.8.0 |
 | Document Links | Low | Medium | **P3** | v0.8.0 |

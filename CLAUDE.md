@@ -3,7 +3,7 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.9 GA - Enhanced Builtin Function Parsing & Dual Function Call Indexing + PR #160 API Documentation Infrastructure & Parser Robustness (SPEC-149)
+**Latest Release**: v0.8.8 - Enhanced Builtin Function Parsing & Dual Function Call Indexing + PR #160 API Documentation Infrastructure & Parser Robustness (SPEC-149)
 
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
@@ -11,7 +11,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 This repository contains **six published crates** forming a complete Perl development ecosystem with LSP, DAP, and comprehensive workspace refactoring capabilities:
 
-### Published Crates (v0.8.9 GA + Issue #207 DAP Support)
+### Published Crates (v0.8.8 + Issue #207 DAP Support)
 
 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
    - Native recursive descent parser with ~100% Perl 5 syntax coverage
@@ -23,7 +23,7 @@ This repository contains **six published crates** forming a complete Perl develo
    - **Test-Driven Development Support**: Auto-detecting TestGenerator with AST-based expectation inference
    - **Comprehensive API Documentation**: Enterprise-grade documentation infrastructure with `#![warn(missing_docs)]` enforcement (PR #160/SPEC-149)
    - **Advanced Parser Robustness**: Comprehensive fuzz testing and mutation hardening with 12 test suites (60%+ mutation score improvement)
-   - **Documentation Quality Enforcement**: 12 acceptance criteria validation with automated quality gates and progress tracking (129 violations baseline)
+   - **Documentation Quality Enforcement**: 12 acceptance criteria validation with automated quality gates and progress tracking (484 violations baseline)
 
 2. **perl-lsp** (`/crates/perl-lsp/`) ⭐ **LSP BINARY**
    - Standalone Language Server binary with production-grade CLI
@@ -36,12 +36,12 @@ This repository contains **six published crates** forming a complete Perl develo
    - Cross-platform support (Windows, macOS, Linux, WSL) with automatic path normalization
    - Enterprise security with path validation, process isolation, and safe defaults
    - Performance optimized (<50ms breakpoint operations, <100ms step/continue)
-   - Comprehensive testing (53/53 tests passing with mutation hardening)
+   - Comprehensive testing (71/71 tests passing with mutation hardening)
 
 4. **perl-lexer** (`/crates/perl-lexer/`)
    - Context-aware tokenizer with Unicode support
    - Enhanced delimiter recognition including single-quote substitution operators
-   - Performance-optimized (v0.8.9+) with comprehensive operator support
+   - Performance-optimized (v0.8.8+) with comprehensive operator support
 
 5. **perl-corpus** (`/crates/perl-corpus/`)
    - Comprehensive test corpus with property-based testing infrastructure
@@ -138,7 +138,7 @@ cargo test -p perl-parser --test missing_docs_ac_tests -- --nocapture  # Detaile
 cargo doc --no-deps --package perl-parser                       # Validate doc generation without warnings
 
 # Missing Documentation Warnings Infrastructure ⭐ **IMPLEMENTED: PR #160 (SPEC-149)**
-# Comprehensive documentation enforcement with `#![warn(missing_docs)]` enabled - Currently tracking 605 violations for systematic resolution
+# Comprehensive documentation enforcement with `#![warn(missing_docs)]` enabled - Currently tracking 484 violations for systematic resolution
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_missing_docs_warning_compilation  # Verify warnings enabled ✅
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_public_functions_documentation_presence  # Function docs (Phase 1 target)
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_public_structs_documentation_presence  # Struct/enum docs (Phase 1 target)
@@ -236,7 +236,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[Crate Architecture Guide](docs/CRATE_ARCHITECTURE_GUIDE.md)** - System design and components
 - **[Incremental Parsing Guide](docs/INCREMENTAL_PARSING_GUIDE.md)** - Performance and implementation
 - **[Security Development Guide](docs/SECURITY_DEVELOPMENT_GUIDE.md)** - Enterprise security practices
-- **[Benchmark Framework](docs/BENCHMARK_FRAMEWORK.md)** - Cross-language performance analysis
+- **[Benchmark Framework](docs/benchmarks/BENCHMARK_FRAMEWORK.md)** - Cross-language performance analysis
 
 ### Specialized Guides
 - **[DAP User Guide](docs/DAP_USER_GUIDE.md)** ⭐ **NEW** - Debug Adapter Protocol setup, configuration, and debugging workflows
@@ -253,7 +253,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[Conditional Documentation Compilation](docs/CONDITIONAL_DOCS_COMPILATION_STRATEGY.md)** - Performance-optimized missing_docs enforcement strategy
 
 ### Architecture Decision Records (ADRs)
-- **[ADR-001: Agent Architecture](docs/ADR_001_AGENT_ARCHITECTURE.md)** - 97 specialized agents and workflow coordination (PR #153)
+- **[ADR-001: Agent Architecture](docs/adr/ADR_001_AGENT_ARCHITECTURE.md)** - 97 specialized agents and workflow coordination (PR #153)
 - **[ADR-002: API Documentation Infrastructure](docs/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)** - Comprehensive documentation enforcement and systematic resolution strategy (PR #160/SPEC-149)
 - **[Agent Orchestration](docs/AGENT_ORCHESTRATION.md)** - Agent ecosystem patterns and routing
 - **[Agent Customization Framework](docs/AGENT_CUSTOMIZER.md)** - Domain-specific agent adaptation
@@ -269,7 +269,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 
 ### Development Locations
 - **Parser & LSP**: `/crates/perl-parser/` - main development with production Rope implementation
-- **LSP Server**: `/crates/perl-lsp/` - standalone LSP server binary (v0.8.9)
+- **LSP Server**: `/crates/perl-lsp/` - standalone LSP server binary (v0.8.8)
 - **DAP Server**: `/crates/perl-dap/` - Debug Adapter Protocol implementation (Issue #207)
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions
@@ -285,7 +285,7 @@ cargo doc --no-deps --package perl-parser              # Generate docs without w
 
 # Check documentation infrastructure status
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_missing_docs_warning_compilation  # Verify enforcement enabled
-# Current status: 603 missing documentation warnings identified for systematic resolution
+# Current status: 484 missing documentation warnings identified for systematic resolution
 ```
 
 **Key Requirements** (see [API Documentation Standards](docs/API_DOCUMENTATION_STANDARDS.md)):
@@ -325,7 +325,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- 
 - **Edge Case Detection**: Validates malformed doctests, empty docs, invalid cross-references
 
 **Implementation Strategy**:
-- **Phased Approach**: See [Documentation Implementation Strategy](docs/DOCUMENTATION_IMPLEMENTATION_STRATEGY.md) for systematic resolution of 603 missing documentation warnings
+- **Phased Approach**: See [Documentation Implementation Strategy](docs/DOCUMENTATION_IMPLEMENTATION_STRATEGY.md) for systematic resolution of 484 missing documentation warnings
 - **Priority-Based Implementation**: Core parser infrastructure → LSP providers → Advanced features → Supporting infrastructure
 - **Timeline**: 8-week phased rollout with quality gates and progress tracking
 
@@ -421,10 +421,10 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 4. **Performance Awareness**: Maintain search performance despite dual lookups through efficient indexing
 5. **Backward Compatibility**: Ensure existing code continues to work with enhanced indexing
 
-## Current Status (v0.8.9 + PR #140 Revolutionary Performance + PR #160 API Documentation & Parser Robustness [SPEC-149] + Issue #207 DAP Support)
+## Current Status (v0.8.8 + PR #140 Revolutionary Performance + PR #160 API Documentation & Parser Robustness [SPEC-149] + Issue #207 DAP Support)
 
 ✅ **Revolutionary Production Ready**:
-- 100% test pass rate across all components (348+ tests passing including 15/15 builtin function tests + 53/53 DAP tests)
+- 99.6% test pass rate across all components (828 passing, 3 failing - intentional TDD documentation tracking, 818 ignored, 272 perl-parser lib tests, 27 perl-lsp tests, 71 perl-dap tests, 151 perl-lexer tests, 147 mutation hardening tests)
 - **Revolutionary Performance Achievements (PR #140)**:
   - **LSP behavioral tests**: 1560s+ → 0.31s (**5000x faster**, Transformational)
   - **User story tests**: 1500s+ → 0.32s (**4700x faster**, Revolutionary)
@@ -436,7 +436,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 - Production-stable incremental parsing with statistical validation
 - **API Documentation Infrastructure (PR #160/SPEC-149)**:
   - **Successfully Implemented**: `#![warn(missing_docs)]` enforcement with 12 acceptance criteria validation framework
-  - **Current Baseline**: 605 documentation violations tracked for systematic resolution across 4 phases
+  - **Current Baseline**: 484 documentation violations tracked for systematic resolution across 4 phases
   - **Enterprise-Grade Quality Assurance**: Property-based testing, edge case detection, and CI integration
   - **Implementation Strategy**: Phased approach targeting critical parser infrastructure first (Phase 1)
   - **Quality Standards**: Comprehensive API Documentation Standards with LSP workflow integration requirements
@@ -480,7 +480,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
   - **Configuration Management**: Launch (start new process) and attach (connect to running process) modes
   - **Performance**: <50ms breakpoint operations, <100ms step/continue, <200ms variable expansion
   - **Enterprise Security**: Path validation, process isolation, safe defaults
-  - **Quality Assurance**: 53/53 tests passing with comprehensive mutation hardening
+  - **Quality Assurance**: 71/71 tests passing with comprehensive mutation hardening
 
 ## Contributing
 
