@@ -16,7 +16,7 @@ Instead of manually updating test counts, performance metrics, or documentation 
 
 
 - **Receipts**: Canonical outputs from `cargo test`, `cargo doc`, benchmarks
-- **Tokens**: Template variables like `0.8.8`, `0`, `484`
+- **Tokens**: Template variables like `0.8.8`, `1550`, `484`
 - **Renderer**: Automatic substitution of tokens with receipt values
 - **CI Validation**: Automated detection of drift between docs and receipts
 
@@ -84,13 +84,13 @@ perl-lsp/
 
 #### Test Metrics
 
-- `0` - Number of passing tests
-- `0` - Number of failing tests
-- `0` - Number of ignored tests
-- `0` - Total active tests (passed + failed)
-- `0` - All tests (active + ignored)
-- `0.0` - Pass rate of active tests (%)
-- `0.0` - Overall pass rate including ignored (%)
+- `1550` - Number of passing tests
+- `33` - Number of failing tests
+- `812` - Number of ignored tests
+- `1583` - Total active tests (passed + failed)
+- `2395` - All tests (active + ignored)
+- `97.9` - Pass rate of active tests (%)
+- `64.7` - Overall pass rate including ignored (%)
 
 #### Documentation Metrics
 
@@ -101,8 +101,8 @@ perl-lsp/
 Both flat and nested token forms are supported:
 
 ```markdown
-0        → Works (legacy)
-0       → Works (canonical)
+1550        → Works (legacy)
+1550       → Works (canonical)
 484       → Works (legacy)
 484  → Works (canonical)
 ```
@@ -185,7 +185,7 @@ on:
 
    ```markdown
    ❌ We have 828 passing tests
-   ✅ We have 0 passing tests
+   ✅ We have 1550 passing tests
 
    ❌ Version 0.8.8 includes...
    ✅ Version 0.8.8 includes...
@@ -266,7 +266,7 @@ jq -n \
 sed \
   -e "s/0.8.8/${VERSION}/g" \
   -e "s/{{tests\.passed}}/${TEST_PASSED}/g" \
-  -e "s/0/${TEST_PASSED}/g" \
+  -e "s/1550/${TEST_PASSED}/g" \
   -e "s/{{docs\.missing_docs}}/${MISSING_DOCS}/g" \
   -e "s/484/${MISSING_DOCS}/g" \
   "${source}" > "${target}"

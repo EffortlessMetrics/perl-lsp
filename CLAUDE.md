@@ -41,7 +41,7 @@ This repository contains **six published crates** forming a complete Perl develo
 4. **perl-lexer** (`/crates/perl-lexer/`)
    - Context-aware tokenizer with Unicode support
    - Enhanced delimiter recognition including single-quote substitution operators
-   - Performance-optimized (v0.8.8+) with comprehensive operator support
+   - Performance-optimized ({{version}}+) with comprehensive operator support
 
 5. **perl-corpus** (`/crates/perl-corpus/`)
    - Comprehensive test corpus with property-based testing infrastructure
@@ -269,7 +269,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 
 ### Development Locations
 - **Parser & LSP**: `/crates/perl-parser/` - main development with production Rope implementation
-- **LSP Server**: `/crates/perl-lsp/` - standalone LSP server binary (v0.8.8)
+- **LSP Server**: `/crates/perl-lsp/` - standalone LSP server binary ({{version}})
 - **DAP Server**: `/crates/perl-dap/` - Debug Adapter Protocol implementation (Issue #207)
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions

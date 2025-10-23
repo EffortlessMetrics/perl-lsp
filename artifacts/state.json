@@ -1,17 +1,16 @@
 {
   "version": "0.8.8",
   "tests": {
-    "passed": 0,
-    "failed": 0,
-    "ignored": 0,
-    "active_tests": 0,
-    "total_all_tests": 0,
-    "pass_rate_active": 0.0,
-    "pass_rate_total": 0.0,
-    "note": "Run generate-receipts.sh for actual test metrics"
+    "passed": 1550,
+    "failed": 33,
+    "ignored": 812,
+    "active_tests": 1583,
+    "total_all_tests": 2395,
+    "pass_rate_active": 97.9,
+    "pass_rate_total": 64.7
   },
   "docs": {
     "missing_docs": 484
   },
-  "generated_at": "2025-10-23T04:08:48Z"
+  "generated_at": "2025-10-23T04:30:00Z"
 }
