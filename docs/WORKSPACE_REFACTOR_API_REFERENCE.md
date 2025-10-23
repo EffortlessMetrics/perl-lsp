@@ -1,6 +1,6 @@
 # WorkspaceRefactor API Reference (**Diataxis: Reference**)
 
-This document provides comprehensive API reference for the WorkspaceRefactor system introduced in v0.8.9, covering all methods, types, and error handling patterns.
+This document provides comprehensive API reference for the WorkspaceRefactor system introduced in v0.8.8, covering all methods, types, and error handling patterns.
 
 ## Core Types
 
@@ -107,11 +107,11 @@ pub enum RefactorError {
 }
 ```
 
-## Enhanced Workspace Symbol Resolution (v0.8.9+) (**Diataxis: Reference** - Dual indexing API)
+## Enhanced Workspace Symbol Resolution (v0.8.8+) (**Diataxis: Reference** - Dual indexing API)
 
 ### Overview
 
-The v0.8.9+ release introduces **production-stable workspace symbol resolution** with dual function call indexing that achieves **98% reference coverage improvement**. This significantly improves cross-file reference finding and ensures comprehensive symbol tracking for refactoring operations with enhanced Unicode processing and atomic performance monitoring.
+The v0.8.8+ release introduces **production-stable workspace symbol resolution** with dual function call indexing that achieves **98% reference coverage improvement**. This significantly improves cross-file reference finding and ensures comprehensive symbol tracking for refactoring operations with enhanced Unicode processing and atomic performance monitoring.
 
 ### WorkspaceIndex Enhanced Methods
 
@@ -129,7 +129,7 @@ impl WorkspaceIndex {
     /// # Returns
     /// Vector of Location structs representing all references to the symbol
     ///
-    /// # Enhanced Behavior (v0.8.9+)
+    /// # Enhanced Behavior (v0.8.8+)
     /// - 98% reference coverage improvement with comprehensive dual indexing
     /// - Searches both bare names and qualified names automatically
     /// - For qualified symbols like "Utils::foo", also searches for bare "foo" references
@@ -165,7 +165,7 @@ impl WorkspaceIndex {
     /// # Returns
     /// Vector of deduplicated Location structs, excluding the definition
     ///
-    /// # Enhanced Behavior (v0.8.9+)
+    /// # Enhanced Behavior (v0.8.8+)
     /// - 98% reference coverage improvement with production-stable dual indexing
     /// - Uses dual indexing (bare + qualified names) for comprehensive search
     /// - Automatically excludes the symbol definition from results  
@@ -689,9 +689,9 @@ mod workspace_refactor_tests {
 
 ## Version Compatibility
 
-### v0.8.9 Features
+### v0.8.8 Features
 
-All WorkspaceRefactor APIs are available starting from v0.8.9. Earlier versions do not include this functionality.
+All WorkspaceRefactor APIs are available starting from v0.8.8. Earlier versions do not include this functionality.
 
 ### Future Compatibility
 

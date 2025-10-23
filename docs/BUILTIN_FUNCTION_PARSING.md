@@ -8,7 +8,7 @@ This guide covers the tree-sitter-perl parser's enhanced builtin function parsin
 
 ## Version Information
 
-- **Introduced**: v0.8.9 (2025-09-09)
+- **Introduced**: v0.8.8 (2025-09-09)
 - **Pull Request**: #119
 - **Issue Reference**: #110
 - **Status**: Complete and Production Ready

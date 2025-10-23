@@ -70,7 +70,7 @@ cargo build -p perl-parser --features incremental --release
 cargo build --all
 ```
 
-## Workspace Configuration (v0.8.9+)
+## Workspace Configuration (v0.8.8+)
 
 The workspace uses an exclusion strategy to ensure reliable builds across all platforms:
 
@@ -102,7 +102,7 @@ The xtask crate is excluded from the workspace to maintain clean builds while pr
 
 ## Test Commands
 
-### Workspace Testing (v0.8.9)
+### Workspace Testing (v0.8.8)
 ```bash
 # Test core published crates (workspace members only)
 cargo test                              # Tests perl-lexer, perl-parser, perl-corpus, perl-lsp
@@ -144,7 +144,7 @@ cargo test -p perl-parser --test incremental_perf_test
 cargo bench incremental --features incremental
 ```
 
-### Enhanced Workspace Navigation Tests (v0.8.9)
+### Enhanced Workspace Navigation Tests (v0.8.8)
 ```bash
 # Test comprehensive AST traversal with ExpressionStatement support
 cargo test -p perl-parser --test workspace_comprehensive_traversal_test
@@ -256,7 +256,7 @@ cargo run -p perl-parser --example lsp_capabilities
 ### Core LSP Testing (*Diataxis: How-to Guide* - Development workflows)
 
 ```bash
-# Run LSP tests with performance optimizations (v0.8.9+)
+# Run LSP tests with performance optimizations (v0.8.8+)
 cargo test -p perl-parser lsp
 
 # Run LSP integration tests with controlled threading (recommended)
@@ -318,7 +318,7 @@ RUST_TEST_THREADS=1 cargo test -p perl-lsp              # Maximum reliability mo
 RUST_TEST_THREADS=4 cargo test -p perl-lsp              # High-performance development
 ```
 
-**LSP_TEST_FALLBACKS** (**NEW in v0.8.9**):
+**LSP_TEST_FALLBACKS** (**NEW in v0.8.8**):
 ```bash
 # Enable fast testing mode (reduces test timeouts by ~75%)
 export LSP_TEST_FALLBACKS=1
@@ -500,7 +500,7 @@ cargo test -p perl-lsp --test lsp_performance_tests -- test_execute_command_late
 
 #### Supported executeCommand Operations (*Diataxis: Reference* - Complete command list)
 
-**Core Commands** (Available since v0.8.9+):
+**Core Commands** (Available since v0.8.8+):
 ```bash
 # Test all supported executeCommand operations
 cargo test -p perl-lsp --test lsp_execute_command_tests -- test_supported_commands
@@ -615,7 +615,7 @@ The enhanced executeCommand and code actions integration delivers enterprise-gra
 
 ## Benchmark Commands
 
-### Workspace Benchmarks (v0.8.9)
+### Workspace Benchmarks (v0.8.8)
 ```bash
 # Run parser benchmarks (workspace crates)
 cargo bench                             # Benchmarks for published crates
@@ -629,7 +629,7 @@ cargo bench -p perl-corpus              # Corpus validation performance
 cargo test -p perl-parser --test incremental_perf_test  # Incremental parsing performance
 ```
 
-### Comprehensive C vs Rust Benchmark Framework (v0.8.9)
+### Comprehensive C vs Rust Benchmark Framework (v0.8.8)
 ```bash
 # Run complete cross-language benchmark suite with statistical analysis
 cargo xtask bench                       # Complete benchmark workflow with C vs Rust comparison
@@ -670,7 +670,7 @@ cargo run --bin xtask -- validate-memory-profiling  # Test dual-mode memory meas
 
 ## Code Quality Commands
 
-### Workspace Quality Checks (v0.8.9)
+### Workspace Quality Checks (v0.8.8)
 ```bash
 # Run standard Rust quality checks (workspace crates)
 cargo fmt                              # Format workspace code
@@ -689,7 +689,7 @@ cargo test --doc                      # Documentation tests
 
 ## Dual-Scanner Corpus Comparison (*Diataxis: How-to Guide* - Testing procedures)
 
-### Running Dual-Scanner Corpus Tests (v0.8.9+)
+### Running Dual-Scanner Corpus Tests (v0.8.8+)
 ```bash
 # Prerequisites: Install libclang-dev for C scanner support
 sudo apt-get install libclang-dev  # Ubuntu/Debian
@@ -1036,7 +1036,7 @@ The unified scanner architecture provides:
 
 ## Edge Case Testing Commands
 
-### Workspace Edge Case Tests (v0.8.9)
+### Workspace Edge Case Tests (v0.8.8)
 ```bash  
 # Run comprehensive edge case tests (workspace crates)
 cargo test -p perl-parser               # Includes all edge case coverage

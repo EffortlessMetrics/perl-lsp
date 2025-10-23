@@ -10,7 +10,7 @@ This report summarizes the current state of the repository based on recent test 
 - `cargo test -p perl-parser --lib`: **passed** – 194 tests succeeded for the pure Rust parser, indicating core functionality works as intended.
 - `cargo test -p tree-sitter-perl --lib`: **incomplete** – long-running stress tests exceeded the allotted time, suggesting additional stability/performance checks may be required.
 
-## Status Resolution (v0.8.9)
+## Status Resolution (v0.8.8)
 
 The issues described in this report have been **resolved** through workspace configuration improvements:
 

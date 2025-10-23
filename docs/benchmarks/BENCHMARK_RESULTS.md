@@ -5,7 +5,7 @@
 This document contains the actual benchmark results comparing the Rust implementation against the original C implementation of tree-sitter-perl. Results are updated automatically as benchmarks are run.
 
 **Last Updated**: 2025-09-08
-**Benchmark Version**: v0.8.9
+**Benchmark Version**: v0.8.8
 **Rust Version**: 1.89.0
 **C Implementation Version**: 1.0.0
 

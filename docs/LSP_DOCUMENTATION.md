@@ -88,7 +88,7 @@ Enhanced syntax highlighting beyond regex-based:
 - **Rename**: Cross-file rename for `our` variables and local rename for `my` variables.
 
 ### 9. Other Features
-- **Inlay Hints** (**Enhanced in v0.8.9+**): Shows parameter names and inferred types with improved positioning accuracy.
+- **Inlay Hints** (**Enhanced in v0.8.8+**): Shows parameter names and inferred types with improved positioning accuracy.
   - **Enhanced Parameter Positioning**: Accurate positioning for parenthesized function calls (e.g., `push(@arr, "x")` shows hint at `@arr`, not at `(`)
   - **Consistent Parameter Labels**: Standardized parameter signatures with consistent case (`ARRAY`, `FILEHANDLE` for built-in functions)
   - **Built-in Function Support**: Comprehensive parameter hints for all major Perl built-ins including `push`, `open`, `print`, `printf`

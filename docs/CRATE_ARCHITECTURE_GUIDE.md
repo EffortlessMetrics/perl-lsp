@@ -1,4 +1,4 @@
-# Crate Architecture Guide (v0.8.9 GA)
+# Crate Architecture Guide (v0.8.8 GA)
 
 ## Published Crates (Workspace Members)
 
@@ -28,13 +28,13 @@
   - `src/incremental_integration.rs`: LSP integration bridge
   - `src/incremental_handler_v2.rs`: Document change processing
   - `src/declaration.rs`: Declaration provider with O(1) position lookups
-  - `src/module_resolver.rs`: **NEW v0.8.9** - Reusable module resolution component for LSP features
-  - `src/workspace_index.rs`: **ENHANCED v0.8.9** - Dual indexing strategy for 98% cross-file reference coverage
+  - `src/module_resolver.rs`: **NEW v0.8.8** - Reusable module resolution component for LSP features
+  - `src/workspace_index.rs`: **ENHANCED v0.8.8** - Dual indexing strategy for 98% cross-file reference coverage
   - `src/completion.rs`: Enhanced completion provider with pluggable module resolver integration
   - `src/import_optimizer.rs`: Import analysis and optimization engine
   - `src/code_actions.rs`: LSP code actions with import optimization integration
 
-### `/crates/perl-lsp/` - Standalone LSP Server ⭐ **LSP BINARY** (v0.8.9)
+### `/crates/perl-lsp/` - Standalone LSP Server ⭐ **LSP BINARY** (v0.8.8)
 - **Purpose**: Clean LSP server implementation separated from parser logic
 - **Key Features**:
   - Standalone Language Server binary with production-grade CLI
@@ -52,7 +52,7 @@
   - **Configuration Management**: Launch (start new process) and attach (connect to running process) modes
   - **Enterprise Security**: Path validation, process isolation, input sanitization, safe defaults
   - **Performance Optimized**: <50ms breakpoint operations, <100ms step/continue, <200ms variable expansion
-  - **Comprehensive Testing**: 53/53 tests passing with mutation hardening and edge case coverage
+  - **Comprehensive Testing**: 71/71 tests passing with mutation hardening and edge case coverage
 - **Key Files**:
   - `src/lib.rs`: Public API exports and crate documentation
   - `src/bridge_adapter.rs`: Bridge to Perl::LanguageServer DAP implementation
@@ -67,7 +67,7 @@
   - **Phase 2** (Planned): Native Rust DAP implementation with AST-based breakpoint validation
   - **Phase 3** (Planned): Production hardening with advanced features (conditional breakpoints, logpoints)
 
-### `/crates/perl-lexer/` - Context-Aware Tokenizer (Enhanced v0.8.9)
+### `/crates/perl-lexer/` - Context-Aware Tokenizer (Enhanced v0.8.8)
 - **Purpose**: Context-aware tokenizer with mode-based lexing and package-qualified identifier support
 - **Key Features**:
   - Context-aware tokenizer with mode-based lexing
@@ -91,7 +91,7 @@
 - **Purpose**: Pest-based parser (v2 implementation), marked as legacy
 - **Status**: Published but marked as legacy, use `perl-parser` instead
 
-## Benchmark Framework (v0.8.9) ⭐ **ENHANCED**
+## Benchmark Framework (v0.8.8) ⭐ **ENHANCED**
 
 ### `/crates/tree-sitter-perl-rs/src/bin/benchmark_parsers.rs`
 - **Purpose**: Comprehensive Rust benchmark runner
@@ -156,7 +156,7 @@
 
 ## xtask Architecture (*Diataxis: Explanation* - Advanced testing design)
 
-### Dual-Scanner Corpus Comparison (v0.8.9+)
+### Dual-Scanner Corpus Comparison (v0.8.8+)
 
 The xtask system implements a sophisticated dual-scanner corpus comparison architecture:
 
@@ -209,7 +209,7 @@ cargo run corpus -- --diagnose         # Detailed analysis
 
 ## Key Components
 
-### ModuleResolver Component (NEW v0.8.9) - (*Diataxis: Reference*)
+### ModuleResolver Component (NEW v0.8.8) - (*Diataxis: Reference*)
 
 The ModuleResolver provides a reusable, generic module resolution system for LSP features requiring Perl module path resolution.
 
@@ -433,7 +433,7 @@ cargo test -p tree-sitter-perl-rs rust_scanner_smoke
 - **Production-Ready Integration**: Seamless integration with parser context and LSP server for real-time editing
 - **Comprehensive Testing**: 8 specialized test cases covering Unicode, CRLF, multiline strings, and edge cases
 
-## Enhanced Dual Indexing Strategy (v0.8.9) ⭐ **ENHANCED**
+## Enhanced Dual Indexing Strategy (v0.8.8) ⭐ **ENHANCED**
 
 ### Cross-File Reference Resolution
 The workspace indexing system implements a dual indexing strategy for comprehensive cross-file navigation with 98% reference coverage:
@@ -486,7 +486,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 - **Backward Compatible**: Existing code continues to work with enhanced indexing
 - **Enterprise Ready**: Production-stable workspace navigation across package boundaries
 
-## Import Optimization Architecture (v0.8.9) ⭐ **NEW**
+## Import Optimization Architecture (v0.8.8) ⭐ **NEW**
 
 ### Core Components
 
@@ -719,7 +719,7 @@ generative-doc-writer       # Documentation synchronization
 - **`/crates/tree-sitter-perl-rs/`**: Legacy test harnesses with outdated Rope usage
 - **Internal test infrastructure**: Focus on production code, not test utilities
 
-## Dual Indexing Architecture (v0.8.9+) (*Diataxis: Explanation* - Revolutionary workspace navigation design)
+## Dual Indexing Architecture (v0.8.8+) (*Diataxis: Explanation* - Revolutionary workspace navigation design)
 
 ### Problem Statement (*Diataxis: Explanation* - Why dual indexing is needed)
 

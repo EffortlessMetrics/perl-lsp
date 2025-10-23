@@ -45,11 +45,11 @@ This document describes the comprehensive benchmarking framework for comparing C
    - **Multi-implementation Analysis**: Compare performance characteristics across different parser versions
    - **Regression Detection**: Automated detection of performance degradation across parser implementations
 
-7. **Revolutionary LSP Performance Benchmarking (PR #140)** (v0.8.9+) ⭐ **REVOLUTIONARY** (**Diataxis: Reference**)
+7. **Revolutionary LSP Performance Benchmarking (PR #140)** (v0.8.8+) ⭐ **REVOLUTIONARY** (**Diataxis: Reference**)
    - **5000x Performance Improvement**: LSP behavioral tests 1560s+ → 0.31s validation
    - **4700x Performance Improvement**: User story tests 1500s+ → 0.32s measurement
 
-8. **Substitution Operator Performance Validation (PR #158)** (v0.8.9+) ⭐ **NEW** (**Diataxis: Reference**)
+8. **Substitution Operator Performance Validation (PR #158)** (v0.8.8+) ⭐ **NEW** (**Diataxis: Reference**)
    - **Zero Performance Impact**: Comprehensive substitution operator parsing with no measurable overhead
    - **<10µs Parsing Time**: Typical substitution operators (`s/old/new/g`) parse in under 10 microseconds
    - **Minimal Memory Overhead**: Reuses existing AST structures without additional memory allocation
@@ -67,14 +67,14 @@ This document describes the comprehensive benchmarking framework for comparing C
    - **Enhanced Test Harness**: Real JSON-RPC protocol performance validation
    - **Strategic Value Analysis**: Transformational CI reliability (100% pass rate)
 
-8. **Traditional LSP Performance Benchmarking** (v0.8.9+) (**Diataxis: Reference**)
+8. **Traditional LSP Performance Benchmarking** (v0.8.8+) (**Diataxis: Reference**)
    - **Workspace Symbol Search Optimization**: 99.5% performance improvement measurement
    - **Test Timeout Reduction**: Validation of 60s+ → 0.26s improvements
    - **Cooperative Yielding Validation**: Measure non-blocking behavior in symbol processing
    - **Memory Usage Profiling**: Track bounded processing and memory consumption limits
    - **Fast Mode Benchmarking**: Performance validation with LSP_TEST_FALLBACKS configuration
 
-9. **Dual Function Call Indexing Benchmarking** (v0.8.9+) ⭐ **NEW** (**Diataxis: Reference**)
+9. **Dual Function Call Indexing Benchmarking** (v0.8.8+) ⭐ **NEW** (**Diataxis: Reference**)
    - **98% Reference Coverage Validation**: Measure comprehensive function call detection improvements
    - **Dual Indexing Performance**: Benchmark O(1) lookup performance for bare + qualified function names
    - **Unicode Processing Enhancement**: Atomic performance counter validation with emoji/character processing
@@ -444,7 +444,7 @@ The framework includes configurable performance gates that automatically detect 
 - **Status**: WARNING/FAIL for memory increases
 - **Action**: Warns on memory regressions
 
-### LSP Performance Gates (v0.8.9+) (**Diataxis: Reference**)
+### LSP Performance Gates (v0.8.8+) (**Diataxis: Reference**)
 - **Test Timeout Threshold**: Validates 99.5% timeout reduction (60s+ → 0.26s)
 - **Workspace Symbol Search**: Validates bounded processing (MAX_PROCESS: 1000)
 - **Cooperative Yielding**: Validates non-blocking behavior (yield every 32 symbols)
@@ -777,7 +777,7 @@ async fn test_unicode_lsp_performance() {
     fi
 ```
 
-#### Threading Considerations for CI (v0.8.9+)
+#### Threading Considerations for CI (v0.8.8+)
 
 **Thread Configuration for Benchmark Consistency**:
 
@@ -879,7 +879,7 @@ For detailed performance analysis:
 3. **Detailed Stats**: Enable comprehensive statistical analysis
 4. **Profiling**: Use `cargo flamegraph` or similar tools
 
-### Memory Profiling System (v0.8.9+)
+### Memory Profiling System (v0.8.8+)
 
 The framework includes advanced memory profiling capabilities:
 
@@ -912,7 +912,7 @@ cargo xtask compare --report  # Includes memory metrics in output
 - **Minimum Guarantees**: Ensures at least 0.1MB reported for tiny files
 - **Fallback Values**: Returns 0.5MB default for inaccessible files
 
-### LSP Performance Benchmarking (v0.8.9+) (**Diataxis: How-to Guide**)
+### LSP Performance Benchmarking (v0.8.8+) (**Diataxis: How-to Guide**)
 
 The framework now includes specialized LSP performance benchmarking to validate workspace optimization improvements:
 

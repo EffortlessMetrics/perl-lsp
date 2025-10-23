@@ -6,7 +6,7 @@ All LSP providers now support source-aware analysis for enhanced documentation e
 
 ### Provider Constructor Patterns
 ```rust
-// Enhanced constructors with source text and module resolver (v0.8.9)
+// Enhanced constructors with source text and module resolver (v0.8.8)
 CompletionProvider::new_with_index_and_source(ast, source, workspace_index, module_resolver)
 SignatureHelpProvider::new_with_source(ast, source)
 SymbolExtractor::new_with_source(source)
@@ -17,7 +17,7 @@ SignatureHelpProvider::new(ast)  // uses empty source
 SymbolExtractor::new()  // no documentation extraction
 ```
 
-### ModuleResolver Integration (NEW v0.8.9) - (*Diataxis: How-to Guide*)
+### ModuleResolver Integration (NEW v0.8.8) - (*Diataxis: How-to Guide*)
 
 The CompletionProvider now supports pluggable module resolution for enhanced Perl module completion. This allows LSP features to resolve module names to file paths for improved functionality.
 
@@ -69,9 +69,9 @@ let completions = provider.get_completions_with_path(&doc.text, offset, Some(uri
 - **Caching Strategy**: Fast path checks open documents first
 - **Generic Design**: Works with any document representation for flexibility
 
-## Enhanced Cross-File Definition Resolution (v0.8.9+) (*Diataxis: How-to Guide* - Advanced LSP Development)
+## Enhanced Cross-File Definition Resolution (v0.8.8+) (*Diataxis: How-to Guide* - Advanced LSP Development)
 
-The v0.8.9+ releases introduce comprehensive Package::subroutine pattern resolution with sophisticated fallback mechanisms for robust cross-file navigation.
+The v0.8.8+ releases introduce comprehensive Package::subroutine pattern resolution with sophisticated fallback mechanisms for robust cross-file navigation.
 
 ### Implementation Patterns for Package::Subroutine Resolution
 
@@ -312,9 +312,9 @@ sub foo {  # Not documentation
 }
 ```
 
-## Cross-File Reference Handling (*Diataxis: Reference* - Enhanced package-qualified identifier support v0.8.9+)
+## Cross-File Reference Handling (*Diataxis: Reference* - Enhanced package-qualified identifier support v0.8.8+)
 
-The v0.8.9+ release includes significant improvements to cross-file reference handling, particularly for package-qualified identifiers and reference deduplication.
+The v0.8.8+ release includes significant improvements to cross-file reference handling, particularly for package-qualified identifiers and reference deduplication.
 
 ### Enhanced Workspace Indexing
 
@@ -344,12 +344,12 @@ pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
 #### **Package-Qualified Identifier Support**
 The system now correctly handles package-qualified identifiers in cross-file scenarios:
 
-**Before v0.8.9:**
+**Before v0.8.8:**
 - References could include function definitions
 - Duplicate entries from dual indexing
 - Inconsistent handling of package contexts
 
-**After v0.8.9:**
+**After v0.8.8:**
 - Clean separation of references vs definitions
 - Intelligent deduplication across qualified/unqualified names
 - Consistent package context resolution
@@ -430,7 +430,7 @@ When implementing new LSP features, follow this structure:
 
 ## Testing Procedures (*Diataxis: How-to Guide* - Testing procedures)
 
-### Dual-Scanner Corpus Validation (v0.8.9+)
+### Dual-Scanner Corpus Validation (v0.8.8+)
 
 For comprehensive LSP development testing, use dual-scanner corpus comparison to validate parser behavior:
 
@@ -1011,7 +1011,7 @@ The enhanced executeCommand and code actions development patterns provide a comp
 
 ## Testing LSP Features
 
-### Revolutionary Test Infrastructure (PR #140) (v0.8.9+)
+### Revolutionary Test Infrastructure (PR #140) (v0.8.8+)
 The project includes revolutionary test infrastructure with transformative performance optimizations achieving unprecedented test reliability:
 
 **Revolutionary Performance Achievements (PR #140)**:
@@ -1030,7 +1030,7 @@ The project includes revolutionary test infrastructure with transformative perfo
 - **Enhanced Test Harness**: Graceful degradation for CI environments
 - **Optimized Idle Detection**: 1000ms → 200ms cycles (**5x improvement**)
 
-### Revolutionary Performance Testing Configuration (PR #140) (v0.8.9+) (**Diataxis: How-to Guide** - Transformative performance testing)
+### Revolutionary Performance Testing Configuration (PR #140) (v0.8.8+) (**Diataxis: How-to Guide** - Transformative performance testing)
 
 The PR #140 enhancements deliver comprehensive performance optimizations achieving revolutionary improvements:
 
@@ -1062,7 +1062,7 @@ export LSP_TEST_FALLBACKS=1
 # Run all LSP tests in fast mode
 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp
 
-# Combine threading control with fast mode for optimal CI reliability (v0.8.9+)
+# Combine threading control with fast mode for optimal CI reliability (v0.8.8+)
 RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp -- --test-threads=2
 
 # Revolutionary performance testing with enhanced test harness (PR #140)
@@ -1122,7 +1122,7 @@ let symbol_check = Duration::from_millis(200);  // Single attempt
 - Workspace symbol tests: Often exceed CI limits
 - Test suite runtime: 5-10 minutes
 
-**After Optimization (v0.8.9)**:
+**After Optimization (v0.8.8)**:
 - `test_completion_detail_formatting`: 0.26 seconds (99.5% faster)
 - All tests pass with `LSP_TEST_FALLBACKS=1`: <10 seconds total
 - Test suite runtime: <1 minute in fast mode

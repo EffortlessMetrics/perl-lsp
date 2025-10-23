@@ -182,7 +182,7 @@ This architecture enables scientific comparison between three implementations:
 
 *Estimated based on architectural efficiency
 
-### Comprehensive Benchmark Framework (v0.8.9) ⭐ **NEW**
+### Comprehensive Benchmark Framework (v0.8.8) ⭐ **NEW**
 
 The project now includes an enterprise-grade cross-language benchmark framework that provides systematic performance validation:
 

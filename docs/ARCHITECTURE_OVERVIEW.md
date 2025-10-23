@@ -34,7 +34,7 @@
 - **`/xtask/`**: Development automation
 - **`/docs/`**: Architecture documentation
 
-## Workspace Configuration Strategy (v0.8.9+)
+## Workspace Configuration Strategy (v0.8.8+)
 
 ### Exclusion Architecture (**Diataxis: Explanation** - Design decisions)
 
@@ -310,7 +310,7 @@ The tree-sitter-perl architecture implements comprehensive thread-safety through
 
 #### Performance Impact of Thread-Safety
 
-**Semantic Tokens Performance** (v0.8.9):
+**Semantic Tokens Performance** (v0.8.8):
 - **Average execution time**: 2.826µs 
 - **Performance improvement**: 35x better than 100µs target
 - **Memory efficiency**: Zero persistent state between calls
