@@ -9,6 +9,11 @@ STATE_FILE="${PROJECT_ROOT}/artifacts/state.json"
 TMP_DIR="${PROJECT_ROOT}/tmp"
 DOCS_DIR="${PROJECT_ROOT}/docs"
 
+# Escape function for sed replacements (escapes &, /, and \)
+esc() {
+  printf '%s' "$1" | sed -e 's/[&/\\]/\\&/g'
+}
+
 if [ ! -f "${STATE_FILE}" ]; then
   echo "Error: State file not found at ${STATE_FILE}"
   echo "Run ./scripts/generate-receipts.sh or ./scripts/quick-receipts.sh first"
@@ -43,25 +48,36 @@ render_file() {
   local source=$1
   local target=$2
 
-  # Use sed to replace all token variants (both flat and nested)
+  # Escape all values for sed (safe against /, &, \)
+  local SED_VERSION=$(esc "${VERSION}")
+  local SED_TEST_PASSED=$(esc "${TEST_PASSED}")
+  local SED_TEST_FAILED=$(esc "${TEST_FAILED}")
+  local SED_TEST_IGNORED=$(esc "${TEST_IGNORED}")
+  local SED_TEST_ACTIVE=$(esc "${TEST_ACTIVE}")
+  local SED_TEST_TOTAL=$(esc "${TEST_TOTAL}")
+  local SED_PASS_RATE_ACTIVE=$(esc "${PASS_RATE_ACTIVE}")
+  local SED_PASS_RATE_TOTAL=$(esc "${PASS_RATE_TOTAL}")
+  local SED_MISSING_DOCS=$(esc "${MISSING_DOCS}")
+
+  # Use sed with safe delimiter (|) to replace all token variants (both flat and nested)
   sed \
-    -e "s/{{version}}/${VERSION}/g" \
-    -e "s/{{test_passed}}/${TEST_PASSED}/g" \
-    -e "s/{{tests\.passed}}/${TEST_PASSED}/g" \
-    -e "s/{{test_failed}}/${TEST_FAILED}/g" \
-    -e "s/{{tests\.failed}}/${TEST_FAILED}/g" \
-    -e "s/{{test_ignored}}/${TEST_IGNORED}/g" \
-    -e "s/{{tests\.ignored}}/${TEST_IGNORED}/g" \
-    -e "s/{{test_active}}/${TEST_ACTIVE}/g" \
-    -e "s/{{tests\.active_tests}}/${TEST_ACTIVE}/g" \
-    -e "s/{{test_total}}/${TEST_TOTAL}/g" \
-    -e "s/{{tests\.total_all_tests}}/${TEST_TOTAL}/g" \
-    -e "s/{{pass_rate_active}}/${PASS_RATE_ACTIVE}/g" \
-    -e "s/{{tests\.pass_rate_active}}/${PASS_RATE_ACTIVE}/g" \
-    -e "s/{{pass_rate_total}}/${PASS_RATE_TOTAL}/g" \
-    -e "s/{{tests\.pass_rate_total}}/${PASS_RATE_TOTAL}/g" \
-    -e "s/{{missing_docs}}/${MISSING_DOCS}/g" \
-    -e "s/{{docs\.missing_docs}}/${MISSING_DOCS}/g" \
+    -e "s|{{version}}|${SED_VERSION}|g" \
+    -e "s|{{test_passed}}|${SED_TEST_PASSED}|g" \
+    -e "s|{{tests\.passed}}|${SED_TEST_PASSED}|g" \
+    -e "s|{{test_failed}}|${SED_TEST_FAILED}|g" \
+    -e "s|{{tests\.failed}}|${SED_TEST_FAILED}|g" \
+    -e "s|{{test_ignored}}|${SED_TEST_IGNORED}|g" \
+    -e "s|{{tests\.ignored}}|${SED_TEST_IGNORED}|g" \
+    -e "s|{{test_active}}|${SED_TEST_ACTIVE}|g" \
+    -e "s|{{tests\.active_tests}}|${SED_TEST_ACTIVE}|g" \
+    -e "s|{{test_total}}|${SED_TEST_TOTAL}|g" \
+    -e "s|{{tests\.total_all_tests}}|${SED_TEST_TOTAL}|g" \
+    -e "s|{{pass_rate_active}}|${SED_PASS_RATE_ACTIVE}|g" \
+    -e "s|{{tests\.pass_rate_active}}|${SED_PASS_RATE_ACTIVE}|g" \
+    -e "s|{{pass_rate_total}}|${SED_PASS_RATE_TOTAL}|g" \
+    -e "s|{{tests\.pass_rate_total}}|${SED_PASS_RATE_TOTAL}|g" \
+    -e "s|{{missing_docs}}|${SED_MISSING_DOCS}|g" \
+    -e "s|{{docs\.missing_docs}}|${SED_MISSING_DOCS}|g" \
     "${source}" > "${target}"
 }
 

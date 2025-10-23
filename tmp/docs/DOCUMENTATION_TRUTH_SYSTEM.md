@@ -61,8 +61,8 @@ Generate canonical receipts → Render docs from receipts → Guard with CI.
          │                                        │
          │  Replace tokens in templates:          │
          │    0.8.8          → 0.8.8        │
-         │    0      → 828          │
-         │    0.0 → 99.6         │
+         │    1550      → 828          │
+         │    97.9 → 99.6         │
          │    484     → 484          │
          └────────────┬──────────────────────────┘
                       │
@@ -110,8 +110,8 @@ This creates:
 
 Replaces template tokens with receipt values:
 - `0.8.8` → Version from perl-parser/Cargo.toml
-- `0`, `0`, `0` → Test counts
-- `0.0` → Pass rate for active tests (excluding ignored)
+- `1550`, `33`, `812` → Test counts
+- `97.9` → Pass rate for active tests (excluding ignored)
 - `484` → Count of missing documentation warnings
 
 ### CI Enforcement
@@ -127,13 +127,13 @@ The `docs-truth` workflow runs on every PR touching documentation:
 | Token | Source | Example |
 |-------|--------|---------|
 | `0.8.8` | perl-parser/Cargo.toml | 0.8.8 |
-| `0` | cargo test summary | 828 |
-| `0` | cargo test summary | 3 |
-| `0` | cargo test summary | 818 |
-| `0` | passed + failed | 831 |
-| `0` | active + ignored | 1649 |
-| `0.0` | (passed / active) × 100 | 99.6 |
-| `0.0` | (passed / total) × 100 | 50.2 |
+| `1550` | cargo test summary | 828 |
+| `33` | cargo test summary | 3 |
+| `812` | cargo test summary | 818 |
+| `1583` | passed + failed | 831 |
+| `2395` | active + ignored | 1649 |
+| `97.9` | (passed / active) × 100 | 99.6 |
+| `64.7` | (passed / total) × 100 | 50.2 |
 | `484` | rustdoc warning count | 484 |
 
 ## Receipt Format
@@ -192,7 +192,7 @@ Before:
 
 After (template):
 ```markdown
-0.0% test pass rate (0 passing, 0 failing, 0 ignored)
+97.9% test pass rate (1550 passing, 33 failing, 812 ignored)
 ```
 
 Rendered:

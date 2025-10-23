@@ -4,6 +4,9 @@
 
 set -euo pipefail
 
+# Set locale to C for consistent number formatting (prevent comma separators)
+export LC_ALL=C
+
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACTS_DIR="${PROJECT_ROOT}/artifacts"
 mkdir -p "${ARTIFACTS_DIR}"
@@ -11,8 +14,9 @@ mkdir -p "${ARTIFACTS_DIR}"
 echo "=== Generating Test Receipts ==="
 
 # Run tests and capture output (exclude xtask which has compilation issues)
+# Use explicit thread limits for stability in CI environments
 cd "${PROJECT_ROOT}"
-RUST_TEST_THREADS=2 cargo +stable test --workspace --exclude xtask --all-features --no-fail-fast 2>&1 \
+RUST_TEST_THREADS=2 cargo +stable test --workspace --exclude xtask --all-features --no-fail-fast -- --test-threads=2 2>&1 \
   | tee "${ARTIFACTS_DIR}/test-output.txt"
 
 # Parse test output into summary
@@ -72,13 +76,15 @@ fi
 echo ""
 echo "=== Generating Doc Receipts ==="
 
-# Count missing docs warnings from rustdoc
+# Count missing docs warnings from rustdoc (entire workspace)
 cd "${PROJECT_ROOT}"
-cargo +stable doc --no-deps --package perl-parser 2>&1 \
-  | tee "${ARTIFACTS_DIR}/rustdoc.log" \
-  | grep -c '^warning: missing documentation' \
-  | awk '{print "{\"missing_docs\": " $1 "}"}' \
-  > "${ARTIFACTS_DIR}/doc-summary.json" || echo '{"missing_docs": 0}' > "${ARTIFACTS_DIR}/doc-summary.json"
+cargo +stable doc --no-deps --workspace --exclude xtask 2> "${ARTIFACTS_DIR}/rustdoc.log" || true
+if command -v rg &> /dev/null; then
+  MISSING_DOCS=$(rg -n '^warning: missing documentation' "${ARTIFACTS_DIR}/rustdoc.log" 2>/dev/null | wc -l | tr -d ' ')
+else
+  MISSING_DOCS=$(grep -c '^warning: missing documentation' "${ARTIFACTS_DIR}/rustdoc.log" 2>/dev/null || echo 0)
+fi
+printf '{"missing_docs": %s}\n' "${MISSING_DOCS}" > "${ARTIFACTS_DIR}/doc-summary.json"
 
 echo "Doc summary saved to ${ARTIFACTS_DIR}/doc-summary.json"
 cat "${ARTIFACTS_DIR}/doc-summary.json"
@@ -86,8 +92,9 @@ cat "${ARTIFACTS_DIR}/doc-summary.json"
 echo ""
 echo "=== Generating Consolidated State ==="
 
-# Extract version from workspace Cargo.toml
-VERSION=$(grep -E "^version\s*=" Cargo.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+# Extract version from cargo metadata (handles workspaces correctly)
+VERSION=$(cargo metadata -q --format-version=1 \
+  | jq -r '.packages[] | select(.name=="perl-parser") | .version')
 
 # Combine all receipts into single state file
 jq -n \

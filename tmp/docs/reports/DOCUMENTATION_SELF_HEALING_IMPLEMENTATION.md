@@ -73,10 +73,10 @@ Replaces template tokens with receipt values:
 | Token | Receipt Path | Example |
 |-------|--------------|---------|
 | `0.8.8` | `.version` | 0.8.8 |
-| `0` | `.tests.passed` | 828 |
-| `0` | `.tests.failed` | 3 |
-| `0` | `.tests.ignored` | 818 |
-| `0.0` | `.tests.pass_rate_active` | 99.6 |
+| `1550` | `.tests.passed` | 828 |
+| `33` | `.tests.failed` | 3 |
+| `812` | `.tests.ignored` | 818 |
+| `97.9` | `.tests.pass_rate_active` | 99.6 |
 | `484` | `.docs.missing_docs` | 484 |
 
 ### 3. CI Enforcement (`.github/workflows/docs-truth.yml`)
@@ -208,9 +208,9 @@ Test run currently executing with:
 # Current Status (v0.8.8)
 
 ✅ **Production Ready**:
-- 0.0% test pass rate across all components
-- 0 passing, 0 failing, 0 ignored
-- Total test suite: 0 tests (0 active + 0 quarantined)
+- 97.9% test pass rate across all components
+- 1550 passing, 33 failing, 812 ignored
+- Total test suite: 2395 tests (1583 active + 812 quarantined)
 - 484 missing documentation warnings tracked for systematic resolution
 ```
 

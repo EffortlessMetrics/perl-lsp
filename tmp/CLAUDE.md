@@ -41,7 +41,7 @@ This repository contains **six published crates** forming a complete Perl develo
 4. **perl-lexer** (`/crates/perl-lexer/`)
    - Context-aware tokenizer with Unicode support
    - Enhanced delimiter recognition including single-quote substitution operators
-   - Performance-optimized (v0.8.8+) with comprehensive operator support
+   - Performance-optimized (0.8.8+) with comprehensive operator support
 
 5. **perl-corpus** (`/crates/perl-corpus/`)
    - Comprehensive test corpus with property-based testing infrastructure
@@ -269,7 +269,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 
 ### Development Locations
 - **Parser & LSP**: `/crates/perl-parser/` - main development with production Rope implementation
-- **LSP Server**: `/crates/perl-lsp/` - standalone LSP server binary (v0.8.8)
+- **LSP Server**: `/crates/perl-lsp/` - standalone LSP server binary (0.8.8)
 - **DAP Server**: `/crates/perl-dap/` - Debug Adapter Protocol implementation (Issue #207)
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions
@@ -424,7 +424,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 ## Current Status (0.8.8 + PR #140 Revolutionary Performance + PR #160 API Documentation & Parser Robustness [SPEC-149] + Issue #207 DAP Support)
 
 ✅ **Revolutionary Production Ready**:
-- 0.0% test pass rate across all components (0 passing, 0 failing, 0 ignored)
+- 97.9% test pass rate across all components (1550 passing, 33 failing, 812 ignored)
 - **Revolutionary Performance Achievements (PR #140)**:
   - **LSP behavioral tests**: 1560s+ → 0.31s (**5000x faster**, Transformational)
   - **User story tests**: 1500s+ → 0.32s (**4700x faster**, Revolutionary)
