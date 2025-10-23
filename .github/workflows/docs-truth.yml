@@ -34,13 +34,20 @@ jobs:
       - name: Check for drift
         run: |
           # Check if rendered docs differ from committed docs
-          if [ -f "CLAUDE.md.template" ]; then
-            diff -u CLAUDE.md CLAUDE.md.rendered || {
-              echo "::error::CLAUDE.md is out of sync with template and state.json"
-              echo "Run ./scripts/generate-receipts.sh && ./scripts/render-docs.sh and commit changes"
-              exit 1
-            }
+          # Compare tmp/docs/ with docs/ and tmp/*.md with *.md
+
+          if diff -ruN docs tmp/docs || diff -ruN README.md tmp/README.md || diff -ruN CLAUDE.md tmp/CLAUDE.md; then
+            echo "::error::Docs are out of sync with receipts (state.json)"
+            echo "Run ./scripts/generate-receipts.sh && ./scripts/render-docs.sh to regenerate"
+            echo ""
+            echo "Differences found:"
+            diff -ruN docs tmp/docs | head -50 || true
+            diff -ruN README.md tmp/README.md | head -20 || true
+            diff -ruN CLAUDE.md tmp/CLAUDE.md | head -20 || true
+            exit 1
           fi
+
+          echo "✓ All documentation is in sync with receipts"
 
       - name: Validate test counts
         run: |

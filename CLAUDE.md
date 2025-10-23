@@ -3,7 +3,7 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.8.8 - Enhanced Builtin Function Parsing & Dual Function Call Indexing + PR #160 API Documentation Infrastructure & Parser Robustness (SPEC-149)
+**Latest Release**: {{version}} - Enhanced Builtin Function Parsing & Dual Function Call Indexing + PR #160 API Documentation Infrastructure & Parser Robustness (SPEC-149)
 
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
@@ -11,7 +11,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 This repository contains **six published crates** forming a complete Perl development ecosystem with LSP, DAP, and comprehensive workspace refactoring capabilities:
 
-### Published Crates (v0.8.8 + Issue #207 DAP Support)
+### Published Crates ({{version}} + Issue #207 DAP Support)
 
 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
    - Native recursive descent parser with ~100% Perl 5 syntax coverage
@@ -23,7 +23,7 @@ This repository contains **six published crates** forming a complete Perl develo
    - **Test-Driven Development Support**: Auto-detecting TestGenerator with AST-based expectation inference
    - **Comprehensive API Documentation**: Enterprise-grade documentation infrastructure with `#![warn(missing_docs)]` enforcement (PR #160/SPEC-149)
    - **Advanced Parser Robustness**: Comprehensive fuzz testing and mutation hardening with 12 test suites (60%+ mutation score improvement)
-   - **Documentation Quality Enforcement**: 12 acceptance criteria validation with automated quality gates and progress tracking (484 violations baseline)
+   - **Documentation Quality Enforcement**: 12 acceptance criteria validation with automated quality gates and progress tracking ({{docs.missing_docs}} violations baseline)
 
 2. **perl-lsp** (`/crates/perl-lsp/`) ⭐ **LSP BINARY**
    - Standalone Language Server binary with production-grade CLI
@@ -138,7 +138,7 @@ cargo test -p perl-parser --test missing_docs_ac_tests -- --nocapture  # Detaile
 cargo doc --no-deps --package perl-parser                       # Validate doc generation without warnings
 
 # Missing Documentation Warnings Infrastructure ⭐ **IMPLEMENTED: PR #160 (SPEC-149)**
-# Comprehensive documentation enforcement with `#![warn(missing_docs)]` enabled - Currently tracking 484 violations for systematic resolution
+# Comprehensive documentation enforcement with `#![warn(missing_docs)]` enabled - Currently tracking {{docs.missing_docs}} violations for systematic resolution
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_missing_docs_warning_compilation  # Verify warnings enabled ✅
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_public_functions_documentation_presence  # Function docs (Phase 1 target)
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_public_structs_documentation_presence  # Struct/enum docs (Phase 1 target)
@@ -285,7 +285,7 @@ cargo doc --no-deps --package perl-parser              # Generate docs without w
 
 # Check documentation infrastructure status
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_missing_docs_warning_compilation  # Verify enforcement enabled
-# Current status: 484 missing documentation warnings identified for systematic resolution
+# Current status: {{docs.missing_docs}} missing documentation warnings identified for systematic resolution
 ```
 
 **Key Requirements** (see [API Documentation Standards](docs/API_DOCUMENTATION_STANDARDS.md)):
@@ -325,7 +325,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- 
 - **Edge Case Detection**: Validates malformed doctests, empty docs, invalid cross-references
 
 **Implementation Strategy**:
-- **Phased Approach**: See [Documentation Implementation Strategy](docs/DOCUMENTATION_IMPLEMENTATION_STRATEGY.md) for systematic resolution of 484 missing documentation warnings
+- **Phased Approach**: See [Documentation Implementation Strategy](docs/DOCUMENTATION_IMPLEMENTATION_STRATEGY.md) for systematic resolution of {{docs.missing_docs}} missing documentation warnings
 - **Priority-Based Implementation**: Core parser infrastructure → LSP providers → Advanced features → Supporting infrastructure
 - **Timeline**: 8-week phased rollout with quality gates and progress tracking
 
@@ -421,10 +421,10 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 4. **Performance Awareness**: Maintain search performance despite dual lookups through efficient indexing
 5. **Backward Compatibility**: Ensure existing code continues to work with enhanced indexing
 
-## Current Status (v0.8.8 + PR #140 Revolutionary Performance + PR #160 API Documentation & Parser Robustness [SPEC-149] + Issue #207 DAP Support)
+## Current Status ({{version}} + PR #140 Revolutionary Performance + PR #160 API Documentation & Parser Robustness [SPEC-149] + Issue #207 DAP Support)
 
 ✅ **Revolutionary Production Ready**:
-- 99.6% test pass rate across all components (828 passing, 3 failing - intentional TDD documentation tracking, 818 ignored, 272 perl-parser lib tests, 27 perl-lsp tests, 71 perl-dap tests, 151 perl-lexer tests, 147 mutation hardening tests)
+- {{tests.pass_rate_active}}% test pass rate across all components ({{tests.passed}} passing, {{tests.failed}} failing, {{tests.ignored}} ignored)
 - **Revolutionary Performance Achievements (PR #140)**:
   - **LSP behavioral tests**: 1560s+ → 0.31s (**5000x faster**, Transformational)
   - **User story tests**: 1500s+ → 0.32s (**4700x faster**, Revolutionary)

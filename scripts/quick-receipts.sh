@@ -31,18 +31,33 @@ EOF
 
 echo "Doc summary saved to ${ARTIFACTS_DIR}/doc-summary.json"
 
-# Create partial state (will be completed when tests finish)
-cat > "${ARTIFACTS_DIR}/state-partial.json" <<EOF
+# Create empty test summary for consistency
+cat > "${ARTIFACTS_DIR}/test-summary.json" <<EOF
 {
-  "version": "${VERSION}",
-  "docs": {
-    "missing_docs": ${MISSING_DOCS}
-  },
-  "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  "passed": 0,
+  "failed": 0,
+  "ignored": 0,
+  "active_tests": 0,
+  "total_all_tests": 0,
+  "pass_rate_active": 0.0,
+  "pass_rate_total": 0.0,
+  "note": "Run generate-receipts.sh for actual test metrics"
 }
 EOF
 
+# Create consolidated state.json (renderer expects this)
+jq -n \
+  --arg version "${VERSION}" \
+  --slurpfile tests "${ARTIFACTS_DIR}/test-summary.json" \
+  --slurpfile docs "${ARTIFACTS_DIR}/doc-summary.json" \
+  '{
+    version: $version,
+    tests: $tests[0],
+    docs: $docs[0],
+    generated_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))
+  }' > "${ARTIFACTS_DIR}/state.json"
+
 echo ""
 echo "=== Quick Receipt Generation Complete ==="
-echo "Partial state saved to ${ARTIFACTS_DIR}/state-partial.json"
-cat "${ARTIFACTS_DIR}/state-partial.json"
+echo "State saved to ${ARTIFACTS_DIR}/state.json (tests will be 0 until full receipt generation)"
+cat "${ARTIFACTS_DIR}/state.json"
