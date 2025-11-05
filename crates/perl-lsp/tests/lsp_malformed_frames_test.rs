@@ -28,12 +28,12 @@ fn test_malformed_headers_handling() {
 
     // PR #173: Enhanced malformed frame recovery should handle this gracefully
     // Server should continue processing or send an appropriate response
-    let response = common::read_response_timeout(&mut server, Duration::from_millis(1000));
+    let _response = common::read_response_timeout(&mut server, Duration::from_millis(1000));
 
     // Verify server didn't crash and either processed request or handled error gracefully
     // The enhanced error handling should maintain session continuity
     // Response can be Some(value) if processed, or None if malformed frame was handled gracefully
-    assert!(true, "Server should handle malformed headers gracefully - response: {:?}", response);
+    // Server should handle malformed headers gracefully
 
     // Test that server is still responsive after malformed header
     let test_response = common::send_request(
@@ -88,10 +88,7 @@ fn test_edge_case_malformed_frame_recovery() {
         Err(_) => {
             // If initialization failed, that's acceptable for this malformed frame type
             // The important thing is that the server didn't crash the process
-            assert!(
-                true,
-                "Server gracefully terminated connection after malformed frame - this is acceptable recovery behavior"
-            );
+            // Server gracefully terminated connection after malformed frame - this is acceptable recovery behavior
         }
     }
 }
@@ -133,10 +130,7 @@ fn test_invalid_json_body() {
         }
         Err(_) => {
             // Connection terminated - this is acceptable for invalid JSON scenarios
-            assert!(
-                true,
-                "Server terminated connection after invalid JSON - acceptable recovery behavior"
-            );
+            // Server terminated connection after invalid JSON - acceptable recovery behavior
         }
     }
 }
@@ -253,19 +247,13 @@ fn test_wrong_content_length_recovery() {
                 }
                 Err(_) => {
                     // Even the shutdown failed - connection was terminated, which is acceptable
-                    assert!(
-                        true,
-                        "Connection terminated during shutdown - acceptable recovery behavior"
-                    );
+                    // Connection terminated during shutdown - acceptable recovery behavior
                 }
             }
         }
         Err(_) => {
             // Connection terminated after wrong content-length - acceptable recovery behavior
-            assert!(
-                true,
-                "Server terminated connection after wrong content-length - acceptable enhanced recovery behavior"
-            );
+            // Server terminated connection after wrong content-length - acceptable enhanced recovery behavior
         }
     }
 }

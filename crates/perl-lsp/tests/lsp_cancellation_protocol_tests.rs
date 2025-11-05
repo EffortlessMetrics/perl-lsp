@@ -477,7 +477,7 @@ fn test_atomic_cancellation_token_operations_ac2() {
 
     // Placeholder assertion that will pass until implementation exists
     // This establishes the test structure for atomic cancellation token operations
-    assert!(true, "Test scaffolding established - implement PerlLspCancellationToken");
+    // Test scaffolding established - implement PerlLspCancellationToken
 }
 
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#cancellation-registry
@@ -582,7 +582,7 @@ fn test_cancellation_registry_concurrent_operations_ac2() {
     */
 
     // Placeholder for test scaffolding
-    assert!(true, "Test scaffolding established - implement CancellationRegistry");
+    // Test scaffolding established - implement CancellationRegistry
 }
 
 /// Tests feature spec: LSP_CANCELLATION_PROTOCOL.md#provider-cleanup-context
@@ -681,7 +681,7 @@ fn test_provider_cleanup_thread_safety_ac2() {
     */
 
     // Placeholder for provider cleanup thread safety testing
-    assert!(true, "Test scaffolding established - implement CancellableProvider trait");
+    // Test scaffolding established - implement CancellableProvider trait
 }
 
 // ============================================================================
