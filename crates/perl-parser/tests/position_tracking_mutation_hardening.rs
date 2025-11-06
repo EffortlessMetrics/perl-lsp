@@ -75,7 +75,7 @@ fn test_range_overlaps_logical_operator_mutations() {
 #[test]
 fn test_range_boundary_conditions_mutations() {
     // Test zero-width ranges at various positions
-    let zero_ranges = vec![
+    let zero_ranges = [
         Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)), // Start of line
         Range::new(Position::new(5, 0, 5), Position::new(5, 0, 5)), // Mid-line
         Range::new(Position::new(10, 1, 0), Position::new(10, 1, 0)), // Start of next line
@@ -95,7 +95,7 @@ fn test_range_boundary_conditions_mutations() {
     }
 
     // Test ranges that touch at boundaries but don't overlap
-    let touching_ranges = vec![
+    let touching_ranges = [
         (
             Range::new(Position::new(0, 0, 0), Position::new(5, 0, 5)), // [0, 5)
             Range::new(Position::new(5, 0, 5), Position::new(10, 0, 10)), // [5, 10)

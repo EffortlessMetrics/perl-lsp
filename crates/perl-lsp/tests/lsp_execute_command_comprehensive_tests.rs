@@ -179,7 +179,7 @@ fn test_execute_command_server_capabilities() {
 #[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC1:executeCommand - Protocol compliance with error handling
 fn test_execute_command_protocol_compliance() {
-    let (mut harness, workspace) = create_execute_command_server();
+    let (mut harness, _workspace) = create_execute_command_server();
 
     // Test invalid command
     let invalid_result = harness.request_with_timeout(
@@ -224,7 +224,7 @@ fn test_execute_command_protocol_compliance() {
 #[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC1:executeCommand - Command parameter validation
 fn test_execute_command_parameter_validation() {
-    let (mut harness, workspace) = create_execute_command_server();
+    let (mut harness, _workspace) = create_execute_command_server();
 
     // Test perl.runCritic with invalid URI
     let invalid_uri_result = harness.request_with_timeout(
@@ -709,7 +709,7 @@ fn test_error_recovery_state_consistency() {
 #[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // Test complete workflow integration
 fn test_complete_workflow_integration() {
-    let (harness, workspace) = create_execute_command_server();
+    let (_harness, _workspace) = create_execute_command_server();
 
     // Test the complete workflow: open -> analyze -> results
     let workflow_content = r#"#!/usr/bin/perl
@@ -1233,7 +1233,7 @@ fn test_concurrent_execute_command_stress() {
 #[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // Test security - path traversal prevention
 fn test_path_traversal_security() {
-    let (mut harness, workspace) = create_execute_command_server();
+    let (mut harness, _workspace) = create_execute_command_server();
 
     // Test various path traversal attempts
     let malicious_paths = vec![

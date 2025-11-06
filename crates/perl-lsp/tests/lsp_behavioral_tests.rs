@@ -333,7 +333,6 @@ sub calculate {
 
 #[test]
 #[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-#[ignore = "Test generation feature not yet implemented"]
 fn test_test_generation_actions_present() {
     let (mut harness, workspace) = create_test_server();
 

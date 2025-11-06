@@ -8,7 +8,7 @@ use perl_parser::Parser;
 #[test]
 fn test_deeply_nested_structures() {
     // Test deeply nested hash and array references
-    let test_cases = vec![
+    let test_cases = [
         // Deeply nested hash references
         r#"$hash{key1}{key2}{key3}{key4}{key5}"#,
         // Deeply nested array references
@@ -52,7 +52,7 @@ fn test_deeply_nested_structures() {
 #[test]
 fn test_complex_subroutine_signatures() {
     // Test modern Perl subroutine signatures with various parameter types
-    let test_cases = vec![
+    let test_cases = [
         // Basic signatures
         "sub test($x) { return $x; }",
         "sub test($x, $y) { return $x + $y; }",
@@ -99,7 +99,7 @@ fn test_complex_subroutine_signatures() {
 #[ignore] // Pre-existing parser limitation: substitution operators not in AST (tracked in separate issue)
 fn test_complex_regex_patterns() {
     // Test complex regular expression patterns that stress the parser
-    let test_cases = vec![
+    let test_cases = [
         // Basic regex with modifiers
         r#"$str =~ /pattern/gi"#,
         // Complex character classes
@@ -141,7 +141,7 @@ fn test_complex_regex_patterns() {
 #[test]
 fn test_unicode_and_encoding_edge_cases() {
     // Test Unicode handling and encoding edge cases
-    let test_cases = vec![
+    let test_cases = [
         // Unicode identifiers
         r#"my $café = "coffee";"#,
         r#"my $🦀 = "Rust";"#,
@@ -176,7 +176,7 @@ fn test_unicode_and_encoding_edge_cases() {
 #[test]
 fn test_error_recovery_scenarios() {
     // Test parser recovery from various syntax errors
-    let test_cases = vec![
+    let test_cases = [
         // Unmatched parentheses
         "my $x = (1 + 2;",
         // Unmatched brackets
@@ -225,7 +225,7 @@ fn test_large_literal_handling() {
         (0..50).map(|i| format!("'key{}' => 'value{}'", i, i)).collect::<Vec<_>>().join(", ")
     );
 
-    let test_cases = vec![
+    let test_cases = [
         // Large numbers
         "my $big = 999999999999999999999;",
         // Very long strings
@@ -257,7 +257,7 @@ fn test_large_literal_handling() {
 #[test]
 fn test_modern_perl_features() {
     // Test modern Perl features that may not be well covered
-    let test_cases = vec![
+    let test_cases = [
         // Postfix dereferencing
         "my $array_ref = [1, 2, 3]; my @array = $array_ref->@*;",
         "my $hash_ref = {a => 1}; my %hash = $hash_ref->%*;",
@@ -367,7 +367,7 @@ fn test_performance_stress_patterns() {
         format!("/{}/", (0..50).map(|i| format!("option{}", i)).collect::<Vec<_>>().join("|"));
     let long_string = format!("my $str = '{}';", "content ".repeat(200));
 
-    let test_cases = vec![
+    let test_cases = [
         // Deeply nested parentheses
         &nested_parens,
         // Long identifier names

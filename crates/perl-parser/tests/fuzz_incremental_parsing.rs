@@ -192,7 +192,7 @@ fn fuzz_malformed_quote_incremental_interaction() {
     }
 }
 
-/// Property-based test for AST invariant preservation
+// Property-based test for AST invariant preservation
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(200))]
 
