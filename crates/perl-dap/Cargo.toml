@@ -1,7 +1,8 @@
 [package]
 name = "perl-dap"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
 description = "Debug Adapter Protocol server for Perl"
 license = "MIT OR Apache-2.0"

@@ -9,6 +9,7 @@ use std::path::PathBuf;
 
 mod tasks;
 mod types;
+mod utils;
 use tasks::*;
 use types::TestSuite;
 #[cfg(any(feature = "legacy", feature = "parser-tasks"))]
@@ -24,6 +25,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Run lean CI suite (format, clippy, tests) for constrained environments
+    Ci,
+
+    /// Run format and clippy checks only (no tests)
+    CheckOnly,
+
     /// Build the project with various configurations
     Build {
         /// Build in release mode
@@ -348,6 +355,8 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Ci => ci::run(),
+        Commands::CheckOnly => ci::check_only(),
         Commands::Build { release, features, c_scanner, rust_scanner } => {
             build::run(release, features, c_scanner, rust_scanner)
         }

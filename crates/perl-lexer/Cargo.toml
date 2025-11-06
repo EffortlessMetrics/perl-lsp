@@ -1,8 +1,8 @@
 [package]
 name = "perl-lexer"
 version = "0.8.8"
-edition = "2024"
-rust-version = "1.89"
+edition.workspace = true
+rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
 description = "High-performance Perl lexer with context-aware tokenization"
 license = "MIT OR Apache-2.0"
