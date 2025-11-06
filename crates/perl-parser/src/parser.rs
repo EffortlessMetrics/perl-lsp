@@ -44,7 +44,7 @@
 use crate::{
     ast::{Node, NodeKind, SourceLocation},
     error::{ParseError, ParseResult},
-    heredoc_collector::{PendingHeredoc, HeredocContent, collect_all},
+    heredoc_collector::{self, HeredocContent, PendingHeredoc, collect_all},
     quote_parser,
     token_stream::{Token, TokenKind, TokenStream},
 };
@@ -91,6 +91,25 @@ pub struct Parser<'a> {
 }
 
 const MAX_RECURSION_DEPTH: usize = 500;
+
+/// Advance byte offset to just after the next line break (handles \n and \r\n)
+fn after_line_break(src: &[u8], mut off: usize) -> usize {
+    // Skip to newline if in middle of line
+    while off < src.len() && src[off] != b'\n' && src[off] != b'\r' {
+        off += 1;
+    }
+    if off < src.len() {
+        if src[off] == b'\r' {
+            off += 1;
+            if off < src.len() && src[off] == b'\n' {
+                off += 1;
+            }
+        } else if src[off] == b'\n' {
+            off += 1;
+        }
+    }
+    off
+}
 
 impl<'a> Parser<'a> {
     /// Create a new parser for processing Perl script content within LSP workflow
@@ -230,6 +249,55 @@ impl<'a> Parser<'a> {
 
     fn exit_recursion(&mut self) {
         self.recursion_depth = self.recursion_depth.saturating_sub(1);
+    }
+
+    // ——— Heredoc collector integration helpers (Sprint A Day 4) ———
+
+    /// Enqueue a heredoc declaration for later content collection
+    fn push_heredoc_decl(
+        &mut self,
+        label: String,
+        allow_indent: bool,
+        quote: heredoc_collector::QuoteKind,
+        decl_start: usize,
+        decl_end: usize,
+    ) {
+        // Leak the string to get a 'a lifetime reference
+        // This is acceptable because heredocs are rare and labels are small
+        let label_ref: &'a str = Box::leak(label.into_boxed_str());
+
+        self.pending_heredocs.push_back(PendingHeredoc {
+            label: label_ref,
+            allow_indent,
+            quote,
+            decl_span: heredoc_collector::Span { start: decl_start, end: decl_end },
+        });
+    }
+
+    /// Drain all pending heredocs after statement completion (FIFO order)
+    fn drain_pending_heredocs(&mut self) {
+        if self.pending_heredocs.is_empty() {
+            return;
+        }
+        // Advance to first content line (handle newline after statement terminator)
+        self.byte_cursor = after_line_break(self.src_bytes, self.byte_cursor);
+
+        let out = collect_all(
+            self.src_bytes,
+            self.byte_cursor,
+            std::mem::take(&mut self.pending_heredocs),
+        );
+
+        for content in out.contents {
+            self.attach_heredoc_content(content);
+        }
+        self.byte_cursor = out.next_offset;
+    }
+
+    /// Attach collected heredoc content to its declaration node
+    /// TODO: Wire to AST node table once node ID system is in place
+    fn attach_heredoc_content(&mut self, content: HeredocContent) {
+        let _keep = content; // Preserved for Sprint A Day 5 attachment phase
     }
 
     /// Parse a complete program
@@ -377,8 +445,13 @@ impl<'a> Parser<'a> {
         // Check for optional semicolon
         // Don't use peek_fresh_kind() here as it can cause issues with nested blocks
         if self.peek_kind() == Some(TokenKind::Semicolon) {
-            self.consume_token()?;
+            let semi_token = self.consume_token()?;
+            // Track cursor after semicolon for heredoc content collection
+            self.byte_cursor = semi_token.end;
         }
+
+        // Drain pending heredocs after statement completion (Sprint A Day 4)
+        self.drain_pending_heredocs();
 
         Ok(stmt)
     }
@@ -4402,31 +4475,23 @@ impl<'a> Parser<'a> {
                 let start_token = self.tokens.next()?;
                 let text = &start_token.text;
                 let start = start_token.start;
+                let end = start_token.end;
 
                 // Parse heredoc delimiter from the token text
                 let (delimiter, interpolated, indented) = parse_heredoc_delimiter(text);
 
-                // Collect heredoc body content
-                let mut content = String::new();
-                let mut end = start_token.end;
+                // Map interpolation to QuoteKind (check original text for quote style)
+                let quote = map_heredoc_quote_kind(text, interpolated);
 
-                // Look for HeredocBody tokens
-                while let Ok(token) = self.tokens.peek() {
-                    if token.kind == TokenKind::HeredocBody {
-                        let body_token = self.tokens.next()?;
-                        // Extract content from the token text
-                        // The lexer includes the content in the token text
-                        content.push_str(&body_token.text);
-                        end = body_token.end;
-                    } else {
-                        break;
-                    }
-                }
+                // Enqueue for later content collection (Sprint A Day 4)
+                self.push_heredoc_decl(delimiter.to_string(), indented, quote, start, end);
+                self.byte_cursor = end;
 
+                // Return declaration node (content will be attached in Day 5)
                 Ok(Node::new(
                     NodeKind::Heredoc {
                         delimiter: delimiter.to_string(),
-                        content,
+                        content: String::new(), // Placeholder until drain_pending_heredocs
                         interpolated,
                         indented,
                     },
@@ -5417,6 +5482,21 @@ fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool) {
         };
 
     (delimiter, interpolated, indented)
+}
+
+/// Map heredoc delimiter text to collector QuoteKind (Sprint A Day 4)
+fn map_heredoc_quote_kind(text: &str, _interpolated: bool) -> heredoc_collector::QuoteKind {
+    // Skip << and optional ~
+    let rest = text.trim_start_matches('<').trim_start_matches('~').trim();
+
+    if rest.starts_with('\'') && rest.ends_with('\'') {
+        heredoc_collector::QuoteKind::Single
+    } else if rest.starts_with('"') && rest.ends_with('"') {
+        heredoc_collector::QuoteKind::Double
+    } else {
+        // Bare word (unquoted)
+        heredoc_collector::QuoteKind::Unquoted
+    }
 }
 
 #[cfg(test)]
