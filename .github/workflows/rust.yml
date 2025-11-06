@@ -107,7 +107,9 @@ jobs:
   benchmark:
     name: Performance Benchmarks
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      contains(github.event.pull_request.labels.*.name, 'ci:bench')
 
     steps:
     - uses: actions/checkout@v4

@@ -100,7 +100,9 @@ jobs:
   semver:
     name: Semver Compatibility
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: |
+      github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'ci:semver')
     continue-on-error: true  # Non-blocking for now
     
     steps:

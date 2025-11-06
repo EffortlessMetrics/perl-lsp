@@ -5,6 +5,9 @@ on:
 
 jobs:
   validate-docs:
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'ci:docs-truth') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
