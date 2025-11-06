@@ -93,14 +93,14 @@ fn test_kill_extract_substitution_parts_boolean_logic_mutations() {
 
     // Test case 3: Edge case where second delimiter might be missing
     // Targets the trimmed.starts_with(delimiter) && logic paths
-    let (pattern, replacement, _modifiers) = extract_substitution_parts("s[test]replacement]");
+    let (pattern, replacement, __modifiers) = extract_substitution_parts("s[test]replacement]");
     assert_eq!(pattern, "test", "Pattern should be 'test' - kills boolean logic mutations");
     // This is a malformed case but should be handled gracefully
     assert_ne!(replacement, "", "Replacement should not be empty - validates boundary logic");
 
     // Test case 4: Parentheses special case handling
     // Tests specific if delimiter == '(' && logic branches
-    let (pattern, replacement, _modifiers) = extract_substitution_parts("s(test)");
+    let (pattern, replacement, __modifiers) = extract_substitution_parts("s(test)");
     assert_eq!(pattern, "test", "Pattern extraction failed for parentheses");
     // For malformed parentheses cases, replacement should be empty per the logic
     assert_eq!(replacement, "", "Parentheses special case handling failed");
@@ -152,7 +152,7 @@ fn test_kill_extract_transliteration_parts_boundary_mutations() {
 
     // Test case 4: Edge case with missing second delimiter for paired delimiters
     // Tests boundary conditions where position arithmetic is critical
-    let (search, replacement, _modifiers) = extract_transliteration_parts("tr{test}incomplete");
+    let (search, replacement, __modifiers) = extract_transliteration_parts("tr{test}incomplete");
     assert_eq!(
         search, "test",
         "Search pattern should be 'test' - kills boundary arithmetic mutations"
@@ -176,7 +176,7 @@ fn test_kill_extract_transliteration_parts_boundary_mutations() {
 fn test_kill_match_guard_closing_delimiter_mutations() {
     // Test case 1: Critical closing delimiter detection in substitution
     // If c == closing is mutated to true/false, parsing fails catastrophically
-    let (pattern, replacement, _modifiers) = extract_substitution_parts("s/test/replace/");
+    let (pattern, replacement, __modifiers) = extract_substitution_parts("s/test/replace/");
     assert_eq!(
         pattern, "test",
         "Pattern parsing failed - kills c == closing match guard mutations"
