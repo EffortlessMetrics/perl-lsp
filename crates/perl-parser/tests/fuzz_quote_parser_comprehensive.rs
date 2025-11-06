@@ -13,12 +13,15 @@ use proptest::prelude::*;
 use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
 
 /// Regression directory for fuzz test cases
+#[allow(dead_code)]
 const REGRESS_DIR: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/fuzz_quote_parser");
 
 /// Property-based fuzz testing for regex parts extraction
 /// Tests stress conditions with random inputs to find crashes/panics
 #[test]
+#[allow(unnameable_test_items)]
+#[allow(dead_code)]
 fn fuzz_extract_regex_parts_stress_test() {
     fn test_regex_parts_no_panic(
         input: String,
@@ -92,6 +95,8 @@ fn fuzz_extract_regex_parts_stress_test() {
 
 /// Fuzz testing for substitution parts extraction with focus on crash discovery
 #[test]
+#[allow(unnameable_test_items)]
+#[allow(dead_code)]
 fn fuzz_extract_substitution_parts_crash_detection() {
     fn test_substitution_no_crash(
         input: String,
@@ -178,6 +183,8 @@ fn fuzz_extract_substitution_parts_crash_detection() {
 
 /// Fuzz testing for transliteration parsing with AST invariant validation
 #[test]
+#[allow(unnameable_test_items)]
+#[allow(dead_code)]
 fn fuzz_extract_transliteration_ast_invariants() {
     fn test_transliteration_invariants(
         input: String,
@@ -273,6 +280,8 @@ fn fuzz_extract_transliteration_ast_invariants() {
 /// Stress test all quote parser functions with extreme inputs
 /// Targets memory exhaustion, infinite loops, and parser state corruption
 #[test]
+#[allow(unnameable_test_items)]
+#[allow(dead_code)]
 fn fuzz_quote_parser_extreme_stress() {
     fn test_extreme_robustness(input: String) -> Result<(), proptest::test_runner::TestCaseError> {
         // Test all public functions for robustness under extreme conditions
@@ -391,6 +400,8 @@ fn fuzz_quote_parser_extreme_stress() {
 /// Integration test: validate that quote parser changes don't break incremental parsing
 /// This tests the interaction between quote parsing and AST construction
 #[test]
+#[allow(unnameable_test_items)]
+#[allow(dead_code)]
 fn fuzz_quote_parser_incremental_parsing_integration() {
     use perl_parser::Parser;
 
@@ -423,22 +434,20 @@ print "Done\n";
 
         prop_assert!(result.is_ok(), "Parser crashed on quote construct integration: {:?}", input);
 
-        if let Ok(parse_result) = result {
-            // Basic AST integrity checks
-            if let Ok(ast) = parse_result {
-                // Verify AST has valid structure - at minimum should be a Program node
-                match &ast.kind {
-                    perl_parser::NodeKind::Program { statements: _ } => {
-                        // Valid program node structure
-                    }
-                    _ => {
-                        prop_assert!(false, "Expected Program node but got: {:?}", ast.kind);
-                    }
+        // Collapse nested if let per clippy suggestion
+        if let Ok(Ok(ast)) = result {
+            // Verify AST has valid structure - at minimum should be a Program node
+            match &ast.kind {
+                perl_parser::NodeKind::Program { statements: _ } => {
+                    // Valid program node structure
                 }
-                // Additional AST validation could go here
+                _ => {
+                    prop_assert!(false, "Expected Program node but got: {:?}", ast.kind);
+                }
             }
-            // If parsing fails, that's acceptable - we just don't want panics
+            // Additional AST validation could go here
         }
+        // If parsing fails, that's acceptable - we just don't want panics
 
         Ok(())
     }
