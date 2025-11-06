@@ -142,6 +142,8 @@ pub mod execute_command;
 pub mod features;
 pub mod folding;
 pub mod formatting;
+/// Heredoc content collector with FIFO ordering and indent stripping.
+pub mod heredoc_collector;
 pub mod implementation_provider;
 pub mod import_optimizer;
 #[cfg(feature = "incremental")]
