@@ -49,6 +49,7 @@ use crate::{
     token_stream::{Token, TokenKind, TokenStream},
 };
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 /// High-performance Perl parser for Perl script analysis within LSP workflow
 ///
@@ -83,7 +84,7 @@ pub struct Parser<'a> {
     /// Statement boundary tracking for indirect object syntax detection
     at_stmt_start: bool,
     /// FIFO queue of pending heredoc declarations awaiting content collection
-    pending_heredocs: VecDeque<PendingHeredoc<'a>>,
+    pending_heredocs: VecDeque<PendingHeredoc>,
     /// Source bytes for heredoc content collection (shared with token stream)
     src_bytes: &'a [u8],
     /// Byte cursor tracking position for heredoc content collection
@@ -262,12 +263,8 @@ impl<'a> Parser<'a> {
         decl_start: usize,
         decl_end: usize,
     ) {
-        // Leak the string to get a 'a lifetime reference
-        // This is acceptable because heredocs are rare and labels are small
-        let label_ref: &'a str = Box::leak(label.into_boxed_str());
-
         self.pending_heredocs.push_back(PendingHeredoc {
-            label: label_ref,
+            label: Arc::from(label.as_str()),
             allow_indent,
             quote,
             decl_span: heredoc_collector::Span { start: decl_start, end: decl_end },
@@ -283,7 +280,7 @@ impl<'a> Parser<'a> {
         self.byte_cursor = after_line_break(self.src_bytes, self.byte_cursor);
 
         // Keep a copy of the declarations so we can match outputs back to inputs
-        let pending: Vec<_> = self.pending_heredocs.iter().copied().collect();
+        let pending: Vec<_> = self.pending_heredocs.iter().cloned().collect();
 
         let out = collect_all(
             self.src_bytes,
@@ -293,20 +290,30 @@ impl<'a> Parser<'a> {
 
         // Zip 1:1 in order (collector preserves input order)
         for (decl, body) in pending.into_iter().zip(out.contents.into_iter()) {
-            self.attach_heredoc_content_by_span(root, decl.decl_span, &body);
+            let attached = self.try_attach_heredoc_at_node(root, decl.decl_span, &body);
+
+            // Defensive guardrail: warn if heredoc node wasn't found at expected span
+            #[cfg(debug_assertions)]
+            if !attached {
+                eprintln!(
+                    "[WARNING] drain_pending_heredocs: Failed to attach heredoc content at span {}..{} - no matching Heredoc node found in AST",
+                    decl.decl_span.start, decl.decl_span.end
+                );
+            }
         }
         self.byte_cursor = out.next_offset;
     }
 
     /// Attach collected heredoc content to its declaration node by matching declaration span
-    fn attach_heredoc_content_by_span(
+    /// Returns true if a matching Heredoc node was found and updated, false otherwise
+    fn try_attach_heredoc_at_node(
         &self,
         root: &mut Node,
         decl_span: heredoc_collector::Span,
         body: &HeredocContent,
-    ) {
+    ) -> bool {
         // Depth-first search for the Heredoc node with matching declaration span
-        self.try_attach_at_node(root, decl_span, body);
+        self.try_attach_at_node(root, decl_span, body)
     }
 
     /// Try to attach heredoc content at this node or its children
@@ -317,8 +324,8 @@ impl<'a> Parser<'a> {
         body: &HeredocContent,
     ) -> bool {
         // Check if this node's span matches the declaration span
-        let node_matches = node.location.start == decl_span.start
-            && node.location.end == decl_span.end;
+        let node_matches =
+            node.location.start == decl_span.start && node.location.end == decl_span.end;
 
         if node_matches {
             // Try to attach at this node
@@ -341,9 +348,23 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // Recursively search children (DFS)
-        // Note: This is a simplified version - we may need to traverse specific NodeKind variants
-        false
+        // Recursively search children (DFS) using for_each_child_mut
+        let mut found = false;
+        node.for_each_child_mut(|child| {
+            if !found && self.try_attach_at_node(child, decl_span, body) {
+                found = true;
+            }
+        });
+
+        #[cfg(debug_assertions)]
+        if !found && node_matches {
+            eprintln!(
+                "warn: no Heredoc node found for decl span {}..{} (matched span but not Heredoc kind)",
+                decl_span.start, decl_span.end
+            );
+        }
+
+        found
     }
 
     /// Parse a complete program

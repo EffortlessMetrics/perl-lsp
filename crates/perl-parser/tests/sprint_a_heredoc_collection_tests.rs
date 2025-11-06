@@ -5,6 +5,7 @@
 /// Labels: tests:heredoc, sprint-a:day3, collector:comprehensive
 use perl_parser::heredoc_collector::*;
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 fn sp(s: usize, e: usize) -> Span {
     Span { start: s, end: e }
@@ -15,7 +16,7 @@ fn empty_unindented() {
     let src = b"<<EOT\nEOT\n";
     let mut q = VecDeque::new();
     q.push_back(PendingHeredoc {
-        label: "EOT",
+        label: Arc::from("EOT"),
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 5),
@@ -33,7 +34,7 @@ fn indented_strip_uses_terminator_indent_mixed_ws() {
     let src = b"<<~EOT\n\t  one\n\t  \ttwo\n\t  EOT\n";
     let mut q = VecDeque::new();
     q.push_back(PendingHeredoc {
-        label: "EOT",
+        label: Arc::from("EOT"),
         allow_indent: true,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 6),
@@ -50,7 +51,7 @@ fn crlf_terminator_match_preserves_content_spans() {
     let src = b"<<~EOT\r\n  a\r\n  b\r\n  EOT\r\n";
     let mut q = VecDeque::new();
     q.push_back(PendingHeredoc {
-        label: "EOT",
+        label: Arc::from("EOT"),
         allow_indent: true,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 7),
@@ -67,7 +68,7 @@ fn label_like_lines_are_not_terminators() {
     let src = b"<<EOT\nnotEOT\n EOTX\nEOT\n";
     let mut q = VecDeque::new();
     q.push_back(PendingHeredoc {
-        label: "EOT",
+        label: Arc::from("EOT"),
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 5),
@@ -81,13 +82,13 @@ fn two_heredocs_in_one_statement_fifo() {
     let src = b"<<A <<B\nA1\nA\nB1\nB\n";
     let mut q = VecDeque::new();
     q.push_back(PendingHeredoc {
-        label: "A",
+        label: Arc::from("A"),
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 4),
     });
     q.push_back(PendingHeredoc {
-        label: "B",
+        label: Arc::from("B"),
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(5, 9),
@@ -107,7 +108,7 @@ fn indented_content_less_than_terminator_indent() {
     let src = b"<<~EOT\n  line1\n  line2\n    EOT\n";
     let mut q = VecDeque::new();
     q.push_back(PendingHeredoc {
-        label: "EOT",
+        label: Arc::from("EOT"),
         allow_indent: true,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 6),
@@ -127,7 +128,7 @@ fn non_indented_heredoc_preserves_all_whitespace() {
     let src = b"<<EOT\n  indented line\nno indent\n  EOT\n";
     let mut q = VecDeque::new();
     q.push_back(PendingHeredoc {
-        label: "EOT",
+        label: Arc::from("EOT"),
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 5),
@@ -145,7 +146,7 @@ fn heredoc_with_empty_lines() {
     let src = b"<<EOT\nline1\n\nline3\nEOT\n";
     let mut q = VecDeque::new();
     q.push_back(PendingHeredoc {
-        label: "EOT",
+        label: Arc::from("EOT"),
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 5),
@@ -164,7 +165,7 @@ fn full_span_covers_all_segments() {
     let src = b"<<EOT\nfirst\nmiddle\nlast\nEOT\n";
     let mut q = VecDeque::new();
     q.push_back(PendingHeredoc {
-        label: "EOT",
+        label: Arc::from("EOT"),
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 5),

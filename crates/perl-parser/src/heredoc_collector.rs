@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 /// Half-open byte offsets into the source buffer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -15,9 +16,9 @@ pub enum QuoteKind {
 }
 
 /// Declaration info captured at parse time.
-#[derive(Debug, Copy, Clone)]
-pub struct PendingHeredoc<'a> {
-    pub label: &'a str,     // exact terminator token
+#[derive(Debug, Clone)]
+pub struct PendingHeredoc {
+    pub label: Arc<str>,    // exact terminator token
     pub allow_indent: bool, // true for <<~
     pub quote: QuoteKind,
     pub decl_span: Span,
@@ -38,10 +39,10 @@ pub struct CollectionResult {
     pub next_offset: usize,            // byte offset immediately after terminator newline
 }
 
-pub fn collect_all<'a>(
-    src: &'a [u8],
+pub fn collect_all(
+    src: &[u8],
     mut offset: usize,
-    mut pending: VecDeque<PendingHeredoc<'a>>,
+    mut pending: VecDeque<PendingHeredoc>,
 ) -> CollectionResult {
     let mut results = Vec::with_capacity(pending.len());
     while let Some(hd) = pending.pop_front() {
@@ -57,7 +58,7 @@ pub fn collect_all<'a>(
 /// and strip the longest common BYTE prefix on each content line.
 /// CRLF is normalized **only** for terminator comparison; content spans exclude
 /// CR and LF bytes by construction.
-fn collect_one(src: &[u8], mut off: usize, hd: &PendingHeredoc<'_>) -> (HeredocContent, usize) {
+fn collect_one(src: &[u8], mut off: usize, hd: &PendingHeredoc) -> (HeredocContent, usize) {
     #[derive(Debug)]
     struct Line {
         start: usize,
