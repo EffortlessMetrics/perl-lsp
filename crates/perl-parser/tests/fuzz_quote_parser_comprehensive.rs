@@ -1,5 +1,3 @@
-#![allow(unnameable_test_items, dead_code, clippy::collapsible_match)]
-
 /// Comprehensive fuzz testing for quote parser components
 /// Targets stress testing of enhanced quote parser after mutation hardening work
 ///

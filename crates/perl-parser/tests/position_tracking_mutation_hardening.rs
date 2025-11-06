@@ -30,7 +30,7 @@ fn test_range_overlaps_logical_operator_mutations() {
 
     // Test cases that MUST return true (kill false-return mutations from && → ||)
     // These cases satisfy: self.start.byte < other.end.byte && other.start.byte < self.end.byte
-    let overlap_cases = vec![
+    let overlap_cases = [
         (&range1, &range2, "Overlapping ranges [0,5) and [3,8) should overlap"),
         (&range2, &range1, "Overlapping ranges [3,8) and [0,5) should overlap (symmetric)"),
     ];
@@ -45,7 +45,7 @@ fn test_range_overlaps_logical_operator_mutations() {
 
     // Test cases that MUST return false (kill true-return mutations from && → ||)
     // These cases fail at least one condition in the && expression
-    let non_overlap_cases = vec![
+    let non_overlap_cases = [
         // Adjacent ranges - fail the overlap test
         (&range1, &range4, "Adjacent ranges [0,5) and [5,6) should NOT overlap"),
         (&range4, &range1, "Adjacent ranges [5,6) and [0,5) should NOT overlap (symmetric)"),

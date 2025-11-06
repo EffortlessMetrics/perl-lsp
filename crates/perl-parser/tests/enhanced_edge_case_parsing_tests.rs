@@ -295,7 +295,7 @@ fn test_modern_perl_features() {
 #[test]
 fn test_boundary_conditions() {
     // Test various boundary conditions that could expose bugs
-    let test_cases = vec![
+    let test_cases = [
         // Empty input
         "",
         // Whitespace only
