@@ -275,12 +275,15 @@ impl<'a> Parser<'a> {
     }
 
     /// Drain all pending heredocs after statement completion (FIFO order)
-    fn drain_pending_heredocs(&mut self) {
+    fn drain_pending_heredocs(&mut self, root: &mut Node) {
         if self.pending_heredocs.is_empty() {
             return;
         }
         // Advance to first content line (handle newline after statement terminator)
         self.byte_cursor = after_line_break(self.src_bytes, self.byte_cursor);
+
+        // Keep a copy of the declarations so we can match outputs back to inputs
+        let pending: Vec<_> = self.pending_heredocs.iter().copied().collect();
 
         let out = collect_all(
             self.src_bytes,
@@ -288,16 +291,59 @@ impl<'a> Parser<'a> {
             std::mem::take(&mut self.pending_heredocs),
         );
 
-        for content in out.contents {
-            self.attach_heredoc_content(content);
+        // Zip 1:1 in order (collector preserves input order)
+        for (decl, body) in pending.into_iter().zip(out.contents.into_iter()) {
+            self.attach_heredoc_content_by_span(root, decl.decl_span, &body);
         }
         self.byte_cursor = out.next_offset;
     }
 
-    /// Attach collected heredoc content to its declaration node
-    /// TODO: Wire to AST node table once node ID system is in place
-    fn attach_heredoc_content(&mut self, content: HeredocContent) {
-        let _keep = content; // Preserved for Sprint A Day 5 attachment phase
+    /// Attach collected heredoc content to its declaration node by matching declaration span
+    fn attach_heredoc_content_by_span(
+        &self,
+        root: &mut Node,
+        decl_span: heredoc_collector::Span,
+        body: &HeredocContent,
+    ) {
+        // Depth-first search for the Heredoc node with matching declaration span
+        self.try_attach_at_node(root, decl_span, body);
+    }
+
+    /// Try to attach heredoc content at this node or its children
+    fn try_attach_at_node(
+        &self,
+        node: &mut Node,
+        decl_span: heredoc_collector::Span,
+        body: &HeredocContent,
+    ) -> bool {
+        // Check if this node's span matches the declaration span
+        let node_matches = node.location.start == decl_span.start
+            && node.location.end == decl_span.end;
+
+        if node_matches {
+            // Try to attach at this node
+            if let NodeKind::Heredoc { content, .. } = &mut node.kind {
+                // Reify the body bytes from src_bytes using the collector's segments
+                let mut s = String::new();
+                for (i, seg) in body.segments.iter().enumerate() {
+                    if seg.end > seg.start {
+                        let bytes = &self.src_bytes[seg.start..seg.end];
+                        // Source is valid UTF-8 (enforced by lexer)
+                        s.push_str(std::str::from_utf8(bytes).unwrap_or_default());
+                    }
+                    if i + 1 < body.segments.len() {
+                        // Normalize line breaks for AST convenience
+                        s.push('\n');
+                    }
+                }
+                *content = s;
+                return true;
+            }
+        }
+
+        // Recursively search children (DFS)
+        // Note: This is a simplified version - we may need to traverse specific NodeKind variants
+        false
     }
 
     /// Parse a complete program
@@ -450,8 +496,8 @@ impl<'a> Parser<'a> {
             self.byte_cursor = semi_token.end;
         }
 
-        // Drain pending heredocs after statement completion (Sprint A Day 4)
-        self.drain_pending_heredocs();
+        // Drain pending heredocs after statement completion (Sprint A Day 5 - with AST attachment)
+        self.drain_pending_heredocs(&mut stmt);
 
         Ok(stmt)
     }

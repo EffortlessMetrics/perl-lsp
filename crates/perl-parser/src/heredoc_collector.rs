@@ -7,7 +7,7 @@ pub struct Span {
     pub end: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum QuoteKind {
     Unquoted,
     Single,
@@ -15,7 +15,7 @@ pub enum QuoteKind {
 }
 
 /// Declaration info captured at parse time.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct PendingHeredoc<'a> {
     pub label: &'a str,     // exact terminator token
     pub allow_indent: bool, // true for <<~
