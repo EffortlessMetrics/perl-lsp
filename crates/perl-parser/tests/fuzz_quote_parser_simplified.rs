@@ -5,8 +5,8 @@
 use perl_parser::quote_parser::*;
 use proptest::prelude::*;
 
-/// Test regex parts extraction with stress inputs
-/// Focus: memory safety, panic prevention, UTF-8 safety
+// Test regex parts extraction with stress inputs
+// Focus: memory safety, panic prevention, UTF-8 safety
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(1000))]
 
@@ -33,8 +33,8 @@ proptest! {
     }
 }
 
-/// Test substitution parts extraction with stress inputs
-/// Focus: delimiter handling, escape sequences, memory bounds
+// Test substitution parts extraction with stress inputs
+// Focus: delimiter handling, escape sequences, memory bounds
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(1000))]
 
@@ -68,8 +68,8 @@ proptest! {
     }
 }
 
-/// Test transliteration parts with focus on AST invariants
-/// Focus: character class handling, modifier validation
+// Test transliteration parts with focus on AST invariants
+// Focus: character class handling, modifier validation
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(800))]
 

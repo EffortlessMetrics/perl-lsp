@@ -124,7 +124,7 @@ mod refactoring_module_tests {
         // Basic API types should be available
         let _result: ParseResult<()> = Ok(());
 
-        assert!(true, "Refactoring API is compatible with parser infrastructure");
+        // Refactoring API is compatible with parser infrastructure (verified by compilation)
     }
 }
 
@@ -181,8 +181,7 @@ mod api_contract_validation_tests {
         // Validate that TestGenerator can be instantiated with available frameworks
         let _generator = TestGenerator::new(TestFramework::Test2V0);
 
-        // If this compiles, the API contract is valid
-        assert!(true, "TestGenerator API contract is valid");
+        // If this compiles, the API contract is valid (verified by compilation)
     }
 
     /// Test that existing parser APIs remain stable
@@ -194,8 +193,7 @@ mod api_contract_validation_tests {
         // Test that core types are still available
         let _result: ParseResult<()> = Ok(());
 
-        // If this compiles, core parser API is stable
-        assert!(true, "Core parser API remains stable");
+        // If this compiles, core parser API is stable (verified by compilation)
     }
 
     /// Test LSP types availability
@@ -207,8 +205,7 @@ mod api_contract_validation_tests {
         let _position = Position::new(0, 0);
         let _range = Range::new(Position::new(0, 0), Position::new(1, 0));
 
-        // If this compiles, LSP types are properly available
-        assert!(true, "LSP types are available and compatible");
+        // If this compiles, LSP types are properly available (verified by compilation)
     }
 }
 

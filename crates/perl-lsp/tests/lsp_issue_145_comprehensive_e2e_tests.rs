@@ -268,7 +268,7 @@ fn test_issue_145_complete_workflow() {
         )
         .expect("Code actions request should succeed");
 
-    let actions = code_actions_result.as_array().expect("Should return code actions array");
+    let _actions = code_actions_result.as_array().expect("Should return code actions array");
 
     // Step 4: Request refactoring actions
     let refactor_actions_result = harness
@@ -289,11 +289,11 @@ fn test_issue_145_complete_workflow() {
         )
         .expect("Refactor actions request should succeed");
 
-    let refactor_actions =
+    let _refactor_actions =
         refactor_actions_result.as_array().expect("Should return refactor actions array");
 
     // Step 5: Test import organization
-    let organize_imports_result = harness
+    let _organize_imports_result = harness
         .request_with_timeout(
             "textDocument/codeAction",
             json!({
@@ -312,7 +312,7 @@ fn test_issue_145_complete_workflow() {
         .expect("Organize imports request should succeed");
 
     // Validation - the complete workflow should work without errors
-    assert!(true, "Complete Issue #145 workflow executed successfully");
+    // Complete Issue #145 workflow executed successfully
 }
 
 #[test]
@@ -336,7 +336,7 @@ fn test_cross_file_integration() {
         )
         .expect("Document symbols should work for module");
 
-    let script_symbols = harness.request_with_timeout(
+    let _script_symbols = harness.request_with_timeout(
         "textDocument/documentSymbol",
         json!({
             "textDocument": {"uri": script_uri}
@@ -413,7 +413,7 @@ fn test_complete_workflow_performance() {
 #[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - Error handling and recovery
 fn test_error_handling_integration() {
-    let (mut harness, workspace) = create_comprehensive_workspace();
+    let (mut harness, _workspace) = create_comprehensive_workspace();
 
     // Test with malformed requests
     let malformed_execute_result = harness.request_with_timeout(
@@ -670,5 +670,5 @@ fn test_resource_management() {
     }
 
     // Server should handle repeated operations without issues
-    assert!(true, "Server should handle repeated operations without resource leaks");
+    // Server successfully handled repeated operations without resource leaks
 }

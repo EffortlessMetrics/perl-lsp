@@ -41,7 +41,7 @@ impl StatisticalAnalyzer {
         let sum: u128 = self.samples.iter().sum();
         let mean = sum as f64 / count as f64;
 
-        let median = if count % 2 == 0 {
+        let median = if count.is_multiple_of(2) {
             (self.samples[count / 2 - 1] + self.samples[count / 2]) as f64 / 2.0
         } else {
             self.samples[count / 2] as f64

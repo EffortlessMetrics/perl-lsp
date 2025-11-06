@@ -593,7 +593,7 @@ impl PerformanceRegressionDetector {
                 regressions.iter().map(|r| r.regression_factor).sum::<f64>()
                     / regressions.len() as f64;
 
-            (100.0 / avg_regression_factor).min(100.0).max(0.0)
+            (100.0 / avg_regression_factor).clamp(0.0, 100.0)
         }
     }
 }
@@ -888,7 +888,6 @@ fn test_infrastructure_cleanup_and_resource_management_ac9() {
     );
 
     println!("Infrastructure cleanup and resource management test scaffolding established");
-    assert!(true, "AC9 infrastructure cleanup test scaffolding completed");
 }
 
 #[derive(Debug)]
@@ -1044,7 +1043,6 @@ fn test_fixture_cleanup_validation_ac9() {
     }
 
     println!("Test fixture cleanup validation test scaffolding established");
-    assert!(true, "AC9 test fixture cleanup validation test scaffolding completed");
 }
 
 #[derive(Debug)]
@@ -1317,8 +1315,6 @@ fn test_concurrent_cancellation_thread_safety_ac10() {
         "Thread safety validation completed with safety score: {:.1}",
         thread_safety_report.overall_safety_score
     );
-
-    assert!(true, "AC10 thread safety validation test scaffolding completed");
 }
 
 #[derive(Debug)]
@@ -1559,7 +1555,6 @@ fn test_deadlock_detection_and_prevention_ac10() {
     }
 
     println!("Deadlock detection and prevention test scaffolding established");
-    assert!(true, "AC10 deadlock detection test scaffolding completed");
 }
 
 #[derive(Debug)]
@@ -1702,7 +1697,6 @@ fn test_lsp_infrastructure_integration_ac11() {
     test_existing_lsp_utilities_integration(&mut fixture.server);
 
     println!("LSP infrastructure integration validation completed successfully");
-    assert!(true, "AC11 LSP infrastructure integration test scaffolding completed");
 }
 
 /// Test integration with existing LSP behavioral patterns
@@ -1972,8 +1966,6 @@ fn test_lsp_regression_prevention_ac11() {
         "Regression prevention test suite completed: {} passed, {} failed",
         passed_tests, failed_tests
     );
-
-    assert!(true, "AC11 regression prevention test scaffolding completed");
 }
 
 #[derive(Debug)]

@@ -217,7 +217,7 @@ fn test_semantic_token_nested_structures() {
     assert!(!tokens.is_empty(), "Should generate tokens for nested code");
 
     // Verify we have tokens across multiple lines
-    let line_count = tokens.iter().map(|token| token.line).max().unwrap_or(0);
+    let _line_count = tokens.iter().map(|token| token.line).max().unwrap_or(0);
 
     // Verify no overlaps in complex nested structure
     verify_no_semantic_token_overlaps(&tokens);
