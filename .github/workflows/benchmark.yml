@@ -26,7 +26,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
 
     - name: Cache cargo dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -61,7 +61,7 @@ jobs:
         alert-comment-cc-users: '@maintainers'
 
     - name: Upload benchmark artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: benchmark-results
         path: |
@@ -98,7 +98,7 @@ jobs:
         cargo run --release --features "pure-rust test-utils" --bin compare_parsers -- --test >> comparison_report.md 2>&1 || true
         
     - name: Upload comparison report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: comparison-report
         path: comparison_report.md
@@ -144,7 +144,7 @@ jobs:
           cargo run --release --features pure-rust -- test.pl 2>&1 | tee -a memory_report.md || true
 
     - name: Upload memory profile
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: memory-profile
         path: |

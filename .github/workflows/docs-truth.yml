@@ -137,7 +137,7 @@ jobs:
           fi
 
       - name: Upload receipts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: docs-truth-receipts
           path: |

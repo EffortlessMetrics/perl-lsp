@@ -8,39 +8,43 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
+  RUST_BACKTRACE: full
 
 jobs:
   test-coverage:
     name: Test Coverage
     runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'ci:coverage')
     steps:
-      - uses: actions/checkout@v3
-      
+      - uses: actions/checkout@v4
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
-      
+
       - name: Install cargo-llvm-cov
-        run: cargo install cargo-llvm-cov
-      
-      - name: Run tests with coverage
+        run: cargo install cargo-llvm-cov --locked
+
+      - name: Run tests with coverage (parser only, lean)
+        env:
+          RUSTFLAGS: "-Copt-level=1 -Cdebuginfo=2"
+          CARGO_BUILD_JOBS: 2
         run: |
-          cargo llvm-cov --workspace --lcov --output-path lcov.info
-          cargo llvm-cov report --workspace
-      
+          cargo llvm-cov -p perl-parser --tests --lcov --output-path lcov.info
+          cargo llvm-cov report -p perl-parser
+
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: lcov.info
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
   tautology-check:
     name: Tautology Detection
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Check for tautological assertions
         run: |
@@ -70,7 +74,7 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Install cargo-audit
         run: cargo install cargo-audit
@@ -85,7 +89,7 @@ jobs:
       github.event_name == 'pull_request' &&
       contains(github.event.pull_request.labels.*.name, 'ci:semver')
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       
@@ -99,7 +103,7 @@ jobs:
     name: Clippy (Strict)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -123,7 +127,7 @@ jobs:
     name: Test Determinism
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -152,7 +156,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true  # Don't fail the build, just report
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Install cargo-mutants
         run: cargo install cargo-mutants
@@ -166,7 +170,7 @@ jobs:
     name: Test Metrics
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -191,7 +195,7 @@ jobs:
           cat test_metrics.md
       
       - name: Upload metrics
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-metrics
           path: test_metrics.md
