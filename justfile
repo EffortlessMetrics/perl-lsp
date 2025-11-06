@@ -29,7 +29,7 @@ ci-format:
 # Clippy lint (catches common issues, allow missing_docs during systematic resolution)
 ci-clippy:
     @echo "🔍 Running clippy..."
-    cargo clippy --workspace --all-targets -- -D warnings -A missing-docs
+    cargo clippy --workspace --all-targets -- -D warnings -A missing_docs
     @echo "✅ Clippy passed"
 
 # Core tests (fast, essential)
