@@ -37,11 +37,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with: { cache-on-failure: true }
       - name: Core tests (fast)
+        env:
+          RUST_BACKTRACE: full
         run: |
-          cargo test -p perl-lexer -p perl-parser -- --nocapture
+          cargo test -p perl-lexer -p perl-parser -- --no-fail-fast --nocapture
       - name: LSP tests (bounded threads)
+        env:
+          RUST_BACKTRACE: full
         run: |
-          RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --nocapture
+          RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --no-fail-fast --nocapture
 
   docs:
     runs-on: ubuntu-latest
