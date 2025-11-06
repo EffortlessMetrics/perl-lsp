@@ -6,6 +6,7 @@ pub mod bindings;
 pub mod build;
 pub mod bump_version;
 pub mod check;
+pub mod ci;
 pub mod clean;
 pub mod compare;
 #[cfg(feature = "legacy")]

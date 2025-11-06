@@ -16,6 +16,11 @@ exclude = [
     "archive",  # Excluded: archived legacy components
 ]
 
+# Workspace-level package metadata
+[workspace.package]
+edition = "2024"
+rust-version = "1.89"
+
 [workspace.dependencies]
 perl-lexer = { path = "crates/perl-lexer" }
 perl-parser = { path = "crates/perl-parser" }
