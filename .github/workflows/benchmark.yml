@@ -13,6 +13,7 @@ env:
 jobs:
   benchmark:
     name: Performance Benchmarks
+    if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
     runs-on: ubuntu-latest
     
     steps:
