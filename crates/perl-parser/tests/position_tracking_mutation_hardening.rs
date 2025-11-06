@@ -130,7 +130,7 @@ fn test_range_boundary_conditions_mutations() {
 fn test_utf16_position_conversion_arithmetic_mutations() {
     // Focus on testing that the function doesn't crash and returns reasonable values
     // rather than exact position matching, since mutations would cause crashes or wildly wrong values
-    let test_cases = vec![
+    let test_cases = [
         // Basic ASCII
         ("Hello\nWorld", 0, "Start of ASCII text"),
         ("Hello\nWorld", 5, "Mid ASCII text"),
@@ -315,7 +315,7 @@ print $x;
 
     // Test that position tracking works across realistic code without exact position matching
     // Focus on detecting mutations that would cause crashes or obviously wrong behavior
-    let test_offsets = vec![0, 5, 10, 15, 20, 25, 30, 35, 40];
+    let test_offsets = [0, 5, 10, 15, 20, 25, 30, 35, 40];
 
     for byte_offset in test_offsets {
         if byte_offset <= perl_code.len() {
