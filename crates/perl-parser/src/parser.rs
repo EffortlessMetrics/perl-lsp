@@ -44,9 +44,11 @@
 use crate::{
     ast::{Node, NodeKind, SourceLocation},
     error::{ParseError, ParseResult},
+    heredoc_collector::{PendingHeredoc, HeredocContent, collect_all},
     quote_parser,
     token_stream::{Token, TokenKind, TokenStream},
 };
+use std::collections::VecDeque;
 
 /// High-performance Perl parser for Perl script analysis within LSP workflow
 ///
@@ -80,6 +82,12 @@ pub struct Parser<'a> {
     in_for_loop_init: bool,
     /// Statement boundary tracking for indirect object syntax detection
     at_stmt_start: bool,
+    /// FIFO queue of pending heredoc declarations awaiting content collection
+    pending_heredocs: VecDeque<PendingHeredoc<'a>>,
+    /// Source bytes for heredoc content collection (shared with token stream)
+    src_bytes: &'a [u8],
+    /// Byte cursor tracking position for heredoc content collection
+    byte_cursor: usize,
 }
 
 const MAX_RECURSION_DEPTH: usize = 500;
@@ -112,6 +120,9 @@ impl<'a> Parser<'a> {
             last_end_position: 0,
             in_for_loop_init: false,
             at_stmt_start: true,
+            pending_heredocs: VecDeque::new(),
+            src_bytes: input.as_bytes(),
+            byte_cursor: 0,
         }
     }
 
