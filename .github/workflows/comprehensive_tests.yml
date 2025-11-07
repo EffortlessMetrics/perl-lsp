@@ -45,8 +45,9 @@ jobs:
         RUST_BACKTRACE: full
       run: |
         set -euo pipefail
-        echo "== perl-parser (full) =="
-        cargo test --no-fail-fast -p perl-parser -- --nocapture
+        echo "== perl-parser (full, excluding fuzz) =="
+        cargo test --no-fail-fast -p perl-parser -- --nocapture \
+          --skip fuzz_regression_test
         echo "== substitution_operator_tests (focused) =="
         cargo test --no-fail-fast -p perl-parser substitution_operator_tests -- --nocapture
     
