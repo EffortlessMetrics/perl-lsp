@@ -26,6 +26,13 @@ jobs:
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --locked
 
+      - name: Create legacy LSP fixtures (CI-only)
+        run: |
+          mkdir -p archive/legacy-tests/test_fixtures
+          touch archive/legacy-tests/test_fixtures/main.pl
+          touch archive/legacy-tests/test_fixtures/Module.pm
+          touch archive/legacy-tests/test_fixtures/test.t
+
       - name: Run tests with coverage (parser only, lean)
         env:
           RUSTFLAGS: "-Copt-level=1 -Cdebuginfo=2"
@@ -101,6 +108,7 @@ jobs:
 
   clippy-strict:
     name: Clippy (Strict)
+    if: contains(github.event.pull_request.labels.*.name, 'ci:strict')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

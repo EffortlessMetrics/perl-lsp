@@ -55,14 +55,14 @@ jobs:
     - name: Run tests
       env:
         RUST_BACKTRACE: full
-      run: cargo test --verbose -- --no-fail-fast
+      run: cargo test --no-fail-fast --verbose
 
     - name: Run tests with features
       env:
         RUST_BACKTRACE: full
       run: |
-        cargo test --features "rust-scanner" --verbose -- --no-fail-fast
-        cargo test --features "c-scanner" --verbose -- --no-fail-fast
+        cargo test --no-fail-fast --features "rust-scanner" --verbose
+        cargo test --no-fail-fast --features "c-scanner" --verbose
 
     - name: Run corpus tests
       run: |
@@ -100,7 +100,7 @@ jobs:
       run: cd tree-sitter-perl && tree-sitter generate
 
     - name: Check formatting
-      run: cargo fmt --all -- --check
+      run: cargo fmt --all --check
 
     - name: Run clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
@@ -230,6 +230,13 @@ jobs:
 
     - name: Install cargo-tarpaulin
       run: cargo install cargo-tarpaulin --locked
+
+    - name: Create legacy LSP fixtures (CI-only)
+      run: |
+        mkdir -p archive/legacy-tests/test_fixtures
+        touch archive/legacy-tests/test_fixtures/main.pl
+        touch archive/legacy-tests/test_fixtures/Module.pm
+        touch archive/legacy-tests/test_fixtures/test.t
 
     - name: Install tree-sitter CLI
       run: npm install -g tree-sitter-cli
