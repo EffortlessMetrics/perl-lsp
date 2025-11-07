@@ -141,11 +141,13 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       
       - name: Run tests multiple times
+        env:
+          RUST_BACKTRACE: full
         run: |
           echo "Running tests 5 times to check determinism..."
           for i in {1..5}; do
             echo "Run $i:"
-            cargo test -p perl-parser --quiet 2>&1 | tee run_$i.log
+            cargo test --no-fail-fast -p perl-parser --quiet 2>&1 | tee run_$i.log
           done
           
           # Check that all runs had the same output

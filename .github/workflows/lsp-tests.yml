@@ -65,6 +65,7 @@ jobs:
       uses: taiki-e/install-action@nextest
 
     - name: Check formatting
+      shell: bash
       run: cargo fmt --all --check
       continue-on-error: ${{ matrix.experimental == true }}
     
