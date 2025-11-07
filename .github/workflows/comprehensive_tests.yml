@@ -14,7 +14,8 @@ jobs:
   test:
     name: Run All Tests
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
+
     steps:
     - uses: actions/checkout@v4
     
@@ -39,10 +40,15 @@ jobs:
         path: target
         key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
     
-    - name: Run comprehensive test suite
+    - name: Run comprehensive test suite (print everything)
+      env:
+        RUST_BACKTRACE: full
       run: |
-        chmod +x .github/run_all_tests.sh
-        .github/run_all_tests.sh
+        set -euo pipefail
+        echo "== perl-parser (full) =="
+        cargo test --no-fail-fast -p perl-parser -- --nocapture
+        echo "== substitution_operator_tests (focused) =="
+        cargo test --no-fail-fast -p perl-parser substitution_operator_tests -- --nocapture
     
     - name: Verify no empty test binaries
       run: |

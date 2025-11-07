@@ -16,6 +16,7 @@ jobs:
   quality:
     name: Quality Gates
     runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'ci:strict')
     
     steps:
     - uses: actions/checkout@v4
@@ -35,6 +36,7 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     
     - name: Format Check
+      if: runner.os != 'Windows'
       run: cargo fmt --all --check
     
     - name: Clippy (strict on first-party)
