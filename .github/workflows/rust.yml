@@ -100,6 +100,7 @@ jobs:
       run: cd tree-sitter-perl && tree-sitter generate
 
     - name: Check formatting
+      if: runner.os != 'Windows'
       run: cargo fmt --all --check
 
     - name: Run clippy
