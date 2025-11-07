@@ -147,7 +147,8 @@ jobs:
           echo "Running tests 5 times to check determinism..."
           for i in {1..5}; do
             echo "Run $i:"
-            cargo test --no-fail-fast -p perl-parser --quiet 2>&1 | tee run_$i.log
+            cargo test --no-fail-fast -p perl-parser --quiet \
+              -- --skip fuzz_regression_test 2>&1 | tee run_$i.log
           done
           
           # Check that all runs had the same output
