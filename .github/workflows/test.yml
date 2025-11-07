@@ -67,9 +67,9 @@ jobs:
           exit 1
         fi
         
-        # Pattern 2: !is_empty() || is_empty()
-        if grep -r "!.*is_empty().*||.*is_empty()" crates/perl-parser/tests/ 2>/dev/null; then
-          echo "ERROR: Found !is_empty() || is_empty() patterns"
+        # Pattern 2: !X.is_empty() || X.is_empty() (same receiver tautology)
+        if grep -rE '!\s*([A-Za-z0-9_\.]+)\.is_empty\(\)\s*\|\|\s*\1\.is_empty\(\)' crates/perl-parser/tests/ 2>/dev/null; then
+          echo "ERROR: Found tautological !X.is_empty() || X.is_empty() patterns"
           exit 1
         fi
         
@@ -237,4 +237,4 @@ jobs:
         components: rustfmt
     
     - name: Check formatting
-      run: cargo fmt --all -- --check
+      run: cargo fmt --all --check

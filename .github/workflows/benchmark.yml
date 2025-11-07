@@ -71,8 +71,9 @@ jobs:
 
   comparison-benchmark:
     name: Parser Comparison Benchmark
+    if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -105,9 +106,10 @@ jobs:
 
   memory-profile:
     name: Memory Usage Profile
+    if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
     runs-on: ubuntu-latest
     continue-on-error: true
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4

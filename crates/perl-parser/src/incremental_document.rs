@@ -404,8 +404,8 @@ impl IncrementalDocument {
                 }
             }
             NodeKind::Binary { left, right, .. } => {
-                *left = Box::new(self.adjust_node_position(left, delta)?);
-                *right = Box::new(self.adjust_node_position(right, delta)?);
+                **left = self.adjust_node_position(left, delta)?;
+                **right = self.adjust_node_position(right, delta)?;
             }
             _ => {}
         }
