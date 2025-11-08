@@ -88,6 +88,9 @@ jobs:
       run: cargo build -p perl-lsp --bin perl-lsp --verbose
     
     - name: Run tests
+      env:
+        CARGO_BUILD_JOBS: 2
+        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1"
       run: cargo test --verbose
     
     - name: Run E2E tests
