@@ -15,6 +15,7 @@ jobs:
     name: Run All Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'ci:all-tests')
 
     steps:
     - uses: actions/checkout@v4

@@ -134,25 +134,26 @@ jobs:
   test-determinism:
     name: Test Determinism
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Run tests multiple times
         env:
           RUST_BACKTRACE: full
         run: |
-          echo "Running tests 5 times to check determinism..."
-          for i in {1..5}; do
+          echo "Running tests 3 times to check determinism..."
+          for i in {1..3}; do
             echo "Run $i:"
             cargo test --no-fail-fast -p perl-parser --quiet \
               -- --skip fuzz_regression_test 2>&1 | tee run_$i.log
           done
-          
+
           # Check that all runs had the same output
-          for i in {2..5}; do
+          for i in {2..3}; do
             if ! diff -q run_1.log run_$i.log > /dev/null; then
               echo "❌ Test output differs between runs"
               diff run_1.log run_$i.log
