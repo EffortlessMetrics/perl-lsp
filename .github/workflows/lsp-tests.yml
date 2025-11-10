@@ -84,12 +84,14 @@ jobs:
       run: cargo build --all --verbose
     
     - name: Run LSP tests with nextest (Phase 1 stabilization)
+      env:
+        CARGO_BUILD_JOBS: 2
+        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1"
+        CI: true
+        GITHUB_ACTIONS: true
       run: |
         # Use nextest with CI profile for retries and improved parallelism
         cargo nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
-      env:
-        CI: true
-        GITHUB_ACTIONS: true
     
     - name: Run LSP smoke test
       run: scripts/lsp-smoke.sh
@@ -97,10 +99,12 @@ jobs:
       shell: bash
     
     - name: Run all parser tests with nextest
-      run: cargo nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
       env:
+        CARGO_BUILD_JOBS: 2
+        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1"
         CI: true
         GITHUB_ACTIONS: true
+      run: cargo nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
     
     - name: Build release binary
       run: cargo build -p perl-lsp --release
