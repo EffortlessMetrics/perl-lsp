@@ -72,9 +72,8 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
-        cargo fetch --locked
-        cargo tree -p perl-parser --edges normal,build,dev | tee cargo-tree.txt
-        grep -i "\bropey\b" cargo-tree.txt
+        cargo tree --locked -p perl-parser --edges normal,build,dev | tee cargo-tree.txt
+        grep -i '\bropey\b' cargo-tree.txt
 
     - name: Check formatting
       if: runner.os != 'Windows'
