@@ -70,7 +70,11 @@ jobs:
     - name: Assert ropey in dep tree (Windows)
       if: matrix.os == 'windows-2022'
       shell: bash
-      run: cargo tree -p perl-parser | grep -i "ropey"
+      run: |
+        set -euo pipefail
+        cargo fetch -p perl-parser
+        cargo tree -p perl-parser | tee cargo-tree.txt
+        grep -i "\bropey\b" cargo-tree.txt
 
     - name: Check formatting
       if: runner.os != 'Windows'

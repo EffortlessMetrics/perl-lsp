@@ -38,13 +38,12 @@ rustc-hash = "2.1.1"
 md5 = "0.8.0"
 phf = { version = "0.13.1", features = ["macros"] }
 walkdir = "2.5.0"
+# Core dependencies for position mapping (unconditional, all targets)
+ropey = "1.6.1"
 
 # Unix-only dependency for signal handling
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.30.1", features = ["signal"] }
-
-# Core dependencies for position mapping (unconditional, all targets)
-ropey = "1.6.1"
 
 # Optional dependencies for incremental parsing
 anyhow = { version = "1.0.100", optional = true }

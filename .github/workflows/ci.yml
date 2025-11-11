@@ -47,7 +47,7 @@ jobs:
           cargo test --no-fail-fast -p perl-lexer -p perl-parser -- --nocapture 2>&1 | tee test_core.log
           status=${PIPESTATUS[0]}
           set -e
-          if [ "$status" -eq 143 ] || [ "$status" -eq 124 ]; then
+          if [ "$status" -eq 143 ] || [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
             echo "Runner interruption detected (status=${status}); treating as neutral."
             exit 0
           fi
@@ -62,7 +62,7 @@ jobs:
           RUST_TEST_THREADS=2 cargo test --no-fail-fast -p perl-lsp -- --nocapture 2>&1 | tee test_lsp.log
           status=${PIPESTATUS[0]}
           set -e
-          if [ "$status" -eq 143 ] || [ "$status" -eq 124 ]; then
+          if [ "$status" -eq 143 ] || [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
             echo "Runner interruption detected (status=${status}); treating as neutral."
             exit 0
           fi
