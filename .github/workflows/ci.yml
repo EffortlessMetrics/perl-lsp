@@ -56,9 +56,12 @@ jobs:
             echo "Runner interruption detected (status=${status}); treating as neutral."
             exit 0
           fi
-          # If and only if the lockfile staleness string is present, retry once without --locked
-          if [ "$status" -ne 0 ] && grep -q "lock file .* needs to be updated but --locked was passed" test_core.log; then
-            echo "::warning:: Lock is stale; retrying once without --locked (CI guard)."
+          # If and only if the lockfile staleness string is present, retry (offline first, then online)
+          if [ "$status" -eq 101 ] && grep -q "lock file .* needs to be updated but --locked was passed" test_core.log; then
+            echo "::warning:: Lock is stale; retrying (offline first, then online) ..."
+            if cargo --offline test --no-fail-fast -p perl-lexer -p perl-parser -- --nocapture; then
+              exit 0
+            fi
             cargo test --no-fail-fast -p perl-lexer -p perl-parser -- --nocapture
             exit $?
           fi
