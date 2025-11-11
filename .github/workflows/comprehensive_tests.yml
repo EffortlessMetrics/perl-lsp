@@ -29,6 +29,7 @@ jobs:
       uses: Swatinem/rust-cache@v2
       with:
         key: ${{ runner.os }}-comprehensive-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
     
     - name: Run comprehensive test suite (print everything)
       env:

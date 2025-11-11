@@ -16,6 +16,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with: { toolchain: 1.90.0 }
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - run: cargo install cargo-mutants --locked || true
       - run: cargo mutants --timeout 60 --no-shuffle || true
 
@@ -27,4 +29,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with: { toolchain: 1.90.0 }
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - run: cargo bench --locked --no-run

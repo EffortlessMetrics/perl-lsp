@@ -23,6 +23,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ runner.os }}-nightly-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
           
       - name: Run deep property tests
         env:

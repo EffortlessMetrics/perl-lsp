@@ -179,6 +179,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: determinism-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
 
       - name: Run tests multiple times (nextest, timeboxed; neutral on runner shutdown)
         env:

@@ -56,6 +56,7 @@ jobs:
       uses: Swatinem/rust-cache@v2
       with:
         key: ${{ runner.os }}-strict-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
     
     - name: Format Check
       if: runner.os != 'Windows'
