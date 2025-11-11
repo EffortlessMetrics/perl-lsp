@@ -50,6 +50,21 @@ jobs:
         fi
         # Prove the lockfile can be consumed without mutation
         cargo metadata --format-version=1 --locked >/dev/null
+        # Prevent nested lockfiles
+        if git ls-files | grep -E '(.+/)?Cargo\.lock' | grep -v '^Cargo\.lock' | grep -q .; then
+          echo "::error::Nested Cargo.lock files detected:"
+          git ls-files | grep -E '(.+/)?Cargo\.lock' | grep -v '^Cargo\.lock'
+          exit 1
+        fi
+
+    - name: CI policy - enforce --locked on cargo commands
+      shell: bash
+      run: |
+        set -euo pipefail
+        if grep -RIn --exclude-dir=target --include="*.yml" -E 'cargo (build|test|install|nextest)\b' .github/workflows | grep -v '\-\-locked' | tee /dev/stderr | grep -q .; then
+          echo "::error::Found cargo invocations without --locked (see above)."
+          exit 1
+        fi
 
     - name: Install Rust
       uses: actions-rs/toolchain@v1
@@ -200,7 +215,17 @@ jobs:
         bin="target/release/perl-lsp"
         if [ "${{ runner.os }}" = "Windows" ]; then bin="${bin}.exe"; fi
         "$bin" --health
-    
+
+    - name: Assert lockfile unchanged
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        if ! git diff --quiet -- Cargo.lock; then
+          echo "::error::Cargo.lock changed during this job. Run 'cargo update' locally and commit the result."
+          git --no-pager diff -- Cargo.lock | sed -n '1,200p'
+          exit 1
+        fi
+
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
