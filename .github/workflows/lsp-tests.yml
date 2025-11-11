@@ -72,8 +72,8 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
-        cargo fetch -p perl-parser
-        cargo tree -p perl-parser | tee cargo-tree.txt
+        cargo fetch --locked
+        cargo tree -p perl-parser --edges normal,build,dev | tee cargo-tree.txt
         grep -i "\bropey\b" cargo-tree.txt
 
     - name: Check formatting
