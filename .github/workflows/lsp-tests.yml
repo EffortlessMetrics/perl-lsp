@@ -73,17 +73,19 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
-        # 1) perl-parser must declare ropey directly (inline or [dependencies.ropey] table)
-        if ! ( \
-          grep -Eq '^\s*ropey\s*=\s*(\{\s*workspace\s*=\s*true\s*\}|"[0-9][^"]*")' crates/perl-parser/Cargo.toml \
-          || awk '
-               /^\[dependencies\.ropey\]/ { insec=1; next }
-               /^\[/ { insec=0 }
-               insec && /workspace\s*=\s*true/ { found=1 }
-               insec && /version\s*=\s*"/ { found=1 }
-               END { exit found?0:1 }
-             ' crates/perl-parser/Cargo.toml \
-        ); then
+        # 1) perl-parser must declare ropey in [dependencies] (inline or [dependencies.ropey] table)
+        if ! awk '
+            BEGIN { indeps=0; inropey=0; ok=0 }
+            /^\[dependencies\]$/ { indeps=1; next }
+            /^\[/               { indeps=0 }
+            indeps && $0 ~ /^[[:space:]]*ropey[[:space:]]*=/ {
+                if ($0 ~ /workspace[[:space:]]*=[[:space:]]*true/ || $0 ~ /"[0-9][^"]*"/) ok=1
+            }
+            /^\[dependencies\.ropey\]$/ { inropey=1; next }
+            /^\[/                        { inropey=0 }
+            inropey && ($0 ~ /workspace[[:space:]]*=[[:space:]]*true/ || $0 ~ /version[[:space:]]*=\s*"/) { ok=1 }
+            END { exit ok?0:1 }
+        ' crates/perl-parser/Cargo.toml; then
           echo "::error:: perl-parser does not declare ropey in [dependencies]"
           exit 1
         fi
@@ -135,8 +137,11 @@ jobs:
           echo "::group::Last 400 lines of test_lsp.log"
           tail -n 400 test_lsp.log || true
           echo "::endgroup::"
-          if grep -q "lock file .* needs to be updated but --locked was passed" test_lsp.log; then
-            echo "::warning:: Lock is stale; retrying once without --locked (CI guard)."
+          if [ "$status" -eq 101 ] && grep -q "lock file .* needs to be updated but --locked was passed" test_lsp.log; then
+            echo "::warning:: Lock is stale; retrying (offline first, then online) ..."
+            if cargo +${{ matrix.toolchain }} --offline nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}; then
+              exit 0
+            fi
             cargo +${{ matrix.toolchain }} nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
             exit $?
           fi
@@ -164,8 +169,11 @@ jobs:
           echo "::group::Last 400 lines of test_parser.log"
           tail -n 400 test_parser.log || true
           echo "::endgroup::"
-          if grep -q "lock file .* needs to be updated but --locked was passed" test_parser.log; then
-            echo "::warning:: Lock is stale; retrying once without --locked (CI guard)."
+          if [ "$status" -eq 101 ] && grep -q "lock file .* needs to be updated but --locked was passed" test_parser.log; then
+            echo "::warning:: Lock is stale; retrying (offline first, then online) ..."
+            if cargo +${{ matrix.toolchain }} --offline nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}; then
+              exit 0
+            fi
             cargo +${{ matrix.toolchain }} nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
             exit $?
           fi
