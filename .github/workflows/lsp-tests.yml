@@ -61,13 +61,13 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
-        if grep -RIn --exclude-dir=target --include="*.yml" -E 'cargo (build|test|install|nextest)\b' .github/workflows | grep -v '\-\-locked' | tee /dev/stderr | grep -q .; then
+        if grep -RIn --exclude-dir=target --include="*.yml" -E 'cargo (build|test|install|nextest|bench|clippy|doc|run|check|publish)\b' .github/workflows | grep -v '\-\-locked' | tee /dev/stderr | grep -q .; then
           echo "::error::Found cargo invocations without --locked (see above)."
           exit 1
         fi
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: ${{ matrix.toolchain }}
         components: rustfmt, clippy
@@ -128,7 +128,7 @@ jobs:
         RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1"
         CARGO_NET_RETRY: 4
         CARGO_HTTP_MULTIPLEXING: "false"
-      run: cargo build --all --verbose
+      run: cargo build --locked --all --verbose
     
     - name: Run LSP tests with nextest (Phase 1 stabilization)
       env:
@@ -277,7 +277,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
     
     - name: Run benchmarks
-      run: cargo bench -p perl-parser --bench lsp_benchmarks
+      run: cargo bench --locked -p perl-parser --bench lsp_benchmarks
     
     - name: Store benchmark results
       uses: benchmark-action/github-action-benchmark@v1

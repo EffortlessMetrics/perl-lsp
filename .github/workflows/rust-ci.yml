@@ -22,14 +22,10 @@ jobs:
       with:
         components: rustfmt, clippy
     
-    - name: Cache dependencies
-      uses: actions/cache@v4
+    - name: Cache cargo dependencies
+      uses: Swatinem/rust-cache@v2
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-format-clippy-${{ hashFiles('Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-cargo-
     
@@ -49,7 +45,7 @@ jobs:
       run: cargo xtask highlight
     
     - name: Check build
-      run: cargo build --release
+      run: cargo build --locked --release
     
     - name: Upload coverage
       uses: codecov/codecov-action@v4
@@ -107,12 +103,12 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Install Rust ${{ matrix.rust }}
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: ${{ matrix.rust }}
     
     - name: Build
-      run: cargo build --release
+      run: cargo build --locked --release
     
     - name: Test
       run: cargo xtask test
@@ -129,7 +125,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
     
     - name: Build with timing
-      run: cargo build --release --timings
+      run: cargo build --locked --release --timings
     
     - name: Run benchmarks
       run: cargo xtask bench
@@ -145,10 +141,10 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
     
     - name: Build documentation
-      run: cargo doc --no-deps --document-private-items
-    
+      run: cargo doc --locked --no-deps --document-private-items
+
     - name: Check documentation links
-      run: cargo doc --no-deps --document-private-items --open
+      run: cargo doc --locked --no-deps --document-private-items --open
 
   publish:
     name: Publish to crates.io
@@ -163,6 +159,6 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
     
     - name: Publish to crates.io
-      run: cargo publish
+      run: cargo publish --locked
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }} 
