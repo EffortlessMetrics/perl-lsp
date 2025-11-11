@@ -15,7 +15,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
+      - name: Validate Cargo.lock (strict)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f Cargo.lock ]; then
+            echo "::error:: Cargo.lock is required for --locked builds. Commit it." >&2
+            exit 1
+          fi
+          # Prove the lockfile can be consumed without mutation
+          cargo metadata --format-version=1 --locked >/dev/null
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -25,13 +36,13 @@ jobs:
       - name: Run standard property tests
         run: |
           echo "Running property tests with default case count..."
-          cargo test -p perl-lexer --test prop_lexer_termination
-          cargo test -p perl-parser --test prop_invariants
-          cargo test -p perl-parser --test prop_qw
-          cargo test -p perl-parser --test prop_quote_like
-          cargo test -p perl-parser --test prop_whitespace
-          cargo test -p perl-parser --test prop_whitespace_idempotence
-          cargo test -p perl-parser --test prop_deletion
+          cargo test --locked -p perl-lexer --test prop_lexer_termination
+          cargo test --locked -p perl-parser --test prop_invariants
+          cargo test --locked -p perl-parser --test prop_qw
+          cargo test --locked -p perl-parser --test prop_quote_like
+          cargo test --locked -p perl-parser --test prop_whitespace
+          cargo test --locked -p perl-parser --test prop_whitespace_idempotence
+          cargo test --locked -p perl-parser --test prop_deletion
 
   property-tests-extended:
     name: Property Tests (Extended - 256 cases)
@@ -50,13 +61,13 @@ jobs:
           PROPTEST_CASES: 256
         run: |
           echo "Running property tests with PROPTEST_CASES=256..."
-          cargo test -p perl-lexer --test prop_lexer_termination -- --nocapture
-          cargo test -p perl-parser --test prop_invariants -- --nocapture
-          cargo test -p perl-parser --test prop_qw -- --nocapture
-          cargo test -p perl-parser --test prop_quote_like -- --nocapture
-          cargo test -p perl-parser --test prop_whitespace -- --nocapture
-          cargo test -p perl-parser --test prop_whitespace_idempotence -- --nocapture
-          cargo test -p perl-parser --test prop_deletion -- --nocapture
+          cargo test --locked -p perl-lexer --test prop_lexer_termination -- --nocapture
+          cargo test --locked -p perl-parser --test prop_invariants -- --nocapture
+          cargo test --locked -p perl-parser --test prop_qw -- --nocapture
+          cargo test --locked -p perl-parser --test prop_quote_like -- --nocapture
+          cargo test --locked -p perl-parser --test prop_whitespace -- --nocapture
+          cargo test --locked -p perl-parser --test prop_whitespace_idempotence -- --nocapture
+          cargo test --locked -p perl-parser --test prop_deletion -- --nocapture
 
   lexer-contract-tests:
     name: Lexer Contract Tests
@@ -70,7 +81,7 @@ jobs:
       
       - name: Run lexer contract tests
         run: |
-          cargo test -p perl-lexer --test lexer_contract_tests
+          cargo test --locked -p perl-lexer --test lexer_contract_tests
 
   parser-integration-tests:
     name: Parser Integration Tests
@@ -84,4 +95,4 @@ jobs:
       
       - name: Run parser token integration tests
         run: |
-          cargo test -p perl-parser --test parser_token_integration_tests
+          cargo test --locked -p perl-parser --test parser_token_integration_tests

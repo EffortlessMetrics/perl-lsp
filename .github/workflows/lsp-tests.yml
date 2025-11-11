@@ -39,7 +39,18 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
-    
+
+    - name: Validate Cargo.lock (strict)
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ ! -f Cargo.lock ]; then
+          echo "::error:: Cargo.lock is required for --locked builds. Commit it." >&2
+          exit 1
+        fi
+        # Prove the lockfile can be consumed without mutation
+        cargo metadata --format-version=1 --locked >/dev/null
+
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -184,8 +195,11 @@ jobs:
       run: cargo +${{ matrix.toolchain }} build -p perl-lsp --release --locked
 
     - name: LSP health check
-      run: target/release/perl-lsp --health
-      if: matrix.os == 'ubuntu-22.04'
+      shell: bash
+      run: |
+        bin="target/release/perl-lsp"
+        if [ "${{ runner.os }}" = "Windows" ]; then bin="${bin}.exe"; fi
+        "$bin" --health
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
