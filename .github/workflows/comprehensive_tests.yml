@@ -47,10 +47,10 @@ jobs:
       run: |
         set -euo pipefail
         echo "== perl-parser (full, excluding fuzz) =="
-        cargo test --no-fail-fast -p perl-parser -- --nocapture \
+        cargo test --locked --no-fail-fast -p perl-parser -- --nocapture \
           --skip fuzz_regression_test
         echo "== substitution_operator_tests (focused) =="
-        cargo test --no-fail-fast -p perl-parser substitution_operator_tests -- --nocapture
+        cargo test --locked --no-fail-fast -p perl-parser substitution_operator_tests -- --nocapture
     
     - name: Verify no empty test binaries
       run: |
@@ -59,7 +59,7 @@ jobs:
         
         for test_file in crates/perl-parser/tests/*.rs; do
           test_name=$(basename "$test_file" .rs)
-          TEST_COUNT=$(cargo test -p perl-parser --test "$test_name" --features test-compat -- --list 2>/dev/null | grep -c ": test" || echo "0")
+          TEST_COUNT=$(cargo test --locked -p perl-parser --test "$test_name" --features test-compat -- --list 2>/dev/null | grep -c ": test" || echo "0")
           
           if [ "$TEST_COUNT" = "0" ]; then
             EMPTY_TESTS="$EMPTY_TESTS $test_name"
@@ -79,7 +79,7 @@ jobs:
         fi
     
     - name: Run tests with all features
-      run: cargo test --workspace --all-features --all-targets
+      run: cargo test --locked --workspace --all-features --all-targets
     
     - name: Check for orphaned tests
       run: |
