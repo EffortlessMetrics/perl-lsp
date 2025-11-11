@@ -21,8 +21,7 @@ fn test_benchmark_saves_output() -> Result<()> {
 
     // Run the xtask bench command and verify it succeeds
     let mut cmd = cargo_bin_cmd!("xtask");
-    cmd
-        .current_dir(temp_dir.path())
+    cmd.current_dir(temp_dir.path())
         .args(["bench", "--name", "dummy", "--save", "--output", output_path.to_str().unwrap()])
         .assert()
         .success();
