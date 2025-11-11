@@ -7,6 +7,6 @@ retries = 1
 path = "target/nextest/ci-junit.xml"
 
 [profile.ci.slow-timeout]
-# Warn after 60s, kill at 120s to prevent hanging tests
+# Warn after 60s, kill after 2 periods (i.e., ~120s)
 period = "60s"
-terminate-after = "120s"
+terminate-after = 2

@@ -292,7 +292,7 @@ fn test_dap_malformed_requests() {
     let mut adapter = DebugAdapter::new();
 
     // Test various malformed or edge case requests
-    let test_cases = vec![
+    let test_cases = [
         ("setBreakpoints", Some(json!({}))),             // Missing source
         ("setBreakpoints", Some(json!({"source": {}}))), // Missing path
         ("setBreakpoints", Some(json!({"source": {"path": ""}}))), // Empty path
