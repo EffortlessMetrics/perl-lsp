@@ -24,12 +24,15 @@ jobs:
   test:
     name: Test LSP Implementation
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-22.04, windows-2022]
         rust: [stable, beta]
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             rust: nightly
             experimental: true
     
@@ -71,6 +74,7 @@ jobs:
       continue-on-error: ${{ matrix.experimental == true }}
     
     - name: Clippy (first-party only)
+      shell: bash  # ensure -- is not eaten by PowerShell on Windows
       run: |
         cargo clippy \
           -p perl-lexer -p perl-parser -p perl-lsp -p perl-corpus \
@@ -86,7 +90,7 @@ jobs:
     - name: Run LSP tests with nextest (Phase 1 stabilization)
       env:
         CARGO_BUILD_JOBS: 2
-        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1"
+        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
         CI: true
         GITHUB_ACTIONS: true
       run: |
@@ -95,23 +99,23 @@ jobs:
     
     - name: Run LSP smoke test
       run: scripts/lsp-smoke.sh
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-22.04'
       shell: bash
-    
+
     - name: Run all parser tests with nextest
       env:
         CARGO_BUILD_JOBS: 2
-        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1"
+        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
         CI: true
         GITHUB_ACTIONS: true
       run: cargo nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
-    
+
     - name: Build release binary
       run: cargo build -p perl-lsp --release
-    
+
     - name: LSP health check
       run: target/release/perl-lsp --health
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-22.04'
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -121,7 +125,7 @@ jobs:
 
   coverage:
     name: Code Coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     if: contains(github.event.pull_request.labels.*.name, 'ci:coverage')
     steps:
     - uses: actions/checkout@v4
@@ -164,7 +168,7 @@ jobs:
   benchmark:
     name: Performance Benchmarks
     if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
     

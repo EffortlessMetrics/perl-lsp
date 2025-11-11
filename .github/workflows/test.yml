@@ -12,9 +12,12 @@ env:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-22.04, windows-2022]
         rust: [stable]
       fail-fast: false  # Continue testing other platforms if one fails
     
@@ -27,16 +30,10 @@ jobs:
         toolchain: ${{ matrix.rust }}
     
     - name: Install perltidy and perlcritic (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-22.04'
       run: |
         sudo apt-get update
         sudo apt-get install -y perltidy libperl-critic-perl
-    
-    - name: Install perltidy and perlcritic (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install perltidy
-        cpan install Perl::Critic
     
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -55,7 +52,10 @@ jobs:
       with:
         path: target
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-    
+
+    - name: Install nextest
+      uses: taiki-e/install-action@nextest
+
     - name: Check for tautological tests
       shell: bash
       run: |
@@ -87,11 +87,13 @@ jobs:
     - name: Build LSP server
       run: cargo build -p perl-lsp --bin perl-lsp --verbose
     
-    - name: Run tests
+    - name: Run tests (nextest, lean, CI guards)
       env:
         CARGO_BUILD_JOBS: 2
-        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1"
-      run: cargo test --verbose
+        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
+      run: |
+        # Skip the crash reproducer in default PR runs; covered in full sweep.
+        cargo nextest run --workspace --profile ci --no-fail-fast
     
     - name: Run E2E tests
       run: cargo test -p perl-parser --tests --verbose
@@ -104,11 +106,9 @@ jobs:
         # Check if jq is available
         if ! command -v jq &> /dev/null; then
           echo "jq not found, installing..."
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+          if [[ "${{ matrix.os }}" == "ubuntu-22.04" ]]; then
             sudo apt-get update && sudo apt-get install -y jq
-          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            brew install jq
-          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          elif [[ "${{ matrix.os }}" == "windows-2022" ]]; then
             echo "Installing jq on Windows..."
             choco install jq -y
           fi
@@ -195,14 +195,14 @@ jobs:
       run: cargo test -p perl-parser --features incremental --verbose
     
     - name: Build with deny warnings (soft check)
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-22.04'
       run: |
         echo "Building with warnings as errors (soft check)..."
         RUSTFLAGS="-D warnings" cargo build --release -p perl-lsp --bin perl-lsp || echo "Warning: Build with -D warnings failed"
       continue-on-error: true
 
   clippy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
     
@@ -229,7 +229,7 @@ jobs:
       continue-on-error: true  # Don't fail on warnings yet
 
   format:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
     

@@ -13,7 +13,7 @@ env:
 jobs:
   test-coverage:
     name: Test Coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     if: contains(github.event.pull_request.labels.*.name, 'ci:coverage')
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +49,7 @@ jobs:
 
   tautology-check:
     name: Tautology Detection
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       
@@ -79,7 +79,7 @@ jobs:
 
   dependency-audit:
     name: Security Audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       
@@ -91,7 +91,7 @@ jobs:
 
   semver-check:
     name: API Compatibility
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     if: |
       github.event_name == 'pull_request' &&
       contains(github.event.pull_request.labels.*.name, 'ci:semver')
@@ -109,7 +109,7 @@ jobs:
   clippy-strict:
     name: Clippy (Strict)
     if: contains(github.event.pull_request.labels.*.name, 'ci:strict')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       
@@ -133,7 +133,7 @@ jobs:
 
   test-determinism:
     name: Test Determinism
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -141,15 +141,23 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Run tests multiple times
+      - name: Install nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Run tests multiple times (nextest, timeboxed)
         env:
           RUST_BACKTRACE: full
+          CARGO_BUILD_JOBS: 2
+          RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
         run: |
           echo "Running tests 3 times to check determinism..."
           for i in {1..3}; do
-            echo "Run $i:"
-            cargo test --no-fail-fast -p perl-parser --quiet \
-              -- --skip fuzz_regression_test 2>&1 | tee run_$i.log
+            echo "::group::Run $i"
+            # Per-run timeout prevents job-level 143 even if a test stalls.
+            timeout 6m \
+              cargo nextest run -p perl-parser --profile ci --no-fail-fast \
+                2>&1 | tee run_$i.log
+            echo "::endgroup::"
           done
 
           # Check that all runs had the same output
@@ -160,12 +168,12 @@ jobs:
               exit 1
             fi
           done
-          
+
           echo "✅ Tests are deterministic"
 
   mutation-testing:
     name: Mutation Testing
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     continue-on-error: true  # Don't fail the build, just report
     steps:
       - uses: actions/checkout@v4
@@ -180,7 +188,7 @@ jobs:
 
   test-metrics:
     name: Test Metrics
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       
