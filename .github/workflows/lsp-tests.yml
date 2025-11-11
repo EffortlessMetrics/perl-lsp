@@ -94,6 +94,8 @@ jobs:
       env:
         CARGO_BUILD_JOBS: 2
         RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1"
+        CARGO_NET_RETRY: 4
+        CARGO_HTTP_MULTIPLEXING: "false"
       run: cargo build --all --verbose
     
     - name: Run LSP tests with nextest (Phase 1 stabilization)
@@ -102,9 +104,11 @@ jobs:
         RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
         CI: true
         GITHUB_ACTIONS: true
+        CARGO_NET_RETRY: 4
+        CARGO_HTTP_MULTIPLEXING: "false"
       run: |
         # Use nextest with CI profile for retries and improved parallelism
-        cargo nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo nextest run --locked -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
     
     - name: Run LSP smoke test
       run: scripts/lsp-smoke.sh

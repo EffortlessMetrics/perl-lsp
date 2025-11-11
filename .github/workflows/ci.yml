@@ -41,12 +41,14 @@ jobs:
         shell: bash
         env:
           RUST_BACKTRACE: full
+          CARGO_NET_RETRY: 4
+          CARGO_HTTP_MULTIPLEXING: "false"
         run: |
           set -euo pipefail
           # Neutralize runner preemption that sends SIGTERM to the shell.
           trap 'echo "::warning::Runner interruption (SIGTERM/INT) — neutralizing"; exit 0' TERM INT
           set +e
-          cargo test --no-fail-fast -p perl-lexer -p perl-parser -- --nocapture 2>&1 | tee test_core.log
+          cargo test --locked --no-fail-fast -p perl-lexer -p perl-parser -- --nocapture 2>&1 | tee test_core.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -eq 143 ] || [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
@@ -58,12 +60,14 @@ jobs:
         shell: bash
         env:
           RUST_BACKTRACE: full
+          CARGO_NET_RETRY: 4
+          CARGO_HTTP_MULTIPLEXING: "false"
         run: |
           set -euo pipefail
           # Neutralize runner preemption that sends SIGTERM to the shell.
           trap 'echo "::warning::Runner interruption (SIGTERM/INT) — neutralizing"; exit 0' TERM INT
           set +e
-          RUST_TEST_THREADS=2 cargo test --no-fail-fast -p perl-lsp -- --nocapture 2>&1 | tee test_lsp.log
+          RUST_TEST_THREADS=2 cargo test --locked --no-fail-fast -p perl-lsp -- --nocapture 2>&1 | tee test_lsp.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -eq 143 ] || [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
