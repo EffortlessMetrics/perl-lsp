@@ -151,6 +151,8 @@ jobs:
           RUST_BACKTRACE: full
           CARGO_BUILD_JOBS: 2
           RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
+          CARGO_NET_RETRY: 4
+          CARGO_HTTP_MULTIPLEXING: "false"
         run: |
           set -euo pipefail
           # Neutralize runner preemption that sends SIGTERM to the shell.
