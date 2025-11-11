@@ -20,7 +20,18 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
-    
+
+    - name: Validate Cargo.lock (strict)
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ ! -f Cargo.lock ]; then
+          echo "::error:: Cargo.lock is required for --locked builds. Commit it." >&2
+          exit 1
+        fi
+        # Prove the lockfile can be consumed without mutation
+        cargo metadata --format-version=1 --locked >/dev/null
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
@@ -67,14 +78,14 @@ jobs:
         # Temporarily allow warnings for perl-parser due to PR #160 documentation tracking strategy
         # The missing_docs warnings are intentional for systematic resolution (605 violations tracked)
         RUSTFLAGS: ""
-      run: cargo build -p perl-parser --all-features
+      run: cargo build -p perl-parser --all-features --locked
     
     - name: Tests
       run: cargo test --workspace --all-features
     
     - name: Tree-sitter ABI symbol exists
       run: |
-        LIB=$(cargo build -p tree-sitter-perl-rs --release --message-format=json \
+        LIB=$(cargo build -p tree-sitter-perl-rs --release --message-format=json --locked \
           | jq -r 'select(.target.kind[]?=="cdylib") | .filenames[]' | head -1)
         if [ -n "$LIB" ]; then
           nm "$LIB" | grep -q 'tree_sitter_perl' || echo "Warning: tree_sitter_perl symbol not found"
@@ -82,7 +93,7 @@ jobs:
     
     - name: Parser S-expression smoke
       run: |
-        cargo build -p perl-parser --bin perl-parse --features cli --release
+        cargo build -p perl-parser --bin perl-parse --features cli --release --locked
         echo 'print "ok\n";' | ./target/release/perl-parse - | tee /dev/stderr \
           | grep -q '(program (call print' || echo "Warning: S-expression format check failed"
     

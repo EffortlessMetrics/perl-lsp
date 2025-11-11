@@ -140,6 +140,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate Cargo.lock (strict)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f Cargo.lock ]; then
+            echo "::error:: Cargo.lock is required for determinism testing. Commit it." >&2
+            exit 1
+          fi
+          # Fail fast if the lockfile is stale; determinism requires a committed, usable lock
+          if ! cargo metadata --format-version=1 --locked >/dev/null 2>&1; then
+            echo "::error:: Cargo.lock is missing or stale. Run 'cargo update' locally and commit it."
+            exit 1
+          fi
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
