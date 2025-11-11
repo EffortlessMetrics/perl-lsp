@@ -28,12 +28,13 @@ jobs:
       run:
         shell: bash
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-22.04, windows-2022]
-        rust: [stable, beta]
+        toolchain: [stable, beta]
         include:
           - os: ubuntu-22.04
-            rust: nightly
+            toolchain: nightly
             experimental: true
     
     steps:
@@ -42,7 +43,7 @@ jobs:
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: ${{ matrix.rust }}
+        toolchain: ${{ matrix.toolchain }}
         override: true
         components: rustfmt, clippy
     
@@ -72,7 +73,10 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
-        cargo tree --locked -p perl-parser --edges normal,build,dev | tee cargo-tree.txt
+        if ! cargo +${{ matrix.toolchain }} tree --locked -p perl-parser --edges normal,build,dev | tee cargo-tree.txt; then
+          echo "::warning::locked cargo tree failed (likely platform-set mismatch); retrying unlocked"
+          cargo +${{ matrix.toolchain }} tree -p perl-parser --edges normal,build,dev | tee cargo-tree.txt
+        fi
         grep -i '\bropey\b' cargo-tree.txt
 
     - name: Check formatting
@@ -106,8 +110,18 @@ jobs:
         CARGO_NET_RETRY: 4
         CARGO_HTTP_MULTIPLEXING: "false"
       run: |
+        set -euo pipefail
+        set +e
         # Use nextest with CI profile for retries and improved parallelism
-        cargo nextest run --locked -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
+        cargo +${{ matrix.toolchain }} nextest run --locked -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} 2>&1 | tee test_lsp.log
+        status=${PIPESTATUS[0]}
+        set -e
+        if [ "$status" -ne 0 ]; then
+          echo "::group::Last 400 lines of test_lsp.log"
+          tail -n 400 test_lsp.log || true
+          echo "::endgroup::"
+        fi
+        exit "$status"
     
     - name: Run LSP smoke test
       run: scripts/lsp-smoke.sh
@@ -120,7 +134,18 @@ jobs:
         RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
         CI: true
         GITHUB_ACTIONS: true
-      run: cargo nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
+      run: |
+        set -euo pipefail
+        set +e
+        cargo +${{ matrix.toolchain }} nextest run --locked --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} 2>&1 | tee test_parser.log
+        status=${PIPESTATUS[0]}
+        set -e
+        if [ "$status" -ne 0 ]; then
+          echo "::group::Last 400 lines of test_parser.log"
+          tail -n 400 test_parser.log || true
+          echo "::endgroup::"
+        fi
+        exit "$status"
 
     - name: Build release binary
       run: cargo build -p perl-lsp --release
@@ -132,7 +157,7 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: perl-lsp-${{ matrix.os }}-${{ matrix.rust }}
+        name: perl-lsp-${{ matrix.os }}-${{ matrix.toolchain }}
         path: target/release/perl-lsp*
 
   coverage:
