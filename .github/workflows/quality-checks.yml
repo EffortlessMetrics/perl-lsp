@@ -158,9 +158,9 @@ jobs:
           for i in 1 2 3; do
             echo "::group::Run $i"
             set +e
-            timeout 6m cargo nextest run -p perl-parser --profile ci --no-fail-fast \
+            timeout 6m cargo nextest run -p perl-parser --profile ci --no-fail-fast --hide-progress \
               -- --skip crash_reproducer_test --skip fuzz_regression_test \
-              2>&1 | tee "run_${i}.log"
+              2>&1 | sed -E 's/^Finished in .*//; s/^\s*Time:\s.*$//' | tee "run_${i}.log"
             status=${PIPESTATUS[0]}
             set -e
             echo "::endgroup::"

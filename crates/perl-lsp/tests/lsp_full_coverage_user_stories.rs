@@ -163,8 +163,8 @@ impl TestContext {
         let result = self.send_request("textDocument/definition", Some(params));
         if let Some(arr) = result.as_ref().and_then(|r| r.as_array()) {
             arr.clone()
-        } else if result.is_some() {
-            vec![result.unwrap()]
+        } else if let Some(r) = result {
+            vec![r]
         } else {
             vec![]
         }
