@@ -92,27 +92,31 @@ jobs:
         CARGO_BUILD_JOBS: 2
         RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
       run: |
-        # Skip the crash reproducer in default PR runs; covered in full sweep.
-        cargo nextest run --workspace --profile ci --no-fail-fast
+        # Skip crash/fuzz buckets in default PR runs; those live in label-gated sweeps.
+        cargo nextest run --workspace --profile ci --no-fail-fast \
+          -- --skip crash_reproducer_test --skip fuzz_regression_test
     
     - name: Run E2E tests
       run: cargo test -p perl-parser --tests --verbose
     
-    - name: Verify test discovery (CI regression guard)
-      shell: bash
+    - name: Check if jq is available (Linux)
       run: |
-        echo "Verifying comprehensive test discovery..."
-        
-        # Check if jq is available
         if ! command -v jq &> /dev/null; then
           echo "jq not found, installing..."
           if [[ "${{ matrix.os }}" == "ubuntu-22.04" ]]; then
             sudo apt-get update && sudo apt-get install -y jq
-          elif [[ "${{ matrix.os }}" == "windows-2022" ]]; then
-            echo "Installing jq on Windows..."
-            choco install jq -y
           fi
         fi
+
+    - name: Install jq (Windows)
+      if: matrix.os == 'windows-2022'
+      shell: pwsh
+      run: choco install jq -y
+
+    - name: Verify test discovery (CI regression guard)
+      shell: bash
+      run: |
+        echo "Verifying comprehensive test discovery..."
         
         # Build test executables and count tests
         echo "Building test executables..."
@@ -203,19 +207,24 @@ jobs:
 
   clippy:
     runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
         toolchain: stable
         components: clippy
-    
-    - name: Run clippy
+
+    - name: Run clippy (first-party)
       run: |
-        echo "Running clippy with all features..."
-        cargo clippy --all-targets --all-features 2>&1 | tee clippy-output.txt
+        echo "Running clippy on first-party crates..."
+        cargo clippy \
+          -p perl-lexer -p perl-parser -p perl-lsp -p perl-corpus -p perl-dap \
+          --all-targets -- -D warnings 2>&1 | tee clippy-output.txt
         
         # Count warnings
         WARNING_COUNT=$(grep -c "warning:" clippy-output.txt || echo "0")

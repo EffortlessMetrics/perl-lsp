@@ -156,6 +156,7 @@ jobs:
             # Per-run timeout prevents job-level 143 even if a test stalls.
             timeout 6m \
               cargo nextest run -p perl-parser --profile ci --no-fail-fast \
+                -- --skip crash_reproducer_test --skip fuzz_regression_test \
                 2>&1 | tee run_$i.log
             echo "::endgroup::"
           done
