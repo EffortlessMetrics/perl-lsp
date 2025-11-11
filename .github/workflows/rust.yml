@@ -28,11 +28,9 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
-        override: true
-        profile: minimal
 
     - name: Cache Rust dependencies
       uses: actions/cache@v4
@@ -77,11 +75,8 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        override: true
-        profile: minimal
         components: rustfmt, clippy
 
     - name: Cache Rust dependencies
@@ -120,11 +115,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-        profile: minimal
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Cache Rust dependencies
       uses: actions/cache@v4
@@ -159,11 +150,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-        profile: minimal
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Cache Rust dependencies
       uses: actions/cache@v4
@@ -200,11 +187,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-        profile: minimal
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Install cargo-audit
       run: cargo install cargo-audit --locked
@@ -223,11 +206,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-        profile: minimal
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Install cargo-tarpaulin
       run: cargo install cargo-tarpaulin --locked

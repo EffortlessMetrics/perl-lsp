@@ -52,14 +52,10 @@ jobs:
       with:
         components: rustfmt, clippy
     
-    - name: Cache cargo registry
-      uses: actions/cache@v4
+    - name: Cache cargo dependencies
+      uses: Swatinem/rust-cache@v2
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-strict-${{ hashFiles('Cargo.lock') }}
     
     - name: Format Check
       if: runner.os != 'Windows'
