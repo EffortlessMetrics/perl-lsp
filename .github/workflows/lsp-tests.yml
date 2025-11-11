@@ -28,6 +28,7 @@ jobs:
       run:
         shell: bash
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-22.04, windows-2022]
         rust: [stable, beta]
@@ -72,7 +73,10 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
-        cargo tree --locked -p perl-parser --edges normal,build,dev | tee cargo-tree.txt
+        if ! cargo tree --locked -p perl-parser --edges normal,build,dev | tee cargo-tree.txt; then
+          echo "::warning::locked cargo tree failed (likely platform-set mismatch); retrying unlocked"
+          cargo tree -p perl-parser --edges normal,build,dev | tee cargo-tree.txt
+        fi
         grep -i '\bropey\b' cargo-tree.txt
 
     - name: Check formatting
@@ -120,7 +124,7 @@ jobs:
         RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
         CI: true
         GITHUB_ACTIONS: true
-      run: cargo nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
+      run: cargo nextest run --locked --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
 
     - name: Build release binary
       run: cargo build -p perl-lsp --release

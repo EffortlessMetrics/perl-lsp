@@ -93,11 +93,11 @@ jobs:
         RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
       run: |
         # Skip crash/fuzz buckets in default PR runs; those live in label-gated sweeps.
-        cargo nextest run --workspace --profile ci --no-fail-fast \
+        cargo nextest run --locked --workspace --profile ci --no-fail-fast \
           -- --skip crash_reproducer_test --skip fuzz_regression_test
-    
+
     - name: Run E2E tests
-      run: cargo test -p perl-parser --tests --verbose
+      run: cargo test --locked -p perl-parser --tests --verbose
     
     - name: Check if jq is available (Linux)
       run: |
@@ -120,7 +120,7 @@ jobs:
         
         # Build test executables and count tests
         echo "Building test executables..."
-        EXECS=$(cargo test -p perl-parser --no-run --message-format=json 2>/dev/null | \
+        EXECS=$(cargo test --locked -p perl-parser --no-run --message-format=json 2>/dev/null | \
           jq -r 'select(.reason=="compiler-artifact") | select(.profile.test==true) | .executable // empty' | \
           grep -v '^$' || true)
         
@@ -196,7 +196,7 @@ jobs:
         echo "✅ Test discovery check passed: $TOTAL_TESTS tests found"
     
     - name: Run incremental tests (feature-gated)
-      run: cargo test -p perl-parser --features incremental --verbose
+      run: cargo test --locked -p perl-parser --features incremental --verbose
     
     - name: Build with deny warnings (soft check)
       if: matrix.os == 'ubuntu-22.04'
