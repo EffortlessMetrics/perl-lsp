@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with: { toolchain: 1.90.0, components: rustfmt }
       - if: runner.os != 'Windows'
         run: cargo fmt --all --check
@@ -24,7 +24,7 @@ jobs:
     needs: fmt
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with: { toolchain: 1.90.0, components: clippy }
       - run: cargo clippy --locked --workspace -- -D warnings -A missing_docs
 
@@ -33,7 +33,7 @@ jobs:
     needs: clippy
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with: { toolchain: 1.90.0 }
       - uses: Swatinem/rust-cache@v2
         with: { cache-on-failure: true }
@@ -92,7 +92,7 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with: { toolchain: 1.90.0 }
       - name: Build docs (no deps)
         run: cargo doc --locked -p perl-parser -p perl-lsp --no-deps
