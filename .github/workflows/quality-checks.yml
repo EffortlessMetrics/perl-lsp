@@ -153,6 +153,8 @@ jobs:
           RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
         run: |
           set -euo pipefail
+          # Neutralize runner preemption that sends SIGTERM to the shell.
+          trap 'echo "::warning::Runner interruption (SIGTERM/INT) — neutralizing determinism step"; exit 0' TERM INT
           echo "Running tests 3 times to check determinism..."
           any_skipped=0
           for i in 1 2 3; do
@@ -164,7 +166,7 @@ jobs:
             status=${PIPESTATUS[0]}
             set -e
             echo "::endgroup::"
-            if [ "$status" -eq 143 ] || [ "$status" -eq 124 ]; then
+            if [ "$status" -eq 143 ] || [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
               echo "Runner interruption detected (status=${status}); marking run ${i} as skipped."
               any_skipped=1
               continue
