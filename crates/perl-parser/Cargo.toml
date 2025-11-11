@@ -87,7 +87,7 @@ serde = { version = "1.0.227", features = ["derive"] }
 toml = "0.9.7"
 
 [dev-dependencies]
-assert_cmd = { version = "2.0.17", features = ["cargo"] }
+assert_cmd = "2.1.1"
 insta = { version = "1.43.2", features = ["yaml"] }
 criterion = "0.7.0"
 predicates = "3.1.3"
