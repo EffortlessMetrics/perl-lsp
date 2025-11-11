@@ -31,19 +31,19 @@ jobs:
           ${{ runner.os }}-cargo-
     
     - name: Check formatting
-      run: cargo run -p xtask --locked --fmt --check
-    
+      run: cargo run -p xtask --locked -- fmt --check
+
     - name: Run clippy
-      run: cargo run -p xtask --locked --check --clippy
-    
+      run: cargo run -p xtask --locked -- check --clippy
+
     - name: Run tests
-      run: cargo run -p xtask --locked --test
-    
+      run: cargo run -p xtask --locked -- test
+
     - name: Run corpus tests
-      run: cargo run -p xtask --locked --corpus
-    
+      run: cargo run -p xtask --locked -- corpus
+
     - name: Run highlight tests
-      run: cargo run -p xtask --locked --highlight
+      run: cargo run -p xtask --locked -- highlight
     
     - name: Check build
       run: cargo build --locked --release
@@ -69,10 +69,10 @@ jobs:
         components: rustfmt, clippy
     
     - name: Check formatting
-      run: cargo run -p xtask --locked --fmt --check
-    
+      run: cargo run -p xtask --locked -- fmt --check
+
     - name: Run clippy
-      run: cargo run -p xtask --locked --check --clippy
+      run: cargo run -p xtask --locked -- check --clippy
 
   security:
     name: Security Audit
@@ -112,7 +112,7 @@ jobs:
       run: cargo build --locked --release
     
     - name: Test
-      run: cargo run -p xtask --locked --test
+      run: cargo run -p xtask --locked -- test
 
   performance:
     name: Performance Check
@@ -129,7 +129,7 @@ jobs:
       run: cargo build --locked --release --timings
     
     - name: Run benchmarks
-      run: cargo run -p xtask --locked --bench
+      run: cargo run -p xtask --locked -- bench
 
   documentation:
     name: Documentation
