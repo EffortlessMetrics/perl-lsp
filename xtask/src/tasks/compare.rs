@@ -108,8 +108,8 @@ fn get_current_memory_usage() -> Result<f64> {
     let pid = std::process::id() as i32;
     let process = Process::new(pid)?;
     let statm = process.statm()?;
-    let page_size: u64 = procfs::page_size() as u64;
-    let rss_bytes: u64 = statm.resident.saturating_mul(page_size);
+    let page_size = procfs::page_size();
+    let rss_bytes = statm.resident.saturating_mul(page_size);
     Ok(rss_bytes as f64 / (1024.0 * 1024.0)) // MB
 }
 
