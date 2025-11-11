@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RIn --exclude-dir=target --include="*.yml" -E 'cargo (build|test|install|nextest)\b' .github/workflows | grep -v '\-\-locked' | tee /dev/stderr | grep -q .; then
+          if grep -RIn --exclude-dir=target --include="*.yml" -E 'cargo (build|test|install|nextest|bench|clippy|doc|run|check|publish)\b' .github/workflows | grep -v '\-\-locked' | tee /dev/stderr | grep -q .; then
             echo "::error::Found cargo invocations without --locked (see above)."
             exit 1
           fi
