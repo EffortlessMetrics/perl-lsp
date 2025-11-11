@@ -139,10 +139,10 @@ jobs:
           echo "::endgroup::"
           if [ "$status" -eq 101 ] && grep -q "lock file .* needs to be updated but --locked was passed" test_lsp.log; then
             echo "::warning:: Lock is stale; retrying (offline first, then online) ..."
-            if cargo +${{ matrix.toolchain }} --offline nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}; then
+            if cargo +${{ matrix.toolchain }} --offline nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} --locked; then
               exit 0
             fi
-            cargo +${{ matrix.toolchain }} nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
+            cargo +${{ matrix.toolchain }} nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} --locked
             exit $?
           fi
         fi
@@ -171,10 +171,10 @@ jobs:
           echo "::endgroup::"
           if [ "$status" -eq 101 ] && grep -q "lock file .* needs to be updated but --locked was passed" test_parser.log; then
             echo "::warning:: Lock is stale; retrying (offline first, then online) ..."
-            if cargo +${{ matrix.toolchain }} --offline nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}; then
+            if cargo +${{ matrix.toolchain }} --offline nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} --locked; then
               exit 0
             fi
-            cargo +${{ matrix.toolchain }} nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
+            cargo +${{ matrix.toolchain }} nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} --locked
             exit $?
           fi
         fi
