@@ -181,7 +181,7 @@ jobs:
         exit "$status"
 
     - name: Build release binary
-      run: cargo build -p perl-lsp --release
+      run: cargo +${{ matrix.toolchain }} build -p perl-lsp --release --locked
 
     - name: LSP health check
       run: target/release/perl-lsp --health
