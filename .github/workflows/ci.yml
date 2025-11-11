@@ -16,6 +16,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with: { toolchain: 1.90.0, components: rustfmt }
+      - name: CI policy - enforce xtask arg barrier
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -nE 'cargo run -p xtask --locked --[^ ]' .github/workflows | tee /dev/stderr | grep -q .; then
+            echo "::error::xtask invocations must include a space after the arg barrier: use '... -- <subcommand> ...'."
+            exit 1
+          fi
       - if: runner.os != 'Windows'
         run: cargo fmt --all --check
 
