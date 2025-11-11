@@ -84,7 +84,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Install cargo-audit
-        run: cargo install cargo-audit
+        run: cargo install cargo-audit --locked
       
       - name: Run security audit
         run: cargo audit
@@ -101,7 +101,7 @@ jobs:
           fetch-depth: 0
       
       - name: Install cargo-semver-checks
-        run: cargo install cargo-semver-checks
+        run: cargo install cargo-semver-checks --locked
       
       - name: Check API compatibility
         run: cargo semver-checks check-release -p perl-parser
@@ -153,12 +153,32 @@ jobs:
             echo "::error:: Cargo.lock is missing or stale. Run 'cargo update' locally and commit it."
             exit 1
           fi
+          # Prevent nested lockfiles
+          if git ls-files | grep -E '(.+/)?Cargo\.lock' | grep -v '^Cargo\.lock' | grep -q .; then
+            echo "::error::Nested Cargo.lock files detected:"
+            git ls-files | grep -E '(.+/)?Cargo\.lock' | grep -v '^Cargo\.lock'
+            exit 1
+          fi
+
+      - name: CI policy - enforce --locked on cargo commands
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIn --exclude-dir=target --include="*.yml" -E 'cargo (build|test|install|nextest)\b' .github/workflows | grep -v '\-\-locked' | tee /dev/stderr | grep -q .; then
+            echo "::error::Found cargo invocations without --locked (see above)."
+            exit 1
+          fi
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install nextest
         uses: taiki-e/install-action@nextest
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: determinism-${{ hashFiles('Cargo.lock') }}
 
       - name: Run tests multiple times (nextest, timeboxed; neutral on runner shutdown)
         env:
@@ -214,6 +234,16 @@ jobs:
           done
           echo "✅ Deterministic outputs across runs."
 
+      - name: Assert lockfile unchanged
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          if ! git diff --quiet -- Cargo.lock; then
+            echo "::error::Cargo.lock changed during this job. Run 'cargo update' locally and commit the result."
+            git --no-pager diff -- Cargo.lock | sed -n '1,200p'
+            exit 1
+          fi
+
   mutation-testing:
     name: Mutation Testing
     runs-on: ubuntu-22.04
@@ -231,7 +261,7 @@ jobs:
           df -h
 
       - name: Install cargo-mutants
-        run: cargo install cargo-mutants
+        run: cargo install cargo-mutants --locked
 
       - name: Run mutation testing (space-aware)
         env:
