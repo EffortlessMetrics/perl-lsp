@@ -76,6 +76,7 @@ jobs:
       uses: Swatinem/rust-cache@v2
       with:
         key: ${{ runner.os }}-${{ matrix.toolchain }}-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
 
     - name: Install nextest
       uses: taiki-e/install-action@nextest

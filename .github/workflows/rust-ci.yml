@@ -26,23 +26,24 @@ jobs:
       uses: Swatinem/rust-cache@v2
       with:
         key: ${{ runner.os }}-format-clippy-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
         restore-keys: |
           ${{ runner.os }}-cargo-
     
     - name: Check formatting
-      run: cargo xtask fmt --check
+      run: cargo run -p xtask --locked --fmt --check
     
     - name: Run clippy
-      run: cargo xtask check --clippy
+      run: cargo run -p xtask --locked --check --clippy
     
     - name: Run tests
-      run: cargo xtask test
+      run: cargo run -p xtask --locked --test
     
     - name: Run corpus tests
-      run: cargo xtask corpus
+      run: cargo run -p xtask --locked --corpus
     
     - name: Run highlight tests
-      run: cargo xtask highlight
+      run: cargo run -p xtask --locked --highlight
     
     - name: Check build
       run: cargo build --locked --release
@@ -68,10 +69,10 @@ jobs:
         components: rustfmt, clippy
     
     - name: Check formatting
-      run: cargo xtask fmt --check
+      run: cargo run -p xtask --locked --fmt --check
     
     - name: Run clippy
-      run: cargo xtask check --clippy
+      run: cargo run -p xtask --locked --check --clippy
 
   security:
     name: Security Audit
@@ -111,7 +112,7 @@ jobs:
       run: cargo build --locked --release
     
     - name: Test
-      run: cargo xtask test
+      run: cargo run -p xtask --locked --test
 
   performance:
     name: Performance Check
@@ -128,7 +129,7 @@ jobs:
       run: cargo build --locked --release --timings
     
     - name: Run benchmarks
-      run: cargo xtask bench
+      run: cargo run -p xtask --locked --bench
 
   documentation:
     name: Documentation

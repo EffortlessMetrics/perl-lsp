@@ -50,6 +50,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: property-tests-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
       
       - name: Run standard property tests
         run: |
@@ -86,6 +87,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: property-tests-extended-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
       
       - name: Run extended property tests
         env:
@@ -122,6 +124,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: lexer-contract-tests-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
       
       - name: Run lexer contract tests
         run: |
@@ -149,6 +152,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: parser-integration-tests-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
       
       - name: Run parser token integration tests
         run: |

@@ -36,6 +36,7 @@ jobs:
       uses: Swatinem/rust-cache@v2
       with:
         key: ${{ runner.os }}-${{ matrix.rust }}-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
 
     - name: Install tree-sitter CLI
       run: npm install -g tree-sitter-cli
@@ -79,6 +80,7 @@ jobs:
       uses: Swatinem/rust-cache@v2
       with:
         key: ${{ runner.os }}-stable-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
 
     - name: Install tree-sitter CLI
       run: npm install -g tree-sitter-cli
@@ -113,6 +115,7 @@ jobs:
       uses: Swatinem/rust-cache@v2
       with:
         key: ${{ runner.os }}-stable-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
 
     - name: Install tree-sitter CLI
       run: npm install -g tree-sitter-cli
@@ -144,6 +147,7 @@ jobs:
       uses: Swatinem/rust-cache@v2
       with:
         key: ${{ runner.os }}-stable-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
 
     - name: Install tree-sitter CLI
       run: npm install -g tree-sitter-cli
@@ -155,7 +159,7 @@ jobs:
       run: cargo build --locked --bin xtask
 
     - name: Run comparison
-      run: cargo xtask compare --report
+      run: cargo run -p xtask --locked -- compare --report
 
     - name: Upload comparison results
       uses: actions/upload-artifact@v4
