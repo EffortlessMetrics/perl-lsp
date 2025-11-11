@@ -187,13 +187,25 @@ jobs:
     continue-on-error: true  # Don't fail the build, just report
     steps:
       - uses: actions/checkout@v4
-      
+
+      - name: Free disk space (Ubuntu runner)
+        run: |
+          df -h
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY" || true
+          df -h
+
       - name: Install cargo-mutants
         run: cargo install cargo-mutants
-      
-      - name: Run mutation testing
+
+      - name: Run mutation testing (space-aware)
+        env:
+          TMPDIR: ${{ runner.temp }}
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
         run: |
-          cargo mutants -p perl-parser --timeout 60 --jobs 2 || true
+          cargo mutants -p perl-parser --timeout 60 --jobs 1 || true
           echo "Mutation testing complete (informational only)"
 
   test-metrics:
