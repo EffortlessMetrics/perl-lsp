@@ -58,7 +58,7 @@ required-features = ["cli"]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
 
 [[bin]]
-name = "perl-dap"
+name = "perl-dap-internal"
 path = "src/bin/perl-dap.rs"
 
 [features]
