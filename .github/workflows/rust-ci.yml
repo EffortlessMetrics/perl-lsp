@@ -144,7 +144,7 @@ jobs:
       run: cargo doc --locked --no-deps --document-private-items
 
     - name: Check documentation links
-      run: cargo doc --locked --no-deps --document-private-items --open
+      run: cargo doc --locked --no-deps --document-private-items
 
   publish:
     name: Publish to crates.io
