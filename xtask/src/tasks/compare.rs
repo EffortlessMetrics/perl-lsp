@@ -108,16 +108,15 @@ fn get_current_memory_usage() -> Result<f64> {
     let pid = std::process::id() as i32;
     let process = Process::new(pid)?;
     let statm = process.statm()?;
-    let page_size = procfs::page_size() as usize;
-    let rss_bytes = statm.resident * page_size;
-    Ok(rss_bytes as f64 / 1024.0 / 1024.0) // Convert to MB
+    let page_size: u64 = procfs::page_size() as u64;
+    let rss_bytes: u64 = statm.resident.saturating_mul(page_size);
+    Ok(rss_bytes as f64 / (1024.0 * 1024.0)) // MB
 }
 
 /// Fallback memory measurement for non-Linux platforms
 #[cfg(not(target_os = "linux"))]
 fn get_current_memory_usage() -> Result<f64> {
-    // Sensible default; exact value isn't critical for non-Linux path.
-    // Return 0 to indicate procfs unavailable, will fall back to peak_alloc
+    // Non-Linux: no procfs. Return 0 and let callers fall back to peak_alloc.
     Ok(0.0)
 }
 
