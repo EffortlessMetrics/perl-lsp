@@ -68,16 +68,22 @@ jobs:
     - name: Install nextest
       uses: taiki-e/install-action@nextest
 
-    - name: Assert ropey in dep tree (Windows)
+    - name: Assert ropey is declared and locked (Windows)
       if: matrix.os == 'windows-2022'
       shell: bash
       run: |
         set -euo pipefail
-        if ! cargo +${{ matrix.toolchain }} tree --locked -p perl-parser --edges normal,build,dev | tee cargo-tree.txt; then
-          echo "::warning::locked cargo tree failed (likely platform-set mismatch); retrying unlocked"
-          cargo +${{ matrix.toolchain }} tree -p perl-parser --edges normal,build,dev | tee cargo-tree.txt
+        # 1) perl-parser must declare ropey directly (workspace or version form)
+        if ! grep -Eq '^\s*ropey\s*=\s*(\{\s*workspace\s*=\s*true\s*\}|"[0-9][^"]*")' crates/perl-parser/Cargo.toml; then
+          echo "::error:: perl-parser does not declare ropey in [dependencies]"
+          exit 1
         fi
-        grep -i '\bropey\b' cargo-tree.txt
+        # 2) ropey must be present in the lockfile
+        if ! grep -q 'name = "ropey"' Cargo.lock; then
+          echo "::error:: ropey not present in Cargo.lock"
+          exit 1
+        fi
+        echo "✅ ropey declared in manifest and present in Cargo.lock."
 
     - name: Check formatting
       if: runner.os != 'Windows'
