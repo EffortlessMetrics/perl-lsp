@@ -60,7 +60,11 @@
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use peak_alloc::PeakAlloc;
+
+// Only available on Linux runners.
+#[cfg(target_os = "linux")]
 use procfs::process::Process;
+
 use serde_json::json;
 use std::fs;
 use std::io::Write;
@@ -98,14 +102,23 @@ where
     (result, memory_mb)
 }
 
-/// Get current process memory usage in MB using procfs
+/// Get current process memory usage in MB using procfs (Linux only)
+#[cfg(target_os = "linux")]
 fn get_current_memory_usage() -> Result<f64> {
     let pid = std::process::id() as i32;
     let process = Process::new(pid)?;
     let statm = process.statm()?;
-    let page_size = procfs::page_size();
+    let page_size = procfs::page_size() as usize;
     let rss_bytes = statm.resident * page_size;
     Ok(rss_bytes as f64 / 1024.0 / 1024.0) // Convert to MB
+}
+
+/// Fallback memory measurement for non-Linux platforms
+#[cfg(not(target_os = "linux"))]
+fn get_current_memory_usage() -> Result<f64> {
+    // Sensible default; exact value isn't critical for non-Linux path.
+    // Return 0 to indicate procfs unavailable, will fall back to peak_alloc
+    Ok(0.0)
 }
 
 /// Estimate memory usage based on file size and parsing complexity
