@@ -350,12 +350,7 @@ fn test_kill_mutations_comprehensive_edge_cases() {
         let open_s = open.to_string();
         let close_s = close.to_string();
         let third_delim = if open_s == close_s { "" } else { close_s.as_str() };
-        let input = format!(
-            "s{}test{}repl{}",
-            open,
-            close,
-            third_delim
-        );
+        let input = format!("s{}test{}repl{}", open, close, third_delim);
         let (pattern, replacement, _) = extract_substitution_parts(&input);
         assert_eq!(pattern, "test", "Pattern extraction for delimiter {}", open);
         if open == '(' && close == ')' {
