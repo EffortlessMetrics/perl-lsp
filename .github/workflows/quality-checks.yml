@@ -169,15 +169,15 @@ jobs:
             exit 1
           fi
 
-      - name: CI policy - forbid raw ExitStatus::from_raw literals in tests
+      - name: CI policy - forbid raw ExitStatus::from_raw except via helper
         shell: bash
         run: |
           set -euo pipefail
-          # In test/bench code, any direct from_raw(<number|expr>) should go via mock_status/raw_exit
-          if git grep -nE 'std::process::ExitStatus::from_raw\([^r]' -- 'crates/**/*.rs' \
-               | grep -E '(_test|tests?/|benches?/|#[[:space:]]*\[test\])' \
-               | tee /dev/stderr | grep -q .; then
-            echo "::error::Use mock_status()/raw_exit() in tests; don't call ExitStatus::from_raw(...) directly."
+          # Allow only the helper's implementation: ...ExitStatus::from_raw(raw_exit(
+          viol="$(git grep -n 'std::process::ExitStatus::from_raw(' -- 'crates/**/*.rs' \
+                    | grep -v 'std::process::ExitStatus::from_raw(raw_exit(' || true)"
+          if [ -n "$viol" ]; then
+            echo "$viol" | sed 's/^/::error::Disallowed direct from_raw(): /' 1>&2
             exit 1
           fi
 
@@ -192,6 +192,14 @@ jobs:
         with:
           key: determinism-${{ hashFiles('Cargo.lock') }}
           cache-on-failure: true
+
+      - name: Check compiles on wasm32-unknown-unknown (no tests)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup target add wasm32-unknown-unknown
+          cargo check --locked -p perl-parser --target wasm32-unknown-unknown
 
       - name: Run tests multiple times (nextest, timeboxed; neutral on runner shutdown)
         env:
