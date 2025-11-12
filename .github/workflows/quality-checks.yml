@@ -171,21 +171,7 @@ jobs:
 
       - name: CI policy - forbid raw ExitStatus::from_raw except via helper
         shell: bash
-        run: |
-          set -euo pipefail
-          # Disallow any ::from_raw(...) that isn't our test helper call.
-          # Allow only "...::from_raw(<spaces>raw_exit(" to handle whitespace and aliases.
-          viol="$(
-            git grep -nE '\b([A-Za-z_][A-Za-z0-9_:]*::)?ExitStatus::from_raw\(' -- \
-              'crates/**/*.rs' 'xtask/**/*.rs' 'examples/**/*.rs' 'tests/**/*.rs' \
-              ':!**/target/**' ':!**/generated/**' \
-            | grep -Ev '::from_raw\([[:space:]]*raw[_ ]?exit[[:space:]]*\(' \
-            || true
-          )"
-          if [ -n "$viol" ]; then
-            echo "$viol" | sed 's/^/::error::Disallowed direct from_raw(): /' 1>&2
-            exit 1
-          fi
+        run: ./.ci/scripts/check-from-raw.sh
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable

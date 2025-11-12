@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Pre-commit hook: Check ExitStatus::from_raw() policy
+#
+# Installation:
+#   cp .ci/hooks/pre-commit .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+#
+# Or use a symlink for auto-updates:
+#   ln -sf ../../.ci/hooks/pre-commit .git/hooks/pre-commit
+
+set -euo pipefail
+
+echo "Running ExitStatus policy check..."
+if ./.ci/scripts/check-from-raw.sh; then
+  exit 0
+else
+  echo ""
+  echo "❌ Policy violation detected!"
+  echo ""
+  echo "Fix: Use mock_status() helper instead of ExitStatus::from_raw()"
+  echo "See: crates/perl-parser/src/execute_command.rs"
+  echo ""
+  echo "After fixing, re-stage your changes and commit again."
+  exit 1
+fi

@@ -94,6 +94,44 @@ See **[CI & Automation](./docs/CI.md)** for comprehensive details about our GitH
 - Avoid unnecessary `.clone()` on types that implement Copy
 - Add `#[allow(clippy::only_used_in_recursion)]` for recursive tree traversal functions
 
+### Cross-Platform `ExitStatus` in Tests
+
+On Unix, `ExitStatus::from_raw(1)` is **wrong** (needs high-byte encoding). On Windows, the signature doesn't exist. Always use the portable helpers from `crates/perl-parser/src/execute_command.rs`:
+
+```rust
+#[cfg(test)]
+use crate::execute_command::mock_status;
+
+#[test]
+fn status_round_trip() {
+    assert!(mock_status(0).success());
+    assert_eq!(mock_status(1).code(), Some(1));
+}
+```
+
+**Never use** `std::process::ExitStatus::from_raw(..)` directly in tests/benches - CI will reject it.
+
+#### Pre-Commit Hook (Optional)
+
+To catch policy violations before pushing, install the pre-commit hook:
+
+```bash
+# Option 1: Copy hook (manual updates needed)
+cp .ci/hooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+
+# Option 2: Symlink hook (auto-updates with git pull)
+ln -sf ../../.ci/hooks/pre-commit .git/hooks/pre-commit
+```
+
+#### Manual Policy Check
+
+Run the policy check locally anytime:
+
+```bash
+./.ci/scripts/check-from-raw.sh
+```
+
 ## Project Structure
 
 - **`crates/perl-parser/`** - Core parser implementation and LSP providers
@@ -156,4 +194,4 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ---
 
-Thank you for contributing to Perl LSP! =€
+Thank you for contributing to Perl LSP! =ï¿½
