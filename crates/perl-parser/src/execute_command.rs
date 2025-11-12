@@ -97,6 +97,26 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// Cross-platform helpers for synthesizing `ExitStatus` in tests/mocks.
+#[cfg(unix)]
+use std::os::unix::process::ExitStatusExt as _;
+#[cfg(windows)]
+use std::os::windows::process::ExitStatusExt as _;
+
+// Map a logical exit code (0/1/…) to the platform's raw representation.
+#[cfg(unix)]
+#[inline]
+fn raw_exit(code: i32) -> i32 {
+    // POSIX: wait(2) encodes exit code in the high byte.
+    code << 8
+}
+#[cfg(windows)]
+#[inline]
+fn raw_exit(code: i32) -> u32 {
+    // Windows: raw is the process' exit code directly.
+    code as u32
+}
+
 /// Commands supported by the Perl LSP server for test execution and code analysis.
 ///
 /// This enum defines all supported executeCommand requests that can be invoked from
@@ -868,8 +888,6 @@ pub fn get_supported_commands() -> Vec<String> {
 mod tests {
     use super::*;
     use std::fs;
-    #[cfg(unix)]
-    use std::os::unix::process::ExitStatusExt;
 
     #[test]
     fn test_supported_commands_includes_run_critic() {
@@ -1134,7 +1152,7 @@ print "Value: $variable\n";
 
         // Test successful result
         let output = std::process::Output {
-            status: std::process::ExitStatus::from_raw(0), // Success status
+            status: std::process::ExitStatus::from_raw(raw_exit(0)), // Success
             stdout: b"test output".to_vec(),
             stderr: b"".to_vec(),
         };
@@ -1146,7 +1164,7 @@ print "Value: $variable\n";
 
         // Test with extra field
         let output = std::process::Output {
-            status: std::process::ExitStatus::from_raw(0),
+            status: std::process::ExitStatus::from_raw(raw_exit(0)),
             stdout: b"test".to_vec(),
             stderr: b"".to_vec(),
         };
@@ -1162,7 +1180,7 @@ print "Value: $variable\n";
 
         // Test failed result
         let output = std::process::Output {
-            status: std::process::ExitStatus::from_raw(256), // Failure status (exit code 1)
+            status: std::process::ExitStatus::from_raw(raw_exit(1)), // Failure (exit 1)
             stdout: b"partial output".to_vec(),
             stderr: b"error message".to_vec(),
         };
@@ -1479,7 +1497,7 @@ print "Value: $variable\n";
 
         // Test successful status - should NOT be negated
         let success_output = std::process::Output {
-            status: std::process::ExitStatus::from_raw(0),
+            status: std::process::ExitStatus::from_raw(raw_exit(0)),
             stdout: b"success".to_vec(),
             stderr: b"".to_vec(),
         };
@@ -1490,7 +1508,7 @@ print "Value: $variable\n";
 
         // Test failure status - should properly indicate failure
         let failure_output = std::process::Output {
-            status: std::process::ExitStatus::from_raw(256), // Exit code 1
+            status: std::process::ExitStatus::from_raw(raw_exit(1)), // Exit 1
             stdout: b"output".to_vec(),
             stderr: b"error".to_vec(),
         };
