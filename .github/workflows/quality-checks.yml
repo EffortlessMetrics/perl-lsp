@@ -173,9 +173,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Allow only the helper's implementation: ...ExitStatus::from_raw(raw_exit(
-          viol="$(git grep -n 'std::process::ExitStatus::from_raw(' -- 'crates/**/*.rs' \
-                    | grep -v 'std::process::ExitStatus::from_raw(raw_exit(' || true)"
+          # Disallow any ::from_raw(...) that isn't our test helper call.
+          # Allow only "...::from_raw(<spaces>raw_exit(" to handle whitespace and aliases.
+          viol="$(
+            git grep -nE '\b([A-Za-z_][A-Za-z0-9_:]*::)?ExitStatus::from_raw\(' -- \
+              'crates/**/*.rs' 'xtask/**/*.rs' 'examples/**/*.rs' 'tests/**/*.rs' \
+              ':!**/target/**' ':!**/generated/**' \
+            | grep -Ev '::from_raw\([[:space:]]*raw[_ ]?exit[[:space:]]*\(' \
+            || true
+          )"
           if [ -n "$viol" ]; then
             echo "$viol" | sed 's/^/::error::Disallowed direct from_raw(): /' 1>&2
             exit 1
