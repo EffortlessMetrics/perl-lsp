@@ -482,6 +482,35 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
   - **Enterprise Security**: Path validation, process isolation, safe defaults
   - **Quality Assurance**: 71/71 tests passing with comprehensive mutation hardening
 
+## GitHub Issues & Project Status
+
+**🎯 Quick Status** (as of 2025-11-12):
+- **MVP**: 70-75% complete (2-3 weeks remaining)
+- **Production v1.0**: 85-90% ready (11-13 weeks)
+- **Open Issues**: 30 total (3 can be closed, 3 P0-CRITICAL)
+- **Sprint A**: 35-40% complete (parser foundation)
+- **Sprint B**: Blocked by Sprint A (LSP polish, 21 story points)
+
+**📚 Comprehensive Documentation**:
+- **[Issue Status Report](docs/ISSUE_STATUS_2025-11-12.md)** - Complete analysis of all 30 open issues with priorities, timelines, and recommendations
+- **[Current Status Snapshot](docs/CURRENT_STATUS.md)** - Real-time project health dashboard with metrics and milestones
+- **[Production Roadmap (#196)](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/196)** - 6-10 month plan to full production
+- **[MVP Roadmap (#195)](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/195)** - 2-3 week plan to minimum viable product
+
+**🚨 Critical Blockers (Immediate Action Required)**:
+1. **Issue #182**: Statement Tracker - Architecture undefined, needs 2-hour design session
+2. **Issue #211**: CI Pipeline Cleanup - $720/year savings opportunity, 3-week timeline
+3. **Issue #210**: Merge-Blocking Gates - Blocked by #211, 8-week implementation
+
+**✅ Issues Ready to Close**:
+- **Issue #203**: Rust 2024 upgrade ✅ COMPLETE (PR #175)
+- **Issue #202**: rand deprecation ✅ COMPLETE (commit e768294f)
+- **Issue #194**: Type hierarchy ✅ ALREADY IMPLEMENTED (just needs CI test enablement)
+
+**📋 Sprint Planning**:
+- **Sprint A** (Issues #183-186, #182): Parser foundation, 35-40% complete, Days 1-10 → extended to 2-3 weeks
+- **Sprint B** (Issues #180, #188, #181, #191): LSP polish, 21 story points, Days 11-19, blocked by Sprint A
+
 ## Contributing
 
 1. **Parser improvements** → `/crates/perl-parser/src/`
@@ -492,6 +521,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 6. **Security features** → Follow enterprise security practices
 7. **xtask improvements** → `/xtask/src/` (Rust 2024 compatible advanced testing tools)
 8. **Agent customization** → `.claude/agents2/` (97 specialized agents for Perl parser ecosystem workflow, PR #153 architecture)
+9. **Issue tracking** → See [Issue Status Report](docs/ISSUE_STATUS_2025-11-12.md) for priorities and assignments
 
 ### Coding Standards
 
