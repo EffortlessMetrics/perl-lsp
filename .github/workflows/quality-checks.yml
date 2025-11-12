@@ -169,6 +169,18 @@ jobs:
             exit 1
           fi
 
+      - name: CI policy - forbid raw ExitStatus::from_raw literals in tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          # In test/bench code, any direct from_raw(<number|expr>) should go via mock_status/raw_exit
+          if git grep -nE 'std::process::ExitStatus::from_raw\([^r]' -- 'crates/**/*.rs' \
+               | grep -E '(_test|tests?/|benches?/|#[[:space:]]*\[test\])' \
+               | tee /dev/stderr | grep -q .; then
+            echo "::error::Use mock_status()/raw_exit() in tests; don't call ExitStatus::from_raw(...) directly."
+            exit 1
+          fi
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
