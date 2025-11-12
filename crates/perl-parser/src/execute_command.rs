@@ -121,8 +121,9 @@ fn raw_exit(code: i32) -> u32 {
     code as u32
 }
 
-// Future platforms: fail fast so we notice and add a mapping.
-#[cfg(not(any(unix, windows)))]
+// Future platforms: fail fast during tests so we notice and add a mapping.
+// Only enforced for test/doctest builds to avoid breaking non-Unix/Windows release targets.
+#[cfg(all(any(test, doctest), not(any(unix, windows))))]
 compile_error!("Add raw_exit() mapping for this platform.");
 
 // Helper to reduce duplication in tests while keeping the trait requirement localized.
