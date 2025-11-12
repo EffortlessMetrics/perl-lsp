@@ -2,6 +2,8 @@
 <!-- Generated: 2025-11-12 -->
 <!-- Research: 30 open issues analyzed and updated -->
 
+> **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2025-11-12. For live status, treat GitHub issues & milestones as canonical. This document provides comprehensive analysis at a point in time but may not reflect subsequent changes.
+
 ## Executive Summary
 
 **Total Open Issues**: 30
