@@ -2,6 +2,8 @@
 <!-- Generated: 2025-11-12 -->
 <!-- Comprehensive project health assessment -->
 
+> **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2025-11-12. For live status, treat GitHub issues & milestones as canonical. Metrics below represent point-in-time measurements and may not reflect subsequent progress.
+
 ## 🎯 At a Glance
 
 | Metric | Value | Target | Status |

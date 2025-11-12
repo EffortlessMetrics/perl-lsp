@@ -1,12 +1,14 @@
 # 🚀 START HERE - perl-lsp Quick Start Guide
 
+> **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2025-11-12. For live status, treat GitHub issues & milestones as canonical. This guide provides point-in-time orientation; see GitHub for current progress.
+
 Welcome to the perl-lsp project! This guide will get you up to speed quickly.
 
 ## 📍 You Are Here
 
 **Project Status**: 70-75% MVP complete, production-ready foundations
 **Timeline**: 2-3 weeks to MVP, 11-13 weeks to Production v1.0
-**Open Issues**: 30 total (3 can be closed, 3 P0-CRITICAL)
+**Open Issues**: 27 total (3 P0-CRITICAL, recently closed 3 resolved issues)
 
 ## 🎯 5-Minute Orientation
 
