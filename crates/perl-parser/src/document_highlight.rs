@@ -165,6 +165,40 @@ impl DocumentHighlightProvider {
             }
             NodeKind::VariableWithAttributes { variable, .. } => Some(vec![variable.as_ref()]),
             NodeKind::ExpressionStatement { expression } => Some(vec![expression.as_ref()]),
+            // Statement modifiers (Issue #191)
+            NodeKind::StatementModifier { statement, condition, .. } => {
+                Some(vec![statement.as_ref(), condition.as_ref()])
+            }
+            // Regex operations - only expr is a child node, patterns are strings (Issue #191)
+            NodeKind::Match { expr, .. }
+            | NodeKind::Substitution { expr, .. }
+            | NodeKind::Transliteration { expr, .. } => Some(vec![expr.as_ref()]),
+            // Control flow (Issue #191)
+            NodeKind::Given { expr, body } => Some(vec![expr.as_ref(), body.as_ref()]),
+            NodeKind::When { condition, body } => Some(vec![condition.as_ref(), body.as_ref()]),
+            NodeKind::Default { body } => Some(vec![body.as_ref()]),
+            NodeKind::LabeledStatement { statement, .. } => Some(vec![statement.as_ref()]),
+            // Code evaluation (Issue #191)
+            NodeKind::Eval { block } | NodeKind::Do { block } => Some(vec![block.as_ref()]),
+            // Error handling (Issue #191)
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                let mut children = vec![body.as_ref()];
+                for (_, catch_body) in catch_blocks {
+                    children.push(catch_body.as_ref());
+                }
+                if let Some(finally) = finally_block {
+                    children.push(finally.as_ref());
+                }
+                Some(children)
+            }
+            // Method declarations (Issue #191)
+            NodeKind::Method { body, .. } => Some(vec![body.as_ref()]),
+            // Indirect calls (Issue #191)
+            NodeKind::IndirectCall { object, args, .. } => {
+                let mut children = vec![object.as_ref()];
+                children.extend(args.iter());
+                Some(children)
+            }
             _ => None,
         }
     }
@@ -384,12 +418,15 @@ hello();"#;
         let ast = parser.parse().unwrap();
         let provider = DocumentHighlightProvider::new();
 
-        // Position on first hello() call
-        let _highlights = provider.find_highlights(&ast, code, 29);
+        // Position on first hello() call (byte offset 29)
+        let highlights = provider.find_highlights(&ast, code, 29);
 
-        // Note: Document highlighting may not work with new AST structure yet
-        // For now just ensure it doesn't crash - empty result is acceptable
-        // highlights.len() is always >= 0, so just check it doesn't panic
+        // Should find both hello() calls (fixed in Issue #191)
+        assert!(
+            highlights.len() >= 2,
+            "Expected at least 2 highlights for function calls, found {}",
+            highlights.len()
+        );
     }
 
     #[test]
@@ -403,5 +440,25 @@ hello();"#;
         let highlights = provider.find_highlights(&ast, code, 12);
 
         assert_eq!(highlights.len(), 0);
+    }
+
+    #[test]
+    fn test_highlight_statement_modifier() {
+        // Test statement modifiers with new AST structure (Issue #191)
+        let code = r#"my $x = 5;
+print $x if $x > 0;"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let provider = DocumentHighlightProvider::new();
+
+        // Position on first $x
+        let highlights = provider.find_highlights(&ast, code, 3);
+
+        // Should find all 3 occurrences of $x
+        assert!(
+            highlights.len() >= 3,
+            "Expected at least 3 highlights for $x, found {}",
+            highlights.len()
+        );
     }
 }
