@@ -10,15 +10,29 @@ default:
 # CI Validation Commands (Issue #211)
 # ============================================================================
 
-# Run full CI pipeline locally (essential jobs only)
-ci-local:
-    @echo "🚀 Running full CI pipeline locally..."
+# Fast merge gate (~2-5 min) - REQUIRED for all merges
+ci-gate:
+    @echo "🚪 Running fast merge gate..."
+    @just ci-format
+    @just ci-clippy-lib
+    @just ci-test-lib
+    @just ci-policy
+    @echo "✅ Merge gate passed!"
+
+# Full CI pipeline (~10-20 min) - RECOMMENDED for large changes
+ci-full:
+    @echo "🚀 Running full CI pipeline..."
     @just ci-format
     @just ci-clippy
     @just ci-test-core
     @just ci-test-lsp
     @just ci-docs || true
-    @echo "✅ All CI checks passed!"
+    @echo "✅ Full CI passed!"
+
+# Legacy alias (deprecated, use ci-full)
+ci-local:
+    @echo "⚠️  'ci-local' is deprecated, use 'ci-full' instead"
+    @just ci-full
 
 # Format check (fast fail)
 ci-format:
@@ -28,15 +42,27 @@ ci-format:
 
 # Clippy lint (catches common issues, allow missing_docs during systematic resolution)
 ci-clippy:
-    @echo "🔍 Running clippy..."
+    @echo "🔍 Running clippy (all targets)..."
     cargo clippy --workspace --all-targets -- -D warnings -A missing_docs
     @echo "✅ Clippy passed"
+
+# Clippy libraries only (fast, for merge gate)
+ci-clippy-lib:
+    @echo "🔍 Running clippy (libraries only)..."
+    cargo clippy --workspace --lib --locked -- -D warnings -A missing_docs
+    @echo "✅ Clippy (lib) passed"
 
 # Core tests (fast, essential)
 ci-test-core:
     @echo "🧪 Running core tests..."
     cargo test --workspace --lib --bins
     @echo "✅ Core tests passed"
+
+# Library tests only (fastest, for merge gate)
+ci-test-lib:
+    @echo "🧪 Running library tests..."
+    cargo test --workspace --lib --locked
+    @echo "✅ Library tests passed"
 
 # LSP integration tests (with adaptive threading)
 ci-test-lsp:
@@ -81,3 +107,9 @@ fmt:
 clean:
     cargo clean
 
+
+# Policy enforcement checks
+ci-policy:
+    @echo "📋 Running policy checks..."
+    @./.ci/scripts/check-from-raw.sh
+    @echo "✅ Policy checks passed"
