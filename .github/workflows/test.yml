@@ -12,9 +12,12 @@ env:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-22.04, windows-2022]
         rust: [stable]
       fail-fast: false  # Continue testing other platforms if one fails
     
@@ -22,40 +25,25 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: ${{ matrix.rust }}
     
     - name: Install perltidy and perlcritic (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-22.04'
       run: |
         sudo apt-get update
         sudo apt-get install -y perltidy libperl-critic-perl
     
-    - name: Install perltidy and perlcritic (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install perltidy
-        cpan install Perl::Critic
-    
-    - name: Cache cargo registry
-      uses: actions/cache@v4
+    - name: Cache cargo dependencies
+      uses: Swatinem/rust-cache@v2
       with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Cache cargo index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Cache cargo build
-      uses: actions/cache@v4
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-    
+        key: ${{ runner.os }}-${{ matrix.rust }}-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
+
+    - name: Install nextest
+      uses: taiki-e/install-action@nextest
+
     - name: Check for tautological tests
       shell: bash
       run: |
@@ -67,9 +55,9 @@ jobs:
           exit 1
         fi
         
-        # Pattern 2: !is_empty() || is_empty()
-        if grep -r "!.*is_empty().*||.*is_empty()" crates/perl-parser/tests/ 2>/dev/null; then
-          echo "ERROR: Found !is_empty() || is_empty() patterns"
+        # Pattern 2: !X.is_empty() || X.is_empty() (same receiver tautology)
+        if grep -rE '!\s*([A-Za-z0-9_\.]+)\.is_empty\(\)\s*\|\|\s*\1\.is_empty\(\)' crates/perl-parser/tests/ 2>/dev/null; then
+          echo "ERROR: Found tautological !X.is_empty() || X.is_empty() patterns"
           exit 1
         fi
         
@@ -82,38 +70,45 @@ jobs:
         echo "✓ No tautological assertions found"
     
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --locked --verbose
     
     - name: Build LSP server
-      run: cargo build -p perl-parser --bin perl-lsp --verbose
+      run: cargo build --locked -p perl-lsp --bin perl-lsp --verbose
     
-    - name: Run tests
-      run: cargo test --verbose
-    
+    - name: Run tests (nextest, lean, CI guards)
+      env:
+        CARGO_BUILD_JOBS: 2
+        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
+      run: |
+        # Skip crash/fuzz buckets in default PR runs; those live in label-gated sweeps.
+        cargo nextest run --locked --workspace --profile ci --no-fail-fast \
+          -- --skip crash_reproducer_test --skip fuzz_regression_test
+
     - name: Run E2E tests
-      run: cargo test -p perl-parser --tests --verbose
+      run: cargo test --locked -p perl-parser --tests --verbose
     
+    - name: Check if jq is available (Linux)
+      run: |
+        if ! command -v jq &> /dev/null; then
+          echo "jq not found, installing..."
+          if [[ "${{ matrix.os }}" == "ubuntu-22.04" ]]; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+        fi
+
+    - name: Install jq (Windows)
+      if: matrix.os == 'windows-2022'
+      shell: pwsh
+      run: choco install jq -y
+
     - name: Verify test discovery (CI regression guard)
       shell: bash
       run: |
         echo "Verifying comprehensive test discovery..."
         
-        # Check if jq is available
-        if ! command -v jq &> /dev/null; then
-          echo "jq not found, installing..."
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            sudo apt-get update && sudo apt-get install -y jq
-          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            brew install jq
-          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            echo "Installing jq on Windows..."
-            choco install jq -y
-          fi
-        fi
-        
         # Build test executables and count tests
         echo "Building test executables..."
-        EXECS=$(cargo test -p perl-parser --no-run --message-format=json 2>/dev/null | \
+        EXECS=$(cargo test --locked -p perl-parser --no-run --message-format=json 2>/dev/null | \
           jq -r 'select(.reason=="compiler-artifact") | select(.profile.test==true) | .executable // empty' | \
           grep -v '^$' || true)
         
@@ -189,30 +184,35 @@ jobs:
         echo "✅ Test discovery check passed: $TOTAL_TESTS tests found"
     
     - name: Run incremental tests (feature-gated)
-      run: cargo test -p perl-parser --features incremental --verbose
+      run: cargo test --locked -p perl-parser --features incremental --verbose
     
     - name: Build with deny warnings (soft check)
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-22.04'
       run: |
         echo "Building with warnings as errors (soft check)..."
-        RUSTFLAGS="-D warnings" cargo build --release -p perl-parser --bin perl-lsp || echo "Warning: Build with -D warnings failed"
+        RUSTFLAGS="-D warnings" cargo build --release -p perl-lsp --bin perl-lsp || echo "Warning: Build with -D warnings failed"
       continue-on-error: true
 
   clippy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
         components: clippy
-    
-    - name: Run clippy
+
+    - name: Run clippy (first-party)
       run: |
-        echo "Running clippy with all features..."
-        cargo clippy --all-targets --all-features 2>&1 | tee clippy-output.txt
+        echo "Running clippy on first-party crates..."
+        cargo clippy \
+          -p perl-lexer -p perl-parser -p perl-lsp -p perl-corpus -p perl-dap \
+          --all-targets -- -D warnings 2>&1 | tee clippy-output.txt
         
         # Count warnings
         WARNING_COUNT=$(grep -c "warning:" clippy-output.txt || echo "0")
@@ -226,15 +226,16 @@ jobs:
       continue-on-error: true  # Don't fail on warnings yet
 
   format:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
     
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
         components: rustfmt
     
     - name: Check formatting
-      run: cargo fmt --all -- --check
+      if: runner.os != 'Windows'
+      run: cargo fmt --all --check

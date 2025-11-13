@@ -30,7 +30,7 @@ fn test_range_overlaps_logical_operator_mutations() {
 
     // Test cases that MUST return true (kill false-return mutations from && → ||)
     // These cases satisfy: self.start.byte < other.end.byte && other.start.byte < self.end.byte
-    let overlap_cases = vec![
+    let overlap_cases = [
         (&range1, &range2, "Overlapping ranges [0,5) and [3,8) should overlap"),
         (&range2, &range1, "Overlapping ranges [3,8) and [0,5) should overlap (symmetric)"),
     ];
@@ -45,7 +45,7 @@ fn test_range_overlaps_logical_operator_mutations() {
 
     // Test cases that MUST return false (kill true-return mutations from && → ||)
     // These cases fail at least one condition in the && expression
-    let non_overlap_cases = vec![
+    let non_overlap_cases = [
         // Adjacent ranges - fail the overlap test
         (&range1, &range4, "Adjacent ranges [0,5) and [5,6) should NOT overlap"),
         (&range4, &range1, "Adjacent ranges [5,6) and [0,5) should NOT overlap (symmetric)"),
@@ -75,7 +75,7 @@ fn test_range_overlaps_logical_operator_mutations() {
 #[test]
 fn test_range_boundary_conditions_mutations() {
     // Test zero-width ranges at various positions
-    let zero_ranges = vec![
+    let zero_ranges = [
         Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0)), // Start of line
         Range::new(Position::new(5, 0, 5), Position::new(5, 0, 5)), // Mid-line
         Range::new(Position::new(10, 1, 0), Position::new(10, 1, 0)), // Start of next line
@@ -95,7 +95,7 @@ fn test_range_boundary_conditions_mutations() {
     }
 
     // Test ranges that touch at boundaries but don't overlap
-    let touching_ranges = vec![
+    let touching_ranges = [
         (
             Range::new(Position::new(0, 0, 0), Position::new(5, 0, 5)), // [0, 5)
             Range::new(Position::new(5, 0, 5), Position::new(10, 0, 10)), // [5, 10)
@@ -130,7 +130,7 @@ fn test_range_boundary_conditions_mutations() {
 fn test_utf16_position_conversion_arithmetic_mutations() {
     // Focus on testing that the function doesn't crash and returns reasonable values
     // rather than exact position matching, since mutations would cause crashes or wildly wrong values
-    let test_cases = vec![
+    let test_cases = [
         // Basic ASCII
         ("Hello\nWorld", 0, "Start of ASCII text"),
         ("Hello\nWorld", 5, "Mid ASCII text"),
@@ -315,7 +315,7 @@ print $x;
 
     // Test that position tracking works across realistic code without exact position matching
     // Focus on detecting mutations that would cause crashes or obviously wrong behavior
-    let test_offsets = vec![0, 5, 10, 15, 20, 25, 30, 35, 40];
+    let test_offsets = [0, 5, 10, 15, 20, 25, 30, 35, 40];
 
     for byte_offset in test_offsets {
         if byte_offset <= perl_code.len() {

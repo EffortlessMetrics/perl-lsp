@@ -132,7 +132,7 @@ impl IncrementalTestUtils {
         let median_incremental = {
             let mut sorted = incremental_times.clone();
             sorted.sort();
-            if sorted.len() % 2 == 0 {
+            if sorted.len().is_multiple_of(2) {
                 (sorted[sorted.len() / 2 - 1] + sorted[sorted.len() / 2]) / 2
             } else {
                 sorted[sorted.len() / 2]

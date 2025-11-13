@@ -11,6 +11,7 @@ pub mod test_helpers;
 pub use test_helpers::*;
 
 // Re-export Phase 1 stabilization helpers for easy access
+#[allow(unused_imports)]
 pub use lsp_harness::{handshake_initialize, shutdown_graceful, spawn_lsp};
 
 // Re-export types that tests may need

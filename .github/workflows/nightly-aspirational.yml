@@ -28,6 +28,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.feature }}
+          cache-on-failure: true
       
       - name: Run tests with feature ${{ matrix.feature }}
         run: |
@@ -60,6 +61,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: combo-${{ matrix.features }}
+          cache-on-failure: true
       
       - name: Run combo tests
         run: |

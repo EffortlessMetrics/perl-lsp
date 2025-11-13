@@ -345,8 +345,7 @@ $var =~ tr/abc/xyz/;
         let mut line = 0u32;
         let mut col = 0u32;
 
-        for i in 0..=index {
-            let token = &tokens[i];
+        for token in tokens.iter().take(index + 1) {
             line += token[0]; // delta_line
             if token[0] > 0 {
                 col = token[1]; // reset to delta_start_char on new line
@@ -745,8 +744,5 @@ fn test_comprehensive_mutation_integration() {
         let _regex = extract_regex_parts(input);
         let _substitution = extract_substitution_parts(input);
         let _transliteration = extract_transliteration_parts(input);
-
-        // Basic smoke test - should not crash or produce sentinel values
-        assert!(true, "Complex integration case '{}' handled successfully", input);
     }
 }

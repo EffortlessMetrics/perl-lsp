@@ -42,18 +42,9 @@ fn test_complete_lsp_integration() {
 
     // Step 2: Open multiple files to simulate real project
     let files = vec![
-        (
-            "file:///workspace/main.pl",
-            include_str!("../../../archive/legacy-tests/test_fixtures/main.pl"),
-        ),
-        (
-            "file:///workspace/lib/Module.pm",
-            include_str!("../../../archive/legacy-tests/test_fixtures/Module.pm"),
-        ),
-        (
-            "file:///workspace/t/test.t",
-            include_str!("../../../archive/legacy-tests/test_fixtures/test.t"),
-        ),
+        ("file:///workspace/main.pl", include_str!("fixtures/main.pl")),
+        ("file:///workspace/lib/Module.pm", include_str!("fixtures/Module.pm")),
+        ("file:///workspace/t/test.t", include_str!("fixtures/test.t")),
     ];
 
     for (uri, content) in files {

@@ -321,8 +321,7 @@ fn test_extract_subroutine_refactoring() {
             .unwrap_or(false)
     });
 
-    if extract_sub_action.is_some() {
-        let action = extract_sub_action.unwrap();
+    if let Some(action) = extract_sub_action {
         assert_eq!(
             action["kind"].as_str(),
             Some("refactor.extract"),
@@ -370,8 +369,7 @@ fn test_organize_imports_refactoring() {
             .unwrap_or(false)
     });
 
-    if organize_imports_action.is_some() {
-        let action = organize_imports_action.unwrap();
+    if let Some(action) = organize_imports_action {
         assert_eq!(
             action["kind"].as_str(),
             Some("source.organizeImports"),
@@ -417,8 +415,7 @@ fn test_code_quality_refactorings() {
             .unwrap_or(false)
     });
 
-    if convert_loop_action.is_some() {
-        let action = convert_loop_action.unwrap();
+    if let Some(action) = convert_loop_action {
         assert_eq!(
             action["kind"].as_str(),
             Some("refactor.rewrite"),
@@ -455,8 +452,7 @@ fn test_code_quality_refactorings() {
             .unwrap_or(false)
     });
 
-    if add_error_check_action.is_some() {
-        let action = add_error_check_action.unwrap();
+    if let Some(action) = add_error_check_action {
         assert_eq!(
             action["kind"].as_str(),
             Some("refactor.rewrite"),
@@ -644,8 +640,7 @@ fn test_quickfix_actions_from_diagnostics() {
     // Look for quickfix actions
     let quickfix_action = actions.iter().find(|action| action["kind"].as_str() == Some("quickfix"));
 
-    if quickfix_action.is_some() {
-        let action = quickfix_action.unwrap();
+    if let Some(action) = quickfix_action {
         assert!(
             action["title"].as_str().is_some(),
             "Quickfix action should have descriptive title"
@@ -681,7 +676,7 @@ fn test_code_actions_empty_selection() {
         )
         .expect("Code action request should succeed for empty selection");
 
-    let actions = actions_result.as_array().expect("Should return action array");
+    let _actions = actions_result.as_array().expect("Should return action array");
     // Empty selection may have fewer actions, but should not error
 }
 

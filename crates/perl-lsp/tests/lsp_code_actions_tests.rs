@@ -9,7 +9,6 @@ use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
 #[ignore]
 // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC4:enabledTests - Extract variable may not be fully implemented yet, but test framework should work
-#[ignore = "Extract variable refactoring implementation incomplete - testing framework validation"]
 fn test_extract_variable() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -65,7 +64,6 @@ print $result;
 #[ignore]
 // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Add error checking refactoring
-#[ignore = "Add error checking refactoring implementation incomplete - testing framework validation"]
 fn test_add_error_checking() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -120,7 +118,6 @@ close($fh);
 #[ignore]
 // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Convert C-style for loop to foreach
-#[ignore = "Convert loop style refactoring implementation incomplete - testing framework validation"]
 fn test_convert_loop_style() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -179,7 +176,6 @@ for (my $i = 0; $i < @array; $i++) {
 #[ignore]
 // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Convert if statement to postfix form
-#[ignore = "Convert to postfix refactoring implementation incomplete - testing framework validation"]
 fn test_convert_to_postfix() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -234,7 +230,6 @@ if ($debug) {
 #[ignore]
 // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Add missing pragmas (strict/warnings/utf8)
-#[ignore = "Add missing pragmas refactoring implementation incomplete - testing framework validation"]
 fn test_add_missing_pragmas() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -290,7 +285,6 @@ print $x;
 #[ignore]
 // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Fix undefined variable issues
-#[ignore = "Fix undefined variable refactoring implementation incomplete - testing framework validation"]
 fn test_fix_undefined_variable() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -360,7 +354,6 @@ print $undefined_var;
 #[ignore]
 // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Extract subroutine with parameter detection
-#[ignore = "Extract subroutine refactoring implementation incomplete - testing framework validation"]
 fn test_extract_subroutine() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -420,7 +413,6 @@ my $y = 20;
 #[ignore]
 // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Organize imports with existing ImportOptimizer integration
-#[ignore = "Organize imports refactoring LSP integration incomplete - testing framework validation"]
 fn test_organize_imports() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -481,7 +473,6 @@ print "test\n";
 #[ignore]
 // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - Multiple refactoring operations in single request
-#[ignore = "Multiple refactorings implementation incomplete - testing framework validation"]
 fn test_multiple_refactorings() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

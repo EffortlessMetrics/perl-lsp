@@ -367,6 +367,7 @@ struct MockTextChange {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::enum_variant_names)]
 enum CancellationTiming {
     EarlyCancel, // Cancel during initial parsing
     MidCancel,   // Cancel during AST construction
@@ -668,7 +669,7 @@ fn test_incremental_parsing_cancellation_preservation_ac6() {
     }
 
     // Test establishes incremental parsing cancellation patterns
-    assert!(true, "AC6 incremental parsing cancellation test scaffolding established");
+    // AC6 incremental parsing cancellation test scaffolding established
 }
 
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#checkpoint-manager
@@ -809,7 +810,7 @@ fn test_incremental_parsing_checkpoint_cancellation_ac6() {
     assert!(content_length > 100, "Test content should be substantial for checkpoint testing");
 
     println!("Checkpoint-based parsing test scaffolding established");
-    assert!(true, "AC6 checkpoint-based incremental parsing test scaffolding completed");
+    // AC6 checkpoint-based incremental parsing test scaffolding completed
 }
 
 #[derive(Debug, Clone)]
@@ -997,7 +998,7 @@ fn test_workspace_indexing_cancellation_integrity_ac7() {
     }
 
     // Test establishes workspace indexing cancellation patterns with integrity preservation
-    assert!(true, "AC7 workspace indexing cancellation test scaffolding established");
+    // AC7 workspace indexing cancellation test scaffolding established
 }
 
 /// Tests feature spec: LSP_CANCELLATION_INTEGRATION_SCHEMA.md#dual-indexing-cancellation
@@ -1151,7 +1152,7 @@ fn test_dual_pattern_indexing_cancellation_ac7() {
     }
 
     println!("Dual pattern indexing cancellation test scaffolding established");
-    assert!(true, "AC7 dual pattern indexing cancellation test scaffolding completed");
+    // AC7 dual pattern indexing cancellation test scaffolding completed
 }
 
 #[derive(Debug, Clone)]
@@ -1386,7 +1387,7 @@ fn test_cross_file_reference_cancellation_ac8() {
     }
 
     // Test establishes cross-file reference resolution cancellation patterns
-    assert!(true, "AC8 cross-file reference resolution cancellation test scaffolding established");
+    // AC8 cross-file reference resolution cancellation test scaffolding established
 }
 
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#multi-tier-resolver
@@ -1574,7 +1575,7 @@ fn test_multi_tier_resolver_cancellation_ac8() {
     );
 
     println!("Multi-tier resolver cancellation test scaffolding established");
-    assert!(true, "AC8 multi-tier resolver cancellation test scaffolding completed");
+    // AC8 multi-tier resolver cancellation test scaffolding completed
 }
 
 #[derive(Debug, Clone)]

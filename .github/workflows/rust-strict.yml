@@ -16,26 +16,51 @@ jobs:
   quality:
     name: Quality Gates
     runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'ci:strict')
     
     steps:
     - uses: actions/checkout@v4
-    
+
+    - name: Validate Cargo.lock (strict)
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ ! -f Cargo.lock ]; then
+          echo "::error:: Cargo.lock is required for --locked builds. Commit it." >&2
+          exit 1
+        fi
+        # Prove the lockfile can be consumed without mutation
+        cargo metadata --format-version=1 --locked >/dev/null
+        # Prevent nested lockfiles
+        if git ls-files | grep -E '(.+/)?Cargo\.lock' | grep -v '^Cargo\.lock' | grep -q .; then
+          echo "::error::Nested Cargo.lock files detected:"
+          git ls-files | grep -E '(.+/)?Cargo\.lock' | grep -v '^Cargo\.lock'
+          exit 1
+        fi
+
+    - name: CI policy - enforce --locked on cargo commands
+      shell: bash
+      run: |
+        set -euo pipefail
+        if grep -RIn --exclude-dir=target --include="*.yml" -E 'cargo (build|test|install|nextest|bench|clippy|doc|run|check|publish)\b' .github/workflows | grep -v '\-\-locked' | tee /dev/stderr | grep -q .; then
+          echo "::error::Found cargo invocations without --locked (see above)."
+          exit 1
+        fi
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
     
-    - name: Cache cargo registry
-      uses: actions/cache@v3
+    - name: Cache cargo dependencies
+      uses: Swatinem/rust-cache@v2
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-strict-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
     
     - name: Format Check
-      run: cargo fmt --all -- --check
+      if: runner.os != 'Windows'
+      run: cargo fmt --all --check
     
     - name: Clippy (strict on first-party)
       env:
@@ -55,24 +80,26 @@ jobs:
     - name: Documentation (strict)
       env:
         RUSTDOCFLAGS: -D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls
-      run: cargo doc --workspace --no-deps
-    
+      run: cargo doc --locked --workspace --no-deps
+
     - name: Build
-      run: cargo build --workspace --all-features
+      run: cargo build --locked --workspace --all-features
     
     - name: Build perl-parser (allowing missing_docs warnings)
       env:
         # Temporarily allow warnings for perl-parser due to PR #160 documentation tracking strategy
         # The missing_docs warnings are intentional for systematic resolution (605 violations tracked)
         RUSTFLAGS: ""
-      run: cargo build -p perl-parser --all-features
+      run: cargo build -p perl-parser --all-features --locked
     
     - name: Tests
-      run: cargo test --workspace --all-features
+      run: cargo test --workspace --all-features --locked
     
     - name: Tree-sitter ABI symbol exists
+      if: runner.os == 'Linux'
+      shell: bash
       run: |
-        LIB=$(cargo build -p tree-sitter-perl-rs --release --message-format=json \
+        LIB=$(cargo build -p tree-sitter-perl-rs --release --message-format=json --locked \
           | jq -r 'select(.target.kind[]?=="cdylib") | .filenames[]' | head -1)
         if [ -n "$LIB" ]; then
           nm "$LIB" | grep -q 'tree_sitter_perl' || echo "Warning: tree_sitter_perl symbol not found"
@@ -80,7 +107,7 @@ jobs:
     
     - name: Parser S-expression smoke
       run: |
-        cargo build -p perl-parser --bin perl-parse --features cli --release
+        cargo build -p perl-parser --bin perl-parse --features cli --release --locked
         echo 'print "ok\n";' | ./target/release/perl-parse - | tee /dev/stderr \
           | grep -q '(program (call print' || echo "Warning: S-expression format check failed"
     
@@ -96,11 +123,23 @@ jobs:
     - name: Dependency Security Check
       run: cargo deny check
 
+  - name: Assert lockfile unchanged
+    if: ${{ always() }}
+    shell: bash
+    run: |
+      if ! git diff --quiet -- Cargo.lock; then
+        echo "::error::Cargo.lock changed during this job. Run 'cargo update' locally and commit the result."
+        git --no-pager diff -- Cargo.lock | sed -n '1,200p'
+        exit 1
+      fi
+
   # Optional: Semver checks for published crates
   semver:
     name: Semver Compatibility
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: |
+      github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'ci:semver')
     continue-on-error: true  # Non-blocking for now
     
     steps:

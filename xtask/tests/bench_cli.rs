@@ -1,5 +1,5 @@
 use anyhow::Result;
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use std::fs;
 use tempfile::TempDir;
 
@@ -20,8 +20,8 @@ fn test_benchmark_saves_output() -> Result<()> {
     let output_path = temp_dir.path().join("bench_output.txt");
 
     // Run the xtask bench command and verify it succeeds
-    Command::cargo_bin("xtask")?
-        .current_dir(temp_dir.path())
+    let mut cmd = cargo_bin_cmd!("xtask");
+    cmd.current_dir(temp_dir.path())
         .args(["bench", "--name", "dummy", "--save", "--output", output_path.to_str().unwrap()])
         .assert()
         .success();

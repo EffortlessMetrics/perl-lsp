@@ -320,7 +320,6 @@ mod control_flow_hardening {
         for input in edge_cases {
             let _result = extract_substitution_parts(input);
             // Should not panic - control flow should handle all cases gracefully
-            assert!(true, "Control flow should handle edge case: {}", input);
         }
     }
 }

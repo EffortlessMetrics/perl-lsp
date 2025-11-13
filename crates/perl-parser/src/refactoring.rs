@@ -524,16 +524,20 @@ impl Default for RefactoringEngine {
 mod temp_stubs {
     use super::*;
 
+    #[allow(dead_code)]
     #[derive(Debug)]
     pub(super) struct WorkspaceRefactor;
+    #[allow(dead_code)]
     impl WorkspaceRefactor {
         pub(super) fn new() -> ParseResult<Self> {
             Ok(Self)
         }
     }
 
+    #[allow(dead_code)]
     #[derive(Debug)]
     pub(super) struct ModernizeEngine;
+    #[allow(dead_code)]
     impl ModernizeEngine {
         pub(super) fn new() -> Self {
             Self

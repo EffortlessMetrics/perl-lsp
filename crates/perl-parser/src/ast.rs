@@ -676,6 +676,452 @@ impl Node {
             }
         }
     }
+
+    /// Call a function on every direct child node of this node.
+    ///
+    /// This enables depth-first traversal for operations like heredoc content attachment.
+    /// The closure receives a mutable reference to each child node.
+    pub fn for_each_child_mut<F: FnMut(&mut Node)>(&mut self, mut f: F) {
+        match &mut self.kind {
+            // Root program node
+            NodeKind::Program { statements } => {
+                for stmt in statements {
+                    f(stmt);
+                }
+            }
+
+            // Statement wrappers
+            NodeKind::ExpressionStatement { expression } => f(expression),
+
+            // Variable declarations
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                f(variable);
+                if let Some(init) = initializer {
+                    f(init);
+                }
+            }
+            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+                for var in variables {
+                    f(var);
+                }
+                if let Some(init) = initializer {
+                    f(init);
+                }
+            }
+            NodeKind::VariableWithAttributes { variable, .. } => f(variable),
+
+            // Binary operations
+            NodeKind::Binary { left, right, .. } => {
+                f(left);
+                f(right);
+            }
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
+                f(condition);
+                f(then_expr);
+                f(else_expr);
+            }
+            NodeKind::Unary { operand, .. } => f(operand),
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                f(lhs);
+                f(rhs);
+            }
+
+            // Control flow
+            NodeKind::Block { statements } => {
+                for stmt in statements {
+                    f(stmt);
+                }
+            }
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
+                f(condition);
+                f(then_branch);
+                for (elsif_cond, elsif_body) in elsif_branches {
+                    f(elsif_cond);
+                    f(elsif_body);
+                }
+                if let Some(else_body) = else_branch {
+                    f(else_body);
+                }
+            }
+            NodeKind::While { condition, body, continue_block, .. } => {
+                f(condition);
+                f(body);
+                if let Some(cont) = continue_block {
+                    f(cont);
+                }
+            }
+            NodeKind::For { init, condition, update, body, continue_block, .. } => {
+                if let Some(i) = init {
+                    f(i);
+                }
+                if let Some(c) = condition {
+                    f(c);
+                }
+                if let Some(u) = update {
+                    f(u);
+                }
+                f(body);
+                if let Some(cont) = continue_block {
+                    f(cont);
+                }
+            }
+            NodeKind::Foreach { variable, list, body } => {
+                f(variable);
+                f(list);
+                f(body);
+            }
+            NodeKind::Given { expr, body } => {
+                f(expr);
+                f(body);
+            }
+            NodeKind::When { condition, body } => {
+                f(condition);
+                f(body);
+            }
+            NodeKind::Default { body } => f(body),
+            NodeKind::StatementModifier { statement, condition, .. } => {
+                f(statement);
+                f(condition);
+            }
+            NodeKind::LabeledStatement { statement, .. } => f(statement),
+
+            // Eval and Do blocks
+            NodeKind::Eval { block } => f(block),
+            NodeKind::Do { block } => f(block),
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                f(body);
+                for (_, catch_body) in catch_blocks {
+                    f(catch_body);
+                }
+                if let Some(finally) = finally_block {
+                    f(finally);
+                }
+            }
+
+            // Function calls
+            NodeKind::FunctionCall { args, .. } => {
+                for arg in args {
+                    f(arg);
+                }
+            }
+            NodeKind::MethodCall { object, args, .. } => {
+                f(object);
+                for arg in args {
+                    f(arg);
+                }
+            }
+            NodeKind::IndirectCall { object, args, .. } => {
+                f(object);
+                for arg in args {
+                    f(arg);
+                }
+            }
+
+            // Functions
+            NodeKind::Subroutine { prototype, signature, body, .. } => {
+                if let Some(proto) = prototype {
+                    f(proto);
+                }
+                if let Some(sig) = signature {
+                    f(sig);
+                }
+                f(body);
+            }
+            NodeKind::Method { signature, body, .. } => {
+                if let Some(sig) = signature {
+                    f(sig);
+                }
+                f(body);
+            }
+            NodeKind::Return { value } => {
+                if let Some(v) = value {
+                    f(v);
+                }
+            }
+            NodeKind::Signature { parameters } => {
+                for param in parameters {
+                    f(param);
+                }
+            }
+            NodeKind::MandatoryParameter { variable } => f(variable),
+            NodeKind::OptionalParameter { variable, default_value } => {
+                f(variable);
+                f(default_value);
+            }
+            NodeKind::SlurpyParameter { variable } => f(variable),
+            NodeKind::NamedParameter { variable } => f(variable),
+
+            // Pattern matching
+            NodeKind::Match { expr, .. } => f(expr),
+            NodeKind::Substitution { expr, .. } => f(expr),
+            NodeKind::Transliteration { expr, .. } => f(expr),
+
+            // Containers
+            NodeKind::ArrayLiteral { elements } => {
+                for elem in elements {
+                    f(elem);
+                }
+            }
+            NodeKind::HashLiteral { pairs } => {
+                for (key, value) in pairs {
+                    f(key);
+                    f(value);
+                }
+            }
+
+            // Package system
+            NodeKind::Package { block, .. } => {
+                if let Some(b) = block {
+                    f(b);
+                }
+            }
+            NodeKind::PhaseBlock { block, .. } => f(block),
+            NodeKind::Class { body, .. } => f(body),
+
+            // Leaf nodes (no children to traverse)
+            NodeKind::Variable { .. }
+            | NodeKind::Identifier { .. }
+            | NodeKind::Number { .. }
+            | NodeKind::String { .. }
+            | NodeKind::Heredoc { .. }
+            | NodeKind::Regex { .. }
+            | NodeKind::Readline { .. }
+            | NodeKind::Glob { .. }
+            | NodeKind::Diamond
+            | NodeKind::Ellipsis
+            | NodeKind::Undef
+            | NodeKind::Use { .. }
+            | NodeKind::No { .. }
+            | NodeKind::Prototype { .. }
+            | NodeKind::DataSection { .. }
+            | NodeKind::Format { .. }
+            | NodeKind::Error { .. }
+            | NodeKind::UnknownRest => {}
+        }
+    }
+
+    /// Call a function on every direct child node of this node (immutable version).
+    ///
+    /// This enables depth-first traversal for read-only operations like AST analysis.
+    /// The closure receives an immutable reference to each child node.
+    pub fn for_each_child<F: FnMut(&Node)>(&self, mut f: F) {
+        match &self.kind {
+            // Root program node
+            NodeKind::Program { statements } => {
+                for stmt in statements {
+                    f(stmt);
+                }
+            }
+
+            // Statement wrappers
+            NodeKind::ExpressionStatement { expression } => f(expression),
+
+            // Variable declarations
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                f(variable);
+                if let Some(init) = initializer {
+                    f(init);
+                }
+            }
+            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+                for var in variables {
+                    f(var);
+                }
+                if let Some(init) = initializer {
+                    f(init);
+                }
+            }
+            NodeKind::VariableWithAttributes { variable, .. } => f(variable),
+
+            // Binary operations
+            NodeKind::Binary { left, right, .. } => {
+                f(left);
+                f(right);
+            }
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
+                f(condition);
+                f(then_expr);
+                f(else_expr);
+            }
+            NodeKind::Unary { operand, .. } => f(operand),
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                f(lhs);
+                f(rhs);
+            }
+
+            // Control flow
+            NodeKind::Block { statements } => {
+                for stmt in statements {
+                    f(stmt);
+                }
+            }
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
+                f(condition);
+                f(then_branch);
+                for (elsif_cond, elsif_body) in elsif_branches {
+                    f(elsif_cond);
+                    f(elsif_body);
+                }
+                if let Some(else_body) = else_branch {
+                    f(else_body);
+                }
+            }
+            NodeKind::While { condition, body, continue_block, .. } => {
+                f(condition);
+                f(body);
+                if let Some(cont) = continue_block {
+                    f(cont);
+                }
+            }
+            NodeKind::For { init, condition, update, body, continue_block, .. } => {
+                if let Some(i) = init {
+                    f(i);
+                }
+                if let Some(c) = condition {
+                    f(c);
+                }
+                if let Some(u) = update {
+                    f(u);
+                }
+                f(body);
+                if let Some(cont) = continue_block {
+                    f(cont);
+                }
+            }
+            NodeKind::Foreach { variable, list, body } => {
+                f(variable);
+                f(list);
+                f(body);
+            }
+            NodeKind::Given { expr, body } => {
+                f(expr);
+                f(body);
+            }
+            NodeKind::When { condition, body } => {
+                f(condition);
+                f(body);
+            }
+            NodeKind::Default { body } => f(body),
+            NodeKind::StatementModifier { statement, condition, .. } => {
+                f(statement);
+                f(condition);
+            }
+            NodeKind::LabeledStatement { statement, .. } => f(statement),
+
+            // Eval and Do blocks
+            NodeKind::Eval { block } => f(block),
+            NodeKind::Do { block } => f(block),
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                f(body);
+                for (_, catch_body) in catch_blocks {
+                    f(catch_body);
+                }
+                if let Some(finally) = finally_block {
+                    f(finally);
+                }
+            }
+
+            // Function calls
+            NodeKind::FunctionCall { args, .. } => {
+                for arg in args {
+                    f(arg);
+                }
+            }
+            NodeKind::MethodCall { object, args, .. } => {
+                f(object);
+                for arg in args {
+                    f(arg);
+                }
+            }
+            NodeKind::IndirectCall { object, args, .. } => {
+                f(object);
+                for arg in args {
+                    f(arg);
+                }
+            }
+
+            // Functions
+            NodeKind::Subroutine { prototype, signature, body, .. } => {
+                if let Some(proto) = prototype {
+                    f(proto);
+                }
+                if let Some(sig) = signature {
+                    f(sig);
+                }
+                f(body);
+            }
+            NodeKind::Method { signature, body, .. } => {
+                if let Some(sig) = signature {
+                    f(sig);
+                }
+                f(body);
+            }
+            NodeKind::Return { value } => {
+                if let Some(v) = value {
+                    f(v);
+                }
+            }
+            NodeKind::Signature { parameters } => {
+                for param in parameters {
+                    f(param);
+                }
+            }
+            NodeKind::MandatoryParameter { variable } => f(variable),
+            NodeKind::OptionalParameter { variable, default_value } => {
+                f(variable);
+                f(default_value);
+            }
+            NodeKind::SlurpyParameter { variable } => f(variable),
+            NodeKind::NamedParameter { variable } => f(variable),
+
+            // Pattern matching
+            NodeKind::Match { expr, .. } => f(expr),
+            NodeKind::Substitution { expr, .. } => f(expr),
+            NodeKind::Transliteration { expr, .. } => f(expr),
+
+            // Containers
+            NodeKind::ArrayLiteral { elements } => {
+                for elem in elements {
+                    f(elem);
+                }
+            }
+            NodeKind::HashLiteral { pairs } => {
+                for (key, value) in pairs {
+                    f(key);
+                    f(value);
+                }
+            }
+
+            // Package system
+            NodeKind::Package { block, .. } => {
+                if let Some(b) = block {
+                    f(b);
+                }
+            }
+            NodeKind::PhaseBlock { block, .. } => f(block),
+            NodeKind::Class { body, .. } => f(body),
+
+            // Leaf nodes (no children to traverse)
+            NodeKind::Variable { .. }
+            | NodeKind::Identifier { .. }
+            | NodeKind::Number { .. }
+            | NodeKind::String { .. }
+            | NodeKind::Heredoc { .. }
+            | NodeKind::Regex { .. }
+            | NodeKind::Readline { .. }
+            | NodeKind::Glob { .. }
+            | NodeKind::Diamond
+            | NodeKind::Ellipsis
+            | NodeKind::Undef
+            | NodeKind::Use { .. }
+            | NodeKind::No { .. }
+            | NodeKind::Prototype { .. }
+            | NodeKind::DataSection { .. }
+            | NodeKind::Format { .. }
+            | NodeKind::Error { .. }
+            | NodeKind::UnknownRest => {}
+        }
+    }
 }
 
 /// Comprehensive enumeration of all Perl language constructs supported in Perl parsing workflow

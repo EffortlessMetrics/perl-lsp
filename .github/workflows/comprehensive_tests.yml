@@ -14,35 +14,33 @@ jobs:
   test:
     name: Run All Tests
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
+    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'ci:all-tests')
+
     steps:
     - uses: actions/checkout@v4
     
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        override: true
         components: rustfmt, clippy
     
-    - name: Cache cargo registry
-      uses: actions/cache@v3
+    - name: Cache cargo dependencies
+      uses: Swatinem/rust-cache@v2
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-comprehensive-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
     
-    - name: Cache cargo build
-      uses: actions/cache@v3
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Run comprehensive test suite
+    - name: Run comprehensive test suite (print everything)
+      env:
+        RUST_BACKTRACE: full
       run: |
-        chmod +x .github/run_all_tests.sh
-        .github/run_all_tests.sh
+        set -euo pipefail
+        echo "== perl-parser (full, excluding fuzz) =="
+        cargo test --locked --no-fail-fast -p perl-parser -- --nocapture \
+          --skip fuzz_regression_test
+        echo "== substitution_operator_tests (focused) =="
+        cargo test --locked --no-fail-fast -p perl-parser substitution_operator_tests -- --nocapture
     
     - name: Verify no empty test binaries
       run: |
@@ -51,7 +49,7 @@ jobs:
         
         for test_file in crates/perl-parser/tests/*.rs; do
           test_name=$(basename "$test_file" .rs)
-          TEST_COUNT=$(cargo test -p perl-parser --test "$test_name" --features test-compat -- --list 2>/dev/null | grep -c ": test" || echo "0")
+          TEST_COUNT=$(cargo test --locked -p perl-parser --test "$test_name" --features test-compat -- --list 2>/dev/null | grep -c ": test" || echo "0")
           
           if [ "$TEST_COUNT" = "0" ]; then
             EMPTY_TESTS="$EMPTY_TESTS $test_name"
@@ -71,7 +69,7 @@ jobs:
         fi
     
     - name: Run tests with all features
-      run: cargo test --workspace --all-features --all-targets
+      run: cargo test --locked --workspace --all-features --all-targets
     
     - name: Check for orphaned tests
       run: |

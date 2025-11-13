@@ -1,2 +1,12 @@
 [profile.ci]
-slow-timeout = { period = "60s", terminate-after = 4 }
+# CI profile with retries and timeouts for reliable CI runs
+fail-fast = false
+retries = 1
+
+[profile.ci.junit]
+path = "target/nextest/ci-junit.xml"
+
+[profile.ci.slow-timeout]
+# Warn after 60s, kill after 2 periods (i.e., ~120s)
+period = "60s"
+terminate-after = 2

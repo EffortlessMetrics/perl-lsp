@@ -188,8 +188,7 @@ fn decode_position(tokens: &[EncodedToken], index: usize) -> (u32, u32) {
     let mut line = 0u32;
     let mut col = 0u32;
 
-    for i in 0..=index {
-        let token = &tokens[i];
+    for token in tokens.iter().take(index + 1) {
         line += token[0]; // delta_line
         if token[0] > 0 {
             col = token[1]; // reset to delta_start_char on new line

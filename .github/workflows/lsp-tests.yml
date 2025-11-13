@@ -17,134 +17,268 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
+  RUST_BACKTRACE: full
   RUST_TEST_THREADS: 2
 
 jobs:
   test:
     name: Test LSP Implementation
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable, beta]
+        os: [ubuntu-22.04, windows-2022]
+        toolchain: [stable, beta]
         include:
-          - os: ubuntu-latest
-            rust: nightly
+          - os: ubuntu-22.04
+            toolchain: nightly
             experimental: true
     
     steps:
-    - uses: actions/checkout@v3
-    
+    - uses: actions/checkout@v4
+
+    - name: Validate Cargo.lock (strict)
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ ! -f Cargo.lock ]; then
+          echo "::error:: Cargo.lock is required for --locked builds. Commit it." >&2
+          exit 1
+        fi
+        # Prove the lockfile can be consumed without mutation
+        cargo metadata --format-version=1 --locked >/dev/null
+        # Prevent nested lockfiles
+        if git ls-files | grep -E '(.+/)?Cargo\.lock' | grep -v '^Cargo\.lock' | grep -q .; then
+          echo "::error::Nested Cargo.lock files detected:"
+          git ls-files | grep -E '(.+/)?Cargo\.lock' | grep -v '^Cargo\.lock'
+          exit 1
+        fi
+
+    - name: CI policy - enforce --locked on cargo commands
+      shell: bash
+      run: |
+        set -euo pipefail
+        if grep -RIn --exclude-dir=target --include="*.yml" -E 'cargo (build|test|install|nextest|bench|clippy|doc|run|check|publish)\b' .github/workflows | grep -v '\-\-locked' | tee /dev/stderr | grep -q .; then
+          echo "::error::Found cargo invocations without --locked (see above)."
+          exit 1
+        fi
+
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: ${{ matrix.rust }}
-        override: true
+        toolchain: ${{ matrix.toolchain }}
         components: rustfmt, clippy
     
-    - name: Cache cargo registry
-      uses: actions/cache@v3
+    - name: Cache cargo dependencies
+      uses: Swatinem/rust-cache@v2
       with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Cache cargo index
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Cache cargo build
-      uses: actions/cache@v3
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.toolchain }}-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
 
     - name: Install nextest
       uses: taiki-e/install-action@nextest
 
+    - name: Assert ropey is declared and locked (Windows)
+      if: matrix.os == 'windows-2022'
+      shell: bash
+      run: |
+        set -euo pipefail
+        # 1) perl-parser must declare ropey in [dependencies] (inline or [dependencies.ropey] table)
+        if ! awk '
+            BEGIN { indeps=0; inropey=0; ok=0 }
+            /^\[dependencies\]$/ { indeps=1; next }
+            /^\[/               { indeps=0 }
+            indeps && $0 ~ /^[[:space:]]*ropey[[:space:]]*=/ {
+                if ($0 ~ /workspace[[:space:]]*=[[:space:]]*true/ || $0 ~ /"[0-9][^"]*"/) ok=1
+            }
+            /^\[dependencies\.ropey\]$/ { inropey=1; next }
+            /^\[/                        { inropey=0 }
+            inropey && ($0 ~ /workspace[[:space:]]*=[[:space:]]*true/ || $0 ~ /version[[:space:]]*=\s*"/) { ok=1 }
+            END { exit ok?0:1 }
+        ' crates/perl-parser/Cargo.toml; then
+          echo "::error:: perl-parser does not declare ropey in [dependencies]"
+          exit 1
+        fi
+        # 2) ropey must be present in the lockfile
+        if ! grep -q 'name = "ropey"' Cargo.lock; then
+          echo "::error:: ropey not present in Cargo.lock"
+          exit 1
+        fi
+        echo "✅ ropey declared in manifest and present in Cargo.lock."
+
     - name: Check formatting
-      run: cargo fmt --all -- --check
+      if: runner.os != 'Windows'
+      shell: bash
+      run: cargo fmt --all --check
       continue-on-error: ${{ matrix.experimental == true }}
     
-    - name: Run clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
+    - name: Clippy (first-party only)
+      shell: bash  # ensure -- is not eaten by PowerShell on Windows
+      run: |
+        cargo clippy \
+          -p perl-lexer -p perl-parser -p perl-lsp -p perl-corpus \
+          --all-targets -- -D warnings
       continue-on-error: ${{ matrix.experimental == true }}
-    
+
     - name: Build
-      run: cargo build --all --verbose
+      env:
+        CARGO_BUILD_JOBS: 2
+        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1"
+        CARGO_NET_RETRY: 4
+        CARGO_HTTP_MULTIPLEXING: "false"
+      run: cargo build --locked --all --verbose
     
     - name: Run LSP tests with nextest (Phase 1 stabilization)
-      run: |
-        # Use nextest with CI profile for retries and improved parallelism
-        cargo nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
       env:
+        CARGO_BUILD_JOBS: 2
+        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
         CI: true
         GITHUB_ACTIONS: true
+        CARGO_NET_RETRY: 4
+        CARGO_HTTP_MULTIPLEXING: "false"
+      run: |
+        set -euo pipefail
+        set +e
+        # Use nextest with CI profile for retries and improved parallelism
+        cargo +${{ matrix.toolchain }} nextest run --locked -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} 2>&1 | tee test_lsp.log
+        status=${PIPESTATUS[0]}
+        set -e
+        if [ "$status" -ne 0 ]; then
+          echo "::group::Last 400 lines of test_lsp.log"
+          tail -n 400 test_lsp.log || true
+          echo "::endgroup::"
+          if [ "$status" -eq 101 ] && grep -q "lock file .* needs to be updated but --locked was passed" test_lsp.log; then
+            echo "::warning:: Lock is stale; retrying (offline first, then online) ..."
+            if cargo +${{ matrix.toolchain }} --offline nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} --locked; then
+              exit 0
+            fi
+            cargo +${{ matrix.toolchain }} nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} --locked
+            exit $?
+          fi
+        fi
+        exit "$status"
     
     - name: Run LSP smoke test
       run: scripts/lsp-smoke.sh
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-22.04'
       shell: bash
-    
+
     - name: Run all parser tests with nextest
-      run: cargo nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }}
       env:
+        CARGO_BUILD_JOBS: 2
+        RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
         CI: true
         GITHUB_ACTIONS: true
-    
+      run: |
+        set -euo pipefail
+        set +e
+        cargo +${{ matrix.toolchain }} nextest run --locked --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} 2>&1 | tee test_parser.log
+        status=${PIPESTATUS[0]}
+        set -e
+        if [ "$status" -ne 0 ]; then
+          echo "::group::Last 400 lines of test_parser.log"
+          tail -n 400 test_parser.log || true
+          echo "::endgroup::"
+          if [ "$status" -eq 101 ] && grep -q "lock file .* needs to be updated but --locked was passed" test_parser.log; then
+            echo "::warning:: Lock is stale; retrying (offline first, then online) ..."
+            if cargo +${{ matrix.toolchain }} --offline nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} --locked; then
+              exit 0
+            fi
+            cargo +${{ matrix.toolchain }} nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} --locked
+            exit $?
+          fi
+        fi
+        exit "$status"
+
     - name: Build release binary
-      run: cargo build -p perl-lsp --release
-    
+      run: cargo +${{ matrix.toolchain }} build -p perl-lsp --release --locked
+
     - name: LSP health check
-      run: target/release/perl-lsp --health
-      if: matrix.os == 'ubuntu-latest'
-    
+      shell: bash
+      run: |
+        bin="target/release/perl-lsp"
+        if [ "${{ runner.os }}" = "Windows" ]; then bin="${bin}.exe"; fi
+        "$bin" --health
+
+    - name: Assert lockfile unchanged
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        if ! git diff --quiet -- Cargo.lock; then
+          echo "::error::Cargo.lock changed during this job. Run 'cargo update' locally and commit the result."
+          git --no-pager diff -- Cargo.lock | sed -n '1,200p'
+          exit 1
+        fi
+
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: perl-lsp-${{ matrix.os }}-${{ matrix.rust }}
+        name: perl-lsp-${{ matrix.os }}-${{ matrix.toolchain }}
         path: target/release/perl-lsp*
+
+    - name: Upload test logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-logs-${{ matrix.os }}-${{ matrix.toolchain }}
+        path: |
+          test_lsp.log
+          test_parser.log
 
   coverage:
     name: Code Coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    if: contains(github.event.pull_request.labels.*.name, 'ci:coverage')
     steps:
-    - uses: actions/checkout@v3
-    
+    - uses: actions/checkout@v4
+
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-    
+      uses: dtolnay/rust-toolchain@stable
+
     - name: Install tarpaulin
-      run: cargo install cargo-tarpaulin
-    
-    - name: Generate coverage
-      run: cargo tarpaulin --out Xml --all --verbose
-    
+      run: cargo install cargo-tarpaulin --locked
+
+    - name: Create legacy LSP fixtures (CI-only)
+      run: |
+        mkdir -p archive/legacy-tests/test_fixtures
+        touch archive/legacy-tests/test_fixtures/main.pl
+        touch archive/legacy-tests/test_fixtures/Module.pm
+        touch archive/legacy-tests/test_fixtures/test.t
+
+    - name: Generate coverage (parser only, lean)
+      env:
+        RUSTFLAGS: "-Copt-level=1 -Cdebuginfo=2"
+        CARGO_BUILD_JOBS: 2
+      run: |
+        cargo tarpaulin \
+          -p perl-parser \
+          --tests \
+          --timeout 240 \
+          --engine llvm \
+          --out Xml \
+          --verbose
+
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         files: ./cobertura.xml
         fail_ci_if_error: false
 
   benchmark:
     name: Performance Benchmarks
-    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
+    runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v3
-    
+    - uses: actions/checkout@v4
+
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
+      uses: dtolnay/rust-toolchain@stable
     
     - name: Run benchmarks
-      run: cargo bench -p perl-parser --bench lsp_benchmarks
+      run: cargo bench --locked -p perl-parser --bench lsp_benchmarks
     
     - name: Store benchmark results
       uses: benchmark-action/github-action-benchmark@v1

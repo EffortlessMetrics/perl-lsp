@@ -257,7 +257,6 @@ mod doc_validation_helpers {
     }
 
     /// Edge Case Detection Functions for Enhanced Test Coverage
-
     /// Finds malformed doctests that won't compile or execute properly
     pub fn find_malformed_doctests(lines: &[&str]) -> Vec<String> {
         let mut malformed = Vec::new();
@@ -510,7 +509,7 @@ mod doc_validation_helpers {
                 let content_lower = content.to_lowercase();
                 for stage in &pipeline_stages {
                     if content_lower.contains(&stage.to_lowercase()) {
-                        *coverage.get_mut(&stage.to_string()).unwrap() += 1;
+                        *coverage.get_mut(*stage).unwrap() += 1;
                     }
                 }
             }
@@ -2138,8 +2137,7 @@ pub fn bad_refs() {}
             panic!("{}", error_summary);
         }
 
-        // Ensure we tested actual modules
-        assert!(!lsp_critical_modules.is_empty(), "Should test LSP critical modules");
+        // Note: lsp_critical_modules array is always non-empty by definition (compile-time constant)
     }
 
     // ============================================================================

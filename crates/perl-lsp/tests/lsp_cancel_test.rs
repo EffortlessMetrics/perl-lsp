@@ -167,7 +167,6 @@ fn test_cancel_request_handling() {
 
 /// Test that $/cancelRequest itself doesn't produce a response
 #[test]
-#[ignore = "LSP cancellation test fails in CI/constrained environments - flaky BrokenPipe errors"]
 fn test_cancel_request_no_response() {
     // Skip test in constrained environments where LSP initialization is unreliable
     // This includes single-threaded environments and CI systems with limited resources

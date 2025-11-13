@@ -1,8 +1,8 @@
 [package]
 name = "perl-lsp"
 version = "0.8.8"
-edition = "2024"
-rust-version = "1.89"
+edition.workspace = true
+rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
 description = "Perl Language Server (LSP) — Tree-sitter-compatible with comprehensive IDE features"
 license = "MIT OR Apache-2.0"
@@ -58,7 +58,7 @@ lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
 expose_lsp_test_api = []  # Expose test helpers for integration tests
 
 [dev-dependencies]
-assert_cmd = "2.0.17"
+assert_cmd = "2.1.1"
 insta = { version = "1.43.2", features = ["yaml"] }
 predicates = "3.1.3"
 pretty_assertions = "1.4.1"

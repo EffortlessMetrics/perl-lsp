@@ -1,8 +1,8 @@
 [package]
 name = "perl-parser"
 version = "0.8.8"
-edition = "2024"
-rust-version = "1.89"
+edition.workspace = true
+rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
 description = "Native Perl parser (v3) — Tree-sitter-compatible kinds/fields/points; stable byte↔UTF-16 conversions"
 license = "MIT OR Apache-2.0"
@@ -38,13 +38,12 @@ rustc-hash = "2.1.1"
 md5 = "0.8.0"
 phf = { version = "0.13.1", features = ["macros"] }
 walkdir = "2.5.0"
+# Core dependencies for position mapping (unconditional, all targets)
+ropey = "1.6.1"
 
 # Unix-only dependency for signal handling
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.30.1", features = ["signal"] }
-
-# Core dependencies for position mapping
-ropey = { version = "1.6.1" }
 
 # Optional dependencies for incremental parsing
 anyhow = { version = "1.0.100", optional = true }
@@ -58,7 +57,7 @@ required-features = ["cli"]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
 
 [[bin]]
-name = "perl-dap"
+name = "perl-dap-internal"
 path = "src/bin/perl-dap.rs"
 
 [features]
@@ -87,7 +86,7 @@ serde = { version = "1.0.227", features = ["derive"] }
 toml = "0.9.7"
 
 [dev-dependencies]
-assert_cmd = "2.0.17"
+assert_cmd = "2.1.1"
 insta = { version = "1.43.2", features = ["yaml"] }
 criterion = "0.7.0"
 predicates = "3.1.3"
