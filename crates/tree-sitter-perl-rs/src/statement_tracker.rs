@@ -2,6 +2,8 @@
 //!
 //! This module provides a simple statement boundary detector that helps
 //! the heredoc scanner know when a statement containing heredocs actually ends.
+//!
+//! Enhanced in Issue #182 to support block depth tracking and heredoc context management.
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -11,18 +13,100 @@ enum BracketType {
     Curly,  // {}
 }
 
+/// Type of code block (Issue #182)
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
+pub enum BlockType {
+    If,
+    Unless,
+    While,
+    Until,
+    For,
+    Foreach,
+    Sub,
+    BEGIN,
+    END,
+    Package,
+    Anonymous, // Anonymous sub or do block
+}
+
+/// Tracks where code blocks begin and end (Issue #182)
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct BlockBoundary {
+    /// Type of block (if, while, for, sub, BEGIN, END, etc.)
+    pub block_type: BlockType,
+
+    /// Line number where block opens
+    pub start_line: usize,
+
+    /// Line number where block closes (None if not yet closed)
+    pub end_line: Option<usize>,
+
+    /// Depth of this block (0 = top-level)
+    pub depth: usize,
+
+    /// Parent block depth (None if top-level)
+    pub parent_depth: Option<usize>,
+}
+
+/// Context information for a heredoc declaration (Issue #182)
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct HeredocContext {
+    /// Line number where heredoc was declared
+    pub declaration_line: usize,
+
+    /// Block depth at time of declaration (0 = top-level)
+    pub block_depth_at_declaration: usize,
+
+    /// The terminator string (e.g., "EOF", "DATA")
+    pub terminator: String,
+
+    /// Line where the statement containing this heredoc ends
+    pub statement_end_line: usize,
+
+    /// Line where content collection should start
+    pub content_start_line: usize,
+}
+
 /// Tracks statement boundaries by monitoring brackets and semicolons
+/// Enhanced in Issue #182 to support block depth and heredoc context tracking
 #[allow(dead_code)]
 pub struct StatementTracker {
+    // Existing fields (original functionality)
     bracket_stack: Vec<BracketType>,
     in_string: Option<char>, // None, Some('"'), Some('\''), Some('`')
     escape_next: bool,
+
+    // NEW: Issue #182 - Block depth tracking
+    // Used in #219 (plumbing) and #220 (semantics)
+    #[allow(dead_code)]
+    block_depth: usize,
+
+    // NEW: Issue #182 - Heredoc context management
+    // Used in #220 (semantics) to correctly handle heredocs in blocks
+    #[allow(dead_code)]
+    heredoc_contexts: Vec<HeredocContext>,
+
+    // NEW: Issue #182 - Track where blocks start/end
+    // Used in #219 (plumbing) and #220 (semantics)
+    #[allow(dead_code)]
+    block_boundaries: Vec<BlockBoundary>,
 }
 
 #[allow(dead_code)]
 impl StatementTracker {
     pub fn new() -> Self {
-        Self { bracket_stack: Vec::new(), in_string: None, escape_next: false }
+        Self {
+            bracket_stack: Vec::new(),
+            in_string: None,
+            escape_next: false,
+            // Issue #182: Initialize new fields (no-op for now, used in #219/#220)
+            block_depth: 0,
+            heredoc_contexts: Vec::new(),
+            block_boundaries: Vec::new(),
+        }
     }
 
     /// Process a character and return true if we're at a statement boundary
@@ -105,6 +189,10 @@ impl StatementTracker {
         self.bracket_stack.clear();
         self.in_string = None;
         self.escape_next = false;
+        // Issue #182: Reset new fields (no-op for now, used in #219/#220)
+        self.block_depth = 0;
+        self.heredoc_contexts.clear();
+        self.block_boundaries.clear();
     }
 }
 
