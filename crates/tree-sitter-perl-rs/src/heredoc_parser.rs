@@ -31,6 +31,7 @@ pub struct HeredocDeclaration {
 }
 
 /// Phase 1: Heredoc Detection Scanner
+/// Enhanced in #219 (Issue #182) to thread StatementTracker for future block-aware processing
 pub struct HeredocScanner<'a> {
     input: &'a str,
     position: usize,
@@ -38,11 +39,22 @@ pub struct HeredocScanner<'a> {
     heredoc_counter: usize,
     /// Track which lines should be skipped (heredoc content lines)
     skip_lines: std::collections::HashSet<usize>,
+    /// Issue #182/#219: Statement tracker for block-aware heredoc handling (used in #220)
+    #[allow(dead_code)]
+    statement_tracker: crate::statement_tracker::StatementTracker,
 }
 
 impl<'a> HeredocScanner<'a> {
     pub fn new(input: &'a str) -> Self {
-        Self { input, position: 0, line_number: 1, heredoc_counter: 0, skip_lines: HashSet::new() }
+        Self {
+            input,
+            position: 0,
+            line_number: 1,
+            heredoc_counter: 0,
+            skip_lines: HashSet::new(),
+            // Issue #182/#219: Initialize tracker (no-op for now, used in #220)
+            statement_tracker: crate::statement_tracker::StatementTracker::new(),
+        }
     }
 
     /// Scan input for heredoc declarations and mark their positions
@@ -257,14 +269,23 @@ impl<'a> HeredocScanner<'a> {
 }
 
 /// Phase 2: Heredoc Content Collector
+/// Enhanced in #219 (Issue #182) to thread StatementTracker for future block-aware processing
 pub struct HeredocCollector<'a> {
     _input: &'a str,
     lines: Vec<&'a str>,
+    /// Issue #182/#219: Statement tracker for block-aware heredoc handling (used in #220)
+    #[allow(dead_code)]
+    statement_tracker: crate::statement_tracker::StatementTracker,
 }
 
 impl<'a> HeredocCollector<'a> {
     pub fn new(input: &'a str) -> Self {
-        Self { _input: input, lines: input.lines().collect() }
+        Self {
+            _input: input,
+            lines: input.lines().collect(),
+            // Issue #182/#219: Initialize tracker (no-op for now, used in #220)
+            statement_tracker: crate::statement_tracker::StatementTracker::new(),
+        }
     }
 
     /// Collect content for all heredoc declarations
