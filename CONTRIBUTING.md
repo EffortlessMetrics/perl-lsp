@@ -78,6 +78,31 @@ See **[CI & Automation](./docs/CI.md)** for comprehensive details about our GitH
 - Add `ci:strict` label for pedantic clippy checks
 - Add `ci:mac` label if your changes affect macOS
 
+### Local CI Validation (While GitHub Actions Is Unavailable)
+
+**⚠️ IMPORTANT**: GitHub Actions is currently unavailable due to billing issues. During this period:
+
+- **REQUIRED**: Run `just ci-gate` before every merge
+- **RECOMMENDED**: Run `just ci-full` for large/structural changes
+- See **[Local CI Protocol](./docs/ci/LOCAL_CI_PROTOCOL.md)** for complete details
+
+```bash
+# Fast merge gate (~2-5 min, required for all merges)
+just ci-gate
+
+# Comprehensive validation (~10-20 min, for large changes)
+just ci-full
+```
+
+**Note in PR descriptions**:
+```markdown
+## Local CI Validation
+✅ `just ci-gate` passed
+See: [Local CI Protocol](docs/ci/LOCAL_CI_PROTOCOL.md)
+```
+
+Once GitHub Actions is restored, this section will be archived and normal CI workflow will resume.
+
 ## Coding Standards
 
 - **Formatting:** Use `cargo fmt --all` before committing
