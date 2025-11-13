@@ -194,6 +194,57 @@ impl StatementTracker {
         self.heredoc_contexts.clear();
         self.block_boundaries.clear();
     }
+
+    // ===== Issue #182/#219: Stub methods for #220 semantics =====
+    // These methods provide the API for block-aware heredoc handling
+    // but are no-ops in #219 (plumbing only). Semantics filled in #220.
+
+    /// Note that a code block is opening (Issue #182/#220)
+    #[inline]
+    #[allow(dead_code)]
+    pub fn note_block_open(&mut self, _line: usize, _block_type: BlockType) {
+        // No-op for #219; implementation in #220
+    }
+
+    /// Note that a code block is closing (Issue #182/#220)
+    #[inline]
+    #[allow(dead_code)]
+    pub fn note_block_close(&mut self, _line: usize) {
+        // No-op for #219; implementation in #220
+    }
+
+    /// Record a heredoc declaration with its context (Issue #182/#220)
+    #[inline]
+    #[allow(dead_code)]
+    pub fn note_heredoc_declaration(
+        &mut self,
+        _line: usize,
+        _terminator: &str,
+        _statement_end_line: usize,
+    ) {
+        // No-op for #219; implementation in #220
+    }
+
+    /// Get the current block depth (Issue #182/#220)
+    #[inline]
+    #[allow(dead_code)]
+    pub fn current_block_depth(&self) -> usize {
+        self.block_depth
+    }
+
+    /// Get heredoc contexts for processing (Issue #182/#220)
+    #[inline]
+    #[allow(dead_code)]
+    pub fn heredoc_contexts(&self) -> &[HeredocContext] {
+        &self.heredoc_contexts
+    }
+
+    /// Get block boundaries for analysis (Issue #182/#220)
+    #[inline]
+    #[allow(dead_code)]
+    pub fn block_boundaries(&self) -> &[BlockBoundary] {
+        &self.block_boundaries
+    }
 }
 
 /// Find the line where a statement containing a heredoc actually ends
