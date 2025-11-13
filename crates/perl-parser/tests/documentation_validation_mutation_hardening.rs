@@ -135,12 +135,7 @@ mod mock_doc_analysis {
 
                 // Target boolean mutations in emptiness checks
                 // Fixed: Use proper if/else conditional logic instead of boolean-to-duration multiplication casting
-                if trimmed_content.is_empty() {
-                    empty_docs.push(format!(
-                        "Line {}: Empty or trivial documentation",
-                        doc_start_line + 1
-                    ));
-                } else if trimmed_content.len() <= 2 {
+                if trimmed_content.is_empty() || trimmed_content.len() <= 2 {
                     empty_docs.push(format!(
                         "Line {}: Empty or trivial documentation",
                         doc_start_line + 1
@@ -172,10 +167,7 @@ mod mock_doc_analysis {
 
             // Target boolean mutations in emptiness checks
             // Fixed: Use proper if/else conditional logic instead of boolean-to-duration multiplication casting
-            if trimmed_content.is_empty() {
-                empty_docs
-                    .push(format!("Line {}: Empty or trivial documentation", doc_start_line + 1));
-            } else if trimmed_content.len() <= 2 {
+            if trimmed_content.is_empty() || trimmed_content.len() <= 2 {
                 empty_docs
                     .push(format!("Line {}: Empty or trivial documentation", doc_start_line + 1));
             } else if is_placeholder_documentation(trimmed_content) {
@@ -283,7 +275,6 @@ mod mock_doc_analysis {
     }
 
     /// Helper functions for documentation analysis
-
     fn is_placeholder_documentation(content: &str) -> bool {
         let placeholders = ["TODO", "FIXME", "XXX", "HACK", "NOTE:", "STUB"];
         let content_lower = content.to_lowercase();
@@ -362,12 +353,12 @@ mod mock_doc_analysis {
     fn find_cross_reference_patterns(content: &str) -> Vec<(String, CrossRefType)> {
         let mut patterns = Vec::new();
         let mut chars = content.chars().peekable();
-        let mut pos = 0;
+        let mut _pos = 0;
 
         while let Some(ch) = chars.next() {
             if ch == '[' && chars.peek() == Some(&'`') {
                 chars.next(); // consume '`'
-                pos += 2;
+                _pos += 2;
 
                 // Extract reference content
                 let mut ref_content = String::new();
@@ -375,10 +366,10 @@ mod mock_doc_analysis {
                 let mut nesting_level = 0;
 
                 while let Some(ch) = chars.next() {
-                    pos += 1;
+                    _pos += 1;
                     if ch == '`' && chars.peek() == Some(&']') {
                         chars.next(); // consume ']'
-                        pos += 1;
+                        _pos += 1;
                         found_end = true;
                         break;
                     } else if ch == '[' && chars.peek() == Some(&'`') {
@@ -405,7 +396,7 @@ mod mock_doc_analysis {
 
                 patterns.push((ref_content, ref_type));
             } else {
-                pos += 1;
+                _pos += 1;
             }
         }
 

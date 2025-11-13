@@ -60,20 +60,21 @@ jobs:
 
       - name: Install cross
         if: matrix.use_cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        run: cargo install cross --locked --git https://github.com/cross-rs/cross
 
       - name: Cache
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+          cache-on-failure: true
 
       - name: Build binary
         shell: bash
         run: |
           if [[ "${{ matrix.use_cross }}" == "true" ]]; then
-            cross build --release --target ${{ matrix.target }} -p perl-parser --bin perl-lsp
+            cross build --release --target ${{ matrix.target }} -p perl-lsp --bin perl-lsp
           else
-            cargo build --release --target ${{ matrix.target }} -p perl-parser --bin perl-lsp
+            cargo build --release --target ${{ matrix.target }} -p perl-lsp --bin perl-lsp
           fi
 
       - name: Package binary

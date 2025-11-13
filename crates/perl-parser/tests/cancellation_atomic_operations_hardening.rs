@@ -710,14 +710,14 @@ mod metrics_atomic_counter_hardening_tests {
         }
 
         // Calculate expected counts
-        let threads_per_counter = num_threads / 3 + if num_threads % 3 > 0 { 1 } else { 0 };
-        let expected_registered = if num_threads > 0 {
+        let _threads_per_counter = num_threads / 3 + if num_threads % 3 > 0 { 1 } else { 0 };
+        let _expected_registered = if num_threads > 0 {
             (num_threads - num_threads / 3 - num_threads / 3) * increments_per_thread
         } else {
             0
         };
-        let expected_cancelled = (num_threads / 3) * increments_per_thread;
-        let expected_completed = (num_threads / 3) * increments_per_thread;
+        let _expected_cancelled = (num_threads / 3) * increments_per_thread;
+        let _expected_completed = (num_threads / 3) * increments_per_thread;
 
         // Verify final counts - targets atomic accumulation correctness
         let final_registered = metrics.registered_count();
@@ -1034,6 +1034,7 @@ mod cancellation_property_hardening_tests {
 use proptest::test_runner::{Config, RngAlgorithm};
 
 /// Helper to configure proptest for more thorough testing
+#[allow(dead_code)]
 fn proptest_config() -> Config {
     Config {
         cases: 1000, // Increase test cases for better mutation coverage

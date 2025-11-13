@@ -1,8 +1,8 @@
 [package]
 name = "perl-corpus"
-rust-version = "1.89"
 version = "0.8.8"
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
 license = "MIT OR Apache-2.0"
 description = "Test corpus management and generators for Perl parsers"
 readme = "README.md"

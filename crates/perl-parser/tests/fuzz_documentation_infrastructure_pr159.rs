@@ -11,6 +11,8 @@
 //!
 //! Labels: tests:fuzz, perl-fuzz:pr159, documentation:infrastructure
 
+#![allow(unnameable_test_items, dead_code, clippy::collapsible_match)]
+
 use perl_parser::*;
 use proptest::prelude::*;
 use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};

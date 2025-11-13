@@ -35,7 +35,9 @@
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)] // prevent stray pub items from escaping
 #![warn(rust_2018_idioms)]
-#![warn(missing_docs)]
+// NOTE: missing_docs is temporarily disabled during Sprint A (heredoc) development
+// TODO: Re-enable after Sprint A to systematically resolve the 484 violations (PR #160/SPEC-149)
+// #![warn(missing_docs)]
 #![warn(clippy::all)]
 #![allow(
     // Core allows for parser/lexer code
@@ -140,6 +142,8 @@ pub mod execute_command;
 pub mod features;
 pub mod folding;
 pub mod formatting;
+/// Heredoc content collector with FIFO ordering and indent stripping.
+pub mod heredoc_collector;
 pub mod implementation_provider;
 pub mod import_optimizer;
 #[cfg(feature = "incremental")]

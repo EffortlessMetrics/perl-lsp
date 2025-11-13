@@ -1,8 +1,12 @@
-Cargo.lock
 node_modules
 build
 *.log
 package-lock.json
+
+# Disallow nested lockfiles; keep only the workspace root
+**/Cargo.lock
+!Cargo.lock
+
 # Debug and build artifacts
 /debug_parse/
 /target/

@@ -218,12 +218,9 @@ fn test_get_closing_delimiter_comprehensive() {
         // Note: get_closing_delimiter is private, so we test it indirectly through the public functions
         // by verifying they handle all delimiter types correctly
 
-        let test_input = format!(
-            "s{}test{}replacement{}",
-            open,
-            expected,
-            if open == expected { "" } else { &expected.to_string() }
-        );
+        let expected_s = expected.to_string();
+        let third_delim = if open == expected { "" } else { expected_s.as_str() };
+        let test_input = format!("s{}test{}replacement{}", open, expected, third_delim);
         let (pattern, replacement, _) = extract_substitution_parts(&test_input);
 
         if open == expected {

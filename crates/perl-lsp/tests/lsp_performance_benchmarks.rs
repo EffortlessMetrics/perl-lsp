@@ -684,8 +684,7 @@ fn benchmark_deep_nesting() {
 
 /// Summary benchmark that runs all tests and reports overall performance
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-#[ignore] // Run with --ignored to execute
+#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing) - Run with --ignored to execute
 fn benchmark_summary() {
     println!("\n=== LSP Performance Benchmark Summary ===\n");
 

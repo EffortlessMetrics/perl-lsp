@@ -123,7 +123,7 @@ fn test_kill_delimiter_match_arm_deletions() {
     // Test each delimiter type individually to ensure the match arm is required
 
     // Test parentheses - kills deletion of '(' => ')' match arm
-    let (pattern, replacement, _) = extract_substitution_parts("s(test)(repl)");
+    let (pattern, _replacement, _) = extract_substitution_parts("s(test)(repl)");
     // Note: parentheses have special behavior in substitution, but the delimiter mapping must work
     assert_eq!(pattern, "test", "Parentheses pattern extraction - kills '(' match arm deletion");
 

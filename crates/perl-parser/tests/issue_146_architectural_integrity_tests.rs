@@ -56,7 +56,6 @@ mod issue_146_tests {
         let _code_action_kind = CodeActionKind::REFACTOR;
 
         // If this compiles, LSP types are properly available
-        assert!(true, "LSP types are available and compatible");
     }
 
     /// AC-2.1: Test refactoring.rs module structure and API
@@ -69,7 +68,6 @@ mod issue_146_tests {
         // Note: workspace_refactor and modernize will be integrated into refactoring.rs
 
         // If we can import these, the foundation for refactoring.rs exists
-        assert!(true, "Refactoring module dependencies are available");
     }
 
     /// AC-3.1: Integration test for lib.rs module exports
@@ -85,7 +83,6 @@ mod issue_146_tests {
         let _result: ParseResult<()> = Ok(());
 
         // If this compiles, core parser API is stable
-        assert!(true, "Core parser API remains stable during module restoration");
     }
 
     /// AC-1.3: API contract validation for TDD workflow components
@@ -97,10 +94,9 @@ mod issue_146_tests {
         use perl_parser::test_generator::{TestFramework, TestGenerator};
 
         // Test that TestGenerator can be instantiated
-        let test_generator = TestGenerator::new(TestFramework::Test2V0);
+        let _test_generator = TestGenerator::new(TestFramework::Test2V0);
 
         // If this compiles, API contracts are valid
-        assert!(true, "TDD workflow API contracts are compatible");
     }
 }
 

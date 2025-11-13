@@ -19,16 +19,11 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         
-      - name: Cache cargo
-        uses: actions/cache@v4
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-nightly-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-nightly-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
           
       - name: Run deep property tests
         env:

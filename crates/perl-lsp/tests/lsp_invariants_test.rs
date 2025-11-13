@@ -121,8 +121,7 @@ fn test_id_matching_invariants() {
 
 /// Verify diagnostics always include version
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-#[ignore] // Version field is optional in LSP spec
+#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing); Version field is optional in LSP spec
 fn test_diagnostics_version_invariant() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -236,8 +235,7 @@ fn test_invalid_request_errors() {
 
 /// Verify notifications don't produce responses
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-#[ignore] // This test is flaky due to timing with diagnostics
+#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing); This test is flaky due to timing with diagnostics
 fn test_notifications_no_response() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -275,8 +273,7 @@ fn test_notifications_no_response() {
 
 /// Verify server handles concurrent requests properly
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-#[ignore] // This test needs rewriting for auto-generated IDs
+#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing); This test needs rewriting for auto-generated IDs
 fn test_concurrent_request_handling() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

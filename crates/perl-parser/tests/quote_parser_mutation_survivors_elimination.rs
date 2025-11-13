@@ -347,11 +347,16 @@ fn test_kill_mutations_comprehensive_edge_cases() {
     // All delimiter types (delimiter mapping mutations)
     let delimiters = vec![('(', ')'), ('[', ']'), ('{', '}'), ('<', '>'), ('/', '/'), ('#', '#')];
     for (open, close) in delimiters {
+        let open_s = open.to_string();
+        let close_s = close.to_string();
+        let third_delim = if open_s == close_s { "" } else { close_s.as_str() };
+        // Keep multi-line layout: this file doubles as a formatting canary.
+        #[rustfmt::skip]
         let input = format!(
             "s{}test{}repl{}",
             open,
             close,
-            if open == close { "" } else { &close.to_string() }
+            third_delim
         );
         let (pattern, replacement, _) = extract_substitution_parts(&input);
         assert_eq!(pattern, "test", "Pattern extraction for delimiter {}", open);

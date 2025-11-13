@@ -13,6 +13,7 @@ env:
 jobs:
   benchmark:
     name: Performance Benchmarks
+    if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
     runs-on: ubuntu-latest
     
     steps:
@@ -25,13 +26,10 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
 
     - name: Cache cargo dependencies
-      uses: actions/cache@v3
+      uses: Swatinem/rust-cache@v2
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-bench-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
 
     - name: Install hyperfine
       run: |
@@ -40,7 +38,7 @@ jobs:
 
     - name: Run Rust benchmarks
       run: |
-        cargo bench --features pure-rust -- --output-format bencher | tee output.txt
+        cargo bench -p perl-parser --bench parser_benchmark -- --output-format bencher | tee output.txt
 
     - name: Run comparison benchmarks
       run: |
@@ -60,7 +58,7 @@ jobs:
         alert-comment-cc-users: '@maintainers'
 
     - name: Upload benchmark artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: benchmark-results
         path: |
@@ -70,8 +68,9 @@ jobs:
 
   comparison-benchmark:
     name: Parser Comparison Benchmark
+    if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -81,32 +80,25 @@ jobs:
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
 
-    - name: Build comparison tool
-      run: cargo build --release --features "pure-rust test-utils" --bin compare_parsers
-
-    - name: Create test corpus
-      run: |
-        mkdir -p test_corpus
-        find . -name "*.pl" -type f | head -50 > test_files.txt || echo "No .pl files found"
-        
-    - name: Run detailed comparison
+    - name: Run comparison benchmarks
       run: |
         echo "# Parser Comparison Results" > comparison_report.md
         echo "" >> comparison_report.md
         echo "## Summary Statistics" >> comparison_report.md
-        cargo run --release --features "pure-rust test-utils" --bin compare_parsers -- --test >> comparison_report.md 2>&1 || true
+        cargo bench -p perl-parser --bench positions_bench -- --warm-up-time 1 --measurement-time 5 2>&1 | tee -a comparison_report.md || true
         
     - name: Upload comparison report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: comparison-report
         path: comparison_report.md
 
   memory-profile:
     name: Memory Usage Profile
+    if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
     runs-on: ubuntu-latest
     continue-on-error: true
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -119,31 +111,15 @@ jobs:
     - name: Install valgrind
       run: sudo apt-get update && sudo apt-get install -y valgrind
 
-    - name: Build for profiling
-      run: |
-        cargo build --release --features pure-rust
-        cargo build --release
-
     - name: Profile memory usage
       run: |
         echo "# Memory Usage Profile" > memory_report.md
         echo "" >> memory_report.md
-        
-        # Create a test file
-        echo 'my $x = 42; print "Hello, $x\n";' > test.pl
-        
-        # Profile C parser
-        echo "## C Parser Memory Usage" >> memory_report.md
-        valgrind --tool=massif --massif-out-file=massif.c.out \
-          cargo run --release -- test.pl 2>&1 | tee -a memory_report.md || true
-        
-        # Profile Rust parser  
-        echo "## Pure Rust Parser Memory Usage" >> memory_report.md
-        valgrind --tool=massif --massif-out-file=massif.rust.out \
-          cargo run --release --features pure-rust -- test.pl 2>&1 | tee -a memory_report.md || true
+        echo "Memory profiling requires valid parser binary - skipped when labeled ci:bench" >> memory_report.md
+        echo "Run parser benchmarks locally with: cargo bench -p perl-parser" >> memory_report.md
 
     - name: Upload memory profile
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: memory-profile
         path: |

@@ -148,7 +148,7 @@ fn test_string_data_signatures() {
 fn test_math_signatures() {
     let mut server = setup_server();
 
-    let math_functions = vec![
+    let math_functions = [
         ("abs($x);", "abs", "VALUE", 4),
         ("sqrt($x);", "sqrt", "EXPR", 5),
         ("sin($x);", "sin", "EXPR", 4),
@@ -314,7 +314,7 @@ fn test_all_114_builtins_are_recognized() {
     let mut server = setup_server();
 
     // List of all 114 built-in functions we support
-    let all_builtins = vec![
+    let all_builtins = [
         // Original 40
         "print",
         "printf",

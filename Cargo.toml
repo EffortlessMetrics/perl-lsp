@@ -16,12 +16,18 @@ exclude = [
     "archive",  # Excluded: archived legacy components
 ]
 
+# Workspace-level package metadata
+[workspace.package]
+edition = "2024"
+rust-version = "1.89"
+
 [workspace.dependencies]
 perl-lexer = { path = "crates/perl-lexer" }
 perl-parser = { path = "crates/perl-parser" }
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust"] }
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c" }
-tree-sitter = "0.25.8"
+tree-sitter = "0.25.10"
+ropey = "1.6.1"
 
 [patch.crates-io]
 perl-lexer = { path = "crates/perl-lexer" }

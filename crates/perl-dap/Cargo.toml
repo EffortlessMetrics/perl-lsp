@@ -1,10 +1,15 @@
 [package]
 name = "perl-dap"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
 description = "Debug Adapter Protocol server for Perl"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+readme = "README.md"
+keywords = ["perl", "parser", "lsp", "dap", "debug"]
+categories = ["development-tools", "parsing"]
 
 [[bin]]
 name = "perl-dap"

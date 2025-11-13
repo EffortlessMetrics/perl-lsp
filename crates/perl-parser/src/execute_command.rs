@@ -97,6 +97,42 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// Cross-platform helpers for synthesizing `ExitStatus` in tests/mocks.
+#[cfg(any(test, doctest))]
+#[cfg(unix)]
+use std::os::unix::process::ExitStatusExt as _;
+#[cfg(any(test, doctest))]
+#[cfg(windows)]
+use std::os::windows::process::ExitStatusExt as _;
+
+// Map a logical exit code (0/1/…) to the platform's raw representation.
+#[cfg(any(test, doctest))]
+#[cfg(unix)]
+#[inline]
+fn raw_exit(code: i32) -> i32 {
+    // POSIX: wait(2) encodes exit code in the high byte.
+    code << 8
+}
+#[cfg(any(test, doctest))]
+#[cfg(windows)]
+#[inline]
+fn raw_exit(code: i32) -> u32 {
+    // Windows: raw is the process' exit code directly.
+    code as u32
+}
+
+// Future platforms: fail fast during tests so we notice and add a mapping.
+// Only enforced for test/doctest builds to avoid breaking non-Unix/Windows release targets.
+#[cfg(all(any(test, doctest), not(any(unix, windows))))]
+compile_error!("Add raw_exit() mapping for this platform.");
+
+// Helper to reduce duplication in tests while keeping the trait requirement localized.
+#[cfg(any(test, doctest))]
+#[inline]
+fn mock_status(code: i32) -> std::process::ExitStatus {
+    std::process::ExitStatus::from_raw(raw_exit(code))
+}
+
 /// Commands supported by the Perl LSP server for test execution and code analysis.
 ///
 /// This enum defines all supported executeCommand requests that can be invoked from
@@ -868,8 +904,6 @@ pub fn get_supported_commands() -> Vec<String> {
 mod tests {
     use super::*;
     use std::fs;
-    #[cfg(unix)]
-    use std::os::unix::process::ExitStatusExt;
 
     #[test]
     fn test_supported_commands_includes_run_critic() {
@@ -1134,7 +1168,7 @@ print "Value: $variable\n";
 
         // Test successful result
         let output = std::process::Output {
-            status: std::process::ExitStatus::from_raw(0), // Success status
+            status: mock_status(0),
             stdout: b"test output".to_vec(),
             stderr: b"".to_vec(),
         };
@@ -1146,7 +1180,7 @@ print "Value: $variable\n";
 
         // Test with extra field
         let output = std::process::Output {
-            status: std::process::ExitStatus::from_raw(0),
+            status: mock_status(0),
             stdout: b"test".to_vec(),
             stderr: b"".to_vec(),
         };
@@ -1162,7 +1196,7 @@ print "Value: $variable\n";
 
         // Test failed result
         let output = std::process::Output {
-            status: std::process::ExitStatus::from_raw(256), // Failure status (exit code 1)
+            status: mock_status(1),
             stdout: b"partial output".to_vec(),
             stderr: b"error message".to_vec(),
         };
@@ -1479,7 +1513,7 @@ print "Value: $variable\n";
 
         // Test successful status - should NOT be negated
         let success_output = std::process::Output {
-            status: std::process::ExitStatus::from_raw(0),
+            status: mock_status(0),
             stdout: b"success".to_vec(),
             stderr: b"".to_vec(),
         };
@@ -1490,7 +1524,7 @@ print "Value: $variable\n";
 
         // Test failure status - should properly indicate failure
         let failure_output = std::process::Output {
-            status: std::process::ExitStatus::from_raw(256), // Exit code 1
+            status: mock_status(1),
             stdout: b"output".to_vec(),
             stderr: b"error".to_vec(),
         };
@@ -1498,6 +1532,19 @@ print "Value: $variable\n";
         let result = provider.format_command_result(failure_output, None);
         assert_eq!(result["success"], false, "Failure status should be false");
         assert_eq!(result["error"], "error", "Failure should include stderr");
+    }
+
+    /// Verifies that mock_status() correctly round-trips exit codes on both platforms.
+    /// This documents the POSIX (high-byte encoding) vs Windows (direct code) behavior.
+    #[test]
+    fn test_exit_status_roundtrip() {
+        let ok = mock_status(0);
+        assert_eq!(ok.code(), Some(0), "Exit code 0 should round-trip correctly");
+        assert!(ok.success(), "Exit code 0 should be success");
+
+        let fail = mock_status(1);
+        assert_eq!(fail.code(), Some(1), "Exit code 1 should round-trip correctly");
+        assert!(!fail.success(), "Exit code 1 should be failure");
     }
 
     #[test]

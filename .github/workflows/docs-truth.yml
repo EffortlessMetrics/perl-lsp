@@ -5,6 +5,9 @@ on:
 
 jobs:
   validate-docs:
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'ci:docs-truth') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -134,7 +137,7 @@ jobs:
           fi
 
       - name: Upload receipts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: docs-truth-receipts
           path: |
