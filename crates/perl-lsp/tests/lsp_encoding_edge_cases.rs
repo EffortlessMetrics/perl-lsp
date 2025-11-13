@@ -3,6 +3,24 @@ use serde_json::json;
 mod common;
 use common::{initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
 
+// Helper function to compute adaptive timeout based on thread constraints (Issue #200)
+fn compute_adaptive_timeout() -> std::time::Duration {
+    use std::time::Duration;
+
+    let rust_test_threads = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(usize::MAX);
+
+    if rust_test_threads <= 2 {
+        Duration::from_secs(60) // High contention
+    } else if rust_test_threads <= 4 {
+        Duration::from_secs(45) // Medium contention
+    } else {
+        Duration::from_secs(30) // Low/no contention
+    }
+}
+
 // Local Unicode analysis function for testing (avoids adding test dependency)
 fn analyze_unicode_complexity(text: &str) -> (usize, usize, usize) {
     let mut char_count = 0;
@@ -194,8 +212,23 @@ fn test_emoji_and_special_unicode() {
     let start_time = Instant::now();
     let mut server = start_lsp_server();
 
-    // Enhanced timeout handling for Unicode processing
-    let unicode_timeout = Duration::from_secs(30); // Increased for complex Unicode
+    // Adaptive timeout based on thread constraints (Issue #200)
+    let unicode_timeout = compute_adaptive_timeout();
+    let rust_test_threads = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(usize::MAX);
+
+    eprintln!(
+        "Using adaptive timeout: {:?} (RUST_TEST_THREADS={})",
+        unicode_timeout,
+        if rust_test_threads == usize::MAX {
+            "unlimited".to_string()
+        } else {
+            rust_test_threads.to_string()
+        }
+    );
+
     let init_result = initialize_lsp(&mut server);
 
     // Validate initialization succeeded before proceeding
@@ -386,11 +419,14 @@ my $test = 'hello';
         "Rocket emoji variable should be indexed"
     );
 
-    // Performance regression check
+    // Performance regression check with adaptive timeout (Issue #200)
+    // Use the same adaptive timeout logic for performance assertion
+    let performance_threshold = unicode_timeout;
     assert!(
-        total_test_time < Duration::from_secs(30),
-        "Unicode test took too long: {:?} - potential performance regression",
-        total_test_time
+        total_test_time < performance_threshold,
+        "Unicode test took too long: {:?} (threshold: {:?}) - potential performance regression",
+        total_test_time,
+        performance_threshold
     );
 }
 
@@ -918,4 +954,54 @@ if ($text =~ /café/i) { } # Case insensitive with accents
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+}
+
+#[test]
+fn test_adaptive_timeout_calculation() {
+    use std::time::Duration;
+
+    // Test the adaptive timeout logic (Issue #200 regression test)
+    // This is a unit test that doesn't require LSP server startup
+
+    // Simulate different thread constraints
+    let test_cases = vec![
+        (Some("1"), Duration::from_secs(60)), // High contention
+        (Some("2"), Duration::from_secs(60)), // High contention
+        (Some("3"), Duration::from_secs(45)), // Medium contention
+        (Some("4"), Duration::from_secs(45)), // Medium contention
+        (Some("5"), Duration::from_secs(30)), // Low contention
+        (Some("8"), Duration::from_secs(30)), // Low contention
+        (None, Duration::from_secs(30)),      // Unlimited (default)
+    ];
+
+    for (threads_env, expected_timeout) in test_cases {
+        // Set environment variable for this test case
+        // SAFETY: Test is single-threaded and we own the environment variable
+        unsafe {
+            if let Some(val) = threads_env {
+                std::env::set_var("RUST_TEST_THREADS", val);
+            } else {
+                std::env::remove_var("RUST_TEST_THREADS");
+            }
+        }
+
+        let actual_timeout = compute_adaptive_timeout();
+
+        assert_eq!(
+            actual_timeout, expected_timeout,
+            "Adaptive timeout mismatch for RUST_TEST_THREADS={:?}: expected {:?}, got {:?}",
+            threads_env, expected_timeout, actual_timeout
+        );
+
+        eprintln!(
+            "✓ Adaptive timeout test passed for RUST_TEST_THREADS={:?}: {:?}",
+            threads_env, actual_timeout
+        );
+    }
+
+    // Clean up environment variable
+    // SAFETY: Test is single-threaded and we own the environment variable
+    unsafe {
+        std::env::remove_var("RUST_TEST_THREADS");
+    }
 }
