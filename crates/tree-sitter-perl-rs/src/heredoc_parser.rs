@@ -514,24 +514,13 @@ EOF
         assert_eq!(ctx.declaration_line, 2);
         assert_eq!(ctx.block_depth_at_declaration, 0); // Scanner doesn't track block depth yet
         assert_eq!(ctx.terminator, "EOF");
-        // NOTE: find_statement_end_line currently returns 7 (end of block)
-        // because it tracks the opening { from line 1 and waits for closing }
-        // This will be fixed in future PR to handle block-aware statement detection
-        assert_eq!(ctx.statement_end_line, 7); // TODO: Should be 2 once block-aware
-        assert_eq!(ctx.content_start_line, 8); // TODO: Should be 3 once block-aware
+        // #221: Correct block-aware behavior
+        assert_eq!(ctx.statement_end_line, 2);
+        assert_eq!(ctx.content_start_line, 3);
 
-        // BASELINE (#220a): Current buggy behavior - skip_lines is empty
-        // because find_statement_end_line returns 7 (end of block) instead of 2
-        // This will be fixed in #221 (edge cases) to handle block-scoped heredocs
-        let expected_buggy: BTreeSet<usize> = BTreeSet::new(); // Empty - bug!
-        assert_eq!(
-            skips, expected_buggy,
-            "Baseline: skip_lines empty due to find_statement_end_line bug"
-        );
-
-        // Expected correct behavior (will pass after #221):
-        // let expected: BTreeSet<_> = [3_usize, 4, 5].into_iter().collect();
-        // assert_eq!(skips, expected, "skip_lines for heredoc in if block");
+        // #221: Correct skip_lines for heredoc in if block
+        let expected: BTreeSet<_> = [3_usize, 4, 5].into_iter().collect();
+        assert_eq!(skips, expected, "skip_lines for heredoc in if block");
     }
 
     #[test]
@@ -555,17 +544,13 @@ DATA
         assert_eq!(ctx.declaration_line, 3);
         assert_eq!(ctx.block_depth_at_declaration, 0); // Scanner doesn't track block depth yet
         assert_eq!(ctx.terminator, "DATA");
-        // BASELINE (#220a): find_statement_end_line returns 7 (end of outer block)
-        assert_eq!(ctx.statement_end_line, 7); // TODO: Should be 3 once block-aware
-        assert_eq!(ctx.content_start_line, 8); // TODO: Should be 4 once block-aware
+        // #221: Correct block-aware behavior
+        assert_eq!(ctx.statement_end_line, 3);
+        assert_eq!(ctx.content_start_line, 4);
 
-        // BASELINE (#220a): skip_lines is empty due to bug
-        let expected_buggy: BTreeSet<usize> = BTreeSet::new();
-        assert_eq!(skips, expected_buggy, "Baseline: skip_lines empty");
-
-        // Expected correct behavior (will pass after #221):
-        // let expected: BTreeSet<_> = [4_usize, 5].into_iter().collect();
-        // assert_eq!(skips, expected, "skip_lines for heredoc in nested blocks");
+        // #221: Correct skip_lines for heredoc in nested blocks
+        let expected: BTreeSet<_> = [4_usize, 5].into_iter().collect();
+        assert_eq!(skips, expected, "skip_lines for heredoc in nested blocks");
     }
 
     #[test]
@@ -590,24 +575,20 @@ EOF2
         assert_eq!(ctx1.declaration_line, 2);
         assert_eq!(ctx1.block_depth_at_declaration, 0); // Scanner doesn't track block depth yet
         assert_eq!(ctx1.terminator, "EOF1");
-        // BASELINE (#220a): find_statement_end_line returns 8 (closing brace)
-        assert_eq!(ctx1.statement_end_line, 8); // TODO: Should be 2 once block-aware
-        assert_eq!(ctx1.content_start_line, 9); // TODO: Should be 3 once block-aware
+        // #221: Correct block-aware behavior
+        assert_eq!(ctx1.statement_end_line, 2);
+        assert_eq!(ctx1.content_start_line, 3);
 
         let ctx2 = &contexts[1];
         assert_eq!(ctx2.declaration_line, 5);
         assert_eq!(ctx2.block_depth_at_declaration, 0); // Scanner doesn't track block depth yet
         assert_eq!(ctx2.terminator, "EOF2");
-        assert_eq!(ctx2.statement_end_line, 8); // TODO: Should be 5 once block-aware
-        assert_eq!(ctx2.content_start_line, 9); // TODO: Should be 6 once block-aware
+        assert_eq!(ctx2.statement_end_line, 5);
+        assert_eq!(ctx2.content_start_line, 6);
 
-        // BASELINE (#220a): skip_lines is empty due to bug
-        let expected_buggy: BTreeSet<usize> = BTreeSet::new();
-        assert_eq!(skips, expected_buggy, "Baseline: skip_lines empty");
-
-        // Expected correct behavior (will pass after #221):
-        // let expected: BTreeSet<_> = [3_usize, 4, 6, 7].into_iter().collect();
-        // assert_eq!(skips, expected, "skip_lines for two heredocs in same block");
+        // #221: Correct skip_lines for two heredocs in same block
+        let expected: BTreeSet<_> = [3_usize, 4, 6, 7].into_iter().collect();
+        assert_eq!(skips, expected, "skip_lines for two heredocs in same block");
     }
 
     // ===== Original Tests (Preserved) =====
