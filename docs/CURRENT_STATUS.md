@@ -30,34 +30,41 @@
 - **779 ignored tests**: 87% due to LSP initialization issues (5-week fix plan)
 - **CI/CD at 40%**: Issue #211 addressing with $720/year savings potential
 - **484 doc violations**: Infrastructure complete, 8-week content plan ready
-- **Sprint A at 35-40%**: Statement tracker architecture needs urgent 2-hour session
+- **Sprint A at 75%**: Final AST integration (#227) ready to start, 1-2 days remaining
 
 ### Critical Blockers 🚫
-1. **Statement Tracker (#182)**: Architecture undefined, blocks 17 test re-enablement
-2. **Sprint A Completion**: Blocks Sprint B (21 story points, 93%+ LSP coverage)
+1. ~~**Statement Tracker (#182)**: Architecture undefined~~ ✅ **RESOLVED** - 75% complete, final AST integration (#227) remaining
+2. **Sprint B Readiness**: Nearly unblocked, just 1-2 days from Sprint A completion
 3. **CI Pipeline (#211)**: Blocks merge-blocking gates (#210)
 
 ---
 
 ## 🏃 Active Sprint Status
 
-### Sprint A: Parser Foundation (Days 1-10)
-**Current**: Day 7+ of originally planned 10 days
-**Completion**: 35-40%
-**Timeline**: Extended to 2-3 weeks (realistic)
+### Sprint A: Parser Foundation (Days 1-10+)
+**Current**: Day 10+ of originally planned 10 days
+**Completion**: 75% ✅
+**Timeline**: 1-2 days remaining (final AST integration)
 
 | Issue | Status | Completion | Timeline |
 |-------|--------|------------|----------|
+| #218 (#182a) Data Structures | ✅ **Complete** (PR #222) | 100% | Days 1-3 |
+| #219 (#182b) Pipeline Threading | ✅ **Complete** (PRs #223, #224) | 100% | Days 3-6 |
+| #220/#221 Tracker Integration + Fix | ✅ **Complete** (PRs #225, #226) | 100% | Days 6-10 |
+| #227 (#182d) AST Integration | 🟡 Ready to Start | 0% | Days 11-12 |
 | #183 Heredoc Backreferences | 🟡 Active | 70% | Days 1-3 |
 | #184 Heredoc Content | 🟡 Active | 75% | Days 3-6 |
 | #185 Phase Diagnostics | 🟢 Good | 70% | Days 4-5 |
 | #186 Edge Cases | 🔴 Early | 15% | Days 7-10 |
-| #182 Statement Tracker | 🔴 **BLOCKER** | 0% | Days 6-8 |
 | #144 Test Re-enablement | 🔴 Blocked | 0% | Days 8-10 |
 
-**Critical Path**: #183 → #184 → #182 → #144
+**Critical Path**: ✅ #218 → ✅ #219 → ✅ #220/#221 → 🟡 #227 (AST integration)
 
-**Unplanned Work**: PR #214 (CI infrastructure, 35+ commits, ~7 days of effort)
+**Recent Achievements**:
+- ✅ Statement tracker architecture implemented and integrated
+- ✅ Block-aware heredoc detection (F1-F4 fixtures passing)
+- ✅ 274 tests passing, CI green
+- 🎯 Final AST integration (#227) ready to start
 
 ---
 
