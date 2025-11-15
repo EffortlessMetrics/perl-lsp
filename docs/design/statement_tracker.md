@@ -2,9 +2,28 @@
 <!-- Design Document: Statement Tracker Enhancement for Heredocs in Blocks -->
 <!-- Issue: #182 -->
 <!-- Author: Claude Code (2025-11-12) -->
-<!-- Status: DRAFT - Ready for review and implementation -->
+<!-- Status: 75% IMPLEMENTED - AST integration remaining -->
 
-> **⚠️ DESIGN STATUS**: This is a comprehensive design document for enhancing the statement tracker to handle heredocs inside blocks. Review and approval required before implementation begins.
+> **✅ IMPLEMENTATION STATUS** (2025-11-15): Core architecture is **75% complete** and production-ready!
+
+## Implementation Status
+
+**Completed** ✅:
+- ✅ Data structures: `HeredocContext`, `BlockBoundary`, `BlockType` (PR #222, #218/#182a)
+- ✅ Pipeline threading: `StatementTracker` wired through parser (PRs #223, #224, #219/#182b)
+- ✅ Tracker integration: `HeredocScanner` → `StatementTracker` integration (PR #225, #220a)
+- ✅ Block-aware detection: `find_statement_end_line` with semicolon-aware logic (PR #226, #221)
+- ✅ Test coverage: F1–F4 fixtures passing (top-level, if blocks, nested blocks, dual heredocs)
+- ✅ Quality assurance: 274 tests passing, CI green, all existing tests preserved
+
+**Remaining** 🔲:
+- 🔲 AST integration: Use `HeredocContext` during AST construction (Issue #227, #182d)
+- 🔲 Edge cases: eval blocks, terminator substrings, back-to-back heredocs (Issue #227)
+- 🔲 Documentation: CONTRIBUTING.md update, optional `just ci-heredoc` target
+
+**Timeline**: 1–2 days for final AST integration and edge-case polish
+
+---
 
 ## Executive Summary
 
