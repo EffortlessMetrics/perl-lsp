@@ -195,34 +195,72 @@ impl StatementTracker {
         self.block_boundaries.clear();
     }
 
-    // ===== Issue #182/#219: Stub methods for #220 semantics =====
-    // These methods provide the API for block-aware heredoc handling
-    // but are no-ops in #219 (plumbing only). Semantics filled in #220.
+    // ===== Issue #182/#220: Block Tracking Semantics =====
+    // These methods provide the API for block-aware heredoc handling.
+    // Implemented in #220 to enable correct heredoc placement in AST.
 
     /// Note that a code block is opening (Issue #182/#220)
+    ///
+    /// This method should be called when a code block opens (e.g., after `if {`, `while {`, `sub {`).
+    /// It increments the block depth and records the block boundary.
     #[inline]
     #[allow(dead_code)]
-    pub fn note_block_open(&mut self, _line: usize, _block_type: BlockType) {
-        // No-op for #219; implementation in #220
+    pub fn note_block_open(&mut self, line: usize, block_type: BlockType) {
+        self.block_depth += 1;
+
+        // Calculate parent depth (current depth - 1, or None if top-level)
+        let parent_depth = if self.block_depth > 1 { Some(self.block_depth - 2) } else { None };
+
+        self.block_boundaries.push(BlockBoundary {
+            block_type,
+            start_line: line,
+            end_line: None, // Will be filled in by note_block_close
+            depth: self.block_depth,
+            parent_depth,
+        });
     }
 
     /// Note that a code block is closing (Issue #182/#220)
+    ///
+    /// This method should be called when a code block closes (e.g., at `}`).
+    /// It decrements the block depth and records the closing line.
     #[inline]
     #[allow(dead_code)]
-    pub fn note_block_close(&mut self, _line: usize) {
-        // No-op for #219; implementation in #220
+    pub fn note_block_close(&mut self, line: usize) {
+        if self.block_depth > 0 {
+            // Find the most recent unclosed block at the current depth
+            if let Some(block) = self
+                .block_boundaries
+                .iter_mut()
+                .filter(|b| b.depth == self.block_depth && b.end_line.is_none())
+                .last()
+            {
+                block.end_line = Some(line);
+            }
+
+            self.block_depth -= 1;
+        }
     }
 
     /// Record a heredoc declaration with its context (Issue #182/#220)
+    ///
+    /// This method should be called when a heredoc declaration is detected.
+    /// It records the heredoc context including the block depth at declaration time.
     #[inline]
     #[allow(dead_code)]
     pub fn note_heredoc_declaration(
         &mut self,
-        _line: usize,
-        _terminator: &str,
-        _statement_end_line: usize,
+        line: usize,
+        terminator: &str,
+        statement_end_line: usize,
     ) {
-        // No-op for #219; implementation in #220
+        self.heredoc_contexts.push(HeredocContext {
+            declaration_line: line,
+            block_depth_at_declaration: self.block_depth,
+            terminator: terminator.to_string(),
+            statement_end_line,
+            content_start_line: statement_end_line + 1,
+        });
     }
 
     /// Get the current block depth (Issue #182/#220)
@@ -293,6 +331,8 @@ pub fn find_statement_end_line(input: &str, heredoc_line: usize) -> usize {
 mod tests {
     use super::*;
 
+    // ===== Existing tests (unchanged) =====
+
     #[test]
     fn test_simple_statement() {
         let input = "my $x = 42;";
@@ -337,5 +377,169 @@ content
 EOF"#;
         let end = find_statement_end_line(input, 3);
         assert_eq!(end, 5); // Statement ends at line 5 with ];
+    }
+
+    // ===== NEW: Issue #220 - Block Tracking Semantics Tests =====
+
+    #[test]
+    fn test_block_depth_tracking_single_block() {
+        let mut tracker = StatementTracker::new();
+        assert_eq!(tracker.current_block_depth(), 0);
+
+        tracker.note_block_open(1, BlockType::If);
+        assert_eq!(tracker.current_block_depth(), 1);
+
+        tracker.note_block_close(3);
+        assert_eq!(tracker.current_block_depth(), 0);
+    }
+
+    #[test]
+    fn test_block_depth_tracking_nested_blocks() {
+        let mut tracker = StatementTracker::new();
+
+        tracker.note_block_open(1, BlockType::If);
+        assert_eq!(tracker.current_block_depth(), 1);
+
+        tracker.note_block_open(2, BlockType::While);
+        assert_eq!(tracker.current_block_depth(), 2);
+
+        tracker.note_block_open(3, BlockType::For);
+        assert_eq!(tracker.current_block_depth(), 3);
+
+        tracker.note_block_close(4);
+        assert_eq!(tracker.current_block_depth(), 2);
+
+        tracker.note_block_close(5);
+        assert_eq!(tracker.current_block_depth(), 1);
+
+        tracker.note_block_close(6);
+        assert_eq!(tracker.current_block_depth(), 0);
+    }
+
+    #[test]
+    fn test_block_boundaries_recorded() {
+        let mut tracker = StatementTracker::new();
+
+        tracker.note_block_open(1, BlockType::If);
+        tracker.note_block_open(2, BlockType::While);
+
+        let boundaries = tracker.block_boundaries();
+        assert_eq!(boundaries.len(), 2);
+
+        assert_eq!(boundaries[0].block_type, BlockType::If);
+        assert_eq!(boundaries[0].start_line, 1);
+        assert_eq!(boundaries[0].depth, 1);
+        assert_eq!(boundaries[0].end_line, None);
+
+        assert_eq!(boundaries[1].block_type, BlockType::While);
+        assert_eq!(boundaries[1].start_line, 2);
+        assert_eq!(boundaries[1].depth, 2);
+        assert_eq!(boundaries[1].end_line, None);
+    }
+
+    #[test]
+    fn test_block_boundaries_closed() {
+        let mut tracker = StatementTracker::new();
+
+        tracker.note_block_open(1, BlockType::If);
+        tracker.note_block_close(5);
+
+        let boundaries = tracker.block_boundaries();
+        assert_eq!(boundaries.len(), 1);
+        assert_eq!(boundaries[0].end_line, Some(5));
+    }
+
+    #[test]
+    fn test_heredoc_declaration_at_top_level() {
+        let mut tracker = StatementTracker::new();
+
+        tracker.note_heredoc_declaration(1, "EOF", 1);
+
+        let contexts = tracker.heredoc_contexts();
+        assert_eq!(contexts.len(), 1);
+
+        assert_eq!(contexts[0].declaration_line, 1);
+        assert_eq!(contexts[0].block_depth_at_declaration, 0);
+        assert_eq!(contexts[0].terminator, "EOF");
+        assert_eq!(contexts[0].statement_end_line, 1);
+        assert_eq!(contexts[0].content_start_line, 2);
+    }
+
+    #[test]
+    fn test_heredoc_declaration_in_if_block() {
+        let mut tracker = StatementTracker::new();
+
+        tracker.note_block_open(1, BlockType::If);
+        tracker.note_heredoc_declaration(2, "EOF", 2);
+
+        let contexts = tracker.heredoc_contexts();
+        assert_eq!(contexts.len(), 1);
+
+        assert_eq!(contexts[0].declaration_line, 2);
+        assert_eq!(contexts[0].block_depth_at_declaration, 1);
+        assert_eq!(contexts[0].terminator, "EOF");
+    }
+
+    #[test]
+    fn test_heredoc_declaration_in_nested_blocks() {
+        let mut tracker = StatementTracker::new();
+
+        tracker.note_block_open(1, BlockType::If);
+        tracker.note_block_open(2, BlockType::While);
+        tracker.note_heredoc_declaration(3, "DATA", 3);
+
+        let contexts = tracker.heredoc_contexts();
+        assert_eq!(contexts.len(), 1);
+
+        assert_eq!(contexts[0].block_depth_at_declaration, 2);
+        assert_eq!(contexts[0].terminator, "DATA");
+    }
+
+    #[test]
+    fn test_multiple_heredocs_in_same_block() {
+        let mut tracker = StatementTracker::new();
+
+        tracker.note_block_open(1, BlockType::If);
+        tracker.note_heredoc_declaration(2, "EOF1", 2);
+        tracker.note_heredoc_declaration(4, "EOF2", 4);
+
+        let contexts = tracker.heredoc_contexts();
+        assert_eq!(contexts.len(), 2);
+
+        assert_eq!(contexts[0].terminator, "EOF1");
+        assert_eq!(contexts[1].terminator, "EOF2");
+        assert_eq!(contexts[0].block_depth_at_declaration, 1);
+        assert_eq!(contexts[1].block_depth_at_declaration, 1);
+    }
+
+    #[test]
+    fn test_block_parent_depth_tracking() {
+        let mut tracker = StatementTracker::new();
+
+        tracker.note_block_open(1, BlockType::If);
+        tracker.note_block_open(2, BlockType::While);
+
+        let boundaries = tracker.block_boundaries();
+
+        assert_eq!(boundaries[0].parent_depth, None); // Top-level if has no parent
+        assert_eq!(boundaries[1].parent_depth, Some(0)); // While's parent is at depth 0
+    }
+
+    #[test]
+    fn test_reset_clears_block_tracking() {
+        let mut tracker = StatementTracker::new();
+
+        tracker.note_block_open(1, BlockType::If);
+        tracker.note_heredoc_declaration(2, "EOF", 2);
+
+        assert_eq!(tracker.current_block_depth(), 1);
+        assert_eq!(tracker.heredoc_contexts().len(), 1);
+        assert_eq!(tracker.block_boundaries().len(), 1);
+
+        tracker.reset();
+
+        assert_eq!(tracker.current_block_depth(), 0);
+        assert_eq!(tracker.heredoc_contexts().len(), 0);
+        assert_eq!(tracker.block_boundaries().len(), 0);
     }
 }
