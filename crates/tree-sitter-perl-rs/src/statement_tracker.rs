@@ -195,34 +195,72 @@ impl StatementTracker {
         self.block_boundaries.clear();
     }
 
-    // ===== Issue #182/#219: Stub methods for #220 semantics =====
-    // These methods provide the API for block-aware heredoc handling
-    // but are no-ops in #219 (plumbing only). Semantics filled in #220.
+    // ===== Issue #182/#220: Block Tracking Semantics =====
+    // These methods provide the API for block-aware heredoc handling.
+    // Implemented in #220 to enable correct heredoc placement in AST.
 
     /// Note that a code block is opening (Issue #182/#220)
+    ///
+    /// This method should be called when a code block opens (e.g., after `if {`, `while {`, `sub {`).
+    /// It increments the block depth and records the block boundary.
     #[inline]
     #[allow(dead_code)]
-    pub fn note_block_open(&mut self, _line: usize, _block_type: BlockType) {
-        // No-op for #219; implementation in #220
+    pub fn note_block_open(&mut self, line: usize, block_type: BlockType) {
+        self.block_depth += 1;
+
+        // Calculate parent depth (current depth - 1, or None if top-level)
+        let parent_depth = if self.block_depth > 1 { Some(self.block_depth - 2) } else { None };
+
+        self.block_boundaries.push(BlockBoundary {
+            block_type,
+            start_line: line,
+            end_line: None, // Will be filled in by note_block_close
+            depth: self.block_depth,
+            parent_depth,
+        });
     }
 
     /// Note that a code block is closing (Issue #182/#220)
+    ///
+    /// This method should be called when a code block closes (e.g., at `}`).
+    /// It decrements the block depth and records the closing line.
     #[inline]
     #[allow(dead_code)]
-    pub fn note_block_close(&mut self, _line: usize) {
-        // No-op for #219; implementation in #220
+    pub fn note_block_close(&mut self, line: usize) {
+        if self.block_depth > 0 {
+            // Find the most recent unclosed block at the current depth
+            if let Some(block) = self
+                .block_boundaries
+                .iter_mut()
+                .filter(|b| b.depth == self.block_depth && b.end_line.is_none())
+                .last()
+            {
+                block.end_line = Some(line);
+            }
+
+            self.block_depth -= 1;
+        }
     }
 
     /// Record a heredoc declaration with its context (Issue #182/#220)
+    ///
+    /// This method should be called when a heredoc declaration is detected.
+    /// It records the heredoc context including the block depth at declaration time.
     #[inline]
     #[allow(dead_code)]
     pub fn note_heredoc_declaration(
         &mut self,
-        _line: usize,
-        _terminator: &str,
-        _statement_end_line: usize,
+        line: usize,
+        terminator: &str,
+        statement_end_line: usize,
     ) {
-        // No-op for #219; implementation in #220
+        self.heredoc_contexts.push(HeredocContext {
+            declaration_line: line,
+            block_depth_at_declaration: self.block_depth,
+            terminator: terminator.to_string(),
+            statement_end_line,
+            content_start_line: statement_end_line + 1,
+        });
     }
 
     /// Get the current block depth (Issue #182/#220)
