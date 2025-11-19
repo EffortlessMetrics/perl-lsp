@@ -86,3 +86,4 @@ benches/bench_lexer_pest
 benchmark_tests/
 test_fixtures/
 lsp_test/
+.ci/tmp/
