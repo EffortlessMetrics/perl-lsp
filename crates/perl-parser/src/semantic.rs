@@ -681,6 +681,183 @@ impl SemanticAnalyzer {
                 self.analyze_node(rhs, scope_id);
             }
 
+            // Phase 1: Critical LSP Features (Issue #188)
+            NodeKind::VariableListDeclaration {
+                declarator,
+                variables,
+                attributes,
+                initializer,
+            } => {
+                // Handle multi-variable declarations like: my ($x, $y, $z) = (1, 2, 3);
+                for var in variables {
+                    if let NodeKind::Variable { sigil, name } = &var.kind {
+                        let token_type = match declarator.as_str() {
+                            "my" | "state" => SemanticTokenType::VariableDeclaration,
+                            "our" => SemanticTokenType::Variable,
+                            "local" => SemanticTokenType::Variable,
+                            _ => SemanticTokenType::Variable,
+                        };
+
+                        let mut modifiers = vec![SemanticTokenModifier::Declaration];
+                        if declarator == "state" || attributes.iter().any(|a| a == ":shared") {
+                            modifiers.push(SemanticTokenModifier::Static);
+                        }
+
+                        self.semantic_tokens.push(SemanticToken {
+                            location: var.location,
+                            token_type,
+                            modifiers,
+                        });
+
+                        // Add hover info
+                        let hover = HoverInfo {
+                            signature: format!("{} {}{}", declarator, sigil, name),
+                            documentation: self.extract_documentation(var.location.start),
+                            details: if attributes.is_empty() {
+                                vec![]
+                            } else {
+                                vec![format!("Attributes: {}", attributes.join(", "))]
+                            },
+                        };
+
+                        self.hover_info.insert(var.location, hover);
+                    }
+                }
+
+                if let Some(init) = initializer {
+                    self.analyze_node(init, scope_id);
+                }
+            }
+
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
+                // Handle conditional expressions: $x ? $y : $z
+                self.analyze_node(condition, scope_id);
+                self.analyze_node(then_expr, scope_id);
+                self.analyze_node(else_expr, scope_id);
+            }
+
+            NodeKind::ArrayLiteral { elements } => {
+                // Handle array constructors: [1, 2, 3, 4]
+                for elem in elements {
+                    self.analyze_node(elem, scope_id);
+                }
+            }
+
+            NodeKind::HashLiteral { pairs } => {
+                // Handle hash constructors: { key1 => "value1", key2 => "value2" }
+                for (key, value) in pairs {
+                    self.analyze_node(key, scope_id);
+                    self.analyze_node(value, scope_id);
+                }
+            }
+
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                // Handle try/catch error handling
+                self.analyze_node(body, scope_id);
+
+                for (_var, catch_body) in catch_blocks {
+                    // Note: var is just a String (variable name), not a Node
+                    self.analyze_node(catch_body, scope_id);
+                }
+
+                if let Some(finally) = finally_block {
+                    self.analyze_node(finally, scope_id);
+                }
+            }
+
+            NodeKind::PhaseBlock { phase: _, block } => {
+                // Handle BEGIN/END/INIT/CHECK/UNITCHECK blocks
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Keyword,
+                    modifiers: vec![],
+                });
+
+                self.analyze_node(block, scope_id);
+            }
+
+            NodeKind::ExpressionStatement { expression } => {
+                // Handle expression statements: $x + 10;
+                // Just delegate to the wrapped expression
+                self.analyze_node(expression, scope_id);
+            }
+
+            NodeKind::Do { block } => {
+                // Handle do blocks: do { ... }
+                // Do blocks create expression context but maintain scope
+                self.analyze_node(block, scope_id);
+            }
+
+            NodeKind::Eval { block } => {
+                // Handle eval blocks: eval { dangerous_operation(); }
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Keyword,
+                    modifiers: vec![],
+                });
+
+                // Eval blocks should create a new scope for error isolation
+                self.analyze_node(block, scope_id);
+            }
+
+            NodeKind::VariableWithAttributes { variable, attributes } => {
+                // Handle attributed variables: my $x :shared = 42;
+                // Analyze the base variable node
+                self.analyze_node(variable, scope_id);
+
+                // Add modifier tokens for special attributes
+                if attributes.iter().any(|a| a == ":shared" || a == ":lvalue") {
+                    // The variable node was already processed, so we just note the attributes
+                    // in the hover info (if we need to enhance it later)
+                }
+            }
+
+            NodeKind::Unary { op, operand } => {
+                // Handle unary operators: -$x, !$x, ++$x, $x++
+                // Add token for the operator itself (if needed for highlighting)
+                if matches!(op.as_str(), "++" | "--" | "!" | "-" | "~" | "\\") {
+                    self.semantic_tokens.push(SemanticToken {
+                        location: node.location,
+                        token_type: SemanticTokenType::Operator,
+                        modifiers: vec![],
+                    });
+                }
+
+                self.analyze_node(operand, scope_id);
+            }
+
+            NodeKind::Readline { filehandle } => {
+                // Handle readline/diamond operator: <STDIN>, <$fh>, <>
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Operator, // diamond operator is an I/O operator
+                    modifiers: vec![],
+                });
+
+                // Add hover info for common filehandles
+                if let Some(fh) = filehandle {
+                    let hover = HoverInfo {
+                        signature: format!("<{}>", fh),
+                        documentation: match fh.as_str() {
+                            "STDIN" => Some("Standard input filehandle".to_string()),
+                            "STDOUT" => Some("Standard output filehandle".to_string()),
+                            "STDERR" => Some("Standard error filehandle".to_string()),
+                            _ => Some(format!("Read from filehandle {}", fh)),
+                        },
+                        details: vec![],
+                    };
+                    self.hover_info.insert(node.location, hover);
+                } else {
+                    // Bare <> reads from ARGV or STDIN
+                    let hover = HoverInfo {
+                        signature: "<>".to_string(),
+                        documentation: Some("Read from command-line files or STDIN".to_string()),
+                        details: vec![],
+                    };
+                    self.hover_info.insert(node.location, hover);
+                }
+            }
+
             _ => {
                 // Handle other node types as needed
             }
@@ -836,9 +1013,9 @@ print $x;
         let analyzer = SemanticAnalyzer::analyze(&ast);
         let tokens = analyzer.semantic_tokens();
 
-        // Note: Semantic analyzer may not handle all new AST node types yet
-        // For now, just ensure it doesn't crash
-        // tokens.len() can be 0 if analyzer doesn't handle the AST structure
+        // Phase 1 implementation (Issue #188) handles critical AST node types
+        // including VariableListDeclaration, Ternary, ArrayLiteral, HashLiteral,
+        // Try, and PhaseBlock nodes
 
         // Check first $x is a declaration
         let x_tokens: Vec<_> = tokens
