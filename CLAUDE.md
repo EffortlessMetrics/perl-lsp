@@ -445,10 +445,10 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 4. **Performance Awareness**: Maintain search performance despite dual lookups through efficient indexing
 5. **Backward Compatibility**: Ensure existing code continues to work with enhanced indexing
 
-## Current Status (0.8.8 + PR #140 Revolutionary Performance + PR #160 API Documentation & Parser Robustness [SPEC-149] + Issue #207 DAP Support + Issue #188 Semantic Phase 1 Complete)
+## Current Status ({{version}} + PR #140 Revolutionary Performance + PR #160 API Documentation & Parser Robustness [SPEC-149] + Issue #207 DAP Support + Issue #188 Semantic Phase 1 Complete)
 
 ✅ **Revolutionary Production Ready** (~80-85% "fully working" for core goal):
-- High test pass rate across all components (run `just health` or `cargo test --workspace --lib` for current metrics)
+- {{tests.pass_rate_active}}% test pass rate across all components ({{tests.passed}} passing, {{tests.failed}} failing, {{tests.ignored}} ignored)
 - **Parser & Heredocs/Statement Tracker**: ~95-100% complete - functionally done for v1
 - **Semantic Analyzer Phase 1**: ✅ Complete (12/12 critical node handlers implemented)
 - **LSP textDocument/definition**: ~80-90% done (implementation + tests complete, awaiting execution on proper hardware)
