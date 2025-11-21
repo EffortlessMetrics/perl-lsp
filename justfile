@@ -17,6 +17,7 @@ ci-gate:
     @just ci-clippy-lib
     @just ci-test-lib
     @just ci-policy
+    @just ci-lsp-def
     @echo "✅ Merge gate passed!"
 
 # Full CI pipeline (~10-20 min) - RECOMMENDED for large changes
@@ -69,6 +70,13 @@ ci-test-lsp:
     @echo "🔌 Running LSP integration tests..."
     RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- --test-threads=2
     @echo "✅ LSP tests passed"
+
+# LSP semantic definition tests (semantic-aware go-to-definition)
+ci-lsp-def:
+    @echo "🔎 Running LSP semantic definition tests..."
+    RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp --test semantic_definition -- --test-threads=1
+    @echo "✅ LSP semantic definition tests passed"
 
 # Documentation build (no deps)
 ci-docs:

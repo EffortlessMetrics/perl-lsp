@@ -166,24 +166,24 @@ cargo test -p perl-parser --test quote_parser_realistic_hardening  # Real-world 
 # Semantic analyzer Phase 1 (12/12 critical node handlers) + LSP textDocument/definition integration
 # Tests use dynamic position calculation for robustness across environments
 
-# Constrained hardware: set once per shell session
-export RUSTC_WRAPPER=""
-export RUST_TEST_THREADS=1
-export CARGO_BUILD_JOBS=1
-
 # Semantic Unit Tests (Fast, No LSP) - Direct validation of SemanticAnalyzer core
-cargo test -p perl-parser semantic::tests::test_analyzer_find_definition_scalar -- --nocapture
-cargo test -p perl-parser semantic::tests::test_semantic_model_definition_at -- --nocapture
+RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+  cargo test -p perl-parser semantic::tests::test_analyzer_find_definition_scalar -- --nocapture
+RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+  cargo test -p perl-parser semantic::tests::test_semantic_model_definition_at -- --nocapture
 
 # LSP Semantic Definition Tests - Resource-efficient (run one at a time on constrained hardware)
-cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_finds_scalar_variable_declaration
-cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_finds_subroutine_declaration
-cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_resolves_scoped_variables
-cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_handles_package_qualified_calls
+RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+  cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_finds_scalar_variable_declaration
+RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+  cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_finds_subroutine_declaration
+RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+  cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_resolves_scoped_variables
+RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+  cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_handles_package_qualified_calls
 
 # CI-ready comprehensive semantic definition validation (requires adequate compute resources)
-# If justfile has ci-lsp-def recipe (PR #232+): just ci-lsp-def
-# Otherwise run: cargo test -p perl-lsp --test semantic_definition
+just ci-lsp-def  # Runs all 4 LSP semantic tests with proper resource constraints
 ```
 
 ### Development
@@ -445,10 +445,10 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 4. **Performance Awareness**: Maintain search performance despite dual lookups through efficient indexing
 5. **Backward Compatibility**: Ensure existing code continues to work with enhanced indexing
 
-## Current Status (0.8.8 + PR #140 Revolutionary Performance + PR #160 API Documentation & Parser Robustness [SPEC-149] + Issue #207 DAP Support + Issue #188 Semantic Phase 1 Complete)
+## Current Status ({{version}} + PR #140 Revolutionary Performance + PR #160 API Documentation & Parser Robustness [SPEC-149] + Issue #207 DAP Support + Issue #188 Semantic Phase 1 Complete)
 
 ✅ **Revolutionary Production Ready** (~80-85% "fully working" for core goal):
-- High test pass rate across all components (run `just health` or `cargo test --workspace --lib` for current metrics)
+- {{tests.pass_rate_active}}% test pass rate across all components ({{tests.passed}} passing, {{tests.failed}} failing, {{tests.ignored}} ignored)
 - **Parser & Heredocs/Statement Tracker**: ~95-100% complete - functionally done for v1
 - **Semantic Analyzer Phase 1**: ✅ Complete (12/12 critical node handlers implemented)
 - **LSP textDocument/definition**: ~80-90% done (implementation + tests complete, awaiting execution on proper hardware)
