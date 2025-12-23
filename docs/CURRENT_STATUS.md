@@ -1,5 +1,5 @@
 # perl-lsp Current Status Snapshot
-<!-- Generated: 2025-11-12 -->
+<!-- Created: 2025-11-12 -->
 <!-- Last Updated: 2025-12-22 - Documentation and Roadmap Refresh -->
 <!-- Comprehensive project health assessment -->
 

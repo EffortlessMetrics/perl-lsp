@@ -166,24 +166,24 @@ cargo test -p perl-parser --test quote_parser_realistic_hardening  # Real-world 
 # Semantic analyzer Phase 1 (12/12 critical node handlers) + LSP textDocument/definition integration
 # Tests use dynamic position calculation for robustness across environments
 
+# Constrained hardware: set once per shell session
+export RUSTC_WRAPPER=""
+export RUST_TEST_THREADS=1
+export CARGO_BUILD_JOBS=1
+
 # Semantic Unit Tests (Fast, No LSP) - Direct validation of SemanticAnalyzer core
-RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-parser semantic::tests::test_analyzer_find_definition_scalar -- --nocapture
-RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-parser semantic::tests::test_semantic_model_definition_at -- --nocapture
+cargo test -p perl-parser semantic::tests::test_analyzer_find_definition_scalar -- --nocapture
+cargo test -p perl-parser semantic::tests::test_semantic_model_definition_at -- --nocapture
 
 # LSP Semantic Definition Tests - Resource-efficient (run one at a time on constrained hardware)
-RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_finds_scalar_variable_declaration
-RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_finds_subroutine_declaration
-RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_resolves_scoped_variables
-RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_handles_package_qualified_calls
+cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_finds_scalar_variable_declaration
+cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_finds_subroutine_declaration
+cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_resolves_scoped_variables
+cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_handles_package_qualified_calls
 
 # CI-ready comprehensive semantic definition validation (requires adequate compute resources)
-just ci-lsp-def  # Runs all 4 LSP semantic tests with proper resource constraints
+# If justfile has ci-lsp-def recipe (PR #232+): just ci-lsp-def
+# Otherwise run: cargo test -p perl-lsp --test semantic_definition
 ```
 
 ### Development
