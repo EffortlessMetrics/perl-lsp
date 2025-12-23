@@ -321,6 +321,231 @@ pub mod assertions {
         assert_eq!(location["range"]["start"]["line"], line);
         assert_eq!(location["range"]["start"]["character"], character);
     }
+
+    /// Assert that definition response contains a location at the expected position
+    pub fn assert_definition_at(response: &Value, uri: &str, line: u32) {
+        let (def_uri, def_line, _) =
+            super::semantic::first_location(response).unwrap_or_else(|| {
+                panic!("Expected definition location in response, got: {:#}", response)
+            });
+
+        assert_eq!(
+            def_uri, uri,
+            "Definition URI mismatch.\nExpected: {}\nActual: {}\nFull response: {:#}",
+            uri, def_uri, response
+        );
+        assert_eq!(
+            def_line, line,
+            "Definition line mismatch.\nExpected: {}\nActual: {}\nFull response: {:#}",
+            line, def_line, response
+        );
+    }
+
+    /// Assert that hover response contains expected content
+    pub fn assert_hover_contains(response: &Value, expected_content: &str) {
+        let content = super::semantic::hover_content(response)
+            .unwrap_or_else(|| panic!("Expected hover content in response, got: {:#}", response));
+
+        assert!(
+            content.contains(expected_content),
+            "Hover content does not contain expected string.\nExpected to contain: {}\nActual content: {}\nFull response: {:#}",
+            expected_content,
+            content,
+            response
+        );
+    }
+
+    /// Assert that hover response contains any of the expected strings
+    pub fn assert_hover_contains_any(response: &Value, expected_strings: &[&str]) {
+        let content = super::semantic::hover_content(response)
+            .unwrap_or_else(|| panic!("Expected hover content in response, got: {:#}", response));
+
+        let found = expected_strings.iter().any(|s| content.contains(s));
+        assert!(
+            found,
+            "Hover content does not contain any expected string.\nExpected one of: {:?}\nActual content: {}\nFull response: {:#}",
+            expected_strings, content, response
+        );
+    }
+}
+
+/// Semantic analyzer testing helpers
+pub mod semantic {
+    use serde_json::Value;
+
+    /// Extract the first definition location from an LSP response.
+    /// Returns (uri, line, character) for easier assertions.
+    ///
+    /// # Returns
+    /// - `Some((uri, line, character))` if a location is found
+    /// - `None` if the result is empty or malformed
+    ///
+    /// # Examples
+    /// ```ignore
+    /// let response = server.get_definition(uri, line, character);
+    /// let (def_uri, def_line, def_char) = first_location(&response)
+    ///     .expect("Expected to find definition");
+    /// assert_eq!(def_uri, "file:///test.pl");
+    /// ```
+    pub fn first_location(resp: &Value) -> Option<(String, u32, u32)> {
+        let arr = resp.get("result")?.as_array()?;
+        let first = arr.first()?;
+        let uri = first.get("uri")?.as_str()?.to_string();
+        let range = first.get("range")?;
+        let start = &range["start"];
+        let line = start.get("line")?.as_u64()? as u32;
+        let character = start.get("character")?.as_u64()? as u32;
+        Some((uri, line, character))
+    }
+
+    /// Extract hover content from an LSP hover response.
+    /// Returns the markdown value string for assertions.
+    ///
+    /// # Returns
+    /// - `Some(content)` if hover content is found
+    /// - `None` if the result is null or malformed
+    ///
+    /// # Examples
+    /// ```ignore
+    /// let response = server.get_hover(uri, line, character);
+    /// let content = hover_content(&response)
+    ///     .expect("Expected hover content");
+    /// assert!(content.contains("Scalar Variable"));
+    /// ```
+    pub fn hover_content(resp: &Value) -> Option<String> {
+        let result = resp.get("result")?;
+        if result.is_null() {
+            return None;
+        }
+        let contents = result.get("contents")?;
+        let value = contents.get("value")?.as_str()?;
+        Some(value.to_string())
+    }
+
+    /// Compute (line, character) for a given needle on a specific target line.
+    /// This helper is resilient to whitespace changes and provides clear error messages.
+    ///
+    /// # Arguments
+    /// - `code`: The full source code text
+    /// - `needle`: The text to search for (e.g., "$x", "foo()")
+    /// - `target_line`: Zero-indexed line number to search on
+    ///
+    /// # Returns
+    /// `(line, character)` tuple suitable for LSP position
+    ///
+    /// # Panics
+    /// Panics with a helpful message if:
+    /// - The target line doesn't exist
+    /// - The needle is not found on the target line
+    ///
+    /// # Examples
+    /// ```ignore
+    /// let code = "my $x = 1;\n$x + 2;\n";
+    /// let (line, char) = find_pos(code, "$x", 1);  // Find $x on line 1
+    /// assert_eq!(line, 1);
+    /// assert_eq!(char, 0);
+    /// ```
+    pub fn find_pos(code: &str, needle: &str, target_line: usize) -> (u32, u32) {
+        let lines: Vec<&str> = code.lines().collect();
+
+        if target_line >= lines.len() {
+            panic!(
+                "Target line {} does not exist in code (total lines: {}).\nCode:\n{}",
+                target_line,
+                lines.len(),
+                code
+            );
+        }
+
+        let line = lines[target_line];
+        let col = line.find(needle).unwrap_or_else(|| {
+            panic!(
+                "Could not find '{}' on line {}.\nLine content: '{}'\nFull code:\n{}",
+                needle, target_line, line, code
+            )
+        });
+
+        (target_line as u32, col as u32)
+    }
+
+    /// Find position with flexible matching - searches multiple lines if not found on target.
+    /// This is useful for tests that might be affected by whitespace changes.
+    ///
+    /// # Arguments
+    /// - `code`: The full source code text
+    /// - `needle`: The text to search for
+    /// - `preferred_line`: Line to search first (zero-indexed)
+    ///
+    /// # Returns
+    /// `Some((line, character))` if found, `None` otherwise
+    ///
+    /// # Examples
+    /// ```ignore
+    /// let code = "my $x = 1;\n\n$x + 2;\n";  // Extra blank line
+    /// let (line, char) = find_pos_flexible(code, "$x", 1)
+    ///     .expect("Should find $x somewhere");
+    /// ```
+    pub fn find_pos_flexible(
+        code: &str,
+        needle: &str,
+        preferred_line: usize,
+    ) -> Option<(u32, u32)> {
+        let lines: Vec<&str> = code.lines().collect();
+
+        // Try preferred line first
+        if preferred_line < lines.len() {
+            if let Some(col) = lines[preferred_line].find(needle) {
+                return Some((preferred_line as u32, col as u32));
+            }
+        }
+
+        // Search nearby lines (±2 lines from preferred)
+        let start = preferred_line.saturating_sub(2);
+        let end = (preferred_line + 3).min(lines.len());
+
+        for (idx, line) in lines.iter().enumerate().take(end).skip(start) {
+            if let Some(col) = line.find(needle) {
+                return Some((idx as u32, col as u32));
+            }
+        }
+
+        None
+    }
+
+    /// Find the nth occurrence of needle in code.
+    /// Useful when the same symbol appears multiple times.
+    ///
+    /// # Arguments
+    /// - `code`: The full source code text
+    /// - `needle`: The text to search for
+    /// - `occurrence`: Which occurrence to find (0-indexed)
+    ///
+    /// # Returns
+    /// `Some((line, character))` if found, `None` if not enough occurrences
+    ///
+    /// # Examples
+    /// ```ignore
+    /// let code = "my $x = 1;\n$x + $x;\n";
+    /// let (line, char) = find_nth_occurrence(code, "$x", 2)
+    ///     .expect("Should find third $x");
+    /// assert_eq!(line, 1);  // Second line, second $x
+    /// ```
+    pub fn find_nth_occurrence(code: &str, needle: &str, occurrence: usize) -> Option<(u32, u32)> {
+        let mut count = 0;
+
+        for (line_idx, line) in code.lines().enumerate() {
+            let mut search_start = 0;
+            while let Some(col) = line[search_start..].find(needle) {
+                if count == occurrence {
+                    return Some((line_idx as u32, (search_start + col) as u32));
+                }
+                count += 1;
+                search_start += col + needle.len();
+            }
+        }
+
+        None
+    }
 }
 
 /// Performance testing utilities

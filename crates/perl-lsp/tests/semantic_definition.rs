@@ -51,8 +51,8 @@ mod semantic_definition_tests {
         let response = server.get_definition(uri, line, character);
         println!("SCALAR DEF RESPONSE: {response:#}");
 
-        let (def_uri, def_line, _def_char) = first_location(&response)
-            .expect("no definition found for $x reference");
+        let (def_uri, def_line, _def_char) =
+            first_location(&response).expect("no definition found for $x reference");
 
         assert_eq!(def_uri, uri, "definition should be in same file");
         assert_eq!(def_line, 0, "definition for $x should be on line 0");
@@ -71,8 +71,8 @@ mod semantic_definition_tests {
         let response = server.get_definition(uri, line, character);
         println!("SUB DEF RESPONSE: {response:#}");
 
-        let (def_uri, def_line, _def_char) = first_location(&response)
-            .expect("no definition found for foo() call");
+        let (def_uri, def_line, _def_char) =
+            first_location(&response).expect("no definition found for foo() call");
 
         assert_eq!(def_uri, uri, "definition should be in same file");
         assert_eq!(def_line, 0, "definition for foo should be on line 0");
@@ -96,8 +96,8 @@ sub foo {
         let response = server.get_definition(uri, line, character);
         println!("SCOPED DEF RESPONSE: {response:#}");
 
-        let (def_uri, def_line, _def_char) = first_location(&response)
-            .expect("no definition found for $inner reference");
+        let (def_uri, def_line, _def_char) =
+            first_location(&response).expect("no definition found for $inner reference");
 
         assert_eq!(def_uri, uri, "definition should be in same file");
         assert_eq!(def_line, 2, "definition for $inner should be on line 2");
@@ -122,8 +122,8 @@ Foo::bar();
         let response = server.get_definition(uri, line, character);
         println!("PKG DEF RESPONSE: {response:#}");
 
-        let (def_uri, def_line, _def_char) = first_location(&response)
-            .expect("no definition found for Foo::bar() call");
+        let (def_uri, def_line, _def_char) =
+            first_location(&response).expect("no definition found for Foo::bar() call");
 
         assert_eq!(def_uri, uri, "definition should be in same file");
         assert_eq!(def_line, 1, "definition for bar should be on line 1");

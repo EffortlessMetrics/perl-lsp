@@ -87,3 +87,8 @@ benchmark_tests/
 test_fixtures/
 lsp_test/
 .ci/tmp/
+
+# Local/generated review artifacts
+github_comment_*.md
+github_comments_*.md
+GITHUB_ISSUES_*.md

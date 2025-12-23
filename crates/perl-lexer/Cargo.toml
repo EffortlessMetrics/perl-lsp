@@ -19,12 +19,8 @@ include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
 unicode-ident = "1.0.19"
 memchr = "2.7.6"
 
-# For regex pattern matching
-regex = "1.11.3"
-once_cell = "1.21.3"
-
 # For better error handling
-thiserror = "2.0.16"
+thiserror = "2.0.17"
 
 [dev-dependencies]
 criterion = "0.7.0"
@@ -35,8 +31,6 @@ proptest = "1.9.0"
 default = []
 # Enable SIMD optimizations for string processing
 simd = []
-# Enable regex caching for better performance
-regex-cache = []
 
 [[bench]]
 name = "lexer_benchmarks"

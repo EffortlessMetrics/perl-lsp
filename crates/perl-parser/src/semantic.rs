@@ -619,6 +619,22 @@ impl SemanticAnalyzer {
                 });
             }
 
+            NodeKind::Substitution { expr, pattern: _, replacement: _, modifiers: _ } => {
+                // Handle substitution operator: $text =~ s/pattern/replacement/modifiers
+                // Add token for the operator itself
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Operator,
+                    modifiers: vec![],
+                });
+
+                // Analyze the expression being operated on (usually a variable)
+                self.analyze_node(expr, scope_id);
+
+                // Note: pattern and replacement are strings, not AST nodes,
+                // so we don't need to walk them for variables
+            }
+
             NodeKind::LabeledStatement { label: _, statement } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
@@ -1413,9 +1429,8 @@ my $documented = 42;
         let col_in_line = ref_line.find("$x").expect("could not find $x on line 2");
         let ref_pos = line_offset + col_in_line;
 
-        let symbol = analyzer
-            .find_definition(ref_pos)
-            .expect("definition not found for $x reference");
+        let symbol =
+            analyzer.find_definition(ref_pos).expect("definition not found for $x reference");
 
         // 1. Must be a scalar named "x"
         assert_eq!(symbol.name, "x");

@@ -591,8 +591,10 @@ impl ImportOptimizer {
             }];
         }
 
-        let first_line = analysis.imports.iter().map(|i| i.line).min().unwrap();
-        let last_line = analysis.imports.iter().map(|i| i.line).max().unwrap();
+        // Defensive: use unwrap_or to handle edge cases where imports is unexpectedly empty
+        // (guard at line 581 should prevent this, but defensive programming is safer)
+        let first_line = analysis.imports.iter().map(|i| i.line).min().unwrap_or(1);
+        let last_line = analysis.imports.iter().map(|i| i.line).max().unwrap_or(1);
 
         let start_offset = self.line_offset(content, first_line);
         let end_offset = self.line_offset(content, last_line + 1);
