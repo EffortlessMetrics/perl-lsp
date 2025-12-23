@@ -6,11 +6,11 @@
 //! The LSP handler at lsp_server.rs:3463 already uses SemanticAnalyzer::find_definition().
 //! These tests validate that it works correctly for common Perl patterns.
 
-mod test_utils;
+mod common;
 
 #[cfg(test)]
 mod semantic_definition_tests {
-    use crate::test_utils::TestServerBuilder;
+    use crate::common::test_utils::TestServerBuilder;
     use serde_json::Value;
 
     /// Extract the first definition location from an LSP response.

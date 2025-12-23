@@ -1,11 +1,30 @@
 #![allow(dead_code)] // This is a utility module used by other tests
 
-/// Test utilities and helpers for LSP testing
-/// Provides common functionality to reduce code duplication
+//! Test utilities and helpers for LSP testing
+//!
+//! This module provides a fluent API for LSP testing while delegating all
+//! subprocess IO to the canonical `common` harness. This prevents the
+//! "new BufReader per call" footgun and ensures consistent IO behavior.
+//!
+//! ## Architecture
+//!
+//! - `TestServer` wraps `common::LspServer` for consistent IO handling
+//! - `TestServerBuilder` provides a fluent API for test setup
+//! - All protocol IO goes through `common::send_request()` / `common::send_notification()`
+//! - Response matching uses `common::read_response_matching()` for deterministic behavior
+
+// Import from the parent's common module (test files must declare `mod common;` before `mod test_utils;`)
+use super::LspServer;
 use serde_json::{Value, json};
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::{Duration, Instant};
+
+// Auto-generate unique IDs for requests (separate counter from common to avoid collision)
+static TEST_UTILS_NEXT_ID: AtomicI64 = AtomicI64::new(2000);
+
+fn next_request_id() -> i64 {
+    TEST_UTILS_NEXT_ID.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Test server builder with fluent interface
 pub struct TestServerBuilder {
@@ -45,10 +64,11 @@ impl TestServerBuilder {
     }
 
     pub fn build(self) -> TestServer {
-        let mut server = start_lsp_server();
+        // Use the canonical common harness for server startup
+        let mut server = super::start_lsp_server();
 
-        // Initialize with custom params
-        let init_params = self.initialization_params.unwrap_or_else(|| {
+        // Build initialization params
+        let mut init_params = self.initialization_params.unwrap_or_else(|| {
             json!({
                 "rootUri": null,
                 "capabilities": {
@@ -59,6 +79,7 @@ impl TestServerBuilder {
             })
         });
 
+        // Add workspace folders if specified
         if !self.workspace_folders.is_empty() {
             let folders: Vec<Value> = self
                 .workspace_folders
@@ -66,35 +87,31 @@ impl TestServerBuilder {
                 .map(|path| json!({ "uri": format!("file://{}", path), "name": path }))
                 .collect();
 
-            let mut params = init_params.as_object().unwrap().clone();
-            params.insert("workspaceFolders".to_string(), folders.into());
-
-            send_request(
-                &mut server.process,
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "initialize",
-                    "params": params
-                }),
-            );
-        } else {
-            send_request(
-                &mut server.process,
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "initialize",
-                    "params": init_params
-                }),
-            );
+            if let Some(obj) = init_params.as_object_mut() {
+                obj.insert("workspaceFolders".to_string(), folders.into());
+            }
         }
 
-        let _ = read_response(&mut server.process);
+        // Send initialize request via common harness
+        let init_id = next_request_id();
+        let init_response = super::send_request(
+            &mut server,
+            json!({
+                "jsonrpc": "2.0",
+                "id": init_id,
+                "method": "initialize",
+                "params": init_params
+            }),
+        );
+
+        // Verify initialization succeeded
+        if init_response.get("error").is_some() {
+            eprintln!("TestServerBuilder: Initialize failed: {init_response:#}");
+        }
 
         // Send initialized notification (required by LSP protocol)
-        send_notification(
-            &mut server.process,
+        super::send_notification(
+            &mut server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "initialized",
@@ -102,20 +119,37 @@ impl TestServerBuilder {
             }),
         );
 
-        server
+        // Wait for index-ready notification to ensure deterministic completion behavior
+        // Only wait if workspace folders were specified (semantic tests usually don't need workspace index)
+        if !self.workspace_folders.is_empty() {
+            super::await_index_ready(&mut server);
+        } else {
+            // For non-workspace tests, just do a brief quiet drain
+            super::drain_until_quiet(
+                &mut server,
+                std::time::Duration::from_millis(50),
+                std::time::Duration::from_millis(200),
+            );
+        }
+
+        TestServer { server, timeout: self.timeout }
     }
 }
 
 /// Test server wrapper with helper methods
+///
+/// Wraps `common::LspServer` to provide a fluent testing API while
+/// delegating all IO to the canonical harness with persistent reader thread.
 pub struct TestServer {
-    process: Child,
+    server: LspServer,
+    timeout: Duration,
 }
 
 impl TestServer {
     /// Send a text document did open notification
     pub fn open_document(&mut self, uri: &str, content: &str) {
-        send_notification(
-            &mut self.process,
+        super::send_notification(
+            &mut self.server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -129,12 +163,14 @@ impl TestServer {
                 }
             }),
         );
+        // Brief delay to let server process the document
+        std::thread::sleep(Duration::from_millis(20));
     }
 
     /// Send a text document did change notification
     pub fn change_document(&mut self, uri: &str, content: &str, version: i32) {
-        send_notification(
-            &mut self.process,
+        super::send_notification(
+            &mut self.server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didChange",
@@ -153,51 +189,48 @@ impl TestServer {
 
     /// Request diagnostics for a document
     pub fn get_diagnostics(&mut self, uri: &str) -> Value {
-        send_request(
-            &mut self.process,
+        super::send_request(
+            &mut self.server,
             json!({
                 "jsonrpc": "2.0",
-                "id": 100,
+                "id": next_request_id(),
                 "method": "textDocument/diagnostic",
                 "params": {
                     "textDocument": { "uri": uri }
                 }
             }),
-        );
-        read_response(&mut self.process)
+        )
     }
 
     /// Request document symbols
     pub fn get_symbols(&mut self, uri: &str) -> Value {
-        send_request(
-            &mut self.process,
+        super::send_request(
+            &mut self.server,
             json!({
                 "jsonrpc": "2.0",
-                "id": 100,
+                "id": next_request_id(),
                 "method": "textDocument/documentSymbol",
                 "params": {
                     "textDocument": { "uri": uri }
                 }
             }),
-        );
-        read_response(&mut self.process)
+        )
     }
 
     /// Request definition at position
     pub fn get_definition(&mut self, uri: &str, line: u32, character: u32) -> Value {
-        send_request(
-            &mut self.process,
+        super::send_request(
+            &mut self.server,
             json!({
                 "jsonrpc": "2.0",
-                "id": 100,
+                "id": next_request_id(),
                 "method": "textDocument/definition",
                 "params": {
                     "textDocument": { "uri": uri },
                     "position": { "line": line, "character": character }
                 }
             }),
-        );
-        read_response(&mut self.process)
+        )
     }
 
     /// Request references at position
@@ -208,11 +241,11 @@ impl TestServer {
         character: u32,
         include_declaration: bool,
     ) -> Value {
-        send_request(
-            &mut self.process,
+        super::send_request(
+            &mut self.server,
             json!({
                 "jsonrpc": "2.0",
-                "id": 100,
+                "id": next_request_id(),
                 "method": "textDocument/references",
                 "params": {
                     "textDocument": { "uri": uri },
@@ -220,72 +253,50 @@ impl TestServer {
                     "context": { "includeDeclaration": include_declaration }
                 }
             }),
-        );
-        read_response(&mut self.process)
+        )
     }
 
     /// Request hover information
     pub fn get_hover(&mut self, uri: &str, line: u32, character: u32) -> Value {
-        send_request(
-            &mut self.process,
+        super::send_request(
+            &mut self.server,
             json!({
                 "jsonrpc": "2.0",
-                "id": 100,
+                "id": next_request_id(),
                 "method": "textDocument/hover",
                 "params": {
                     "textDocument": { "uri": uri },
                     "position": { "line": line, "character": character }
                 }
             }),
-        );
-        read_response(&mut self.process)
+        )
     }
 
     /// Request signature help
     pub fn get_signature_help(&mut self, uri: &str, line: u32, character: u32) -> Value {
-        send_request(
-            &mut self.process,
+        super::send_request(
+            &mut self.server,
             json!({
                 "jsonrpc": "2.0",
-                "id": 100,
+                "id": next_request_id(),
                 "method": "textDocument/signatureHelp",
                 "params": {
                     "textDocument": { "uri": uri },
                     "position": { "line": line, "character": character }
                 }
             }),
-        );
-        read_response(&mut self.process)
+        )
     }
 
-    /// Shutdown the server
+    /// Shutdown the server gracefully
     pub fn shutdown(mut self) {
-        send_request(
-            &mut self.process,
-            json!({
-                "jsonrpc": "2.0",
-                "id": 999,
-                "method": "shutdown"
-            }),
-        );
-        let _ = read_response(&mut self.process);
-
-        send_notification(
-            &mut self.process,
-            json!({
-                "jsonrpc": "2.0",
-                "method": "exit"
-            }),
-        );
-
-        let _ = self.process.wait();
+        super::shutdown_and_exit(&mut self.server);
     }
 }
 
 impl Drop for TestServer {
     fn drop(&mut self) {
-        // Ensure server is terminated on drop
-        let _ = self.process.kill();
+        // LspServer's Drop impl handles cleanup
     }
 }
 
@@ -650,126 +661,5 @@ pub mod generators {
             content.push_str(&format!("sub sub_{} {{ return {}; }}\n", i, i));
         }
         content
-    }
-}
-
-// Common functions (to be imported from test files that include this module)
-
-// Helper to start server from Child process
-fn start_lsp_server() -> TestServer {
-    // Use pre-built binary directly for fast startup
-    // Falls back to cargo run if binary not found
-    let binary_path = std::env::var("PERL_LSP_BIN")
-        .unwrap_or_else(|_| {
-            // Try common binary locations
-            let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-                .unwrap_or_else(|_| ".".to_string());
-            let workspace_root = std::path::Path::new(&manifest_dir)
-                .parent()
-                .and_then(|p| p.parent())
-                .unwrap_or(std::path::Path::new("."));
-
-            let debug_binary = workspace_root.join("target/debug/perl-lsp");
-            if debug_binary.exists() {
-                return debug_binary.to_string_lossy().to_string();
-            }
-
-            let release_binary = workspace_root.join("target/release/perl-lsp");
-            if release_binary.exists() {
-                return release_binary.to_string_lossy().to_string();
-            }
-
-            // Fallback to cargo run (slow)
-            "cargo".to_string()
-        });
-
-    let process = if binary_path.ends_with("perl-lsp") {
-        // Direct binary execution (fast)
-        Command::new(&binary_path)
-            .args(["--stdio"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("Failed to start LSP server")
-    } else {
-        // Cargo run fallback (slow)
-        Command::new("cargo")
-            .args(["run", "-p", "perl-lsp", "--", "--stdio"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("Failed to start LSP server via cargo")
-    };
-
-    TestServer { process }
-}
-
-// Send request to server via JSON-RPC
-fn send_request(child: &mut Child, request: Value) {
-    let request_str = serde_json::to_string(&request).unwrap();
-    let length = request_str.len();
-
-    let stdin = child.stdin.as_mut().unwrap();
-    write!(stdin, "Content-Length: {}\r\n\r\n{}", length, request_str).unwrap();
-    stdin.flush().unwrap();
-}
-
-// Send notification to server
-fn send_notification(child: &mut Child, notification: Value) {
-    send_request(child, notification); // Notifications use same format
-}
-
-// Read a single message from server (internal helper)
-fn read_message(reader: &mut BufReader<&mut std::process::ChildStdout>) -> Value {
-    use std::io::Read;
-
-    // Read headers
-    let mut headers = String::new();
-    loop {
-        let mut line = String::new();
-        reader.read_line(&mut line).unwrap();
-        if line == "\r\n" {
-            break;
-        }
-        headers.push_str(&line);
-    }
-
-    // Parse content length
-    let content_length: usize = headers
-        .lines()
-        .find(|line| line.starts_with("Content-Length:"))
-        .and_then(|line| line.split(':').nth(1))
-        .and_then(|len| len.trim().parse().ok())
-        .unwrap_or(0);
-
-    // Read content
-    let mut content = vec![0; content_length];
-    reader.read_exact(&mut content).unwrap();
-
-    serde_json::from_slice(&content).unwrap()
-}
-
-// Read response from server (skips notifications)
-fn read_response(child: &mut Child) -> Value {
-    let stdout = child.stdout.as_mut().unwrap();
-    let mut reader = BufReader::new(stdout);
-
-    // Keep reading until we get a response (has id field) or error
-    let timeout = Instant::now();
-    loop {
-        let msg = read_message(&mut reader);
-
-        // If it has an "id" field, it's a response
-        if msg.get("id").is_some() {
-            return msg;
-        }
-
-        // It's a notification - skip it and continue
-        // But don't loop forever
-        if timeout.elapsed() > Duration::from_secs(30) {
-            panic!("Timeout waiting for response, only received notifications");
-        }
     }
 }

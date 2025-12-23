@@ -8,11 +8,11 @@
 //! and symbol_at() to provide rich hover information for Perl symbols.
 //! These tests validate hover behavior across common Perl patterns.
 
-mod test_utils;
+mod common;
 
 #[cfg(test)]
 mod semantic_hover_tests {
-    use crate::test_utils::TestServerBuilder;
+    use crate::common::test_utils::TestServerBuilder;
     use serde_json::Value;
 
     /// Extract hover content from an LSP hover response.
