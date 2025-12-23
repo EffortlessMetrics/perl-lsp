@@ -91,6 +91,17 @@ impl TestServerBuilder {
         }
 
         let _ = read_response(&mut server.process);
+
+        // Send initialized notification (required by LSP protocol)
+        send_notification(
+            &mut server.process,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "initialized",
+                "params": {}
+            }),
+        );
+
         server
     }
 }
@@ -646,13 +657,51 @@ pub mod generators {
 
 // Helper to start server from Child process
 fn start_lsp_server() -> TestServer {
-    let process = Command::new("cargo")
-        .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("Failed to start LSP server");
+    // Use pre-built binary directly for fast startup
+    // Falls back to cargo run if binary not found
+    let binary_path = std::env::var("PERL_LSP_BIN")
+        .unwrap_or_else(|_| {
+            // Try common binary locations
+            let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+                .unwrap_or_else(|_| ".".to_string());
+            let workspace_root = std::path::Path::new(&manifest_dir)
+                .parent()
+                .and_then(|p| p.parent())
+                .unwrap_or(std::path::Path::new("."));
+
+            let debug_binary = workspace_root.join("target/debug/perl-lsp");
+            if debug_binary.exists() {
+                return debug_binary.to_string_lossy().to_string();
+            }
+
+            let release_binary = workspace_root.join("target/release/perl-lsp");
+            if release_binary.exists() {
+                return release_binary.to_string_lossy().to_string();
+            }
+
+            // Fallback to cargo run (slow)
+            "cargo".to_string()
+        });
+
+    let process = if binary_path.ends_with("perl-lsp") {
+        // Direct binary execution (fast)
+        Command::new(&binary_path)
+            .args(["--stdio"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("Failed to start LSP server")
+    } else {
+        // Cargo run fallback (slow)
+        Command::new("cargo")
+            .args(["run", "-p", "perl-lsp", "--", "--stdio"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("Failed to start LSP server via cargo")
+    };
 
     TestServer { process }
 }
@@ -672,10 +721,9 @@ fn send_notification(child: &mut Child, notification: Value) {
     send_request(child, notification); // Notifications use same format
 }
 
-// Read response from server
-fn read_response(child: &mut Child) -> Value {
-    let stdout = child.stdout.as_mut().unwrap();
-    let mut reader = BufReader::new(stdout);
+// Read a single message from server (internal helper)
+fn read_message(reader: &mut BufReader<&mut std::process::ChildStdout>) -> Value {
+    use std::io::Read;
 
     // Read headers
     let mut headers = String::new();
@@ -698,8 +746,30 @@ fn read_response(child: &mut Child) -> Value {
 
     // Read content
     let mut content = vec![0; content_length];
-    use std::io::Read;
     reader.read_exact(&mut content).unwrap();
 
     serde_json::from_slice(&content).unwrap()
+}
+
+// Read response from server (skips notifications)
+fn read_response(child: &mut Child) -> Value {
+    let stdout = child.stdout.as_mut().unwrap();
+    let mut reader = BufReader::new(stdout);
+
+    // Keep reading until we get a response (has id field) or error
+    let timeout = Instant::now();
+    loop {
+        let msg = read_message(&mut reader);
+
+        // If it has an "id" field, it's a response
+        if msg.get("id").is_some() {
+            return msg;
+        }
+
+        // It's a notification - skip it and continue
+        // But don't loop forever
+        if timeout.elapsed() > Duration::from_secs(30) {
+            panic!("Timeout waiting for response, only received notifications");
+        }
+    }
 }
