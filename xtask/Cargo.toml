@@ -27,7 +27,7 @@ chrono = { version = "0.4.42", features = ["serde"] }
 perl-parser = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", optional = true }
-regex = "1.11.3"
+regex = "1.12.2"
 serde_yaml_ng = "0.10.0"
 bindgen = "0.72.1"
 peak_alloc = "0.3.0"
