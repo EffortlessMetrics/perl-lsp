@@ -35,7 +35,6 @@ fn open_doc(harness: &mut LspHarness, text: &str) -> String {
 // ======================== INITIALIZATION CONTRACT ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_initialization_contract() {
     let mut harness = LspHarness::new();
 
@@ -85,7 +84,6 @@ fn test_initialization_contract() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_minimal_client_initialization() {
     let mut harness = LspHarness::new();
 
@@ -113,7 +111,6 @@ fn test_minimal_client_initialization() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_double_initialization_rejected() {
     let mut harness = LspHarness::new();
 
@@ -141,7 +138,6 @@ fn test_double_initialization_rejected() {
 // ======================== REQUEST/RESPONSE SHAPE CONTRACTS ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_completion_response_shape() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -183,7 +179,6 @@ fn test_completion_response_shape() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_hover_response_shape() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -224,7 +219,6 @@ fn test_hover_response_shape() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_highlight_contract() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -266,7 +260,6 @@ fn test_document_highlight_contract() {
 // ======================== ERROR HANDLING CONTRACTS ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_error_response_contract() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -305,7 +298,6 @@ fn test_error_response_contract() {
 // ======================== WORKSPACE OPERATIONS ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_folders_contract() {
     let mut harness = LspHarness::new();
 
@@ -357,7 +349,6 @@ fn test_workspace_folders_contract() {
 // ======================== VERSION AND EDIT CONTRACTS ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_apply_edit_with_version() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -406,7 +397,6 @@ fn test_apply_edit_with_version() {
 // ======================== PERFORMANCE CONTRACTS ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_bounded_definition_timeout() {
     // This test verifies that module resolution completes quickly
     // even when the module doesn't exist. We've improved the timeout
@@ -441,7 +431,6 @@ fn test_bounded_definition_timeout() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_large_file_responsiveness() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -475,7 +464,6 @@ fn test_large_file_responsiveness() {
 // ======================== PROPERTY-BASED CONTRACTS ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_idempotent_operations() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -512,7 +500,6 @@ fn test_idempotent_operations() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_uri_validation_contract() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -542,7 +529,6 @@ fn test_uri_validation_contract() {
 // ======================== BACKWARDS COMPATIBILITY ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_legacy_client_support() {
     let mut harness = LspHarness::new();
 
@@ -564,7 +550,6 @@ fn test_legacy_client_support() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_no_stdout_leak() {
     // This test would need special harness support to capture raw stdout
     // For now, we just verify the server doesn't panic on normal operations

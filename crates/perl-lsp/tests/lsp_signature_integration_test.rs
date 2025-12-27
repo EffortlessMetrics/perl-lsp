@@ -5,7 +5,6 @@ use perl_parser::{Parser, SignatureHelpProvider};
 use serde_json::json;
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_lsp_signature_help_request_format() {
     // Test that signature help responses match LSP specification
     let code = "print($x, ";
@@ -44,7 +43,6 @@ fn test_lsp_signature_help_request_format() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_signature_help_trigger_characters() {
     // Test that signature help is triggered correctly
     let trigger_cases = vec![
@@ -70,7 +68,6 @@ fn test_signature_help_trigger_characters() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_multi_signature_functions() {
     // Test functions with multiple signatures
     let multi_sig_functions = vec![
@@ -122,7 +119,6 @@ fn test_multi_signature_functions() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_parameter_highlighting() {
     // Test that active parameter is correctly highlighted
     struct TestCase {
@@ -167,7 +163,6 @@ fn test_parameter_highlighting() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_builtin_vs_user_functions() {
     // Test that we distinguish between built-in and user-defined functions
     let code = r#"
@@ -195,7 +190,6 @@ print("world");
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_method_call_signatures() {
     // Test that method calls don't incorrectly trigger built-in signatures
     let test_cases = vec![
@@ -216,7 +210,6 @@ fn test_method_call_signatures() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_signature_help_with_syntax_errors() {
     // Test that signature help works even with syntax errors
     let error_cases = vec![
@@ -238,7 +231,6 @@ fn test_signature_help_with_syntax_errors() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_overloaded_operators_as_functions() {
     // Test operators that can be used as functions
     let operator_functions = vec![
@@ -267,7 +259,7 @@ fn test_overloaded_operators_as_functions() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore = "File test operators (-e, -f, etc.) not yet registered in signature help provider"]
 fn test_file_test_operators() {
     // Test file test operators
     let file_tests = vec![
@@ -285,7 +277,6 @@ fn test_file_test_operators() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_special_forms() {
     // Test special forms that look like functions
     let special_forms = vec![
@@ -305,7 +296,6 @@ fn test_special_forms() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_pragma_like_functions() {
     // Test pragma-like built-ins
     let pragmas =
@@ -326,7 +316,6 @@ fn test_pragma_like_functions() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_comprehensive_function_categories() {
     // Ensure all categories of functions are covered
     let ast = Parser::new("").parse().unwrap();
@@ -353,7 +342,6 @@ fn test_comprehensive_function_categories() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_documentation_quality() {
     // Test that all signatures have documentation
     let ast = Parser::new("").parse().unwrap();
