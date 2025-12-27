@@ -1411,7 +1411,6 @@ dependencies = [
  "ropey",
  "serde",
  "serde_json",
- "serde_yaml",
  "tempfile",
  "thiserror",
  "tokio",
@@ -1426,10 +1425,8 @@ version = "0.8.8"
 dependencies = [
  "criterion",
  "memchr",
- "once_cell",
  "pretty_assertions",
  "proptest",
- "regex",
  "thiserror",
  "unicode-ident",
 ]
@@ -2107,19 +2104,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5417783452c2be558477e104686f7de5dae53dba813c28435e0e70f82d9b04ee"
 dependencies = [
  "serde_core",
-]
-
-[[package]]
-name = "serde_yaml"
-version = "0.9.34+deprecated"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
-dependencies = [
- "indexmap",
- "itoa",
- "ryu",
- "serde",
- "unsafe-libyaml",
 ]
 
 [[package]]

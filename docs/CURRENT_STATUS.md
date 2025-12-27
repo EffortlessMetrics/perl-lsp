@@ -1,9 +1,9 @@
 # perl-lsp Current Status Snapshot
-<!-- Created: 2025-11-12 -->
-<!-- Last Updated: 2025-12-22 - Documentation and Roadmap Refresh -->
+<!-- Generated: 2025-11-20 -->
+<!-- Last Updated: 2025-11-20 - Semantic Definition Testing Complete -->
 <!-- Comprehensive project health assessment -->
 
-> **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2025-12-22. For live status, treat GitHub issues & milestones as canonical. Metrics below represent point-in-time measurements and may not reflect subsequent progress.
+> **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2025-11-20. For live status, treat GitHub issues & milestones as canonical. Metrics below represent point-in-time measurements and may not reflect subsequent progress.
 
 ## 🎯 At a Glance
 

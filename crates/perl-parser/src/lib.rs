@@ -258,7 +258,8 @@ pub use incremental::{Edit, IncrementalState, apply_edits};
 
 // IDE feature exports
 pub use semantic::{
-    HoverInfo, SemanticAnalyzer, SemanticToken, SemanticTokenModifier, SemanticTokenType,
+    HoverInfo, SemanticAnalyzer, SemanticModel, SemanticToken, SemanticTokenModifier,
+    SemanticTokenType,
 };
 pub use symbol::{Symbol, SymbolExtractor, SymbolKind, SymbolReference, SymbolTable};
 

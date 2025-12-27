@@ -351,7 +351,6 @@ INIT {
 // ============================================================================
 
 #[test]
-#[ignore] // Enable after Phase 2 implementation
 fn test_substitution_operator_semantic() {
     let code = r#"
 my $text = "hello world";
@@ -394,7 +393,7 @@ my $result = $obj->get_value();
 }
 
 #[test]
-#[ignore] // Enable after Phase 2 implementation
+#[ignore = "Phase 2: Reference/Dereference semantic handlers not yet implemented"]
 fn test_reference_dereference_semantic() {
     let code = r#"
 my $scalar = 42;

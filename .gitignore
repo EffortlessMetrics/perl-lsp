@@ -58,10 +58,66 @@ INTEGRATION_COMPLETION_DIGEST.md
 *report*.md
 *status*.md
 *summary*.md
+*_RECEIPT*.md
+*_CHECK_RUN*.md
+*_PROGRESS_COMMENT*.md
+*_VALIDATION*.md
+*_LEDGER*.md
+ledger_*.md
+ISSUE_*.md
+PR_*.md
+T[0-9]*_*.md
+SPRINT_*.md
+POLICY_*.md
+ROUTING_*.md
+INTEGRATIVE_*.md
+REVIEW_*.md
+GENERATIVE_*.md
+PROMOTION_*.md
+QUALITY_*.md
+SECURITY_*.md
+SCHEMA_*.md
+BENCHMARK_*.md
+DOCUMENTATION_*.md
+TEST_HARDENING_*.md
+TESTS_FINALIZER_*.md
+PHASE*_*.md
+DAY*_*.md
+BRANCH_*.md
+SPEC_*.md
+CONTRACT_*.md
+COVERAGE_*.md
+coverage-*.md
+
+# Spec manifest files
+SPEC*.manifest.yml
+SPEC-*.manifest.yml
+
+# Mutation testing config
+mutation_*.txt
+
+# JSON artifacts
+*_EVIDENCE.json
+*_METADATA*.json
+
+# Misplaced test files
+test_behavior.rs
+
+# Coverage directories
+coverage-perl-*/
+
+# Temp directories
+tmp/
+gh-issues-to-create/
+
+# Errant shell expansion directories
+\$\(pwd\)/
 
 # Temporary scripts and artifacts
 analyze_survivors.sh
 run_mutation_test.sh
+fix_remaining_tests.sh
+update-state.sh
 **/temp_*.rs
 **/*_temp.rs
 
@@ -74,6 +130,10 @@ archive/
 
 # Large binary executables (should be built, not committed)
 test_perf
+test_day5_heredoc
+test_heredoc_parse
+test_parser_direct
+libast.rlib
 examples/debug_super
 examples/debug_corpus_parser
 benchmarks/bench_lexer_pest
@@ -87,3 +147,8 @@ benchmark_tests/
 test_fixtures/
 lsp_test/
 .ci/tmp/
+
+# Local/generated review artifacts
+github_comment_*.md
+github_comments_*.md
+GITHUB_ISSUES_*.md
