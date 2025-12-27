@@ -200,6 +200,31 @@ impl LspHarness {
         self.initialize(None)
     }
 
+    /// Initialize and wait until the server is fully ready.
+    ///
+    /// This is the **canonical initialization pattern** that should be used in most tests.
+    /// It combines:
+    /// 1. `initialize` request with proper capabilities
+    /// 2. `initialized` notification
+    /// 3. Barrier synchronization to ensure server is fully ready
+    ///
+    /// # Example
+    /// ```ignore
+    /// let mut harness = LspHarness::new_raw();
+    /// harness.initialize_ready("file:///workspace", None)?;
+    /// harness.open("file:///test.pl", "my $x = 1;")?;
+    /// let result = harness.request("textDocument/hover", params)?;
+    /// ```
+    pub fn initialize_ready(
+        &mut self,
+        root_uri: &str,
+        capabilities: Option<Value>,
+    ) -> Result<Value, String> {
+        let response = self.initialize_with_root(root_uri, capabilities)?;
+        self.barrier();
+        Ok(response)
+    }
+
     /// Open a document (alias for open)
     pub fn open_document(&mut self, uri: &str, text: &str) -> Result<(), String> {
         self.open(uri, text)
@@ -215,6 +240,36 @@ impl LspHarness {
                     "languageId": "perl",
                     "version": 1,
                     "text": text
+                }
+            }),
+        );
+        Ok(())
+    }
+
+    /// Change document content (full replacement)
+    ///
+    /// This is a convenience wrapper for `textDocument/didChange` with full content replacement.
+    pub fn change_full(&mut self, uri: &str, version: i32, text: &str) -> Result<(), String> {
+        self.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                    "version": version
+                },
+                "contentChanges": [{ "text": text }]
+            }),
+        );
+        Ok(())
+    }
+
+    /// Close a document
+    pub fn close(&mut self, uri: &str) -> Result<(), String> {
+        self.notify(
+            "textDocument/didClose",
+            json!({
+                "textDocument": {
+                    "uri": uri
                 }
             }),
         );
@@ -1128,4 +1183,103 @@ macro_rules! assert_perf {
             $max_ms
         );
     }};
+}
+
+// ======================== TESTCONTEXT COMPATIBILITY WRAPPER ========================
+
+/// A compatibility wrapper that provides the same API as the old TestContext
+/// but uses LspHarness underneath for proper initialization and synchronization.
+///
+/// This enables mechanical migration of tests from TestContext to LspHarness
+/// with minimal diff.
+///
+/// # Migration
+///
+/// Old code:
+/// ```ignore
+/// let mut ctx = TestContext::new();
+/// let _ = ctx.initialize();
+/// ctx.open_document(uri, text);
+/// let result = ctx.send_request("textDocument/hover", params);
+/// ```
+///
+/// New code (just change imports):
+/// ```ignore
+/// use support::lsp_harness::TestContext;  // <-- Changed import
+/// let mut ctx = TestContext::new();  // Same API
+/// let _ = ctx.initialize();
+/// ctx.open_document(uri, text);
+/// let result = ctx.send_request("textDocument/hover", params);
+/// ```
+pub struct TestContext {
+    harness: LspHarness,
+    version_counter: i32,
+}
+
+impl TestContext {
+    /// Create a new test context with uninitialized harness
+    pub fn new() -> Self {
+        Self {
+            harness: LspHarness::new_raw(),
+            version_counter: 1,
+        }
+    }
+
+    /// Initialize the LSP server and wait for it to be fully ready
+    ///
+    /// Returns the initialization response value.
+    /// Unlike the old TestContext, this includes a barrier to ensure the server is ready.
+    pub fn initialize(&mut self) -> Value {
+        self.harness
+            .initialize_ready("file:///workspace", None)
+            .expect("initialization should succeed")
+    }
+
+    /// Send a request and wait for response
+    ///
+    /// Returns `Some(result)` on success, `None` on error.
+    pub fn send_request(&mut self, method: &str, params: Option<Value>) -> Option<Value> {
+        let p = params.unwrap_or(json!({}));
+        self.harness.request(method, p).ok()
+    }
+
+    /// Send a notification (no response expected)
+    pub fn send_notification(&mut self, method: &str, params: Option<Value>) {
+        let p = params.unwrap_or(json!({}));
+        self.harness.notify(method, p);
+    }
+
+    /// Open a document
+    pub fn open_document(&mut self, uri: &str, text: &str) {
+        self.harness.open(uri, text).expect("open should succeed");
+    }
+
+    /// Update document content with auto-incrementing version
+    pub fn update_document(&mut self, uri: &str, text: &str) {
+        self.version_counter += 1;
+        self.harness
+            .change_full(uri, self.version_counter, text)
+            .expect("change should succeed");
+    }
+
+    /// Close a document
+    pub fn close_document(&mut self, uri: &str) {
+        self.harness.close(uri).expect("close should succeed");
+    }
+
+    /// Synchronization barrier - wait for server to be idle
+    pub fn barrier(&mut self) {
+        self.harness.barrier();
+    }
+
+    /// Get underlying harness for advanced operations
+    pub fn harness(&mut self) -> &mut LspHarness {
+        &mut self.harness
+    }
+}
+
+impl Default for TestContext {
+    fn default() -> Self {
+        Self::new()
+    }
 }
