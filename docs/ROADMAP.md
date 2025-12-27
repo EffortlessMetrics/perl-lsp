@@ -124,58 +124,46 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 
 ---
 
-## 🎯 Current Phase: Validation & De-Risking (November 2025)
+## 🎯 Current Phase: Validation & De-Risking (December 2025)
 
-**Status**: ~80-85% "fully working" for core goal: "Perl parser + LSP that actually works"
+**Status**: ~85-90% "fully working" for core goal: "Perl parser + LSP that actually works"
 
-### ✅ Recent Completions (2025-11-20)
+### ✅ Recent Completions
 
-1. **Statement Tracker & Heredocs** - ✅ **100% COMPLETE**
+1. **Statement Tracker & Heredocs** - ✅ **100% COMPLETE** (2025-11-20)
    - `HeredocContext`, `BlockBoundary`, `BlockType` fully implemented
    - `StatementTracker` threaded through parser pipeline
    - AST integration (F1-F6 + edge cases) validated
-   - 274 tests passing at repository level
 
-2. **Semantic Analyzer Phase 1** - ✅ **COMPLETE (12/12 critical handlers)**
-   - Variable declarations (scalar, array, hash)
-   - Ternary operators, array/hash literals
-   - Try blocks, phase blocks, do/eval expressions
-   - Expression statements, unary operators, readline
+2. **Semantic Analyzer Phase 1** - ✅ **COMPLETE** (2025-11-20)
+   - 12/12 critical node handlers implemented
    - `SemanticModel` stable API wrapper
+   - LSP `textDocument/definition` integrated
 
-3. **LSP Semantic Definition** - ✅ **Implementation + Tests Complete**
-   - `textDocument/definition` uses `SemanticAnalyzer::find_definition()`
-   - 4 core test patterns validated (scalars, subs, lexical scopes, package-qualified)
-   - Dynamic position calculation for robustness
-   - Resource-efficient individual test execution
-   - Awaiting execution validation on proper hardware
+3. **Band 1: Semantic Stack Validation** - ✅ **COMPLETE** (2025-12-27)
+   - `just ci-gate` verified on Rust 1.89 MSRV
+   - 337 library tests passing (perl-parser: 279, perl-dap: 37, perl-corpus: 12, perl-lexer: 9)
+   - 4/4 LSP semantic definition tests passing
+   - Format, clippy, and policy checks all green
 
 ### 📋 Path to "Fully Working" v1.0
 
-**Band 1: Prove the Semantic Stack** (1-2 working days on adequate hardware)
-- [ ] Run semantic analyzer unit tests on non-resource-starved machine
-- [ ] Execute all 4 LSP semantic definition tests
-- [ ] Run `just ci-gate` for complete validation receipt
-- **Target**: Move from 80-85% → 90%+ with execution proof
-
 **Band 2: Reduce Ignored Tests** (1-2 weeks part-time)
-- [ ] Inventory 779 ignored tests by file
-- [ ] Re-enable 5-10 tests per dense file
-- [ ] Tag remaining ignores with clear reasons (slow, legacy, issue #)
-- [ ] Document test surfacing in `docs/ci/IGNORED_TESTS_INDEX.md`
+- [ ] Inventory ~740 ignored tests by file and reason
+- [ ] Fix root cause: BrokenPipe initialization timing
+- [ ] Re-enable tests in batches (target: densest files first)
+- [ ] Document remaining ignores in `docs/ci/IGNORED_TESTS_INDEX.md`
 - **Target**: <100 ignored tests with documented reasons
 
 **Band 3: Tag v0.9 Semantic-Ready** (1-2 weeks)
 - [ ] Align README/status docs with semantic LSP capabilities
 - [ ] Tag `v0.9.0-semantic-lsp-ready` milestone
 - [ ] Update CHANGELOG with semantic analyzer + LSP definition features
-- [ ] Use as base for CI cost optimization and Sprint B features
 - **Target**: Externally-consumable "it just works" release
 
 ### 🚧 Known Constraints
-- **Resource-constrained testing environment**: WSL with limited CPU/RAM causes test hangs
-- **GitHub Actions billing**: Blocked, preventing hosted CI execution
-- **Large ignored test count**: 779 tests (mostly LSP integration) need review
+- **~740 ignored LSP tests**: Single root cause (initialization timing), fix in progress
+- **CI Pipeline**: Issue #211 blocks merge-blocking gates (#210)
 - **Semantic Phase 2/3**: Advanced features deferred (closures, multi-file, imports)
 
 ---
@@ -444,9 +432,9 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 
 ## 📊 Benchmark Methodology
 
-*Performance measurements taken on Intel Core i7-10700K @ 3.8GHz, 32GB RAM, Ubuntu 22.04 LTS. Tests run on warm cache with 1000 iterations, reporting median times. Test corpus includes real-world Perl files ranging from 100 lines (simple) to 5000+ lines (complex). See **[BENCHMARKS.md](BENCHMARKS.md)** for the corpus, hardware, and exact commands; see **[FEATURE_ROADMAP.md](FEATURE_ROADMAP.md)** for the canonical feature matrix.
+*Performance measurements taken on Intel Core i7-10700K @ 3.8GHz, 32GB RAM, Ubuntu 22.04 LTS. Tests run on warm cache with 1000 iterations, reporting median times. Test corpus includes real-world Perl files ranging from 100 lines (simple) to 5000+ lines (complex). See **[benchmarks/BENCHMARK_FRAMEWORK.md](benchmarks/BENCHMARK_FRAMEWORK.md)** for the corpus, hardware, and exact commands.*
 
-<sup>†</sup> *LSP 3.18 compliance percentage based on implemented and fully functional LSP protocol features. The server advertises only capabilities that are production-ready. See LSP_ACTUAL_STATUS.md for detailed feature matrix.*
+<sup>†</sup> *LSP 3.18 compliance percentage based on implemented and fully functional LSP protocol features. The server advertises only capabilities that are production-ready. See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed feature matrix.*
 
 ---
 
@@ -510,14 +498,15 @@ workspace/executeCommand: {
 
 ## 🔗 Resources
 
-- **[Detailed Feature Roadmap](FEATURE_ROADMAP.md)** - Complete feature list
-- **[2025 Roadmap](ROADMAP_2025.md)** - This year's focus
-- **[Architecture Guide](ARCHITECTURE.md)** - Technical details
-- **[LSP Documentation](docs/LSP_DOCUMENTATION.md)** - IDE integration
-- **[Contributing Guide](CONTRIBUTING.md)** - How to help
+- **[Architecture Overview](ARCHITECTURE_OVERVIEW.md)** - Technical details and system design
+- **[Crate Architecture Guide](CRATE_ARCHITECTURE_GUIDE.md)** - Component relationships
+- **[LSP Implementation Guide](LSP_IMPLEMENTATION_GUIDE.md)** - LSP server architecture
+- **[LSP Features](LSP_FEATURES.md)** - Complete feature matrix
+- **[Current Status](CURRENT_STATUS.md)** - Real-time project health
+- **[Contributing Guide](../CONTRIBUTING.md)** - How to help
 
 ---
 
 *The future of Perl tooling is here. Join us in building it!*
 
-*Last Updated: 2025-08-25*
+**Last Updated**: 2025-12-27

@@ -62,12 +62,12 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 - **Performance**: <1ms incremental parsing (actual: 931ns!), <50ms LSP responses
 
 ### Areas of Focus ⚠️
-- **779 ignored tests**: 87% due to LSP initialization issues (5-week fix plan in Band 2)
+- **~740 ignored tests**: 95% due to single root cause (LSP initialization timing), fix plan in Band 2
 - **CI/CD at 40%**: Issue #211 addressing with $720/year savings potential
 - **484 doc violations**: Infrastructure complete, 8-week content plan ready
 - ~~**Sprint A at 75%**~~ ✅ **Sprint A 100% COMPLETE!** All heredoc/statement tracker work delivered!
 - **Semantic Analyzer (#188)**: ✅ **Phase 1 COMPLETE!** All 12/12 critical handlers + LSP textDocument/definition integration
-- **Semantic Definition Testing**: ✅ **Tests Complete** - 4 LSP tests + 2 unit tests, awaiting execution on proper hardware
+- **Semantic Definition Testing**: ✅ **VALIDATED** (2025-12-27) - 4/4 LSP tests + 2 unit tests passing
 
 ### Recent Completions (2025-11-20) 🎉
 1. ✅ **Semantic Analyzer Phase 1** - 12/12 critical node handlers implemented with SemanticModel stable API
@@ -342,7 +342,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 
 **Integration**: `SemanticAnalyzer::find_definition(byte_offset)` wired to LSP handler
 
-**Test Infrastructure** (awaiting execution on proper hardware):
+**Test Infrastructure** (✅ validated 2025-12-27):
 1. **Scalar Variable Definition** - `$x` reference resolves to `my $x` declaration
 2. **Subroutine Definition** - `foo()` call resolves to `sub foo` declaration
 3. **Lexical Scoped Variables** - Proper nested scope handling (`$inner` vs `$outer`)
@@ -372,23 +372,21 @@ RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
 - **Result**: Semantic stack validated, 337 lib tests + 4 LSP def tests passing
 
 **Band 2: Reduce Ignored Tests** (1-2 weeks part-time)
-- [ ] Inventory 779 ignored tests by file
-- [ ] Re-enable 5-10 tests per dense file
-- [ ] Tag remaining ignores with reasons
-- [ ] Document in `docs/ci/IGNORED_TESTS_INDEX.md`
-- **Target**: <100 ignored tests with clear justifications
+- [ ] Fix root cause: BrokenPipe initialization timing (95% of ignores)
+- [ ] Migrate tests from `TestContext` to `LspHarness` pattern
+- [ ] Re-enable tests in batches (target: densest files first)
+- [ ] Document remaining ignores in `docs/ci/IGNORED_TESTS_INDEX.md`
+- **Target**: <100 ignored tests with documented reasons
 
 **Band 3: Tag v0.9-semantic-lsp-ready** (1-2 weeks)
 - [ ] Update README/docs with semantic capabilities
 - [ ] Tag milestone: `v0.9.0-semantic-lsp-ready`
 - [ ] Update CHANGELOG with Phase 1 achievements
-- [ ] Foundation for CI optimization and Sprint B features
 - **Target**: Externally-consumable "it just works" release
 
 ### 🚧 Known Constraints
-- **Resource-constrained testing**: WSL with limited CPU/RAM causes test hangs
-- **GitHub Actions billing**: Blocked, preventing hosted CI execution
-- **Large ignored test count**: 779 tests need systematic review
+- **~740 ignored LSP tests**: Single root cause (BrokenPipe initialization timing)
+- **CI Pipeline**: Issue #211 blocks merge-blocking gates (#210)
 - **Semantic Phase 2/3**: Advanced features deferred (closures, multi-file, imports)
 
 ---
