@@ -9,12 +9,15 @@
 //! - **dispatch**: Request routing and lifecycle management
 //! - **handlers**: LSP method implementations
 //! - **fallback**: Text-based fallback implementations
+//! - **server_impl**: Core LspServer implementation
+//! - **server**: Public server interface (re-exports from server_impl)
 
 pub mod dispatch;
 pub mod fallback;
 pub mod handlers;
 pub mod protocol;
 pub mod server;
+pub mod server_impl;
 pub mod state;
 pub mod transport;
 

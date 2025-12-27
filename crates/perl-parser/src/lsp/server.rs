@@ -1,17 +1,15 @@
 //! LSP Server core
 //!
-//! This module re-exports the LspServer from the legacy lsp_server module
-//! during the migration period. Eventually, the server implementation will
-//! live here directly.
+//! This module provides the public interface to the LSP server implementation.
+//! The actual implementation lives in `server_impl.rs`.
+//!
+//! ## Migration Status
+//! The server implementation has been moved from the legacy `lsp_server.rs`
+//! (at the crate root) to `lsp/server_impl.rs`. The root-level `lsp_server.rs`
+//! now serves as a compatibility shim that re-exports from here.
 
-// Re-export LspServer from legacy location
-pub use crate::lsp_server::LspServer;
+// Re-export LspServer from the implementation module
+pub use super::server_impl::LspServer;
 
-// Re-export protocol types from the new modular location
+// Re-export protocol types for convenience
 pub use super::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
-
-// After migration is complete, this file will contain:
-// - LspServer struct definition
-// - Constructor methods (new, with_output)
-// - run() event loop
-// - Core server state
