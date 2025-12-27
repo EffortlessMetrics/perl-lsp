@@ -1,6 +1,16 @@
 //! Advanced LSP Features Test Suite
 //!
 //! Tests for snippets, templates, test runner integration, and advanced IDE features
+//!
+//! NOTE: This test file is gated behind the `lsp-extras` feature because:
+//! 1. The AdvancedTestContext doesn't properly initialize the LSP server
+//! 2. Many of these tests are for speculative/future features not yet implemented
+//! 3. The tests use a broken initialization pattern (init params are computed but discarded)
+//!
+//! To run these tests: `cargo test -p perl-lsp --features lsp-extras --test lsp_advanced_features_test`
+//! These tests should be rewritten with proper LspHarness before enabling in CI.
+
+#![cfg(feature = "lsp-extras")]
 
 use perl_parser::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
