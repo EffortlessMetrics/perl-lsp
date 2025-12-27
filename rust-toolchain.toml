@@ -1,5 +1,6 @@
-# Rust toolchain configuration for tree-sitter-perl
+# Rust toolchain configuration for perl-lsp
+# MSRV: 1.89 (for OpenAI Codex compatibility)
 [toolchain]
-channel = "stable"
+channel = "1.89.0"
 components = ["rustfmt", "clippy"]
 profile = "minimal"
