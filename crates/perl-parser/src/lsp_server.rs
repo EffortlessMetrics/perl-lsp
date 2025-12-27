@@ -22,9 +22,13 @@ use crate::{
     // Import from new modular lsp structure
     lsp::protocol::{
         JsonRpcError, JsonRpcRequest, JsonRpcResponse,
-        REQUEST_CANCELLED, SERVER_CANCELLED, CONTENT_MODIFIED,
+        REQUEST_CANCELLED, CONTENT_MODIFIED,
         METHOD_NOT_FOUND, INVALID_REQUEST, INVALID_PARAMS,
+        cancelled_response, request_cancelled_error, server_cancelled_error,
+        enhanced_error, document_not_found_error,
     },
+    lsp::transport::{read_message, write_message, log_response},
+    lsp::state::{DocumentState, ClientCapabilities, normalize_package_separator, ServerConfig},
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
     positions::LineStartsCache,
@@ -37,10 +41,9 @@ use crate::{
 use lsp_types::Location;
 use md5;
 use serde_json::{Value, json};
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
     Arc, Mutex,
@@ -65,28 +68,7 @@ lazy_static! {
         regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)").unwrap();
 }
 
-// Error code aliases for backward compatibility
-// (actual constants imported from crate::lsp::protocol)
-const ERR_METHOD_NOT_FOUND: i32 = METHOD_NOT_FOUND;
-const ERR_INVALID_REQUEST: i32 = INVALID_REQUEST;
-const ERR_INVALID_PARAMS: i32 = INVALID_PARAMS;
-const ERR_SERVER_CANCELLED: i32 = SERVER_CANCELLED;
-const ERR_CONTENT_MODIFIED: i32 = CONTENT_MODIFIED;
-const ERR_REQUEST_CANCELLED: i32 = REQUEST_CANCELLED;
-
-/// Helper to create a cancelled response
-fn cancelled_response(id: &serde_json::Value) -> JsonRpcResponse {
-    JsonRpcResponse {
-        jsonrpc: "2.0".to_string(),
-        id: Some(id.clone()),
-        result: None,
-        error: Some(JsonRpcError {
-            code: ERR_REQUEST_CANCELLED,
-            message: "Request cancelled".into(),
-            data: None,
-        }),
-    }
-}
+// Note: Error codes and cancelled_response imported from crate::lsp::protocol
 
 /// Enhanced cancelled response with provider context and performance tracking
 fn enhanced_cancelled_response(
@@ -129,7 +111,7 @@ fn enhanced_cancelled_response(
         jsonrpc: "2.0".to_string(),
         id: Some(token.request_id().clone()),
         result: None,
-        error: Some(JsonRpcError { code: ERR_REQUEST_CANCELLED, message, data: Some(data) }),
+        error: Some(JsonRpcError { code: REQUEST_CANCELLED, message, data: Some(data) }),
     }
 }
 
@@ -146,22 +128,7 @@ macro_rules! early_cancel_or {
     }};
 }
 
-/// Client capabilities received during initialization
-#[derive(Debug, Clone, Default)]
-struct ClientCapabilities {
-    /// Supports LocationLink for goto declaration
-    declaration_link_support: bool,
-    /// Supports LocationLink for goto definition
-    definition_link_support: bool,
-    /// Supports LocationLink for goto type definition
-    type_definition_link_support: bool,
-    /// Supports LocationLink for goto implementation
-    implementation_link_support: bool,
-    /// Supports dynamic registration for file watching
-    dynamic_registration_support: bool,
-    /// Supports snippet syntax in completion items
-    snippet_support: bool,
-}
+// Note: ClientCapabilities imported from crate::lsp::state::document
 
 /// LSP server that handles JSON-RPC communication
 pub struct LspServer {
@@ -194,99 +161,8 @@ pub struct LspServer {
     client_supports_pull_diags: Arc<AtomicBool>,
 }
 
-/// Document state with Rope-based content management for efficient LSP operations
-///
-/// This structure maintains both a Rope for efficient edits and a cached String
-/// representation for compatibility with subsystems that expect `&str`. The dual
-/// representation ensures optimal performance for both incremental edits (Rope)
-/// and parsing/analysis operations (String).
-///
-/// ## Performance Characteristics
-/// - **Rope operations**: O(log n) for insertions, deletions, and slicing
-/// - **String operations**: O(1) access for parsing and analysis
-/// - **Position mapping**: O(log n) with line starts cache
-/// - **Memory usage**: ~2x content size due to dual representation
-#[derive(Clone)]
-pub(crate) struct DocumentState {
-    /// Rope-backed document content providing O(log n) edit performance
-    ///
-    /// The rope is the authoritative source for document content and supports
-    /// efficient incremental updates from LSP TextDocumentContentChangeEvents.
-    pub(crate) rope: ropey::Rope,
-
-    /// Cached string representation synchronized with rope content
-    ///
-    /// This cached copy enables efficient access for parsing and analysis
-    /// subsystems that operate on `&str`. Updated lazily when rope changes.
-    pub(crate) text: String,
-
-    /// LSP document version number for synchronization
-    pub(crate) _version: i32,
-
-    /// Cached parsed AST for semantic analysis
-    ///
-    /// Rebuilt when document content changes, providing fast access to
-    /// structured representation for LSP features like hover and completion.
-    pub(crate) ast: Option<std::sync::Arc<crate::ast::Node>>,
-
-    /// Parse errors from last AST generation attempt
-    pub(crate) parse_errors: Vec<crate::error::ParseError>,
-
-    /// Parent map for O(1) scope traversal during semantic analysis
-    ///
-    /// Built once per AST generation, uses FxHashMap for faster pointer hashing
-    /// enabling efficient parent lookups during symbol resolution.
-    pub(crate) parent_map: ParentMap,
-
-    /// Line starts cache for O(log n) LSP position conversion
-    ///
-    /// Enables fast conversion between byte offsets (rope operations) and
-    /// line/column positions (LSP protocol) with UTF-16 encoding support.
-    pub(crate) line_starts: LineStartsCache,
-
-    /// Generation counter for race condition prevention in concurrent access
-    pub(crate) generation: Arc<AtomicU32>,
-}
-
-/// Normalize legacy package separator ' to ::
-fn norm_pkg<'a>(s: &'a str) -> Cow<'a, str> {
-    if s.contains('\'') { Cow::Owned(s.replace('\'', "::")) } else { Cow::Borrowed(s) }
-}
-
-/// Server configuration
-#[derive(Debug, Clone)]
-struct ServerConfig {
-    // Inlay hints configuration
-    inlay_hints_enabled: bool,
-    inlay_hints_parameter_hints: bool,
-    inlay_hints_type_hints: bool,
-    inlay_hints_chained_hints: bool,
-    inlay_hints_max_length: usize,
-
-    // Test runner configuration
-    test_runner_enabled: bool,
-    test_runner_command: String,
-    test_runner_args: Vec<String>,
-    test_runner_timeout: u64,
-}
-
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            inlay_hints_enabled: true,
-            inlay_hints_parameter_hints: true,
-            inlay_hints_type_hints: true,
-            inlay_hints_chained_hints: false,
-            inlay_hints_max_length: 30,
-            test_runner_enabled: true,
-            test_runner_command: "perl".to_string(),
-            test_runner_args: vec![],
-            test_runner_timeout: 60000,
-        }
-    }
-}
-
-// JSON-RPC types are now imported from crate::lsp::protocol::{JsonRpcRequest, JsonRpcResponse, JsonRpcError}
+// Note: DocumentState, ServerConfig, and normalize_package_separator are
+// imported from crate::lsp::state::{document, config}
 
 #[allow(dead_code)]
 impl LspServer {
@@ -402,15 +278,16 @@ impl LspServer {
         eprintln!("LSP server started");
 
         loop {
-            // Read LSP message
-            match self.read_message_from(&mut reader)? {
+            // Read LSP message using transport module
+            match read_message(&mut reader)? {
                 Some(request) => {
                     eprintln!("Received request: {}", request.method);
 
                     // Handle the request
                     if let Some(response) = self.handle_request(request) {
-                        // Send response
-                        self.send_message(&mut stdout, &response)?;
+                        // Log and send response using transport module
+                        log_response(&response);
+                        write_message(&mut stdout, &response)?;
                     }
                 }
                 None => {
@@ -424,168 +301,22 @@ impl LspServer {
         Ok(())
     }
 
-    /// Send an LSP message to stdout
-    fn send_message(
-        &self,
-        stdout: &mut io::StdoutLock<'_>,
-        response: &JsonRpcResponse,
-    ) -> io::Result<()> {
-        let content = serde_json::to_string(response)?;
-        let content_length = content.len();
-
-        // Log outgoing response for debugging
-        eprintln!(
-            "[perl-lsp:tx] id={:?} has_result={} has_error={} len={}",
-            response.id,
-            response.result.is_some(),
-            response.error.is_some(),
-            content_length
-        );
-
-        write!(stdout, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
-        stdout.flush()?;
-
-        Ok(())
-    }
-
     /// Handle a message from any reader (for testing)
     pub fn handle_message<R: Read>(&mut self, reader: &mut R) -> io::Result<()> {
         let mut buf_reader = BufReader::new(reader);
-        if let Some(request) = self.read_message_from(&mut buf_reader)? {
+        if let Some(request) = read_message(&mut buf_reader)? {
             if let Some(response) = self.handle_request(request) {
-                // Write response to the configured output
+                // Write response to the configured output using transport module
                 if let Ok(mut output) = self.output.lock() {
-                    let content = serde_json::to_string(&response)?;
-                    let content_length = content.len();
-                    write!(output, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
-                    output.flush()?;
+                    write_message(&mut *output, &response)?;
                 }
             }
         }
         Ok(())
     }
 
-    /// Read an LSP message from any BufRead source
-    fn read_message_from<R: BufRead>(&self, reader: &mut R) -> io::Result<Option<JsonRpcRequest>> {
-        let mut headers = HashMap::new();
-
-        // Read headers
-        loop {
-            let mut line = String::new();
-            if reader.read_line(&mut line)? == 0 {
-                return Ok(None); // EOF
-            }
-
-            let line = line.trim_end();
-            if line.is_empty() {
-                break; // End of headers
-            }
-
-            if let Some((key, value)) = line.split_once(": ") {
-                headers.insert(key.to_string(), value.to_string());
-            }
-        }
-
-        // Read content
-        if let Some(content_length) = headers.get("Content-Length") {
-            if let Ok(length) = content_length.parse::<usize>() {
-                let mut content = vec![0u8; length];
-                let mut bytes_read = 0;
-
-                // Read content in chunks to handle partial reads
-                while bytes_read < length {
-                    let bytes_to_read = length - bytes_read;
-                    let mut chunk = vec![0u8; bytes_to_read];
-                    match reader.read(&mut chunk)? {
-                        0 => return Ok(None), // Unexpected EOF
-                        n => {
-                            content[bytes_read..bytes_read + n].copy_from_slice(&chunk[..n]);
-                            bytes_read += n;
-                        }
-                    }
-                }
-
-                // Parse JSON-RPC request with enhanced error handling
-                match serde_json::from_slice(&content) {
-                    Ok(request) => return Ok(Some(request)),
-                    Err(e) => {
-                        // Enhanced malformed frame recovery
-                        eprintln!("LSP server: JSON parse error - {}", e);
-
-                        // Attempt to extract malformed content safely (no sensitive data logging)
-                        let content_str = String::from_utf8_lossy(&content);
-                        if content_str.len() > 100 {
-                            eprintln!(
-                                "LSP server: Malformed frame (truncated): {}...",
-                                &content_str[..100]
-                            );
-                        } else {
-                            eprintln!("LSP server: Malformed frame: {}", content_str);
-                        }
-
-                        // Continue processing - don't crash the server on malformed input
-                        return Ok(None);
-                    }
-                }
-            }
-        }
-
-        Ok(None)
-    }
-
-    /// Create a request cancelled error
-    fn request_cancelled() -> JsonRpcError {
-        JsonRpcError {
-            code: ERR_REQUEST_CANCELLED,
-            message: "Request cancelled".to_string(),
-            data: None,
-        }
-    }
-
-    /// Create a server cancelled error
-    fn server_cancelled() -> JsonRpcError {
-        JsonRpcError {
-            code: ERR_SERVER_CANCELLED,
-            message: "Server cancelled the request".to_string(),
-            data: None,
-        }
-    }
-
-    /// Create an enhanced error response with comprehensive context
-    fn enhanced_error(
-        code: i32,
-        message: &str,
-        error_type: &str,
-        method: Option<&str>,
-    ) -> JsonRpcError {
-        let mut data = json!({
-            "error_type": error_type,
-            "context": "Enhanced LSP error response with comprehensive context",
-            "server_info": {
-                "name": "perl-lsp",
-                "version": env!("CARGO_PKG_VERSION"),
-                "capabilities": "Enhanced error handling and concurrent request management"
-            },
-            "timestamp": std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()
-        });
-
-        if let Some(method_name) = method {
-            data["method"] = json!(method_name);
-        }
-
-        JsonRpcError { code, message: message.to_string(), data: Some(data) }
-    }
-
-    /// Create a standard document not found error response
-    fn document_not_found_error() -> Value {
-        json!({
-            "status": "error",
-            "message": "Document not found"
-        })
-    }
+    // Note: request_cancelled_error, server_cancelled_error, enhanced_error, and
+    // document_not_found_error are imported from crate::lsp::protocol
 
     /// Mark a request as cancelled
     fn cancel_mark(&self, id: &Value) {
@@ -914,7 +645,7 @@ impl LspServer {
                                 jsonrpc: "2.0".to_string(),
                                 id: Some(id.clone()),
                                 result: None,
-                                error: Some(Self::request_cancelled()),
+                                error: Some(request_cancelled_error()),
                             });
                         }
 
@@ -925,7 +656,7 @@ impl LspServer {
                                     jsonrpc: "2.0".to_string(),
                                     id: Some(id.clone()),
                                     result: None,
-                                    error: Some(Self::server_cancelled()),
+                                    error: Some(server_cancelled_error()),
                                 });
                             }
                         }
@@ -937,8 +668,8 @@ impl LspServer {
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
                 // Enhanced error response with comprehensive context
-                Err(Self::enhanced_error(
-                    ERR_METHOD_NOT_FOUND,
+                Err(enhanced_error(
+                    METHOD_NOT_FOUND,
                     &format!("Method '{}' not found or not supported", request.method),
                     "method_not_found",
                     Some(&request.method),
@@ -1234,7 +965,7 @@ impl LspServer {
                 DocumentState {
                     rope: rope.clone(),
                     text: text.to_string(),
-                    _version: version,
+                    version,
                     ast: ast_arc.clone(),
                     parse_errors: errors,
                     parent_map,
@@ -1306,7 +1037,7 @@ impl LspServer {
                     .unwrap_or_else(|| DocumentState {
                         rope: ropey::Rope::new(),
                         text: String::new(),
-                        _version: version,
+                        version,
                         ast: None,
                         parse_errors: vec![],
                         parent_map: ParentMap::default(),
@@ -1372,7 +1103,7 @@ impl LspServer {
                 doc_state = DocumentState {
                     rope: doc.rope.clone(),
                     text: text.to_string(),
-                    _version: version,
+                    version,
                     ast: ast_arc.clone(),
                     parse_errors: errors,
                     parent_map,
@@ -1383,14 +1114,14 @@ impl LspServer {
                 // Check if a newer change arrived while we were parsing
                 if let Some(existing_doc) = self.get_document(&documents, uri) {
                     if existing_doc.generation.load(Ordering::SeqCst) != next_gen
-                        || existing_doc._version > target_version
+                        || existing_doc.version > target_version
                     {
                         eprintln!(
                             "Discarding stale parse result for {} (gen {} != {} or version {} > {})",
                             uri,
                             next_gen,
                             existing_doc.generation.load(Ordering::SeqCst),
-                            existing_doc._version,
+                            existing_doc.version,
                             target_version
                         );
                         return Ok(());
@@ -1523,7 +1254,7 @@ impl LspServer {
                 "Publishing {} diagnostics for {} (version {})",
                 lsp_diagnostics.len(),
                 uri,
-                doc._version
+                doc.version
             );
 
             // Only publish if client doesn't support pull diagnostics
@@ -1535,7 +1266,7 @@ impl LspServer {
                     "textDocument/publishDiagnostics",
                     json!({
                         "uri": uri,
-                        "version": doc._version,
+                        "version": doc.version,
                         "diagnostics": lsp_diagnostics
                     }),
                 );
@@ -1996,7 +1727,7 @@ impl LspServer {
             // Early cancellation check with relaxed read
             if token.is_cancelled_relaxed() {
                 return Err(JsonRpcError {
-                    code: ERR_REQUEST_CANCELLED,
+                    code: REQUEST_CANCELLED,
                     message: "Request cancelled".to_string(),
                     data: None,
                 });
@@ -2063,7 +1794,7 @@ impl LspServer {
                         GLOBAL_CANCELLATION_REGISTRY.remove_request(req_id);
                     }
                     return Err(JsonRpcError {
-                        code: ERR_REQUEST_CANCELLED,
+                        code: REQUEST_CANCELLED,
                         message: "Request cancelled during completion generation".to_string(),
                         data: None,
                     });
@@ -2568,7 +2299,7 @@ impl LspServer {
             // Early cancellation check with relaxed read
             if token.is_cancelled_relaxed() {
                 return Err(JsonRpcError {
-                    code: ERR_REQUEST_CANCELLED,
+                    code: REQUEST_CANCELLED,
                     message: "Request cancelled".to_string(),
                     data: None,
                 });
@@ -3117,10 +2848,10 @@ impl LspServer {
                         uri.to_string(),
                     )
                     .with_parent_map(&doc.parent_map)
-                    .with_doc_version(doc._version);
+                    .with_doc_version(doc.version);
 
                     // Find declaration at the position
-                    if let Some(location_links) = provider.find_declaration(offset, doc._version) {
+                    if let Some(location_links) = provider.find_declaration(offset, doc.version) {
                         // Check client capability and return appropriate format
                         if self.client_capabilities.declaration_link_support {
                             // Return LocationLink format
@@ -3351,9 +3082,9 @@ impl LspServer {
                         uri.to_string(),
                     )
                     .with_parent_map(&doc.parent_map)
-                    .with_doc_version(doc._version);
+                    .with_doc_version(doc.version);
 
-                    if let Some(location_links) = provider.find_declaration(offset, doc._version) {
+                    if let Some(location_links) = provider.find_declaration(offset, doc.version) {
                         // Convert to Location format for definition
                         let result: Vec<Value> = location_links
                             .iter()
@@ -3490,7 +3221,7 @@ impl LspServer {
             // Early cancellation check with relaxed read
             if token.is_cancelled_relaxed() {
                 return Err(JsonRpcError {
-                    code: ERR_REQUEST_CANCELLED,
+                    code: REQUEST_CANCELLED,
                     message: "Request cancelled".to_string(),
                     data: None,
                 });
@@ -4635,13 +4366,13 @@ impl LspServer {
     fn handle_semantic_tokens(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
             let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
-                code: ERR_INVALID_PARAMS,
+                code: INVALID_PARAMS,
                 message: "Missing textDocument.uri".into(),
                 data: None,
             })?;
             let documents = self.documents.lock().unwrap();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: ERR_INVALID_REQUEST,
+                code: INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
                 data: None,
             })?;
@@ -4660,7 +4391,7 @@ impl LspServer {
     fn handle_inlay_hints(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
             let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
-                code: ERR_INVALID_PARAMS,
+                code: INVALID_PARAMS,
                 message: "Missing textDocument.uri".into(),
                 data: None,
             })?;
@@ -4679,7 +4410,7 @@ impl LspServer {
 
             let documents = self.documents.lock().unwrap();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: ERR_INVALID_REQUEST,
+                code: INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
                 data: None,
             })?;
@@ -4705,13 +4436,13 @@ impl LspServer {
     fn handle_document_links(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
             let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
-                code: ERR_INVALID_PARAMS,
+                code: INVALID_PARAMS,
                 message: "Missing textDocument.uri".into(),
                 data: None,
             })?;
             let documents = self.documents.lock().unwrap();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: ERR_INVALID_REQUEST,
+                code: INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
                 data: None,
             })?;
@@ -4729,19 +4460,19 @@ impl LspServer {
     fn handle_selection_range(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
             let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
-                code: ERR_INVALID_PARAMS,
+                code: INVALID_PARAMS,
                 message: "Missing textDocument.uri".into(),
                 data: None,
             })?;
             let positions = p["positions"].as_array().ok_or_else(|| JsonRpcError {
-                code: ERR_INVALID_PARAMS,
+                code: INVALID_PARAMS,
                 message: "Missing positions array".into(),
                 data: None,
             })?;
 
             let documents = self.documents.lock().unwrap();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: ERR_INVALID_REQUEST,
+                code: INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
                 data: None,
             })?;
@@ -4775,7 +4506,7 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
             let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
-                code: ERR_INVALID_PARAMS,
+                code: INVALID_PARAMS,
                 message: "Missing textDocument.uri".into(),
                 data: None,
             })?;
@@ -4786,7 +4517,7 @@ impl LspServer {
 
             let documents = self.documents.lock().unwrap();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: ERR_INVALID_REQUEST,
+                code: INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
                 data: None,
             })?;
@@ -5611,7 +5342,7 @@ impl LspServer {
     /// Helper to create a ContentModified error response
     fn content_modified() -> JsonRpcError {
         JsonRpcError {
-            code: ERR_CONTENT_MODIFIED,
+            code: CONTENT_MODIFIED,
             message: "Document changed before request executed".to_string(),
             data: None,
         }
@@ -5622,7 +5353,7 @@ impl LspServer {
         if let Some(v) = req_version {
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
-                if v < doc._version {
+                if v < doc.version {
                     return Err(Self::content_modified());
                 }
             }
@@ -5942,7 +5673,7 @@ impl LspServer {
                             },
                         },
                     },
-                    container_name: sym.container_name.map(|s| norm_pkg(&s).into_owned()),
+                    container_name: sym.container_name.map(|s| normalize_package_separator(&s).into_owned()),
                 });
             }
         }
@@ -6463,7 +6194,7 @@ impl LspServer {
                                 },
                             },
                         },
-                        container_name: container.map(|s| norm_pkg(s).into_owned()),
+                        container_name: container.map(|s| normalize_package_separator(s).into_owned()),
                     });
 
                     // Recurse into body with this subroutine as container
@@ -6498,7 +6229,7 @@ impl LspServer {
                             },
                         },
                     },
-                    container_name: container.map(|s| norm_pkg(s).into_owned()),
+                    container_name: container.map(|s| normalize_package_separator(s).into_owned()),
                 });
 
                 // Recurse into block with this package as container
@@ -7726,7 +7457,7 @@ impl LspServer {
                 }
                 _ => {
                     return Err(JsonRpcError {
-                        code: ERR_METHOD_NOT_FOUND,
+                        code: METHOD_NOT_FOUND,
                         message: format!("Unknown command: {}", command),
                         data: None,
                     });
@@ -7782,7 +7513,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(Self::document_not_found_error()))
+        Ok(Some(document_not_found_error()))
     }
 
     /// Run all tests in a file
@@ -7813,7 +7544,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(Self::document_not_found_error()))
+        Ok(Some(document_not_found_error()))
     }
 
     /// Run Perl::Critic on a file
@@ -7924,7 +7655,7 @@ impl LspServer {
             })));
         }
 
-        Ok(Some(Self::document_not_found_error()))
+        Ok(Some(document_not_found_error()))
     }
 
     /// Handle workspace/configuration request
@@ -8032,7 +7763,7 @@ impl LspServer {
                             if let Some(path) = uri_to_fs_path(&uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     doc.text = content;
-                                    doc._version += 1;
+                                    doc.version += 1;
                                     // Clear cached AST
                                     doc.ast = None;
                                 }
@@ -8316,7 +8047,7 @@ impl LspServer {
                                     }
 
                                     doc.text = new_lines.join("\n");
-                                    doc._version += 1;
+                                    doc.version += 1;
                                 }
                             }
 
@@ -8613,7 +8344,7 @@ impl LspServer {
                     if prev == result_id {
                         json!({
                             "uri": uri_str,
-                            "version": doc._version,
+                            "version": doc.version,
                             "kind": "unchanged",
                             "resultId": prev
                         })
@@ -8656,7 +8387,7 @@ impl LspServer {
 
                         json!({
                             "uri": uri_str,
-                            "version": doc._version,
+                            "version": doc.version,
                             "kind": "full",
                             "resultId": result_id,
                             "items": lsp_diagnostics
@@ -8701,7 +8432,7 @@ impl LspServer {
 
                     json!({
                         "uri": uri_str,
-                        "version": doc._version,
+                        "version": doc.version,
                         "kind": "full",
                         "resultId": result_id,
                         "items": lsp_diagnostics
@@ -9279,7 +9010,7 @@ mod tests {
             DocumentState {
                 rope,
                 text: text.to_string(),
-                _version: 1,
+                version: 1,
                 ast: None,
                 parse_errors: Vec::new(),
                 parent_map: ParentMap::default(),
