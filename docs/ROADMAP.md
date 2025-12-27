@@ -1,12 +1,15 @@
 # Perl Parser Project - Roadmap
 
+> **📌 CANONICAL**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for verification protocol.
+> **Stale roadmaps**: Historical documents moved to `docs/archive/` (LSP_DEVELOPMENT_ROADMAP.md, FEATURE_ROADMAP.md, ROADMAP_2025.md)
+
 > **Status**: ✅ **Core Goal ~80-85% Complete** – Parser v3 production-ready (100% coverage), Semantic Analyzer Phase 1 complete (12/12 handlers), LSP textDocument/definition implemented and tested. In validation/de-risking phase for v1.0 release.
 
-> **Latest Update**: 2025-11-20 – Semantic definition testing infrastructure complete with dynamic position calculation. Statement tracker/heredocs 100% implemented. Ready for execution validation on proper hardware.
+> **Latest Update**: 2025-12-26 – ci-gate verified (337 lib tests + 4 LSP semantic definition tests). Statement tracker/heredocs 100% implemented. Semantic analyzer Phase 1 complete.
 
 ---
 
-## 🎉 Current State (v0.8.8 – November 2025)
+## 🎉 Current State (v0.8.8 – December 2025)
 
 We've built the most comprehensive Perl parsing solution available, **on track for v1.0 production release**:
 

@@ -1,9 +1,41 @@
 # perl-lsp Current Status Snapshot
-<!-- Generated: 2025-11-20 -->
-<!-- Last Updated: 2025-11-20 - Semantic Definition Testing Complete -->
+<!-- Generated: 2025-12-26 -->
+<!-- Last Updated: 2025-12-26 - Verified baseline with clean ci-gate pass -->
 <!-- Comprehensive project health assessment -->
 
-> **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2025-11-20. For live status, treat GitHub issues & milestones as canonical. Metrics below represent point-in-time measurements and may not reflect subsequent progress.
+> **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2025-12-26. For live status, treat GitHub issues & milestones as canonical. Metrics below represent point-in-time measurements and may not reflect subsequent progress.
+
+---
+
+## 🔬 Verification Protocol
+
+**The repo has three authoritative verification tiers:**
+
+### Tier A: Merge Gate (Required for all merges)
+```bash
+just ci-gate  # ~2-5 min
+```
+✅ **Last verified**: 2025-12-26 (commit d1a163b3, rustc 1.91.1)
+- Format check: ✅ Passed
+- Clippy (libs): ✅ Passed
+- Library tests: ✅ 337 passed, 1 ignored
+- Policy checks: ✅ Passed
+- LSP semantic definition: ✅ 4/4 passed
+
+### Tier B: Release Confidence (Large changes/release candidates)
+```bash
+just ci-full  # ~10-20 min
+```
+Includes: docs, full clippy, integration tests, LSP tests
+
+### Tier C: Real User Confirmation
+Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rename
+
+### Canonical Documentation
+- **This file** (`CURRENT_STATUS.md`): Authoritative project status
+- **`ROADMAP.md`**: Long-term vision and component status
+- **`features.toml`** + server capabilities: Ground truth for LSP features
+- **Historical docs**: See `docs/archive/` - preserved but not canonical
 
 ## 🎯 At a Glance
 
@@ -410,5 +442,5 @@ RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
 
 *This snapshot provides real-time project intelligence for informed decision-making. Updated weekly during active development.*
 
-*Last Updated: 2025-11-20*
-*Next Update: Post Band 1 validation (semantic stack execution proof)*
+*Last Updated: 2025-12-26*
+*Next Update: After next ci-full verification or significant milestone*
