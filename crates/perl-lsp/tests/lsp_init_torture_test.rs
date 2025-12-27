@@ -114,11 +114,9 @@ fn torture_test_context_init_cycles() {
             })),
         );
 
-        // Should get some response (even null is fine)
-        assert!(
-            result.is_some() || result.is_none(),
-            "Request should complete"
-        );
+        // Test passes if we get here without panic/crash
+        // The request completing at all (Some or None) proves the server is responsive
+        let _ = result; // Explicitly acknowledge the result
         success_count += 1;
     }
 
