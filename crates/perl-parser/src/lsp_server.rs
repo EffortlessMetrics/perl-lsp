@@ -19,6 +19,12 @@ use crate::{
     formatting::{CodeFormatter, FormattingOptions},
     implementation_provider::ImplementationProvider,
     inlay_hints_provider::{InlayHintConfig, InlayHintsProvider},
+    // Import from new modular lsp structure
+    lsp::protocol::{
+        JsonRpcError, JsonRpcRequest, JsonRpcResponse,
+        REQUEST_CANCELLED, SERVER_CANCELLED, CONTENT_MODIFIED,
+        METHOD_NOT_FOUND, INVALID_REQUEST, INVALID_PARAMS,
+    },
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
     positions::LineStartsCache,
@@ -30,7 +36,6 @@ use crate::{
 };
 use lsp_types::Location;
 use md5;
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -60,18 +65,14 @@ lazy_static! {
         regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)").unwrap();
 }
 
-// JSON-RPC Error Codes
-const ERR_METHOD_NOT_FOUND: i32 = -32601;
-const ERR_INVALID_REQUEST: i32 = -32600;
-const ERR_INVALID_PARAMS: i32 = -32602;
-// LSP 3.17 standard error codes:
-// -32802 ServerCancelled (preferred for server-side cancellations)
-// -32801 ContentModified (document changed; redo request)
-// -32800 RequestCancelled (client-side; we use this for $/cancelRequest)
-#[allow(dead_code)]
-const ERR_SERVER_CANCELLED: i32 = -32802; // Server cancelled the request (LSP 3.17)
-const ERR_CONTENT_MODIFIED: i32 = -32801; // Content modified, operation obsolete
-const ERR_REQUEST_CANCELLED: i32 = -32800; // Client cancelled via $/cancelRequest
+// Error code aliases for backward compatibility
+// (actual constants imported from crate::lsp::protocol)
+const ERR_METHOD_NOT_FOUND: i32 = METHOD_NOT_FOUND;
+const ERR_INVALID_REQUEST: i32 = INVALID_REQUEST;
+const ERR_INVALID_PARAMS: i32 = INVALID_PARAMS;
+const ERR_SERVER_CANCELLED: i32 = SERVER_CANCELLED;
+const ERR_CONTENT_MODIFIED: i32 = CONTENT_MODIFIED;
+const ERR_REQUEST_CANCELLED: i32 = REQUEST_CANCELLED;
 
 /// Helper to create a cancelled response
 fn cancelled_response(id: &serde_json::Value) -> JsonRpcResponse {
@@ -285,34 +286,7 @@ impl Default for ServerConfig {
     }
 }
 
-/// JSON-RPC request
-#[derive(Debug, Deserialize)]
-pub struct JsonRpcRequest {
-    #[serde(rename = "jsonrpc")]
-    pub _jsonrpc: String,
-    pub id: Option<Value>,
-    pub method: String,
-    pub params: Option<Value>,
-}
-
-/// JSON-RPC response
-#[derive(Debug, Serialize)]
-pub struct JsonRpcResponse {
-    pub jsonrpc: String,
-    pub id: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<JsonRpcError>,
-}
-
-/// JSON-RPC error
-#[derive(Debug, Serialize)]
-pub struct JsonRpcError {
-    pub code: i32,
-    pub message: String,
-    pub data: Option<Value>,
-}
+// JSON-RPC types are now imported from crate::lsp::protocol::{JsonRpcRequest, JsonRpcResponse, JsonRpcError}
 
 #[allow(dead_code)]
 impl LspServer {
