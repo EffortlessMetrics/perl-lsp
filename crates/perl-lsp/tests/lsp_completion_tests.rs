@@ -6,7 +6,6 @@ use common::{completion_items, initialize_lsp, send_notification, send_request, 
 
 /// Test basic variable completion
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_scalar_variable_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -62,7 +61,6 @@ $cou
 
 /// Test array variable completion
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_array_variable_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -114,7 +112,6 @@ my @data = qw(a b c);
 
 /// Test hash variable completion
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_hash_variable_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -166,7 +163,6 @@ my %settings = ();
 
 /// Test function completion
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_function_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -224,7 +220,6 @@ proc
 
 /// Test built-in function completion
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_builtin_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -270,7 +265,6 @@ fn test_builtin_completion() {
 
 /// Test keyword completion
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_keyword_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -323,7 +317,6 @@ fn test_keyword_completion() {
 
 /// Test special variable completion
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_special_variable_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -382,7 +375,6 @@ fn test_special_variable_completion() {
 
 /// Test method completion after ->
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_method_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -435,7 +427,6 @@ fn test_method_completion() {
 
 /// Test completion in mixed context
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_mixed_context_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -493,7 +484,6 @@ va
 
 /// Test completion details and documentation
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_completion_details() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -548,7 +538,6 @@ fn test_completion_details() {
 
 /// Test completion with empty prefix (should show all relevant items)
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_empty_prefix_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -597,7 +586,6 @@ fn test_empty_prefix_completion() {
 
 /// Test that completion doesn't trigger in comments
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_no_completion_in_comments() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -637,7 +625,6 @@ fn test_no_completion_in_comments() {
 
 /// Test completion with package context
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_package_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -686,7 +673,6 @@ MyModule::"#
 
 /// Test snippet expansion in completions
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_snippet_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -763,7 +749,6 @@ fn test_snippet_completion() {
 
 /// Test array and hash element access completion
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_element_access_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -813,7 +798,6 @@ $arr"#
 
 /// Test completion filtering and ranking
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_completion_ranking() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -859,7 +843,6 @@ fn test_completion_ranking() {
 
 /// Test completion with incremental typing
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_incremental_completion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

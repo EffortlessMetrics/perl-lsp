@@ -1,6 +1,6 @@
 # perl-lsp Current Status Snapshot
 <!-- Generated: 2025-12-27 -->
-<!-- Last Updated: 2025-12-27 - Band 2 test sweep progress + infrastructure fixes -->
+<!-- Last Updated: 2025-12-27 - Batch A sweep: 572 → 454 ignores (-118) -->
 <!-- Comprehensive project health assessment -->
 
 > **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2025-12-27. For live status, treat GitHub issues & milestones as canonical. Metrics below represent point-in-time measurements and may not reflect subsequent progress.
@@ -45,7 +45,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 | **MVP Completion** | 75-80% | 100% | 🟢 2-3 weeks |
 | **Production v1.0** | 85-90% | 100% | 🟢 11-13 weeks |
 | **Tier A Tests** | 337 passed, 1 ignored | 100% | 🟢 `just ci-gate` |
-| **LSP Ignored Tests** | 572 (was 608+) | <100 | 🟡 Band 2 sweep |
+| **LSP Ignored Tests** | 454 (was 572) | <100 | 🟢 Batch A: -118 |
 | **LSP Coverage** | 91% | 93%+ | 🟡 Sprint B |
 | **Parser Coverage** | ~100% | 100% | 🟢 Complete |
 | **Semantic Analyzer** | Phase 1 Complete | Phase 3 | 🟢 12/12 handlers |
@@ -63,7 +63,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 - **Performance**: <1ms incremental parsing (actual: 931ns!), <50ms LSP responses
 
 ### Areas of Focus ⚠️
-- **~572 ignored tests**: ✅ Down from 608+ (Band 2 sweep in progress, 51+ re-enabled)
+- **~454 ignored tests**: ✅ Down from 572 (Batch A sweep: -118 ignores, 8 files cleaned)
 - **CI/CD at 40%**: Issue #211 addressing with $720/year savings potential
 - **484 doc violations**: Infrastructure complete, 8-week content plan ready
 - ~~**Sprint A at 75%**~~ ✅ **Sprint A 100% COMPLETE!** All heredoc/statement tracker work delivered!
@@ -72,6 +72,19 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 - **Band 2 Test Sweep**: 🟢 **IN PROGRESS** - protocol violations, window progress, unhappy paths cleaned
 
 ### Recent Completions (2025-12-27) 🎉
+1. ✅ **Batch A Sweep Complete** - 118 ignores removed (454 remaining, down from 572)
+   - `lsp_filesystem_failures.rs`: 17 → 0 ignores (all pass)
+   - `lsp_completion_tests.rs`: 17 → 0 ignores (all pass)
+   - `lsp_integration_tests.rs`: 16 → 0 ignores (fixed `initialized` notification)
+   - `lsp_api_contracts.rs`: 15 → 0 ignores (all pass)
+   - `lsp_schema_validation.rs`: 14 → 0 ignores (all pass)
+   - `lsp_encoding_edge_cases.rs`: 14 → 0 ignores (all pass)
+   - `lsp_workspace_file_ops_tests.rs`: 13 → 0 ignores (fixed `initialized` notification)
+   - `lsp_signature_integration_test.rs`: 13 → 1 ignore (file test operators not implemented)
+2. ✅ **`lsp-extras` Feature Declared** - Silences `unexpected_cfgs` warning for quarantined tests
+3. ✅ **Protocol Fixes** - Tests now send `initialized` notification after `initialize` request
+
+### Earlier Completions (2025-12-27)
 1. ✅ **Band 2 Test Sweep Progress** - 51+ tests re-enabled or quarantined (572 ignores, down from 608+)
    - `lsp_protocol_violations.rs`: 26 → 4 ignores (-22)
    - `lsp_window_progress_test.rs`: 21 → 0 ignores (-21)

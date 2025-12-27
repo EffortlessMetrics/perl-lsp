@@ -11,7 +11,6 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 /// Tests handling of permission errors, disk space, and I/O failures
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_read_only_file() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -67,7 +66,6 @@ fn test_read_only_file() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_directory_as_file() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -117,7 +115,6 @@ fn test_directory_as_file() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_non_existent_file() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -159,7 +156,6 @@ fn test_non_existent_file() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 #[cfg(unix)]
 fn test_permission_denied_directory() {
     // Skip test if running as root (no permission denied for root)
@@ -217,7 +213,6 @@ fn test_permission_denied_directory() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 #[cfg(windows)]
 fn test_permission_denied_directory() {
     // Windows permission handling is different, skip for now
@@ -225,7 +220,6 @@ fn test_permission_denied_directory() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 #[cfg(unix)]
 fn test_symlink_loop() {
     let mut server = start_lsp_server();
@@ -288,7 +282,6 @@ fn test_symlink_loop() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 #[cfg(windows)]
 fn test_symlink_loop() {
     // Windows symlink handling requires admin privileges, skip for now
@@ -296,7 +289,6 @@ fn test_symlink_loop() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_broken_symlink() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -355,7 +347,6 @@ fn test_broken_symlink() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_very_long_path() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -402,7 +393,6 @@ fn test_very_long_path() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_special_filename_characters() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -475,7 +465,6 @@ fn test_special_filename_characters() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_case_sensitive_filesystem() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -547,7 +536,6 @@ fn test_case_sensitive_filesystem() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_file_deleted_while_open() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -610,7 +598,6 @@ fn test_file_deleted_while_open() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_file_modified_externally() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -677,7 +664,6 @@ fn test_file_modified_externally() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_folder_deleted() {
     let mut server = start_lsp_server();
 
@@ -755,7 +741,6 @@ fn test_workspace_folder_deleted() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_hidden_files() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -801,7 +786,6 @@ fn test_hidden_files() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_device_files() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -833,7 +817,6 @@ fn test_device_files() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_fifo_pipe() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
