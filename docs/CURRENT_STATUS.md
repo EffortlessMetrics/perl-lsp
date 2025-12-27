@@ -1,9 +1,9 @@
 # perl-lsp Current Status Snapshot
-<!-- Generated: 2025-12-26 -->
-<!-- Last Updated: 2025-12-26 - Verified baseline with clean ci-gate pass -->
+<!-- Generated: 2025-12-27 -->
+<!-- Last Updated: 2025-12-27 - Band 2 test sweep progress + infrastructure fixes -->
 <!-- Comprehensive project health assessment -->
 
-> **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2025-12-26. For live status, treat GitHub issues & milestones as canonical. Metrics below represent point-in-time measurements and may not reflect subsequent progress.
+> **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2025-12-27. For live status, treat GitHub issues & milestones as canonical. Metrics below represent point-in-time measurements and may not reflect subsequent progress.
 
 ---
 
@@ -45,6 +45,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 | **MVP Completion** | 75-80% | 100% | 🟢 2-3 weeks |
 | **Production v1.0** | 85-90% | 100% | 🟢 11-13 weeks |
 | **Tier A Tests** | 337 passed, 1 ignored | 100% | 🟢 `just ci-gate` |
+| **LSP Ignored Tests** | 572 (was 608+) | <100 | 🟡 Band 2 sweep |
 | **LSP Coverage** | 91% | 93%+ | 🟡 Sprint B |
 | **Parser Coverage** | ~100% | 100% | 🟢 Complete |
 | **Semantic Analyzer** | Phase 1 Complete | Phase 3 | 🟢 12/12 handlers |
@@ -62,14 +63,24 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 - **Performance**: <1ms incremental parsing (actual: 931ns!), <50ms LSP responses
 
 ### Areas of Focus ⚠️
-- **~740 ignored tests**: 95% due to single root cause (LSP initialization timing), fix plan in Band 2
+- **~572 ignored tests**: ✅ Down from 608+ (Band 2 sweep in progress, 51+ re-enabled)
 - **CI/CD at 40%**: Issue #211 addressing with $720/year savings potential
 - **484 doc violations**: Infrastructure complete, 8-week content plan ready
 - ~~**Sprint A at 75%**~~ ✅ **Sprint A 100% COMPLETE!** All heredoc/statement tracker work delivered!
 - **Semantic Analyzer (#188)**: ✅ **Phase 1 COMPLETE!** All 12/12 critical handlers + LSP textDocument/definition integration
 - **Semantic Definition Testing**: ✅ **VALIDATED** (2025-12-27) - 4/4 LSP tests + 2 unit tests passing
+- **Band 2 Test Sweep**: 🟢 **IN PROGRESS** - protocol violations, window progress, unhappy paths cleaned
 
-### Recent Completions (2025-11-20) 🎉
+### Recent Completions (2025-12-27) 🎉
+1. ✅ **Band 2 Test Sweep Progress** - 51+ tests re-enabled or quarantined (572 ignores, down from 608+)
+   - `lsp_protocol_violations.rs`: 26 → 4 ignores (-22)
+   - `lsp_window_progress_test.rs`: 21 → 0 ignores (-21)
+   - `lsp_unhappy_paths.rs`: 9 → 1 ignores (-8)
+   - `lsp_advanced_features_test.rs`: 23 tests feature-gated behind `lsp-extras`
+2. ✅ **TestContext Infrastructure Fixed** - `params: None` → `json!(null)`, added `initialize_with()`
+3. ✅ **IGNORED_TESTS_INDEX Updated** - Accurate categories, sweep strategy documented
+
+### Earlier Completions (2025-11-20)
 1. ✅ **Semantic Analyzer Phase 1** - 12/12 critical node handlers implemented with SemanticModel stable API
 2. ✅ **LSP Semantic Definition** - textDocument/definition using SemanticAnalyzer::find_definition()
 3. ✅ **Dynamic Test Infrastructure** - Tests resilient to whitespace/formatting via find_pos() helper
@@ -205,7 +216,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 | ------ | ----- | ------ | ------ |
 | Tier A (lib tests) | 337 passed, 1 ignored | 100% | 🟢 `just ci-gate` |
 | LSP Semantic Def | 4/4 passed | 4/4 | 🟢 `just ci-lsp-def` |
-| Ignored Tests | ~740 (perl-lsp) | <100 | 🔴 Issue #198 |
+| Ignored Tests | ~572 (perl-lsp) | <100 | 🟡 Band 2 sweep (was 608+) |
 | Mutation Score | 87% | 87%+ | 🟢 Target Met |
 | Fuzz Testing | 12 suites | Ongoing | 🟢 Robust |
 
@@ -371,11 +382,15 @@ RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
 - [x] Complete `just ci-gate` validation (Rust 1.89 MSRV)
 - **Result**: Semantic stack validated, 337 lib tests + 4 LSP def tests passing
 
-**Band 2: Reduce Ignored Tests** (1-2 weeks part-time)
-- [ ] Fix root cause: BrokenPipe initialization timing (95% of ignores)
-- [ ] Migrate tests from `TestContext` to `LspHarness` pattern
-- [ ] Re-enable tests in batches (target: densest files first)
-- [ ] Document remaining ignores in `docs/ci/IGNORED_TESTS_INDEX.md`
+**Band 2: Reduce Ignored Tests** (1-2 weeks part-time) - 🟢 **IN PROGRESS**
+- [x] Fix `TestContext` wrapper (params: `None` → `json!(null)`, add `initialize_with()`)
+- [x] Apply "flip strategy" to `lsp_protocol_violations.rs`: 26 → 4 ignores (**-22**)
+- [x] Sweep `lsp_window_progress_test.rs`: 21 → 0 ignores (**-21**)
+- [x] Sweep `lsp_unhappy_paths.rs`: 9 → 1 ignores (**-8**)
+- [x] Feature-gate `lsp_advanced_features_test.rs` (23 tests behind `lsp-extras`)
+- [x] Update `docs/ci/IGNORED_TESTS_INDEX.md` with accurate categories
+- [ ] Continue sweep on remaining high-confidence files
+- **Current**: 572 ignores (down from 608+, **51+ tests re-enabled**)
 - **Target**: <100 ignored tests with documented reasons
 
 **Band 3: Tag v0.9-semantic-lsp-ready** (1-2 weeks)
@@ -385,7 +400,7 @@ RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
 - **Target**: Externally-consumable "it just works" release
 
 ### 🚧 Known Constraints
-- **~740 ignored LSP tests**: Single root cause (BrokenPipe initialization timing)
+- **~572 ignored LSP tests**: Down from 608+ (Band 2 sweep in progress, 51+ re-enabled)
 - **CI Pipeline**: Issue #211 blocks merge-blocking gates (#210)
 - **Semantic Phase 2/3**: Advanced features deferred (closures, multi-file, imports)
 
@@ -429,5 +444,5 @@ RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
 
 *This snapshot provides real-time project intelligence for informed decision-making. Updated weekly during active development.*
 
-*Last Updated: 2025-12-27*
-*Next Update: After ci-full verification or significant milestone*
+*Last Updated: 2025-12-27 (Band 2 test sweep progress)*
+*Next Update: After completing remaining sweep candidates or significant milestone*
