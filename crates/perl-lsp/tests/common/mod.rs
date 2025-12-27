@@ -7,12 +7,13 @@
 //! - **Response Matching**: Match by ID for request/response pairing
 //! - **Timeouts**: Configurable via env vars, with sensible defaults
 //! - **Quiet Drain**: Wait for server to settle after changes before assertions
-//! - **Portable Spawn**: Attempts CARGO_BIN_EXE_perl-lsp → PATH → cargo run fallback
+//! - **Portable Spawn**: PERL_LSP_BIN → CARGO_BIN_EXE_* → PATH → cargo run fallback
 //!
 //! ## Environment Variables
 //!
+//! - `PERL_LSP_BIN`: Explicit path to perl-lsp binary (useful for custom CARGO_TARGET_DIR)
 //! - `LSP_TEST_TIMEOUT_MS`: Default per-request timeout (ms), default 5000
-//! - `LSP_TEST_SHORT_MS`: "Short" timeout for optional responses (ms), default 500  
+//! - `LSP_TEST_SHORT_MS`: "Short" timeout for optional responses (ms), default 500
 //! - `LSP_TEST_ECHO_STDERR`: If set, echo perl-lsp stderr lines in tests
 //!
 //! ## Key Functions
@@ -23,6 +24,9 @@
 //! - `read_response_matching()`: Reads response matching specific ID
 
 #![allow(dead_code)] // Common test utilities - some may not be used by all test files
+
+// Re-export test_utils for semantic tests
+pub mod test_utils;
 
 // Error codes
 const ERR_TEST_TIMEOUT: i64 = -32000;
@@ -79,9 +83,22 @@ impl LspServer {
 }
 
 fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
-    // Try CARGO_BIN_EXE_* first, then PATH, then cargo run
+    // Resolution order:
+    // 1. PERL_LSP_BIN env var (explicit override, useful for custom target dirs)
+    // 2. CARGO_BIN_EXE_* (Cargo-provided path during test execution)
+    // 3. Workspace target directory binaries (absolute paths)
+    // 4. PATH lookup
+    // 5. cargo run fallback (slow but always works)
     let mut v: Vec<Command> = Vec::new();
 
+    // 1. Explicit override via PERL_LSP_BIN
+    if let Ok(p) = std::env::var("PERL_LSP_BIN") {
+        let mut c = Command::new(p);
+        c.arg("--stdio");
+        v.push(c);
+    }
+
+    // 2. Cargo-provided binary path (set during `cargo test`)
     if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl-lsp") {
         let mut c = Command::new(p);
         c.arg("--stdio");
@@ -93,21 +110,40 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
         v.push(c);
     }
 
-    // Try perl-lsp from PATH
+    // 3. Try workspace target directory binaries (using absolute paths)
+    // CARGO_MANIFEST_DIR points to the crate directory, we need the workspace root
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        let crate_dir = std::path::Path::new(&manifest_dir);
+        // Walk up to find workspace root (contains Cargo.toml with [workspace])
+        let workspace_root =
+            crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists()).unwrap_or(crate_dir);
+
+        // Try release binary first (faster)
+        let release_binary = workspace_root.join("target/release/perl-lsp");
+        if release_binary.exists() {
+            let mut c = Command::new(&release_binary);
+            c.arg("--stdio");
+            v.push(c);
+        }
+
+        // Then try debug binary
+        let debug_binary = workspace_root.join("target/debug/perl-lsp");
+        if debug_binary.exists() {
+            let mut c = Command::new(&debug_binary);
+            c.arg("--stdio");
+            v.push(c);
+        }
+    }
+
+    // 4. Try perl-lsp from PATH
     {
         let mut c = Command::new("perl-lsp");
         c.arg("--stdio");
         v.push(c);
     }
 
-    // Try release binary if available
-    {
-        let mut c = Command::new("./target/release/perl-lsp");
-        c.arg("--stdio");
-        v.push(c);
-    }
-
-    // Fallback: use cargo run with release profile (avoid debug linking issues)
+    // 5. Fallback: use cargo run with release profile (avoid debug linking issues)
+    // This is SLOW because it may need to compile, but always works
     {
         let mut c = Command::new("cargo");
         c.args(["run", "-q", "-p", "perl-lsp", "--release", "--", "--stdio"]);
@@ -143,12 +179,16 @@ pub fn start_lsp_server() -> LspServer {
         }
         spawned.unwrap_or_else(|| {
             eprintln!("Failed to start perl-lsp server - tried all methods:");
-            eprintln!("  1. CARGO_BIN_EXE_perl-lsp env var");
-            eprintln!("  2. CARGO_BIN_EXE_perl_lsp env var");
-            eprintln!("  3. perl-lsp from PATH");
-            eprintln!("  4. ./target/release/perl-lsp");
-            eprintln!("  5. cargo run --release -p perl-lsp");
+            eprintln!("  1. PERL_LSP_BIN env var (explicit override)");
+            eprintln!("  2. CARGO_BIN_EXE_perl-lsp env var");
+            eprintln!("  3. CARGO_BIN_EXE_perl_lsp env var");
+            eprintln!("  4. Workspace target/release/perl-lsp");
+            eprintln!("  5. Workspace target/debug/perl-lsp");
+            eprintln!("  6. perl-lsp from PATH");
+            eprintln!("  7. cargo run --release -p perl-lsp");
             eprintln!("Last error: {:?}", last_err);
+            eprintln!("Hint: Set PERL_LSP_BIN=/path/to/perl-lsp to use a custom binary");
+            eprintln!("Hint: Run 'cargo build -p perl-lsp --release' first for faster tests");
             panic!("Failed to start perl-lsp via any available method: {:?}", last_err)
         })
     };
@@ -175,10 +215,14 @@ pub fn start_lsp_server() -> LspServer {
     // -------- stdout LSP reader thread --------
     let stdout = process.stdout.take().expect("stdout piped");
     let (tx, rx) = mpsc::channel::<Value>();
+    let debug_reader = std::env::var_os("LSP_TEST_DEBUG_READER").is_some();
     let _stdout_thread = std::thread::Builder::new()
         .name("lsp-stdout-reader".into())
         .spawn(move || {
             let mut r = BufReader::new(stdout);
+            if debug_reader {
+                eprintln!("[reader] Thread started");
+            }
             loop {
                 // Parse headers
                 let mut content_len: Option<usize> = None;
@@ -186,7 +230,12 @@ pub fn start_lsp_server() -> LspServer {
                 loop {
                     line.clear();
                     match r.read_line(&mut line) {
-                        Ok(0) => return, // EOF
+                        Ok(0) => {
+                            if debug_reader {
+                                eprintln!("[reader] EOF on stdout");
+                            }
+                            return; // EOF
+                        }
                         Ok(_) => {
                             let l = line.trim_end();
                             if l.is_empty() {
@@ -199,7 +248,12 @@ pub fn start_lsp_server() -> LspServer {
                                 content_len = rest.parse::<usize>().ok();
                             }
                         }
-                        Err(_) => return,
+                        Err(e) => {
+                            if debug_reader {
+                                eprintln!("[reader] Error reading line: {e}");
+                            }
+                            return;
+                        }
                     }
                 }
                 let len = match content_len {
@@ -209,9 +263,17 @@ pub fn start_lsp_server() -> LspServer {
                 // Read body
                 let mut buf = vec![0u8; len];
                 if r.read_exact(&mut buf).is_err() {
+                    if debug_reader {
+                        eprintln!("[reader] Error reading body");
+                    }
                     return;
                 }
                 if let Ok(val) = serde_json::from_slice::<Value>(&buf) {
+                    if debug_reader {
+                        let id = val.get("id").map(|v| v.to_string()).unwrap_or_default();
+                        let method = val.get("method").and_then(|v| v.as_str()).unwrap_or("");
+                        eprintln!("[reader] Received message id={id} method={method}");
+                    }
                     let _ = tx.send(val);
                 }
             }

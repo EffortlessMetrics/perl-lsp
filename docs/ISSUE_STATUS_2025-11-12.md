@@ -14,6 +14,30 @@
 
 ---
 
+## 🔬 Semantic & LSP Definition Status (2025-11-20)
+
+**Parser (Phase 1 Complete)**:
+- ✅ Semantic Phase 1: 12/12 handlers implemented and compiling
+  - `VariableListDeclaration`, `Ternary`, `ArrayLiteral`, `HashLiteral`, `Try`, `PhaseBlock`, `ExpressionStatement`, `Do`, `Eval`, `VariableWithAttributes`, `Unary`, `Readline`
+- ✅ SemanticModel API: `build()`, `tokens()`, `symbol_table()`, `hover_info_at()`, `definition_at()`
+- ✅ Tests: `semantic_smoke_tests.rs` (13 Phase-1 tests passing, 8 Phase-2/3 ignored as designed)
+- ✅ Export: Public API via `pub use semantic::SemanticModel;` in `lib.rs`
+
+**LSP Integration**:
+- ✅ `textDocument/definition`: Handler implemented via `SemanticAnalyzer::find_definition()`
+- ✅ Tests: `crates/perl-lsp/tests/semantic_definition.rs` (4 scenarios: scalar, sub, lexical scope, package-qualified)
+- ⏳ Local execution: Tests compile cleanly; actual execution limited on current dev machine due to resource constraints (WSL2 + low RAM)
+- ✅ CI wiring: `just ci-lsp-def` target exists and is wired into `ci-gate`
+
+**Next Actions**:
+- [ ] Run `just ci-lsp-def` on higher-capacity machine or GitHub Actions (when billing restored)
+- [ ] Verify all 4 semantic definition tests pass (see `docs/ci/MERGE_CHECKLIST_188_phase1.md` for exact commands)
+- [ ] Mark `ci-lsp-def` as "stable" in docs once tests execute successfully
+
+**Blockers**: GitHub Actions billing (for automated CI), or access to higher-capacity dev machine for local validation
+
+---
+
 ## 🔴 P0-CRITICAL (3 issues) - IMMEDIATE ACTION REQUIRED
 
 ### Issue #211: CI Pipeline Cleanup

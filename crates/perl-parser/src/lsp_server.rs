@@ -392,7 +392,11 @@ impl LspServer {
         });
 
         let notification_str = serde_json::to_string(&notification)?;
-        let mut output = self.output.lock().unwrap();
+        // Handle lock poisoning gracefully instead of panicking
+        let mut output = self
+            .output
+            .lock()
+            .map_err(|e| io::Error::other(format!("Failed to acquire output lock: {}", e)))?;
         write!(output, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)?;
         output.flush()
     }
@@ -3457,10 +3461,10 @@ impl LspServer {
                     }
 
                     // Fall back to same-file definition
-                    let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
+                    let model = crate::semantic::SemanticModel::build(ast, &doc.text);
 
                     // Find definition at the position
-                    if let Some(definition) = analyzer.find_definition(offset) {
+                    if let Some(definition) = model.definition_at(offset) {
                         let (def_line, def_char) =
                             self.offset_to_pos16(doc, definition.location.start);
 
@@ -8477,14 +8481,30 @@ impl LspServer {
             "params": params
         });
 
-        // Send using the proper output mechanism (fire and forget)
-        if let Ok(mut output) = self.output.lock() {
-            let msg = serde_json::to_string(&request).unwrap();
-            write!(output, "Content-Length: {}\r\n\r\n{}", msg.len(), msg).ok();
-            output.flush().ok();
+        // Send using the proper output mechanism with explicit error logging
+        // (previously silenced with .ok() which hid client disconnect issues)
+        match self.output.lock() {
+            Ok(mut output) => match serde_json::to_string(&request) {
+                Ok(msg) => {
+                    if let Err(e) = write!(output, "Content-Length: {}\r\n\r\n{}", msg.len(), msg) {
+                        eprintln!("[perl-lsp] Failed to write file watcher request: {}", e);
+                        return;
+                    }
+                    if let Err(e) = output.flush() {
+                        eprintln!("[perl-lsp] Failed to flush file watcher request: {}", e);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[perl-lsp] Failed to serialize file watcher request: {}", e);
+                }
+            },
+            Err(e) => {
+                eprintln!(
+                    "[perl-lsp] Could not acquire output lock for file watcher registration: {}",
+                    e
+                );
+            }
         }
-
-        eprintln!("Sent file watcher registration request (async)");
     }
 
     /// Handle textDocument/diagnostic request (LSP 3.17 pull diagnostics)

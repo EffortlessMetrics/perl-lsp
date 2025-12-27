@@ -4,10 +4,8 @@ use serde_json::json;
 use std::time::{Duration, Instant};
 
 mod common;
+use common::test_utils::generators;
 use common::{initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
-
-mod test_utils;
-use test_utils::generators;
 
 /// Performance requirements
 const MAX_INIT_TIME: Duration = Duration::from_millis(1000);

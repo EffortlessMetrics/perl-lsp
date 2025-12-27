@@ -31,12 +31,13 @@
 //! cargo bench -p perl-dap -- --measurement-time 5
 //! ```
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use perl_dap::configuration::{AttachConfiguration, LaunchConfiguration};
 use perl_dap::platform::{
     format_command_args, normalize_path, resolve_perl_path, setup_environment,
 };
 use std::collections::HashMap;
+use std::hint::black_box;
 use std::path::PathBuf;
 use std::time::Duration;
 

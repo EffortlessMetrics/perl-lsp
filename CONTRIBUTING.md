@@ -101,6 +101,24 @@ just ci-full
 See: [Local CI Protocol](docs/ci/LOCAL_CI_PROTOCOL.md)
 ```
 
+**Semantic & LSP Changes**:
+
+If you modify `crates/perl-parser/src/semantic.rs` or any LSP handler (especially `textDocument/definition`):
+
+```bash
+# Run semantic-aware definition tests
+just ci-lsp-def
+
+# Or run the full gate (includes ci-lsp-def)
+just ci-gate
+```
+
+The semantic tests validate that LSP definition resolution works correctly for:
+- Scalar variable references → declarations
+- Subroutine calls → sub definitions
+- Lexical scope resolution
+- Package-qualified symbol lookups
+
 Once GitHub Actions is restored, this section will be archived and normal CI workflow will resume.
 
 ## Coding Standards
