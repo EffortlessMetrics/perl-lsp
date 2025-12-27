@@ -2,6 +2,30 @@
 
 > **Purpose**: Fix 688 ignored tests by migrating from broken `TestContext` to working `LspHarness`.
 > **Last Updated**: 2025-12-27
+> **Status**: Phase 1 Complete - `TestContext` compatibility wrapper now available!
+
+## Quick Migration Path (Recommended)
+
+The fastest way to migrate is to use the **new `TestContext` compatibility wrapper** in
+`tests/support/lsp_harness.rs`. This provides the same API as the old broken TestContext
+but uses LspHarness underneath with proper synchronization:
+
+```rust
+// Just change the import - the API is the same!
+mod support;
+use support::lsp_harness::TestContext;  // ← New location
+
+let mut ctx = TestContext::new();
+let _ = ctx.initialize();  // Now includes barrier synchronization!
+ctx.open_document(uri, text);
+let result = ctx.send_request("textDocument/hover", params);
+```
+
+The wrapper handles:
+
+- Proper `initialize` + `initialized` + barrier sequence
+- Auto-incrementing document versions
+- Graceful shutdown on drop
 
 ## The Problem
 
@@ -16,6 +40,7 @@ let result = ctx.send_request(...);  // ❌ Server may not be ready
 ```
 
 This causes "BrokenPipe" errors because:
+
 1. The server thread hasn't finished processing `initialize`
 2. No wait for `initialized` notification to be acknowledged
 3. No synchronization barrier before requests
@@ -37,6 +62,7 @@ let result = harness.request(method, params)?;   // ✅ Adaptive timeout
 ### Step 1: Replace TestContext with LspHarness
 
 **Before:**
+
 ```rust
 use crate::support::test_context::TestContext;
 
@@ -58,6 +84,7 @@ fn test_some_feature() {
 ```
 
 **After:**
+
 ```rust
 mod support;
 use support::lsp_harness::LspHarness;
@@ -148,17 +175,17 @@ let result = harness.request("textDocument/definition", json!({
 
 ## API Mapping
 
-| TestContext | LspHarness | Notes |
-|-------------|------------|-------|
-| `TestContext::new()` | `LspHarness::new_raw()` | Raw constructor |
-| `ctx.initialize()` | `harness.initialize_with_root(uri, caps)?` | Returns Result, includes barrier |
-| `ctx.send_request(method, params)` | `harness.request(method, params)?` | Returns Result, adaptive timeout |
-| `ctx.send_notification(method, params)` | `harness.notify(method, params)` | Same behavior |
-| `ctx.open_document(uri, text)` | `harness.open(uri, text)?` | Returns Result |
-| `ctx.update_document(uri, text)` | Manual via `notify("textDocument/didChange", ...)` | |
-| N/A | `harness.barrier()` | **Use this!** Sync point |
-| N/A | `harness.wait_for_idle(duration)` | Drain notifications |
-| N/A | `harness.shutdown_gracefully()` | Called automatically on drop |
+| TestContext                              | LspHarness                                         | Notes                             |
+|------------------------------------------|---------------------------------------------------|-----------------------------------|
+| `TestContext::new()`                     | `LspHarness::new_raw()`                           | Raw constructor                   |
+| `ctx.initialize()`                       | `harness.initialize_with_root(uri, caps)?`        | Returns Result, includes barrier  |
+| `ctx.send_request(method, params)`       | `harness.request(method, params)?`                | Returns Result, adaptive timeout  |
+| `ctx.send_notification(method, params)`  | `harness.notify(method, params)`                  | Same behavior                     |
+| `ctx.open_document(uri, text)`           | `harness.open(uri, text)?`                        | Returns Result                    |
+| `ctx.update_document(uri, text)`         | Manual via `notify("textDocument/didChange", ...)` |                                   |
+| N/A                                      | `harness.barrier()`                               | **Use this!** Sync point          |
+| N/A                                      | `harness.wait_for_idle(duration)`                 | Drain notifications               |
+| N/A                                      | `harness.shutdown_gracefully()`                   | Called automatically on drop      |
 
 ## Batch Migration Script
 
@@ -237,16 +264,19 @@ let symbols = harness.request("workspace/symbol", ...)?;
 ## Progress Checklist
 
 ### Priority 1 (Phase 1)
+
 - [ ] `lsp_comprehensive_3_17_test.rs` (59 tests)
 - [ ] `lsp_comprehensive_e2e_test.rs` (33 tests)
 
 ### Priority 2 (Phase 2)
+
 - [ ] `lsp_protocol_violations.rs` (26 tests)
 - [ ] `lsp_execute_command_comprehensive_tests.rs` (25 tests)
 
 ### Priority 3 (Phase 3)
+
 - [ ] `lsp_advanced_features_test.rs` (23 tests)
 - [ ] `lsp_window_progress_test.rs` (21 tests)
 - [ ] `lsp_error_recovery_behavioral_tests.rs` (21 tests)
 
-*Continue with remaining files per IGNORED_TESTS_INDEX.md*
+Continue with remaining files per `IGNORED_TESTS_INDEX.md`.

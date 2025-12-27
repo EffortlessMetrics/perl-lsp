@@ -5,20 +5,41 @@
 
 ## Summary
 
-| Category | Count | % | Root Cause | Fix Strategy |
-|----------|-------|---|------------|--------------|
-| BrokenPipe Initialization | 688 | 93% | LSP init timing race | Migrate to `LspHarness` |
-| Double Initialization | 5 | 0.7% | Test infrastructure | Fix test setup |
-| Cancellation Env | 8 | 1% | Environment config | Stabilize env vars |
-| perl-parser (various) | 53 | 7% | Mixed reasons | Case-by-case |
-| **Total** | **~793** | 100% | | |
+| Category                    | Count   | %    | Root Cause              | Fix Strategy              |
+|-----------------------------|---------|------|-------------------------|---------------------------|
+| BrokenPipe Initialization   | 688     | 93%  | LSP init timing race    | Migrate to `LspHarness`   |
+| Double Initialization       | 5       | 0.7% | Test infrastructure     | Fix test setup            |
+| Cancellation Env            | 8       | 1%   | Environment config      | Stabilize env vars        |
+| perl-parser (various)       | 53      | 7%   | Mixed reasons           | Case-by-case              |
+| **Total**                   | **~793**| 100% |                         |                           |
+
+## How Counts Are Generated
+
+The ignore counts in this document are generated using these commands:
+
+```bash
+# Total ignored tests in perl-lsp
+grep -r '#\[ignore\]' crates/perl-lsp/tests/*.rs 2>/dev/null | wc -l
+
+# Breakdown by reason (BrokenPipe)
+grep -r '#\[ignore\].*BrokenPipe' crates/perl-lsp/tests/*.rs 2>/dev/null | wc -l
+
+# Per-file counts (top 20)
+grep -l '#\[ignore\]' crates/perl-lsp/tests/*.rs 2>/dev/null | while read f; do
+  echo "$(grep -c '#\[ignore\]' "$f") $(basename "$f")"
+done | sort -rn | head -20
+
+# perl-parser ignores
+grep -r '#\[ignore\]' crates/perl-parser/tests/*.rs 2>/dev/null | wc -l
+```
 
 ## Root Cause Analysis
 
 ### Primary Issue: BrokenPipe Initialization (688 tests)
 
 **Pattern observed:**
-```
+
+```text
 #[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 ```
 
@@ -38,36 +59,36 @@
 
 ### Secondary Issues
 
-| Issue | Count | Files | Fix |
-|-------|-------|-------|-----|
-| Double initialization | 5 | `lsp_code_actions_comprehensive_tests_enhanced.rs` | Ensure single init per test |
-| Cancellation env | 8 | `lsp_cancellation_*.rs` | Stabilize env vars before test |
-| Stress tests | 10 | Various `*_stress_*.rs` | Tag as `#[cfg(feature = "slow")]` |
+| Issue                | Count | Files                                              | Fix                           |
+|----------------------|-------|----------------------------------------------------|-------------------------------|
+| Double initialization| 5     | `lsp_code_actions_comprehensive_tests_enhanced.rs` | Ensure single init per test   |
+| Cancellation env     | 8     | `lsp_cancellation_*.rs`                            | Stabilize env vars before test|
+| Stress tests         | 10    | Various `*_stress_*.rs`                            | Tag as `#[cfg(feature = "slow")]` |
 
 ## Files by Ignored Test Count (Top 20)
 
-| File | Count | Strategy |
-|------|-------|----------|
-| `lsp_comprehensive_3_17_test.rs` | 59 | **Priority 1**: Convert to LspHarness |
-| `lsp_comprehensive_e2e_test.rs` | 33 | **Priority 1**: Uses TestContext directly |
-| `lsp_protocol_violations.rs` | 26 | **Priority 2**: Protocol compliance tests |
-| `lsp_execute_command_comprehensive_tests.rs` | 25 | **Priority 2**: Execute command tests |
-| `lsp_advanced_features_test.rs` | 23 | **Priority 3**: Feature tests |
-| `lsp_window_progress_test.rs` | 21 | **Priority 3**: Window progress |
-| `lsp_error_recovery_behavioral_tests.rs` | 21 | **Priority 3**: Error recovery |
-| `lsp_unhappy_paths.rs` | 19 | **Priority 4**: Edge cases |
-| `lsp_filesystem_failures.rs` | 17 | **Priority 4**: FS failure handling |
-| `lsp_completion_tests.rs` | 17 | **Priority 4**: Completion tests |
-| `lsp_integration_tests.rs` | 16 | **Priority 4**: Integration |
-| `lsp_full_coverage_user_stories.rs` | 16 | **Priority 4**: User stories |
-| `lsp_e2e_user_stories.rs` | 16 | **Priority 4**: E2E user stories |
-| `lsp_api_contracts.rs` | 15 | **Priority 5**: API contracts |
-| `lsp_schema_validation.rs` | 14 | **Priority 5**: Schema validation |
-| `lsp_memory_pressure.rs` | 14 | Tag as slow test |
-| `lsp_encoding_edge_cases.rs` | 14 | **Priority 5**: Encoding tests |
-| `lsp_workspace_file_ops_tests.rs` | 13 | **Priority 5**: Workspace ops |
-| `lsp_signature_integration_test.rs` | 13 | **Priority 5**: Signature help |
-| `lsp_performance_benchmarks.rs` | 13 | Tag as slow test |
+| File                                            | Count | Strategy                                |
+|-------------------------------------------------|-------|-----------------------------------------|
+| `lsp_comprehensive_3_17_test.rs`            | 59    | **Priority 1**: Convert to LspHarness   |
+| `lsp_comprehensive_e2e_test.rs`             | 33    | **Priority 1**: Uses TestContext        |
+| `lsp_protocol_violations.rs`                | 26    | **Priority 2**: Protocol compliance     |
+| `lsp_execute_command_comprehensive_tests.rs`| 25    | **Priority 2**: Execute command tests   |
+| `lsp_advanced_features_test.rs`             | 23    | **Priority 3**: Feature tests           |
+| `lsp_window_progress_test.rs`               | 21    | **Priority 3**: Window progress         |
+| `lsp_error_recovery_behavioral_tests.rs`    | 21    | **Priority 3**: Error recovery          |
+| `lsp_unhappy_paths.rs`                      | 19    | **Priority 4**: Edge cases              |
+| `lsp_filesystem_failures.rs`                | 17    | **Priority 4**: FS failure handling     |
+| `lsp_completion_tests.rs`                   | 17    | **Priority 4**: Completion tests        |
+| `lsp_integration_tests.rs`                  | 16    | **Priority 4**: Integration             |
+| `lsp_full_coverage_user_stories.rs`         | 16    | **Priority 4**: User stories            |
+| `lsp_e2e_user_stories.rs`                   | 16    | **Priority 4**: E2E user stories        |
+| `lsp_api_contracts.rs`                      | 15    | **Priority 5**: API contracts           |
+| `lsp_schema_validation.rs`                  | 14    | **Priority 5**: Schema validation       |
+| `lsp_memory_pressure.rs`                    | 14    | Tag as slow test                        |
+| `lsp_encoding_edge_cases.rs`                | 14    | **Priority 5**: Encoding tests          |
+| `lsp_workspace_file_ops_tests.rs`           | 13    | **Priority 5**: Workspace ops           |
+| `lsp_signature_integration_test.rs`         | 13    | **Priority 5**: Signature help          |
+| `lsp_performance_benchmarks.rs`             | 13    | Tag as slow test                        |
 
 ## Re-enablement Plan
 
@@ -108,19 +129,21 @@ Target: All remaining tests
 
 ## Legitimate Ignores (Keep Ignored)
 
-| Test | File | Reason |
-|------|------|--------|
-| Performance benchmarks | `lsp_performance_benchmarks.rs` | Slow, run separately |
-| Memory pressure tests | `lsp_memory_pressure.rs` | Resource-intensive |
-| Stress tests | Various | Run with `--ignored` flag |
+| Test                   | File                             | Reason                     |
+|------------------------|----------------------------------|----------------------------|
+| Performance benchmarks | `lsp_performance_benchmarks.rs`  | Slow, run separately       |
+| Memory pressure tests  | `lsp_memory_pressure.rs`         | Resource-intensive         |
+| Stress tests           | Various                          | Run with `--ignored` flag  |
 
 ## Progress Tracking
 
-- [ ] Phase 1: 0/92 tests re-enabled
-- [ ] Phase 2: 0/115 tests re-enabled
+- [x] Phase 1: 92/92 tests re-enabled (**COMPLETE**: `lsp_comprehensive_e2e_test.rs` + `lsp_comprehensive_3_17_test.rs`)
+- [x] Phase 2: 25/115 tests re-enabled (`lsp_execute_command_comprehensive_tests.rs`)
 - [ ] Phase 3: 0/200 tests re-enabled
 - [ ] Phase 4: 0/340 tests re-enabled
 - [ ] Final count: <100 ignored with documented reasons
+
+**Current ignore count**: 608 (down from ~700+, 117 tests re-enabled)
 
 ## Commands for Validation
 
