@@ -144,6 +144,18 @@ pub fn method_not_found(method: &str) -> JsonRpcError {
     }
 }
 
+/// Create a method not advertised error
+///
+/// Used when the client requests a feature that wasn't advertised
+/// in the server's capabilities during initialization.
+pub fn method_not_advertised() -> JsonRpcError {
+    JsonRpcError {
+        code: METHOD_NOT_FOUND,
+        message: "Method not advertised in server capabilities".to_string(),
+        data: None,
+    }
+}
+
 /// Create an invalid params error
 pub fn invalid_params(message: &str) -> JsonRpcError {
     JsonRpcError {

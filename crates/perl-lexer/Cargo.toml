@@ -23,7 +23,7 @@ memchr = "2.7.6"
 thiserror = "2.0.17"
 
 [dev-dependencies]
-criterion = "0.7.0"
+criterion = "0.8.1"
 pretty_assertions = "1.4.1"
 proptest = "1.9.0"
 
