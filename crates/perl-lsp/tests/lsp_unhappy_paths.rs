@@ -13,7 +13,7 @@ use common::{
 /// Ensures the LSP server handles errors gracefully
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore = "Server crashes when receiving malformed JSON - needs robustness improvement"]
 fn test_malformed_json_request() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -32,7 +32,6 @@ fn test_malformed_json_request() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_invalid_method() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -55,7 +54,6 @@ fn test_invalid_method() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_missing_required_params() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -101,7 +99,6 @@ fn test_missing_required_params() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_invalid_uri_format() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -171,7 +168,6 @@ fn test_invalid_uri_format() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_not_found() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -224,7 +220,6 @@ fn test_document_not_found() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_out_of_bounds_position() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -632,7 +627,6 @@ fn test_deeply_nested_structure() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_binary_content() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -682,7 +676,6 @@ fn test_binary_content() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_binary_frame() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -725,7 +718,6 @@ fn test_binary_frame() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_cancel_request() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

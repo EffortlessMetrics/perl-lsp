@@ -148,11 +148,15 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 
 ### 📋 Path to "Fully Working" v1.0
 
-**Band 2: Reduce Ignored Tests** (1-2 weeks part-time)
-- [ ] Inventory ~740 ignored tests by file and reason
-- [ ] Fix root cause: BrokenPipe initialization timing
-- [ ] Re-enable tests in batches (target: densest files first)
-- [ ] Document remaining ignores in `docs/ci/IGNORED_TESTS_INDEX.md`
+**Band 2: Reduce Ignored Tests** (1-2 weeks part-time) - 🟢 **IN PROGRESS**
+- [x] Inventory ignored tests by file and reason (**done**: `docs/ci/IGNORED_TESTS_INDEX.md`)
+- [x] Fix TestContext wrapper (params: `None` → `json!(null)`, add `initialize_with()`)
+- [x] Apply "flip strategy" to protocol violations: 26 → 4 ignores (**-22**)
+- [x] Sweep window progress tests: 21 → 0 ignores (**-21**)
+- [x] Sweep unhappy paths tests: 9 → 1 ignores (**-8**)
+- [x] Feature-gate `lsp_advanced_features_test.rs` (23 tests behind `lsp-extras`)
+- [ ] Continue sweep on remaining high-confidence files
+- **Current**: 572 ignores (down from 608+, **51+ tests re-enabled**)
 - **Target**: <100 ignored tests with documented reasons
 
 **Band 3: Tag v0.9 Semantic-Ready** (1-2 weeks)
@@ -162,7 +166,7 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 - **Target**: Externally-consumable "it just works" release
 
 ### 🚧 Known Constraints
-- **~740 ignored LSP tests**: Single root cause (initialization timing), fix in progress
+- **~572 ignored LSP tests**: Down from 608+ (51+ re-enabled via Band 2 sweep)
 - **CI Pipeline**: Issue #211 blocks merge-blocking gates (#210)
 - **Semantic Phase 2/3**: Advanced features deferred (closures, multi-file, imports)
 

@@ -16,7 +16,6 @@ use support::lsp_harness::LspHarness;
 // ==================== LIFECYCLE CONTRACTS ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_initialize_contract_3_17() {
     let mut harness = LspHarness::new();
 
@@ -328,7 +327,6 @@ fn test_initialize_contract_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_initialized_notification() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -352,7 +350,6 @@ fn test_initialized_notification() {
 // ==================== TEXT SYNCHRONIZATION ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_text_document_sync_full() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -427,7 +424,6 @@ fn test_text_document_sync_full() {
 // ==================== LANGUAGE FEATURES ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_completion_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -452,7 +448,6 @@ fn test_completion_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_hover_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -479,7 +474,6 @@ fn test_hover_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_signature_help_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -507,7 +501,6 @@ fn test_signature_help_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_declaration_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -528,7 +521,6 @@ fn test_declaration_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_definition_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -549,7 +541,6 @@ fn test_definition_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_type_definition_3_17() {
     let mut harness = LspHarness::new();
     let init_response = harness.initialize(None).expect("init");
@@ -591,7 +582,6 @@ fn test_type_definition_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_implementation_3_17() {
     let mut harness = LspHarness::new();
     let init_response = harness.initialize(None).expect("init");
@@ -635,7 +625,6 @@ fn test_implementation_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_references_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -658,7 +647,6 @@ fn test_references_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_highlight_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -678,7 +666,6 @@ fn test_document_highlight_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_symbol_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -697,7 +684,6 @@ fn test_document_symbol_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_code_action_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -725,7 +711,6 @@ fn test_code_action_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_code_action_resolve_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -747,7 +732,6 @@ fn test_code_action_resolve_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_code_lens_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -766,7 +750,6 @@ fn test_code_lens_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_link_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -785,7 +768,6 @@ fn test_document_link_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_color_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -805,7 +787,6 @@ fn test_document_color_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_formatting_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -842,7 +823,6 @@ fn test_formatting_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_range_formatting_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -880,7 +860,6 @@ fn test_range_formatting_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_on_type_formatting_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -905,7 +884,6 @@ fn test_on_type_formatting_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_rename_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -926,7 +904,6 @@ fn test_rename_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_prepare_rename_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -947,7 +924,6 @@ fn test_prepare_rename_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_folding_range_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -966,7 +942,6 @@ fn test_folding_range_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_selection_range_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -988,7 +963,6 @@ fn test_selection_range_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_linked_editing_range_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1010,7 +984,6 @@ fn test_linked_editing_range_3_17() {
 // ==================== SEMANTIC TOKENS (3.16+) ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_semantic_tokens_full_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1031,7 +1004,6 @@ fn test_semantic_tokens_full_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_semantic_tokens_range_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1056,7 +1028,6 @@ fn test_semantic_tokens_range_3_17() {
 // ==================== CALL HIERARCHY (3.16+) ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_prepare_call_hierarchy_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1076,7 +1047,6 @@ fn test_prepare_call_hierarchy_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_incoming_calls_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1108,7 +1078,6 @@ fn test_incoming_calls_3_17() {
 // ==================== TYPE HIERARCHY (3.17) ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_prepare_type_hierarchy_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1130,7 +1099,6 @@ fn test_prepare_type_hierarchy_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_type_hierarchy_supertypes_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1162,7 +1130,6 @@ fn test_type_hierarchy_supertypes_3_17() {
 // ==================== INLAY HINTS (3.17) ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_inlay_hint_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1187,7 +1154,6 @@ fn test_inlay_hint_3_17() {
 // ==================== INLINE VALUES (3.17) ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_inline_value_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1219,7 +1185,6 @@ fn test_inline_value_3_17() {
 // ==================== MONIKER (3.16+) ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_moniker_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1241,7 +1206,6 @@ fn test_moniker_3_17() {
 // ==================== DIAGNOSTICS PULL MODEL (3.17) ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_diagnostic_pull_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1267,7 +1231,6 @@ fn test_diagnostic_pull_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_diagnostic_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1290,7 +1253,6 @@ fn test_workspace_diagnostic_3_17() {
 // ==================== WORKSPACE FEATURES ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_symbol_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1309,7 +1271,6 @@ fn test_workspace_symbol_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_symbol_resolve_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1332,7 +1293,6 @@ fn test_workspace_symbol_resolve_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_execute_command_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1356,7 +1316,6 @@ fn test_execute_command_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_folders_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1379,7 +1338,6 @@ fn test_workspace_folders_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_file_operations_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1458,7 +1416,6 @@ fn test_file_operations_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_watched_files_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1478,7 +1435,6 @@ fn test_watched_files_3_17() {
 // ==================== WINDOW FEATURES ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_show_message_3_17() {
     // Server->client, so we can't test directly
     // But we document the contract here
@@ -1492,7 +1448,6 @@ fn test_show_message_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_show_document_3_17() {
     // Server->client request (3.16+)
     // Params: { uri, external?, takeFocus?, selection? }
@@ -1500,14 +1455,12 @@ fn test_show_document_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_log_message_3_17() {
     // Server->client notification
     // { "type": 1-4, "message": "string" }
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_work_done_progress_3_17() {
     // window/workDoneProgress/create (server->client)
     // $/progress notifications
@@ -1517,7 +1470,6 @@ fn test_work_done_progress_3_17() {
 // ==================== MISCELLANEOUS ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_cancel_request_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1533,7 +1485,6 @@ fn test_cancel_request_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_progress_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1577,7 +1528,6 @@ fn test_progress_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_set_trace_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1591,14 +1541,12 @@ fn test_set_trace_3_17() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_log_trace_3_17() {
     // Server->client notification when tracing is on
     // { "message": "string", "verbose"?: "string" }
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_telemetry_3_17() {
     // Server->client notification
     // params: any
@@ -1607,7 +1555,6 @@ fn test_telemetry_3_17() {
 // ==================== SHUTDOWN & EXIT ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_shutdown_exit_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1623,7 +1570,6 @@ fn test_shutdown_exit_3_17() {
 // ==================== ERROR CODES ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_error_codes_3_17() {
     // Standard JSON-RPC error codes
     const _PARSE_ERROR: i32 = -32700;
@@ -1657,7 +1603,6 @@ fn test_error_codes_3_17() {
 // ==================== PRE-INITIALIZE BEHAVIOR ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_inbound_before_initialize_contract() {
     // Requests before initialize must return -32002 ServerNotInitialized
     // Notifications must be dropped (except exit)
@@ -1680,7 +1625,6 @@ fn test_inbound_before_initialize_contract() {
 // ==================== $-PREFIXED MESSAGES ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_dollar_prefixed_request_method_not_found() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1698,7 +1642,6 @@ fn test_dollar_prefixed_request_method_not_found() {
 // ==================== NOTEBOOK SUPPORT (3.17) ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_notebook_document_3_17() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -1792,7 +1735,6 @@ fn test_notebook_document_3_17() {
 // ==================== PARTIAL RESULT STREAMING ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_partial_result_streaming_contract() {
     // When using partialResultToken, the entire payload is streamed via $/progress
     // and the final response must be empty (e.g., [] for arrays)
@@ -1810,7 +1752,6 @@ fn test_partial_result_streaming_contract() {
 // ==================== COMPLIANCE VALIDATION ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_full_lsp_3_17_compliance() {
     // This test validates that all required LSP 3.17 methods are handled
     // Note: Some methods are optional based on server capabilities

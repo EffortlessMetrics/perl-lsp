@@ -249,7 +249,6 @@ fn validate_markup_content(content: &Value) -> Result<(), String> {
 // ======================== INITIALIZE RESPONSE VALIDATION ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_initialize_response_schema_3_17() {
     let mut harness = TestHarness::new();
     let result = harness.initialize_default().expect("init");
@@ -352,7 +351,6 @@ fn validate_server_capabilities(caps: &Value) -> Result<(), String> {
 // ======================== MESSAGE VALIDATION TESTS ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_completion_response_schema() {
     let mut harness = TestHarness::new();
     harness.initialize_default().expect("failed to init LSP harness");
@@ -493,7 +491,6 @@ fn validate_completion_item(item: &Value) -> Result<(), String> {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_symbol_response_schema() {
     let mut harness = TestHarness::new();
     harness.initialize_default().expect("failed to init LSP harness");
@@ -589,7 +586,6 @@ fn validate_document_symbol(sym: &Value) -> Result<(), String> {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_hover_response_schema() {
     let mut harness = TestHarness::new();
     harness.initialize_default().expect("failed to init LSP harness");
@@ -637,7 +633,6 @@ fn test_hover_response_schema() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_symbol_response_schema() {
     let mut harness = TestHarness::new();
     harness.initialize_default().expect("failed to init LSP harness");
@@ -708,7 +703,6 @@ fn validate_workspace_symbol(sym: &Value) -> Result<(), String> {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_code_action_response_schema() {
     let mut harness = TestHarness::new();
     harness.initialize_default().expect("failed to init LSP harness");
@@ -965,7 +959,6 @@ fn validate_text_edit(edit: &Value) -> Result<(), String> {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_publish_diagnostics_schema() {
     let mut harness = TestHarness::new();
     harness.initialize_default().expect("failed to init LSP harness");
@@ -1028,7 +1021,6 @@ fn validate_publish_diagnostics_params(params: &Value) -> Result<(), String> {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_error_response_schema() {
     let mut harness = TestHarness::new();
 
@@ -1080,7 +1072,6 @@ fn test_error_response_schema() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_signature_help_response_schema() {
     let mut harness = TestHarness::new();
     harness.initialize_default().expect("failed to init LSP harness");
@@ -1155,7 +1146,6 @@ fn test_signature_help_response_schema() {
 // ======================== LSP 3.17 SPECIFIC TESTS ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_semantic_tokens_response_schema() {
     let mut harness = TestHarness::new();
     harness.initialize_default().expect("failed to init LSP harness");
@@ -1201,7 +1191,6 @@ fn test_semantic_tokens_response_schema() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_inlay_hint_response_schema() {
     let mut harness = TestHarness::new();
     harness.initialize_default().expect("failed to init LSP harness");
@@ -1265,7 +1254,6 @@ fn test_inlay_hint_response_schema() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_diagnostic_pull_response_schema() {
     let mut harness = TestHarness::new();
     harness.initialize_default().expect("failed to init LSP harness");
@@ -1329,7 +1317,6 @@ fn test_diagnostic_pull_response_schema() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_type_hierarchy_response_schema() {
     let mut harness = TestHarness::new();
     harness.initialize_default().expect("failed to init LSP harness");
@@ -1453,7 +1440,6 @@ fn validate_logtrace(msg: &Value, trace: &str) -> Result<(), String> {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_lsp_3_17_compliance_summary() {
     println!("LSP 3.17 Schema Validation Summary:");
     println!("====================================");
