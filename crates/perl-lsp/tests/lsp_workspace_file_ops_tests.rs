@@ -36,8 +36,18 @@ fn make_request(
     }
 }
 
+/// Helper to send the initialized notification (required after initialize request)
+fn send_initialized(server: &mut LspServer) {
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    };
+    server.handle_request(initialized_notification);
+}
+
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_did_change_watched_files_created() {
     let mut server = create_test_server();
 
@@ -48,6 +58,7 @@ fn test_did_change_watched_files_created() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // Send a file created notification
     let params = json!({
@@ -67,7 +78,6 @@ fn test_did_change_watched_files_created() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_did_change_watched_files_changed() {
     let mut server = create_test_server();
 
@@ -78,6 +88,7 @@ fn test_did_change_watched_files_changed() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // First open a document
     let open_params = json!({
@@ -108,7 +119,6 @@ fn test_did_change_watched_files_changed() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_did_change_watched_files_deleted() {
     let mut server = create_test_server();
 
@@ -119,6 +129,7 @@ fn test_did_change_watched_files_deleted() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // First open a document
     let open_params = json!({
@@ -149,7 +160,6 @@ fn test_did_change_watched_files_deleted() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_did_change_watched_files_invalid_uri() {
     let mut server = create_test_server();
 
@@ -160,6 +170,7 @@ fn test_did_change_watched_files_invalid_uri() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // Send notification with invalid URI (missing uri field)
     let params = json!({
@@ -178,7 +189,6 @@ fn test_did_change_watched_files_invalid_uri() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_will_rename_files() {
     let mut server = create_test_server();
 
@@ -189,6 +199,7 @@ fn test_will_rename_files() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // Open a document that uses a module
     let open_params = json!({
@@ -221,7 +232,6 @@ fn test_will_rename_files() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_will_rename_files_missing_uri() {
     let mut server = create_test_server();
 
@@ -232,6 +242,7 @@ fn test_will_rename_files_missing_uri() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // Request with missing URIs
     let params = json!({
@@ -252,7 +263,6 @@ fn test_will_rename_files_missing_uri() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_did_delete_files() {
     let mut server = create_test_server();
 
@@ -263,6 +273,7 @@ fn test_did_delete_files() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // Open a document
     let open_params = json!({
@@ -292,7 +303,6 @@ fn test_did_delete_files() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_did_delete_files_invalid_uri() {
     let mut server = create_test_server();
 
@@ -303,6 +313,7 @@ fn test_did_delete_files_invalid_uri() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // Send delete notification with missing URI
     let params = json!({
@@ -321,7 +332,6 @@ fn test_did_delete_files_invalid_uri() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_apply_edit_single_line() {
     let mut server = create_test_server();
 
@@ -332,6 +342,7 @@ fn test_apply_edit_single_line() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // Open a document
     let open_params = json!({
@@ -370,7 +381,6 @@ fn test_apply_edit_single_line() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_apply_edit_multi_line() {
     let mut server = create_test_server();
 
@@ -381,6 +391,7 @@ fn test_apply_edit_multi_line() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // Open a document
     let open_params = json!({
@@ -419,7 +430,6 @@ fn test_apply_edit_multi_line() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_apply_edit_no_document() {
     let mut server = create_test_server();
 
@@ -430,6 +440,7 @@ fn test_apply_edit_no_document() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // Try to apply edit to non-existent document
     let params = json!({
@@ -457,7 +468,6 @@ fn test_apply_edit_no_document() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_apply_edit_invalid_params() {
     let mut server = create_test_server();
 
@@ -468,6 +478,7 @@ fn test_apply_edit_invalid_params() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // Send invalid params (no edit field)
     let params = json!({});
@@ -482,7 +493,6 @@ fn test_apply_edit_invalid_params() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_path_to_module_name() {
     // Test the path_to_module_name function indirectly through willRenameFiles
     let mut server = create_test_server();
@@ -494,6 +504,7 @@ fn test_path_to_module_name() {
         "capabilities": {}
     });
     let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
 
     // Test various path patterns
     let test_cases = vec![
