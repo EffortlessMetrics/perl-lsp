@@ -1229,23 +1229,38 @@ impl TestContext {
     ///
     /// Returns the initialization response value.
     /// Unlike the old TestContext, this includes a barrier to ensure the server is ready.
+    /// Uses default root_uri "file:///workspace" and default capabilities.
     pub fn initialize(&mut self) -> Value {
+        self.initialize_with("file:///workspace", None)
+    }
+
+    /// Initialize the LSP server with custom root_uri and capabilities
+    ///
+    /// Returns the initialization response value.
+    /// This includes a barrier to ensure the server is fully ready.
+    ///
+    /// # Arguments
+    /// * `root_uri` - The workspace root URI (e.g., "file:///test" or a real temp directory)
+    /// * `capabilities` - Optional custom client capabilities (None = sensible defaults)
+    pub fn initialize_with(&mut self, root_uri: &str, capabilities: Option<Value>) -> Value {
         self.harness
-            .initialize_ready("file:///workspace", None)
+            .initialize_ready(root_uri, capabilities)
             .expect("initialization should succeed")
     }
 
     /// Send a request and wait for response
     ///
     /// Returns `Some(result)` on success, `None` on error.
+    /// Note: `params: None` maps to JSON `null`, not `{}` - this is correct per JSON-RPC spec.
     pub fn send_request(&mut self, method: &str, params: Option<Value>) -> Option<Value> {
-        let p = params.unwrap_or(json!({}));
+        let p = params.unwrap_or(json!(null));
         self.harness.request(method, p).ok()
     }
 
     /// Send a notification (no response expected)
+    /// Note: `params: None` maps to JSON `null`, not `{}` - this is correct per JSON-RPC spec.
     pub fn send_notification(&mut self, method: &str, params: Option<Value>) {
-        let p = params.unwrap_or(json!({}));
+        let p = params.unwrap_or(json!(null));
         self.harness.notify(method, p);
     }
 
