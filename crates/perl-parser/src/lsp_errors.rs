@@ -2,7 +2,7 @@
 //!
 //! Provides consistent error responses for the LSP server
 
-use crate::lsp_server::JsonRpcError;
+use crate::lsp::protocol::JsonRpcError;
 use serde_json::{Value, json};
 
 /// LSP error codes (from the LSP 3.18 specification)

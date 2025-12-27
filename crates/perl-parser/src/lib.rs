@@ -178,6 +178,8 @@ pub mod lsp_errors;
 pub mod lsp_on_type_formatting;
 pub mod lsp_selection_range;
 pub mod lsp_server;
+/// Modular LSP server implementation (migration target)
+pub mod lsp;
 pub mod lsp_utils;
 /// Code modernization utilities for Perl best practices.
 pub mod modernize;
@@ -284,7 +286,9 @@ pub use import_optimizer::{
     OrganizationSuggestion, SuggestionPriority, UnusedImport,
 };
 pub use inlay_hints::{parameter_hints, trivial_type_hints};
-pub use lsp_server::{JsonRpcRequest, JsonRpcResponse, LspServer};
+// Export LSP types from the new modular structure
+pub use lsp::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
+pub use lsp_server::LspServer;
 pub use on_type_formatting::compute_on_type_edit;
 pub use rename::{RenameOptions, RenameProvider, RenameResult, TextEdit, apply_rename_edits};
 pub use scope_analyzer::{IssueKind, ScopeAnalyzer, ScopeIssue};
