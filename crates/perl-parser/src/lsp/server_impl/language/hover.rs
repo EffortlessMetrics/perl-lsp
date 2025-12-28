@@ -20,7 +20,7 @@ impl LspServer {
             let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
             self.ensure_latest(uri, req_version)?;
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ast) = &doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
@@ -147,7 +147,7 @@ impl LspServer {
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
 

@@ -23,7 +23,7 @@ impl LspServer {
             let line = pos["line"].as_u64().unwrap_or(0) as u32;
             let col = pos["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
                 code: INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
@@ -62,7 +62,7 @@ impl LspServer {
 
             eprintln!("Formatting document: {}", uri);
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let formatter = CodeFormatter::new();
                 match formatter.format_document(&doc.text, &options) {
@@ -136,7 +136,7 @@ impl LspServer {
 
             eprintln!("Formatting range in document: {}", uri);
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let formatter = CodeFormatter::new();
                 match formatter.format_range(&doc.text, &range, &options) {
