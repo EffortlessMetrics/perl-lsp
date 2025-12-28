@@ -47,9 +47,7 @@ fn torture_init_shutdown_cycles() {
                 .expect("initialization should succeed");
 
             // Open a tiny document
-            harness
-                .open("file:///test.pl", "my $x = 1;")
-                .expect("open should succeed");
+            harness.open("file:///test.pl", "my $x = 1;").expect("open should succeed");
 
             // Request hover
             let result = harness.request(
@@ -71,10 +69,7 @@ fn torture_init_shutdown_cycles() {
             success_count += 1;
         } else {
             failure_count += 1;
-            eprintln!(
-                "Init torture test failed on iteration {} with panic",
-                i + 1
-            );
+            eprintln!("Init torture test failed on iteration {} with panic", i + 1);
         }
     }
 
@@ -86,10 +81,7 @@ fn torture_init_shutdown_cycles() {
         failure_count, iterations
     );
 
-    eprintln!(
-        "Init torture test passed: {}/{} iterations successful",
-        success_count, iterations
-    );
+    eprintln!("Init torture test passed: {}/{} iterations successful", success_count, iterations);
 }
 
 /// Test: Rapid init/shutdown cycles with TestContext wrapper
@@ -114,11 +106,9 @@ fn torture_test_context_init_cycles() {
             })),
         );
 
-        // Should get some response (even null is fine)
-        assert!(
-            result.is_some() || result.is_none(),
-            "Request should complete"
-        );
+        // Test passes if we get here without panic/crash
+        // The request completing at all (Some or None) proves the server is responsive
+        let _ = result; // Explicitly acknowledge the result
         success_count += 1;
     }
 
@@ -134,9 +124,7 @@ fn torture_document_lifecycle() {
     let iterations = get_iterations();
 
     let mut harness = LspHarness::new_raw();
-    harness
-        .initialize_ready("file:///workspace", None)
-        .expect("initialization should succeed");
+    harness.initialize_ready("file:///workspace", None).expect("initialization should succeed");
 
     for i in 0..iterations {
         let uri = format!("file:///test_{}.pl", i);
@@ -157,10 +145,7 @@ fn torture_document_lifecycle() {
     // Final barrier
     harness.barrier();
 
-    eprintln!(
-        "Document lifecycle torture test passed: {} open/close cycles",
-        iterations
-    );
+    eprintln!("Document lifecycle torture test passed: {} open/close cycles", iterations);
 }
 
 /// Test: Rapid document updates
@@ -169,27 +154,18 @@ fn torture_document_updates() {
     let iterations = get_iterations();
 
     let mut harness = LspHarness::new_raw();
-    harness
-        .initialize_ready("file:///workspace", None)
-        .expect("initialization should succeed");
+    harness.initialize_ready("file:///workspace", None).expect("initialization should succeed");
 
     let uri = "file:///test.pl";
-    harness
-        .open(uri, "my $x = 0;")
-        .expect("open should succeed");
+    harness.open(uri, "my $x = 0;").expect("open should succeed");
 
     for i in 1..=iterations {
         let content = format!("my $x = {};", i);
-        harness
-            .change_full(uri, i as i32, &content)
-            .expect("change should succeed");
+        harness.change_full(uri, i as i32, &content).expect("change should succeed");
     }
 
     // Final barrier
     harness.barrier();
 
-    eprintln!(
-        "Document update torture test passed: {} updates",
-        iterations
-    );
+    eprintln!("Document update torture test passed: {} updates", iterations);
 }

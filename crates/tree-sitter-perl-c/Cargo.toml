@@ -10,15 +10,15 @@ keywords = ["tree-sitter", "perl", "parser", "grammar"]
 categories = ["parsing", "text-processing"]
 
 [dependencies]
-tree-sitter = "0.25.10"
+tree-sitter = "0.26.3"
 serde = { version = "1.0.228", features = ["derive"] }
-bincode = "2.0.1"
-proptest = "1.8.0"
+bincode = "3.0.0"
+proptest = "1.9.0"
 walkdir = "2.5.0"
 thiserror = "2.0.17"
 
 [dev-dependencies]
-criterion = "0.7.0"
+criterion = "0.8.1"
 test-case = "3.3.1"
 
 [features]
@@ -40,5 +40,5 @@ name = "parse_c"
 path = "src/bin/parse_c.rs"
 
 [build-dependencies]
-cc = "1.2.39"
+cc = "1.2.51"
 bindgen = "0.72.1" 
