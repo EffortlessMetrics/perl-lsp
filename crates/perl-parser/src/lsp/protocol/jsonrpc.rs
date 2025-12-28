@@ -49,32 +49,17 @@ pub struct JsonRpcResponse {
 impl JsonRpcResponse {
     /// Create a success response
     pub fn success(id: Option<Value>, result: Value) -> Self {
-        Self {
-            jsonrpc: "2.0".to_string(),
-            id,
-            result: Some(result),
-            error: None,
-        }
+        Self { jsonrpc: "2.0".to_string(), id, result: Some(result), error: None }
     }
 
     /// Create an error response
     pub fn error(id: Option<Value>, error: JsonRpcError) -> Self {
-        Self {
-            jsonrpc: "2.0".to_string(),
-            id,
-            result: None,
-            error: Some(error),
-        }
+        Self { jsonrpc: "2.0".to_string(), id, result: None, error: Some(error) }
     }
 
     /// Create a null result response (for methods that return nothing)
     pub fn null(id: Option<Value>) -> Self {
-        Self {
-            jsonrpc: "2.0".to_string(),
-            id,
-            result: Some(Value::Null),
-            error: None,
-        }
+        Self { jsonrpc: "2.0".to_string(), id, result: Some(Value::Null), error: None }
     }
 }
 
@@ -96,19 +81,11 @@ pub struct JsonRpcError {
 impl JsonRpcError {
     /// Create a new error
     pub fn new(code: i32, message: impl Into<String>) -> Self {
-        Self {
-            code,
-            message: message.into(),
-            data: None,
-        }
+        Self { code, message: message.into(), data: None }
     }
 
     /// Create an error with additional data
     pub fn with_data(code: i32, message: impl Into<String>, data: Value) -> Self {
-        Self {
-            code,
-            message: message.into(),
-            data: Some(data),
-        }
+        Self { code, message: message.into(), data: Some(data) }
     }
 }

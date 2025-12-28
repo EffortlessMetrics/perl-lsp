@@ -102,12 +102,7 @@ pub fn write_notification<W: Write>(
     });
 
     let notification_str = serde_json::to_string(&notification)?;
-    write!(
-        writer,
-        "Content-Length: {}\r\n\r\n{}",
-        notification_str.len(),
-        notification_str
-    )?;
+    write!(writer, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)?;
     writer.flush()
 }
 

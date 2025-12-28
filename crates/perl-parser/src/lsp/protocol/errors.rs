@@ -91,11 +91,7 @@ pub fn cancelled_response(id: &Value) -> JsonRpcResponse {
 
 /// Create a request cancelled error
 pub fn request_cancelled_error() -> JsonRpcError {
-    JsonRpcError {
-        code: REQUEST_CANCELLED,
-        message: "Request cancelled".to_string(),
-        data: None,
-    }
+    JsonRpcError { code: REQUEST_CANCELLED, message: "Request cancelled".to_string(), data: None }
 }
 
 /// Create a server cancelled error
@@ -158,11 +154,7 @@ pub fn method_not_advertised() -> JsonRpcError {
 
 /// Create an invalid params error
 pub fn invalid_params(message: &str) -> JsonRpcError {
-    JsonRpcError {
-        code: INVALID_PARAMS,
-        message: message.to_string(),
-        data: None,
-    }
+    JsonRpcError { code: INVALID_PARAMS, message: message.to_string(), data: None }
 }
 
 /// Create a server not initialized error
@@ -184,9 +176,5 @@ pub fn document_not_found_error() -> Value {
 
 /// Create an internal error
 pub fn internal_error(message: &str) -> JsonRpcError {
-    JsonRpcError {
-        code: INTERNAL_ERROR,
-        message: message.to_string(),
-        data: None,
-    }
+    JsonRpcError { code: INTERNAL_ERROR, message: message.to_string(), data: None }
 }

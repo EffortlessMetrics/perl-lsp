@@ -24,18 +24,14 @@ pub use crate::lsp::protocol::{
 
 // For backward compatibility, also provide these aliases
 use crate::lsp::protocol::JsonRpcError;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Create a server cancelled error with a custom message
 ///
 /// This variant allows a custom message, unlike `server_cancelled_error()` which
 /// uses a default message.
 pub fn server_cancelled(message: &str) -> JsonRpcError {
-    JsonRpcError {
-        code: error_codes::SERVER_CANCELLED,
-        message: message.to_string(),
-        data: None,
-    }
+    JsonRpcError { code: error_codes::SERVER_CANCELLED, message: message.to_string(), data: None }
 }
 
 /// Create an invalid params error as a JSON Value

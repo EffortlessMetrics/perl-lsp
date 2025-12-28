@@ -173,13 +173,13 @@ pub mod inline_completions;
 pub mod line_index;
 /// LSP linked editing provider for synchronized symbol renaming.
 pub mod linked_editing;
+/// Modular LSP server implementation (migration target)
+pub mod lsp;
 pub mod lsp_document_link;
 pub mod lsp_errors;
 pub mod lsp_on_type_formatting;
 pub mod lsp_selection_range;
 pub mod lsp_server;
-/// Modular LSP server implementation (migration target)
-pub mod lsp;
 pub mod lsp_utils;
 /// Code modernization utilities for Perl best practices.
 pub mod modernize;
