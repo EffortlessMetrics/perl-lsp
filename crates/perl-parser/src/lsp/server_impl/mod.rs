@@ -201,6 +201,18 @@ impl LspServer {
         output.flush()
     }
 
+    /// Acquire a lock on the documents map with poison recovery
+    ///
+    /// This helper centralizes lock acquisition behavior, recovering from
+    /// panicked threads by unwrapping the poisoned mutex. This prevents
+    /// server crashes when another thread has panicked while holding the lock.
+    #[inline]
+    pub(crate) fn documents_guard(
+        &self,
+    ) -> std::sync::MutexGuard<'_, HashMap<String, DocumentState>> {
+        self.documents.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     /// Run the LSP server
     pub fn run(&mut self) -> io::Result<()> {
         let stdin = io::stdin();
@@ -1630,7 +1642,11 @@ fn location_from_path(p: &Path) -> serde_json::Value {
 }
 
 /// Convert byte offset to UTF-16 column position
-fn byte_to_utf16_col(line_text: &str, byte_pos: usize) -> usize {
+///
+/// LSP uses UTF-16 code units for character positions, but Rust strings use
+/// UTF-8 byte offsets. This function converts a byte position within a line
+/// to the corresponding UTF-16 column position.
+pub(crate) fn byte_to_utf16_col(line_text: &str, byte_pos: usize) -> usize {
     let mut units = 0;
     for (i, ch) in line_text.char_indices() {
         if i >= byte_pos {

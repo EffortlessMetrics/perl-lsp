@@ -2,7 +2,7 @@
 //!
 //! Handles textDocument/references and textDocument/documentHighlight requests.
 
-use super::super::*;
+use super::super::{byte_to_utf16_col, *};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -28,8 +28,7 @@ impl LspServer {
                 true
             };
 
-            // Use poison-safe lock to prevent server crash if another thread panicked
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
@@ -93,17 +92,20 @@ impl LspServer {
                                         let lines: Vec<&str> = doc_text.lines().collect();
                                         for (line_num, line) in lines.iter().enumerate() {
                                             for mat in search_regex.find_iter(line) {
-                                                // TODO: Convert byte offsets to UTF-16 columns for non-ASCII lines (regex fallback).
+                                                // Convert byte offsets to UTF-16 columns for LSP compliance
+                                                let start_utf16 =
+                                                    byte_to_utf16_col(line, mat.start());
+                                                let end_utf16 = byte_to_utf16_col(line, mat.end());
                                                 enhanced_locations.push(json!({
                                                     "uri": doc_uri,
                                                     "range": {
                                                         "start": {
                                                             "line": line_num,
-                                                            "character": mat.start(),
+                                                            "character": start_utf16,
                                                         },
                                                         "end": {
                                                             "line": line_num,
-                                                            "character": mat.end(),
+                                                            "character": end_utf16,
                                                         },
                                                     },
                                                 }));
@@ -220,17 +222,21 @@ impl LspServer {
                                                 let lines: Vec<&str> = doc_text.lines().collect();
                                                 for (line_num, line) in lines.iter().enumerate() {
                                                     for mat in search_regex.find_iter(line) {
-                                                        // TODO: Convert byte offsets to UTF-16 columns for non-ASCII lines (regex fallback).
+                                                        // Convert byte offsets to UTF-16 columns for LSP compliance
+                                                        let start_utf16 =
+                                                            byte_to_utf16_col(line, mat.start());
+                                                        let end_utf16 =
+                                                            byte_to_utf16_col(line, mat.end());
                                                         all_locations.push(json!({
                                                             "uri": doc_uri,
                                                             "range": {
                                                                 "start": {
                                                                     "line": line_num,
-                                                                    "character": mat.start(),
+                                                                    "character": start_utf16,
                                                                 },
                                                                 "end": {
                                                                     "line": line_num,
-                                                                    "character": mat.end(),
+                                                                    "character": end_utf16,
                                                                 },
                                                             },
                                                         }));
@@ -297,8 +303,7 @@ impl LspServer {
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
-            // Use poison-safe lock to prevent server crash if another thread panicked
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);

@@ -16,7 +16,7 @@ impl LspServer {
                 message: "Missing textDocument.uri".into(),
                 data: None,
             })?;
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
                 code: INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
@@ -44,7 +44,7 @@ impl LspServer {
 
             eprintln!("Getting semantic tokens for: {}", uri);
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let provider = SemanticTokensProvider::new(doc.text.clone());
@@ -81,7 +81,7 @@ impl LspServer {
                 uri, start_line, end_line
             );
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let provider = SemanticTokensProvider::new(doc.text.clone());
