@@ -65,10 +65,8 @@ impl ServerConfig {
                 self.test_runner_command = cmd.to_string();
             }
             if let Some(args) = test.get("args").and_then(|v| v.as_array()) {
-                self.test_runner_args = args
-                    .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect();
+                self.test_runner_args =
+                    args.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
             }
             if let Some(timeout) = test.get("timeout").and_then(|v| v.as_u64()) {
                 self.test_runner_timeout = timeout;

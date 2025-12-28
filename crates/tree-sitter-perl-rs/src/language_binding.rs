@@ -207,32 +207,35 @@ pub extern "C" fn tree_sitter_perl_external_scanner_scan(
 }
 
 /// Symbol names for debugging
-static SYMBOL_NAMES: &[&str] = &[
-    "source_file",
-    "statement",
-    "expression",
-    "identifier",
-    "number",
-    "string",
-    "scalar_variable",
-    "array_variable",
-    "hash_variable",
-    "subroutine_declaration",
-    "package_declaration",
-    "use_statement",
-    "if_statement",
-    "while_statement",
-    "for_statement",
-    "block",
-    "assignment",
-    "binary_expression",
-    "unary_expression",
-    "function_call",
-    "method_call",
-    "comment",
-    "heredoc",
-    "regex",
-    "ERROR",
+/// NOTE: These are NUL-terminated byte literals for C FFI compatibility.
+/// Rust `&str` is NOT NUL-terminated, which would cause undefined behavior
+/// when passed to C code expecting C strings.
+static SYMBOL_NAMES: &[&[u8]] = &[
+    b"source_file\0",
+    b"statement\0",
+    b"expression\0",
+    b"identifier\0",
+    b"number\0",
+    b"string\0",
+    b"scalar_variable\0",
+    b"array_variable\0",
+    b"hash_variable\0",
+    b"subroutine_declaration\0",
+    b"package_declaration\0",
+    b"use_statement\0",
+    b"if_statement\0",
+    b"while_statement\0",
+    b"for_statement\0",
+    b"block\0",
+    b"assignment\0",
+    b"binary_expression\0",
+    b"unary_expression\0",
+    b"function_call\0",
+    b"method_call\0",
+    b"comment\0",
+    b"heredoc\0",
+    b"regex\0",
+    b"ERROR\0",
 ];
 
 /// Get symbol name
@@ -246,22 +249,25 @@ pub extern "C" fn tree_sitter_perl_symbol_name(symbol: u16) -> *const c_char {
 }
 
 /// Field names
-static FIELD_NAMES: &[&str] = &[
-    "name",
-    "body",
-    "condition",
-    "then",
-    "else",
-    "operator",
-    "left",
-    "right",
-    "function",
-    "arguments",
-    "object",
-    "method",
-    "value",
-    "pattern",
-    "flags",
+/// NOTE: These are NUL-terminated byte literals for C FFI compatibility.
+/// Rust `&str` is NOT NUL-terminated, which would cause undefined behavior
+/// when passed to C code expecting C strings.
+static FIELD_NAMES: &[&[u8]] = &[
+    b"name\0",
+    b"body\0",
+    b"condition\0",
+    b"then\0",
+    b"else\0",
+    b"operator\0",
+    b"left\0",
+    b"right\0",
+    b"function\0",
+    b"arguments\0",
+    b"object\0",
+    b"method\0",
+    b"value\0",
+    b"pattern\0",
+    b"flags\0",
 ];
 
 /// Get field name

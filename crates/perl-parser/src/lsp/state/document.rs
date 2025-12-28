@@ -6,8 +6,8 @@
 use crate::declaration::ParentMap;
 use crate::positions::LineStartsCache;
 use std::borrow::Cow;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 /// Document state with Rope-based content management for efficient LSP operations
 ///
@@ -159,11 +159,7 @@ impl DocumentState {
 
 /// Normalize legacy package separator ' to ::
 pub fn normalize_package_separator(s: &str) -> Cow<'_, str> {
-    if s.contains('\'') {
-        Cow::Owned(s.replace('\'', "::"))
-    } else {
-        Cow::Borrowed(s)
-    }
+    if s.contains('\'') { Cow::Owned(s.replace('\'', "::")) } else { Cow::Borrowed(s) }
 }
 
 /// Client capabilities received during initialization
