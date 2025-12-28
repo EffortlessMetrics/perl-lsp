@@ -6,7 +6,10 @@ use super::super::*;
 
 impl LspServer {
     /// Handle hover request
-    pub(crate) fn handle_hover(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+    pub(crate) fn handle_hover(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
