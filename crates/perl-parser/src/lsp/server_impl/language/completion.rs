@@ -77,7 +77,7 @@ impl LspServer {
             #[cfg(not(feature = "workspace"))]
             let index_ready = false;
 
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
 
@@ -319,7 +319,7 @@ impl LspServer {
             let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
             self.ensure_latest(uri, req_version)?;
 
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
 

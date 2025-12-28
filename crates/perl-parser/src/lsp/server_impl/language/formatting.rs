@@ -23,7 +23,7 @@ impl LspServer {
             let line = pos["line"].as_u64().unwrap_or(0) as u32;
             let col = pos["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
                 code: INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
@@ -62,12 +62,11 @@ impl LspServer {
 
             eprintln!("Formatting document: {}", uri);
 
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(doc) = self.get_document(&documents, uri) {
                 let formatter = CodeFormatter::new();
                 match formatter.format_document(&doc.text, &options) {
                     Ok(edits) => {
-                        let doc_end = self.get_document_end_position(&doc.text);
                         let lsp_edits: Vec<Value> = edits
                             .into_iter()
                             .map(|edit| {
@@ -77,7 +76,10 @@ impl LspServer {
                                             "line": edit.range.start.line,
                                             "character": edit.range.start.character,
                                         },
-                                        "end": doc_end.clone(),
+                                        "end": {
+                                            "line": edit.range.end.line,
+                                            "character": edit.range.end.character,
+                                        },
                                     },
                                     "newText": edit.new_text,
                                 })
@@ -134,7 +136,7 @@ impl LspServer {
 
             eprintln!("Formatting range in document: {}", uri);
 
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(doc) = self.get_document(&documents, uri) {
                 let formatter = CodeFormatter::new();
                 match formatter.format_range(&doc.text, &range, &options) {
