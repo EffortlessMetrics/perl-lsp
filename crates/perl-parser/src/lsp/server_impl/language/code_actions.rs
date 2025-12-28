@@ -26,7 +26,7 @@ impl LspServer {
         let end_line = params["range"]["end"]["line"].as_u64().unwrap_or(0) as u32;
         let end_char = params["range"]["end"]["character"].as_u64().unwrap_or(0) as u32;
 
-        let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+        let documents = self.documents_guard();
         let doc = match self.get_document(&documents, uri) {
             Some(d) => d,
             None => return Ok(Some(json!([]))),
@@ -348,7 +348,7 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
             if let Some(uri) = p["textDocument"]["uri"].as_str() {
-                let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+                let documents = self.documents_guard();
                 if let Some(doc) = documents.get(uri) {
                     let mut actions =
                         crate::code_actions_pragmas::missing_pragmas_actions(uri, &doc.text);
@@ -416,8 +416,7 @@ impl LspServer {
                     // For quickfix actions, compute the workspace edit now
                     if let Some(data) = action.get("data") {
                         if let Some(uri) = data.get("uri").and_then(|u| u.as_str()) {
-                            let documents =
-                                self.documents.lock().unwrap_or_else(|e| e.into_inner());
+                            let documents = self.documents_guard();
                             if self.get_document(&documents, uri).is_some() {
                                 // Example: Add "use strict;" at the beginning
                                 if let Some(pragma) = data.get("pragma").and_then(|p| p.as_str()) {

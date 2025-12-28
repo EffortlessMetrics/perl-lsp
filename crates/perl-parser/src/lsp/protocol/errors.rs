@@ -178,3 +178,62 @@ pub fn document_not_found_error() -> Value {
 pub fn internal_error(message: &str) -> JsonRpcError {
     JsonRpcError { code: INTERNAL_ERROR, message: message.to_string(), data: None }
 }
+
+// ============================================================================
+// Request Parameter Extraction Helpers
+// ============================================================================
+
+/// Extract the required textDocument.uri from LSP request params
+///
+/// Returns INVALID_PARAMS error if the URI is missing or not a string.
+pub fn req_uri(params: &Value) -> Result<&str, JsonRpcError> {
+    params
+        .pointer("/textDocument/uri")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))
+}
+
+/// Extract the required position (line, character) from LSP request params
+///
+/// Returns INVALID_PARAMS error if line or character are missing.
+pub fn req_position(params: &Value) -> Result<(u32, u32), JsonRpcError> {
+    let line = params
+        .pointer("/position/line")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| invalid_params("Missing required parameter: position.line"))?
+        as u32;
+    let character = params
+        .pointer("/position/character")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| invalid_params("Missing required parameter: position.character"))?
+        as u32;
+    Ok((line, character))
+}
+
+/// Extract the required range from LSP request params
+///
+/// Returns INVALID_PARAMS error if any range components are missing.
+/// Returns ((start_line, start_char), (end_line, end_char)).
+pub fn req_range(params: &Value) -> Result<((u32, u32), (u32, u32)), JsonRpcError> {
+    let start_line = params
+        .pointer("/range/start/line")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| invalid_params("Missing required parameter: range.start.line"))?
+        as u32;
+    let start_char = params
+        .pointer("/range/start/character")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| invalid_params("Missing required parameter: range.start.character"))?
+        as u32;
+    let end_line = params
+        .pointer("/range/end/line")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| invalid_params("Missing required parameter: range.end.line"))?
+        as u32;
+    let end_char = params
+        .pointer("/range/end/character")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| invalid_params("Missing required parameter: range.end.character"))?
+        as u32;
+    Ok(((start_line, start_char), (end_line, end_char)))
+}
