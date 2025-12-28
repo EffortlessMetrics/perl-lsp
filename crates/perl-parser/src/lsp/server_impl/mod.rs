@@ -72,8 +72,7 @@ use url::Url;
 use crate::uri::parse_uri;
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{
-    LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex, WorkspaceSymbol,
-    uri_to_fs_path,
+    LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex, uri_to_fs_path,
 };
 
 #[cfg(feature = "workspace")]
@@ -1035,11 +1034,13 @@ impl LspServer {
                     let offset = self.pos16_to_offset(doc, line, character);
 
                     // Use SemanticAnalyzer for type information
-                    let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
-                    let source_loc = crate::SourceLocation { start: offset, end: offset + 1 };
+                    // Pass the source text to enable proper symbol resolution
+                    let analyzer =
+                        crate::semantic::SemanticAnalyzer::analyze_with_source(ast, &doc.text);
 
-                    // Try to get symbol information from semantic analyzer
-                    if let Some(symbol_info) = analyzer.symbol_at(source_loc) {
+                    // Try to find the symbol at this position, checking references first
+                    // This allows hover on variable usages to show the variable's definition info
+                    if let Some(symbol_info) = analyzer.find_definition(offset) {
                         // Get symbol kind as string
                         let kind_str = match symbol_info.kind {
                             crate::symbol::SymbolKind::ScalarVariable => "Scalar Variable",

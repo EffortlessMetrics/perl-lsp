@@ -1,12 +1,15 @@
-//! Request dispatch and lifecycle management
+//! Request dispatch placeholder
 //!
-//! This module handles:
-//! - Method routing from `handle_request()`
-//! - Lifecycle state (initialized, shutdown)
-//! - Cancellation integration
+//! **NOTE**: The actual dispatch implementation is in `server_impl/dispatch.rs`.
 //!
-//! The actual dispatch logic will be extracted from lsp_server.rs
-//! as part of the modularization effort.
+//! This module was initially planned for extracted dispatch logic, but the
+//! implementation was placed directly in `server_impl/dispatch.rs` which is
+//! the canonical location. This placeholder is retained for backwards
+//! compatibility and documentation purposes.
+//!
+//! See `crate::lsp::server_impl::dispatch` for:
+//! - Method routing via `handle_request()`
+//! - Lifecycle state management (initialized, shutdown)
+//! - Cancellation integration with `PerlLspCancellationToken`
 
-// Placeholder - dispatch logic will be moved here from lsp_server.rs
-// The handle_request() method's match arms will be organized here.
+// Intentionally empty - real dispatch logic lives in server_impl/dispatch.rs
