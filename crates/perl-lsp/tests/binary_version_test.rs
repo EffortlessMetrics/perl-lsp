@@ -51,7 +51,8 @@ fn lsp_server_version_matches_crate_version() {
 
     // Assert version matches
     assert_eq!(
-        server_version, EXPECTED_VERSION,
+        server_version,
+        EXPECTED_VERSION,
         "\n\
         ╔════════════════════════════════════════════════════════════════════╗\n\
         ║ WRONG BINARY VERSION DETECTED!                                     ║\n\
