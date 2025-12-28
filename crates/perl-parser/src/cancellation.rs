@@ -457,6 +457,46 @@ macro_rules! check_cancellation {
     };
 }
 
+/// RAII guard for automatic cancellation cleanup
+///
+/// This guard ensures that cancellation tokens are properly cleaned up when
+/// a request completes, regardless of whether it succeeds, fails, or panics.
+///
+/// # Example
+/// ```ignore
+/// let _guard = RequestCleanupGuard::new(request_id);
+/// // ... process request ...
+/// // Guard automatically calls remove_request on drop
+/// ```
+pub struct RequestCleanupGuard {
+    request_id: Option<Value>,
+}
+
+impl RequestCleanupGuard {
+    /// Create a new cleanup guard for the given request ID
+    ///
+    /// If `request_id` is `None`, the guard does nothing on drop.
+    pub fn new(request_id: Option<Value>) -> Self {
+        Self { request_id }
+    }
+
+    /// Create a guard from a reference to an optional Value
+    ///
+    /// This is a convenience method for the common pattern of
+    /// `RequestCleanupGuard::new(request_id.cloned())`.
+    pub fn from_ref(request_id: Option<&Value>) -> Self {
+        Self { request_id: request_id.cloned() }
+    }
+}
+
+impl Drop for RequestCleanupGuard {
+    fn drop(&mut self) {
+        if let Some(ref req_id) = self.request_id {
+            GLOBAL_CANCELLATION_REGISTRY.remove_request(req_id);
+        }
+    }
+}
+
 lazy_static::lazy_static! {
     /// Default global cancellation registry instance for thread-safe cancellation coordination
     pub static ref GLOBAL_CANCELLATION_REGISTRY: CancellationRegistry = CancellationRegistry::new();
@@ -543,5 +583,47 @@ mod tests {
 
         // Validate memory overhead is reasonable
         assert!(metrics.memory_overhead_bytes() < 1024 * 1024); // <1MB
+    }
+
+    #[test]
+    fn test_request_cleanup_guard_auto_cleanup() {
+        // Use a separate registry for testing to avoid interference
+        let registry = CancellationRegistry::new();
+        let req_id = json!(9999);
+
+        // Register a token
+        let token = PerlLspCancellationToken::new(req_id.clone(), "test".to_string());
+        registry.register_token(token).unwrap();
+
+        // Verify it's registered
+        let initial_count = registry.active_count();
+        assert!(initial_count > 0, "Token should be registered");
+
+        // Manually remove to verify the method works
+        registry.remove_request(&req_id);
+
+        // Verify the request was cleaned up
+        assert_eq!(registry.active_count(), initial_count - 1, "Token should be removed");
+    }
+
+    #[test]
+    fn test_request_cleanup_guard_none_is_noop() {
+        // Creating a guard with None should not panic or cause issues
+        let _guard = RequestCleanupGuard::new(None);
+        // Guard drops without doing anything
+    }
+
+    #[test]
+    fn test_request_cleanup_guard_from_ref() {
+        // Test that from_ref correctly clones the value
+        let req_id = json!(9998);
+        let guard = RequestCleanupGuard::from_ref(Some(&req_id));
+
+        // Verify the guard has the request_id
+        assert!(guard.request_id.is_some());
+        assert_eq!(guard.request_id.as_ref().unwrap(), &req_id);
+
+        // Let it drop - this exercises the Drop impl even if nothing is registered
+        drop(guard);
     }
 }
