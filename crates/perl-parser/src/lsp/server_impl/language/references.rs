@@ -3,6 +3,14 @@
 //! Handles textDocument/references and textDocument/documentHighlight requests.
 
 use super::super::*;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    /// Regex for matching fully-qualified Perl symbol names (e.g., Package::SubPackage::function)
+    /// Compiled once at startup to avoid per-request regex compilation overhead.
+    static ref QUALIFIED_NAME_RE: regex::Regex =
+        regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)").unwrap();
+}
 
 impl LspServer {
     /// Handle textDocument/references request
@@ -20,7 +28,8 @@ impl LspServer {
                 true
             };
 
-            let documents = self.documents.lock().unwrap();
+            // Use poison-safe lock to prevent server crash if another thread panicked
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
@@ -57,8 +66,12 @@ impl LspServer {
                             }
 
                             // Enhanced fallback: always search for both qualified and unqualified references
-                            let docs_snapshot: Vec<(String, DocumentState)> =
-                                documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                            // Snapshot only (uri, text) to minimize cloning overhead - we don't need
+                            // AST, rope, or other DocumentState fields for text search
+                            let docs_snapshot: Vec<(String, String)> = documents
+                                .iter()
+                                .map(|(k, v)| (k.clone(), v.text.clone()))
+                                .collect();
 
                             let mut enhanced_locations = Vec::new();
                             let symbol_name = &symbol_key.name;
@@ -76,10 +89,11 @@ impl LspServer {
 
                             for pattern in patterns {
                                 if let Ok(search_regex) = regex::Regex::new(&pattern) {
-                                    for (doc_uri, doc_state) in &docs_snapshot {
-                                        let lines: Vec<&str> = doc_state.text.lines().collect();
+                                    for (doc_uri, doc_text) in &docs_snapshot {
+                                        let lines: Vec<&str> = doc_text.lines().collect();
                                         for (line_num, line) in lines.iter().enumerate() {
                                             for mat in search_regex.find_iter(line) {
+                                                // TODO: Convert byte offsets to UTF-16 columns for non-ASCII lines (regex fallback).
                                                 enhanced_locations.push(json!({
                                                     "uri": doc_uri,
                                                     "range": {
@@ -141,12 +155,8 @@ impl LspServer {
                         let text_around = self.get_text_around_offset(&doc.text, offset, radius);
                         let cursor_in_text = offset - text_start;
 
-                        let re = regex::Regex::new(
-                            r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)",
-                        )
-                        .unwrap();
-
-                        for cap in re.captures_iter(&text_around) {
+                        // Use cached regex to avoid per-request compilation overhead
+                        for cap in QUALIFIED_NAME_RE.captures_iter(&text_around) {
                             if let Some(m) = cap.get(1) {
                                 if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
                                     let parts: Vec<&str> = m.as_str().split("::").collect();
@@ -191,25 +201,26 @@ impl LspServer {
                                             }
 
                                             // Fallback: scan open documents for qualified name references
-                                            let docs_snapshot: Vec<(String, DocumentState)> =
-                                                documents
-                                                    .iter()
-                                                    .map(|(k, v)| (k.clone(), v.clone()))
-                                                    .collect();
+                                            // Snapshot only (uri, text) to minimize cloning overhead
+                                            let docs_snapshot: Vec<(String, String)> = documents
+                                                .iter()
+                                                .map(|(k, v)| (k.clone(), v.text.clone()))
+                                                .collect();
 
                                             let mut all_locations = Vec::new();
                                             let qualified_name = format!("{}::{}", pkg, name);
-                                            let search_regex = regex::Regex::new(&format!(
+                                            let Ok(search_regex) = regex::Regex::new(&format!(
                                                 r"\b{}\b",
                                                 regex::escape(&qualified_name)
-                                            ))
-                                            .unwrap();
+                                            )) else {
+                                                continue;
+                                            };
 
-                                            for (doc_uri, doc_state) in docs_snapshot {
-                                                let lines: Vec<&str> =
-                                                    doc_state.text.lines().collect();
+                                            for (doc_uri, doc_text) in docs_snapshot {
+                                                let lines: Vec<&str> = doc_text.lines().collect();
                                                 for (line_num, line) in lines.iter().enumerate() {
                                                     for mat in search_regex.find_iter(line) {
+                                                        // TODO: Convert byte offsets to UTF-16 columns for non-ASCII lines (regex fallback).
                                                         all_locations.push(json!({
                                                             "uri": doc_uri,
                                                             "range": {
@@ -286,7 +297,8 @@ impl LspServer {
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap();
+            // Use poison-safe lock to prevent server crash if another thread panicked
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
