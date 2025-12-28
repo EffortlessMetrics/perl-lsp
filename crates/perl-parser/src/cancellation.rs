@@ -585,25 +585,42 @@ mod tests {
         assert!(metrics.memory_overhead_bytes() < 1024 * 1024); // <1MB
     }
 
+    /// Test-local lock to serialize tests that use the global registry
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn test_request_cleanup_guard_auto_cleanup() {
-        // Use a separate registry for testing to avoid interference
-        let registry = CancellationRegistry::new();
+        // Serialize access to global registry to avoid interference between tests
+        let _lock = TEST_LOCK.lock().unwrap();
+
         let req_id = json!(9999);
 
-        // Register a token
-        let token = PerlLspCancellationToken::new(req_id.clone(), "test".to_string());
-        registry.register_token(token).unwrap();
+        // Ensure clean baseline by removing any stale entry
+        GLOBAL_CANCELLATION_REGISTRY.remove_request(&req_id);
+        let count_before = GLOBAL_CANCELLATION_REGISTRY.active_count();
 
-        // Verify it's registered
-        let initial_count = registry.active_count();
-        assert!(initial_count > 0, "Token should be registered");
+        {
+            // Register a token in the global registry
+            let token = PerlLspCancellationToken::new(req_id.clone(), "test".to_string());
+            GLOBAL_CANCELLATION_REGISTRY.register_token(token).unwrap();
 
-        // Manually remove to verify the method works
-        registry.remove_request(&req_id);
+            assert_eq!(
+                GLOBAL_CANCELLATION_REGISTRY.active_count(),
+                count_before + 1,
+                "Token should be registered"
+            );
 
-        // Verify the request was cleaned up
-        assert_eq!(registry.active_count(), initial_count - 1, "Token should be removed");
+            // Create guard - it will call remove_request on drop
+            let _guard = RequestCleanupGuard::new(Some(req_id.clone()));
+            // guard drops at scope end
+        }
+
+        // After the scope ends, the guard's Drop should have cleaned up the token
+        assert_eq!(
+            GLOBAL_CANCELLATION_REGISTRY.active_count(),
+            count_before,
+            "Token should be removed by guard drop"
+        );
     }
 
     #[test]

@@ -608,7 +608,6 @@ impl LspServer {
         Ok(Some(json!([])))
     }
 
-
     /// Handle textDocument/references request
     fn handle_references(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {

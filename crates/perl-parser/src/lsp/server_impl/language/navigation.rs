@@ -429,7 +429,7 @@ impl LspServer {
             }
 
             // Delegate to original handler
-            self.handle_definition(Some(params.clone()))
+            self.handle_definition(Some(params))
         } else {
             self.handle_definition(params)
         }
