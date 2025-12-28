@@ -201,15 +201,32 @@ pub fn start_lsp_server() -> LspServer {
             eprintln!("║ Resolution order tried:                                            ║");
             eprintln!("║  1. PERL_LSP_BIN env var: {:?}", std::env::var("PERL_LSP_BIN").ok());
             eprintln!("║  2. Compile-time CARGO_BIN_EXE: {:?}", CARGO_BIN_EXE);
-            eprintln!("║  3. Runtime CARGO_BIN_EXE_perl-lsp: {:?}", std::env::var("CARGO_BIN_EXE_perl-lsp").ok());
-            eprintln!("║  4. Runtime CARGO_BIN_EXE_perl_lsp: {:?}", std::env::var("CARGO_BIN_EXE_perl_lsp").ok());
+            eprintln!(
+                "║  3. Runtime CARGO_BIN_EXE_perl-lsp: {:?}",
+                std::env::var("CARGO_BIN_EXE_perl-lsp").ok()
+            );
+            eprintln!(
+                "║  4. Runtime CARGO_BIN_EXE_perl_lsp: {:?}",
+                std::env::var("CARGO_BIN_EXE_perl_lsp").ok()
+            );
             if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
                 let crate_dir = std::path::Path::new(&manifest_dir);
-                let workspace_root = crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists()).unwrap_or(crate_dir);
+                let workspace_root = crate_dir
+                    .ancestors()
+                    .find(|p| p.join("Cargo.lock").exists())
+                    .unwrap_or(crate_dir);
                 let debug_binary = workspace_root.join("target/debug/perl-lsp");
                 let release_binary = workspace_root.join("target/release/perl-lsp");
-                eprintln!("║  5. Debug binary exists: {} ({})", debug_binary.exists(), debug_binary.display());
-                eprintln!("║  6. Release binary exists: {} ({})", release_binary.exists(), release_binary.display());
+                eprintln!(
+                    "║  5. Debug binary exists: {} ({})",
+                    debug_binary.exists(),
+                    debug_binary.display()
+                );
+                eprintln!(
+                    "║  6. Release binary exists: {} ({})",
+                    release_binary.exists(),
+                    release_binary.display()
+                );
             }
             eprintln!("║  7. perl-lsp in PATH: {:?}", which::which("perl-lsp").ok());
             eprintln!("║  8. cargo run fallback");
