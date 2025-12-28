@@ -84,16 +84,21 @@ impl LspServer {
 
         eprintln!("Workspace symbol search: '{}'", query);
 
+        // Snapshot documents without holding lock during iteration
+        // (Follows same pattern as handle_workspace_symbols_v2)
+        let docs_snapshot: Vec<(String, DocumentState)> = {
+            let documents = self.documents.lock().unwrap();
+            documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        };
+
         // Simple synchronous extraction (legacy non-workspace path)
         let mut all_symbols = Vec::new();
-        let documents = self.documents.lock().unwrap();
-        for (uri, doc) in documents.iter() {
+        for (uri, doc) in docs_snapshot.iter() {
             if let Some(ref ast) = doc.ast {
                 // Extract symbols using document symbol provider
                 self.extract_simple_symbols(ast, &doc.text, uri, query, &mut all_symbols);
             }
         }
-        drop(documents);
 
         eprintln!("Found {} symbols total", all_symbols.len());
 
