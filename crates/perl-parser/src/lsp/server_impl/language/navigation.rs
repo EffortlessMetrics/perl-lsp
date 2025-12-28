@@ -5,6 +5,7 @@
 
 use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
+use crate::lsp::protocol::{req_position, req_uri};
 use std::collections::HashMap;
 
 #[cfg(feature = "workspace")]
@@ -26,9 +27,8 @@ impl LspServer {
         let t0 = std::time::Instant::now();
 
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -151,9 +151,8 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -370,6 +369,8 @@ impl LspServer {
                     if let Some(definition) = model.definition_at(offset) {
                         let (def_line, def_char) =
                             self.offset_to_pos16(doc, definition.location.start);
+                        let (def_end_line, def_end_char) =
+                            self.offset_to_pos16(doc, definition.location.end);
 
                         return Ok(Some(json!([{
                             "uri": uri,
@@ -379,8 +380,8 @@ impl LspServer {
                                     "character": def_char,
                                 },
                                 "end": {
-                                    "line": def_line,
-                                    "character": def_char + definition.name.len() as u32,
+                                    "line": def_end_line,
+                                    "character": def_end_char,
                                 },
                             },
                         }])));
@@ -443,9 +444,8 @@ impl LspServer {
         use crate::type_definition::TypeDefinitionProvider;
 
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -474,9 +474,8 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {

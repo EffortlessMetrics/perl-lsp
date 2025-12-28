@@ -10,7 +10,7 @@
 use crate::{
     CompletionItemKind, CompletionProvider,
     cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, RequestCleanupGuard},
-    lsp::protocol::{JsonRpcError, REQUEST_CANCELLED},
+    lsp::protocol::{JsonRpcError, REQUEST_CANCELLED, req_position, req_uri},
     type_inference::TypeInferenceEngine,
 };
 use lazy_static::lazy_static;
@@ -62,9 +62,8 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             // Reject stale requests
             let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
@@ -311,9 +310,8 @@ impl LspServer {
             }
 
             // Use cancellable provider method instead of delegating
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             // Reject stale requests
             let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
