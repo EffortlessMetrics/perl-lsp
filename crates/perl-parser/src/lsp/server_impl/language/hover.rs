@@ -4,6 +4,7 @@
 
 use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
+use crate::lsp::protocol::{req_position, req_uri};
 
 impl LspServer {
     /// Handle hover request
@@ -12,9 +13,8 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             // Reject stale requests
             let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
@@ -143,9 +143,8 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {

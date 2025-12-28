@@ -4,6 +4,7 @@
 //! Supports both single-file and workspace-wide renaming.
 
 use super::super::*;
+use crate::lsp::protocol::{invalid_params, req_position, req_uri};
 
 impl LspServer {
     /// Handle textDocument/prepareRename request
@@ -12,9 +13,8 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -64,10 +64,11 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
-            let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
-            let new_name = params["newName"].as_str().unwrap_or("");
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
+            let new_name = params["newName"]
+                .as_str()
+                .ok_or_else(|| invalid_params("Missing required parameter: newName"))?;
 
             // Validate the new name
             if !self.is_valid_identifier(new_name) {

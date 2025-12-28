@@ -195,45 +195,51 @@ pub fn req_uri(params: &Value) -> Result<&str, JsonRpcError> {
 
 /// Extract the required position (line, character) from LSP request params
 ///
-/// Returns INVALID_PARAMS error if line or character are missing.
+/// Returns INVALID_PARAMS error if line or character are missing or overflow u32.
 pub fn req_position(params: &Value) -> Result<(u32, u32), JsonRpcError> {
-    let line = params
+    let line_u64 = params
         .pointer("/position/line")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: position.line"))?
-        as u32;
-    let character = params
+        .ok_or_else(|| invalid_params("Missing required parameter: position.line"))?;
+    let line =
+        u32::try_from(line_u64).map_err(|_| invalid_params("position.line exceeds u32::MAX"))?;
+    let character_u64 = params
         .pointer("/position/character")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: position.character"))?
-        as u32;
+        .ok_or_else(|| invalid_params("Missing required parameter: position.character"))?;
+    let character = u32::try_from(character_u64)
+        .map_err(|_| invalid_params("position.character exceeds u32::MAX"))?;
     Ok((line, character))
 }
 
 /// Extract the required range from LSP request params
 ///
-/// Returns INVALID_PARAMS error if any range components are missing.
+/// Returns INVALID_PARAMS error if any range components are missing or overflow u32.
 /// Returns ((start_line, start_char), (end_line, end_char)).
 pub fn req_range(params: &Value) -> Result<((u32, u32), (u32, u32)), JsonRpcError> {
-    let start_line = params
+    let start_line_u64 = params
         .pointer("/range/start/line")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: range.start.line"))?
-        as u32;
-    let start_char = params
+        .ok_or_else(|| invalid_params("Missing required parameter: range.start.line"))?;
+    let start_line = u32::try_from(start_line_u64)
+        .map_err(|_| invalid_params("range.start.line exceeds u32::MAX"))?;
+    let start_char_u64 = params
         .pointer("/range/start/character")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: range.start.character"))?
-        as u32;
-    let end_line = params
+        .ok_or_else(|| invalid_params("Missing required parameter: range.start.character"))?;
+    let start_char = u32::try_from(start_char_u64)
+        .map_err(|_| invalid_params("range.start.character exceeds u32::MAX"))?;
+    let end_line_u64 = params
         .pointer("/range/end/line")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: range.end.line"))?
-        as u32;
-    let end_char = params
+        .ok_or_else(|| invalid_params("Missing required parameter: range.end.line"))?;
+    let end_line = u32::try_from(end_line_u64)
+        .map_err(|_| invalid_params("range.end.line exceeds u32::MAX"))?;
+    let end_char_u64 = params
         .pointer("/range/end/character")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: range.end.character"))?
-        as u32;
+        .ok_or_else(|| invalid_params("Missing required parameter: range.end.character"))?;
+    let end_char = u32::try_from(end_char_u64)
+        .map_err(|_| invalid_params("range.end.character exceeds u32::MAX"))?;
     Ok(((start_line, start_char), (end_line, end_char)))
 }
