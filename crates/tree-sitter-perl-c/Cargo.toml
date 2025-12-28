@@ -12,7 +12,7 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 tree-sitter = "0.26.3"
 serde = { version = "1.0.228", features = ["derive"] }
-bincode = "3.0.0"
+# bincode removed - was unused (v3.0.0 doesn't exist on crates.io)
 proptest = "1.9.0"
 walkdir = "2.5.0"
 thiserror = "2.0.17"
