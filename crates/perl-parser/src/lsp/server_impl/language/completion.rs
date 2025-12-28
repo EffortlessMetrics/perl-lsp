@@ -9,14 +9,25 @@
 
 use crate::{
     CompletionItemKind, CompletionProvider,
-    cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken},
+    cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, RequestCleanupGuard},
     lsp::protocol::{JsonRpcError, REQUEST_CANCELLED},
     type_inference::TypeInferenceEngine,
 };
+use lazy_static::lazy_static;
+use regex::Regex;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
 use super::super::LspServer;
+
+lazy_static! {
+    /// Regex for snippet placeholders like ${1:placeholder}
+    static ref SNIPPET_PLACEHOLDER_RE: Regex =
+        Regex::new(r"\$\{(\d+):([^}]+)\}").unwrap();
+    /// Regex for simple placeholders like $1, $0
+    static ref SNIPPET_SIMPLE_RE: Regex =
+        Regex::new(r"\$\d+").unwrap();
+}
 
 impl LspServer {
     /// Format type information concisely for completion detail
@@ -38,17 +49,11 @@ impl LspServer {
 
     /// Degrade snippet syntax to plaintext for clients that don't support snippets
     pub(crate) fn degrade_snippet_to_plaintext(snippet: &str) -> String {
-        use regex::Regex;
-
-        // Remove snippet placeholders: ${1:placeholder} -> placeholder, $1 -> empty
-        let placeholder_re = Regex::new(r"\$\{(\d+):([^}]+)\}").unwrap();
-        let mut result = placeholder_re.replace_all(snippet, "$2").to_string();
+        // Remove snippet placeholders: ${1:placeholder} -> placeholder
+        let result = SNIPPET_PLACEHOLDER_RE.replace_all(snippet, "$2");
 
         // Remove simple placeholders: $1, $0, etc.
-        let simple_re = Regex::new(r"\$\d+").unwrap();
-        result = simple_re.replace_all(&result, "").to_string();
-
-        result
+        SNIPPET_SIMPLE_RE.replace_all(&result, "").to_string()
     }
 
     /// Handle completion request
@@ -275,6 +280,9 @@ impl LspServer {
         params: Option<Value>,
         request_id: Option<&Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        // RAII guard ensures cleanup on all exit paths (early returns, errors, panics)
+        let _cleanup_guard = RequestCleanupGuard::from_ref(request_id);
+
         if let Some(params) = params {
             // Create or get cancellation token for this request
             let token = if let Some(req_id) = request_id {
@@ -309,12 +317,7 @@ impl LspServer {
 
             // Reject stale requests
             let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
-            if let Err(e) = self.ensure_latest(uri, req_version) {
-                if let Some(req_id) = request_id {
-                    GLOBAL_CANCELLATION_REGISTRY.remove_request(req_id);
-                }
-                return Err(e);
-            }
+            self.ensure_latest(uri, req_version)?;
 
             let documents = self.documents.lock().unwrap();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -359,9 +362,6 @@ impl LspServer {
 
                 // Check for cancellation after provider call using relaxed read
                 if token.is_cancelled_relaxed() {
-                    if let Some(req_id) = request_id {
-                        GLOBAL_CANCELLATION_REGISTRY.remove_request(req_id);
-                    }
                     return Err(JsonRpcError {
                         code: REQUEST_CANCELLED,
                         message: "Request cancelled during completion generation".to_string(),
@@ -404,21 +404,10 @@ impl LspServer {
                     })
                     .collect();
 
-                let result = Ok(Some(json!({"isIncomplete": false, "items": items})));
-                if let Some(req_id) = request_id {
-                    GLOBAL_CANCELLATION_REGISTRY.remove_request(req_id);
-                }
-                return result;
+                return Ok(Some(json!({"isIncomplete": false, "items": items})));
             }
 
-            let result = Ok(Some(json!({"isIncomplete": false, "items": []})));
-
-            // Cleanup token after completion
-            if let Some(req_id) = request_id {
-                GLOBAL_CANCELLATION_REGISTRY.remove_request(req_id);
-            }
-
-            result
+            Ok(Some(json!({"isIncomplete": false, "items": []})))
         } else {
             self.handle_completion(params)
         }
@@ -586,5 +575,44 @@ impl LspServer {
         }
 
         completions
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_degrade_snippet_removes_placeholders_with_defaults() {
+        // ${1:placeholder} should become "placeholder"
+        let result = LspServer::degrade_snippet_to_plaintext("function(${1:arg1}, ${2:arg2})");
+        assert_eq!(result, "function(arg1, arg2)");
+    }
+
+    #[test]
+    fn test_degrade_snippet_removes_simple_placeholders() {
+        // $1, $0 should be removed entirely
+        let result = LspServer::degrade_snippet_to_plaintext("print $1;$0");
+        assert_eq!(result, "print ;");
+    }
+
+    #[test]
+    fn test_degrade_snippet_mixed_placeholders() {
+        // Mix of both types
+        let result = LspServer::degrade_snippet_to_plaintext("sub ${1:name} { $0 }");
+        assert_eq!(result, "sub name {  }");
+    }
+
+    #[test]
+    fn test_degrade_snippet_no_placeholders() {
+        // Plain text should pass through unchanged
+        let result = LspServer::degrade_snippet_to_plaintext("just plain text");
+        assert_eq!(result, "just plain text");
+    }
+
+    #[test]
+    fn test_degrade_snippet_empty_string() {
+        let result = LspServer::degrade_snippet_to_plaintext("");
+        assert_eq!(result, "");
     }
 }
