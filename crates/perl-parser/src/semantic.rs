@@ -216,16 +216,27 @@ impl SemanticAnalyzer {
     }
 
     /// Find the symbol at a given location
+    ///
+    /// Returns the most specific (smallest range) symbol that contains the location.
+    /// This ensures that when hovering inside a subroutine body, we return the
+    /// variable at the cursor rather than the enclosing subroutine.
     pub fn symbol_at(&self, location: SourceLocation) -> Option<&Symbol> {
-        // Search through all symbols for one at this location
+        let mut best: Option<&Symbol> = None;
+        let mut best_span = usize::MAX;
+
+        // Search through all symbols for the most specific one at this location
         for symbols in self.symbol_table.symbols.values() {
             for symbol in symbols {
                 if symbol.location.start <= location.start && symbol.location.end >= location.end {
-                    return Some(symbol);
+                    let span = symbol.location.end - symbol.location.start;
+                    if span < best_span {
+                        best = Some(symbol);
+                        best_span = span;
+                    }
                 }
             }
         }
-        None
+        best
     }
 
     /// Find the definition of a symbol at a given position

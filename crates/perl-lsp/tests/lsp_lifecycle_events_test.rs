@@ -2,7 +2,7 @@
 //! Tests didSave, willSave, and willSaveWaitUntil notifications
 
 use perl_parser::{JsonRpcRequest, JsonRpcResponse, LspServer};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Helper to set up an initialized LSP server with a document
 fn setup_server_with_document() -> (LspServer, String) {

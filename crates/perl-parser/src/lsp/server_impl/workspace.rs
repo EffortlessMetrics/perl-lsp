@@ -74,6 +74,7 @@ impl LspServer {
     }
 
     /// Handle workspace/symbol request (legacy implementation)
+    #[cfg(not(feature = "workspace"))]
     pub(super) fn handle_workspace_symbols(
         &self,
         params: Option<Value>,

@@ -6,10 +6,10 @@
 //! - **protocol**: JSON-RPC message types and error handling
 //! - **transport**: Message framing and I/O
 //! - **state**: Document and server state management
-//! - **dispatch**: Request routing and lifecycle management
+//! - **dispatch**: Placeholder (real dispatch in `server_impl/dispatch.rs`)
 //! - **handlers**: LSP method implementations
 //! - **fallback**: Text-based fallback implementations
-//! - **server_impl**: Core LspServer implementation
+//! - **server_impl**: Core LspServer implementation and dispatch logic
 //! - **server**: Public server interface (re-exports from server_impl)
 
 pub mod dispatch;

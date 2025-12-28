@@ -340,16 +340,17 @@ pub extern "C" fn tree_sitter_perl_delete_tree(tree_id: u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::CStr;
 
     #[test]
     fn test_parser_interface() {
         let source = "my $x = 42;";
         let tree_id = GLOBAL_PARSER.parse(source).unwrap();
         assert!(tree_id > 0);
-        
+
         let ast = GLOBAL_PARSER.get_ast(tree_id);
         assert!(ast.is_some());
-        
+
         GLOBAL_PARSER.delete_tree(tree_id);
         assert!(GLOBAL_PARSER.get_ast(tree_id).is_none());
     }
@@ -380,5 +381,81 @@ mod tests {
         );
         assert_eq!(new_state.heredoc_terminators.len(), 2);
         assert_eq!(new_state.heredoc_terminators[0], "EOF");
+    }
+
+    /// Proof test: verify symbol names are valid NUL-terminated C strings.
+    ///
+    /// This test prevents regression of UB where Rust `&str` (NOT NUL-terminated)
+    /// was incorrectly passed to C code expecting C strings.
+    #[test]
+    fn test_symbol_names_are_valid_c_strings() {
+        // Test first symbol (index 0)
+        let ptr = tree_sitter_perl_symbol_name(0);
+        assert!(!ptr.is_null(), "Symbol name at index 0 should not be null");
+
+        // Verify it's a valid C string with NUL terminator
+        let c_str = unsafe { CStr::from_ptr(ptr) };
+        let s = c_str.to_str().expect("Symbol name should be valid UTF-8");
+        assert_eq!(s, "source_file", "First symbol should be 'source_file'");
+
+        // Test that the string is properly NUL-terminated within reasonable bounds
+        let bytes = unsafe { std::slice::from_raw_parts(ptr as *const u8, 64) };
+        let nul_pos = bytes.iter().position(|&b| b == 0);
+        assert!(nul_pos.is_some(), "Symbol name must have NUL terminator within 64 bytes");
+        assert!(nul_pos.unwrap() < 50, "NUL terminator should be within reasonable bounds");
+
+        // Test that out-of-bounds returns null
+        let out_of_bounds = tree_sitter_perl_symbol_name(u16::MAX);
+        assert!(out_of_bounds.is_null(), "Out of bounds symbol should return null");
+    }
+
+    /// Proof test: verify field names are valid NUL-terminated C strings.
+    ///
+    /// This test prevents regression of UB where Rust `&str` (NOT NUL-terminated)
+    /// was incorrectly passed to C code expecting C strings.
+    #[test]
+    fn test_field_names_are_valid_c_strings() {
+        // Test first field (index 0)
+        let ptr = tree_sitter_perl_field_name(0);
+        assert!(!ptr.is_null(), "Field name at index 0 should not be null");
+
+        // Verify it's a valid C string with NUL terminator
+        let c_str = unsafe { CStr::from_ptr(ptr) };
+        let s = c_str.to_str().expect("Field name should be valid UTF-8");
+        assert_eq!(s, "name", "First field should be 'name'");
+
+        // Test that the string is properly NUL-terminated within reasonable bounds
+        let bytes = unsafe { std::slice::from_raw_parts(ptr as *const u8, 64) };
+        let nul_pos = bytes.iter().position(|&b| b == 0);
+        assert!(nul_pos.is_some(), "Field name must have NUL terminator within 64 bytes");
+        assert!(nul_pos.unwrap() < 50, "NUL terminator should be within reasonable bounds");
+
+        // Test that out-of-bounds returns null
+        let out_of_bounds = tree_sitter_perl_field_name(u16::MAX);
+        assert!(out_of_bounds.is_null(), "Out of bounds field should return null");
+    }
+
+    /// Test that all symbol and field names are properly NUL-terminated
+    #[test]
+    fn test_all_names_have_nul_terminator() {
+        // Verify all symbol names
+        for i in 0..SYMBOL_NAMES.len() {
+            let name = SYMBOL_NAMES[i];
+            assert!(
+                name.ends_with(&[0u8]),
+                "Symbol name at index {} must end with NUL byte",
+                i
+            );
+        }
+
+        // Verify all field names
+        for i in 0..FIELD_NAMES.len() {
+            let name = FIELD_NAMES[i];
+            assert!(
+                name.ends_with(&[0u8]),
+                "Field name at index {} must end with NUL byte",
+                i
+            );
+        }
     }
 }

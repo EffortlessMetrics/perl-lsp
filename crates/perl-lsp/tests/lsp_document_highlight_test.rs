@@ -11,15 +11,11 @@ fn setup_server_with_document(content: &str) -> (LspHarness, String) {
     let mut harness = LspHarness::new_raw();
 
     // Initialize server
-    harness
-        .initialize(None)
-        .expect("Failed to initialize server");
+    harness.initialize(None).expect("Failed to initialize server");
 
     // Open document
     let uri = "file:///test.pl";
-    harness
-        .open(uri, content)
-        .expect("Failed to open document");
+    harness.open(uri, content).expect("Failed to open document");
 
     (harness, uri.to_string())
 }
@@ -58,10 +54,7 @@ my $bar = $foo * 2;"#;
         assert!(obj.contains_key("kind"));
 
         let kind = obj["kind"].as_u64().unwrap();
-        assert!(
-            kind >= 1 && kind <= 3,
-            "Kind should be Text(1), Read(2), or Write(3)"
-        );
+        assert!((1..=3).contains(&kind), "Kind should be Text(1), Read(2), or Write(3)");
     }
 }
 
@@ -126,10 +119,7 @@ $other->process();"#;
     let highlights_arr = response.as_array().unwrap();
 
     // Should find all 'process' method calls
-    assert!(
-        highlights_arr.len() >= 2,
-        "Should find at least 2 occurrences of 'process' method"
-    );
+    assert!(highlights_arr.len() >= 2, "Should find at least 2 occurrences of 'process' method");
 }
 
 #[test]
@@ -164,10 +154,7 @@ my $obj = MyPackage->new();"#;
     // Note: Package name highlighting may not be fully implemented.
     // Accept any result - the key test is that the API works correctly
     // and returns a valid array response.
-    eprintln!(
-        "Package highlight: found {} occurrences of 'MyPackage'",
-        highlights_arr.len()
-    );
+    eprintln!("Package highlight: found {} occurrences of 'MyPackage'", highlights_arr.len());
 }
 
 #[test]
@@ -192,11 +179,7 @@ my $foo = 42;"#;
     let highlights_arr = response.as_array().unwrap();
 
     // Should return empty array for non-symbol positions
-    assert_eq!(
-        highlights_arr.len(),
-        0,
-        "Should return empty array for non-symbol positions"
-    );
+    assert_eq!(highlights_arr.len(), 0, "Should return empty array for non-symbol positions");
 }
 
 #[test]
