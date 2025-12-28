@@ -12,6 +12,7 @@
 //! - Execute command
 
 use super::super::*;
+use crate::lsp::protocol::{invalid_params, req_position, req_uri};
 
 impl LspServer {
     /// Handle textDocument/inlayHint request
@@ -19,21 +20,14 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        use crate::lsp::protocol::req_range;
         if let Some(p) = params {
-            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
-                code: INVALID_PARAMS,
-                message: "Missing textDocument.uri".into(),
-                data: None,
-            })?;
+            let uri = req_uri(&p)?;
 
             // Extract the range parameter (required by LSP spec)
-            let range = if let Some(range_val) = p.get("range") {
-                let start_line = range_val["start"]["line"].as_u64().unwrap_or(0) as u32;
-                let start_char = range_val["start"]["character"].as_u64().unwrap_or(0) as u32;
-                let end_line = range_val["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
-                let end_char =
-                    range_val["end"]["character"].as_u64().unwrap_or(u32::MAX as u64) as u32;
-                Some(crate::positions::Range::new(start_line, start_char, end_line, end_char))
+            // InlayHint range is required per spec, but we allow graceful degradation to full doc
+            let range = if let Ok(((sl, sc), (el, ec))) = req_range(&p) {
+                Some(crate::positions::Range::new(sl, sc, el, ec))
             } else {
                 None
             };
@@ -96,7 +90,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let uri = req_uri(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -123,16 +117,10 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
-            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
-                code: INVALID_PARAMS,
-                message: "Missing textDocument.uri".into(),
-                data: None,
-            })?;
-            let positions = p["positions"].as_array().ok_or_else(|| JsonRpcError {
-                code: INVALID_PARAMS,
-                message: "Missing positions array".into(),
-                data: None,
-            })?;
+            let uri = req_uri(&p)?;
+            let positions = p["positions"]
+                .as_array()
+                .ok_or_else(|| invalid_params("Missing required parameter: positions"))?;
 
             let documents = self.documents_guard();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
@@ -147,6 +135,7 @@ impl LspServer {
                 let parent_map = crate::selection_range::build_parent_map(ast);
 
                 for pos in positions {
+                    // Positions in array still need per-item extraction with graceful handling
                     let line = pos["line"].as_u64().unwrap_or(0) as u32;
                     let col = pos["character"].as_u64().unwrap_or(0) as u32;
                     let off = self.pos16_to_offset(doc, line, col);
@@ -174,7 +163,7 @@ impl LspServer {
         }
 
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let uri = req_uri(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -255,10 +244,8 @@ impl LspServer {
         use crate::inline_completions::InlineCompletionProvider;
 
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let position = &params["position"];
-            let line = position["line"].as_u64().unwrap_or(0) as u32;
-            let character = position["character"].as_u64().unwrap_or(0) as u32;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -278,16 +265,16 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        use crate::lsp::protocol::req_range;
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let range = &params["range"];
+            let uri = req_uri(&params)?;
+            let ((start_line, _start_char), (end_line, _end_char)) = req_range(&params)?;
             let _context = &params["context"]; // Debug context (stopped at breakpoint, etc)
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 // Extract visible scalar variables in the range
-                let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
-                let end_line = range["end"]["line"].as_u64().unwrap_or(0) as u32;
+                use super::super::byte_to_utf16_col;
 
                 let mut inline_values = Vec::new();
 
@@ -303,13 +290,15 @@ impl LspServer {
                     for cap in re.captures_iter(line_text) {
                         if let Some(m) = cap.get(0) {
                             let var_text = m.as_str();
-                            let col = m.start();
+                            // Convert byte positions to UTF-16 code units for LSP compliance
+                            let start_utf16 = byte_to_utf16_col(line_text, m.start());
+                            let end_utf16 = byte_to_utf16_col(line_text, m.end());
 
                             // Create inline value text hint (showing the variable name as placeholder)
                             inline_values.push(json!({
                                 "range": {
-                                    "start": { "line": line_num, "character": col as u32 },
-                                    "end": { "line": line_num, "character": (col + var_text.len()) as u32 }
+                                    "start": { "line": line_num, "character": start_utf16 as u32 },
+                                    "end": { "line": line_num, "character": end_utf16 as u32 }
                                 },
                                 "text": format!("{} = ?", var_text)
                             }));
@@ -330,10 +319,8 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let position = &params["position"];
-            let line = position["line"].as_u64().unwrap_or(0) as u32;
-            let character = position["character"].as_u64().unwrap_or(0) as u32;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -390,10 +377,8 @@ impl LspServer {
         }
 
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let position = &params["position"];
-            let line = position["line"].as_u64().unwrap_or(0) as u32;
-            let character = position["character"].as_u64().unwrap_or(0) as u32;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -412,7 +397,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let uri = req_uri(&params)?;
 
             eprintln!("Discovering tests for: {}", uri);
 
@@ -490,7 +475,9 @@ impl LspServer {
         use crate::execute_command::ExecuteCommandProvider;
 
         if let Some(params) = params {
-            let command = params["command"].as_str().unwrap_or("");
+            let command = params["command"]
+                .as_str()
+                .ok_or_else(|| invalid_params("Missing required parameter: command"))?;
 
             // LSP 3.17 compliance: arguments field is required even if empty
             if !params.as_object().unwrap_or(&serde_json::Map::new()).contains_key("arguments") {

@@ -5,6 +5,7 @@
 
 use super::super::*;
 use crate::formatting::CodeFormatter;
+use crate::lsp::protocol::{req_position, req_range, req_uri};
 
 impl LspServer {
     /// Handle textDocument/onTypeFormatting request
@@ -13,15 +14,9 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
-            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
-                code: INVALID_PARAMS,
-                message: "Missing textDocument.uri".into(),
-                data: None,
-            })?;
+            let uri = req_uri(&p)?;
             let ch = p["ch"].as_str().and_then(|s| s.chars().next()).unwrap_or('\n');
-            let pos = &p["position"];
-            let line = pos["line"].as_u64().unwrap_or(0) as u32;
-            let col = pos["character"].as_u64().unwrap_or(0) as u32;
+            let (line, col) = req_position(&p)?;
 
             let documents = self.documents_guard();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
@@ -45,7 +40,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let uri = req_uri(&params)?;
 
             // Reject stale requests
             let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
@@ -109,7 +104,8 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let uri = req_uri(&params)?;
+            let ((start_line, start_char), (end_line, end_char)) = req_range(&params)?;
             let options: FormattingOptions = serde_json::from_value(params["options"].clone())
                 .unwrap_or(FormattingOptions {
                     tab_size: 4,
@@ -119,19 +115,9 @@ impl LspServer {
                     trim_final_newlines: None,
                 });
 
-            let range = if let Some(range_value) = params.get("range") {
-                crate::formatting::Range {
-                    start: crate::formatting::Position {
-                        line: range_value["start"]["line"].as_u64().unwrap_or(0) as u32,
-                        character: range_value["start"]["character"].as_u64().unwrap_or(0) as u32,
-                    },
-                    end: crate::formatting::Position {
-                        line: range_value["end"]["line"].as_u64().unwrap_or(0) as u32,
-                        character: range_value["end"]["character"].as_u64().unwrap_or(0) as u32,
-                    },
-                }
-            } else {
-                return Ok(Some(json!([])));
+            let range = crate::formatting::Range {
+                start: crate::formatting::Position { line: start_line, character: start_char },
+                end: crate::formatting::Position { line: end_line, character: end_char },
             };
 
             eprintln!("Formatting range in document: {}", uri);

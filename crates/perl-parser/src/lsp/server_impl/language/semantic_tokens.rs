@@ -3,6 +3,7 @@
 //! Handles textDocument/semanticTokens/full and textDocument/semanticTokens/range requests.
 
 use super::super::*;
+use crate::lsp::protocol::req_uri;
 
 impl LspServer {
     /// Handle textDocument/semanticTokens/full request
@@ -11,11 +12,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
-            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
-                code: INVALID_PARAMS,
-                message: "Missing textDocument.uri".into(),
-                data: None,
-            })?;
+            let uri = req_uri(&p)?;
             let documents = self.documents_guard();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
                 code: INVALID_REQUEST,
@@ -40,7 +37,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let uri = req_uri(&params)?;
 
             eprintln!("Getting semantic tokens for: {}", uri);
 
@@ -70,11 +67,10 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        use crate::lsp::protocol::req_range;
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let range = &params["range"];
-            let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
-            let end_line = range["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+            let uri = req_uri(&params)?;
+            let ((start_line, _start_char), (end_line, _end_char)) = req_range(&params)?;
 
             eprintln!(
                 "Getting semantic tokens for range: {} (lines {}-{})",
