@@ -70,8 +70,15 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 - **Semantic Analyzer (#188)**: ✅ **Phase 1 COMPLETE!** All 12/12 critical handlers + LSP textDocument/definition integration
 - **Semantic Definition Testing**: ✅ **VALIDATED** (2025-12-27) - 4/4 LSP tests + 2 unit tests passing
 - **Band 2 Test Sweep**: 🟢 **IN PROGRESS** - protocol violations, window progress, unhappy paths cleaned
+- **LSP Server Modularization**: ✅ **COMPLETE** - `lsp_server.rs` refactored to `lsp/server_impl/*`
 
 ### Recent Completions (2025-12-27) 🎉
+4. ✅ **LSP Server Modularization** - Major refactoring for maintainability
+   - Implementation moved from `lsp_server.rs` to `lsp/server_impl/*.rs`
+   - Modular structure: `dispatch.rs`, `navigation.rs`, `workspace.rs`, etc.
+   - `lsp/dispatch.rs` is now a placeholder pointing to `server_impl/dispatch.rs`
+   - Tree-sitter FFI UB fix: NUL-terminated C strings with proof tests
+   - Semantic hover improvements: `symbol_at` returns most specific symbol
 1. ✅ **Batch A Sweep Complete** - 118 ignores removed (454 remaining, down from 572)
    - `lsp_filesystem_failures.rs`: 17 → 0 ignores (all pass)
    - `lsp_completion_tests.rs`: 17 → 0 ignores (all pass)

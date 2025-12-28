@@ -1219,10 +1219,7 @@ pub struct TestContext {
 impl TestContext {
     /// Create a new test context with uninitialized harness
     pub fn new() -> Self {
-        Self {
-            harness: LspHarness::new_raw(),
-            version_counter: 1,
-        }
+        Self { harness: LspHarness::new_raw(), version_counter: 1 }
     }
 
     /// Initialize the LSP server and wait for it to be fully ready
@@ -1272,9 +1269,7 @@ impl TestContext {
     /// Update document content with auto-incrementing version
     pub fn update_document(&mut self, uri: &str, text: &str) {
         self.version_counter += 1;
-        self.harness
-            .change_full(uri, self.version_counter, text)
-            .expect("change should succeed");
+        self.harness.change_full(uri, self.version_counter, text).expect("change should succeed");
     }
 
     /// Close a document

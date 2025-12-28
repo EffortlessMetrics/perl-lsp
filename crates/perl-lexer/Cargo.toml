@@ -16,14 +16,14 @@ include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
 
 [dependencies]
 # Core dependencies
-unicode-ident = "1.0.19"
+unicode-ident = "1.0.22"
 memchr = "2.7.6"
 
 # For better error handling
 thiserror = "2.0.17"
 
 [dev-dependencies]
-criterion = "0.7.0"
+criterion = "0.8.1"
 pretty_assertions = "1.4.1"
 proptest = "1.9.0"
 
