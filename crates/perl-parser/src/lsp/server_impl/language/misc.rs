@@ -136,8 +136,15 @@ impl LspServer {
 
                 for pos in positions {
                     // Positions in array still need per-item extraction with graceful handling
-                    let line = pos["line"].as_u64().unwrap_or(0) as u32;
-                    let col = pos["character"].as_u64().unwrap_or(0) as u32;
+                    // Use try_from for safe u64→u32 conversion (strict-by-default)
+                    let line = pos["line"]
+                        .as_u64()
+                        .and_then(|v| u32::try_from(v).ok())
+                        .unwrap_or(0);
+                    let col = pos["character"]
+                        .as_u64()
+                        .and_then(|v| u32::try_from(v).ok())
+                        .unwrap_or(0);
                     let off = self.pos16_to_offset(doc, line, col);
                     let chain =
                         crate::selection_range::selection_chain(ast, &parent_map, off, &|o| {
