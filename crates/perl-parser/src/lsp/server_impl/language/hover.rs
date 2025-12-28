@@ -131,7 +131,7 @@ impl LspServer {
             }
 
             // Delegate to original handler
-            self.handle_hover(Some(params.clone()))
+            self.handle_hover(Some(params))
         } else {
             self.handle_hover(params)
         }
