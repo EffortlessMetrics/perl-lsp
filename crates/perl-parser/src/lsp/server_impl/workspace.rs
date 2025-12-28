@@ -84,106 +84,16 @@ impl LspServer {
 
         eprintln!("Workspace symbol search: '{}'", query);
 
-        // First, get symbols from currently open documents (synchronous)
-        #[cfg(feature = "workspace")]
+        // Simple synchronous extraction (legacy non-workspace path)
         let mut all_symbols = Vec::new();
-
-        #[cfg(feature = "workspace")]
-        {
-            let documents = self.documents.lock().unwrap();
-            for (uri, doc) in documents.iter() {
-                if let Some(ref ast) = doc.ast {
-                    // Extract symbols from this document
-                    let doc_symbols = self.extract_document_symbols(ast, &doc.text, uri);
-
-                    // Filter by query
-                    let query_lower = query.to_lowercase();
-                    for sym in doc_symbols {
-                        if sym.name.to_lowercase().contains(&query_lower) {
-                            all_symbols.push(sym);
-                        }
-                    }
-                }
+        let documents = self.documents.lock().unwrap();
+        for (uri, doc) in documents.iter() {
+            if let Some(ref ast) = doc.ast {
+                // Extract symbols using document symbol provider
+                self.extract_simple_symbols(ast, &doc.text, uri, query, &mut all_symbols);
             }
         }
-
-        #[cfg(not(feature = "workspace"))]
-        let all_symbols = {
-            // Simple synchronous extraction without workspace feature
-            let mut symbols = Vec::new();
-            let documents = self.documents.lock().unwrap();
-            for (uri, doc) in documents.iter() {
-                if let Some(ref ast) = doc.ast {
-                    // Extract symbols using document symbol provider
-                    self.extract_simple_symbols(ast, &doc.text, uri, query, &mut symbols);
-                }
-            }
-            symbols
-        };
-
-        // Also use workspace index if available
-        #[cfg(feature = "workspace")]
-        {
-            let index_symbols = if let Some(ref workspace_index) = self.workspace_index {
-                workspace_index.find_symbols(query)
-            } else {
-                Vec::new()
-            };
-
-            // Convert workspace index symbols to typed LSP WorkspaceSymbol structs
-            use std::collections::HashSet;
-            let mut seen = HashSet::new();
-
-            // Track what we already have from open docs
-            for sym in &all_symbols {
-                seen.insert((
-                    sym.location.uri.clone(),
-                    sym.location.range.start.line,
-                    sym.location.range.start.character,
-                    sym.name.clone(),
-                    sym.kind,
-                ));
-            }
-
-            // Add index symbols that aren't already in the results
-            let additional_symbols: Vec<WorkspaceSymbol> = index_symbols
-                .into_iter()
-                .filter(|sym| {
-                    // Deduplicate by (uri, start position, name, kind)
-                    seen.insert((
-                        sym.uri.clone(),
-                        sym.range.start.line,
-                        sym.range.start.character,
-                        sym.name.clone(),
-                        sym.kind.to_lsp_kind(),
-                    ))
-                })
-                .collect();
-
-            // Convert to LSP DTOs and add to results
-            for sym in additional_symbols {
-                all_symbols.push(LspWorkspaceSymbol {
-                    name: sym.name,
-                    kind: sym.kind.to_lsp_kind(),
-                    location: LspLocation {
-                        uri: sym.uri,
-                        range: LspRange {
-                            start: LspPosition {
-                                line: sym.range.start.line,
-                                character: sym.range.start.character,
-                            },
-                            end: LspPosition {
-                                line: sym.range.end.line,
-                                character: sym.range.end.character,
-                            },
-                        },
-                    },
-                    container_name: sym
-                        .container_name
-                        .map(|s| normalize_package_separator(&s).into_owned()),
-                });
-            }
-        }
+        drop(documents);
 
         eprintln!("Found {} symbols total", all_symbols.len());
 
