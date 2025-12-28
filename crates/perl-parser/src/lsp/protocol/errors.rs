@@ -195,45 +195,178 @@ pub fn req_uri(params: &Value) -> Result<&str, JsonRpcError> {
 
 /// Extract the required position (line, character) from LSP request params
 ///
-/// Returns INVALID_PARAMS error if line or character are missing.
+/// Returns INVALID_PARAMS error if line or character are missing or out of u32 range.
 pub fn req_position(params: &Value) -> Result<(u32, u32), JsonRpcError> {
-    let line = params
+    let line_u64 = params
         .pointer("/position/line")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: position.line"))?
-        as u32;
-    let character = params
+        .ok_or_else(|| invalid_params("Missing required parameter: position.line"))?;
+    let line = u32::try_from(line_u64)
+        .map_err(|_| invalid_params("position.line out of range for u32"))?;
+
+    let character_u64 = params
         .pointer("/position/character")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: position.character"))?
-        as u32;
+        .ok_or_else(|| invalid_params("Missing required parameter: position.character"))?;
+    let character = u32::try_from(character_u64)
+        .map_err(|_| invalid_params("position.character out of range for u32"))?;
+
     Ok((line, character))
 }
 
 /// Extract the required range from LSP request params
 ///
-/// Returns INVALID_PARAMS error if any range components are missing.
+/// Returns INVALID_PARAMS error if any range components are missing or out of u32 range.
 /// Returns ((start_line, start_char), (end_line, end_char)).
 pub fn req_range(params: &Value) -> Result<((u32, u32), (u32, u32)), JsonRpcError> {
-    let start_line = params
-        .pointer("/range/start/line")
-        .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: range.start.line"))?
-        as u32;
-    let start_char = params
-        .pointer("/range/start/character")
-        .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: range.start.character"))?
-        as u32;
-    let end_line = params
-        .pointer("/range/end/line")
-        .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: range.end.line"))?
-        as u32;
-    let end_char = params
-        .pointer("/range/end/character")
-        .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: range.end.character"))?
-        as u32;
+    let start_line = u32::try_from(
+        params
+            .pointer("/range/start/line")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| invalid_params("Missing required parameter: range.start.line"))?,
+    )
+    .map_err(|_| invalid_params("range.start.line out of range for u32"))?;
+
+    let start_char = u32::try_from(
+        params
+            .pointer("/range/start/character")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| invalid_params("Missing required parameter: range.start.character"))?,
+    )
+    .map_err(|_| invalid_params("range.start.character out of range for u32"))?;
+
+    let end_line = u32::try_from(
+        params
+            .pointer("/range/end/line")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| invalid_params("Missing required parameter: range.end.line"))?,
+    )
+    .map_err(|_| invalid_params("range.end.line out of range for u32"))?;
+
+    let end_char = u32::try_from(
+        params
+            .pointer("/range/end/character")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| invalid_params("Missing required parameter: range.end.character"))?,
+    )
+    .map_err(|_| invalid_params("range.end.character out of range for u32"))?;
+
     Ok(((start_line, start_char), (end_line, end_char)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_req_position_valid() {
+        let params = json!({
+            "position": { "line": 10, "character": 5 }
+        });
+        let result = req_position(&params);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (10, 5));
+    }
+
+    #[test]
+    fn test_req_position_missing_line() {
+        let params = json!({
+            "position": { "character": 5 }
+        });
+        let result = req_position(&params);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(err.message.contains("position.line"));
+    }
+
+    #[test]
+    fn test_req_position_line_overflow() {
+        let params = json!({
+            "position": { "line": u64::MAX, "character": 5 }
+        });
+        let result = req_position(&params);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(err.message.contains("out of range"));
+    }
+
+    #[test]
+    fn test_req_position_character_overflow() {
+        let params = json!({
+            "position": { "line": 10, "character": u64::MAX }
+        });
+        let result = req_position(&params);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(err.message.contains("position.character out of range"));
+    }
+
+    #[test]
+    fn test_req_range_valid() {
+        let params = json!({
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 10, "character": 5 }
+            }
+        });
+        let result = req_range(&params);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ((0, 0), (10, 5)));
+    }
+
+    #[test]
+    fn test_req_range_start_line_overflow() {
+        let params = json!({
+            "range": {
+                "start": { "line": u64::MAX, "character": 0 },
+                "end": { "line": 10, "character": 5 }
+            }
+        });
+        let result = req_range(&params);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(err.message.contains("out of range"));
+    }
+
+    #[test]
+    fn test_req_range_end_character_overflow() {
+        let params = json!({
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 10, "character": u64::MAX }
+            }
+        });
+        let result = req_range(&params);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(err.message.contains("range.end.character out of range"));
+    }
+
+    #[test]
+    fn test_req_uri_valid() {
+        let params = json!({
+            "textDocument": { "uri": "file:///test.pl" }
+        });
+        let result = req_uri(&params);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "file:///test.pl");
+    }
+
+    #[test]
+    fn test_req_uri_missing() {
+        let params = json!({
+            "textDocument": {}
+        });
+        let result = req_uri(&params);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(err.message.contains("textDocument.uri"));
+    }
 }

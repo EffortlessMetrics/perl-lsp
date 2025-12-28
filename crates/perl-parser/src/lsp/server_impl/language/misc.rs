@@ -11,7 +11,7 @@
 //! - Test discovery
 //! - Execute command
 
-use super::super::*;
+use super::super::{byte_to_utf16_col, *};
 
 impl LspServer {
     /// Handle textDocument/inlayHint request
@@ -303,13 +303,15 @@ impl LspServer {
                     for cap in re.captures_iter(line_text) {
                         if let Some(m) = cap.get(0) {
                             let var_text = m.as_str();
-                            let col = m.start();
+                            // Convert byte offsets to UTF-16 columns for LSP compliance
+                            let start_utf16 = byte_to_utf16_col(line_text, m.start());
+                            let end_utf16 = byte_to_utf16_col(line_text, m.end());
 
                             // Create inline value text hint (showing the variable name as placeholder)
                             inline_values.push(json!({
                                 "range": {
-                                    "start": { "line": line_num, "character": col as u32 },
-                                    "end": { "line": line_num, "character": (col + var_text.len()) as u32 }
+                                    "start": { "line": line_num, "character": start_utf16 },
+                                    "end": { "line": line_num, "character": end_utf16 }
                                 },
                                 "text": format!("{} = ?", var_text)
                             }));
