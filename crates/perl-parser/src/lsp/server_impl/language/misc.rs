@@ -38,7 +38,7 @@ impl LspServer {
                 None
             };
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
                 code: INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
@@ -73,7 +73,7 @@ impl LspServer {
                 message: "Missing textDocument.uri".into(),
                 data: None,
             })?;
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
                 code: INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
@@ -98,7 +98,7 @@ impl LspServer {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let uri_parsed = url::Url::parse(uri).map_err(|_| JsonRpcError {
                     code: -32602,
@@ -134,7 +134,7 @@ impl LspServer {
                 data: None,
             })?;
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
                 code: INVALID_REQUEST,
                 message: format!("Document not open: {}", uri),
@@ -176,7 +176,7 @@ impl LspServer {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let provider = CodeLensProvider::new(doc.text.clone());
@@ -228,7 +228,7 @@ impl LspServer {
                 // For now, count references across all documents
                 let mut total_references = 0;
 
-                let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+                let documents = self.documents_guard();
                 for (_uri, doc) in documents.iter() {
                     if let Some(ref ast) = doc.ast {
                         total_references += self.count_references(ast, symbol_name, symbol_kind);
@@ -260,7 +260,7 @@ impl LspServer {
             let line = position["line"].as_u64().unwrap_or(0) as u32;
             let character = position["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let provider = InlineCompletionProvider::new();
                 let completions = provider.get_inline_completions(&doc.text, line, character);
@@ -283,7 +283,7 @@ impl LspServer {
             let range = &params["range"];
             let _context = &params["context"]; // Debug context (stopped at breakpoint, etc)
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 // Extract visible scalar variables in the range
                 let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
@@ -335,7 +335,7 @@ impl LspServer {
             let line = position["line"].as_u64().unwrap_or(0) as u32;
             let character = position["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
@@ -395,7 +395,7 @@ impl LspServer {
             let line = position["line"].as_u64().unwrap_or(0) as u32;
             let character = position["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let result =
                     crate::linked_editing::handle_linked_editing(&doc.text, line, character);
@@ -416,7 +416,7 @@ impl LspServer {
 
             eprintln!("Discovering tests for: {}", uri);
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let runner = TestRunner::new(doc.text.clone(), uri.to_string());

@@ -16,7 +16,7 @@ impl LspServer {
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
 
@@ -150,7 +150,7 @@ impl LspServer {
                 let uri = item["data"]["uri"].as_str().unwrap_or("");
                 let name = item["data"]["name"].as_str().unwrap_or("");
 
-                let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+                let documents = self.documents_guard();
                 if let Some(doc) = documents.get(uri) {
                     if let Some(ref ast) = doc.ast {
                         // Create type hierarchy provider
@@ -262,7 +262,7 @@ impl LspServer {
                 let uri = item["data"]["uri"].as_str().unwrap_or("");
                 let name = item["data"]["name"].as_str().unwrap_or("");
 
-                let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+                let documents = self.documents_guard();
                 if let Some(doc) = documents.get(uri) {
                     if let Some(ref ast) = doc.ast {
                         // Create type hierarchy provider
@@ -382,7 +382,7 @@ impl LspServer {
 
             eprintln!("Preparing call hierarchy at: {} ({}:{})", uri, line, character);
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let provider = CallHierarchyProvider::new(doc.text.clone(), uri.to_string());
@@ -408,7 +408,7 @@ impl LspServer {
 
             eprintln!("Getting incoming calls for: {}", item["name"].as_str().unwrap_or(""));
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     // Reconstruct the CallHierarchyItem from JSON
@@ -437,7 +437,7 @@ impl LspServer {
 
             eprintln!("Getting outgoing calls for: {}", item["name"].as_str().unwrap_or(""));
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     // Reconstruct the CallHierarchyItem from JSON

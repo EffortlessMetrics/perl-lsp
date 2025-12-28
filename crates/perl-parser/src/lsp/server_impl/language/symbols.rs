@@ -13,7 +13,7 @@ impl LspServer {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     // Extract symbols from AST
@@ -142,7 +142,7 @@ impl LspServer {
         if let Some(params) = params {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let mut lsp_ranges = Vec::new();
 

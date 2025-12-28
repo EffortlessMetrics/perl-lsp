@@ -16,7 +16,7 @@ impl LspServer {
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(_ast) = &doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
@@ -78,7 +78,7 @@ impl LspServer {
                 });
             }
 
-            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
@@ -135,7 +135,7 @@ impl LspServer {
                 p.get("position").and_then(|p| p.get("character")).and_then(|n| n.as_u64()),
                 p.get("newName").and_then(|s| s.as_str()),
             ) {
-                let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+                let documents = self.documents_guard();
                 if let Some(doc) = documents.get(uri) {
                     if let Some(ref ast) = doc.ast {
                         let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
