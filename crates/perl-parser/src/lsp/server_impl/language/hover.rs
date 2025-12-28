@@ -3,6 +3,7 @@
 //! Provides hover information and function signature help for Perl code.
 
 use super::super::*;
+use crate::cancellation::RequestCleanupGuard;
 
 impl LspServer {
     /// Handle hover request
@@ -99,6 +100,9 @@ impl LspServer {
         params: Option<Value>,
         request_id: Option<&Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        // RAII guard ensures cleanup on all exit paths (early returns, errors, panics)
+        let _cleanup_guard = RequestCleanupGuard::from_ref(request_id);
+
         if let Some(params) = params {
             // Create or get cancellation token for this request
             let token = if let Some(req_id) = request_id {
@@ -126,15 +130,8 @@ impl LspServer {
                 });
             }
 
-            // Delegate to original handler for now, with token cleanup
-            let result = self.handle_hover(Some(params.clone()));
-
-            // Cleanup token after completion
-            if let Some(req_id) = request_id {
-                GLOBAL_CANCELLATION_REGISTRY.remove_request(req_id);
-            }
-
-            result
+            // Delegate to original handler
+            self.handle_hover(Some(params))
         } else {
             self.handle_hover(params)
         }
