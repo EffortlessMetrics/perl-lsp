@@ -162,6 +162,45 @@ cargo test -p perl-parser workspace_index workspace_rename
 cargo test -p perl-parser tdd_basic
 ```
 
+### WSL-Safe Local Gate (*Diataxis: How-to Guide* - Resource-constrained testing)
+
+The local gate script provides a reliable test workflow for WSL, containers, and resource-constrained environments by controlling parallelism to prevent OOM crashes.
+
+```bash
+# Standard WSL-safe execution (debug build, recommended)
+CARGO_BUILD_JOBS=2 RUST_TEST_THREADS=1 ./scripts/gate-local.sh
+
+# Release build mode (faster execution, more memory-intensive)
+GATE_RELEASE=1 CARGO_BUILD_JOBS=2 RUST_TEST_THREADS=1 ./scripts/gate-local.sh
+
+# Custom parallelism (for systems with more resources)
+CARGO_BUILD_JOBS=4 RUST_TEST_THREADS=2 ./scripts/gate-local.sh
+```
+
+**What the gate checks:**
+1. **Format check**: `cargo fmt --all -- --check`
+2. **Clippy lints**: `cargo clippy --workspace --all-targets -- -D warnings`
+3. **Build perl-lsp binary**: Ensures tests use the correct version
+4. **Binary version check**: Catches stale/wrong binary issues immediately
+5. **perl-parser tests**: Library tests with thread control
+6. **perl-lsp tests**: Integration tests with proper binary
+7. **perl-lexer tests**: Optional, non-fatal
+8. **perl-dap tests**: Optional, non-fatal
+
+**Why this matters:**
+- Prevents "mysterious hover null" issues caused by testing against stale binaries
+- The `binary_version_test` runs first to catch wrong-binary issues immediately
+- Debug binary is built explicitly before tests (avoids stale release binary trap)
+- Controlled parallelism prevents WSL OOM crashes
+- Works reliably in CI containers with limited resources
+
+**Environment variables:**
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CARGO_BUILD_JOBS` | 2 | Parallel rustc invocations |
+| `RUST_TEST_THREADS` | 1 | Test parallelism (1 = serial) |
+| `GATE_RELEASE` | unset | Set to "1" for release builds |
+
 ### Revolutionary Performance Testing (PR #140) (*Diataxis: How-to Guide* - Game-changing test reliability)
 
 PR #140 delivers transformative performance optimizations achieving unprecedented test speed and reliability:

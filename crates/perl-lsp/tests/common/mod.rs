@@ -82,13 +82,21 @@ impl LspServer {
     }
 }
 
+/// Compile-time path to the perl-lsp binary, set by Cargo when building integration tests.
+/// This is the most reliable way to get the correct binary path.
+const CARGO_BIN_EXE: Option<&str> = option_env!("CARGO_BIN_EXE_perl-lsp");
+
 fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
-    // Resolution order:
+    // Resolution order (fixed for test reliability):
     // 1. PERL_LSP_BIN env var (explicit override, useful for custom target dirs)
-    // 2. CARGO_BIN_EXE_* (Cargo-provided path during test execution)
-    // 3. Workspace target directory binaries (absolute paths)
-    // 4. PATH lookup
-    // 5. cargo run fallback (slow but always works)
+    // 2. Compile-time CARGO_BIN_EXE (guaranteed correct during `cargo test -p perl-lsp`)
+    // 3. Runtime CARGO_BIN_EXE_* (fallback for edge cases)
+    // 4. Workspace target directory binaries (DEBUG first, then release)
+    // 5. PATH lookup
+    // 6. cargo run fallback (slow but always works)
+    //
+    // IMPORTANT: Debug binary is checked BEFORE release to avoid stale release binaries
+    // causing test failures. When you run `cargo test -p perl-lsp`, cargo builds debug.
     let mut v: Vec<Command> = Vec::new();
 
     // 1. Explicit override via PERL_LSP_BIN
@@ -98,7 +106,15 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
         v.push(c);
     }
 
-    // 2. Cargo-provided binary path (set during `cargo test`)
+    // 2. Compile-time CARGO_BIN_EXE (most reliable for `cargo test`)
+    // This is set at compile time by Cargo and points to the exact binary that was built
+    if let Some(p) = CARGO_BIN_EXE {
+        let mut c = Command::new(p);
+        c.arg("--stdio");
+        v.push(c);
+    }
+
+    // 3. Runtime CARGO_BIN_EXE_* (fallback, in case compile-time wasn't set)
     if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl-lsp") {
         let mut c = Command::new(p);
         c.arg("--stdio");
@@ -110,7 +126,8 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
         v.push(c);
     }
 
-    // 3. Try workspace target directory binaries (using absolute paths)
+    // 4. Try workspace target directory binaries (using absolute paths)
+    // IMPORTANT: Debug BEFORE release to avoid stale release binary issues
     // CARGO_MANIFEST_DIR points to the crate directory, we need the workspace root
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         let crate_dir = std::path::Path::new(&manifest_dir);
@@ -118,35 +135,35 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
         let workspace_root =
             crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists()).unwrap_or(crate_dir);
 
-        // Try release binary first (faster)
-        let release_binary = workspace_root.join("target/release/perl-lsp");
-        if release_binary.exists() {
-            let mut c = Command::new(&release_binary);
-            c.arg("--stdio");
-            v.push(c);
-        }
-
-        // Then try debug binary
+        // Try DEBUG binary first (this is what `cargo test` builds by default)
         let debug_binary = workspace_root.join("target/debug/perl-lsp");
         if debug_binary.exists() {
             let mut c = Command::new(&debug_binary);
             c.arg("--stdio");
             v.push(c);
         }
+
+        // Then try release binary (only if debug doesn't exist)
+        let release_binary = workspace_root.join("target/release/perl-lsp");
+        if release_binary.exists() {
+            let mut c = Command::new(&release_binary);
+            c.arg("--stdio");
+            v.push(c);
+        }
     }
 
-    // 4. Try perl-lsp from PATH
+    // 5. Try perl-lsp from PATH
     {
         let mut c = Command::new("perl-lsp");
         c.arg("--stdio");
         v.push(c);
     }
 
-    // 5. Fallback: use cargo run with release profile (avoid debug linking issues)
+    // 6. Fallback: use cargo run with debug profile (matches what tests build)
     // This is SLOW because it may need to compile, but always works
     {
         let mut c = Command::new("cargo");
-        c.args(["run", "-q", "-p", "perl-lsp", "--release", "--", "--stdio"]);
+        c.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"]);
         v.push(c);
     }
 
@@ -178,17 +195,32 @@ pub fn start_lsp_server() -> LspServer {
             }
         }
         spawned.unwrap_or_else(|| {
-            eprintln!("Failed to start perl-lsp server - tried all methods:");
-            eprintln!("  1. PERL_LSP_BIN env var (explicit override)");
-            eprintln!("  2. CARGO_BIN_EXE_perl-lsp env var");
-            eprintln!("  3. CARGO_BIN_EXE_perl_lsp env var");
-            eprintln!("  4. Workspace target/release/perl-lsp");
-            eprintln!("  5. Workspace target/debug/perl-lsp");
-            eprintln!("  6. perl-lsp from PATH");
-            eprintln!("  7. cargo run --release -p perl-lsp");
-            eprintln!("Last error: {:?}", last_err);
-            eprintln!("Hint: Set PERL_LSP_BIN=/path/to/perl-lsp to use a custom binary");
-            eprintln!("Hint: Run 'cargo build -p perl-lsp --release' first for faster tests");
+            eprintln!("╔════════════════════════════════════════════════════════════════════╗");
+            eprintln!("║ ERROR: Failed to start perl-lsp server                             ║");
+            eprintln!("╠════════════════════════════════════════════════════════════════════╣");
+            eprintln!("║ Resolution order tried:                                            ║");
+            eprintln!("║  1. PERL_LSP_BIN env var: {:?}", std::env::var("PERL_LSP_BIN").ok());
+            eprintln!("║  2. Compile-time CARGO_BIN_EXE: {:?}", CARGO_BIN_EXE);
+            eprintln!("║  3. Runtime CARGO_BIN_EXE_perl-lsp: {:?}", std::env::var("CARGO_BIN_EXE_perl-lsp").ok());
+            eprintln!("║  4. Runtime CARGO_BIN_EXE_perl_lsp: {:?}", std::env::var("CARGO_BIN_EXE_perl_lsp").ok());
+            if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+                let crate_dir = std::path::Path::new(&manifest_dir);
+                let workspace_root = crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists()).unwrap_or(crate_dir);
+                let debug_binary = workspace_root.join("target/debug/perl-lsp");
+                let release_binary = workspace_root.join("target/release/perl-lsp");
+                eprintln!("║  5. Debug binary exists: {} ({})", debug_binary.exists(), debug_binary.display());
+                eprintln!("║  6. Release binary exists: {} ({})", release_binary.exists(), release_binary.display());
+            }
+            eprintln!("║  7. perl-lsp in PATH: {:?}", which::which("perl-lsp").ok());
+            eprintln!("║  8. cargo run fallback");
+            eprintln!("╠════════════════════════════════════════════════════════════════════╣");
+            eprintln!("║ Last error: {:?}", last_err);
+            eprintln!("╠════════════════════════════════════════════════════════════════════╣");
+            eprintln!("║ HINTS:                                                             ║");
+            eprintln!("║  • Run: cargo build -p perl-lsp   (builds debug binary)            ║");
+            eprintln!("║  • Or:  cargo test -p perl-lsp    (builds + tests automatically)   ║");
+            eprintln!("║  • Set PERL_LSP_BIN=/path/to/perl-lsp for custom binary            ║");
+            eprintln!("╚════════════════════════════════════════════════════════════════════╝");
             panic!("Failed to start perl-lsp via any available method: {:?}", last_err)
         })
     };
