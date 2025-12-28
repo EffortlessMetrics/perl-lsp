@@ -30,7 +30,7 @@ impl LspServer {
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
@@ -155,7 +155,7 @@ impl LspServer {
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(doc) = self.get_document(&documents, uri) {
                 // First check if we're on a module name in use/require statement
                 let offset = self.pos16_to_offset(doc, line, character);
@@ -447,7 +447,7 @@ impl LspServer {
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let provider = TypeDefinitionProvider::new();
@@ -478,7 +478,7 @@ impl LspServer {
             let line = params["position"]["line"].as_u64().unwrap_or(0) as u32;
             let character = params["position"]["character"].as_u64().unwrap_or(0) as u32;
 
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     #[cfg(feature = "workspace")]
@@ -585,7 +585,7 @@ impl LspServer {
             // This would need proper traversal - simplified for now
             if self.check_inheritance_in_package(node, base_class) {
                 // Get source text for position conversion
-                let documents = self.documents.lock().unwrap();
+                let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
                 if let Some(doc) = documents.get(uri) {
                     let source_text = &doc.text;
                     // Convert byte offsets to UTF-16 line/column
