@@ -1,0 +1,654 @@
+//! Miscellaneous language feature handlers
+//!
+//! Handles various LSP features including:
+//! - Inlay hints
+//! - Document links
+//! - Selection ranges
+//! - Code lens
+//! - Inline completion and values
+//! - Monikers
+//! - Linked editing ranges
+//! - Test discovery
+//! - Execute command
+
+use super::super::*;
+
+impl LspServer {
+    /// Handle textDocument/inlayHint request
+    pub(crate) fn handle_inlay_hints(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(p) = params {
+            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
+                code: INVALID_PARAMS,
+                message: "Missing textDocument.uri".into(),
+                data: None,
+            })?;
+
+            // Extract the range parameter (required by LSP spec)
+            let range = if let Some(range_val) = p.get("range") {
+                let start_line = range_val["start"]["line"].as_u64().unwrap_or(0) as u32;
+                let start_char = range_val["start"]["character"].as_u64().unwrap_or(0) as u32;
+                let end_line = range_val["end"]["line"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                let end_char =
+                    range_val["end"]["character"].as_u64().unwrap_or(u32::MAX as u64) as u32;
+                Some(crate::positions::Range::new(start_line, start_char, end_line, end_char))
+            } else {
+                None
+            };
+
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
+                code: INVALID_REQUEST,
+                message: format!("Document not open: {}", uri),
+                data: None,
+            })?;
+            if let Some(ref ast) = doc.ast {
+                let mut hints = Vec::new();
+                hints.extend(crate::inlay_hints::parameter_hints(
+                    ast,
+                    &|off| self.offset_to_pos16(doc, off),
+                    range,
+                ));
+                hints.extend(crate::inlay_hints::trivial_type_hints(
+                    ast,
+                    &|off| self.offset_to_pos16(doc, off),
+                    range,
+                ));
+                return Ok(Some(json!(hints)));
+            }
+        }
+        Ok(Some(json!([])))
+    }
+
+    /// Handle textDocument/documentLink request
+    pub(crate) fn handle_document_links(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(p) = params {
+            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
+                code: INVALID_PARAMS,
+                message: "Missing textDocument.uri".into(),
+                data: None,
+            })?;
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
+                code: INVALID_REQUEST,
+                message: format!("Document not open: {}", uri),
+                data: None,
+            })?;
+
+            // Get workspace roots from initialization params
+            let roots = self.workspace_roots();
+            let links = crate::document_links::compute_links(uri, &doc.text, &roots);
+            Ok(Some(json!(links)))
+        } else {
+            Ok(Some(json!([])))
+        }
+    }
+
+    /// Handle documentLink request (alternative)
+    #[allow(dead_code)] // Alternative implementation
+    pub(crate) fn handle_document_link(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(doc) = self.get_document(&documents, uri) {
+                let uri_parsed = url::Url::parse(uri).map_err(|_| JsonRpcError {
+                    code: -32602,
+                    message: "Invalid URI".to_string(),
+                    data: None,
+                })?;
+                match crate::lsp_document_link::collect_document_links(&doc.text, &uri_parsed) {
+                    Ok(links) => Ok(Some(serde_json::to_value(links).unwrap_or(Value::Null))),
+                    Err(_) => Ok(Some(Value::Null)),
+                }
+            } else {
+                Ok(Some(Value::Null))
+            }
+        } else {
+            Ok(Some(Value::Null))
+        }
+    }
+
+    /// Handle textDocument/selectionRange request
+    pub(crate) fn handle_selection_range(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(p) = params {
+            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
+                code: INVALID_PARAMS,
+                message: "Missing textDocument.uri".into(),
+                data: None,
+            })?;
+            let positions = p["positions"].as_array().ok_or_else(|| JsonRpcError {
+                code: INVALID_PARAMS,
+                message: "Missing positions array".into(),
+                data: None,
+            })?;
+
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
+                code: INVALID_REQUEST,
+                message: format!("Document not open: {}", uri),
+                data: None,
+            })?;
+
+            let mut out = Vec::new();
+            if let Some(ref ast) = doc.ast {
+                // Build parent map if not cached
+                let parent_map = crate::selection_range::build_parent_map(ast);
+
+                for pos in positions {
+                    let line = pos["line"].as_u64().unwrap_or(0) as u32;
+                    let col = pos["character"].as_u64().unwrap_or(0) as u32;
+                    let off = self.pos16_to_offset(doc, line, col);
+                    let chain =
+                        crate::selection_range::selection_chain(ast, &parent_map, off, &|o| {
+                            self.offset_to_pos16(doc, o)
+                        });
+                    out.push(chain);
+                }
+            }
+            Ok(Some(json!(out)))
+        } else {
+            Ok(Some(json!([])))
+        }
+    }
+
+    /// Handle textDocument/codeLens request
+    pub(crate) fn handle_code_lens(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        // Gate unadvertised feature
+        if !self.advertised_features.lock().unwrap().code_lens {
+            return Err(crate::lsp_errors::method_not_advertised());
+        }
+
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(doc) = self.get_document(&documents, uri) {
+                if let Some(ref ast) = doc.ast {
+                    let provider = CodeLensProvider::new(doc.text.clone());
+                    let mut lenses = provider.extract(ast);
+
+                    // Add shebang lens if applicable
+                    if let Some(shebang_lens) = get_shebang_lens(&doc.text) {
+                        lenses.insert(0, shebang_lens);
+                    }
+
+                    return Ok(Some(json!(lenses)));
+                } else {
+                    // Text-based fallback when AST is not available
+                    let text_lenses = self.extract_text_based_code_lenses(&doc.text, uri);
+                    return Ok(Some(json!(text_lenses)));
+                }
+            }
+        }
+
+        Ok(Some(json!([])))
+    }
+
+    /// Handle codeLens/resolve request
+    pub(crate) fn handle_code_lens_resolve(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            // Parse the code lens
+            if let Ok(lens) =
+                serde_json::from_value::<crate::code_lens_provider::CodeLens>(params.clone())
+            {
+                // Extract the symbol name and kind from the lens data
+                let symbol_name = lens
+                    .data
+                    .as_ref()
+                    .and_then(|d| d.get("name"))
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("");
+
+                let symbol_kind = lens
+                    .data
+                    .as_ref()
+                    .and_then(|d| d.get("kind"))
+                    .and_then(|k| k.as_str())
+                    .unwrap_or("unknown");
+
+                // Get the document URI from the range (we need to track this better in the future)
+                // For now, count references across all documents
+                let mut total_references = 0;
+
+                let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+                for (_uri, doc) in documents.iter() {
+                    if let Some(ref ast) = doc.ast {
+                        total_references += self.count_references(ast, symbol_name, symbol_kind);
+                    } else {
+                        // Text-based fallback when AST is not available
+                        total_references +=
+                            self.count_references_text_based(&doc.text, symbol_name, symbol_kind);
+                    }
+                }
+
+                let resolved = resolve_code_lens(lens, total_references);
+                return Ok(Some(json!(resolved)));
+            }
+        }
+
+        Err(JsonRpcError { code: -32602, message: "Invalid parameters".to_string(), data: None })
+    }
+
+    /// Handle textDocument/inlineCompletion request
+    pub(crate) fn handle_inline_completion(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        use crate::inline_completions::InlineCompletionProvider;
+
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let position = &params["position"];
+            let line = position["line"].as_u64().unwrap_or(0) as u32;
+            let character = position["character"].as_u64().unwrap_or(0) as u32;
+
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(doc) = self.get_document(&documents, uri) {
+                let provider = InlineCompletionProvider::new();
+                let completions = provider.get_inline_completions(&doc.text, line, character);
+                return Ok(Some(serde_json::to_value(completions).unwrap_or(Value::Null)));
+            }
+        }
+
+        Ok(Some(json!({
+            "items": []
+        })))
+    }
+
+    /// Handle textDocument/inlineValue request
+    pub(crate) fn handle_inline_value(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let range = &params["range"];
+            let _context = &params["context"]; // Debug context (stopped at breakpoint, etc)
+
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(doc) = self.get_document(&documents, uri) {
+                // Extract visible scalar variables in the range
+                let start_line = range["start"]["line"].as_u64().unwrap_or(0) as u32;
+                let end_line = range["end"]["line"].as_u64().unwrap_or(0) as u32;
+
+                let mut inline_values = Vec::new();
+
+                // Simple implementation: find scalar variables in the visible range
+                let lines: Vec<&str> = doc.text.lines().collect();
+                // Move regex construction outside loop
+                let re = regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
+
+                for line_num in start_line..=end_line.min((lines.len() - 1) as u32) {
+                    let line_text = lines[line_num as usize];
+
+                    // Find scalar variables using regex
+                    for cap in re.captures_iter(line_text) {
+                        if let Some(m) = cap.get(0) {
+                            let var_text = m.as_str();
+                            let col = m.start();
+
+                            // Create inline value text hint (showing the variable name as placeholder)
+                            inline_values.push(json!({
+                                "range": {
+                                    "start": { "line": line_num, "character": col as u32 },
+                                    "end": { "line": line_num, "character": (col + var_text.len()) as u32 }
+                                },
+                                "text": format!("{} = ?", var_text)
+                            }));
+                        }
+                    }
+                }
+
+                return Ok(Some(json!(inline_values)));
+            }
+        }
+
+        Ok(Some(json!([])))
+    }
+
+    /// Handle textDocument/moniker request
+    pub(crate) fn handle_moniker(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let position = &params["position"];
+            let line = position["line"].as_u64().unwrap_or(0) as u32;
+            let character = position["character"].as_u64().unwrap_or(0) as u32;
+
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(doc) = self.get_document(&documents, uri) {
+                if let Some(ref ast) = doc.ast {
+                    let offset = self.pos16_to_offset(doc, line, character);
+
+                    // Find the symbol at the cursor position
+                    let current_pkg = crate::declaration::current_package_at(ast, offset);
+                    if let Some(key) =
+                        crate::declaration::symbol_at_cursor(ast, offset, current_pkg)
+                    {
+                        // Generate a stable moniker for the symbol
+                        let identifier = format!("{}::{}", key.pkg, key.name).replace("::", ".");
+                        let moniker = json!({
+                            "scheme": "perl",
+                            "identifier": identifier,
+                            "unique": "project",
+                            "kind": "export"
+                        });
+
+                        return Ok(Some(json!([moniker])));
+                    }
+                }
+            }
+        }
+
+        Ok(Some(json!([])))
+    }
+
+    /// Handle textDocument/documentColor request
+    pub(crate) fn handle_document_color(
+        &self,
+        _params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        Err(JsonRpcError { code: -32601, message: "Method not found".into(), data: None })
+    }
+
+    /// Handle textDocument/colorPresentation request
+    pub(crate) fn handle_color_presentation(
+        &self,
+        _params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        Err(JsonRpcError { code: -32601, message: "Method not found".into(), data: None })
+    }
+
+    /// Handle textDocument/linkedEditingRange request
+    pub(crate) fn handle_linked_editing_range(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        // Gate unadvertised feature
+        if !self.advertised_features.lock().unwrap().linked_editing {
+            return Err(crate::lsp_errors::method_not_advertised());
+        }
+
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let position = &params["position"];
+            let line = position["line"].as_u64().unwrap_or(0) as u32;
+            let character = position["character"].as_u64().unwrap_or(0) as u32;
+
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(doc) = self.get_document(&documents, uri) {
+                let result =
+                    crate::linked_editing::handle_linked_editing(&doc.text, line, character);
+                return Ok(Some(serde_json::to_value(result).unwrap_or(Value::Null)));
+            }
+        }
+
+        Ok(Some(Value::Null))
+    }
+
+    /// Handle test discovery request
+    pub(crate) fn handle_test_discovery(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+
+            eprintln!("Discovering tests for: {}", uri);
+
+            let documents = self.documents.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(doc) = self.get_document(&documents, uri) {
+                if let Some(ref ast) = doc.ast {
+                    let runner = TestRunner::new(doc.text.clone(), uri.to_string());
+                    let tests = runner.discover_tests(ast);
+
+                    // Convert test items to JSON
+                    let test_items: Vec<Value> = tests
+                        .into_iter()
+                        .map(|test| {
+                            json!({
+                                "id": test.id,
+                                "label": test.label,
+                                "uri": test.uri,
+                                "range": {
+                                    "start": {
+                                        "line": test.range.start_line,
+                                        "character": test.range.start_character
+                                    },
+                                    "end": {
+                                        "line": test.range.end_line,
+                                        "character": test.range.end_character
+                                    }
+                                },
+                                "kind": match test.kind {
+                                    TestKind::File => "file",
+                                    TestKind::Suite => "suite",
+                                    TestKind::Test => "test"
+                                },
+                                "children": test.children.into_iter()
+                                    .map(|child| json!({
+                                        "id": child.id,
+                                        "label": child.label,
+                                        "uri": child.uri,
+                                        "range": {
+                                            "start": {
+                                                "line": child.range.start_line,
+                                                "character": child.range.start_character
+                                            },
+                                            "end": {
+                                                "line": child.range.end_line,
+                                                "character": child.range.end_character
+                                            }
+                                        },
+                                        "kind": match child.kind {
+                                            TestKind::File => "file",
+                                            TestKind::Suite => "suite",
+                                            TestKind::Test => "test"
+                                        },
+                                        "children": []
+                                    }))
+                                    .collect::<Vec<_>>()
+                            })
+                        })
+                        .collect();
+
+                    eprintln!("Found {} test items", test_items.len());
+
+                    return Ok(Some(json!(test_items)));
+                }
+            }
+        }
+
+        Ok(Some(json!([])))
+    }
+
+    /// Handle execute command request
+    pub(crate) fn handle_execute_command(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        use crate::execute_command::ExecuteCommandProvider;
+
+        if let Some(params) = params {
+            let command = params["command"].as_str().unwrap_or("");
+
+            // LSP 3.17 compliance: arguments field is required even if empty
+            if !params.as_object().unwrap_or(&serde_json::Map::new()).contains_key("arguments") {
+                return Err(JsonRpcError {
+                    code: -32602, // InvalidParams
+                    message: "Missing required 'arguments' field in executeCommand request"
+                        .to_string(),
+                    data: Some(json!({
+                        "command": command,
+                        "errorType": "executeCommand",
+                        "originalError": "Missing 'arguments' field"
+                    })),
+                });
+            }
+
+            let arguments = params["arguments"].as_array().cloned().unwrap_or_default();
+
+            eprintln!("Executing command: {}", command);
+
+            // Use the new execute command provider for new commands
+            let provider = ExecuteCommandProvider::new();
+
+            match command {
+                // Keep existing test commands for backward compatibility
+                "perl.runTest" => {
+                    if let Some(test_id) = arguments.first().and_then(|v| v.as_str()) {
+                        return self.run_test(test_id);
+                    }
+                }
+                "perl.runTestFile" => {
+                    if let Some(file_uri) = arguments.first().and_then(|v| v.as_str()) {
+                        return self.run_test_file(file_uri);
+                    }
+                }
+                // New commands handled by ExecuteCommandProvider
+                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.debugTests"
+                | "perl.runCritic" => {
+                    match provider.execute_command(command, arguments) {
+                        Ok(result) => return Ok(Some(result)),
+                        Err(e) => {
+                            // Return proper JSON-RPC error according to LSP 3.17 specification
+                            let error_code = if e.contains("Missing") || e.contains("argument") {
+                                -32602 // InvalidParams
+                            } else if e.contains("Unknown command") {
+                                -32601 // MethodNotFound
+                            } else if e.contains("Path traversal") || e.contains("security") {
+                                -32603 // InternalError (security)
+                            } else {
+                                -32603 // InternalError (general)
+                            };
+
+                            return Err(JsonRpcError {
+                                code: error_code,
+                                message: format!("Execute command failed: {}", e),
+                                data: Some(json!({
+                                    "command": command,
+                                    "errorType": "executeCommand",
+                                    "originalError": e
+                                })),
+                            });
+                        }
+                    }
+                }
+                // Debug commands (stub implementation for now)
+                "perl.debugFile" => {
+                    eprintln!("Debug command requested: {}", command);
+                    // Return a success status - actual DAP integration can be added later
+                    return Ok(Some(
+                        json!({"status": "started", "message": format!("Debug session {} initiated", command)}),
+                    ));
+                }
+                _ => {
+                    return Err(JsonRpcError {
+                        code: METHOD_NOT_FOUND,
+                        message: format!("Unknown command: {}", command),
+                        data: None,
+                    });
+                }
+            }
+        }
+
+        // Missing params entirely
+        Err(JsonRpcError {
+            code: -32602, // InvalidParams
+            message: "Missing parameters for executeCommand request".to_string(),
+            data: Some(json!({
+                "errorType": "executeCommand",
+                "originalError": "Missing params"
+            })),
+        })
+    }
+
+    /// Count references to a symbol using text-based search
+    pub(crate) fn count_references_text_based(
+        &self,
+        text: &str,
+        symbol_name: &str,
+        symbol_kind: &str,
+    ) -> usize {
+        let mut count = 0;
+
+        match symbol_kind {
+            "package" => {
+                // Count package usage (use statements, new() calls, etc.)
+                use regex::Regex;
+
+                // Count "use PackageName" statements
+                if let Ok(use_regex) =
+                    Regex::new(&format!(r"\buse\s+{}\b", regex::escape(symbol_name)))
+                {
+                    count += use_regex.find_iter(text).count();
+                }
+
+                // Count "PackageName->new()" or "PackageName->method()" calls
+                if let Ok(call_regex) = Regex::new(&format!(r"\b{}->", regex::escape(symbol_name)))
+                {
+                    count += call_regex.find_iter(text).count();
+                }
+
+                // Count "bless ... PackageName" statements
+                if let Ok(bless_regex) =
+                    Regex::new(&format!(r"bless\s+.*?,\s*{}", regex::escape(symbol_name)))
+                {
+                    count += bless_regex.find_iter(text).count();
+                }
+            }
+            "subroutine" => {
+                // Count function calls
+                use regex::Regex;
+
+                // Count "function_name(" calls
+                if let Ok(call_regex) =
+                    Regex::new(&format!(r"\b{}\s*\(", regex::escape(symbol_name)))
+                {
+                    count += call_regex.find_iter(text).count();
+                }
+
+                // Count "&function_name" references
+                if let Ok(ref_regex) = Regex::new(&format!(r"&{}\b", regex::escape(symbol_name))) {
+                    count += ref_regex.find_iter(text).count();
+                }
+            }
+            _ => {
+                // Generic search
+                use regex::Regex;
+                if let Ok(re) = Regex::new(&format!(r"\b{}\b", regex::escape(symbol_name))) {
+                    count += re.find_iter(text).count();
+                }
+            }
+        }
+
+        count
+    }
+
+    /// Get workspace roots from initialization
+    pub(crate) fn workspace_roots(&self) -> Vec<url::Url> {
+        // In a real implementation, store these from initialize params
+        // For now, return empty vec
+        vec![]
+    }
+}
