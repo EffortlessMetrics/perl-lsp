@@ -228,34 +228,57 @@ impl LspServer {
     }
 
     /// Handle workspace/configuration request
+    ///
+    /// Supports both direct array format and ConfigurationParams with items property
     pub(super) fn handle_configuration(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            if let Some(items) = params.as_array() {
+            // Support both direct array format and ConfigurationParams with items property
+            let items =
+                params.get("items").and_then(|i| i.as_array()).or_else(|| params.as_array());
+
+            if let Some(items) = items {
                 let mut results = Vec::new();
 
                 for item in items {
                     if let Some(section) = item.get("section").and_then(|s| s.as_str()) {
                         eprintln!("Configuration requested for section: {}", section);
 
-                        let config = self.config.lock().unwrap();
-                        let value = match section {
-                            "perl.inlayHints.enabled" => json!(config.inlay_hints_enabled),
-                            "perl.inlayHints.parameterHints" => {
-                                json!(config.inlay_hints_parameter_hints)
+                        // Handle workspace configuration sections
+                        let value = if section.starts_with("perl.workspace.") {
+                            let workspace_config = self.workspace_config.lock().unwrap();
+                            match section {
+                                "perl.workspace.includePaths" => {
+                                    json!(workspace_config.include_paths)
+                                }
+                                "perl.workspace.useSystemInc" => {
+                                    json!(workspace_config.use_system_inc)
+                                }
+                                "perl.workspace.resolutionTimeout" => {
+                                    json!(workspace_config.resolution_timeout_ms)
+                                }
+                                _ => json!(null),
                             }
-                            "perl.inlayHints.typeHints" => json!(config.inlay_hints_type_hints),
-                            "perl.inlayHints.chainedHints" => {
-                                json!(config.inlay_hints_chained_hints)
+                        } else {
+                            let config = self.config.lock().unwrap();
+                            match section {
+                                "perl.inlayHints.enabled" => json!(config.inlay_hints_enabled),
+                                "perl.inlayHints.parameterHints" => {
+                                    json!(config.inlay_hints_parameter_hints)
+                                }
+                                "perl.inlayHints.typeHints" => json!(config.inlay_hints_type_hints),
+                                "perl.inlayHints.chainedHints" => {
+                                    json!(config.inlay_hints_chained_hints)
+                                }
+                                "perl.inlayHints.maxLength" => json!(config.inlay_hints_max_length),
+                                "perl.testRunner.enabled" => json!(config.test_runner_enabled),
+                                "perl.testRunner.testCommand" => json!(config.test_runner_command),
+                                "perl.testRunner.testArgs" => json!(config.test_runner_args),
+                                "perl.testRunner.testTimeout" => json!(config.test_runner_timeout),
+                                _ => json!(null),
                             }
-                            "perl.inlayHints.maxLength" => json!(config.inlay_hints_max_length),
-                            "perl.testRunner.enabled" => json!(config.test_runner_enabled),
-                            "perl.testRunner.testCommand" => json!(config.test_runner_command),
-                            "perl.testRunner.testArgs" => json!(config.test_runner_args),
-                            "perl.testRunner.testTimeout" => json!(config.test_runner_timeout),
-                            _ => json!(null),
                         };
 
                         results.push(value);
@@ -267,6 +290,32 @@ impl LspServer {
         }
 
         Ok(Some(json!([])))
+    }
+
+    /// Handle workspace/didChangeConfiguration notification
+    ///
+    /// Updates both ServerConfig and WorkspaceConfig when the client
+    /// notifies of configuration changes.
+    pub(super) fn handle_did_change_configuration(&self, params: Option<Value>) {
+        if let Some(params) = params {
+            if let Some(settings) = params.get("settings") {
+                eprintln!("Configuration changed, updating server settings");
+
+                // Update server config (inlay hints, test runner)
+                if let Some(perl) = settings.get("perl") {
+                    let mut config = self.config.lock().unwrap();
+                    config.update_from_value(perl);
+                    eprintln!("Updated server config from perl settings");
+                }
+
+                // Update workspace config (include paths, @INC)
+                if let Some(perl) = settings.get("perl") {
+                    let mut workspace_config = self.workspace_config.lock().unwrap();
+                    workspace_config.update_from_value(perl);
+                    eprintln!("Updated workspace config from perl settings");
+                }
+            }
+        }
     }
 
     /// Handle workspace/didChangeWatchedFiles notification

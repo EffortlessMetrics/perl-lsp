@@ -66,7 +66,8 @@ impl LspServer {
             let (line, character) = req_position(&params)?;
 
             // Reject stale requests
-            let req_version = params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            let req_version =
+                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
             // Check index readiness (soft wait, no sleeps) - provide basic completion if not ready
@@ -314,7 +315,8 @@ impl LspServer {
             let (line, character) = req_position(&params)?;
 
             // Reject stale requests
-            let req_version = params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            let req_version =
+                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
             let documents = self.documents_guard();

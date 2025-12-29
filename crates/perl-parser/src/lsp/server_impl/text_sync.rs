@@ -17,10 +17,8 @@ impl LspServer {
                 .pointer("/textDocument/text")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| invalid_params("Missing required parameter: textDocument.text"))?;
-            let version_i64 = params
-                .pointer("/textDocument/version")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0);
+            let version_i64 =
+                params.pointer("/textDocument/version").and_then(|v| v.as_i64()).unwrap_or(0);
             let version = i32::try_from(version_i64).unwrap_or(0);
 
             eprintln!("Document opened: {}", uri);
@@ -129,10 +127,8 @@ impl LspServer {
                 .pointer("/textDocument/uri")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
-            let version_i64 = params
-                .pointer("/textDocument/version")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0);
+            let version_i64 =
+                params.pointer("/textDocument/version").and_then(|v| v.as_i64()).unwrap_or(0);
             let version = i32::try_from(version_i64).unwrap_or(0);
 
             if let Some(changes) = params["contentChanges"].as_array() {
