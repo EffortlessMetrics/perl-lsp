@@ -425,7 +425,7 @@ fn resolution_precedence_is_documented() {
 
     // This test serves as a reminder to maintain the documentation
     // If this test compiles, the function exists (documentation is in source)
-    assert!(true);
+    // (No assertion needed - compilation itself validates the documentation exists)
 }
 
 /// Test that system @INC lookup is only performed when enabled
