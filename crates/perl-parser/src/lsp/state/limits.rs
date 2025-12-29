@@ -97,6 +97,15 @@ pub struct LspLimits {
     /// Deadline for filesystem operations (default: 500ms)
     pub fs_operation_deadline: Duration,
 
+    /// Deadline for semantic tokens computation (default: 2s)
+    pub semantic_tokens_deadline: Duration,
+
+    /// Deadline for code lens resolve operations (default: 1s)
+    pub code_lens_resolve_deadline: Duration,
+
+    /// Deadline for completion operations (default: 500ms)
+    pub completion_deadline: Duration,
+
     // =========================================================================
     // Degradation Behavior
     // =========================================================================
@@ -136,6 +145,9 @@ impl Default for LspLimits {
             reference_search_deadline: Duration::from_secs(2),
             regex_scan_deadline: Duration::from_secs(1),
             fs_operation_deadline: Duration::from_millis(500),
+            semantic_tokens_deadline: Duration::from_secs(2),
+            code_lens_resolve_deadline: Duration::from_secs(1),
+            completion_deadline: Duration::from_millis(500),
 
             // Degradation behavior
             return_partial_on_timeout: true,
@@ -242,6 +254,48 @@ pub fn reference_search_deadline() -> Duration {
 #[inline]
 pub fn regex_scan_deadline() -> Duration {
     LSP_LIMITS.read().map(|l| l.regex_scan_deadline).unwrap_or(Duration::from_secs(1))
+}
+
+/// Get current code lens cap
+#[inline]
+pub fn code_lens_cap() -> usize {
+    LSP_LIMITS.read().map(|l| l.code_lens_cap).unwrap_or(100)
+}
+
+/// Get current document symbol cap
+#[inline]
+pub fn document_symbol_cap() -> usize {
+    LSP_LIMITS.read().map(|l| l.document_symbol_cap).unwrap_or(500)
+}
+
+/// Get current semantic tokens deadline
+#[inline]
+pub fn semantic_tokens_deadline() -> Duration {
+    LSP_LIMITS.read().map(|l| l.semantic_tokens_deadline).unwrap_or(Duration::from_secs(2))
+}
+
+/// Get current code lens resolve deadline
+#[inline]
+pub fn code_lens_resolve_deadline() -> Duration {
+    LSP_LIMITS.read().map(|l| l.code_lens_resolve_deadline).unwrap_or(Duration::from_secs(1))
+}
+
+/// Get current completion deadline
+#[inline]
+pub fn completion_deadline() -> Duration {
+    LSP_LIMITS.read().map(|l| l.completion_deadline).unwrap_or(Duration::from_millis(500))
+}
+
+/// Get current inlay hints cap
+#[inline]
+pub fn inlay_hints_cap() -> usize {
+    LSP_LIMITS.read().map(|l| l.inlay_hints_cap).unwrap_or(500)
+}
+
+/// Get current diagnostics per file cap
+#[inline]
+pub fn diagnostics_per_file_cap() -> usize {
+    LSP_LIMITS.read().map(|l| l.diagnostics_per_file_cap).unwrap_or(200)
 }
 
 #[cfg(test)]

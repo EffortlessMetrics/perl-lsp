@@ -309,6 +309,9 @@ impl LspServer {
     }
 
     /// Handle didClose notification
+    ///
+    /// Deterministic state transition: notify coordinator of document close
+    /// so it can update pending change tracking if needed.
     pub(crate) fn handle_did_close(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
             let uri = params
@@ -317,6 +320,13 @@ impl LspServer {
                 .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
 
             eprintln!("Document closed: {}", uri);
+
+            // Notify coordinator that document is being closed (for pending change cleanup)
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                // Mark as complete to clear any pending change tracking
+                coordinator.notify_parse_complete(uri);
+            }
 
             // Remove from documents
             self.documents.lock().unwrap().remove(uri);

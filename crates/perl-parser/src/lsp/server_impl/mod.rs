@@ -7,6 +7,8 @@ mod diagnostics;
 mod dispatch;
 mod language;
 mod lifecycle;
+/// Routing module for lifecycle-aware index access
+pub mod routing;
 mod text_sync;
 mod workspace;
 
@@ -1028,6 +1030,27 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_completion(params)
+    }
+
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn test_handle_hover(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_hover(params)
+    }
+
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn test_handle_document_symbols(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_document_symbol(params)
+    }
+
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn test_handle_workspace_symbols(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_workspace_symbols_v2(params)
     }
 
     // Note: handle_document_link is implemented in language/misc.rs
