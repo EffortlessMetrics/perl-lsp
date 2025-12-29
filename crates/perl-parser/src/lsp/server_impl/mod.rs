@@ -43,7 +43,10 @@ use crate::{
         cancelled_response, document_not_found_error, enhanced_error, request_cancelled_error,
         server_cancelled_error,
     },
-    lsp::state::{ClientCapabilities, DocumentState, ServerConfig, normalize_package_separator},
+    lsp::state::{
+        ClientCapabilities, DocumentState, ServerConfig, WorkspaceConfig,
+        normalize_package_separator,
+    },
     lsp::transport::{log_response, read_message, write_message},
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
@@ -133,6 +136,8 @@ pub struct LspServer {
     advertised_features: std::sync::Mutex<crate::capabilities::AdvertisedFeatures>,
     /// Client supports pull diagnostics
     client_supports_pull_diags: Arc<AtomicBool>,
+    /// Workspace configuration for module resolution
+    workspace_config: Arc<Mutex<WorkspaceConfig>>,
 }
 
 // Note: DocumentState, ServerConfig, and normalize_package_separator are
@@ -171,6 +176,7 @@ impl LspServer {
             root_path: Arc::new(Mutex::new(None)),
             advertised_features: std::sync::Mutex::new(default_features),
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
+            workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
         }
     }
 
@@ -204,6 +210,7 @@ impl LspServer {
             root_path: Arc::new(Mutex::new(None)),
             advertised_features: std::sync::Mutex::new(default_features),
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
+            workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
         }
     }
 
@@ -249,7 +256,6 @@ impl LspServer {
     /// - Memory usage: ~1x total text size (only text is cloned, not AST/rope)
     /// - Use case: Text-based reference searches, regex scans across workspace
     #[inline]
-    #[allow(dead_code)]
     pub(crate) fn documents_text_snapshot(&self) -> Vec<(String, String)> {
         let docs = self.documents_guard();
         docs.iter().map(|(k, v)| (k.clone(), v.text.clone())).collect()
@@ -656,11 +662,11 @@ impl LspServer {
                             range: crate::code_lens_provider::Range {
                                 start: crate::code_lens_provider::Position {
                                     line: line_num as u32,
-                                    character: pkg_name.start() as u32,
+                                    character: byte_to_utf16_col(line, pkg_name.start()) as u32,
                                 },
                                 end: crate::code_lens_provider::Position {
                                     line: line_num as u32,
-                                    character: pkg_name.end() as u32,
+                                    character: byte_to_utf16_col(line, pkg_name.end()) as u32,
                                 },
                             },
                             command: None, // Will be resolved later
@@ -685,11 +691,11 @@ impl LspServer {
                             range: crate::code_lens_provider::Range {
                                 start: crate::code_lens_provider::Position {
                                     line: line_num as u32,
-                                    character: sub_name.start() as u32,
+                                    character: byte_to_utf16_col(line, sub_name.start()) as u32,
                                 },
                                 end: crate::code_lens_provider::Position {
                                     line: line_num as u32,
-                                    character: sub_name.end() as u32,
+                                    character: byte_to_utf16_col(line, sub_name.end()) as u32,
                                 },
                             },
                             command: None, // Will be resolved later
@@ -734,11 +740,13 @@ impl LspServer {
                                     range: LspRange {
                                         start: LspPosition {
                                             line: line_num as u32,
-                                            character: sub_name.start() as u32,
+                                            character: byte_to_utf16_col(line, sub_name.start())
+                                                as u32,
                                         },
                                         end: LspPosition {
                                             line: line_num as u32,
-                                            character: sub_name.end() as u32,
+                                            character: byte_to_utf16_col(line, sub_name.end())
+                                                as u32,
                                         },
                                     },
                                 },
@@ -765,11 +773,13 @@ impl LspServer {
                                     range: LspRange {
                                         start: LspPosition {
                                             line: line_num as u32,
-                                            character: pkg_name.start() as u32,
+                                            character: byte_to_utf16_col(line, pkg_name.start())
+                                                as u32,
                                         },
                                         end: LspPosition {
                                             line: line_num as u32,
-                                            character: pkg_name.end() as u32,
+                                            character: byte_to_utf16_col(line, pkg_name.end())
+                                                as u32,
                                         },
                                     },
                                 },
