@@ -347,6 +347,10 @@ impl LspServer {
                     Err(e) => Err(e),
                 }
             }
+            "workspace/didChangeConfiguration" => {
+                self.handle_did_change_configuration(request.params);
+                Ok(None) // Notification, no response
+            }
             "workspace/willRenameFiles" => self.handle_will_rename_files(request.params),
             "workspace/didDeleteFiles" => self.handle_did_delete_files(request.params),
             "workspace/applyEdit" => self.handle_apply_edit(request.params),
