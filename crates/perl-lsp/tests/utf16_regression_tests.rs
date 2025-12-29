@@ -51,10 +51,10 @@ fn extract_hover_range(response: &serde_json::Value) -> Option<(u32, u32, u32, u
     let start = range.get("start")?;
     let end = range.get("end")?;
     Some((
-        start.get("line")?.as_u64()? as u32,
-        start.get("character")?.as_u64()? as u32,
-        end.get("line")?.as_u64()? as u32,
-        end.get("character")?.as_u64()? as u32,
+        u32::try_from(start.get("line")?.as_u64()?).ok()?,
+        u32::try_from(start.get("character")?.as_u64()?).ok()?,
+        u32::try_from(end.get("line")?.as_u64()?).ok()?,
+        u32::try_from(end.get("character")?.as_u64()?).ok()?,
     ))
 }
 
@@ -64,7 +64,11 @@ fn extract_definition_locations(response: &serde_json::Value) -> Vec<(String, u3
     let mut locations = Vec::new();
     if let Some(result) = response.get("result") {
         let items = if result.is_array() {
-            result.as_array().unwrap().clone()
+            if let Some(arr) = result.as_array() {
+                arr.clone()
+            } else {
+                return locations;
+            }
         } else if result.is_object() {
             vec![result.clone()]
         } else {
@@ -77,11 +81,16 @@ fn extract_definition_locations(response: &serde_json::Value) -> Vec<(String, u3
                 let start = &range["start"];
                 let end = &range["end"];
                 if let (Some(line), Some(start_char), Some(end_char)) = (
-                    start.get("line").and_then(|v| v.as_u64()),
-                    start.get("character").and_then(|v| v.as_u64()),
-                    end.get("character").and_then(|v| v.as_u64()),
+                    start.get("line").and_then(|v| v.as_u64()).and_then(|v| u32::try_from(v).ok()),
+                    start
+                        .get("character")
+                        .and_then(|v| v.as_u64())
+                        .and_then(|v| u32::try_from(v).ok()),
+                    end.get("character")
+                        .and_then(|v| v.as_u64())
+                        .and_then(|v| u32::try_from(v).ok()),
                 ) {
-                    locations.push((uri_str, line as u32, start_char as u32, end_char as u32));
+                    locations.push((uri_str, line, start_char, end_char));
                 }
             }
         }
@@ -97,11 +106,11 @@ fn extract_definition_locations(response: &serde_json::Value) -> Vec<(String, u3
 /// If byte offsets are incorrectly used:
 /// - The hover/definition position for `$after_emoji` would be wrong by +2 per emoji
 ///
-/// Expected UTF-16 positions on line 1 ("$emoji_🎉 = 1;"):
-/// - '$' is at position 0
-/// - 'e' is at position 1
-/// - '🎉' starts at position 7, ends at position 9 (2 UTF-16 code units)
-/// - '=' is at position 11
+/// Expected UTF-16 positions on line 0 ("my $emoji_🎉 = 1;"):
+/// - 'm' is at position 0
+/// - '$' is at position 3 (after "my ")
+/// - '🎉' starts at position 10, ends at position 12 (2 UTF-16 code units)
+/// - '=' is at position 13
 #[test]
 fn test_utf16_emoji_position_handling() {
     let mut server = start_lsp_server();

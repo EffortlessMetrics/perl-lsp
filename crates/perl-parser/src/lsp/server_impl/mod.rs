@@ -249,7 +249,6 @@ impl LspServer {
     /// - Memory usage: ~1x total text size (only text is cloned, not AST/rope)
     /// - Use case: Text-based reference searches, regex scans across workspace
     #[inline]
-    #[allow(dead_code)]
     pub(crate) fn documents_text_snapshot(&self) -> Vec<(String, String)> {
         let docs = self.documents_guard();
         docs.iter().map(|(k, v)| (k.clone(), v.text.clone())).collect()
