@@ -43,7 +43,7 @@ impl LspServer {
             let uri = req_uri(&params)?;
 
             // Reject stale requests
-            let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
+            let req_version = params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
             let options: FormattingOptions = serde_json::from_value(params["options"].clone())

@@ -3,14 +3,25 @@
 //! Handles didOpen, didChange, didClose, didSave notifications.
 
 use super::*;
+use crate::lsp::protocol::invalid_params;
 
 impl LspServer {
     /// Handle textDocument/didOpen notification
     pub(crate) fn handle_did_open(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let text = params["textDocument"]["text"].as_str().unwrap_or("");
-            let version = params["textDocument"]["version"].as_i64().unwrap_or(0) as i32;
+            let uri = params
+                .pointer("/textDocument/uri")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
+            let text = params
+                .pointer("/textDocument/text")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| invalid_params("Missing required parameter: textDocument.text"))?;
+            let version_i64 = params
+                .pointer("/textDocument/version")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let version = i32::try_from(version_i64).unwrap_or(0);
 
             eprintln!("Document opened: {}", uri);
 
@@ -114,8 +125,15 @@ impl LspServer {
     /// Handle didChange notification
     pub(crate) fn handle_did_change(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let version = params["textDocument"]["version"].as_i64().unwrap_or(0) as i32;
+            let uri = params
+                .pointer("/textDocument/uri")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
+            let version_i64 = params
+                .pointer("/textDocument/version")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let version = i32::try_from(version_i64).unwrap_or(0);
 
             if let Some(changes) = params["contentChanges"].as_array() {
                 // Get current document state or create new one
@@ -256,7 +274,10 @@ impl LspServer {
     /// Handle didClose notification
     pub(crate) fn handle_did_close(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let uri = params
+                .pointer("/textDocument/uri")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
 
             eprintln!("Document closed: {}", uri);
 
@@ -285,9 +306,14 @@ impl LspServer {
     /// Handle didSave notification
     pub(crate) fn handle_did_save(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
-            let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let _version =
-                params["textDocument"].get("version").and_then(|v| v.as_i64()).map(|v| v as i32);
+            let uri = params
+                .pointer("/textDocument/uri")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
+            let _version = params
+                .pointer("/textDocument/version")
+                .and_then(|v| v.as_i64())
+                .and_then(|v| i32::try_from(v).ok());
 
             eprintln!("Document saved: {}", uri);
 

@@ -4,6 +4,7 @@
 //! Provides quick fixes, refactoring actions, and source actions.
 
 use super::super::*;
+use crate::lsp::protocol::{req_range, req_uri};
 
 impl LspServer {
     /// Handle textDocument/codeAction request
@@ -16,15 +17,8 @@ impl LspServer {
             None => return Ok(Some(json!([]))),
         };
 
-        let uri = params["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
-            code: INVALID_PARAMS,
-            message: "Missing textDocument.uri".into(),
-            data: None,
-        })?;
-        let start_line = params["range"]["start"]["line"].as_u64().unwrap_or(0) as u32;
-        let start_char = params["range"]["start"]["character"].as_u64().unwrap_or(0) as u32;
-        let end_line = params["range"]["end"]["line"].as_u64().unwrap_or(0) as u32;
-        let end_char = params["range"]["end"]["character"].as_u64().unwrap_or(0) as u32;
+        let uri = req_uri(&params)?;
+        let ((start_line, start_char), (end_line, end_char)) = req_range(&params)?;
 
         let documents = self.documents_guard();
         let doc = match self.get_document(&documents, uri) {

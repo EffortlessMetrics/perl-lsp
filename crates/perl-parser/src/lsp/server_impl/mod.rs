@@ -655,11 +655,11 @@ impl LspServer {
                             range: crate::code_lens_provider::Range {
                                 start: crate::code_lens_provider::Position {
                                     line: line_num as u32,
-                                    character: pkg_name.start() as u32,
+                                    character: byte_to_utf16_col(line, pkg_name.start()) as u32,
                                 },
                                 end: crate::code_lens_provider::Position {
                                     line: line_num as u32,
-                                    character: pkg_name.end() as u32,
+                                    character: byte_to_utf16_col(line, pkg_name.end()) as u32,
                                 },
                             },
                             command: None, // Will be resolved later
@@ -684,11 +684,11 @@ impl LspServer {
                             range: crate::code_lens_provider::Range {
                                 start: crate::code_lens_provider::Position {
                                     line: line_num as u32,
-                                    character: sub_name.start() as u32,
+                                    character: byte_to_utf16_col(line, sub_name.start()) as u32,
                                 },
                                 end: crate::code_lens_provider::Position {
                                     line: line_num as u32,
-                                    character: sub_name.end() as u32,
+                                    character: byte_to_utf16_col(line, sub_name.end()) as u32,
                                 },
                             },
                             command: None, // Will be resolved later
@@ -733,11 +733,11 @@ impl LspServer {
                                     range: LspRange {
                                         start: LspPosition {
                                             line: line_num as u32,
-                                            character: sub_name.start() as u32,
+                                            character: byte_to_utf16_col(line, sub_name.start()) as u32,
                                         },
                                         end: LspPosition {
                                             line: line_num as u32,
-                                            character: sub_name.end() as u32,
+                                            character: byte_to_utf16_col(line, sub_name.end()) as u32,
                                         },
                                     },
                                 },
@@ -764,11 +764,11 @@ impl LspServer {
                                     range: LspRange {
                                         start: LspPosition {
                                             line: line_num as u32,
-                                            character: pkg_name.start() as u32,
+                                            character: byte_to_utf16_col(line, pkg_name.start()) as u32,
                                         },
                                         end: LspPosition {
                                             line: line_num as u32,
-                                            character: pkg_name.end() as u32,
+                                            character: byte_to_utf16_col(line, pkg_name.end()) as u32,
                                         },
                                     },
                                 },
