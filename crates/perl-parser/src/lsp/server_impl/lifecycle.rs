@@ -102,6 +102,19 @@ impl LspServer {
                 folders.push(root_uri.to_string());
                 // Also set the root path for module resolution
                 self.set_root_uri(root_uri);
+            } else if let Some(root_path) = params.get("rootPath").and_then(|p| p.as_str()) {
+                // Legacy fallback: rootPath is deprecated since LSP 3.0 but still sent by some clients
+                eprintln!("Initialized with legacy rootPath: {}", root_path);
+                // Convert rootPath to URI format for consistency
+                let root_uri = if root_path.starts_with('/') {
+                    format!("file://{}", root_path)
+                } else {
+                    // Windows path handling (C:\path -> file:///C:/path)
+                    format!("file:///{}", root_path.replace('\\', "/"))
+                };
+                let mut folders = self.workspace_folders.lock().unwrap();
+                folders.push(root_uri.clone());
+                self.set_root_uri(&root_uri);
             }
         }
 
@@ -302,28 +315,72 @@ impl LspServer {
         *self.root_path.lock().unwrap() = root_path;
     }
 
-    /// Enhanced module path resolver using root_path
+    /// Enhanced module path resolver using workspace configuration
+    ///
+    /// Uses configurable include paths from `WorkspaceConfig` instead of
+    /// hardcoded directories. Returns the absolute filesystem path for a module.
     pub(super) fn resolve_module_path(&self, module: &str) -> Option<PathBuf> {
         let root = self.root_path.lock().unwrap().clone()?;
         let rel = module.replace("::", "/") + ".pm";
-        for base in ["lib", "inc", "local/lib/perl5"] {
-            let p = root.join(base).join(&rel);
+
+        // Use configured include paths
+        let include_paths = {
+            let config = self.workspace_config.lock().unwrap();
+            config.include_paths.clone()
+        };
+
+        for base in &include_paths {
+            let p = if base == "." { root.join(&rel) } else { root.join(base).join(&rel) };
             if p.exists() {
                 return Some(p);
             }
         }
-        // Best-effort even if not present (for test workspaces)
+        // Best-effort fallback for test workspaces
         Some(root.join("lib").join(rel))
     }
 
     /// Resolve a module name to a file path URI
+    ///
+    /// ## Resolution Precedence Order (deterministic)
+    ///
+    /// The resolution follows a strict precedence order designed for optimal
+    /// developer experience and predictable behavior:
+    ///
+    /// 1. **Open Documents** (fastest path)
+    ///    - Already-opened documents are checked first
+    ///    - This ensures edits in progress take precedence
+    ///
+    /// 2. **Workspace Folders** (in initialization order)
+    ///    - Folders are searched in the order they were added
+    ///    - For each folder, configured include_paths are searched
+    ///    - This respects multi-root workspace priority
+    ///
+    /// 3. **Configured Include Paths** (user-specified)
+    ///    - Custom paths from workspace configuration
+    ///    - Relative paths are resolved against each workspace folder
+    ///
+    /// 4. **System @INC** (opt-in only)
+    ///    - Disabled by default (network filesystem concern)
+    ///    - Enable via `workspace.useSystemInc: true` in settings
+    ///    - Filtered to exclude `.` (current directory) for security
+    ///
+    /// ## Performance Characteristics
+    /// - Timeout: Configurable (default 50ms) to prevent blocking
+    /// - Returns None on timeout, allowing graceful degradation
     pub(super) fn resolve_module_to_path(&self, module_name: &str) -> Option<String> {
         use std::time::{Duration, Instant};
 
-        // Convert Module::Name to Module/Name.pm
+        let start_time = Instant::now();
         let relative_path = format!("{}.pm", module_name.replace("::", "/"));
 
-        // First check if we have the document already opened (fast path)
+        // Get configuration upfront to minimize lock contention
+        let (include_paths, timeout_ms, use_system_inc) = {
+            let config = self.workspace_config.lock().unwrap();
+            (config.include_paths.clone(), config.resolution_timeout_ms, config.use_system_inc)
+        };
+        let timeout = Duration::from_millis(timeout_ms);
+
+        // TIER 1: Open documents (fastest path - in-memory lookup)
         let documents = self.documents.lock().unwrap();
         for (uri, _doc) in documents.iter() {
             if uri.ends_with(&relative_path) {
@@ -332,15 +389,8 @@ impl LspServer {
         }
         drop(documents);
 
-        // Set a timeout for file system operations
-        let start_time = Instant::now();
-        let timeout = Duration::from_millis(50); // Reduced timeout for faster response
-
-        // Get workspace folders from initialization
+        // TIER 2 & 3: Workspace folders with configured include paths
         let workspace_folders = self.workspace_folders.lock().unwrap().clone();
-
-        // Only check workspace-local directories to avoid blocking
-        let search_dirs = ["lib", ".", "local/lib/perl5"];
 
         for workspace_folder in workspace_folders.iter() {
             // Early timeout check
@@ -360,37 +410,53 @@ impl LspServer {
                 workspace_folder
             };
 
-            for dir in &search_dirs {
-                let full_path = if *dir == "." {
+            // Search configured include paths within this workspace folder
+            for dir in &include_paths {
+                if start_time.elapsed() > timeout {
+                    return None;
+                }
+
+                let full_path = if dir == "." {
                     format!("{}/{}", workspace_path, relative_path)
                 } else {
                     format!("{}/{}/{}", workspace_path, dir, relative_path)
                 };
 
-                // Check timeout before each FS operation
-                if start_time.elapsed() > timeout {
-                    return None;
-                }
-
-                // Use metadata() instead of exists() as it's slightly more predictable
-                // and we can potentially wrap this in a timeout later
                 match std::fs::metadata(&full_path) {
                     Ok(meta) if meta.is_file() => {
                         return Some(format!("file://{}", full_path));
                     }
-                    _ => {
-                        // File doesn't exist or isn't a regular file, continue
-                    }
-                }
-
-                // Final timeout check
-                if start_time.elapsed() > timeout {
-                    return None;
+                    _ => continue,
                 }
             }
         }
 
-        // Don't check system paths (@INC) to avoid blocking on network filesystems
+        // TIER 4: System @INC (opt-in only)
+        if use_system_inc {
+            if start_time.elapsed() > timeout {
+                return None;
+            }
+
+            // Get system @INC paths (lazily populated)
+            let system_paths = {
+                let mut config = self.workspace_config.lock().unwrap();
+                config.get_system_inc().to_vec()
+            };
+
+            for inc_path in system_paths {
+                if start_time.elapsed() > timeout {
+                    return None;
+                }
+
+                let full_path = inc_path.join(&relative_path);
+                if full_path.is_file() {
+                    if let Some(path_str) = full_path.to_str() {
+                        return Some(format!("file://{}", path_str));
+                    }
+                }
+            }
+        }
+
         None
     }
 }
