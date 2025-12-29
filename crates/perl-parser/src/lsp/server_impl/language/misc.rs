@@ -137,14 +137,10 @@ impl LspServer {
                 for pos in positions {
                     // Positions in array still need per-item extraction with graceful handling
                     // Use try_from for safe u64→u32 conversion (strict-by-default)
-                    let line = pos["line"]
-                        .as_u64()
-                        .and_then(|v| u32::try_from(v).ok())
-                        .unwrap_or(0);
-                    let col = pos["character"]
-                        .as_u64()
-                        .and_then(|v| u32::try_from(v).ok())
-                        .unwrap_or(0);
+                    let line =
+                        pos["line"].as_u64().and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
+                    let col =
+                        pos["character"].as_u64().and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
                     let off = self.pos16_to_offset(doc, line, col);
                     let chain =
                         crate::selection_range::selection_chain(ast, &parent_map, off, &|o| {
@@ -196,6 +192,10 @@ impl LspServer {
     }
 
     /// Handle codeLens/resolve request
+    ///
+    /// This implementation uses the snapshot pattern to minimize lock hold time.
+    /// The documents lock is held only during the snapshot creation, then released
+    /// before the CPU-intensive reference counting work begins.
     pub(crate) fn handle_code_lens_resolve(
         &self,
         params: Option<Value>,
@@ -220,18 +220,20 @@ impl LspServer {
                     .and_then(|k| k.as_str())
                     .unwrap_or("unknown");
 
-                // Get the document URI from the range (we need to track this better in the future)
-                // For now, count references across all documents
-                let mut total_references = 0;
+                // Take a snapshot of all documents - lock is released after this line
+                // This allows other LSP operations to proceed while we do CPU-intensive
+                // reference counting across the workspace
+                let snapshot = self.documents_scan_snapshot();
 
-                let documents = self.documents_guard();
-                for (_uri, doc) in documents.iter() {
-                    if let Some(ref ast) = doc.ast {
+                // Now iterate without holding the lock
+                let mut total_references = 0;
+                for view in &snapshot {
+                    if let Some(ref ast) = view.ast {
                         total_references += self.count_references(ast, symbol_name, symbol_kind);
                     } else {
                         // Text-based fallback when AST is not available
                         total_references +=
-                            self.count_references_text_based(&doc.text, symbol_name, symbol_kind);
+                            self.count_references_text_based(&view.text, symbol_name, symbol_kind);
                     }
                 }
 
