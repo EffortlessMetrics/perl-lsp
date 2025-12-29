@@ -3,43 +3,81 @@
 //! Handles workspace symbols, configuration, file watching, and edits.
 
 use super::*;
+use crate::lsp::state::workspace_symbol_cap;
+#[cfg(feature = "workspace")]
+use crate::workspace_index::IndexState;
 
 impl LspServer {
-    /// Handle workspace/symbol request (v2 implementation with cooperative yielding)
+    /// Handle workspace/symbol request (v2 implementation with lifecycle-aware dispatch)
+    ///
+    /// Uses `IndexCoordinator.query()` for state-aware behavior:
+    /// - **Ready state**: Full workspace index search with cooperative yielding
+    /// - **Building/Degraded state**: Open document search only (partial results)
     pub(super) fn handle_workspace_symbols_v2(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         let query =
             params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
+        let cap = workspace_symbol_cap();
 
-        eprintln!("Workspace symbol search v2: '{}'", query);
+        eprintln!("Workspace symbol search v2: '{}' (cap: {})", query, cap);
 
-        // Use workspace index if available
-        if let Some(ref workspace_index) = self.workspace_index {
-            let symbols = workspace_index.search_symbols(query);
+        // Use coordinator for lifecycle-aware dispatch
+        #[cfg(feature = "workspace")]
+        if let Some(coordinator) = self.coordinator() {
+            let state = coordinator.state();
+            let is_ready = matches!(state, IndexState::Ready { .. });
 
-            // Convert to LSP format with yielding
-            let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
-                .iter()
-                .enumerate()
-                .map(|(i, sym)| {
-                    // Cooperative yield every 64 symbols
-                    if i & 0x3f == 0 {
-                        std::thread::yield_now();
+            if is_ready {
+                // Full query path: use workspace index
+                let symbols = coordinator.index().search_symbols(query);
+
+                // Convert to LSP format with yielding and result cap
+                let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
+                    .iter()
+                    .take(cap)
+                    .enumerate()
+                    .map(|(i, sym)| {
+                        // Cooperative yield every 64 symbols
+                        if i & 0x3f == 0 {
+                            std::thread::yield_now();
+                        }
+                        sym.into()
+                    })
+                    .collect();
+
+                if !lsp_symbols.is_empty() {
+                    eprintln!(
+                        "Workspace symbol: returned {} results from index (Ready state)",
+                        lsp_symbols.len()
+                    );
+                    return Ok(Some(json!(lsp_symbols)));
+                }
+                // If index is empty, fall through to open-doc search
+            } else {
+                eprintln!(
+                    "Workspace symbol: index not ready ({:?}), using open-doc fallback",
+                    match &state {
+                        IndexState::Building { indexed_count, total_count, .. } =>
+                            format!("Building {}/{}", indexed_count, total_count),
+                        IndexState::Degraded { reason, .. } => format!("Degraded: {:?}", reason),
+                        _ => "Unknown".to_string(),
                     }
-                    sym.into()
-                })
-                .collect();
-
-            // If the workspace index is empty (e.g., due to parsing failures),
-            // fall back to document-based search for better test reliability
-            if !lsp_symbols.is_empty() {
-                return Ok(Some(json!(lsp_symbols)));
+                );
             }
         }
 
-        // Fallback to document-based search
+        // Fallback/degraded path: search open documents only
+        self.search_open_documents_for_symbols(query, cap)
+    }
+
+    /// Search only open documents for symbols (degraded/fallback path)
+    fn search_open_documents_for_symbols(
+        &self,
+        query: &str,
+        cap: usize,
+    ) -> Result<Option<Value>, JsonRpcError> {
         let mut all_symbols = Vec::new();
 
         // Collect document snapshots without holding lock
@@ -54,6 +92,11 @@ impl LspServer {
                 std::thread::yield_now();
             }
 
+            // Early exit if we've hit the result cap
+            if all_symbols.len() >= cap {
+                break;
+            }
+
             if let Some(ref ast) = doc.ast {
                 let doc_symbols = self.extract_document_symbols(ast, &doc.text, uri);
                 let query_lower = query.to_lowercase();
@@ -61,15 +104,22 @@ impl LspServer {
                 for sym in doc_symbols {
                     if sym.name.to_lowercase().contains(&query_lower) {
                         all_symbols.push(sym);
+                        if all_symbols.len() >= cap {
+                            break;
+                        }
                     }
                 }
             } else {
                 // Text-based fallback when AST is not available
                 let text_symbols = self.extract_text_based_symbols(&doc.text, uri, query);
-                all_symbols.extend(text_symbols);
+                let remaining = cap.saturating_sub(all_symbols.len());
+                all_symbols.extend(text_symbols.into_iter().take(remaining));
             }
         }
 
+        // Truncate to cap in case we went slightly over
+        all_symbols.truncate(cap);
+        eprintln!("Workspace symbol: returned {} results from open documents", all_symbols.len());
         Ok(Some(json!(all_symbols)))
     }
 

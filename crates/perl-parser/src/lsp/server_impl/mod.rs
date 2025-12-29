@@ -73,7 +73,8 @@ use url::Url;
 use crate::uri::parse_uri;
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{
-    LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex, uri_to_fs_path,
+    IndexCoordinator, LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex,
+    uri_to_fs_path,
 };
 
 /// Lightweight view of a document for scan-heavy operations
@@ -113,7 +114,11 @@ pub struct LspServer {
     pub(crate) documents: Arc<Mutex<HashMap<String, DocumentState>>>,
     /// Whether the server is initialized
     initialized: bool,
-    /// Workspace-wide index for cross-file features
+    /// Index coordinator for workspace-wide features with lifecycle management
+    #[cfg(feature = "workspace")]
+    pub(crate) index_coordinator: Option<Arc<IndexCoordinator>>,
+    /// Legacy workspace index reference (delegates to coordinator.index())
+    /// TODO: Remove once all handlers migrated to coordinator pattern
     #[cfg(feature = "workspace")]
     pub(crate) workspace_index: Option<Arc<WorkspaceIndex>>,
     /// AST cache for performance
@@ -147,9 +152,14 @@ pub struct LspServer {
 impl LspServer {
     /// Create a new LSP server
     pub fn new() -> Self {
-        // Initialize workspace indexing (always enabled when workspace feature is on)
+        // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
-        let workspace_index = Some(Arc::new(WorkspaceIndex::new()));
+        let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
+
+        // Legacy workspace_index reference - delegates to coordinator.index()
+        // TODO: Remove once all handlers migrated to coordinator pattern
+        #[cfg(feature = "workspace")]
+        let workspace_index = index_coordinator.as_ref().map(|c| Arc::clone(c.index()));
 
         let default_features = {
             let flags = if cfg!(feature = "lsp-ga-lock") {
@@ -163,6 +173,8 @@ impl LspServer {
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
+            #[cfg(feature = "workspace")]
+            index_coordinator,
             #[cfg(feature = "workspace")]
             workspace_index,
             // Cache up to 100 ASTs with 5 minute TTL
@@ -182,9 +194,13 @@ impl LspServer {
 
     /// Create a new LSP server with custom output (for testing)
     pub fn with_output(output: Arc<Mutex<Box<dyn Write + Send>>>) -> Self {
-        // Initialize workspace indexing (always enabled when workspace feature is on)
+        // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
-        let workspace_index = Some(Arc::new(WorkspaceIndex::new()));
+        let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
+
+        // Legacy workspace_index reference - delegates to coordinator.index()
+        #[cfg(feature = "workspace")]
+        let workspace_index = index_coordinator.as_ref().map(|c| Arc::clone(c.index()));
 
         let default_features = {
             let flags = if cfg!(feature = "lsp-ga-lock") {
@@ -198,6 +214,8 @@ impl LspServer {
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
+            #[cfg(feature = "workspace")]
+            index_coordinator,
             #[cfg(feature = "workspace")]
             workspace_index,
             ast_cache: Arc::new(AstCache::new(100, 300)),
@@ -282,6 +300,29 @@ impl LspServer {
                 ast: v.ast.clone(),
             })
             .collect()
+    }
+
+    /// Get the index coordinator for lifecycle-aware index access
+    ///
+    /// Returns a reference to the IndexCoordinator, which provides:
+    /// - `state()`: Lock-free check of current index state (Building/Ready/Degraded)
+    /// - `index()`: Access to underlying WorkspaceIndex for queries
+    /// - `notify_change(uri)`: Notify of file change (tracks parse storm)
+    /// - `notify_parse_complete(uri)`: Notify parse done (may trigger recovery)
+    /// - `query(full, partial)`: Automatic dispatch based on state
+    ///
+    /// ## Usage Pattern
+    /// ```rust,ignore
+    /// if let Some(coordinator) = self.coordinator() {
+    ///     coordinator.notify_change(&uri);
+    ///     // ... do parsing work ...
+    ///     coordinator.notify_parse_complete(&uri);
+    /// }
+    /// ```
+    #[cfg(feature = "workspace")]
+    #[inline]
+    pub(crate) fn coordinator(&self) -> Option<&Arc<IndexCoordinator>> {
+        self.index_coordinator.as_ref()
     }
 
     /// Run the LSP server
