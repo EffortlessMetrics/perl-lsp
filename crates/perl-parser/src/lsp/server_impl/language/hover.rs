@@ -17,7 +17,7 @@ impl LspServer {
             let (line, character) = req_position(&params)?;
 
             // Reject stale requests
-            let req_version = params["textDocument"]["version"].as_i64().map(|n| n as i32);
+            let req_version = params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
             let documents = self.documents_guard();
