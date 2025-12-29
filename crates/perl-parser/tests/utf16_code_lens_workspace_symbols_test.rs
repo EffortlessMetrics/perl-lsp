@@ -116,19 +116,19 @@ fn test_code_lens_package_position() {
     let pkg_line = lines[1];
 
     let pkg_regex = Regex::new(r"^\s*package\s+([\w:]+)").unwrap();
-    if let Some(captures) = pkg_regex.captures(pkg_line) {
-        if let Some(pkg_name) = captures.get(1) {
-            let byte_start = pkg_name.start();
-            let byte_end = pkg_name.end();
+    if let Some(captures) = pkg_regex.captures(pkg_line)
+        && let Some(pkg_name) = captures.get(1)
+    {
+        let byte_start = pkg_name.start();
+        let byte_end = pkg_name.end();
 
-            let utf16_start = byte_to_utf16_col(pkg_line, byte_start);
-            let utf16_end = byte_to_utf16_col(pkg_line, byte_end);
+        let utf16_start = byte_to_utf16_col(pkg_line, byte_start);
+        let utf16_end = byte_to_utf16_col(pkg_line, byte_end);
 
-            // Verify the range makes sense for "MyApp::Handler" (14 chars)
-            assert_eq!(utf16_end - utf16_start, 14);
-            // Start position should be after "package " (8 chars)
-            assert_eq!(utf16_start, 8);
-        }
+        // Verify the range makes sense for "MyApp::Handler" (14 chars)
+        assert_eq!(utf16_end - utf16_start, 14);
+        // Start position should be after "package " (8 chars)
+        assert_eq!(utf16_start, 8);
     }
 }
 
@@ -142,19 +142,19 @@ fn test_workspace_symbol_sub_position() {
     let simple_line = "    sub my_handler {";
 
     let sub_regex = Regex::new(r"^\s*sub\s+(\w+)").unwrap();
-    if let Some(captures) = sub_regex.captures(simple_line) {
-        if let Some(sub_name) = captures.get(1) {
-            let byte_start = sub_name.start();
-            let byte_end = sub_name.end();
+    if let Some(captures) = sub_regex.captures(simple_line)
+        && let Some(sub_name) = captures.get(1)
+    {
+        let byte_start = sub_name.start();
+        let byte_end = sub_name.end();
 
-            let utf16_start = byte_to_utf16_col(simple_line, byte_start);
-            let utf16_end = byte_to_utf16_col(simple_line, byte_end);
+        let utf16_start = byte_to_utf16_col(simple_line, byte_start);
+        let utf16_end = byte_to_utf16_col(simple_line, byte_end);
 
-            // "my_handler" is 10 chars
-            assert_eq!(utf16_end - utf16_start, 10);
-            // Start after "    sub " (8 chars)
-            assert_eq!(utf16_start, 8);
-        }
+        // "my_handler" is 10 chars
+        assert_eq!(utf16_end - utf16_start, 10);
+        // Start after "    sub " (8 chars)
+        assert_eq!(utf16_start, 8);
     }
 }
 
@@ -201,17 +201,17 @@ fn test_regression_package_after_emoji_comment() {
     // The regex won't match because of emoji, but if we had a line like:
     let simple_line = "package MyHandler;";
 
-    if let Some(captures) = pkg_regex.captures(simple_line) {
-        if let Some(pkg_name) = captures.get(1) {
-            // Before fix: character: pkg_name.start() as u32 (byte offset)
-            // After fix: character: byte_to_utf16_col(line, pkg_name.start()) as u32
+    if let Some(captures) = pkg_regex.captures(simple_line)
+        && let Some(pkg_name) = captures.get(1)
+    {
+        // Before fix: character: pkg_name.start() as u32 (byte offset)
+        // After fix: character: byte_to_utf16_col(line, pkg_name.start()) as u32
 
-            let byte_start = pkg_name.start();
-            let utf16_start = byte_to_utf16_col(simple_line, byte_start);
+        let byte_start = pkg_name.start();
+        let utf16_start = byte_to_utf16_col(simple_line, byte_start);
 
-            // For ASCII, they should be equal
-            assert_eq!(byte_start, utf16_start);
-        }
+        // For ASCII, they should be equal
+        assert_eq!(byte_start, utf16_start);
     }
 
     // Now test with emoji before the package name
@@ -245,14 +245,14 @@ fn test_regression_sub_with_multibyte_prefix() {
     let sub_line = lines[1];
 
     let sub_regex = Regex::new(r"^\s*sub\s+(\w+)").unwrap();
-    if let Some(captures) = sub_regex.captures(sub_line) {
-        if let Some(sub_name) = captures.get(1) {
-            let byte_start = sub_name.start();
-            let utf16_start = byte_to_utf16_col(sub_line, byte_start);
+    if let Some(captures) = sub_regex.captures(sub_line)
+        && let Some(sub_name) = captures.get(1)
+    {
+        let byte_start = sub_name.start();
+        let utf16_start = byte_to_utf16_col(sub_line, byte_start);
 
-            // Pure ASCII line: byte == UTF-16
-            assert_eq!(byte_start, utf16_start);
-            assert_eq!(byte_start, 4); // "sub " is 4 chars
-        }
+        // Pure ASCII line: byte == UTF-16
+        assert_eq!(byte_start, utf16_start);
+        assert_eq!(byte_start, 4); // "sub " is 4 chars
     }
 }
