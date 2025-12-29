@@ -447,21 +447,27 @@ impl LspServer {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
-                    let provider = TypeDefinitionProvider::new();
+            // Acquire minimal data under lock, then drop it
+            let ast = {
+                let documents = self.documents_guard();
+                let Some(doc) = self.get_document(&documents, uri) else {
+                    return Ok(Some(json!([])));
+                };
+                let Some(ast) = doc.ast.as_ref() else {
+                    return Ok(Some(json!([])));
+                };
+                ast.clone()
+            };
 
-                    // Convert documents to HashMap<String, String> for provider
-                    let doc_map: HashMap<String, String> =
-                        documents.iter().map(|(k, v)| (k.clone(), v.text.clone())).collect();
+            // Build doc_map outside the lock using snapshot helper
+            let doc_map: HashMap<String, String> =
+                self.documents_text_snapshot().into_iter().collect();
 
-                    if let Some(locations) =
-                        provider.find_type_definition(ast, line, character, uri, &doc_map)
-                    {
-                        return Ok(Some(json!(locations)));
-                    }
-                }
+            let provider = TypeDefinitionProvider::new();
+            if let Some(locations) =
+                provider.find_type_definition(ast.as_ref(), line, character, uri, &doc_map)
+            {
+                return Ok(Some(json!(locations)));
             }
         }
 
@@ -477,22 +483,33 @@ impl LspServer {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
-                    #[cfg(feature = "workspace")]
-                    {
-                        let provider = ImplementationProvider::new(self.workspace_index.clone());
+            // Acquire minimal data under lock, then drop it
+            let ast = {
+                let documents = self.documents_guard();
+                let Some(doc) = self.get_document(&documents, uri) else {
+                    return Ok(Some(json!([])));
+                };
+                let Some(ast) = doc.ast.as_ref() else {
+                    return Ok(Some(json!([])));
+                };
+                ast.clone()
+            };
 
-                        // Convert documents to HashMap<String, String> for provider
-                        let doc_map: HashMap<String, String> =
-                            documents.iter().map(|(k, v)| (k.clone(), v.text.clone())).collect();
+            #[cfg(feature = "workspace")]
+            {
+                // Build doc_map outside the lock using snapshot helper
+                let doc_map: HashMap<String, String> =
+                    self.documents_text_snapshot().into_iter().collect();
 
-                        let locations =
-                            provider.find_implementations(ast, line, character, uri, &doc_map);
-                        return Ok(Some(json!(locations)));
-                    }
-                }
+                let provider = ImplementationProvider::new(self.workspace_index.clone());
+                let locations =
+                    provider.find_implementations(ast.as_ref(), line, character, uri, &doc_map);
+                return Ok(Some(json!(locations)));
+            }
+
+            #[cfg(not(feature = "workspace"))]
+            {
+                let _ = (ast, line, character, uri); // Suppress unused warnings
             }
         }
 
