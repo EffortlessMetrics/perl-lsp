@@ -121,7 +121,6 @@ impl Default for IndexResourceLimits {
 ///
 /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#indexmetrics
 #[derive(Debug)]
-#[allow(dead_code)] // last_indexed reserved for future timestamp tracking
 pub struct IndexMetrics {
     /// Pending parse operations
     pending_parses: std::sync::atomic::AtomicUsize,
@@ -130,6 +129,9 @@ pub struct IndexMetrics {
     parse_storm_threshold: usize,
 
     /// Last successful index time
+    ///
+    /// TODO: Future use - telemetry reporting and cache invalidation timestamps
+    #[allow(dead_code)]
     last_indexed: std::sync::atomic::AtomicU64,
 }
 

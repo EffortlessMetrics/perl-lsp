@@ -404,10 +404,13 @@ impl LspServer {
             }
 
             // Parse the workspace folder URI to get the file path
+            // Use PathBuf for cross-platform path handling (Windows + Unix)
             let workspace_path = if workspace_folder.starts_with("file://") {
-                workspace_folder.strip_prefix("file://").unwrap_or(workspace_folder)
+                std::path::PathBuf::from(
+                    workspace_folder.strip_prefix("file://").unwrap_or(workspace_folder),
+                )
             } else {
-                workspace_folder
+                std::path::PathBuf::from(workspace_folder)
             };
 
             // Search configured include paths within this workspace folder
@@ -416,15 +419,19 @@ impl LspServer {
                     return None;
                 }
 
+                // Use PathBuf::join for cross-platform path construction
                 let full_path = if dir == "." {
-                    format!("{}/{}", workspace_path, relative_path)
+                    workspace_path.join(&relative_path)
                 } else {
-                    format!("{}/{}/{}", workspace_path, dir, relative_path)
+                    workspace_path.join(dir).join(&relative_path)
                 };
 
                 match std::fs::metadata(&full_path) {
                     Ok(meta) if meta.is_file() => {
-                        return Some(format!("file://{}", full_path));
+                        // Use Url::from_file_path for proper URI construction
+                        if let Ok(url) = url::Url::from_file_path(&full_path) {
+                            return Some(url.to_string());
+                        }
                     }
                     _ => continue,
                 }
@@ -450,8 +457,9 @@ impl LspServer {
 
                 let full_path = inc_path.join(&relative_path);
                 if full_path.is_file() {
-                    if let Some(path_str) = full_path.to_str() {
-                        return Some(format!("file://{}", path_str));
+                    // Use Url::from_file_path for proper URI construction (Windows-safe)
+                    if let Ok(url) = url::Url::from_file_path(&full_path) {
+                        return Some(url.to_string());
                     }
                 }
             }

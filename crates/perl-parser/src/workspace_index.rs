@@ -275,7 +275,12 @@ pub struct IndexMetrics {
     parse_storm_threshold: usize,
 
     /// Last successful index time (as millis since epoch, atomic)
-    #[allow(dead_code)] // Reserved for future timestamp tracking
+    ///
+    /// TODO: Future use:
+    /// - Telemetry: Report index freshness metrics to LSP clients
+    /// - Cache invalidation: Detect stale indexes requiring reindexing
+    /// - Incremental updates: Skip files unchanged since last_indexed timestamp
+    #[allow(dead_code)]
     last_indexed: std::sync::atomic::AtomicU64,
 }
 
@@ -371,7 +376,13 @@ pub struct IndexCoordinator {
     index: Arc<WorkspaceIndex>,
 
     /// Resource limits configuration
-    #[allow(dead_code)] // Reserved for resource enforcement in Phase 3
+    ///
+    /// TODO: Future use (Phase 3 - Bounded Behavior):
+    /// - Enforce max_files: Degrade to open-doc-only mode when cap exceeded
+    /// - Enforce max_symbols: Prune low-priority symbols from index
+    /// - Result limits: Cap workspace/symbol and references returns
+    /// - Memory budgeting: Track per-file index size and evict LRU entries
+    #[allow(dead_code)]
     limits: IndexResourceLimits,
 
     /// Runtime metrics for degradation detection

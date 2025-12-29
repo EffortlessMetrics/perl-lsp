@@ -209,13 +209,9 @@ args = ["--stdio"]
 
 ---
 
-### 2. `docs/CONFIG.md`
-
-Complete configuration reference.
-
----
-
 ## Configuration Reference
+
+_Note: This section documents the configuration options that should be extracted to `docs/CONFIG.md`._
 
 ### Server Settings
 
@@ -262,12 +258,22 @@ Sent via `workspace/didChangeConfiguration`:
 {
   "settings": {
     "perl": {
-      "includePaths": ["lib", "t/lib"],
-      "maxFiles": 5000
+      "inlayHints": {
+        "enabled": true,
+        "parameterHints": true,
+        "typeHints": false
+      },
+      "workspace": {
+        "includePaths": ["lib", "t/lib"],
+        "useSystemInc": false,
+        "resolutionTimeout": 5000
+      }
     }
   }
 }
 ```
+
+Note: Configuration is nested under `perl.inlayHints.*` and `perl.workspace.*` sections.
 
 ### Environment Variables
 
