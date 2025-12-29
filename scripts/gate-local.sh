@@ -33,6 +33,10 @@ echo ">>> clippy"
 cargo clippy --workspace --all-targets -- -D warnings
 
 echo ""
+echo ">>> workspace feature check"
+cargo check -p perl-parser --features workspace
+
+echo ""
 echo ">>> Build perl-lsp binary (ensures tests use correct version)"
 cargo build -p perl-lsp $PROFILE_FLAG
 
