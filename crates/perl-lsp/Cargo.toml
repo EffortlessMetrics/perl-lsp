@@ -55,7 +55,7 @@ qw-variants = []  # Support for all qw delimiter variants
 package-qualified = []  # Package-qualified subroutine resolution
 error-classifier-v2 = []  # Next generation error classification
 lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
-expose_lsp_test_api = []  # Expose test helpers for integration tests
+expose_lsp_test_api = ["perl-parser/expose_lsp_test_api"]  # Expose test helpers for integration tests
 lsp-extras = []  # Quarantined tests for unimplemented/aspirational LSP features
 
 [dev-dependencies]

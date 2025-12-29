@@ -11,12 +11,14 @@ use crate::{
     CompletionItemKind, CompletionProvider,
     cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, RequestCleanupGuard},
     lsp::protocol::{JsonRpcError, REQUEST_CANCELLED, req_position, req_uri},
+    lsp::state::{completion_cap, completion_deadline},
     type_inference::TypeInferenceEngine,
 };
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde_json::{Value, json};
 use std::sync::Arc;
+use std::time::Instant;
 
 use super::super::LspServer;
 
@@ -61,6 +63,10 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        let start = Instant::now();
+        let deadline = completion_deadline();
+        let cap = completion_cap();
+
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
@@ -137,9 +143,9 @@ impl LspServer {
                 };
 
                 // Add workspace-wide completions (functions and modules from other files)
-                // Only if index is ready (soft wait, no sleeps)
+                // Only if index is ready (soft wait, no sleeps) and within deadline
                 #[cfg(feature = "workspace")]
-                if index_ready && let Some(ref workspace_index) = self.workspace_index {
+                if index_ready && start.elapsed() < deadline && let Some(ref workspace_index) = self.workspace_index {
                     // Get the current context to filter relevant completions
                     let text_before = &doc.text[..offset.min(doc.text.len())];
                     let prefix = text_before
@@ -162,6 +168,12 @@ impl LspServer {
                     }
 
                     for symbol in workspace_symbols {
+                        // Check deadline periodically
+                        if completions.len() >= cap {
+                            eprintln!("Completion: cap reached ({}), stopping workspace scan", cap);
+                            break;
+                        }
+
                         // Skip if already in local completions
                         if seen.contains(&symbol.name) {
                             continue;
@@ -207,6 +219,10 @@ impl LspServer {
                         });
                     }
                 }
+
+                // Apply cap before converting to JSON
+                let is_incomplete = completions.len() > cap;
+                completions.truncate(cap);
 
                 let items: Vec<Value> = completions
                     .into_iter()
@@ -266,8 +282,12 @@ impl LspServer {
                     })
                     .collect();
 
-                eprintln!("Returning {} completions", items.len());
-                return Ok(Some(json!({"isIncomplete": false, "items": items})));
+                if is_incomplete {
+                    eprintln!("Completion: returning {} items (capped at {}, elapsed {:?})", items.len(), cap, start.elapsed());
+                } else {
+                    eprintln!("Returning {} completions", items.len());
+                }
+                return Ok(Some(json!({"isIncomplete": is_incomplete, "items": items})));
             }
         }
 

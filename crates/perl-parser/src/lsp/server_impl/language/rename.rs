@@ -2,9 +2,17 @@
 //!
 //! Handles textDocument/prepareRename and textDocument/rename requests.
 //! Supports both single-file and workspace-wide renaming.
+//!
+//! # Lifecycle-Aware Behavior
+//!
+//! Uses the routing module for state-aware dispatch:
+//! - **Ready state**: Full workspace rename across all indexed files
+//! - **Building/Degraded state**: Same-file rename only; logs "workspace rename unavailable while index building"
 
 use super::super::*;
 use crate::lsp::protocol::{invalid_params, req_position, req_uri};
+#[cfg(feature = "workspace")]
+use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
 
 impl LspServer {
     /// Handle textDocument/prepareRename request
@@ -125,6 +133,10 @@ impl LspServer {
     }
 
     /// Handle textDocument/rename request with workspace support
+    ///
+    /// Uses routing helper for lifecycle-aware behavior:
+    /// - **Ready state**: Full workspace rename across all indexed files
+    /// - **Building/Degraded state**: Same-file rename only with warning log
     pub(crate) fn handle_rename_workspace(
         &self,
         params: Option<Value>,
@@ -136,21 +148,87 @@ impl LspServer {
                 p.get("position").and_then(|p| p.get("character")).and_then(|n| n.as_u64()),
                 p.get("newName").and_then(|s| s.as_str()),
             ) {
+                // Check index access mode using routing helper
+                #[cfg(feature = "workspace")]
+                {
+                    let access_mode = route_index_access(self.coordinator());
+
+                    match access_mode {
+                        IndexAccessMode::Partial(reason) => {
+                            eprintln!(
+                                "Rename: workspace rename unavailable ({}), using same-file only",
+                                reason
+                            );
+                            // Fall through to same-file rename
+                        }
+                        IndexAccessMode::None => {
+                            eprintln!("Rename: no workspace feature, using same-file only");
+                            // Fall through to same-file rename
+                        }
+                        IndexAccessMode::Full(_) => {
+                            // Full workspace rename available
+                            let documents = self.documents_guard();
+                            if let Some(doc) = documents.get(uri) {
+                                if let Some(ref ast) = doc.ast {
+                                    let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
+                                    let current_pkg =
+                                        crate::declaration::current_package_at(ast, offset);
+                                    if let Some(key) = crate::declaration::symbol_at_cursor(
+                                        ast,
+                                        offset,
+                                        current_pkg,
+                                    ) {
+                                        if let Some(ref idx) = self.workspace_index {
+                                            let edits = crate::workspace_rename::build_rename_edit(
+                                                idx, &key, new_name,
+                                            );
+                                            let ws_edit =
+                                                crate::workspace_rename::to_workspace_edit(edits);
+                                            return Ok(Some(ws_edit));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Same-file fallback for degraded/partial modes
                 let documents = self.documents_guard();
                 if let Some(doc) = documents.get(uri) {
                     if let Some(ref ast) = doc.ast {
                         let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
-                        let current_pkg = crate::declaration::current_package_at(ast, offset);
-                        if let Some(key) =
-                            crate::declaration::symbol_at_cursor(ast, offset, current_pkg)
-                        {
-                            #[cfg(feature = "workspace")]
-                            if let Some(ref idx) = self.workspace_index {
-                                let edits =
-                                    crate::workspace_rename::build_rename_edit(idx, &key, new_name);
-                                let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
-                                return Ok(Some(ws_edit));
+
+                        // Create semantic analyzer for same-file rename
+                        let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
+
+                        // Find all references (including definition)
+                        let references = analyzer.find_all_references(offset, true);
+
+                        if !references.is_empty() {
+                            // Create text edits for all references
+                            let mut edits = Vec::new();
+                            for location in references {
+                                let (start_line, start_char) =
+                                    self.offset_to_pos16(doc, location.start);
+                                let (end_line, end_char) =
+                                    self.offset_to_pos16(doc, location.end);
+
+                                edits.push(json!({
+                                    "range": {
+                                        "start": { "line": start_line, "character": start_char },
+                                        "end": { "line": end_line, "character": end_char }
+                                    },
+                                    "newText": new_name
+                                }));
                             }
+
+                            // Return WorkspaceEdit with same-file changes only
+                            return Ok(Some(json!({
+                                "changes": {
+                                    uri: edits
+                                }
+                            })));
                         }
                     }
                 }

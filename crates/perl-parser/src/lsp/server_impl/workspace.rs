@@ -1,16 +1,22 @@
 //! Workspace-level operations
 //!
 //! Handles workspace symbols, configuration, file watching, and edits.
+//!
+//! # Lifecycle-Aware Behavior
+//!
+//! Uses the routing module for state-aware dispatch:
+//! - **Ready state**: Full workspace index search with cooperative yielding
+//! - **Building/Degraded state**: Open document search only (partial results)
 
 use super::*;
 use crate::lsp::state::workspace_symbol_cap;
 #[cfg(feature = "workspace")]
-use crate::workspace_index::IndexState;
+use crate::lsp::server_impl::routing::{route_index_access, IndexAccessMode};
 
 impl LspServer {
     /// Handle workspace/symbol request (v2 implementation with lifecycle-aware dispatch)
     ///
-    /// Uses `IndexCoordinator.query()` for state-aware behavior:
+    /// Uses routing helper for state-aware behavior:
     /// - **Ready state**: Full workspace index search with cooperative yielding
     /// - **Building/Degraded state**: Open document search only (partial results)
     pub(super) fn handle_workspace_symbols_v2(
@@ -23,48 +29,48 @@ impl LspServer {
 
         eprintln!("Workspace symbol search v2: '{}' (cap: {})", query, cap);
 
-        // Use coordinator for lifecycle-aware dispatch
+        // Use routing helper for lifecycle-aware dispatch
         #[cfg(feature = "workspace")]
-        if let Some(coordinator) = self.coordinator() {
-            let state = coordinator.state();
-            let is_ready = matches!(state, IndexState::Ready { .. });
+        {
+            let access_mode = route_index_access(self.coordinator());
 
-            if is_ready {
-                // Full query path: use workspace index
-                let symbols = coordinator.index().search_symbols(query);
+            match access_mode {
+                IndexAccessMode::Full(coordinator) => {
+                    // Full query path: use workspace index
+                    let symbols = coordinator.index().search_symbols(query);
 
-                // Convert to LSP format with yielding and result cap
-                let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
-                    .iter()
-                    .take(cap)
-                    .enumerate()
-                    .map(|(i, sym)| {
-                        // Cooperative yield every 64 symbols
-                        if i & 0x3f == 0 {
-                            std::thread::yield_now();
-                        }
-                        sym.into()
-                    })
-                    .collect();
+                    // Convert to LSP format with yielding and result cap
+                    let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
+                        .iter()
+                        .take(cap)
+                        .enumerate()
+                        .map(|(i, sym)| {
+                            // Cooperative yield every 64 symbols
+                            if i & 0x3f == 0 {
+                                std::thread::yield_now();
+                            }
+                            sym.into()
+                        })
+                        .collect();
 
-                if !lsp_symbols.is_empty() {
-                    eprintln!(
-                        "Workspace symbol: returned {} results from index (Ready state)",
-                        lsp_symbols.len()
-                    );
-                    return Ok(Some(json!(lsp_symbols)));
-                }
-                // If index is empty, fall through to open-doc search
-            } else {
-                eprintln!(
-                    "Workspace symbol: index not ready ({:?}), using open-doc fallback",
-                    match &state {
-                        IndexState::Building { indexed_count, total_count, .. } =>
-                            format!("Building {}/{}", indexed_count, total_count),
-                        IndexState::Degraded { reason, .. } => format!("Degraded: {:?}", reason),
-                        _ => "Unknown".to_string(),
+                    if !lsp_symbols.is_empty() {
+                        eprintln!(
+                            "Workspace symbol: returned {} results from index (Ready state)",
+                            lsp_symbols.len()
+                        );
+                        return Ok(Some(json!(lsp_symbols)));
                     }
-                );
+                    // If index is empty, fall through to open-doc search
+                }
+                IndexAccessMode::Partial(reason) => {
+                    eprintln!(
+                        "Workspace symbol: {}, using open-doc fallback",
+                        reason
+                    );
+                }
+                IndexAccessMode::None => {
+                    eprintln!("Workspace symbol: no workspace feature, using open-doc fallback");
+                }
             }
         }
 
@@ -372,6 +378,11 @@ impl LspServer {
     }
 
     /// Handle workspace/didChangeWatchedFiles notification
+    ///
+    /// Deterministic state transitions:
+    /// - File changes notify coordinator (never block handler threads)
+    /// - Index updates happen synchronously but quickly
+    /// - State recovery is handled by coordinator's internal logic
     pub(super) fn handle_did_change_watched_files(
         &self,
         params: Option<Value>,
@@ -392,6 +403,12 @@ impl LspServer {
             let change_type = change.typ;
 
             eprintln!("File change detected: {} (type: {:?})", uri, change_type);
+
+            // Notify coordinator of pending change (never block handler threads)
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                coordinator.notify_change(&uri);
+            }
 
             match change_type {
                 FileChangeType::CREATED => {
@@ -463,6 +480,12 @@ impl LspServer {
                     eprintln!("Removed deleted file from index: {}", uri);
                 }
                 _ => {}
+            }
+
+            // Notify coordinator that file processing is complete
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                coordinator.notify_parse_complete(&uri);
             }
         }
 
