@@ -73,6 +73,30 @@ use crate::workspace_index::{
     LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex, uri_to_fs_path,
 };
 
+/// Lightweight view of a document for scan-heavy operations
+///
+/// This struct provides the minimal data needed for workspace-wide scans
+/// (code lens resolve, reference counting) without requiring the full
+/// DocumentState. Using this snapshot pattern allows the documents lock
+/// to be released before CPU-intensive work begins.
+///
+/// ## Design Rationale
+/// - `uri`: Needed to construct LSP Location responses
+/// - `text`: Needed for text-based fallback searches (regex, line iteration)
+/// - `ast`: Arc clone allows AST traversal without deep copying the tree
+///
+/// The rope, line_starts cache, parent_map, and other fields are omitted
+/// as they're not typically needed for bulk scan operations.
+pub(crate) struct DocumentScanView {
+    /// Document URI for constructing Location responses
+    #[allow(dead_code)] // Preserved for future scan operations that build Location responses
+    pub uri: String,
+    /// Document text content for text-based searches
+    pub text: String,
+    /// Optional AST reference (Arc clone) for AST-based operations
+    pub ast: Option<Arc<crate::ast::Node>>,
+}
+
 // Note: FQN_RE regex moved to language/navigation.rs
 
 // Note: Error codes and cancelled_response imported from crate::lsp::protocol
@@ -211,6 +235,47 @@ impl LspServer {
         &self,
     ) -> std::sync::MutexGuard<'_, HashMap<String, DocumentState>> {
         self.documents.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Create a lightweight snapshot of all document URIs and text content
+    ///
+    /// This method minimizes lock hold time by copying only the URI and text
+    /// fields needed for scan-heavy operations (regex searches, text-based
+    /// fallbacks). The lock is released immediately after the snapshot is
+    /// created, allowing other operations to proceed while scanning.
+    ///
+    /// ## Performance Characteristics
+    /// - Lock hold time: O(n) where n is the number of documents (just cloning strings)
+    /// - Memory usage: ~1x total text size (only text is cloned, not AST/rope)
+    /// - Use case: Text-based reference searches, regex scans across workspace
+    #[inline]
+    #[allow(dead_code)]
+    pub(crate) fn documents_text_snapshot(&self) -> Vec<(String, String)> {
+        let docs = self.documents_guard();
+        docs.iter().map(|(k, v)| (k.clone(), v.text.clone())).collect()
+    }
+
+    /// Create a snapshot for scan operations that may need AST access
+    ///
+    /// This method provides a more comprehensive snapshot that includes the
+    /// AST reference (as Arc clone) in addition to URI and text. This allows
+    /// scan-heavy operations to work with both text and AST without holding
+    /// the documents lock during CPU-intensive work.
+    ///
+    /// ## Performance Characteristics
+    /// - Lock hold time: O(n) where n is the number of documents
+    /// - Memory usage: ~1x text size + Arc refs (AST is shared, not cloned)
+    /// - Use case: Code lens resolve, reference counting across workspace
+    #[inline]
+    pub(crate) fn documents_scan_snapshot(&self) -> Vec<DocumentScanView> {
+        let docs = self.documents_guard();
+        docs.iter()
+            .map(|(k, v)| DocumentScanView {
+                uri: k.clone(),
+                text: v.text.clone(),
+                ast: v.ast.clone(),
+            })
+            .collect()
     }
 
     /// Run the LSP server
