@@ -155,6 +155,14 @@ impl WorkspaceConfig {
     ///
     /// Returns empty slice if `use_system_inc` is false.
     /// Otherwise, fetches @INC from perl interpreter on first call.
+    ///
+    /// # Security Notes
+    ///
+    /// - **Opt-in only**: System @INC is disabled by default (`use_system_inc: false`)
+    /// - **Trusted source**: Paths come from user's configured `perl` executable/environment
+    /// - **Filtered**: Excludes `.` (current directory) to prevent injection attacks
+    /// - **Expectation**: Returned paths should be absolute; relative paths from exotic
+    ///   @INC configurations may behave unexpectedly
     pub fn get_system_inc(&mut self) -> &[PathBuf] {
         if !self.use_system_inc {
             return &[];

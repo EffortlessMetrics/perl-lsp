@@ -301,18 +301,21 @@ impl LspServer {
             if let Some(settings) = params.get("settings") {
                 eprintln!("Configuration changed, updating server settings");
 
-                // Update server config (inlay hints, test runner)
+                // Read perl settings once and update both configs
                 if let Some(perl) = settings.get("perl") {
-                    let mut config = self.config.lock().unwrap();
-                    config.update_from_value(perl);
-                    eprintln!("Updated server config from perl settings");
-                }
+                    // Update server config (inlay hints, test runner)
+                    {
+                        let mut config = self.config.lock().unwrap();
+                        config.update_from_value(perl);
+                        eprintln!("Updated server config from perl settings");
+                    }
 
-                // Update workspace config (include paths, @INC)
-                if let Some(perl) = settings.get("perl") {
-                    let mut workspace_config = self.workspace_config.lock().unwrap();
-                    workspace_config.update_from_value(perl);
-                    eprintln!("Updated workspace config from perl settings");
+                    // Update workspace config (include paths, @INC)
+                    {
+                        let mut workspace_config = self.workspace_config.lock().unwrap();
+                        workspace_config.update_from_value(perl);
+                        eprintln!("Updated workspace config from perl settings");
+                    }
                 }
             }
         }
