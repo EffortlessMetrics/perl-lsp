@@ -4,6 +4,8 @@
 
 use super::*;
 use crate::lsp::protocol::invalid_params;
+#[cfg(feature = "workspace")]
+use crate::workspace_index::IndexState;
 
 impl LspServer {
     /// Handle textDocument/didOpen notification
@@ -23,6 +25,12 @@ impl LspServer {
 
             eprintln!("Document opened: {}", uri);
 
+            // Notify coordinator of pending change (tracks parse storm)
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                coordinator.notify_change(uri);
+            }
+
             // Check cache first
             let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, text) {
                 eprintln!("Using cached AST for {}", uri);
@@ -40,6 +48,12 @@ impl LspServer {
                     Err(e) => (None, vec![e]),
                 }
             };
+
+            // Notify coordinator that parse is complete (may trigger recovery)
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                coordinator.notify_parse_complete(uri);
+            }
 
             // Convert AST to Arc for stable pointers
             let ast_arc = ast.map(Arc::new);
@@ -101,8 +115,23 @@ impl LspServer {
                 #[cfg(feature = "workspace")]
                 if let Some(ref workspace_index) = self.workspace_index {
                     if let Ok(url) = url::Url::parse(uri) {
-                        if let Err(e) = workspace_index.index_file(url, text.to_string()) {
-                            eprintln!("Failed to index file {}: {}", uri, e);
+                        match workspace_index.index_file(url, text.to_string()) {
+                            Ok(()) => {
+                                // Transition to Ready on first successful index if still Building
+                                if let Some(coordinator) = self.coordinator() {
+                                    if matches!(coordinator.state(), IndexState::Building { .. }) {
+                                        let symbols = workspace_index.all_symbols();
+                                        coordinator.transition_to_ready(1, symbols.len());
+                                        eprintln!(
+                                            "Index transitioned to Ready after first file (symbols: {})",
+                                            symbols.len()
+                                        );
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to index file {}: {}", uri, e);
+                            }
                         }
                     }
                 }
@@ -170,6 +199,12 @@ impl LspServer {
                 let text = doc.rope.to_string();
                 eprintln!("Document changed: {} (version {})", uri, version);
 
+                // Notify coordinator of pending change (tracks parse storm)
+                #[cfg(feature = "workspace")]
+                if let Some(coordinator) = self.coordinator() {
+                    coordinator.notify_change(uri);
+                }
+
                 // Check cache first
                 let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, &text) {
                     eprintln!("Using cached AST for {}", uri);
@@ -187,6 +222,12 @@ impl LspServer {
                         Err(e) => (None, vec![e]),
                     }
                 };
+
+                // Notify coordinator that parse is complete (may trigger recovery)
+                #[cfg(feature = "workspace")]
+                if let Some(coordinator) = self.coordinator() {
+                    coordinator.notify_parse_complete(uri);
+                }
 
                 // Convert AST to Arc for stable pointers
                 let ast_arc = ast.map(Arc::new);

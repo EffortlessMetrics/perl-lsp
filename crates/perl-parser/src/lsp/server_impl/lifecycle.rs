@@ -105,13 +105,17 @@ impl LspServer {
             } else if let Some(root_path) = params.get("rootPath").and_then(|p| p.as_str()) {
                 // Legacy fallback: rootPath is deprecated since LSP 3.0 but still sent by some clients
                 eprintln!("Initialized with legacy rootPath: {}", root_path);
-                // Convert rootPath to URI format for consistency
-                let root_uri = if root_path.starts_with('/') {
-                    format!("file://{}", root_path)
-                } else {
-                    // Windows path handling (C:\path -> file:///C:/path)
-                    format!("file:///{}", root_path.replace('\\', "/"))
-                };
+                // Convert rootPath to URI format using proper URL encoding
+                let path = std::path::Path::new(root_path);
+                let root_uri =
+                    url::Url::from_file_path(path).map(|u| u.to_string()).unwrap_or_else(|_| {
+                        // Fallback for edge cases (e.g., relative paths, UNC paths)
+                        if root_path.starts_with('/') {
+                            format!("file://{}", root_path)
+                        } else {
+                            format!("file:///{}", root_path.replace('\\', "/"))
+                        }
+                    });
                 let mut folders = self.workspace_folders.lock().unwrap();
                 folders.push(root_uri.clone());
                 self.set_root_uri(&root_uri);
@@ -293,13 +297,43 @@ impl LspServer {
     }
 
     /// Send a notification when the workspace index is ready
+    ///
+    /// Also transitions the index coordinator to Ready state if there are no
+    /// workspace folders to scan (i.e., ready for single-file operation).
     pub(super) fn send_index_ready_notification(&self) -> io::Result<()> {
         #[cfg(feature = "workspace")]
-        let has_symbols =
-            self.workspace_index.as_ref().map(|idx| idx.has_symbols()).unwrap_or(false);
+        let (has_symbols, file_count, symbol_count) = {
+            let has = self.workspace_index.as_ref().map(|idx| idx.has_symbols()).unwrap_or(false);
+            let files =
+                self.workspace_index.as_ref().map(|idx| idx.all_symbols().len()).unwrap_or(0);
+            (has, if has { 1 } else { 0 }, files)
+        };
 
         #[cfg(not(feature = "workspace"))]
-        let has_symbols = false;
+        let (has_symbols, _file_count, _symbol_count): (bool, usize, usize) = (false, 0, 0);
+
+        // Transition coordinator to Ready state
+        // This marks the index as available for full queries
+        #[cfg(feature = "workspace")]
+        if let Some(coordinator) = self.coordinator() {
+            // Check if workspace folders exist - if not, we're ready immediately
+            let folders = self.workspace_folders.lock().unwrap();
+            if folders.is_empty() || has_symbols {
+                coordinator.transition_to_ready(file_count, symbol_count);
+                eprintln!(
+                    "Index coordinator transitioned to Ready (files: {}, symbols: {})",
+                    file_count, symbol_count
+                );
+            } else {
+                // Workspace folders exist but no symbols indexed yet
+                // Stay in Building state - files will be indexed as they're opened
+                // or when file watcher events are received
+                eprintln!(
+                    "Index coordinator remaining in Building state ({} workspace folders, awaiting files)",
+                    folders.len()
+                );
+            }
+        }
 
         self.notify(
             "perl-lsp/index-ready",
