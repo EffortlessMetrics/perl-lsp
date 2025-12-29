@@ -290,11 +290,11 @@ impl<'a> Parser<'a> {
 
         // Zip 1:1 in order (collector preserves input order)
         for (decl, body) in pending.into_iter().zip(out.contents.into_iter()) {
-            let attached = self.try_attach_heredoc_at_node(root, decl.decl_span, &body);
+            let _attached = self.try_attach_heredoc_at_node(root, decl.decl_span, &body);
 
             // Defensive guardrail: warn if heredoc node wasn't found at expected span
             #[cfg(debug_assertions)]
-            if !attached {
+            if !_attached {
                 eprintln!(
                     "[WARNING] drain_pending_heredocs: Failed to attach heredoc content at span {}..{} - no matching Heredoc node found in AST",
                     decl.decl_span.start, decl.decl_span.end
