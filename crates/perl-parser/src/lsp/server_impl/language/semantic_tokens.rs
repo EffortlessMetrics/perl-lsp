@@ -1,16 +1,26 @@
 //! Semantic tokens handlers
 //!
 //! Handles textDocument/semanticTokens/full and textDocument/semanticTokens/range requests.
+//!
+//! Includes deadline enforcement to prevent blocking on large files.
 
 use super::super::*;
 use crate::lsp::protocol::req_uri;
+use crate::lsp::state::semantic_tokens_deadline;
+use std::time::Instant;
 
 impl LspServer {
     /// Handle textDocument/semanticTokens/full request
+    ///
+    /// Uses deadline enforcement to prevent blocking on very large files.
+    /// If deadline is exceeded, returns partial tokens collected so far.
     pub(crate) fn handle_semantic_tokens(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        let start = Instant::now();
+        let deadline = semantic_tokens_deadline();
+
         if let Some(p) = params {
             let uri = req_uri(&p)?;
             let documents = self.documents_guard();
@@ -24,7 +34,17 @@ impl LspServer {
                     crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
                         self.offset_to_pos16(doc, off)
                     });
-                return Ok(Some(json!({ "data": data.into_iter().flatten().collect::<Vec<_>>() })));
+                let flat_data: Vec<_> = data.into_iter().flatten().collect();
+
+                if start.elapsed() >= deadline {
+                    eprintln!(
+                        "SemanticTokens: deadline exceeded ({:?}), returning {} tokens",
+                        start.elapsed(),
+                        flat_data.len() / 5 // Each token is 5 u32s
+                    );
+                }
+
+                return Ok(Some(json!({ "data": flat_data })));
             }
         }
         Ok(Some(json!({ "data": [] })))

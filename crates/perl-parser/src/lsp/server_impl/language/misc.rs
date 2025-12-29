@@ -13,6 +13,8 @@
 
 use super::super::*;
 use crate::lsp::protocol::{invalid_params, req_position, req_uri};
+use crate::lsp::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
+use std::time::Instant;
 
 impl LspServer {
     /// Handle textDocument/inlayHint request
@@ -21,6 +23,8 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         use crate::lsp::protocol::req_range;
+        let cap = inlay_hints_cap();
+
         if let Some(p) = params {
             let uri = req_uri(&p)?;
 
@@ -50,6 +54,11 @@ impl LspServer {
                     &|off| self.offset_to_pos16(doc, off),
                     range,
                 ));
+                // Apply cap to inlay hints
+                if hints.len() > cap {
+                    eprintln!("InlayHints: capping from {} to {}", hints.len(), cap);
+                    hints.truncate(cap);
+                }
                 return Ok(Some(json!(hints)));
             }
         }
@@ -165,6 +174,8 @@ impl LspServer {
             return Err(crate::lsp_errors::method_not_advertised());
         }
 
+        let cap = code_lens_cap();
+
         if let Some(params) = params {
             let uri = req_uri(&params)?;
 
@@ -179,10 +190,21 @@ impl LspServer {
                         lenses.insert(0, shebang_lens);
                     }
 
+                    // Apply cap to code lenses
+                    if lenses.len() > cap {
+                        eprintln!("CodeLens: capping from {} to {}", lenses.len(), cap);
+                        lenses.truncate(cap);
+                    }
+
                     return Ok(Some(json!(lenses)));
                 } else {
                     // Text-based fallback when AST is not available
-                    let text_lenses = self.extract_text_based_code_lenses(&doc.text, uri);
+                    let mut text_lenses = self.extract_text_based_code_lenses(&doc.text, uri);
+                    // Apply cap to text-based lenses
+                    if text_lenses.len() > cap {
+                        eprintln!("CodeLens (text): capping from {} to {}", text_lenses.len(), cap);
+                        text_lenses.truncate(cap);
+                    }
                     return Ok(Some(json!(text_lenses)));
                 }
             }
@@ -196,10 +218,15 @@ impl LspServer {
     /// This implementation uses the snapshot pattern to minimize lock hold time.
     /// The documents lock is held only during the snapshot creation, then released
     /// before the CPU-intensive reference counting work begins.
+    ///
+    /// Includes deadline enforcement to prevent blocking on large workspaces.
     pub(crate) fn handle_code_lens_resolve(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        let start = Instant::now();
+        let deadline = code_lens_resolve_deadline();
+
         if let Some(params) = params {
             // Parse the code lens
             if let Ok(lens) =
@@ -227,7 +254,16 @@ impl LspServer {
 
                 // Now iterate without holding the lock
                 let mut total_references = 0;
-                for view in &snapshot {
+                for (scanned_docs, view) in snapshot.iter().enumerate() {
+                    // Check deadline periodically (every 10 documents)
+                    if scanned_docs % 10 == 0 && start.elapsed() >= deadline {
+                        eprintln!(
+                            "CodeLensResolve: deadline exceeded after {} docs, returning partial count {}",
+                            scanned_docs, total_references
+                        );
+                        break;
+                    }
+
                     if let Some(ref ast) = view.ast {
                         total_references += self.count_references(ast, symbol_name, symbol_kind);
                     } else {
