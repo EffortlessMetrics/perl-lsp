@@ -59,7 +59,7 @@ fn test_ga_lock_capabilities_snapshot() {
 
 /// Helper test to regenerate snapshots (run with --ignored)
 #[test]
-#[ignore]
+#[ignore = "INFRA: Manual snapshot regeneration helper - run with --ignored when needed"]
 fn regenerate_snapshots() {
     use std::fs;
     use std::path::Path;
