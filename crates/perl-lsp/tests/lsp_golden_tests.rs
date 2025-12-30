@@ -48,7 +48,9 @@ impl TestContext {
         // Try workspace target directory
         if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
             let crate_dir = std::path::Path::new(&manifest_dir);
-            if let Some(workspace_root) = crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists()) {
+            if let Some(workspace_root) =
+                crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists())
+            {
                 let debug_binary = workspace_root.join("target/debug/perl-lsp");
                 if debug_binary.exists() {
                     let mut cmd = std::process::Command::new(&debug_binary);
@@ -104,7 +106,7 @@ impl TestContext {
     }
 
     fn send_request(&mut self, method: &str, params: Option<Value>) -> Option<Value> {
-        use std::io::{BufRead, Write};
+        use std::io::{BufRead, Read, Write};
 
         static mut REQUEST_ID: i32 = 1;
         let id = unsafe {
@@ -126,21 +128,38 @@ impl TestContext {
         self.writer.write_all(message.as_bytes()).unwrap();
         self.writer.flush().unwrap();
 
-        // Read response
-        let mut headers = String::new();
+        // Read response using proper LSP framing:
+        // 1. Parse headers line-by-line until blank line
+        // 2. Extract Content-Length from headers
+        // 3. Read exactly Content-Length bytes for body
+        // 4. Do NOT call read_line after the blank line!
+        let mut content_length: Option<usize> = None;
+        let mut line = String::new();
+
         loop {
-            headers.clear();
-            self.reader.read_line(&mut headers).ok()?;
-            if headers == "\r\n" {
+            line.clear();
+            let bytes_read = self.reader.read_line(&mut line).ok()?;
+            if bytes_read == 0 {
+                return None; // EOF
+            }
+
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                // Blank line = end of headers
                 break;
+            }
+
+            // Parse Content-Length header (case-insensitive)
+            let lower = trimmed.to_ascii_lowercase();
+            if let Some(rest) = lower.strip_prefix("content-length") {
+                let value_part = rest.trim_start_matches(':').trim();
+                content_length = value_part.parse().ok();
             }
         }
 
-        self.reader.read_line(&mut headers).ok()?;
-        let content_length: usize = headers.split(':').nth(1)?.trim().parse().ok()?;
-
-        let mut buffer = vec![0; content_length];
-        use std::io::Read;
+        // Now read exactly Content-Length bytes
+        let len = content_length?;
+        let mut buffer = vec![0u8; len];
         self.reader.read_exact(&mut buffer).ok()?;
 
         let response: Value = serde_json::from_slice(&buffer).ok()?;

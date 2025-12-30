@@ -6,7 +6,9 @@
 #![allow(clippy::collapsible_if)]
 
 mod common;
-use common::{initialize_lsp, send_notification, send_request, shutdown_and_exit, start_lsp_server};
+use common::{
+    initialize_lsp, send_notification, send_request, shutdown_and_exit, start_lsp_server,
+};
 use serde_json::json;
 
 /// Verify all responses have proper JSON-RPC structure
@@ -121,7 +123,7 @@ fn test_id_matching_invariants() {
 
 /// Verify diagnostics always include version
 #[test]
-#[ignore] // BUG: Diagnostics are not cleared after fixing error - see test_diagnostics_version_invariant assertion failure
+#[ignore = "BUG: Diagnostics are not cleared after fixing error - needs investigation"]
 fn test_diagnostics_version_invariant() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

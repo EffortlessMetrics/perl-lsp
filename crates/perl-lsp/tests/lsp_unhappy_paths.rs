@@ -290,7 +290,7 @@ fn test_out_of_bounds_position() {
 }
 
 #[test]
-#[ignore = "BROKENPIPE: Flaky concurrent edit handling in CI (race condition during rapid updates)"]
+#[ignore = "STRESS: Rapid concurrent edits test - requires proper shutdown handling for reliability"]
 fn test_concurrent_document_edits() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -354,7 +354,7 @@ fn test_concurrent_document_edits() {
 }
 
 #[test]
-#[ignore = "BROKENPIPE: Flaky version mismatch handling in CI (timing-dependent)"]
+#[ignore = "STRESS: Version mismatch edge case test - needs shutdown handling"]
 fn test_version_mismatch() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -416,7 +416,7 @@ fn test_version_mismatch() {
 }
 
 #[test]
-#[ignore = "BROKENPIPE: Flaky regex error handling in CI during LSP initialization"]
+#[ignore = "STRESS: Invalid regex edge case - needs shutdown handling for CI reliability"]
 fn test_invalid_regex_pattern() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -466,7 +466,7 @@ fn test_invalid_regex_pattern() {
 }
 
 #[test]
-#[ignore = "BROKENPIPE: Flaky circular dependency handling in CI (timing-dependent)"]
+#[ignore = "STRESS: Circular dependency stress test - needs proper shutdown"]
 fn test_circular_module_dependency() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -953,7 +953,7 @@ fn test_invalid_capability_request() {
 }
 
 #[test]
-#[ignore = "BROKENPIPE: Flaky Unicode edge case handling in CI (environmental/timing)"]
+#[ignore = "STRESS: Unicode edge case stress test - needs proper shutdown"]
 fn test_unicode_unhappy_paths() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

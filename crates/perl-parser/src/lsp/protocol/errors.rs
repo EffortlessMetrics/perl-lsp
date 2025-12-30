@@ -29,9 +29,11 @@ pub const INTERNAL_ERROR: i32 = -32603;
 // ============================================================================
 
 /// Server error range start (reserved for implementation-defined server-errors)
+/// Per JSON-RPC 2.0 spec, server errors are between -32099 and -32000 inclusive.
 pub const SERVER_ERROR_START: i32 = -32099;
 
-/// Server error range end
+/// Server error range end (inclusive)
+/// Per JSON-RPC 2.0 spec, server errors are between -32099 and -32000 inclusive.
 pub const SERVER_ERROR_END: i32 = -32000;
 
 /// Unknown error code (for internal use)
@@ -198,22 +200,14 @@ pub fn internal_error(message: &str) -> JsonRpcError {
 /// Used when the connection to the client has been terminated (e.g., BrokenPipe).
 /// This is a transport-layer error, distinct from protocol-level InvalidRequest.
 pub fn connection_closed_error() -> JsonRpcError {
-    JsonRpcError {
-        code: CONNECTION_CLOSED,
-        message: "Connection closed".to_string(),
-        data: None,
-    }
+    JsonRpcError { code: CONNECTION_CLOSED, message: "Connection closed".to_string(), data: None }
 }
 
 /// Create a transport error with custom message
 ///
 /// Used for general I/O/transport errors that aren't specifically connection closures.
 pub fn transport_error(message: &str) -> JsonRpcError {
-    JsonRpcError {
-        code: TRANSPORT_ERROR,
-        message: message.to_string(),
-        data: None,
-    }
+    JsonRpcError { code: TRANSPORT_ERROR, message: message.to_string(), data: None }
 }
 
 // ============================================================================

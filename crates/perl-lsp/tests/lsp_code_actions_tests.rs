@@ -2,7 +2,9 @@
 use serde_json::json;
 
 mod common;
-use common::{initialize_lsp, send_notification, send_request, shutdown_and_exit, start_lsp_server};
+use common::{
+    initialize_lsp, send_notification, send_request, shutdown_and_exit, start_lsp_server,
+};
 
 /// Test extract variable refactoring
 #[test]
