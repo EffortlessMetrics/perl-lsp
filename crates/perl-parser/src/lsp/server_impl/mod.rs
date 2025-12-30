@@ -48,6 +48,15 @@ use crate::{
         normalize_package_separator,
     },
     lsp::transport::{log_response, read_message, write_message},
+    // Import text processing helpers
+    lsp::utils::{
+        byte_to_utf16_col, byte_to_line_col, get_text_around_offset, extract_module_reference,
+        position_to_offset, offset_to_position
+    },
+    // Import fallback implementations
+    lsp::fallback::text::{
+        extract_text_based_code_lenses, extract_text_based_symbols
+    },
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
     positions::LineStartsCache,
@@ -73,7 +82,7 @@ use url::Url;
 use crate::uri::parse_uri;
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{
-    LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex, uri_to_fs_path,
+    LspWorkspaceSymbol, WorkspaceIndex, uri_to_fs_path,
 };
 
 /// Lightweight view of a document for scan-heavy operations
@@ -451,100 +460,16 @@ impl LspServer {
     /// Convert offset to line/column position (UTF-16 aware, CRLF safe)
     #[allow(deprecated)]
     pub fn offset_to_position(&self, content: &str, offset: usize) -> (u32, u32) {
-        let mut line = 0u32;
-        let mut col_utf16 = 0u32;
-        let mut byte_pos = 0usize;
-        let mut chars = content.chars().peekable();
-
-        while let Some(ch) = chars.next() {
-            if byte_pos >= offset {
-                break;
-            }
-
-            match ch {
-                '\r' => {
-                    // Peek ahead to see if this is CRLF
-                    if chars.peek() == Some(&'\n') {
-                        // This is CRLF - treat as single line ending
-                        if byte_pos + 1 >= offset {
-                            // Offset is at the \r - treat as end of current line
-                            break;
-                        }
-                        // Skip both \r and \n
-                        chars.next(); // consume the \n
-                        line += 1;
-                        col_utf16 = 0;
-                        byte_pos += 2; // \r + \n
-                    } else {
-                        // Solo \r - treat as line ending
-                        line += 1;
-                        col_utf16 = 0;
-                        byte_pos += ch.len_utf8();
-                    }
-                }
-                '\n' => {
-                    // LF (could be standalone or part of CRLF, but CRLF is handled above)
-                    line += 1;
-                    col_utf16 = 0;
-                    byte_pos += ch.len_utf8();
-                }
-                _ => {
-                    // Regular character
-                    col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
-                    byte_pos += ch.len_utf8();
-                }
-            }
-        }
-
-        (line, col_utf16)
+        // Implementation moved to lsp/utils.rs
+        let p = offset_to_position(content, offset);
+        (p.line, p.character)
     }
 
     /// Convert line/column position to offset (UTF-16 aware, CRLF safe)
     #[allow(deprecated)]
     pub fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
-        let mut cur_line = 0u32;
-        let mut col_utf16 = 0u32;
-        let mut prev_was_cr = false;
-
-        for (byte_idx, ch) in content.char_indices() {
-            // Check if we've reached the target position
-            if cur_line == line && col_utf16 == character {
-                return byte_idx;
-            }
-
-            // Handle line endings and character counting
-            match ch {
-                '\n' => {
-                    if !prev_was_cr {
-                        // Standalone \n
-                        cur_line += 1;
-                        col_utf16 = 0;
-                    }
-                    // If prev_was_cr, this \n is part of CRLF and we already incremented the line
-                }
-                '\r' => {
-                    // Always increment line on \r (whether solo or part of CRLF)
-                    cur_line += 1;
-                    col_utf16 = 0;
-                }
-                _ => {
-                    // Regular character - only count UTF-16 units on target line
-                    if cur_line == line {
-                        col_utf16 += if ch.len_utf16() == 2 { 2 } else { 1 };
-                    }
-                }
-            }
-
-            prev_was_cr = ch == '\r';
-        }
-
-        // Handle end of file position
-        if cur_line == line && col_utf16 == character {
-            return content.len();
-        }
-
-        // Clamp to end of buffer
-        content.len()
+        // Implementation moved to lsp/utils.rs
+        position_to_offset(content, line, character).unwrap_or_else(|| content.len())
     }
     // === END_TEST_ONLY_POSITION_HELPERS ===
 
@@ -556,7 +481,7 @@ impl LspServer {
     }
 
     /// Normalize URI key for consistent document lookup
-    fn normalize_uri_key(&self, raw: &str) -> String {
+    pub(crate) fn normalize_uri_key(&self, raw: &str) -> String {
         // Parse to Url to canonicalize, then stringify the way we store it.
         // If parsing fails, return the raw key so we at least try the given string.
         if let Ok(u) = url::Url::parse(raw) {
@@ -585,7 +510,7 @@ impl LspServer {
     }
 
     /// Get document by URI with normalization fallback
-    fn get_document<'a>(
+    pub(crate) fn get_document<'a>(
         &self,
         documents: &'a std::sync::MutexGuard<'_, HashMap<String, DocumentState>>,
         uri: &str,
@@ -595,7 +520,7 @@ impl LspServer {
     }
 
     /// Get mutable document by URI with normalization fallback
-    fn get_document_mut<'a>(
+    pub(crate) fn get_document_mut<'a>(
         &self,
         documents: &'a mut std::sync::MutexGuard<'_, HashMap<String, DocumentState>>,
         uri: &str,
@@ -644,72 +569,9 @@ impl LspServer {
     fn extract_text_based_code_lenses(
         &self,
         text: &str,
-        _uri: &str,
+        uri: &str,
     ) -> Vec<crate::code_lens_provider::CodeLens> {
-        let mut lenses = Vec::new();
-
-        // Use simple regex patterns to find common Perl constructs that should have code lenses
-        use regex::Regex;
-
-        // Find package declarations
-        if let Ok(pkg_regex) = Regex::new(r"^\s*package\s+([\w:]+)") {
-            for (line_num, line) in text.lines().enumerate() {
-                if let Some(captures) = pkg_regex.captures(line) {
-                    if let Some(pkg_name) = captures.get(1) {
-                        let name = pkg_name.as_str().to_string();
-
-                        lenses.push(crate::code_lens_provider::CodeLens {
-                            range: crate::code_lens_provider::Range {
-                                start: crate::code_lens_provider::Position {
-                                    line: line_num as u32,
-                                    character: byte_to_utf16_col(line, pkg_name.start()) as u32,
-                                },
-                                end: crate::code_lens_provider::Position {
-                                    line: line_num as u32,
-                                    character: byte_to_utf16_col(line, pkg_name.end()) as u32,
-                                },
-                            },
-                            command: None, // Will be resolved later
-                            data: Some(json!({
-                                "name": name,
-                                "kind": "package"
-                            })),
-                        });
-                    }
-                }
-            }
-        }
-
-        // Find subroutine declarations
-        if let Ok(sub_regex) = Regex::new(r"^\s*sub\s+(\w+)") {
-            for (line_num, line) in text.lines().enumerate() {
-                if let Some(captures) = sub_regex.captures(line) {
-                    if let Some(sub_name) = captures.get(1) {
-                        let name = sub_name.as_str().to_string();
-
-                        lenses.push(crate::code_lens_provider::CodeLens {
-                            range: crate::code_lens_provider::Range {
-                                start: crate::code_lens_provider::Position {
-                                    line: line_num as u32,
-                                    character: byte_to_utf16_col(line, sub_name.start()) as u32,
-                                },
-                                end: crate::code_lens_provider::Position {
-                                    line: line_num as u32,
-                                    character: byte_to_utf16_col(line, sub_name.end()) as u32,
-                                },
-                            },
-                            command: None, // Will be resolved later
-                            data: Some(json!({
-                                "name": name,
-                                "kind": "subroutine"
-                            })),
-                        });
-                    }
-                }
-            }
-        }
-
-        lenses
+        extract_text_based_code_lenses(text, uri)
     }
 
     /// Extract symbols from text when AST parsing fails
@@ -719,79 +581,7 @@ impl LspServer {
         uri: &str,
         query: &str,
     ) -> Vec<LspWorkspaceSymbol> {
-        let mut symbols = Vec::new();
-        let query_lower = query.to_lowercase();
-
-        // Use simple regex patterns to find common Perl symbols
-        use regex::Regex;
-
-        // Find subroutine definitions
-        if let Ok(sub_regex) = Regex::new(r"^\s*sub\s+(\w+)") {
-            for (line_num, line) in text.lines().enumerate() {
-                if let Some(captures) = sub_regex.captures(line) {
-                    if let Some(sub_name) = captures.get(1) {
-                        let name = sub_name.as_str().to_string();
-                        if name.to_lowercase().contains(&query_lower) {
-                            symbols.push(LspWorkspaceSymbol {
-                                name,
-                                kind: 12, // Function
-                                location: LspLocation {
-                                    uri: uri.to_string(),
-                                    range: LspRange {
-                                        start: LspPosition {
-                                            line: line_num as u32,
-                                            character: byte_to_utf16_col(line, sub_name.start())
-                                                as u32,
-                                        },
-                                        end: LspPosition {
-                                            line: line_num as u32,
-                                            character: byte_to_utf16_col(line, sub_name.end())
-                                                as u32,
-                                        },
-                                    },
-                                },
-                                container_name: None,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        // Find package declarations
-        if let Ok(pkg_regex) = Regex::new(r"^\s*package\s+([\w:]+)") {
-            for (line_num, line) in text.lines().enumerate() {
-                if let Some(captures) = pkg_regex.captures(line) {
-                    if let Some(pkg_name) = captures.get(1) {
-                        let name = pkg_name.as_str().to_string();
-                        if name.to_lowercase().contains(&query_lower) {
-                            symbols.push(LspWorkspaceSymbol {
-                                name,
-                                kind: 4, // Namespace
-                                location: LspLocation {
-                                    uri: uri.to_string(),
-                                    range: LspRange {
-                                        start: LspPosition {
-                                            line: line_num as u32,
-                                            character: byte_to_utf16_col(line, pkg_name.start())
-                                                as u32,
-                                        },
-                                        end: LspPosition {
-                                            line: line_num as u32,
-                                            character: byte_to_utf16_col(line, pkg_name.end())
-                                                as u32,
-                                        },
-                                    },
-                                },
-                                container_name: None,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        symbols
+        extract_text_based_symbols(text, uri, query)
     }
 
     /// Extract workspace symbols from a document's AST
@@ -834,8 +624,8 @@ impl LspServer {
                 // Add the subroutine as a symbol if it has a name
                 if let Some(sub_name) = name {
                     let (start_line, start_char) =
-                        self.byte_to_line_col(source, node.location.start);
-                    let (end_line, end_char) = self.byte_to_line_col(source, node.location.end);
+                        byte_to_line_col(source, node.location.start);
+                    let (end_line, end_char) = byte_to_line_col(source, node.location.end);
 
                     symbols.push(LspWorkspaceSymbol {
                         name: sub_name.clone(),
@@ -870,8 +660,8 @@ impl LspServer {
 
             NodeKind::Package { name, block, .. } => {
                 // Add the package as a symbol
-                let (start_line, start_char) = self.byte_to_line_col(source, node.location.start);
-                let (end_line, end_char) = self.byte_to_line_col(source, node.location.end);
+                let (start_line, start_char) = byte_to_line_col(source, node.location.start);
+                let (end_line, end_char) = byte_to_line_col(source, node.location.end);
 
                 symbols.push(LspWorkspaceSymbol {
                     name: name.clone(),
@@ -942,8 +732,8 @@ impl LspServer {
                 if let Some(sub_name) = name {
                     if sub_name.to_lowercase().contains(&query_lower) {
                         let (start_line, start_char) =
-                            self.byte_to_line_col(source, node.location.start);
-                        let (end_line, end_char) = self.byte_to_line_col(source, node.location.end);
+                            byte_to_line_col(source, node.location.start);
+                        let (end_line, end_char) = byte_to_line_col(source, node.location.end);
 
                         symbols.push(json!({
                             "name": sub_name,
@@ -965,8 +755,8 @@ impl LspServer {
             NodeKind::Package { name, block, .. } => {
                 if name.to_lowercase().contains(&query_lower) {
                     let (start_line, start_char) =
-                        self.byte_to_line_col(source, node.location.start);
-                    let (end_line, end_char) = self.byte_to_line_col(source, node.location.end);
+                        byte_to_line_col(source, node.location.start);
+                    let (end_line, end_char) = byte_to_line_col(source, node.location.end);
 
                     symbols.push(json!({
                         "name": name,
@@ -1000,26 +790,6 @@ impl LspServer {
 
             _ => {}
         }
-    }
-
-    /// Convert byte offset to line and column
-    fn byte_to_line_col(&self, source: &str, offset: usize) -> (u32, u32) {
-        let mut line = 0;
-        let mut col = 0;
-
-        for (i, ch) in source.char_indices() {
-            if i >= offset {
-                break;
-            }
-            if ch == '\n' {
-                line += 1;
-                col = 0;
-            } else {
-                col += 1;
-            }
-        }
-
-        (line, col)
     }
 
     /// Count references to a symbol in an AST
@@ -1186,277 +956,6 @@ impl LspServer {
     // Note: handle_prepare_call_hierarchy, handle_incoming_calls, handle_outgoing_calls,
     // json_to_call_hierarchy_item are implemented in language/hierarchy.rs
 
-    /// Find matching closing parenthesis
-    fn find_matching_paren(&self, s: &str, open_at: usize) -> Option<usize> {
-        // s[open_at] must be '('; walk forwards tracking (), [], {} and quotes.
-        let mut i = open_at;
-        let mut depth_par = 0i32;
-        let mut _depth_brk = 0i32;
-        let mut _depth_brc = 0i32;
-        let mut in_s = false;
-        let mut in_d = false;
-        while i < s.len() {
-            let b = s.as_bytes()[i];
-            let prev_backslash = i > 0 && s.as_bytes()[i - 1] == b'\\';
-            if in_s {
-                if b == b'\'' && !prev_backslash {
-                    in_s = false;
-                }
-            } else if in_d {
-                if b == b'"' && !prev_backslash {
-                    in_d = false;
-                }
-            } else {
-                match b {
-                    b'\'' => in_s = true,
-                    b'"' => in_d = true,
-                    b'(' => depth_par += 1,
-                    b')' => {
-                        depth_par -= 1;
-                        if depth_par == 0 {
-                            return Some(i);
-                        }
-                    }
-                    b'[' => _depth_brk += 1,
-                    b']' => _depth_brk -= 1,
-                    b'{' => _depth_brc += 1,
-                    b'}' => _depth_brc -= 1,
-                    _ => {}
-                }
-            }
-            i += 1;
-        }
-        None
-    }
-
-    /// Scan forward until end of statement (top-level `;`) honoring quotes/brackets.
-    fn slice_until_stmt_end(&self, src: &str, from: usize) -> usize {
-        let mut i = from;
-        let mut depth_par = 0i32;
-        let mut depth_brk = 0i32;
-        let mut depth_brc = 0i32;
-        let mut in_s = false;
-        let mut in_d = false;
-        while i < src.len() {
-            let b = src.as_bytes()[i];
-            let esc = i > 0 && src.as_bytes()[i - 1] == b'\\';
-            if in_s {
-                if b == b'\'' && !esc {
-                    in_s = false;
-                }
-            } else if in_d {
-                if b == b'"' && !esc {
-                    in_d = false;
-                }
-            } else {
-                match b {
-                    b'\'' => in_s = true,
-                    b'"' => in_d = true,
-                    b'(' => depth_par += 1,
-                    b')' => depth_par -= 1,
-                    b'[' => depth_brk += 1,
-                    b']' => depth_brk -= 1,
-                    b'{' => depth_brc += 1,
-                    b'}' => depth_brc -= 1,
-                    b';' if depth_par == 0 && depth_brk == 0 && depth_brc == 0 => return i,
-                    _ => {}
-                }
-            }
-            i += 1;
-        }
-        src.len()
-    }
-
-    /// Top-level argument starts for a comma-separated list without surrounding parens.
-    fn arg_starts_top_level(&self, src: &str) -> Vec<usize> {
-        let mut v = Vec::new();
-        let mut i = 0usize;
-        while i < src.len() && src.as_bytes()[i].is_ascii_whitespace() {
-            i += 1;
-        }
-        if i < src.len() {
-            v.push(i);
-        }
-        let mut j = i;
-        let mut depth_par = 0i32;
-        let mut depth_brk = 0i32;
-        let mut depth_brc = 0i32;
-        let mut in_s = false;
-        let mut in_d = false;
-        while j < src.len() {
-            let b = src.as_bytes()[j];
-            let esc = j > 0 && src.as_bytes()[j - 1] == b'\\';
-            if in_s {
-                if b == b'\'' && !esc {
-                    in_s = false;
-                }
-            } else if in_d {
-                if b == b'"' && !esc {
-                    in_d = false;
-                }
-            } else {
-                match b {
-                    b'\'' => in_s = true,
-                    b'"' => in_d = true,
-                    b'(' => depth_par += 1,
-                    b')' => depth_par -= 1,
-                    b'[' => depth_brk += 1,
-                    b']' => depth_brk -= 1,
-                    b'{' => depth_brc += 1,
-                    b'}' => depth_brc -= 1,
-                    b',' if depth_par == 0 && depth_brk == 0 && depth_brc == 0 => {
-                        let mut k = j + 1;
-                        while k < src.len() && src.as_bytes()[k].is_ascii_whitespace() {
-                            k += 1;
-                        }
-                        if k < src.len() {
-                            v.push(k);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            j += 1;
-        }
-        v
-    }
-
-    /// Move the anchor inside an argument to the "interesting" token:
-    ///  - skip leading whitespace
-    ///  - for `my|our` args, jump to the first sigiled var (`$foo`/`@a`/`%h`)
-    ///  - for bareword filehandles (e.g., `FH`), jump to the bareword
-    fn anchor_arg_start(&self, body: &str, rel: usize) -> usize {
-        let s = &body[rel..];
-        let mut i = 0usize;
-        while i < s.len() && s.as_bytes()[i].is_ascii_whitespace() {
-            i += 1;
-        }
-        // my/our <sigiled-var>
-        if s[i..].starts_with("my ") || s[i..].starts_with("our ") {
-            let mut j = i + 3; // skip "my " / "our "
-            while j < s.len() && s.as_bytes()[j].is_ascii_whitespace() {
-                j += 1;
-            }
-            return rel + j;
-        }
-        // If next is sigiled variable, keep; else keep bareword start
-        rel + i
-    }
-
-    /// If argument starts at `my $fh`, retarget anchor to the `$fh` (or bareword FH).
-    fn smart_arg_anchor(&self, body: &str, rel: usize) -> usize {
-        let s = &body[rel..];
-        let mut i = 0usize;
-        while i < s.len() && s.as_bytes()[i].is_ascii_whitespace() {
-            i += 1;
-        }
-
-        // handle my/our
-        for kw in ["my ", "our "] {
-            if s[i..].starts_with(kw) {
-                i += kw.len();
-                while i < s.len() && s.as_bytes()[i].is_ascii_whitespace() {
-                    i += 1;
-                }
-                break;
-            }
-        }
-
-        // valid anchors: sigils, barewords, deref braces and array/hash derefs
-        // $, @, %, &, { (for @{ ... }, %{ ... }), [ (rare, but safe), or A-Za-z_ bareword
-        let b = s.as_bytes().get(i).copied().unwrap_or(b' ');
-        if matches!(b, b'$' | b'@' | b'%' | b'&' | b'{' | b'[')
-            || b.is_ascii_alphabetic()
-            || b == b'_'
-        {
-            return rel + i;
-        }
-        rel + i
-    }
-
-    /// Find argument starts in function call body
-    fn arg_starts_in_call_body(&self, body: &str) -> Vec<usize> {
-        // Return byte offsets (within body) where each top-level argument starts.
-        let mut starts = Vec::new();
-        let mut i = 0usize;
-        let mut depth_par = 0i32;
-        let mut _depth_brk = 0i32;
-        let mut _depth_brc = 0i32;
-        let mut in_s = false;
-        let mut in_d = false;
-        let mut _at_token = false;
-        // First arg always starts at the first non-space
-        while i < body.len() && body.as_bytes()[i].is_ascii_whitespace() {
-            i += 1;
-        }
-        if i < body.len() {
-            starts.push(i);
-            _at_token = true;
-        }
-        let mut j = i;
-        while j < body.len() {
-            let b = body.as_bytes()[j];
-            let prev_backslash = j > 0 && body.as_bytes()[j - 1] == b'\\';
-            if in_s {
-                if b == b'\'' && !prev_backslash {
-                    in_s = false;
-                }
-            } else if in_d {
-                if b == b'"' && !prev_backslash {
-                    in_d = false;
-                }
-            } else {
-                match b {
-                    b'\'' => in_s = true,
-                    b'"' => in_d = true,
-                    b'(' => depth_par += 1,
-                    b')' => depth_par -= 1,
-                    b'[' => _depth_brk += 1,
-                    b']' => _depth_brk -= 1,
-                    b'{' => _depth_brc += 1,
-                    b'}' => _depth_brc -= 1,
-                    b',' if depth_par == 0 && _depth_brk == 0 && _depth_brc == 0 => {
-                        // next arg start = first non-space after comma
-                        let mut k = j + 1;
-                        while k < body.len() && body.as_bytes()[k].is_ascii_whitespace() {
-                            k += 1;
-                        }
-                        if k < body.len() {
-                            starts.push(k);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            j += 1;
-        }
-        starts
-    }
-
-    /// Convert position to byte offset
-    fn pos_to_offset_bytes(&self, text: &str, line: u32, ch: u32) -> usize {
-        let mut byte = 0usize;
-        for (cur, l) in text.split_inclusive('\n').enumerate() {
-            if cur as u32 == line {
-                return byte + (ch as usize).min(l.len());
-            }
-            byte += l.len();
-        }
-        text.len()
-    }
-
-    /// Slice text within range
-    fn slice_in_range<'a>(
-        &self,
-        text: &'a str,
-        start: (u32, u32),
-        end: (u32, u32),
-    ) -> (usize, usize, &'a str) {
-        let s = self.pos_to_offset_bytes(text, start.0, start.1);
-        let e = self.pos_to_offset_bytes(text, end.0, end.1);
-        (s, e, &text[s.min(text.len())..e.min(text.len())])
-    }
-
     // Note: handle_inlay_hint, handle_test_discovery, handle_execute_command, run_test,
     // run_test_file, run_perl_critic are implemented in language/misc.rs
 
@@ -1491,299 +990,44 @@ impl LspServer {
     }
 
     // Note: handle_document_link is implemented in language/misc.rs
-}
 
-impl LspServer {
     /// Get text around an offset position
-    fn get_text_around_offset(&self, content: &str, offset: usize, radius: usize) -> String {
-        let start = offset.saturating_sub(radius);
-        let end = (offset + radius).min(content.len());
-        content[start..end].to_string()
+    pub(crate) fn get_text_around_offset(
+        &self,
+        content: &str,
+        offset: usize,
+        radius: usize,
+    ) -> String {
+        get_text_around_offset(content, offset, radius)
     }
 
     /// Extract module reference from text (e.g., from "use Module::Name" or "require Module::Name")
-    fn extract_module_reference(&self, text: &str, cursor_pos: usize) -> Option<String> {
-        // Look for patterns like "use Module::Name" or "require Module::Name"
-        let patterns = [
-            r"use\s+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)",
-            r"require\s+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)",
-        ];
-
-        for pattern in patterns {
-            let re = regex::Regex::new(pattern).ok()?;
-            for cap in re.captures_iter(text) {
-                if let Some(module_match) = cap.get(1) {
-                    let match_start = module_match.start();
-                    let match_end = module_match.end();
-
-                    // Check if cursor is within the module name
-                    if cursor_pos >= match_start && cursor_pos <= match_end {
-                        return Some(module_match.as_str().to_string());
-                    }
-                }
-            }
-        }
-
-        None
+    pub(crate) fn extract_module_reference(&self, text: &str, cursor_pos: usize) -> Option<String> {
+        extract_module_reference(text, cursor_pos)
     }
 
     /// Get buffer text for a URI
-    fn buffer_text(&self, uri: &str) -> Option<String> {
+    pub(crate) fn buffer_text(&self, uri: &str) -> Option<String> {
         let docs = self.documents.lock().unwrap();
         docs.get(uri).map(|d| d.text.clone())
     }
 
     /// Iterate over all open buffers (for reference search)
-    fn iter_open_buffers(&self) -> Vec<(String, String)> {
+    pub(crate) fn iter_open_buffers(&self) -> Vec<(String, String)> {
         let docs = self.documents.lock().unwrap();
         docs.iter().map(|(uri, doc)| (uri.clone(), doc.text.clone())).collect()
-    }
-
-    /// Non-blocking definition handler with fallback
-    fn on_definition(&self, params: serde_json::Value) -> Result<serde_json::Value, JsonRpcError> {
-        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
-        let line = params.pointer("/position/line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let ch =
-            params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-
-        let text = self.buffer_text(uri).unwrap_or_default();
-        let module = token_under_cursor(&text, line, ch).filter(|s| s.contains("::"));
-
-        if let Some(m) = module {
-            if let Some(path) = self.resolve_module_path(&m) {
-                let loc = location_from_path(&path);
-                return Ok(serde_json::json!([loc]));
-            }
-        }
-
-        // Fallback: try existing analysis
-        // For now, just return empty array
-        Ok(serde_json::json!([]))
-    }
-
-    /// Non-blocking references handler with fallback
-    fn on_references(&self, params: serde_json::Value) -> Result<serde_json::Value, JsonRpcError> {
-        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
-        let line = params.pointer("/position/line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let ch =
-            params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-
-        let text = self.buffer_text(uri).unwrap_or_default();
-        let needle = token_under_cursor(&text, line, ch).unwrap_or_default();
-        if needle.is_empty() {
-            return Ok(serde_json::json!([]));
-        }
-
-        // Fallback: search all open docs with word boundary checking
-        let mut out = Vec::new();
-        for (doc_uri, doc_text) in self.iter_open_buffers() {
-            for (ln, l) in doc_text.lines().enumerate() {
-                let line_bytes = l.as_bytes();
-                let mut start = 0usize;
-                while let Some(idx) = l[start..].find(&needle) {
-                    let col = start + idx;
-                    // Only include if it's a word boundary match
-                    if is_word_boundary(line_bytes, col, needle.len()) {
-                        // Convert byte position to UTF-16 for LSP
-                        let col_utf16 = byte_to_utf16_col(l, col);
-                        let end_utf16 = byte_to_utf16_col(l, col + needle.len());
-                        out.push(serde_json::json!({
-                            "uri": doc_uri,
-                            "range": {
-                                "start": {"line": ln as u32, "character": col_utf16 as u32},
-                                "end":   {"line": ln as u32, "character": end_utf16 as u32}
-                            }
-                        }));
-                    }
-                    start = col + needle.len();
-                }
-            }
-        }
-
-        // Sort for deterministic output and deduplicate
-        out.sort_by_key(|loc| {
-            (
-                loc["uri"].as_str().unwrap_or("").to_string(),
-                loc["range"]["start"]["line"].as_u64().unwrap_or(0),
-                loc["range"]["start"]["character"].as_u64().unwrap_or(0),
-            )
-        });
-        out.dedup();
-
-        Ok(serde_json::Value::Array(out))
-    }
-
-    /// Non-blocking folding range handler with text-based fallback
-    fn on_folding_range(
-        &self,
-        params: serde_json::Value,
-    ) -> Result<serde_json::Value, JsonRpcError> {
-        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
-        let text = self.buffer_text(uri).unwrap_or_default();
-        let ranges = folding_ranges_from_text(&text, 128);
-        Ok(serde_json::to_value(ranges).unwrap_or(serde_json::json!([])))
     }
 }
 
 // Helper functions for non-blocking handlers
 
-/// Convert UTF-16 column position to byte offset
-fn byte_offset_utf16(line_text: &str, col_utf16: usize) -> usize {
-    let mut units = 0;
-    for (i, ch) in line_text.char_indices() {
-        if units == col_utf16 {
-            return i;
-        }
-        // UTF-16 encoding: chars >= U+10000 use 2 units (surrogate pairs)
-        let add = if ch as u32 >= 0x10000 { 2 } else { 1 };
-        units += add;
-    }
-    line_text.len()
-}
-
-/// Extract token at cursor position (UTF-16 aware)
-fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<String> {
-    let l = text.lines().nth(line)?;
-    let byte_pos = byte_offset_utf16(l, col_utf16);
-    let bytes = l.as_bytes();
-
-    if byte_pos >= bytes.len() {
-        return None;
-    }
-
-    // Expand to a "word" containing :: and \w
-    // Also include sigils if we're on or after one
-    let mut s = byte_pos;
-    let mut e = byte_pos;
-
-    // Expand left - if we hit a sigil, include it
-    while s > 0 && is_modchar(bytes[s - 1]) {
-        s -= 1;
-    }
-    if s > 0
-        && (bytes[s - 1] == b'$'
-            || bytes[s - 1] == b'@'
-            || bytes[s - 1] == b'%'
-            || bytes[s - 1] == b'&'
-            || bytes[s - 1] == b'*')
-    {
-        s -= 1;
-    }
-
-    // Expand right
-    while e < bytes.len() && is_modchar(bytes[e]) {
-        e += 1;
-    }
-
-    Some(l[s..e].to_string())
-}
-
-fn is_modchar(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b':' || b == b'_'
-}
-
-/// Check if position is at word boundary (for accurate reference matching)
-fn is_word_boundary(text: &[u8], pos: usize, word_len: usize) -> bool {
-    // For Perl variables with sigils, we need special handling
-    // If the match starts with a sigil ($, @, %), check the character after the variable name
-    let _sigil_offset =
-        if pos < text.len() && (text[pos] == b'$' || text[pos] == b'@' || text[pos] == b'%') {
-            1
-        } else {
-            0
-        };
-
-    // Check left boundary (before the sigil if present)
-    if pos > 0 && is_modchar(text[pos - 1]) {
-        return false;
-    }
-
-    // Check right boundary (after the identifier part)
-    let end_pos = pos + word_len;
-    if end_pos < text.len() && is_modchar(text[end_pos]) {
-        return false;
-    }
-
-    true
-}
-
-fn location_from_path(p: &Path) -> serde_json::Value {
+pub(crate) fn location_from_path(p: &Path) -> serde_json::Value {
     let uri = Url::from_file_path(p).unwrap().to_string();
     // Jump to start of file or try to find 'package' later if you prefer
     serde_json::json!({
         "uri": uri,
         "range": { "start": { "line": 0, "character": 0}, "end": { "line": 0, "character": 0} }
     })
-}
-
-/// Convert byte offset to UTF-16 column position
-///
-/// LSP uses UTF-16 code units for character positions, but Rust strings use
-/// UTF-8 byte offsets. This function converts a byte position within a line
-/// to the corresponding UTF-16 column position.
-pub(crate) fn byte_to_utf16_col(line_text: &str, byte_pos: usize) -> usize {
-    let mut units = 0;
-    for (i, ch) in line_text.char_indices() {
-        if i >= byte_pos {
-            break;
-        }
-        // UTF-16 encoding: chars >= U+10000 use 2 units
-        units += if ch as u32 >= 0x10000 { 2 } else { 1 };
-    }
-    units
-}
-
-fn folding_ranges_from_text(src: &str, limit: usize) -> Vec<serde_json::Value> {
-    let mut out = Vec::new();
-    let lines: Vec<&str> = src.lines().collect();
-
-    // Track different types of blocks
-    let mut sub_stack: Vec<usize> = Vec::new();
-    let mut pod_start: Option<usize> = None;
-
-    for (i, line) in lines.iter().enumerate() {
-        let trimmed = line.trim_start();
-
-        // Skip lines that look like strings (basic heuristic)
-        if trimmed.starts_with('"') || trimmed.starts_with('\'') || trimmed.starts_with('`') {
-            continue;
-        }
-
-        // POD documentation blocks
-        if trimmed.starts_with("=pod") || trimmed.starts_with("=head") {
-            pod_start = Some(i);
-        } else if trimmed.starts_with("=cut") {
-            if let Some(start) = pod_start.take() {
-                if i > start {
-                    out.push(serde_json::json!({
-                        "startLine": start as u32,
-                        "endLine": i as u32,
-                        "kind": "comment"
-                    }));
-                }
-            }
-        }
-
-        // Subroutine blocks
-        if trimmed.starts_with("sub ") && trimmed.contains('{') {
-            sub_stack.push(i);
-        } else if trimmed.starts_with('}') && pod_start.is_none() {
-            if let Some(start) = sub_stack.pop() {
-                if i > start {
-                    out.push(serde_json::json!({
-                        "startLine": start as u32,
-                        "endLine": i as u32,
-                        "kind": "region"
-                    }));
-                }
-            }
-        }
-    }
-
-    if out.len() > limit {
-        out.truncate(limit);
-    }
-    out
 }
 
 impl Default for LspServer {
@@ -1807,11 +1051,12 @@ mod tests {
     #[test]
     fn code_action_append_uses_document_end() {
         use std::sync::Arc;
+        use ropey::Rope;
 
         let server = LspServer::new();
         let uri = "file:///test.pl";
         let text = "package Foo;"; // No trailing newline
-        let rope = ropey::Rope::from_str(text);
+        let rope = Rope::from_str(text);
         let line_starts = LineStartsCache::new_rope(&rope);
         server.documents.lock().unwrap().insert(
             uri.to_string(),

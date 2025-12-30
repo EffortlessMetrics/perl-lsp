@@ -6,6 +6,7 @@
 use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::lsp::protocol::{req_position, req_uri};
+use crate::lsp::utils::token_under_cursor;
 use std::collections::HashMap;
 
 #[cfg(feature = "workspace")]
@@ -714,5 +715,30 @@ impl LspServer {
             }
             _ => {}
         }
+    }
+
+    /// Non-blocking definition handler with fallback
+    pub(crate) fn on_definition(
+        &self,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, JsonRpcError> {
+        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
+        let line = params.pointer("/position/line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let ch =
+            params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+
+        let text = self.buffer_text(uri).unwrap_or_default();
+        let module = token_under_cursor(&text, line, ch).filter(|s| s.contains("::"));
+
+        if let Some(m) = module {
+            if let Some(path) = self.resolve_module_path(&m) {
+                let loc = location_from_path(&path);
+                return Ok(serde_json::json!([loc]));
+            }
+        }
+
+        // Fallback: try existing analysis
+        // For now, just return empty array
+        Ok(serde_json::json!([]))
     }
 }

@@ -4,5 +4,5 @@
 //! full AST analysis is unavailable or inappropriate.
 
 // Fallback modules will be added here:
-// pub mod text;
+pub mod text;
 // pub mod module_resolve;
