@@ -1,22 +1,39 @@
 use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
-/// Test Workspace Symbol Resolve support (LSP 3.17)
-#[test]
-fn test_workspace_symbol_resolve() {
+/// Helper to properly initialize a server with the required initialized notification
+fn setup_server() -> LspServer {
     let mut server = LspServer::new();
 
-    // Initialize server
+    // Initialize request
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
-            "capabilities": {}
+            "capabilities": {},
+            "rootUri": "file:///test"
         })),
     };
     let _ = server.handle_request(init_request);
+
+    // Must send initialized notification after initialize
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized);
+
+    server
+}
+
+/// Test Workspace Symbol Resolve support (LSP 3.17)
+#[test]
+fn test_workspace_symbol_resolve() {
+    let mut server = setup_server();
 
     // Open a document with symbols
     let uri = "file:///test.pl";
@@ -86,19 +103,7 @@ our $VERSION = '1.0';
 
 #[test]
 fn test_workspace_symbol_resolve_with_container() {
-    let mut server = LspServer::new();
-
-    // Initialize server
-    let init_request = JsonRpcRequest {
-        _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
-        method: "initialize".into(),
-        params: Some(json!({
-            "processId": 1,
-            "capabilities": {}
-        })),
-    };
-    let _ = server.handle_request(init_request);
+    let mut server = setup_server();
 
     // Open a document with nested symbols
     let uri = "file:///test.pl";
@@ -175,7 +180,8 @@ fn test_workspace_symbol_resolve_capability() {
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
-            "capabilities": {}
+            "capabilities": {},
+            "rootUri": "file:///test"
         })),
     };
 
@@ -193,19 +199,7 @@ fn test_workspace_symbol_resolve_capability() {
 
 #[test]
 fn test_workspace_symbol_resolve_unknown_symbol() {
-    let mut server = LspServer::new();
-
-    // Initialize server
-    let init_request = JsonRpcRequest {
-        _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
-        method: "initialize".into(),
-        params: Some(json!({
-            "processId": 1,
-            "capabilities": {}
-        })),
-    };
-    let _ = server.handle_request(init_request);
+    let mut server = setup_server();
 
     // Try to resolve a symbol without opening the document
     let unknown_symbol = json!({

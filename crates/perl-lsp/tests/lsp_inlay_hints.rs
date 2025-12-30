@@ -2,6 +2,7 @@ use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]
+
 fn inlay_hints_for_substr_and_types() {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
