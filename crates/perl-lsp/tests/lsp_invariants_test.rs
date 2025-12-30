@@ -11,7 +11,6 @@ use serde_json::json;
 
 /// Verify all responses have proper JSON-RPC structure
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_response_structure_invariants() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -44,7 +43,6 @@ fn test_response_structure_invariants() {
 
 /// Verify error responses have proper structure
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_error_response_structure() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -81,7 +79,6 @@ fn test_error_response_structure() {
 
 /// Verify ID matching between request and response
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_id_matching_invariants() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -121,7 +118,7 @@ fn test_id_matching_invariants() {
 
 /// Verify diagnostics always include version
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing); Version field is optional in LSP spec
+#[ignore] // Version field is optional in LSP spec
 fn test_diagnostics_version_invariant() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -185,7 +182,6 @@ fn test_diagnostics_version_invariant() {
 
 /// Verify server doesn't crash on malformed JSON
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_no_crash_on_malformed_json() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -214,7 +210,6 @@ fn test_no_crash_on_malformed_json() {
 
 /// Verify proper error for invalid method
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_invalid_request_errors() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -235,7 +230,7 @@ fn test_invalid_request_errors() {
 
 /// Verify notifications don't produce responses
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing); This test is flaky due to timing with diagnostics
+#[ignore] // This test is flaky due to timing with diagnostics
 fn test_notifications_no_response() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -273,7 +268,7 @@ fn test_notifications_no_response() {
 
 /// Verify server handles concurrent requests properly
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing); This test needs rewriting for auto-generated IDs
+#[ignore] // This test needs rewriting for auto-generated IDs
 fn test_concurrent_request_handling() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

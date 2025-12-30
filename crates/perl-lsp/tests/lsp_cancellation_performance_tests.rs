@@ -578,7 +578,6 @@ impl ThreadingScenario {
 /// Tests feature spec: LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md#macro-benchmark-requirements
 /// AC:12 - End-to-end cancellation response time validation across all LSP providers
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_end_to_end_cancellation_response_time_ac12() {
     let mut fixture = PerformanceTestFixture::new();
 

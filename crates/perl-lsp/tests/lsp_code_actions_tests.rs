@@ -6,8 +6,6 @@ use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
 
 /// Test extract variable refactoring
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC4:enabledTests - Extract variable may not be fully implemented yet, but test framework should work
 fn test_extract_variable() {
     let mut server = start_lsp_server();
@@ -61,8 +59,6 @@ print $result;
 
 /// Test adding error checking to file operations
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Add error checking refactoring
 fn test_add_error_checking() {
     let mut server = start_lsp_server();
@@ -115,8 +111,6 @@ close($fh);
 
 /// Test converting old-style for loops to foreach
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Convert C-style for loop to foreach
 fn test_convert_loop_style() {
     let mut server = start_lsp_server();
@@ -173,8 +167,6 @@ for (my $i = 0; $i < @array; $i++) {
 
 /// Test converting to postfix form
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Convert if statement to postfix form
 fn test_convert_to_postfix() {
     let mut server = start_lsp_server();
@@ -227,8 +219,6 @@ if ($debug) {
 
 /// Test adding missing pragmas
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Add missing pragmas (strict/warnings/utf8)
 fn test_add_missing_pragmas() {
     let mut server = start_lsp_server();
@@ -282,8 +272,6 @@ print $x;
 
 /// Test quick fix for undefined variable
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Fix undefined variable issues
 fn test_fix_undefined_variable() {
     let mut server = start_lsp_server();
@@ -351,8 +339,6 @@ print $undefined_var;
 
 /// Test extract subroutine refactoring
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Extract subroutine with parameter detection
 fn test_extract_subroutine() {
     let mut server = start_lsp_server();
@@ -410,8 +396,6 @@ my $y = 20;
 
 /// Test organize imports refactoring
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC3:codeActions - Organize imports with existing ImportOptimizer integration
 fn test_organize_imports() {
     let mut server = start_lsp_server();
@@ -470,8 +454,6 @@ print "test\n";
 
 /// Test multiple refactorings available
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - Multiple refactoring operations in single request
 fn test_multiple_refactorings() {
     let mut server = start_lsp_server();

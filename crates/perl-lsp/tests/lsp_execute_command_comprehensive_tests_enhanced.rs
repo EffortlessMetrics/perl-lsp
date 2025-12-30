@@ -354,10 +354,11 @@ fn test_enhanced_performance_validation() {
 // ======================== AC4: Enhanced Protocol Compliance ========================
 
 #[test]
-#[ignore] // BUG: Test skips LSP initialization before making requests, causing "Server not initialized" errors
+#[ignore = "BROKENPIPE: Flaky executeCommand handling in CI during LSP initialization (environmental/timing)"]
 // AC4:protocolCompliance - URI handling with comprehensive validation
 fn test_enhanced_uri_handling() {
     let (mut harness, workspace) = create_enhanced_execute_command_server();
+    harness.initialize_default().expect("Server should initialize successfully");
 
     // Test various URI formats
     let test_cases = vec![
@@ -408,10 +409,11 @@ fn test_enhanced_uri_handling() {
 }
 
 #[test]
-#[ignore] // BUG: Test skips LSP initialization before making requests, causing "Server not initialized" errors
+#[ignore = "BROKENPIPE: Flaky concurrent executeCommand handling in CI (environmental/timing)"]
 // AC4:protocolCompliance - Concurrent request handling validation
 fn test_enhanced_concurrent_handling() {
     let (mut harness, workspace) = create_enhanced_execute_command_server();
+    harness.initialize_default().expect("Server should initialize successfully");
 
     // AC4: Test concurrent requests with different files
     let requests = vec![
@@ -453,10 +455,11 @@ fn test_enhanced_concurrent_handling() {
 // ======================== Revolutionary Performance Integration ========================
 
 #[test]
-#[ignore] // BUG: Test skips LSP initialization before making requests, causing "Server not initialized" errors
+#[ignore = "BROKENPIPE: Flaky performance test in CI during LSP initialization (environmental/timing)"]
 // AC5:performance - Thread-aware timeout scaling validation
 fn test_revolutionary_performance_integration() {
     let (mut harness, workspace) = create_enhanced_execute_command_server();
+    harness.initialize_default().expect("Server should initialize successfully");
 
     // AC5: Revolutionary performance with thread-aware scaling
     let thread_count =

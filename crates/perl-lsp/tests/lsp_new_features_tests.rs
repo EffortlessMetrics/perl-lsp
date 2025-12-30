@@ -6,7 +6,6 @@ use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
 
 /// Test document links for MetaCPAN
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_links_metacpan() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -57,7 +56,6 @@ require Module::Load;
 
 /// Test document links for local files
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_links_local_files() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -106,7 +104,6 @@ do "config/settings.pl";
 
 /// Test selection ranges
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_selection_ranges() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -169,7 +166,6 @@ sub process_data {
 
 /// Test on-type formatting for braces
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_on_type_formatting_brace() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -221,7 +217,6 @@ fn test_on_type_formatting_brace() {
 
 /// Test on-type formatting for newline
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_on_type_formatting_newline() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -280,7 +275,6 @@ fn test_on_type_formatting_newline() {
 
 /// Test workspace/didChangeWatchedFiles registration
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_file_watcher_registration() {
     let mut server = start_lsp_server();
 
@@ -324,7 +318,6 @@ fn test_file_watcher_registration() {
 
 /// Test that selection ranges handle edge cases
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_selection_ranges_edge_cases() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -369,7 +362,6 @@ fn test_selection_ranges_edge_cases() {
 
 /// Test on-type formatting with tabs
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_on_type_formatting_tabs() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -423,7 +415,6 @@ fn test_on_type_formatting_tabs() {
 
 #[cfg(windows)]
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_links_windows_path_with_space() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

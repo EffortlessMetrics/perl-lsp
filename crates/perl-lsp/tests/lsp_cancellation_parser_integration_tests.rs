@@ -522,7 +522,6 @@ fn create_cross_file_scenarios() -> Vec<CrossFileScenario> {
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#incremental-parsing-cancellation
 /// AC:6 - Incremental parsing cancellation with <1ms update preservation
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_incremental_parsing_cancellation_preservation_ac6() {
     let fixture = ParserIntegrationFixture::new();
 

@@ -41,7 +41,6 @@ fn open(server: &mut LspServer, uri: &str, text: &str) {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_cross_file_definition() {
     let mut srv = init_server();
 
@@ -113,7 +112,6 @@ print "Result: $result\n";
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_cross_file_references() {
     let mut srv = init_server();
 
@@ -205,7 +203,6 @@ for (1..10) {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_symbols_after_indexing() {
     let mut srv = init_server();
 

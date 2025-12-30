@@ -17,17 +17,57 @@ struct TestContext {
     writer: std::process::ChildStdin,
 }
 
+/// Compile-time path to the perl-lsp binary, set by Cargo when building integration tests.
+const CARGO_BIN_EXE: Option<&str> = option_env!("CARGO_BIN_EXE_perl-lsp");
+
 impl TestContext {
-    fn new() -> Self {
-        // Check if we should use in-process server for better performance
-        if std::env::var("LSP_TEST_FALLBACKS").is_ok() {
-            // Use in-process server for faster tests
-            return Self::new_in_process();
+    /// Find the perl-lsp binary using multiple resolution strategies
+    fn find_perl_lsp_binary() -> std::process::Command {
+        // Resolution order:
+        // 1. Compile-time CARGO_BIN_EXE (most reliable for `cargo test`)
+        // 2. Runtime CARGO_BIN_EXE_perl-lsp env var
+        // 3. Workspace target/debug/perl-lsp
+        // 4. Fallback to cargo run (slow but always works)
+
+        if let Some(bin_path) = CARGO_BIN_EXE {
+            if std::path::Path::new(bin_path).exists() {
+                let mut cmd = std::process::Command::new(bin_path);
+                cmd.arg("--stdio");
+                return cmd;
+            }
         }
 
-        // Start LSP server with optimized settings
-        let mut server = std::process::Command::new("cargo")
-            .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
+        if let Ok(bin_path) = std::env::var("CARGO_BIN_EXE_perl-lsp") {
+            if std::path::Path::new(&bin_path).exists() {
+                let mut cmd = std::process::Command::new(bin_path);
+                cmd.arg("--stdio");
+                return cmd;
+            }
+        }
+
+        // Try workspace target directory
+        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+            let crate_dir = std::path::Path::new(&manifest_dir);
+            if let Some(workspace_root) = crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists()) {
+                let debug_binary = workspace_root.join("target/debug/perl-lsp");
+                if debug_binary.exists() {
+                    let mut cmd = std::process::Command::new(&debug_binary);
+                    cmd.arg("--stdio");
+                    return cmd;
+                }
+            }
+        }
+
+        // Fallback to cargo run (slow)
+        let mut cmd = std::process::Command::new("cargo");
+        cmd.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"]);
+        cmd
+    }
+
+    fn new() -> Self {
+        // Start LSP server using optimized binary resolution
+        let mut cmd = Self::find_perl_lsp_binary();
+        let mut server = cmd
             .env("LSP_TEST_MODE", "1") // Enable test optimizations
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
@@ -60,39 +100,6 @@ impl TestContext {
         // Give minimal time for initialization
         std::thread::sleep(std::time::Duration::from_millis(50));
 
-        ctx
-    }
-
-    /// Create in-process test context for faster testing
-    fn new_in_process() -> Self {
-        // For now, fall back to external process but with optimizations
-        // TODO: Implement true in-process server for maximum performance
-        let mut server = std::process::Command::new("cargo")
-            .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
-            .env("LSP_TEST_MODE", "1")
-            .env("LSP_FAST_MODE", "1")
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .expect("Failed to start LSP server");
-
-        let reader = std::io::BufReader::new(server.stdout.take().unwrap());
-        let writer = server.stdin.take().unwrap();
-
-        let mut ctx = TestContext { server, reader, writer };
-
-        // Fast initialization
-        ctx.send_request(
-            "initialize",
-            Some(json!({
-                "processId": std::process::id(),
-                "capabilities": {},
-                "rootUri": format!("file://{}", std::env::current_dir().unwrap().display())
-            })),
-        );
-
-        ctx.send_notification("initialized", None);
         ctx
     }
 
@@ -183,7 +190,6 @@ impl Drop for TestContext {
 // ===================== Golden Tests =====================
 
 #[test]
-#[ignore = "Spawns cargo run for LSP server - timeouts in CI, requires in-process harness refactor"]
 fn test_hover_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/hover_test.pl";
@@ -224,7 +230,6 @@ fn test_hover_golden() {
 }
 
 #[test]
-#[ignore = "Spawns cargo run for LSP server - timeouts in CI, requires in-process harness refactor"]
 fn test_diagnostics_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/diagnostics_test.pl";
@@ -247,7 +252,6 @@ fn test_diagnostics_golden() {
 }
 
 #[test]
-#[ignore = "Spawns cargo run for LSP server - timeouts in CI, requires in-process harness refactor"]
 fn test_completion_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/completion_test.pl";
@@ -285,7 +289,6 @@ fn test_completion_golden() {
 }
 
 #[test]
-#[ignore = "Spawns cargo run for LSP server - timeouts in CI, requires in-process harness refactor"]
 fn test_semantic_tokens_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/hover_test.pl";
@@ -310,7 +313,6 @@ fn test_semantic_tokens_golden() {
 }
 
 #[test]
-#[ignore = "Spawns cargo run for LSP server - timeouts in CI, requires in-process harness refactor"]
 fn test_folding_ranges_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/hover_test.pl";
@@ -343,7 +345,6 @@ fn test_folding_ranges_golden() {
 // ===================== Edit Loop Fuzzing =====================
 
 #[test]
-#[ignore = "Spawns cargo run for LSP server - timeouts in CI, requires in-process harness refactor"]
 fn test_edit_loop_robustness() {
     let mut ctx = TestContext::new();
 
