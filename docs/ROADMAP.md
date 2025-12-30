@@ -18,7 +18,7 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 | **perl-parser** (v3) ⭐ | **Production** | **1-150µs** | **100%** | Native parser, statement tracker, heredoc support |
 | **perl-lexer** | **Production** | Sub-microsecond | **100%** | Context-aware tokenization |
 | **perl-corpus** | **Production** | N/A | **272+ tests** | Comprehensive test suite with mutation hardening |
-| **perl-parser-pest** (v2) | **Legacy** | 200-450µs | **99.995%** | Maintained for compatibility |
+| **perl-parser-pest** (v2) | **Legacy** | 200-450µs | **99.995%** | Maintained for education and comparison |
 | **LSP Server** 🚀 | **~91% Ready** | <50ms | **~91% LSP 3.18** | Semantic-aware definition, workspace refactoring |
 | **Semantic Analyzer** ⭐ **NEW** | **Phase 1 Complete** | <1ms | **12/12 handlers** | Precise symbol resolution, lexical scoping |
 | **DAP Server** 🆕 | **Phase 1 Complete** | <100ms | **Bridge mode** | Full debugging support via Perl::LanguageServer |
@@ -27,16 +27,17 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 
 ---
 
-## 📦 Component Status (v0.8.5)
+## 📦 Component Status (v0.8.8)
 
 ### Published Crates
 | Crate | Version | Status | Purpose |
 |-------|---------|--------|----------|
-| **perl-parser** | v0.8.5 | ✅ Production | Main parser + LSP server binary |
-| **perl-lexer** | v0.8.5 | ✅ Production | Context-aware tokenizer |
-| **perl-corpus** | v0.8.5 | ✅ Production | Test corpus (141 edge cases) |
-| **perl-parser-pest** | v0.8.5 | ⚠️ Legacy/Experimental | Pest-based parser (maintained) |
-| **perl-lsp** | ??? | ??? |
+| **perl-parser** | v0.8.8 | ✅ Production | Main parser library |
+| **perl-lsp** | v0.8.8 | ✅ Production | Production LSP server (~91% functional) |
+| **perl-lexer** | v0.8.8 | ✅ Production | Context-aware tokenizer |
+| **perl-corpus** | v0.8.8 | ✅ Production | Test corpus (141 edge cases) |
+| **perl-dap** | v0.1.0 | ✅ Phase 1 | Debug Adapter Protocol (bridge mode) |
+| **perl-parser-pest** | v0.8.8 | ⚠️ Legacy/Experimental | Pest-based parser (maintained) |
 
 ### Component Integration
 - **perl-parser + perl-lexer**: Fully integrated for v3 parser
@@ -416,27 +417,27 @@ We've built the most comprehensive Perl parsing solution available, **on track f
   - Thread-safe architecture
   - Production-ready status
 
-### 2025 Target Metrics
+### 2027 Target Metrics
 - **Adoption Goals**
-  - 10K+ VSCode extension installs
-  - 1K+ crates.io downloads
-  - 500+ GitHub stars
-  - 50+ contributors
-  - 10+ enterprise deployments
+  - 1K+ VSCode extension installs
+  - 0.1K+ crates.io downloads
+  - 50+ GitHub stars
+  - 5+ contributors
+  - 1+ enterprise deployments
 - **Performance Targets**
-  - <1ms incremental parsing
-  - <100ms for 100K LOC files
-  - <500MB memory for 1M LOC
+  - <10ms incremental parsing
+  - <1000ms for 100K LOC files
+  - <5000MB memory for 1M LOC
 - **Community Growth**
-  - 5+ editor integrations
-  - 100+ community plugins
-  - 1000+ Discord members
+  - 1+ editor integrations
+  - 10+ community plugins
+  - 1+ Discord members
 
 ---
 
 ## 📊 Benchmark Methodology
 
-*Performance measurements taken on Intel Core i7-10700K @ 3.8GHz, 32GB RAM, Ubuntu 22.04 LTS. Tests run on warm cache with 1000 iterations, reporting median times. Test corpus includes real-world Perl files ranging from 100 lines (simple) to 5000+ lines (complex). See **[benchmarks/BENCHMARK_FRAMEWORK.md](benchmarks/BENCHMARK_FRAMEWORK.md)** for the corpus, hardware, and exact commands.*
+*Performance measurements taken on [this has not actually been tested yet]. Tests run on warm cache with 1000 iterations, reporting median times. Test corpus includes real-world Perl files ranging from 100 lines (simple) to 5000+ lines (complex). See **[benchmarks/BENCHMARK_FRAMEWORK.md](benchmarks/BENCHMARK_FRAMEWORK.md)** for the corpus, hardware, and exact commands.*
 
 <sup>†</sup> *LSP 3.18 compliance percentage based on implemented and fully functional LSP protocol features. The server advertises only capabilities that are production-ready. See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed feature matrix.*
 
@@ -494,9 +495,9 @@ workspace/executeCommand: {
 - **v0.8.5** - August 2025 - GA: LSP 3.18 partial compliance, pull diagnostics, type hierarchy
 
 ### Upcoming
-- **v0.9.0** - September 2025 - Full LSP 3.18 compliance (100%)
-- **v0.10.0** - October 2025 - Perl 7 support, AI integration
-- **v1.0.0** - January 2026 - Industry standard platform
+- **v0.9.0** - Q1 2026 - Full LSP 3.18 compliance (100%), semantic analyzer Phase 2/3
+- **v0.10.0** - Q2 2026 - Perl 7 support, AI integration
+- **v1.0.0** - Q4 2026 - Industry standard platform
 
 ---
 
