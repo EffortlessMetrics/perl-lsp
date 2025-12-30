@@ -4,6 +4,7 @@
 
 use super::super::{byte_to_utf16_col, *};
 use crate::lsp::protocol::{req_position, req_uri};
+use crate::lsp::utils::{token_under_cursor, is_word_boundary};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -345,5 +346,60 @@ impl LspServer {
         }
 
         Ok(Some(json!([])))
+    }
+
+    /// Non-blocking references handler with fallback
+    pub(crate) fn on_references(
+        &self,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, JsonRpcError> {
+        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
+        let line = params.pointer("/position/line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let ch =
+            params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+
+        let text = self.buffer_text(uri).unwrap_or_default();
+        let needle = token_under_cursor(&text, line, ch).unwrap_or_default();
+        if needle.is_empty() {
+            return Ok(serde_json::json!([]));
+        }
+
+        // Fallback: search all open docs with word boundary checking
+        let mut out = Vec::new();
+        for (doc_uri, doc_text) in self.iter_open_buffers() {
+            for (ln, l) in doc_text.lines().enumerate() {
+                let line_bytes = l.as_bytes();
+                let mut start = 0usize;
+                while let Some(idx) = l[start..].find(&needle) {
+                    let col = start + idx;
+                    // Only include if it's a word boundary match
+                    if is_word_boundary(line_bytes, col, needle.len()) {
+                        // Convert byte position to UTF-16 for LSP
+                        let col_utf16 = byte_to_utf16_col(l, col);
+                        let end_utf16 = byte_to_utf16_col(l, col + needle.len());
+                        out.push(serde_json::json!({
+                            "uri": doc_uri,
+                            "range": {
+                                "start": {"line": ln as u32, "character": col_utf16 as u32},
+                                "end":   {"line": ln as u32, "character": end_utf16 as u32}
+                            }
+                        }));
+                    }
+                    start = col + needle.len();
+                }
+            }
+        }
+
+        // Sort for deterministic output and deduplicate
+        out.sort_by_key(|loc| {
+            (
+                loc["uri"].as_str().unwrap_or("").to_string(),
+                loc["range"]["start"]["line"].as_u64().unwrap_or(0),
+                loc["range"]["start"]["character"].as_u64().unwrap_or(0),
+            )
+        });
+        out.dedup();
+
+        Ok(serde_json::Value::Array(out))
     }
 }

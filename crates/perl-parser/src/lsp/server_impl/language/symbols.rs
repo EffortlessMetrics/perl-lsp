@@ -4,6 +4,7 @@
 
 use super::super::{byte_to_utf16_col, *};
 use crate::lsp::protocol::req_uri;
+use crate::lsp::fallback::text::folding_ranges_from_text;
 
 impl LspServer {
     /// Handle textDocument/documentSymbol request
@@ -211,18 +212,29 @@ impl LspServer {
 
                     // If no ranges from AST, try fallback
                     if lsp_ranges.is_empty() {
-                        return Ok(Some(json!(extract_folding_fallback(&doc.text))));
+                        return Ok(Some(json!(folding_ranges_from_text(&doc.text, 1000))));
                     }
 
                     return Ok(Some(json!(lsp_ranges)));
                 } else {
                     // No AST, use fallback
-                    return Ok(Some(json!(extract_folding_fallback(&doc.text))));
+                    return Ok(Some(json!(folding_ranges_from_text(&doc.text, 1000))));
                 }
             }
         }
 
         Ok(Some(json!([])))
+    }
+
+    /// Non-blocking folding range handler with text-based fallback
+    pub(crate) fn on_folding_range(
+        &self,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, JsonRpcError> {
+        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
+        let text = self.buffer_text(uri).unwrap_or_default();
+        let ranges = folding_ranges_from_text(&text, 128);
+        Ok(serde_json::to_value(ranges).unwrap_or(serde_json::json!([])))
     }
 
     /// Fallback symbol extraction using regex when parser fails
@@ -305,109 +317,4 @@ fn symbol_kind_to_lsp(kind: crate::symbol::SymbolKind) -> u32 {
 /// Helper function to convert offset to line number
 fn offset_to_line(content: &str, offset: usize) -> usize {
     content[..offset.min(content.len())].chars().filter(|&c| c == '\n').count()
-}
-
-/// Fallback folding extraction using text-based analysis
-fn extract_folding_fallback(content: &str) -> Vec<Value> {
-    let mut ranges = Vec::new();
-    let lines: Vec<&str> = content.lines().collect();
-    let mut brace_stack: Vec<usize> = Vec::new();
-    let mut sub_start: Option<usize> = None;
-    let mut pod_start: Option<usize> = None;
-
-    for (line_num, line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-
-        // Handle POD sections
-        if trimmed.starts_with("=") {
-            if trimmed == "=cut" {
-                if let Some(start) = pod_start {
-                    if line_num > start {
-                        ranges.push(json!({
-                            "startLine": start,
-                            "endLine": line_num,
-                            "kind": "comment"
-                        }));
-                    }
-                    pod_start = None;
-                }
-            } else if pod_start.is_none() {
-                pod_start = Some(line_num);
-            }
-            continue;
-        }
-
-        // Skip if we're in POD
-        if pod_start.is_some() {
-            continue;
-        }
-
-        // Handle subroutines
-        if trimmed.starts_with("sub ") {
-            // If we had a previous sub, close it
-            if let Some(start) = sub_start {
-                if line_num > start + 1 {
-                    ranges.push(json!({
-                        "startLine": start,
-                        "endLine": line_num - 1
-                    }));
-                }
-            }
-            sub_start = Some(line_num);
-        }
-
-        // Count braces (simple approach, doesn't handle strings/comments perfectly)
-        let mut in_string = false;
-        let mut escape_next = false;
-        let mut prev_char = ' ';
-
-        for ch in line.chars() {
-            if escape_next {
-                escape_next = false;
-                prev_char = ch;
-                continue;
-            }
-
-            if ch == '\\' {
-                escape_next = true;
-                prev_char = ch;
-                continue;
-            }
-
-            // Simple string detection (not perfect but good enough)
-            if (ch == '"' || ch == '\'') && (!in_string || prev_char != '\\') {
-                in_string = !in_string;
-            }
-
-            if !in_string {
-                if ch == '{' {
-                    brace_stack.push(line_num);
-                } else if ch == '}' {
-                    if let Some(start_line) = brace_stack.pop() {
-                        // Only create fold if it spans multiple lines
-                        if line_num > start_line {
-                            ranges.push(json!({
-                                "startLine": start_line,
-                                "endLine": line_num
-                            }));
-                        }
-                    }
-                }
-            }
-
-            prev_char = ch;
-        }
-    }
-
-    // Close any remaining sub
-    if let Some(start) = sub_start {
-        if lines.len() > start + 1 {
-            ranges.push(json!({
-                "startLine": start,
-                "endLine": lines.len() - 1
-            }));
-        }
-    }
-
-    ranges
 }

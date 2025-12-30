@@ -20,6 +20,7 @@ pub mod server;
 pub mod server_impl;
 pub mod state;
 pub mod transport;
+pub mod utils;
 
 // Re-export primary types for backward compatibility
 pub use protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
