@@ -10,6 +10,8 @@ use crate::lsp::utils::token_under_cursor;
 use std::collections::HashMap;
 
 #[cfg(feature = "workspace")]
+use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
+#[cfg(feature = "workspace")]
 use lazy_static::lazy_static;
 
 #[cfg(feature = "workspace")]
@@ -240,7 +242,10 @@ impl LspServer {
                                         kind: crate::workspace_index::SymKind::Sub,
                                     };
 
-                                    if let Some(ref workspace_index) = self.workspace_index {
+                                    // Use routing policy for cross-file definition lookup
+                                    let access_mode = route_index_access(self.coordinator());
+                                    if let IndexAccessMode::Full(coordinator) = access_mode {
+                                        let workspace_index = coordinator.index();
                                         if let Some(def_location) = workspace_index.find_def(&key) {
                                             if let Some(lsp_location) =
                                                 crate::workspace_index::lsp_adapter::to_lsp_location(
@@ -263,6 +268,7 @@ impl LspServer {
                                             }
                                         }
                                     }
+                                    // Partial/None: fall through to same-file resolution
                                 }
                                 break;
                             }
@@ -313,54 +319,60 @@ impl LspServer {
                         }
                     }
 
-                    // Try workspace index for cross-file definitions
+                    // Try workspace index for cross-file definitions using routing policy
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
-                        // Use symbol_at_cursor to get the symbol key
-                        let current_package = crate::declaration::current_package_at(ast, offset);
-                        if let Some(symbol_key) =
-                            crate::declaration::symbol_at_cursor(ast, offset, current_package)
-                        {
-                            eprintln!("Looking for definition of {:?}", symbol_key);
-
-                            // Try to find definition using the symbol key
-                            if let Some(def_location) = workspace_index.find_def(&symbol_key) {
-                                eprintln!("Found definition at {:?}", def_location);
-                                // Convert internal Location to LSP Location
-                                if let Some(lsp_location) =
-                                    crate::workspace_index::lsp_adapter::to_lsp_location(
-                                        &def_location,
-                                    )
-                                {
-                                    return Ok(Some(json!([lsp_location])));
-                                }
-                            }
-
-                            // Also try with find_definition for backward compatibility
-                            let symbol_name =
-                                if symbol_key.kind == crate::workspace_index::SymKind::Sub {
-                                    format!("{}::{}", symbol_key.pkg, symbol_key.name)
-                                } else {
-                                    symbol_key.name.to_string()
-                                };
-
-                            if let Some(def_location) =
-                                workspace_index.find_definition(&symbol_name)
+                    {
+                        let access_mode = route_index_access(self.coordinator());
+                        if let IndexAccessMode::Full(coordinator) = access_mode {
+                            let workspace_index = coordinator.index();
+                            // Use symbol_at_cursor to get the symbol key
+                            let current_package =
+                                crate::declaration::current_package_at(ast, offset);
+                            if let Some(symbol_key) =
+                                crate::declaration::symbol_at_cursor(ast, offset, current_package)
                             {
-                                eprintln!(
-                                    "Found definition via find_definition for {}",
-                                    symbol_name
-                                );
-                                // Convert internal Location to LSP Location
-                                if let Some(lsp_location) =
-                                    crate::workspace_index::lsp_adapter::to_lsp_location(
-                                        &def_location,
-                                    )
+                                eprintln!("Looking for definition of {:?}", symbol_key);
+
+                                // Try to find definition using the symbol key
+                                if let Some(def_location) = workspace_index.find_def(&symbol_key) {
+                                    eprintln!("Found definition at {:?}", def_location);
+                                    // Convert internal Location to LSP Location
+                                    if let Some(lsp_location) =
+                                        crate::workspace_index::lsp_adapter::to_lsp_location(
+                                            &def_location,
+                                        )
+                                    {
+                                        return Ok(Some(json!([lsp_location])));
+                                    }
+                                }
+
+                                // Also try with find_definition for backward compatibility
+                                let symbol_name =
+                                    if symbol_key.kind == crate::workspace_index::SymKind::Sub {
+                                        format!("{}::{}", symbol_key.pkg, symbol_key.name)
+                                    } else {
+                                        symbol_key.name.to_string()
+                                    };
+
+                                if let Some(def_location) =
+                                    workspace_index.find_definition(&symbol_name)
                                 {
-                                    return Ok(Some(json!([lsp_location])));
+                                    eprintln!(
+                                        "Found definition via find_definition for {}",
+                                        symbol_name
+                                    );
+                                    // Convert internal Location to LSP Location
+                                    if let Some(lsp_location) =
+                                        crate::workspace_index::lsp_adapter::to_lsp_location(
+                                            &def_location,
+                                        )
+                                    {
+                                        return Ok(Some(json!([lsp_location])));
+                                    }
                                 }
                             }
                         }
+                        // Partial/None: fall through to same-file semantic model
                     }
 
                     // Fall back to same-file definition
@@ -502,7 +514,16 @@ impl LspServer {
                 let doc_map: HashMap<String, String> =
                     self.documents_text_snapshot().into_iter().collect();
 
-                let provider = ImplementationProvider::new(self.workspace_index.clone());
+                // Use routing policy - only provide workspace index in Full mode
+                let access_mode = route_index_access(self.coordinator());
+                let workspace_index = if let IndexAccessMode::Full(coordinator) = access_mode {
+                    Some(coordinator.index().clone())
+                } else {
+                    // Partial/None: same-file analysis only
+                    None
+                };
+
+                let provider = ImplementationProvider::new(workspace_index);
                 let locations =
                     provider.find_implementations(ast.as_ref(), line, character, uri, &doc_map);
                 return Ok(Some(json!(locations)));
