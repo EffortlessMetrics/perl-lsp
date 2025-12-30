@@ -11,7 +11,7 @@ use crate::{
     CompletionItemKind, CompletionProvider,
     cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, RequestCleanupGuard},
     lsp::protocol::{JsonRpcError, REQUEST_CANCELLED, req_position, req_uri},
-    lsp::server_impl::routing::{route_index_access, IndexAccessMode},
+    lsp::server_impl::routing::{IndexAccessMode, route_index_access},
     lsp::state::{completion_cap, completion_deadline},
     type_inference::TypeInferenceEngine,
 };
@@ -92,7 +92,7 @@ impl LspServer {
                     let provider = CompletionProvider::new_with_index_and_source(
                         ast,
                         &doc.text,
-                        self.workspace_index.clone(),
+                        self.workspace_index(),
                     );
 
                     #[cfg(not(feature = "workspace"))]
@@ -147,75 +147,82 @@ impl LspServer {
                             // Find matching symbols in the workspace
                             let index = coordinator.index();
 
-                    // Get the current context to filter relevant completions
-                    let text_before = &doc.text[..offset.min(doc.text.len())];
-                    let prefix = text_before
-                        .chars()
-                        .rev()
-                        .take_while(|&c| c.is_alphanumeric() || c == '_' || c == ':')
-                        .collect::<String>()
-                        .chars()
-                        .rev()
-                        .collect::<String>();
+                            // Get the current context to filter relevant completions
+                            let text_before = &doc.text[..offset.min(doc.text.len())];
+                            let prefix = text_before
+                                .chars()
+                                .rev()
+                                .take_while(|&c| c.is_alphanumeric() || c == '_' || c == ':')
+                                .collect::<String>()
+                                .chars()
+                                .rev()
+                                .collect::<String>();
 
                             let workspace_symbols = index.find_symbols(&prefix);
-                    use std::collections::HashSet;
-                    let mut seen = HashSet::new();
-                    for completion in &completions {
-                        seen.insert(completion.label.clone());
-                    }
+                            use std::collections::HashSet;
+                            let mut seen = HashSet::new();
+                            for completion in &completions {
+                                seen.insert(completion.label.clone());
+                            }
 
-                    for symbol in workspace_symbols {
+                            for symbol in workspace_symbols {
                                 // Check cap limit
-                        if completions.len() >= cap {
-                            eprintln!("Completion: cap reached ({}), stopping workspace scan", cap);
-                            break;
-                        }
+                                if completions.len() >= cap {
+                                    eprintln!(
+                                        "Completion: cap reached ({}), stopping workspace scan",
+                                        cap
+                                    );
+                                    break;
+                                }
 
-                        // Skip if already in local completions
-                        if seen.contains(&symbol.name) {
-                            continue;
-                        }
+                                // Skip if already in local completions
+                                if seen.contains(&symbol.name) {
+                                    continue;
+                                }
 
-                        // Add workspace symbol as completion
-                        let kind = match symbol.kind {
-                            crate::workspace_index::SymbolKind::Package => {
-                                CompletionItemKind::Module
-                            }
-                            crate::workspace_index::SymbolKind::Subroutine => {
-                                CompletionItemKind::Function
-                            }
-                            crate::workspace_index::SymbolKind::Variable => {
-                                CompletionItemKind::Variable
-                            }
-                            crate::workspace_index::SymbolKind::Class => CompletionItemKind::Module,
-                            crate::workspace_index::SymbolKind::Method => {
-                                CompletionItemKind::Function
-                            }
-                            crate::workspace_index::SymbolKind::Constant => {
-                                CompletionItemKind::Constant
-                            }
-                            crate::workspace_index::SymbolKind::Role => CompletionItemKind::Module,
-                            crate::workspace_index::SymbolKind::Import => {
-                                CompletionItemKind::Module
-                            }
-                            crate::workspace_index::SymbolKind::Export => {
-                                CompletionItemKind::Function
-                            }
-                        };
+                                // Add workspace symbol as completion
+                                let kind = match symbol.kind {
+                                    crate::workspace_index::SymbolKind::Package => {
+                                        CompletionItemKind::Module
+                                    }
+                                    crate::workspace_index::SymbolKind::Subroutine => {
+                                        CompletionItemKind::Function
+                                    }
+                                    crate::workspace_index::SymbolKind::Variable => {
+                                        CompletionItemKind::Variable
+                                    }
+                                    crate::workspace_index::SymbolKind::Class => {
+                                        CompletionItemKind::Module
+                                    }
+                                    crate::workspace_index::SymbolKind::Method => {
+                                        CompletionItemKind::Function
+                                    }
+                                    crate::workspace_index::SymbolKind::Constant => {
+                                        CompletionItemKind::Constant
+                                    }
+                                    crate::workspace_index::SymbolKind::Role => {
+                                        CompletionItemKind::Module
+                                    }
+                                    crate::workspace_index::SymbolKind::Import => {
+                                        CompletionItemKind::Module
+                                    }
+                                    crate::workspace_index::SymbolKind::Export => {
+                                        CompletionItemKind::Function
+                                    }
+                                };
 
-                        completions.push(crate::completion::CompletionItem {
-                            label: symbol.name.clone(),
-                            kind,
-                            detail: symbol.qualified_name,
-                            insert_text: Some(symbol.name),
-                            sort_text: None,
-                            filter_text: None,
-                            documentation: None,
-                            additional_edits: Vec::new(),
-                            text_edit_range: None, // Workspace completions don't need precise text edit
-                        });
-                    }
+                                completions.push(crate::completion::CompletionItem {
+                                    label: symbol.name.clone(),
+                                    kind,
+                                    detail: symbol.qualified_name,
+                                    insert_text: Some(symbol.name),
+                                    sort_text: None,
+                                    filter_text: None,
+                                    documentation: None,
+                                    additional_edits: Vec::new(),
+                                    text_edit_range: None, // Workspace completions don't need precise text edit
+                                });
+                            }
                         }
                         IndexAccessMode::Partial(reason) => {
                             // Log but continue with local completions only
@@ -375,7 +382,7 @@ impl LspServer {
                     let provider = CompletionProvider::new_with_index_and_source(
                         ast,
                         &doc.text,
-                        self.workspace_index.clone(),
+                        self.workspace_index(),
                     );
                     #[cfg(not(feature = "workspace"))]
                     let provider =

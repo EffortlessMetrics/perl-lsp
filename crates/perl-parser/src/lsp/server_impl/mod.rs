@@ -128,10 +128,6 @@ pub struct LspServer {
     /// Index coordinator for workspace-wide features with lifecycle management
     #[cfg(feature = "workspace")]
     pub(crate) index_coordinator: Option<Arc<IndexCoordinator>>,
-    /// Legacy workspace index reference (delegates to coordinator.index())
-    /// TODO: Remove once all handlers migrated to coordinator pattern
-    #[cfg(feature = "workspace")]
-    pub(crate) workspace_index: Option<Arc<WorkspaceIndex>>,
     /// AST cache for performance
     ast_cache: Arc<AstCache>,
     /// Symbol index for fast lookups
@@ -167,11 +163,6 @@ impl LspServer {
         #[cfg(feature = "workspace")]
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
-        // Legacy workspace_index reference - delegates to coordinator.index()
-        // TODO: Remove once all handlers migrated to coordinator pattern
-        #[cfg(feature = "workspace")]
-        let workspace_index = index_coordinator.as_ref().map(|c| Arc::clone(c.index()));
-
         let default_features = {
             let flags = if cfg!(feature = "lsp-ga-lock") {
                 crate::capabilities::BuildFlags::ga_lock()
@@ -186,8 +177,6 @@ impl LspServer {
             initialized: false,
             #[cfg(feature = "workspace")]
             index_coordinator,
-            #[cfg(feature = "workspace")]
-            workspace_index,
             // Cache up to 100 ASTs with 5 minute TTL
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
@@ -209,10 +198,6 @@ impl LspServer {
         #[cfg(feature = "workspace")]
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
-        // Legacy workspace_index reference - delegates to coordinator.index()
-        #[cfg(feature = "workspace")]
-        let workspace_index = index_coordinator.as_ref().map(|c| Arc::clone(c.index()));
-
         let default_features = {
             let flags = if cfg!(feature = "lsp-ga-lock") {
                 crate::capabilities::BuildFlags::ga_lock()
@@ -227,8 +212,6 @@ impl LspServer {
             initialized: false,
             #[cfg(feature = "workspace")]
             index_coordinator,
-            #[cfg(feature = "workspace")]
-            workspace_index,
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
@@ -334,6 +317,21 @@ impl LspServer {
     #[inline]
     pub(crate) fn coordinator(&self) -> Option<&Arc<IndexCoordinator>> {
         self.index_coordinator.as_ref()
+    }
+
+    /// Get the workspace index through the coordinator
+    ///
+    /// This method replaces direct field access to ensure all index access
+    /// goes through the coordinator lifecycle. Returns None if no coordinator
+    /// is available.
+    ///
+    /// **Note**: Prefer using `route_index_access(self.coordinator())` in handlers
+    /// for proper lifecycle-aware degraded behavior. Use this method only when
+    /// you need direct index access for mutation or reporting.
+    #[cfg(feature = "workspace")]
+    #[inline]
+    pub(crate) fn workspace_index(&self) -> Option<Arc<WorkspaceIndex>> {
+        self.coordinator().map(|c| Arc::clone(c.index()))
     }
 
     /// Run the LSP server

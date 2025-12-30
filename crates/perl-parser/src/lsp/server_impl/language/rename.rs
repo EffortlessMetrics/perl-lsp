@@ -178,9 +178,9 @@ impl LspServer {
                                         offset,
                                         current_pkg,
                                     ) {
-                                        if let Some(ref idx) = self.workspace_index {
+                                        if let Some(idx) = self.workspace_index() {
                                             let edits = crate::workspace_rename::build_rename_edit(
-                                                idx, &key, new_name,
+                                                &idx, &key, new_name,
                                             );
                                             let ws_edit =
                                                 crate::workspace_rename::to_workspace_edit(edits);

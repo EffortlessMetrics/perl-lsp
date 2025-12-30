@@ -92,7 +92,7 @@ impl LspServer {
             if let Some(ref _ast) = ast_arc {
                 // Update the fast symbol index with symbols from workspace index
                 #[cfg(feature = "workspace")]
-                if let Some(ref workspace_index) = self.workspace_index {
+                if let Some(workspace_index) = self.workspace_index() {
                     let index_symbols = workspace_index.find_symbols("");
                     let symbols = index_symbols
                         .into_iter()
@@ -113,7 +113,7 @@ impl LspServer {
 
                 // Update the workspace-wide index for cross-file features
                 #[cfg(feature = "workspace")]
-                if let Some(ref workspace_index) = self.workspace_index {
+                if let Some(workspace_index) = self.workspace_index() {
                     if let Ok(url) = url::Url::parse(uri) {
                         match workspace_index.index_file(url, text.to_string()) {
                             Ok(()) => {
@@ -284,7 +284,7 @@ impl LspServer {
                     // Update the workspace-wide index for cross-file features
                     // Note: version is maintained by the document state
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
+                    if let Some(workspace_index) = self.workspace_index() {
                         if let Ok(url) = url::Url::parse(uri) {
                             let doc_content = self
                                 .documents
@@ -333,7 +333,7 @@ impl LspServer {
 
             // Clear from workspace index
             #[cfg(feature = "workspace")]
-            if let Some(ref workspace_index) = self.workspace_index {
+            if let Some(workspace_index) = self.workspace_index() {
                 workspace_index.clear_file(uri);
             }
 
