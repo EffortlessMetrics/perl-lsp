@@ -7,7 +7,6 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 
 /// Test with a real CPAN module structure
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_cpan_module_structure() {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
@@ -126,7 +125,6 @@ This is a sample CPAN-style module for testing.
 
 /// Test with Mojolicious web application
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_mojolicious_app() {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
@@ -239,7 +237,6 @@ __DATA__
 
 /// Test with DBI database code
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_dbi_database_code() {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
@@ -387,7 +384,6 @@ END {
 
 /// Test with Test::More test file
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_perl_test_file() {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
@@ -503,7 +499,6 @@ done_testing();
 
 /// Test with Catalyst MVC controller
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_catalyst_controller() {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
@@ -685,7 +680,6 @@ __PACKAGE__->meta->make_immutable;
 
 /// Test with complex regex patterns
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_complex_regex_patterns() {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
@@ -839,7 +833,6 @@ sub normalize_text {
 
 /// Test with modern Perl features
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_modern_perl_features() {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
@@ -985,7 +978,6 @@ sub array_operations {
 
 /// Test multi-file project with modules
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_multi_file_project() {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {

@@ -113,7 +113,7 @@ mod declaration_micro_tests {
     }
 
     #[test]
-    #[ignore = "Test expects specific span handling"]
+    #[ignore = "BUG: Parser span calculation differs - test expects hardcoded byte offset"]
     fn test_comment_with_qw_in_it() {
         let code = "# qw is used here\nmy $var = 1; print $var;";
         let (provider, _map, _ast) = parse_and_get_provider(code);

@@ -142,7 +142,6 @@ fn test_diagnostics_clear_protocol_framing() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_symbol_deduplication() {
     use perl_parser::workspace_index::WorkspaceIndex;
     use std::collections::HashSet;
@@ -199,7 +198,6 @@ sub another {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_symbol_response_format() {
     use perl_parser::workspace_index::WorkspaceIndex;
     use url::Url;
@@ -248,7 +246,6 @@ sub test_function {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_position_encoding_advertised() {
     // This test verifies that the server advertises UTF-16 position encoding
     let _server = LspServer::new();
@@ -270,7 +267,6 @@ fn test_position_encoding_advertised() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_tool_detection() {
     // Test that tool detection doesn't crash on systems without perltidy/perlcritic
     // The actual detection happens in handle_initialize which uses Command::new
@@ -301,7 +297,6 @@ fn test_tool_detection() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_uri_normalization() {
     use perl_parser::workspace_index::WorkspaceIndex;
     use url::Url;

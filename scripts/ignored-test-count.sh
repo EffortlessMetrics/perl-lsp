@@ -34,6 +34,8 @@ counts[brokenpipe]=0
 counts[feature]=0
 counts[infra]=0
 counts[protocol]=0
+counts[stress]=0
+counts[bug]=0
 counts[bare]=0
 counts[other]=0
 
@@ -62,14 +64,20 @@ categorize_ignore() {
     local lower_reason="${reason,,}"
     local lower_context="${context,,}"
 
+    # Check for stress tests (should be run with --ignored for stress testing)
+    if [[ "$lower_reason" =~ stress|memory.stress|performance.stress|load.test|stack.overflow|designed.to.fail ]]; then
+        echo "stress"
     # Check for BrokenPipe/transport issues
-    if [[ "$lower_reason" =~ brokenpipe|broken.pipe|transport|flak|timeout|race|intermittent ]]; then
+    elif [[ "$lower_reason" =~ brokenpipe|broken.pipe|transport|flak|timeout|race|intermittent ]]; then
         echo "brokenpipe"
+    # Check for known bugs that need fixing
+    elif [[ "$lower_reason" =~ ^bug:|bug:\ |known.bug|regression|incorrect.behavior|parser.bug|missing.*notification|missing.*initialize|server.returns.*instead|exposes.*|will.kill|mut_[0-9]+|known.inconsistencies|matching.issue|investigate|instead.of.expected|different.error.format|expects.*but.implementation ]]; then
+        echo "bug"
     # Check for feature-gated/not implemented
-    elif [[ "$lower_reason" =~ feature|not.implemented|unimplemented|wip|work.in.progress|pending ]]; then
+    elif [[ "$lower_reason" =~ feature|not.implemented|unimplemented|wip|work.in.progress|pending|when.implemented|remove.when|ac[0-9]+:|not.yet|tdd.scaffold|scaffold|doesn\'t.support|doesn.t.support|doesn.t.handle|parser.limitation|expected.to.fail|not.fully.supported|enable.after|after.phase ]]; then
         echo "feature"
     # Check for infrastructure/TODO
-    elif [[ "$lower_reason" =~ infra|todo|fixme|needs|requires|setup|config|environment ]]; then
+    elif [[ "$lower_reason" =~ infra|todo|fixme|needs|requires|setup|config|environment|run.with|only.run.after|only.run.when ]]; then
         echo "infra"
     # Check for protocol compliance
     elif [[ "$lower_reason" =~ protocol|lsp|dap|compliance|spec|specification ]]; then
@@ -155,7 +163,7 @@ done < <(find "$REPO_ROOT/crates" -name "*.rs" -type f 2>/dev/null)
 
 # Calculate total
 total=0
-for cat in brokenpipe feature infra protocol bare other; do
+for cat in brokenpipe feature infra protocol stress bug bare other; do
     ((total += counts[$cat])) || true
 done
 
@@ -194,7 +202,7 @@ echo "==============================================="
 printf "%-12s %8s %8s %8s\n" "Category" "Count" "Baseline" "Delta"
 echo "-----------------------------------------------"
 
-for cat in brokenpipe feature infra protocol bare other; do
+for cat in brokenpipe feature infra protocol stress bug bare other; do
     base_val=${baseline[$cat]:-0}
     delta=$(format_delta ${counts[$cat]} $base_val)
     printf "%-12s %8d %8d %8b\n" "$cat" "${counts[$cat]}" "$base_val" "$delta"
@@ -212,7 +220,7 @@ if [[ "${VERBOSE:-}" == "1" ]]; then
     echo ""
     echo "Detailed breakdown by category:"
     echo ""
-    for cat in brokenpipe feature infra protocol bare other; do
+    for cat in brokenpipe feature infra protocol stress bug bare other; do
         if [[ ${counts[$cat]} -gt 0 ]]; then
             echo -e "${YELLOW}=== $cat (${counts[$cat]}) ===${NC}"
             grep "^$cat|" "$DETAILS_FILE" | while IFS='|' read -r _ loc name reason; do
@@ -236,7 +244,7 @@ case "$MODE" in
         {
             echo "# Ignored test baseline - $(date -Iseconds)"
             echo "# Updated by: ignored-test-count.sh --update"
-            for cat in brokenpipe feature infra protocol bare other; do
+            for cat in brokenpipe feature infra protocol stress bug bare other; do
                 echo "$cat=${counts[$cat]}"
             done
             echo "total=$total"

@@ -37,6 +37,20 @@ pub const SERVER_ERROR_END: i32 = -32000;
 /// Unknown error code (for internal use)
 pub const UNKNOWN_ERROR_CODE: i32 = -32001;
 
+/// Connection closed - The connection was closed unexpectedly
+///
+/// Used when a BrokenPipe or similar transport error indicates
+/// the client/server connection has been terminated.
+/// Reserved server error range: -32000 to -32099
+pub const CONNECTION_CLOSED: i32 = -32050;
+
+/// Transport error - A general transport-layer error occurred
+///
+/// Used for I/O errors that are not specifically connection closures,
+/// such as write failures, buffer overflows, etc.
+/// Reserved server error range: -32000 to -32099
+pub const TRANSPORT_ERROR: i32 = -32051;
+
 // ============================================================================
 // LSP 3.17 Standard Error Codes
 // ============================================================================
@@ -177,6 +191,29 @@ pub fn document_not_found_error() -> Value {
 /// Create an internal error
 pub fn internal_error(message: &str) -> JsonRpcError {
     JsonRpcError { code: INTERNAL_ERROR, message: message.to_string(), data: None }
+}
+
+/// Create a connection closed error
+///
+/// Used when the connection to the client has been terminated (e.g., BrokenPipe).
+/// This is a transport-layer error, distinct from protocol-level InvalidRequest.
+pub fn connection_closed_error() -> JsonRpcError {
+    JsonRpcError {
+        code: CONNECTION_CLOSED,
+        message: "Connection closed".to_string(),
+        data: None,
+    }
+}
+
+/// Create a transport error with custom message
+///
+/// Used for general I/O/transport errors that aren't specifically connection closures.
+pub fn transport_error(message: &str) -> JsonRpcError {
+    JsonRpcError {
+        code: TRANSPORT_ERROR,
+        message: message.to_string(),
+        data: None,
+    }
 }
 
 // ============================================================================
