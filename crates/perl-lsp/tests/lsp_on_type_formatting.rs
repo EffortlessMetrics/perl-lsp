@@ -2,6 +2,7 @@ use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]
+
 fn on_type_braces_indent() {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
@@ -56,6 +57,7 @@ fn on_type_braces_indent() {
 }
 
 #[test]
+
 fn on_type_closing_brace_dedent() {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {

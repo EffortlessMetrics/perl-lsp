@@ -2,6 +2,7 @@ use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]
+
 fn semantic_tokens_emit_data() {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {

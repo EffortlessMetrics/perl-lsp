@@ -104,7 +104,7 @@ sub nested {
 }
 
 #[test]
-#[ignore] // Parser does not yet support C-style for loop syntax: for (my $i = 0; $i < 5; $i++)
+#[ignore = "FEATURE: Parser does not yet support C-style for loop syntax"]
 fn test_folding_ranges_blocks() {
     let mut server = setup_server();
 

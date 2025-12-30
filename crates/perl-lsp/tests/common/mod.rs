@@ -28,13 +28,18 @@
 // Re-export test_utils for semantic tests
 pub mod test_utils;
 
-// Error codes
+// Error codes aligned with crates/perl-parser/src/lsp/protocol/errors.rs
+/// JSON-RPC reserved: Server error range is -32000 to -32099
 const ERR_TEST_TIMEOUT: i64 = -32000;
+/// Connection closed - BrokenPipe or similar transport termination
+const ERR_CONNECTION_CLOSED: i64 = -32050;
+/// Transport error - general I/O failures that aren't connection closures
+const ERR_TRANSPORT_ERROR: i64 = -32051;
 
 use serde_json::{Value, json};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 const PENDING_CAP: usize = 512; // Prevent unbounded growth of pending message queue
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
@@ -68,8 +73,8 @@ pub struct LspServer {
     _stdout_thread: std::thread::JoinHandle<()>,
     _stderr_thread: std::thread::JoinHandle<()>,
     pending: VecDeque<Value>,
-    /// Atomic flag to prevent writes after shutdown begins
-    is_shutting_down: Arc<AtomicBool>,
+    /// Flag to track if shutdown has been initiated (prevents double-shutdown)
+    shutdown_initiated: std::sync::atomic::AtomicBool,
 }
 
 impl LspServer {
@@ -81,11 +86,6 @@ impl LspServer {
     /// Get mutable access to the stdin writer
     pub fn stdin_writer(&mut self) -> &mut BufWriter<ChildStdin> {
         &mut self.writer
-    }
-
-    /// Check if shutdown is in progress
-    pub fn is_shutting_down(&self) -> bool {
-        self.is_shutting_down.load(Ordering::SeqCst)
     }
 }
 
@@ -343,7 +343,7 @@ pub fn start_lsp_server() -> LspServer {
         _stdout_thread,
         _stderr_thread,
         pending: VecDeque::new(),
-        is_shutting_down: Arc::new(AtomicBool::new(false)),
+        shutdown_initiated: std::sync::atomic::AtomicBool::new(false),
     };
 
     // Brief delay to allow server to fully initialize before returning
@@ -353,52 +353,55 @@ pub fn start_lsp_server() -> LspServer {
 }
 
 pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
-    // Guard: Check if shutdown is in progress
-    if server.is_shutting_down.load(Ordering::SeqCst) {
-        return json!({"error":{"code":-32051,"message":"Server is shutting down"}});
-    }
-
-    // Ensure every request has an id so we can match the response deterministically
+    // IMPORTANT: Extract/assign ID FIRST, before any early returns.
+    // This ensures error responses can include the proper request ID.
     let id = match request.get("id") {
-        Some(v) => Some(v.clone()),
+        Some(v) => v.clone(),
         None => {
             let nid = next_id();
             request["id"] = json!(nid);
-            Some(json!(nid))
+            json!(nid)
         }
     };
 
     let body = request.to_string();
     if let Err(e) = send_message_inner(&mut server.writer, &body) {
-        // Handle write errors gracefully - BrokenPipe during teardown is expected
-        return if e.kind() == io::ErrorKind::BrokenPipe {
-            connection_closed_error()
-        } else {
-            internal_transport_error(&format!("Write failed: {}", e))
-        };
+        // Handle write errors gracefully with proper JSON-RPC envelope
+        // BrokenPipe during teardown is expected; other errors are transport failures
+        return map_send_error(Some(id), e, "send_request");
     }
 
     // Match by ID to avoid confusion with interleaved notifications
-    match id {
-        Some(Value::Number(n)) if n.as_i64().is_some() => {
+    match &id {
+        Value::Number(n) if n.as_i64().is_some() => {
             read_response_matching_i64(server, n.as_i64().unwrap(), default_timeout())
-                .unwrap_or_else(
-                    || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
-                )
+                .unwrap_or_else(|| {
+                    error_response_for_request(
+                        Some(id.clone()),
+                        ERR_TEST_TIMEOUT,
+                        "test harness timeout",
+                    )
+                })
         }
-        Some(v) => read_response_matching(server, &v, default_timeout()).unwrap_or_else(
-            || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
-        ),
-        None => unreachable!("we always assign an id"),
+        v => read_response_matching(server, v, default_timeout()).unwrap_or_else(|| {
+            error_response_for_request(Some(id.clone()), ERR_TEST_TIMEOUT, "test harness timeout")
+        }),
+    }
+}
+
+/// Maps I/O send errors to proper JSON-RPC error responses.
+///
+/// BrokenPipe → CONNECTION_CLOSED (-32050)
+/// Other I/O errors → TRANSPORT_ERROR (-32051)
+fn map_send_error(id: Option<Value>, e: io::Error, context: &str) -> Value {
+    if e.kind() == io::ErrorKind::BrokenPipe {
+        connection_closed_error_for_request(id)
+    } else {
+        transport_error_for_request(id, &format!("{}: {}", context, e))
     }
 }
 
 pub fn send_notification(server: &mut LspServer, notification: Value) {
-    // Guard: Check if shutdown is in progress - silently return
-    if server.is_shutting_down.load(Ordering::SeqCst) {
-        return;
-    }
-
     let body = notification.to_string();
     // Ignore write errors during notification sends - BrokenPipe during teardown is expected
     let _ = send_message_inner(&mut server.writer, &body);
@@ -489,15 +492,42 @@ fn send_message_inner(writer: &mut impl Write, body: &str) -> io::Result<()> {
     writer.flush()
 }
 
-/// Creates an error response for connection-closed scenarios.
-/// Uses error code -32050 (CONNECTION_CLOSED) from the server-defined error range.
-fn connection_closed_error() -> Value {
-    json!({"error":{"code":-32050,"message":"Connection closed"}})
+/// Creates a JSON-RPC 2.0 error response with proper envelope.
+///
+/// All error responses MUST include `jsonrpc` and `id` fields per JSON-RPC 2.0 spec.
+/// The `id` should be extracted from the original request before any error handling.
+fn error_response_for_request(id: Option<Value>, code: i64, message: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id.unwrap_or(Value::Null),
+        "error": {
+            "code": code,
+            "message": message
+        }
+    })
+}
+
+/// Creates an error response for connection-closed scenarios (BrokenPipe).
+fn connection_closed_error_for_request(id: Option<Value>) -> Value {
+    error_response_for_request(id, ERR_CONNECTION_CLOSED, "Connection closed")
 }
 
 /// Creates an error response for internal transport errors.
+fn transport_error_for_request(id: Option<Value>, msg: &str) -> Value {
+    error_response_for_request(id, ERR_TRANSPORT_ERROR, msg)
+}
+
+// Legacy functions for backward compatibility with code that doesn't have request context
+// These return responses with null id (valid JSON-RPC but less informative)
+
+/// Creates an error response for connection-closed scenarios (legacy, no request context).
+fn connection_closed_error() -> Value {
+    connection_closed_error_for_request(None)
+}
+
+/// Creates an error response for internal transport errors (legacy, no request context).
 fn internal_transport_error(msg: &str) -> Value {
-    json!({"error":{"code":-32603,"message":msg}})
+    transport_error_for_request(None, msg)
 }
 
 /// Blocking receive with a sane default timeout to avoid hangs.
@@ -564,10 +594,6 @@ pub fn read_response_matching_i64(server: &mut LspServer, id: i64, dur: Duration
 
 /// Write raw bytes (for malformed/binary frame tests).
 pub fn send_raw(server: &mut LspServer, bytes: &[u8]) {
-    if server.is_shutting_down.load(Ordering::SeqCst) {
-        return;
-    }
-
     // Ignore write errors - BrokenPipe during teardown is expected
     let _ = server.writer.write_all(bytes).and_then(|_| server.writer.flush());
 }
@@ -644,12 +670,8 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
     {
         let body = init.to_string();
         if let Err(e) = send_message_inner(&mut server.writer, &body) {
-            // Handle write errors gracefully - return error response
-            return if e.kind() == io::ErrorKind::BrokenPipe {
-                connection_closed_error()
-            } else {
-                internal_transport_error(&format!("Initialize write failed: {}", e))
-            };
+            // Handle write errors gracefully with proper JSON-RPC envelope (id=1)
+            return map_send_error(Some(json!(1)), e, "initialize");
         }
     }
 
@@ -739,21 +761,14 @@ pub fn await_index_ready(server: &mut LspServer) {
     }
 }
 
-/// Gracefully shut down the server with proper guard mechanism.
-/// This function is idempotent - calling it multiple times is safe.
-///
-/// The shutdown sequence:
-/// 1. Set shutdown flag to prevent further sends
-/// 2. Send shutdown request directly (bypassing guard)
-/// 3. Send exit notification directly (bypassing guard)
-/// 4. Wait for process to terminate (with timeout)
-/// 5. Force kill if needed
+/// Gracefully shut the server down (best-effort) without hanging tests.
 pub fn shutdown_and_exit(server: &mut LspServer) {
-    // Guard: Set shutdown flag to prevent concurrent sends
-    // Use swap to check if we were already shutting down
-    if server.is_shutting_down.swap(true, Ordering::SeqCst) {
-        // Already shutting down - just wait for process to exit
-        for _ in 0..10 {
+    use std::sync::atomic::Ordering;
+
+    // Mark shutdown as initiated to prevent duplicate shutdown in Drop
+    if server.shutdown_initiated.swap(true, Ordering::SeqCst) {
+        // Already initiated, just wait for exit
+        for _ in 0..20 {
             if server.process.try_wait().ok().flatten().is_some() {
                 return;
             }
@@ -762,52 +777,31 @@ pub fn shutdown_and_exit(server: &mut LspServer) {
         return;
     }
 
-    // Send shutdown request directly (bypass the guard since we just set it)
-    let shutdown_req = json!({
-        "jsonrpc": "2.0",
-        "id": 999_001,
-        "method": "shutdown",
-        "params": {}
-    });
-    let body = shutdown_req.to_string();
-    let _ = send_message_inner(&mut server.writer, &body);
+    // Try a graceful shutdown first; if the server ignores, we'll still exit the test.
+    let _ = send_request(
+        server,
+        json!({"jsonrpc":"2.0","id": 999_001,"method":"shutdown","params":{}}),
+    );
+    send_notification(server, json!({"jsonrpc":"2.0","method":"exit"}));
 
-    // Brief wait for shutdown response
-    let _ = read_response_matching_i64(server, 999_001, Duration::from_millis(500));
-
-    // Send exit notification directly
-    let exit_notif = json!({"jsonrpc": "2.0", "method": "exit"});
-    let _ = send_message_inner(&mut server.writer, &exit_notif.to_string());
-
-    // Wait for process to terminate gracefully
+    // Give it a moment, then force-kill if needed.
     for _ in 0..20 {
         if server.process.try_wait().ok().flatten().is_some() {
             return;
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-
-    // Force kill if graceful shutdown failed
     let _ = server.process.kill();
-    let _ = server.process.wait();
 }
 
 /// Send raw message to server (for testing malformed input)
 pub fn send_raw_message(server: &mut LspServer, content: &str) {
-    if server.is_shutting_down.load(Ordering::SeqCst) {
-        return;
-    }
-
     // Ignore write errors - BrokenPipe during teardown is expected
     let _ = send_message_inner(&mut server.writer, content);
 }
 
 /// Send request without waiting for response
 pub fn send_request_no_wait(server: &mut LspServer, req: Value) {
-    if server.is_shutting_down.load(Ordering::SeqCst) {
-        return;
-    }
-
     let body = req.to_string();
     // Ignore write errors - BrokenPipe during teardown is expected
     let _ = send_message_inner(&mut server.writer, &body);
@@ -815,10 +809,46 @@ pub fn send_request_no_wait(server: &mut LspServer, req: Value) {
 
 impl Drop for LspServer {
     fn drop(&mut self) {
-        // Best-effort cleanup if shutdown wasn't called.
-        if self.process.try_wait().ok().flatten().is_none() {
+        use std::sync::atomic::Ordering;
+
+        // Check if already exited
+        if self.process.try_wait().ok().flatten().is_some() {
+            return;
+        }
+
+        // Check if shutdown was already initiated by explicit call
+        if self.shutdown_initiated.swap(true, Ordering::SeqCst) {
+            // Already initiated, just wait for exit then force-kill if needed
+            for _ in 0..50 {
+                if self.process.try_wait().ok().flatten().is_some() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
             let _ = self.process.kill();
             let _ = self.process.wait();
+            return;
         }
+
+        // Best-effort graceful shutdown (never panic in Drop)
+        // 1. Try to send shutdown request
+        let shutdown_body = r#"{"jsonrpc":"2.0","id":999999,"method":"shutdown","params":{}}"#;
+        let _ = send_message_inner(&mut self.writer, shutdown_body);
+
+        // 2. Try to send exit notification
+        let exit_body = r#"{"jsonrpc":"2.0","method":"exit"}"#;
+        let _ = send_message_inner(&mut self.writer, exit_body);
+
+        // 3. Wait briefly for graceful exit (max 500ms)
+        for _ in 0..50 {
+            if self.process.try_wait().ok().flatten().is_some() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        // 4. Fall back to hard kill if graceful shutdown didn't work
+        let _ = self.process.kill();
+        let _ = self.process.wait();
     }
 }

@@ -7,6 +7,7 @@ use support::lsp_harness::LspHarness;
 /// Test that disabled features are properly gated
 /// This prevents accidental feature leaks when handlers are registered without guards
 #[test]
+
 fn test_type_hierarchy_advertised() {
     let client_caps = json!({
         "textDocument": {
@@ -30,6 +31,7 @@ fn test_type_hierarchy_advertised() {
 
 /// Test that features marked as not advertised don't appear in capabilities
 #[test]
+
 fn test_non_advertised_features_hidden() {
     let client_caps = json!({
         "textDocument": {

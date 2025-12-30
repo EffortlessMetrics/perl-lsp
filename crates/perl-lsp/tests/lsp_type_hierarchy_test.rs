@@ -3,7 +3,7 @@ use serde_json::json;
 
 /// Test Type Hierarchy support (LSP 3.17)
 #[test]
-#[ignore = "FEATURE: Type hierarchy provider returns null for prepare request - needs implementation"]
+
 fn test_type_hierarchy_prepare() {
     let mut server = LspServer::new();
 
@@ -78,7 +78,7 @@ sub new {
 }
 
 #[test]
-#[ignore = "FEATURE: Type hierarchy provider returns null for prepare request - needs implementation"]
+
 fn test_type_hierarchy_supertypes() {
     let mut server = LspServer::new();
 
@@ -170,7 +170,7 @@ package Parent2;
 }
 
 #[test]
-#[ignore = "FEATURE: Type hierarchy provider returns null for prepare request - needs implementation"]
+
 fn test_type_hierarchy_subtypes() {
     let mut server = LspServer::new();
 
@@ -263,6 +263,7 @@ our @ISA = ('Base');
 }
 
 #[test]
+
 fn test_type_hierarchy_capability_advertised() {
     let mut server = LspServer::new();
 
@@ -291,7 +292,7 @@ fn test_type_hierarchy_capability_advertised() {
 }
 
 #[test]
-#[ignore = "FEATURE: Type hierarchy provider returns null for prepare request - needs implementation"]
+
 fn test_type_hierarchy_with_namespace_packages() {
     let mut server = LspServer::new();
 
