@@ -70,7 +70,6 @@ fn parse_messages(data: &[u8]) -> Vec<Value> {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_diagnostics_clear_protocol_framing() {
     // Buffer to capture all output from the server
     let buffer = Arc::new(Mutex::new(Vec::new()));
@@ -99,6 +98,9 @@ fn test_diagnostics_clear_protocol_framing() {
             "capabilities": {}
         }),
     );
+
+    // Send initialized notification (required by LSP protocol)
+    send("initialized", None, json!({}));
 
     // Open document
     send(

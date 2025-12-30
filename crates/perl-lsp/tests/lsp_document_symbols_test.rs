@@ -1,20 +1,12 @@
 //! Tests for textDocument/documentSymbol LSP feature
 //!
-//! ## Test Status (Phase 1 Stabilization)
-//! These tests are currently IGNORED due to flaky BrokenPipe errors during LSP
-//! initialization in CI environments. The errors are environmental/timing related,
-//! not functional bugs in the document symbol provider.
-//!
-//! **Resolution Strategy:**
-//! - Phase 2: Port to stable harness (spawn_lsp, handshake_initialize, barriers)
-//! - Phase 3: Re-enable after demonstrating 100% pass rate with nextest retries
-//!
-//! **Technical Context:**
-//! BrokenPipe errors occur when test infrastructure tears down the LSP server
-//! before all async operations complete. The stable harness addresses this with
-//! proper shutdown sequencing and synchronization barriers.
-
-#![cfg_attr(test, allow(unused))] // Tests currently ignored, will be re-enabled in Phase 2
+//! These tests validate the document symbol provider functionality including:
+//! - Basic symbol extraction (packages, subroutines, variables)
+//! - Nested symbol structures (closures, multiple packages)
+//! - Empty document handling
+//! - Constants and labels
+//! - All variable types (scalar, array, hash, our, local, state)
+//! - Hierarchical symbol structures
 
 use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
@@ -66,7 +58,6 @@ fn open_document(server: &mut LspServer, uri: &str, content: &str) {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_symbols_basic() {
     let mut server = setup_server();
 
@@ -138,7 +129,6 @@ sub calculate {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_symbols_nested() {
     let mut server = setup_server();
 
@@ -200,7 +190,6 @@ sub another_sub {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_symbols_empty_document() {
     let mut server = setup_server();
 
@@ -227,7 +216,6 @@ fn test_document_symbols_empty_document() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_symbols_with_constants() {
     let mut server = setup_server();
 
@@ -269,7 +257,6 @@ sub area {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_symbols_with_labels() {
     let mut server = setup_server();
 
@@ -312,7 +299,6 @@ sub process {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_symbols_all_variable_types() {
     let mut server = setup_server();
 
@@ -374,7 +360,6 @@ state $persistent = 0;
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_symbols_hierarchical_structure() {
     let mut server = setup_server();
 

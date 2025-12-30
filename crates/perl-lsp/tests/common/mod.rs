@@ -356,8 +356,14 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
     };
 
     let body = request.to_string();
-    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
-    server.writer.flush().unwrap();
+    if let Err(e) = send_message_inner(&mut server.writer, &body) {
+        // Handle write errors gracefully - BrokenPipe during teardown is expected
+        return if e.kind() == io::ErrorKind::BrokenPipe {
+            connection_closed_error()
+        } else {
+            internal_transport_error(&format!("Write failed: {}", e))
+        };
+    }
 
     // Match by ID to avoid confusion with interleaved notifications
     match id {
@@ -376,8 +382,8 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
 
 pub fn send_notification(server: &mut LspServer, notification: Value) {
     let body = notification.to_string();
-    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
-    server.writer.flush().unwrap();
+    // Ignore write errors during notification sends - BrokenPipe during teardown is expected
+    let _ = send_message_inner(&mut server.writer, &body);
 }
 
 fn default_timeout() -> Duration {
@@ -458,6 +464,23 @@ pub fn adaptive_sleep_ms(base_ms: u64) -> Duration {
     Duration::from_millis(base_ms * multiplier)
 }
 
+/// Helper function to send a JSON-RPC message over the wire.
+/// Returns io::Result to allow graceful error handling.
+fn send_message_inner(writer: &mut impl Write, body: &str) -> io::Result<()> {
+    write!(writer, "Content-Length: {}\r\n\r\n{}", body.len(), body)?;
+    writer.flush()
+}
+
+/// Creates an error response for connection-closed scenarios.
+fn connection_closed_error() -> Value {
+    json!({"error":{"code":-32600,"message":"Connection closed"}})
+}
+
+/// Creates an error response for internal transport errors.
+fn internal_transport_error(msg: &str) -> Value {
+    json!({"error":{"code":-32603,"message":msg}})
+}
+
 /// Blocking receive with a sane default timeout to avoid hangs.
 pub fn read_response(server: &mut LspServer) -> Value {
     read_response_timeout(server, default_timeout()).unwrap_or_else(
@@ -522,8 +545,8 @@ pub fn read_response_matching_i64(server: &mut LspServer, id: i64, dur: Duration
 
 /// Write raw bytes (for malformed/binary frame tests).
 pub fn send_raw(server: &mut LspServer, bytes: &[u8]) {
-    server.writer.write_all(bytes).unwrap();
-    server.writer.flush().unwrap();
+    // Ignore write errors - BrokenPipe during teardown is expected
+    let _ = server.writer.write_all(bytes).and_then(|_| server.writer.flush());
 }
 
 /// Read a notification matching the given method name
@@ -597,8 +620,14 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
     // write without reading
     {
         let body = init.to_string();
-        write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
-        server.writer.flush().unwrap();
+        if let Err(e) = send_message_inner(&mut server.writer, &body) {
+            // Handle write errors gracefully - return error response
+            return if e.kind() == io::ErrorKind::BrokenPipe {
+                connection_closed_error()
+            } else {
+                internal_transport_error(&format!("Initialize write failed: {}", e))
+            };
+        }
     }
 
     // wait specifically for id=1 - use extended timeout for initialization
@@ -708,15 +737,15 @@ pub fn shutdown_and_exit(server: &mut LspServer) {
 
 /// Send raw message to server (for testing malformed input)
 pub fn send_raw_message(server: &mut LspServer, content: &str) {
-    write!(server.writer, "Content-Length: {}\r\n\r\n{}", content.len(), content).unwrap();
-    server.writer.flush().unwrap();
+    // Ignore write errors - BrokenPipe during teardown is expected
+    let _ = send_message_inner(&mut server.writer, content);
 }
 
 /// Send request without waiting for response
 pub fn send_request_no_wait(server: &mut LspServer, req: Value) {
     let body = req.to_string();
-    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
-    server.writer.flush().unwrap();
+    // Ignore write errors - BrokenPipe during teardown is expected
+    let _ = send_message_inner(&mut server.writer, &body);
 }
 
 impl Drop for LspServer {
