@@ -3,8 +3,9 @@
 //! Handles textDocument/documentSymbol and textDocument/foldingRange requests.
 
 use super::super::{byte_to_utf16_col, *};
-use crate::lsp::protocol::req_uri;
 use crate::lsp::fallback::text::folding_ranges_from_text;
+use crate::lsp::protocol::req_uri;
+use crate::lsp::state::document_symbol_cap;
 
 impl LspServer {
     /// Handle textDocument/documentSymbol request
@@ -12,6 +13,8 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        let cap = document_symbol_cap();
+
         if let Some(params) = params {
             let uri = req_uri(&params)?;
 
@@ -122,11 +125,30 @@ impl LspServer {
                         document_symbols.push(symbol_info);
                     }
 
+                    // Apply cap to document symbols
+                    if document_symbols.len() > cap {
+                        eprintln!(
+                            "DocumentSymbol: capping from {} to {}",
+                            document_symbols.len(),
+                            cap
+                        );
+                        document_symbols.truncate(cap);
+                    }
+
                     return Ok(Some(json!(document_symbols)));
                 } else {
                     // Fallback: Extract symbols via regex when parse fails
                     eprintln!("Using fallback symbol extraction for {}", uri);
-                    let symbols = self.extract_symbols_fallback(&doc.text);
+                    let mut symbols = self.extract_symbols_fallback(&doc.text);
+                    // Apply cap to fallback symbols
+                    if symbols.len() > cap {
+                        eprintln!(
+                            "DocumentSymbol (fallback): capping from {} to {}",
+                            symbols.len(),
+                            cap
+                        );
+                        symbols.truncate(cap);
+                    }
                     eprintln!("Returning {} fallback symbols", symbols.len());
                     return Ok(Some(json!(symbols)));
                 }

@@ -4,6 +4,8 @@
 
 use super::*;
 use crate::lsp::protocol::invalid_params;
+#[cfg(feature = "workspace")]
+use crate::workspace_index::IndexState;
 
 impl LspServer {
     /// Handle textDocument/didOpen notification
@@ -22,6 +24,12 @@ impl LspServer {
             let version = i32::try_from(version_i64).unwrap_or(0);
 
             eprintln!("Document opened: {}", uri);
+
+            // Notify coordinator of pending change (tracks parse storm)
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                coordinator.notify_change(uri);
+            }
 
             // Check cache first
             let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, text) {
@@ -75,10 +83,13 @@ impl LspServer {
             );
 
             // Index symbols for workspace search
+            // Note: Indexing is a MUTATION operation - use coordinator.index() directly
+            // This must happen BEFORE notify_parse_complete to keep work inside the tracking window
             if let Some(ref _ast) = ast_arc {
                 // Update the fast symbol index with symbols from workspace index
                 #[cfg(feature = "workspace")]
-                if let Some(ref workspace_index) = self.workspace_index {
+                if let Some(coordinator) = self.coordinator() {
+                    let workspace_index = coordinator.index();
                     let index_symbols = workspace_index.find_symbols("");
                     let symbols = index_symbols
                         .into_iter()
@@ -99,13 +110,34 @@ impl LspServer {
 
                 // Update the workspace-wide index for cross-file features
                 #[cfg(feature = "workspace")]
-                if let Some(ref workspace_index) = self.workspace_index {
+                if let Some(coordinator) = self.coordinator() {
+                    let workspace_index = coordinator.index();
                     if let Ok(url) = url::Url::parse(uri) {
-                        if let Err(e) = workspace_index.index_file(url, text.to_string()) {
-                            eprintln!("Failed to index file {}: {}", uri, e);
+                        match workspace_index.index_file(url, text.to_string()) {
+                            Ok(()) => {
+                                // Transition to Ready on first successful index if still Building
+                                if matches!(coordinator.state(), IndexState::Building { .. }) {
+                                    let symbols = workspace_index.all_symbols();
+                                    coordinator.transition_to_ready(1, symbols.len());
+                                    eprintln!(
+                                        "Index transitioned to Ready after first file (symbols: {})",
+                                        symbols.len()
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to index file {}: {}", uri, e);
+                            }
                         }
                     }
                 }
+            }
+
+            // Notify coordinator that all work (parse + index) is complete (may trigger recovery)
+            // This must come AFTER indexing to keep mutation work inside the tracking window
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                coordinator.notify_parse_complete(uri);
             }
 
             // Send diagnostics
@@ -170,6 +202,12 @@ impl LspServer {
                 let text = doc.rope.to_string();
                 eprintln!("Document changed: {} (version {})", uri, version);
 
+                // Notify coordinator of pending change (tracks parse storm)
+                #[cfg(feature = "workspace")]
+                if let Some(coordinator) = self.coordinator() {
+                    coordinator.notify_change(uri);
+                }
+
                 // Check cache first
                 let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, &text) {
                     eprintln!("Using cached AST for {}", uri);
@@ -229,6 +267,11 @@ impl LspServer {
                             existing_doc.version,
                             target_version
                         );
+                        // Still notify completion even if discarding, to keep coordinator state consistent
+                        #[cfg(feature = "workspace")]
+                        if let Some(coordinator) = self.coordinator() {
+                            coordinator.notify_parse_complete(uri);
+                        }
                         return Ok(());
                     }
                 }
@@ -239,11 +282,14 @@ impl LspServer {
                 drop(documents);
 
                 // Index symbols for workspace search
+                // Note: Indexing is a MUTATION operation - use coordinator.index() directly
+                // This must happen BEFORE notify_parse_complete to keep work inside the tracking window
                 if let Some(ref _ast) = ast_arc {
                     // Update the workspace-wide index for cross-file features
                     // Note: version is maintained by the document state
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
+                    if let Some(coordinator) = self.coordinator() {
+                        let workspace_index = coordinator.index();
                         if let Ok(url) = url::Url::parse(uri) {
                             let doc_content = self
                                 .documents
@@ -259,6 +305,13 @@ impl LspServer {
                     }
                 }
 
+                // Notify coordinator that all work (parse + index) is complete (may trigger recovery)
+                // This must come AFTER indexing to keep mutation work inside the tracking window
+                #[cfg(feature = "workspace")]
+                if let Some(coordinator) = self.coordinator() {
+                    coordinator.notify_parse_complete(uri);
+                }
+
                 // Send diagnostics
                 self.publish_diagnostics(uri);
             }
@@ -268,6 +321,9 @@ impl LspServer {
     }
 
     /// Handle didClose notification
+    ///
+    /// Deterministic state transition: notify coordinator of document close
+    /// so it can update pending change tracking if needed.
     pub(crate) fn handle_did_close(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
             let uri = params
@@ -277,13 +333,26 @@ impl LspServer {
 
             eprintln!("Document closed: {}", uri);
 
+            // Notify coordinator of pending change to track cleanup work
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                coordinator.notify_change(uri);
+            }
+
             // Remove from documents
             self.documents.lock().unwrap().remove(uri);
 
             // Clear from workspace index
+            // Note: Mutation operation - use coordinator.index() directly
             #[cfg(feature = "workspace")]
-            if let Some(ref workspace_index) = self.workspace_index {
-                workspace_index.clear_file(uri);
+            if let Some(coordinator) = self.coordinator() {
+                coordinator.index().clear_file(uri);
+            }
+
+            // Notify coordinator that cleanup is complete
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                coordinator.notify_parse_complete(uri);
             }
 
             // Clear diagnostics for this file using centralized notify
