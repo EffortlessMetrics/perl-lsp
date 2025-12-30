@@ -48,6 +48,7 @@ test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
 lsp-ga-lock = []
 experimental-features = []  # Experimental LSP features for testing
+stress-tests = []  # Enable stress tests that are too slow for CI
 
 # Aspirational features for tests that should eventually pass
 constant-advanced = []  # Advanced constant pragma parsing (hash form, qw form)

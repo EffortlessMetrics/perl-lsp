@@ -156,14 +156,28 @@ severity = 3
 
 /// Create comprehensive test workspace for E2E testing
 fn create_comprehensive_workspace() -> (LspHarness, TempWorkspace) {
-    let (mut harness, workspace) = LspHarness::with_workspace(&[
-        ("lib/MyApp/DataProcessor.pm", e2e_fixtures::REALISTIC_PERL_MODULE),
-        ("test_script.pl", e2e_fixtures::TEST_SCRIPT),
-        (".perlcriticrc", e2e_fixtures::PERLCRITIC_CONFIG),
-    ])
-    .expect("Failed to create comprehensive test workspace");
+    let (harness, workspace, _init_result) = create_comprehensive_workspace_with_init();
+    (harness, workspace)
+}
 
-    // Initialize all documents
+/// Create comprehensive test workspace for E2E testing - returns init result for capability inspection
+fn create_comprehensive_workspace_with_init() -> (LspHarness, TempWorkspace, serde_json::Value) {
+    let workspace = TempWorkspace::new().expect("Failed to create temp workspace");
+
+    // Write all files to disk
+    workspace.write("lib/MyApp/DataProcessor.pm", e2e_fixtures::REALISTIC_PERL_MODULE)
+        .expect("Failed to write module file");
+    workspace.write("test_script.pl", e2e_fixtures::TEST_SCRIPT)
+        .expect("Failed to write script file");
+    workspace.write(".perlcriticrc", e2e_fixtures::PERLCRITIC_CONFIG)
+        .expect("Failed to write config file");
+
+    let mut harness = LspHarness::new_without_initialize();
+    let init_result = harness
+        .initialize_with_root(&workspace.root_uri, None)
+        .expect("Failed to initialize LSP server");
+
+    // Open all documents
     harness
         .open_document(
             &workspace.uri("lib/MyApp/DataProcessor.pm"),
@@ -182,20 +196,19 @@ fn create_comprehensive_workspace() -> (LspHarness, TempWorkspace) {
     // Wait for comprehensive indexing and analysis
     harness.wait_for_idle(Duration::from_millis(2000));
 
-    (harness, workspace)
+    (harness, workspace, init_result)
 }
 
 // ======================== AC5: Comprehensive Integration Test Suite ========================
 
 #[test]
-#[ignore = "BUG: Double-initialization - create_comprehensive_workspace() already initializes server"]
+#[ignore = "FEATURE: perl.runCritic not detecting 'use strict' violations - perlcritic integration incomplete"]
 // AC5:integration - Complete Issue #145 workflow validation
 fn test_issue_145_complete_workflow() {
-    let (mut harness, workspace) = create_comprehensive_workspace();
+    let (mut harness, workspace, init_result) = create_comprehensive_workspace_with_init();
 
     // Step 1: Verify server capabilities include new features
-    // Initialize the server to get capabilities
-    let init_result = harness.initialize_default().expect("Server should initialize successfully");
+    // Server was initialized by create_comprehensive_workspace_with_init(), use the returned init_result
 
     let capabilities =
         init_result.get("capabilities").expect("Initialize result should contain capabilities");

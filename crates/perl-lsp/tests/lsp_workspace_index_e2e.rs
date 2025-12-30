@@ -99,7 +99,6 @@ sub new_name {
 
 /// Test LSP workspace/symbol request with index
 #[test]
-#[ignore = "BUG: Missing initialized notification - Server not initialized error"]
 fn test_lsp_workspace_symbols_with_index() {
     let mut server = LspServer::new();
 
@@ -115,6 +114,15 @@ fn test_lsp_workspace_symbols_with_index() {
         })),
     };
     server.handle_request(init_request);
+
+    // Send initialized notification
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    };
+    server.handle_request(initialized_notification);
 
     // Open two files
     let open_a = JsonRpcRequest {
@@ -183,7 +191,6 @@ fn test_lsp_workspace_symbols_with_index() {
 
 /// Test cross-file go-to-definition
 #[test]
-#[ignore = "BUG: Missing initialized notification - Server not initialized error"]
 fn test_cross_file_definition() {
     let mut server = LspServer::new();
 
@@ -199,6 +206,15 @@ fn test_cross_file_definition() {
         })),
     };
     server.handle_request(init_request);
+
+    // Send initialized notification
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    };
+    server.handle_request(initialized_notification);
 
     // Open file with definition
     let open_def = JsonRpcRequest {

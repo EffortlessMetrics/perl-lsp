@@ -290,7 +290,7 @@ fn test_out_of_bounds_position() {
 }
 
 #[test]
-#[ignore = "STRESS: Rapid concurrent edits test - requires proper shutdown handling for reliability"]
+#[cfg_attr(not(feature = "stress-tests"), ignore = "STRESS: Rapid concurrent edits test - requires proper shutdown handling for reliability")]
 fn test_concurrent_document_edits() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -354,7 +354,7 @@ fn test_concurrent_document_edits() {
 }
 
 #[test]
-#[ignore = "STRESS: Version mismatch edge case test - needs shutdown handling"]
+#[cfg_attr(not(feature = "stress-tests"), ignore = "STRESS: Version mismatch edge case test - needs shutdown handling")]
 fn test_version_mismatch() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -416,7 +416,7 @@ fn test_version_mismatch() {
 }
 
 #[test]
-#[ignore = "STRESS: Invalid regex edge case - needs shutdown handling for CI reliability"]
+#[cfg_attr(not(feature = "stress-tests"), ignore = "STRESS: Invalid regex edge case - needs shutdown handling for CI reliability")]
 fn test_invalid_regex_pattern() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -466,7 +466,7 @@ fn test_invalid_regex_pattern() {
 }
 
 #[test]
-#[ignore = "STRESS: Circular dependency stress test - needs proper shutdown"]
+#[cfg_attr(not(feature = "stress-tests"), ignore = "STRESS: Circular dependency stress test - needs proper shutdown")]
 fn test_circular_module_dependency() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -531,7 +531,7 @@ fn test_circular_module_dependency() {
 }
 
 #[test]
-#[ignore = "STRESS: Long line stress test (100K char line) - run with --ignored for stress testing"]
+#[cfg_attr(not(feature = "stress-tests"), ignore = "STRESS: Long line stress test (100K char line) - run with --ignored for stress testing")]
 fn test_extremely_long_line() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -581,7 +581,7 @@ fn test_extremely_long_line() {
 }
 
 #[test]
-#[ignore = "STRESS: Deep nesting stress test (100 levels) - run with --ignored for stress testing"]
+#[cfg_attr(not(feature = "stress-tests"), ignore = "STRESS: Deep nesting stress test (100 levels) - run with --ignored for stress testing")]
 fn test_deeply_nested_structure() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -953,7 +953,7 @@ fn test_invalid_capability_request() {
 }
 
 #[test]
-#[ignore = "STRESS: Unicode edge case stress test - needs proper shutdown"]
+#[cfg_attr(not(feature = "stress-tests"), ignore = "STRESS: Unicode edge case stress test - needs proper shutdown")]
 fn test_unicode_unhappy_paths() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -1003,7 +1003,7 @@ fn test_unicode_unhappy_paths() {
 }
 
 #[test]
-#[ignore = "STRESS: Memory stress test (100 documents) - run with --ignored for stress testing"]
+#[cfg_attr(not(feature = "stress-tests"), ignore = "STRESS: Memory stress test (100 documents) - run with --ignored for stress testing")]
 fn test_memory_stress() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
