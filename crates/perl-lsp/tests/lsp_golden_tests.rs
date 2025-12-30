@@ -190,7 +190,6 @@ impl Drop for TestContext {
 // ===================== Golden Tests =====================
 
 #[test]
-#[ignore = "BROKENPIPE: Flaky golden test in CI during LSP initialization (environmental/timing)"]
 fn test_hover_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/hover_test.pl";
@@ -231,7 +230,6 @@ fn test_hover_golden() {
 }
 
 #[test]
-#[ignore = "BROKENPIPE: Flaky golden test in CI during LSP initialization (environmental/timing)"]
 fn test_diagnostics_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/diagnostics_test.pl";
@@ -254,7 +252,6 @@ fn test_diagnostics_golden() {
 }
 
 #[test]
-#[ignore = "BROKENPIPE: Flaky golden test in CI during LSP initialization (environmental/timing)"]
 fn test_completion_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/completion_test.pl";
@@ -292,7 +289,6 @@ fn test_completion_golden() {
 }
 
 #[test]
-#[ignore = "BROKENPIPE: Flaky golden test in CI during LSP initialization (environmental/timing)"]
 fn test_semantic_tokens_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/hover_test.pl";
@@ -317,7 +313,6 @@ fn test_semantic_tokens_golden() {
 }
 
 #[test]
-#[ignore = "BROKENPIPE: Flaky golden test in CI during LSP initialization (environmental/timing)"]
 fn test_folding_ranges_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/hover_test.pl";
@@ -350,7 +345,6 @@ fn test_folding_ranges_golden() {
 // ===================== Edit Loop Fuzzing =====================
 
 #[test]
-#[ignore = "BROKENPIPE: Flaky golden test in CI during LSP initialization (environmental/timing)"]
 fn test_edit_loop_robustness() {
     let mut ctx = TestContext::new();
 

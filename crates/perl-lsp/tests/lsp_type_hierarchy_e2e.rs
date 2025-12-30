@@ -4,7 +4,6 @@ mod support;
 use support::lsp_client::LspClient;
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn prepare_and_subtypes() {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
@@ -74,7 +73,6 @@ fn prepare_and_subtypes() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn multiple_inheritance() {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
@@ -131,7 +129,6 @@ use parent qw(Mixin1 Mixin2);
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn isa_array_inheritance() {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
@@ -188,7 +185,6 @@ our @ISA = ('Parent1', 'Parent2');
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn type_hierarchy_ignores_string_literals() {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);

@@ -7,7 +7,6 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 /// Ensures the LSP server is secure and handles edge cases properly
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_path_traversal_prevention() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -58,7 +57,6 @@ fn test_path_traversal_prevention() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_code_injection_prevention() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -110,7 +108,6 @@ fn test_code_injection_prevention() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_null_byte_injection() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -154,7 +151,6 @@ fn test_null_byte_injection() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_format_string_vulnerability() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -208,7 +204,6 @@ fn test_format_string_vulnerability() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_integer_overflow_prevention() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -255,7 +250,6 @@ fn test_integer_overflow_prevention() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_special_file_handling() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -308,7 +302,6 @@ fn test_special_file_handling() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_protocol_confusion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -342,7 +335,6 @@ fn test_protocol_confusion() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_resource_uri_validation() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -396,7 +388,6 @@ fn test_resource_uri_validation() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_encoding_edge_cases() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -453,7 +444,6 @@ fn test_encoding_edge_cases() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_symlink_and_hardlink_handling() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -533,7 +523,6 @@ fn test_symlink_and_hardlink_handling() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_permission_denied_simulation() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -583,7 +572,6 @@ fn test_permission_denied_simulation() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_time_based_attacks() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

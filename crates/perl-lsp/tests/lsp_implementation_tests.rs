@@ -4,7 +4,6 @@ mod support;
 use support::lsp_harness::LspHarness;
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_implementation_find_subclasses() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");
@@ -43,7 +42,6 @@ my $pet = Animal->new();
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_implementation_method_overrides() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");
@@ -97,7 +95,6 @@ sub process { print "Another process\n" }
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_implementation_interface_pattern() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");
@@ -136,7 +133,6 @@ sub deserialize { return "from xml" }
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_implementation_no_implementations() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");

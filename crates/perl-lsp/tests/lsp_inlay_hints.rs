@@ -2,7 +2,6 @@ use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn inlay_hints_for_substr_and_types() {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
