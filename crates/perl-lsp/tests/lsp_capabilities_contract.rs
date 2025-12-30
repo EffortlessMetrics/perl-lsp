@@ -101,6 +101,7 @@ fn test_ga_capabilities_contract() {
 
 /// Test that unsupported methods return proper errors
 #[test]
+
 fn test_unsupported_methods_return_error() {
     let mut server = LspServer::new();
 

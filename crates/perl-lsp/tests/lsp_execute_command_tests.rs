@@ -32,6 +32,7 @@ fn setup_server() -> LspServer {
 }
 
 #[test]
+
 fn test_execute_command_run_file() {
     let mut server = setup_server();
 
@@ -82,6 +83,7 @@ print "Hello, World!\n";
 }
 
 #[test]
+
 fn test_execute_command_run_tests() {
     let mut server = setup_server();
 
@@ -141,6 +143,7 @@ is(1 + 1, 2, "Math works");
 }
 
 #[test]
+
 fn test_execute_command_unknown() {
     let mut server = setup_server();
 
@@ -168,6 +171,7 @@ fn test_execute_command_unknown() {
 }
 
 #[test]
+
 fn test_execute_command_capabilities() {
     let mut server = LspServer::new();
 

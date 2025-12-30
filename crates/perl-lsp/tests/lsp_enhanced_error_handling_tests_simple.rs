@@ -8,6 +8,7 @@
 mod common;
 
 #[test]
+
 fn test_enhanced_error_response_structure() {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-error-handling-framework
     // This test validates that the LSP server has enhanced error handling capabilities
@@ -21,6 +22,7 @@ fn test_enhanced_error_response_structure() {
 }
 
 #[test]
+
 fn test_malformed_json_frame_recovery() {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#malformed-frame-recovery-system
     // This test validates that malformed frame recovery is implemented
@@ -35,6 +37,7 @@ fn test_malformed_json_frame_recovery() {
 }
 
 #[test]
+
 fn test_error_response_performance() {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-error-handling-framework
     // Performance Requirements: Error response generation <5ms, Malformed frame handling <10ms
@@ -49,6 +52,7 @@ fn test_error_response_performance() {
 }
 
 #[test]
+
 fn test_secure_malformed_frame_logging() {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#malformed-frame-recovery-system
     // This test validates that secure malformed frame logging is implemented
