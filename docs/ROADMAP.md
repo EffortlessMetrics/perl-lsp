@@ -18,7 +18,7 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 | **perl-parser** (v3) ⭐ | **Production** | **1-150µs** | **100%** | Native parser, statement tracker, heredoc support |
 | **perl-lexer** | **Production** | Sub-microsecond | **100%** | Context-aware tokenization |
 | **perl-corpus** | **Production** | N/A | **272+ tests** | Comprehensive test suite with mutation hardening |
-| **perl-parser-pest** (v2) | **Legacy** | 200-450µs | **99.995%** | Maintained for compatibility |
+| **perl-parser-pest** (v2) | **Legacy** | 200-450µs | **99.995%** | Maintained for education and comparison |
 | **LSP Server** 🚀 | **~91% Ready** | <50ms | **~91% LSP 3.18** | Semantic-aware definition, workspace refactoring |
 | **Semantic Analyzer** ⭐ **NEW** | **Phase 1 Complete** | <1ms | **12/12 handlers** | Precise symbol resolution, lexical scoping |
 | **DAP Server** 🆕 | **Phase 1 Complete** | <100ms | **Bridge mode** | Full debugging support via Perl::LanguageServer |
