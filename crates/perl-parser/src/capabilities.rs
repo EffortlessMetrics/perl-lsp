@@ -184,7 +184,7 @@ impl BuildFlags {
             inline_completion: true, // Deterministic inline completions
             inline_values: true,     // Debug inline values
             moniker: true,           // Stable symbol identifiers
-            document_color: true,    // Color detection
+            document_color: false,   // Handler not implemented (returns -32601)
             formatting: false,       // Set based on perltidy availability
             range_formatting: false, // Set based on perltidy availability
             folding_range: true,
@@ -392,7 +392,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
                         SemanticTokenModifier::DEFAULT_LIBRARY,
                     ],
                 },
-                range: Some(false),
+                range: Some(true),
                 full: Some(SemanticTokensFullOptions::Bool(true)),
             }));
     }
