@@ -81,7 +81,6 @@ fn create_test_server() -> (LspHarness, TempWorkspace) {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_cross_file_definition() {
     // Ensure we use fast, deterministic fallbacks to avoid long waits
     unsafe {
@@ -124,7 +123,6 @@ fn test_cross_file_definition() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_cross_file_references() {
     // Ensure we use fast, deterministic fallbacks to avoid long waits
     unsafe {
@@ -166,7 +164,6 @@ fn test_cross_file_references() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_symbol_search() {
     // Ensure we use fast, deterministic fallbacks to avoid long waits
     unsafe {
@@ -197,7 +194,6 @@ fn test_workspace_symbol_search() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_extract_variable_returns_edits() {
     // Ensure we use fast, deterministic fallbacks to avoid long waits
     unsafe {
@@ -243,7 +239,6 @@ fn test_extract_variable_returns_edits() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC2:runCritic - perl.runCritic command integration with diagnostic workflow
 fn test_critic_violations_emit_diagnostics() {
     let (mut harness, workspace) = create_test_server();
@@ -332,7 +327,7 @@ sub calculate {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore = "Test generation code action not yet returning 'Generate test' action for subroutine ranges"]
 fn test_test_generation_actions_present() {
     let (mut harness, workspace) = create_test_server();
 
@@ -381,7 +376,6 @@ fn test_test_generation_actions_present() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_completion_detail_formatting() {
     // Ensure we use fast, deterministic fallbacks to avoid long waits
     unsafe {
@@ -428,7 +422,6 @@ fn test_completion_detail_formatting() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_hover_enriched_information() {
     // Ensure we use fast, deterministic fallbacks to avoid long waits
     unsafe {
@@ -483,7 +476,6 @@ fn test_hover_enriched_information() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_folding_ranges_work() {
     // Ensure we use fast, deterministic fallbacks to avoid long waits
     unsafe {
@@ -513,7 +505,6 @@ fn test_folding_ranges_work() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_utf16_definition_with_non_ascii_on_same_line() {
     // Ensure we use the fast, deterministic fallbacks in CI
     unsafe {
@@ -595,7 +586,6 @@ fn utf16_units(s: &str) -> usize {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_word_boundary_references() {
     // Ensure we use the fast, deterministic fallbacks
     unsafe {

@@ -33,7 +33,6 @@ fn setup_server() -> LspServer {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_code_lens_reference_counting() {
     let mut server = setup_server();
 
@@ -147,7 +146,6 @@ sub unused_function {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_code_lens_package_references() {
     let mut server = setup_server();
 

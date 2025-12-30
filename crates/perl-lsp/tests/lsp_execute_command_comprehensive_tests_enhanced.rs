@@ -77,7 +77,6 @@ fn create_enhanced_execute_command_server() -> (LspHarness, TempWorkspace) {
 // ======================== AC1: Enhanced Server Capabilities Testing ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC1:executeCommand - Enhanced server capabilities validation with LSP 3.17+ compliance
 fn test_enhanced_execute_command_server_capabilities() {
     let (mut harness, _workspace) = create_enhanced_execute_command_server();
@@ -137,7 +136,6 @@ fn test_enhanced_execute_command_server_capabilities() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC1:executeCommand - Protocol compliance validation with enhanced error handling
 fn test_enhanced_execute_command_protocol_compliance() {
     let (mut harness, _workspace) = create_enhanced_execute_command_server();
@@ -186,7 +184,6 @@ fn test_enhanced_execute_command_protocol_compliance() {
 // ======================== AC2: Enhanced perl.runCritic Testing ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC2:runCritic - Enhanced syntax error handling with proper response structure
 fn test_enhanced_perl_run_critic_syntax_error_handling() {
     let (mut harness, workspace) = create_enhanced_execute_command_server();
@@ -251,7 +248,6 @@ fn test_enhanced_perl_run_critic_syntax_error_handling() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC2:runCritic - Enhanced empty file handling with edge case validation
 fn test_enhanced_empty_file_handling() {
     let (mut harness, workspace) = create_enhanced_execute_command_server();
@@ -294,7 +290,6 @@ fn test_enhanced_empty_file_handling() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC2:runCritic - Performance validation with revolutionary threading preservation
 fn test_enhanced_performance_validation() {
     // Create large file content for performance testing
@@ -359,7 +354,7 @@ fn test_enhanced_performance_validation() {
 // ======================== AC4: Enhanced Protocol Compliance ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore] // BUG: Test skips LSP initialization before making requests, causing "Server not initialized" errors
 // AC4:protocolCompliance - URI handling with comprehensive validation
 fn test_enhanced_uri_handling() {
     let (mut harness, workspace) = create_enhanced_execute_command_server();
@@ -413,7 +408,7 @@ fn test_enhanced_uri_handling() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore] // BUG: Test skips LSP initialization before making requests, causing "Server not initialized" errors
 // AC4:protocolCompliance - Concurrent request handling validation
 fn test_enhanced_concurrent_handling() {
     let (mut harness, workspace) = create_enhanced_execute_command_server();
@@ -458,7 +453,7 @@ fn test_enhanced_concurrent_handling() {
 // ======================== Revolutionary Performance Integration ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore] // BUG: Test skips LSP initialization before making requests, causing "Server not initialized" errors
 // AC5:performance - Thread-aware timeout scaling validation
 fn test_revolutionary_performance_integration() {
     let (mut harness, workspace) = create_enhanced_execute_command_server();
