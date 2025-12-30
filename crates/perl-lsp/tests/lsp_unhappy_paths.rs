@@ -289,7 +289,8 @@ fn test_out_of_bounds_position() {
     shutdown_and_exit(&mut server);
 }
 
-#[ignore]
+#[test]
+#[ignore = "BROKENPIPE: Flaky concurrent edit handling in CI (race condition during rapid updates)"]
 fn test_concurrent_document_edits() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -352,7 +353,8 @@ fn test_concurrent_document_edits() {
     assert!(response["result"].is_array());
 }
 
-#[ignore]
+#[test]
+#[ignore = "BROKENPIPE: Flaky version mismatch handling in CI (timing-dependent)"]
 fn test_version_mismatch() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -413,7 +415,8 @@ fn test_version_mismatch() {
     assert!(response["result"].is_array() || response["error"].is_object());
 }
 
-#[ignore]
+#[test]
+#[ignore = "BROKENPIPE: Flaky regex error handling in CI during LSP initialization"]
 fn test_invalid_regex_pattern() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -462,7 +465,8 @@ fn test_invalid_regex_pattern() {
     assert!(response.is_object());
 }
 
-#[ignore]
+#[test]
+#[ignore = "BROKENPIPE: Flaky circular dependency handling in CI (timing-dependent)"]
 fn test_circular_module_dependency() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -526,7 +530,8 @@ fn test_circular_module_dependency() {
     assert!(response["result"].is_array());
 }
 
-#[ignore]
+#[test]
+#[ignore = "STRESS: Long line stress test (100K char line) - run with --ignored for stress testing"]
 fn test_extremely_long_line() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -575,7 +580,8 @@ fn test_extremely_long_line() {
     assert!(response.is_object());
 }
 
-#[ignore]
+#[test]
+#[ignore = "STRESS: Deep nesting stress test (100 levels) - run with --ignored for stress testing"]
 fn test_deeply_nested_structure() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -850,7 +856,8 @@ fn test_cancel_request() {
     shutdown_and_exit(&mut server);
 }
 
-#[ignore]
+#[test]
+#[ignore = "PROTOCOL: Server behavior after shutdown request - needs protocol compliance review"]
 fn test_shutdown_without_exit() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -893,7 +900,8 @@ fn test_shutdown_without_exit() {
     assert!(response["error"].is_object());
 }
 
-#[ignore]
+#[test]
+#[ignore = "PROTOCOL: Client capability negotiation edge case - needs protocol compliance review"]
 fn test_invalid_capability_request() {
     let mut server = start_lsp_server();
 
@@ -944,7 +952,8 @@ fn test_invalid_capability_request() {
     assert!(response.is_object());
 }
 
-#[ignore]
+#[test]
+#[ignore = "BROKENPIPE: Flaky Unicode edge case handling in CI (environmental/timing)"]
 fn test_unicode_unhappy_paths() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -993,7 +1002,8 @@ fn test_unicode_unhappy_paths() {
     assert!(response["result"].is_array());
 }
 
-#[ignore]
+#[test]
+#[ignore = "STRESS: Memory stress test (100 documents) - run with --ignored for stress testing"]
 fn test_memory_stress() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
