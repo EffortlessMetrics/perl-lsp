@@ -7,7 +7,6 @@ use url::Url;
 
 /// Test that workspace index properly tracks cross-file symbols
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_index_cross_file() {
     let index = WorkspaceIndex::new();
 
@@ -64,7 +63,6 @@ Foo::baz();
 
 /// Test that index updates when files change
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_index_file_updates() {
     let index = WorkspaceIndex::new();
     let uri = Url::parse("file:///workspace/test.pl").unwrap();
@@ -101,7 +99,7 @@ sub new_name {
 
 /// Test LSP workspace/symbol request with index
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore] // Missing `initialized` notification after initialize request - Server not initialized error
 fn test_lsp_workspace_symbols_with_index() {
     let mut server = LspServer::new();
 
@@ -185,7 +183,7 @@ fn test_lsp_workspace_symbols_with_index() {
 
 /// Test cross-file go-to-definition
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore] // Missing `initialized` notification after initialize request - Server not initialized error
 fn test_cross_file_definition() {
     let mut server = LspServer::new();
 

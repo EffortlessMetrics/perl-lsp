@@ -1,7 +1,6 @@
 //! Tests for document links feature
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_links_basic() {
     use url::Url;
 
@@ -21,7 +20,6 @@ use Foo::Bar::Baz;
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_url_handling() {
     use url::Url;
 
