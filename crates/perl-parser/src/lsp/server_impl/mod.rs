@@ -82,8 +82,7 @@ use url::Url;
 use crate::uri::parse_uri;
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{
-    IndexCoordinator, LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex,
-    uri_to_fs_path,
+    IndexCoordinator, LspWorkspaceSymbol, WorkspaceIndex, uri_to_fs_path,
 };
 
 #[cfg(feature = "workspace")]
@@ -540,7 +539,7 @@ impl LspServer {
     #[allow(deprecated)]
     pub fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
         // Implementation moved to lsp/utils.rs
-        position_to_offset(content, line, character).unwrap_or_else(|| content.len())
+        position_to_offset(content, line, character).unwrap_or(content.len())
     }
     // === END_TEST_ONLY_POSITION_HELPERS ===
 
