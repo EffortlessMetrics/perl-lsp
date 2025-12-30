@@ -165,8 +165,8 @@ impl LspServer {
                             eprintln!("Rename: no workspace feature, using same-file only");
                             // Fall through to same-file rename
                         }
-                        IndexAccessMode::Full(_) => {
-                            // Full workspace rename available
+                        IndexAccessMode::Full(coordinator) => {
+                            // Full workspace rename available - use coordinator's index directly
                             let documents = self.documents_guard();
                             if let Some(doc) = documents.get(uri) {
                                 if let Some(ref ast) = doc.ast {
@@ -178,14 +178,15 @@ impl LspServer {
                                         offset,
                                         current_pkg,
                                     ) {
-                                        if let Some(idx) = self.workspace_index() {
-                                            let edits = crate::workspace_rename::build_rename_edit(
-                                                &idx, &key, new_name,
-                                            );
-                                            let ws_edit =
-                                                crate::workspace_rename::to_workspace_edit(edits);
-                                            return Ok(Some(ws_edit));
-                                        }
+                                        // Use coordinator.index() directly instead of workspace_index()
+                                        // to ensure we go through routing policy
+                                        let idx = coordinator.index();
+                                        let edits = crate::workspace_rename::build_rename_edit(
+                                            idx, &key, new_name,
+                                        );
+                                        let ws_edit =
+                                            crate::workspace_rename::to_workspace_edit(edits);
+                                        return Ok(Some(ws_edit));
                                     }
                                 }
                             }

@@ -319,17 +319,37 @@ impl LspServer {
         self.index_coordinator.as_ref()
     }
 
-    /// Get the workspace index through the coordinator
+    /// Get the workspace index through the coordinator (DEPRECATED for handler use)
     ///
-    /// This method replaces direct field access to ensure all index access
-    /// goes through the coordinator lifecycle. Returns None if no coordinator
-    /// is available.
+    /// **WARNING**: Do NOT use this method in LSP handlers. Use one of:
+    /// - `route_index_access(self.coordinator())` for query operations
+    /// - `coordinator.index()` directly for mutation operations
     ///
-    /// **Note**: Prefer using `route_index_access(self.coordinator())` in handlers
-    /// for proper lifecycle-aware degraded behavior. Use this method only when
-    /// you need direct index access for mutation or reporting.
+    /// This method exists for backwards compatibility and diagnostic purposes only.
+    /// The grep guard in `scripts/gate-local.sh` enforces this restriction.
+    ///
+    /// # Usage in handlers
+    ///
+    /// Query operations (completion, references, navigation):
+    /// ```rust,ignore
+    /// let mode = route_index_access(self.coordinator());
+    /// match mode {
+    ///     IndexAccessMode::Full(coord) => { coord.index() }
+    ///     IndexAccessMode::Partial(_) | IndexAccessMode::None => { /* fallback */ }
+    /// }
+    /// ```
+    ///
+    /// Mutation operations (text sync, file watcher):
+    /// ```rust,ignore
+    /// if let Some(coordinator) = self.coordinator() {
+    ///     coordinator.notify_change(uri);
+    ///     let _ = coordinator.index().index_file(url, content);
+    ///     coordinator.notify_parse_complete(uri);
+    /// }
+    /// ```
     #[cfg(feature = "workspace")]
     #[inline]
+    #[allow(dead_code)] // Kept for diagnostics/compatibility, not used in handlers
     pub(crate) fn workspace_index(&self) -> Option<Arc<WorkspaceIndex>> {
         self.coordinator().map(|c| Arc::clone(c.index()))
     }

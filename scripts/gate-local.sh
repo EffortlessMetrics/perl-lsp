@@ -24,6 +24,32 @@ echo "╔═══════════════════════�
 echo "║ WSL-Safe Gate (jobs=$CARGO_BUILD_JOBS, threads=$RUST_TEST_THREADS, profile=$PROFILE)"
 echo "╚═══════════════════════════════════════════════════════════════════════════════╝"
 
+# =============================================================================
+# Coordinator Takeover Enforcement
+# =============================================================================
+# These guards ensure no handler bypasses routing or accesses workspace_index
+# directly. All cross-file queries must go through route_index_access().
+# All mutations must use coordinator.index() with paired lifecycle notifications.
+
+echo ""
+echo ">>> coordinator takeover enforcement (grep guards)"
+
+# Fail if any handler calls self.workspace_index() directly (bypass prevention)
+if grep -rn 'self\.workspace_index()' crates/perl-parser/src/lsp/server_impl 2>/dev/null; then
+    echo "ERROR: Found self.workspace_index() bypass in server_impl"
+    echo "All index access must go through coordinator or routing policy"
+    exit 1
+fi
+echo "  ✓ No workspace_index() bypasses found"
+
+# Fail if workspace_index field is re-introduced on LspServer
+if grep -rn 'workspace_index:.*Option<Arc<WorkspaceIndex>>' crates/perl-parser/src/lsp/server_impl/mod.rs 2>/dev/null; then
+    echo "ERROR: workspace_index field found on LspServer"
+    echo "Use index_coordinator field instead (coordinator-first pattern)"
+    exit 1
+fi
+echo "  ✓ No workspace_index field on LspServer"
+
 echo ""
 echo ">>> fmt check"
 cargo fmt --all -- --check
