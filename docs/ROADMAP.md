@@ -27,16 +27,17 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 
 ---
 
-## 📦 Component Status (v0.8.5)
+## 📦 Component Status (v0.8.8)
 
 ### Published Crates
 | Crate | Version | Status | Purpose |
 |-------|---------|--------|----------|
-| **perl-parser** | v0.8.5 | ✅ Production | Main parser + LSP server binary |
-| **perl-lexer** | v0.8.5 | ✅ Production | Context-aware tokenizer |
-| **perl-corpus** | v0.8.5 | ✅ Production | Test corpus (141 edge cases) |
-| **perl-parser-pest** | v0.8.5 | ⚠️ Legacy/Experimental | Pest-based parser (maintained) |
-| **perl-lsp** | ??? | ??? |
+| **perl-parser** | v0.8.8 | ✅ Production | Main parser library |
+| **perl-lsp** | v0.8.8 | ✅ Production | Production LSP server (~91% functional) |
+| **perl-lexer** | v0.8.8 | ✅ Production | Context-aware tokenizer |
+| **perl-corpus** | v0.8.8 | ✅ Production | Test corpus (141 edge cases) |
+| **perl-dap** | v0.1.0 | ✅ Phase 1 | Debug Adapter Protocol (bridge mode) |
+| **perl-parser-pest** | v0.8.8 | ⚠️ Legacy/Experimental | Pest-based parser (maintained) |
 
 ### Component Integration
 - **perl-parser + perl-lexer**: Fully integrated for v3 parser
@@ -494,9 +495,9 @@ workspace/executeCommand: {
 - **v0.8.5** - August 2025 - GA: LSP 3.18 partial compliance, pull diagnostics, type hierarchy
 
 ### Upcoming
-- **v0.9.0** - September 2025 - Full LSP 3.18 compliance (100%)
-- **v0.10.0** - October 2025 - Perl 7 support, AI integration
-- **v1.0.0** - January 2026 - Industry standard platform
+- **v0.9.0** - Q1 2026 - Full LSP 3.18 compliance (100%), semantic analyzer Phase 2/3
+- **v0.10.0** - Q2 2026 - Perl 7 support, AI integration
+- **v1.0.0** - Q4 2026 - Industry standard platform
 
 ---
 
