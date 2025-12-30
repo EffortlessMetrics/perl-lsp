@@ -562,7 +562,7 @@ fn test_response_without_request() {
 }
 
 #[test]
-#[ignore = "BrokenPipe when sending batch JSON-RPC arrays - server may not support batch mode"]
+#[ignore = "FEATURE: JSON-RPC batch requests not supported - server handles single requests only"]
 fn test_batch_request_violations() {
     let mut server = start_lsp_server();
 

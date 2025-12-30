@@ -4,6 +4,7 @@ use serde_json::json;
 use support::lsp_harness::LspHarness;
 
 #[test]
+
 fn test_shows_codelens_on_sub() {
     let doc = r#"
 sub add {
@@ -46,6 +47,7 @@ my $z = add(1, 2);
 }
 
 #[test]
+
 fn test_test_subroutine_gets_run_lens() {
     let doc = r#"
 sub test_addition {
@@ -87,6 +89,7 @@ sub add {
 }
 
 #[test]
+
 fn test_package_gets_references_lens() {
     let doc = r#"
 package MyModule;
@@ -119,6 +122,7 @@ sub new {
 }
 
 #[test]
+
 fn test_codelens_resolve() {
     let doc = r#"
 sub helper {

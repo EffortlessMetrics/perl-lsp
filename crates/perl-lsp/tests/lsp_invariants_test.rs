@@ -6,7 +6,9 @@
 #![allow(clippy::collapsible_if)]
 
 mod common;
-use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
+use common::{
+    initialize_lsp, send_notification, send_request, shutdown_and_exit, start_lsp_server,
+};
 use serde_json::json;
 
 /// Verify all responses have proper JSON-RPC structure
@@ -39,6 +41,7 @@ fn test_response_structure_invariants() {
 
     // Must have matching ID
     assert!(response.get("id").is_some(), "Response must have an id field");
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify error responses have proper structure
@@ -75,6 +78,7 @@ fn test_error_response_structure() {
         || code < -32000, // Server-defined errors
         "Error code must be standard JSON-RPC or server-defined"
     );
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify ID matching between request and response
@@ -114,11 +118,12 @@ fn test_id_matching_invariants() {
         }),
     );
     assert_eq!(response["id"], "test-id", "Response ID must match string request ID");
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify diagnostics always include version
 #[test]
-#[ignore] // Version field is optional in LSP spec
+#[ignore = "BUG: Diagnostics are not cleared after fixing error - needs investigation"]
 fn test_diagnostics_version_invariant() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -178,6 +183,7 @@ fn test_diagnostics_version_invariant() {
         let diags = diag["params"]["diagnostics"].as_array().unwrap();
         assert!(diags.is_empty(), "Fixed code should have empty diagnostics array");
     }
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify server doesn't crash on malformed JSON
@@ -206,6 +212,7 @@ fn test_no_crash_on_malformed_json() {
         }),
     );
     assert!(response["result"].is_array() || response["error"].is_object());
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify proper error for invalid method
@@ -226,11 +233,11 @@ fn test_invalid_request_errors() {
 
     assert!(response["error"].is_object());
     assert_eq!(response["error"]["code"], -32601); // Method not found
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify notifications don't produce responses
 #[test]
-#[ignore] // This test is flaky due to timing with diagnostics
 fn test_notifications_no_response() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -264,11 +271,11 @@ fn test_notifications_no_response() {
             Some("textDocument/publishDiagnostics")
         );
     }
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify server handles concurrent requests properly
 #[test]
-#[ignore] // This test needs rewriting for auto-generated IDs
 fn test_concurrent_request_handling() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -305,4 +312,5 @@ fn test_concurrent_request_handling() {
     // Should receive all IDs (order may vary)
     received_ids.sort();
     assert_eq!(received_ids, vec![200, 201, 202, 203, 204]);
+    shutdown_and_exit(&mut server);
 }

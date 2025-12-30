@@ -4,6 +4,7 @@ mod support;
 use support::lsp_harness::LspHarness;
 
 #[test]
+
 fn test_implementation_find_subclasses() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");
@@ -42,6 +43,7 @@ my $pet = Animal->new();
 }
 
 #[test]
+
 fn test_implementation_method_overrides() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");
@@ -95,6 +97,7 @@ sub process { print "Another process\n" }
 }
 
 #[test]
+
 fn test_implementation_interface_pattern() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");
@@ -133,6 +136,7 @@ sub deserialize { return "from xml" }
 }
 
 #[test]
+
 fn test_implementation_no_implementations() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");

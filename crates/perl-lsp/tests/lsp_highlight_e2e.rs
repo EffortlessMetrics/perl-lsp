@@ -4,6 +4,7 @@ mod support;
 use support::lsp_client::LspClient;
 
 #[test]
+
 fn highlights_read_and_write() {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
@@ -69,6 +70,7 @@ fn highlights_read_and_write() {
 }
 
 #[test]
+
 fn highlights_across_scopes() {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
@@ -104,6 +106,7 @@ $global++;
 }
 
 #[test]
+
 fn no_highlights_for_different_variables() {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);

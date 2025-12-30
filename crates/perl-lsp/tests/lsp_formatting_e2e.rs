@@ -6,6 +6,7 @@ mod support;
 use support::lsp_client::LspClient;
 
 #[test]
+
 fn document_formatting_with_perltidy() {
     // Skip test if perltidy is not available
     if std::process::Command::new("perltidy").arg("--version").output().is_err() {
@@ -55,6 +56,7 @@ fn document_formatting_with_perltidy() {
 }
 
 #[test]
+
 fn range_formatting() {
     // Skip test if perltidy is not available
     if std::process::Command::new("perltidy").arg("--version").output().is_err() {
@@ -108,6 +110,7 @@ sub second{my$b=2;return$b;}
 }
 
 #[test]
+
 fn formatting_preserves_comments() {
     // Skip test if perltidy is not available
     if std::process::Command::new("perltidy").arg("--version").output().is_err() {
@@ -164,6 +167,7 @@ return$x;
 }
 
 #[test]
+
 fn formatting_with_custom_config() {
     // Skip test if perltidy is not available
     if std::process::Command::new("perltidy").arg("--version").output().is_err() {

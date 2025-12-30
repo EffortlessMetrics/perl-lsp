@@ -188,7 +188,7 @@ fn create_comprehensive_workspace() -> (LspHarness, TempWorkspace) {
 // ======================== AC5: Comprehensive Integration Test Suite ========================
 
 #[test]
-#[ignore] // BUG: Test calls initialize_default() but server is already initialized by create_comprehensive_workspace() -> with_workspace()
+#[ignore = "BUG: Double-initialization - create_comprehensive_workspace() already initializes server"]
 // AC5:integration - Complete Issue #145 workflow validation
 fn test_issue_145_complete_workflow() {
     let (mut harness, workspace) = create_comprehensive_workspace();
@@ -316,7 +316,7 @@ fn test_issue_145_complete_workflow() {
 }
 
 #[test]
-#[ignore] // BUG: Cross-file definition lookup returns Err but test expects Ok - need to fix assertion logic
+#[ignore = "BUG: Cross-file definition lookup returns Err but test expects Ok"]
 // AC5:integration - Cross-file analysis and navigation
 fn test_cross_file_integration() {
     let (mut harness, workspace) = create_comprehensive_workspace();

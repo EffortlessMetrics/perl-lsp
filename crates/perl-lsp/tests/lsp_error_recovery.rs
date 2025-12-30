@@ -2,7 +2,10 @@ use serde_json::json;
 use std::time::Duration;
 
 mod common;
-use common::{completion_items, initialize_lsp, send_notification, send_request, start_lsp_server};
+use common::{
+    completion_items, initialize_lsp, send_notification, send_request, shutdown_and_exit,
+    start_lsp_server,
+};
 
 /// Test suite for error recovery scenarios
 /// Ensures the LSP server can recover from various error states
@@ -71,6 +74,7 @@ fn test_recover_from_parse_errors() {
     assert!(response["result"].is_array(), "Response was not an array: {}", response);
     let symbols = response["result"].as_array().unwrap();
     assert!(!symbols.is_empty());
+    shutdown_and_exit(&mut server);
 }
 
 #[test]
@@ -136,6 +140,7 @@ sub another_valid {
 
     assert!(function_names.contains(&"valid_function".to_string()));
     assert!(function_names.contains(&"another_valid".to_string()));
+    shutdown_and_exit(&mut server);
 }
 
 #[test]
@@ -224,6 +229,7 @@ fn test_incremental_edit_recovery() {
         }),
     );
     assert!(response["result"].is_object() || response["result"].is_null());
+    shutdown_and_exit(&mut server);
 }
 
 #[test]
@@ -301,6 +307,7 @@ fn test_workspace_recovery_after_error() {
     if !symbols.is_empty() {
         assert!(symbols.iter().any(|s| s["name"] == "foo"), "Workspace symbols: {:?}", symbols);
     }
+    shutdown_and_exit(&mut server);
 }
 
 #[test]
@@ -364,6 +371,7 @@ print $var;  # Another valid reference
     // When there are syntax errors, references might not be found
     // The important thing is that the server doesn't crash and returns a valid response
     eprintln!("Found {} references (may be 0 due to parse errors): {:?}", refs.len(), refs);
+    shutdown_and_exit(&mut server);
 }
 
 #[test]
@@ -419,6 +427,7 @@ sub broken {
 
     // Should suggest "print" despite earlier error
     assert!(items.iter().any(|item| item["label"] == "print"));
+    shutdown_and_exit(&mut server);
 }
 
 #[test]
@@ -494,6 +503,7 @@ $old_name++;
         );
         assert!(response["result"]["changes"].is_object());
     }
+    shutdown_and_exit(&mut server);
 }
 
 #[test]
@@ -542,6 +552,7 @@ my   $z   =   3;"#;
     );
     // Should either format what it can or return error gracefully
     assert!(response["result"].is_array() || response["error"].is_object());
+    shutdown_and_exit(&mut server);
 }
 
 #[test]
@@ -678,10 +689,12 @@ fn test_diagnostic_recovery() {
         );
         // For now, just verify the server didn't crash and can respond
         // Verify the server didn't crash and can respond (symbols vector is valid)
+        shutdown_and_exit(&mut server);
         return; // Skip the exact assertion for now
     }
 
     assert_eq!(symbols.len(), 3); // Should have all three variables
+    shutdown_and_exit(&mut server);
 }
 
 #[test]
@@ -731,6 +744,7 @@ my $result = my_func();  # Should still find definition
         }),
     );
     assert!(response["result"].is_array() || response["result"].is_object());
+    shutdown_and_exit(&mut server);
 }
 
 #[test]
@@ -784,4 +798,5 @@ sub broken {
         }),
     );
     assert!(response["result"].is_object() || response["result"].is_null());
+    shutdown_and_exit(&mut server);
 }
