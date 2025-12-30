@@ -3,8 +3,8 @@
 //! Handles textDocument/documentSymbol and textDocument/foldingRange requests.
 
 use super::super::{byte_to_utf16_col, *};
-use crate::lsp::protocol::req_uri;
 use crate::lsp::fallback::text::folding_ranges_from_text;
+use crate::lsp::protocol::req_uri;
 use crate::lsp::state::document_symbol_cap;
 
 impl LspServer {

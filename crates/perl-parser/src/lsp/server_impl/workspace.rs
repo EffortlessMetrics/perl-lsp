@@ -76,6 +76,7 @@ impl LspServer {
     }
 
     /// Search only open documents for symbols (degraded/fallback path)
+    #[cfg(feature = "workspace")]
     fn search_open_documents_for_symbols(
         &self,
         query: &str,
@@ -124,6 +125,17 @@ impl LspServer {
         all_symbols.truncate(cap);
         eprintln!("Workspace symbol: returned {} results from open documents", all_symbols.len());
         Ok(Some(json!(all_symbols)))
+    }
+
+    /// Search open documents for symbols (non-workspace stub)
+    #[cfg(not(feature = "workspace"))]
+    fn search_open_documents_for_symbols(
+        &self,
+        query: &str,
+        _cap: usize,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        eprintln!("Workspace symbol: no workspace feature, returning empty for query '{}'", query);
+        Ok(Some(json!([])))
     }
 
     /// Handle workspace/symbol request (legacy implementation)

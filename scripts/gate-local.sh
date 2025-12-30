@@ -59,8 +59,14 @@ echo ">>> clippy"
 cargo clippy --workspace --all-targets -- -D warnings
 
 echo ""
-echo ">>> workspace feature check"
+echo ">>> Feature matrix checks"
+echo "  Checking --no-default-features (minimal build)..."
+cargo check -p perl-parser --no-default-features
+echo "  ✓ Minimal build compiles"
+
+echo "  Checking --features workspace (full build)..."
 cargo check -p perl-parser --features workspace
+echo "  ✓ Workspace build compiles"
 
 echo ""
 echo ">>> Build perl-lsp binary (ensures tests use correct version)"
