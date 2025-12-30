@@ -416,21 +416,21 @@ We've built the most comprehensive Perl parsing solution available, **on track f
   - Thread-safe architecture
   - Production-ready status
 
-### 2025 Target Metrics
+### 2027 Target Metrics
 - **Adoption Goals**
-  - 10K+ VSCode extension installs
-  - 1K+ crates.io downloads
-  - 500+ GitHub stars
-  - 50+ contributors
-  - 10+ enterprise deployments
+  - 1K+ VSCode extension installs
+  - 0.1K+ crates.io downloads
+  - 50+ GitHub stars
+  - 5+ contributors
+  - 1+ enterprise deployments
 - **Performance Targets**
-  - <1ms incremental parsing
-  - <100ms for 100K LOC files
-  - <500MB memory for 1M LOC
+  - <10ms incremental parsing
+  - <1000ms for 100K LOC files
+  - <5000MB memory for 1M LOC
 - **Community Growth**
-  - 5+ editor integrations
-  - 100+ community plugins
-  - 1000+ Discord members
+  - 1+ editor integrations
+  - 10+ community plugins
+  - 1+ Discord members
 
 ---
 
