@@ -411,8 +411,10 @@ impl LspServer {
                 FileChangeType::CREATED => {
                     // Created
                     // Re-index the file if it's a Perl file
+                    // Note: Mutation operation - use coordinator.index() directly
                     #[cfg(feature = "workspace")]
-                    if let Some(workspace_index) = self.workspace_index() {
+                    if let Some(coordinator) = self.coordinator() {
+                        let workspace_index = coordinator.index();
                         if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
                             if let Some(path) = uri_to_fs_path(&uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
@@ -428,8 +430,10 @@ impl LspServer {
                 FileChangeType::CHANGED => {
                     // Changed
                     // Re-index the file
+                    // Note: Mutation operation - use coordinator.index() directly
                     #[cfg(feature = "workspace")]
-                    if let Some(workspace_index) = self.workspace_index() {
+                    if let Some(coordinator) = self.coordinator() {
+                        let workspace_index = coordinator.index();
                         if let Some(path) = uri_to_fs_path(&uri) {
                             if let Ok(content) = std::fs::read_to_string(&path) {
                                 if let Ok(url) = url::Url::parse(&uri) {
@@ -464,9 +468,10 @@ impl LspServer {
                 FileChangeType::DELETED => {
                     // Deleted
                     // Remove from index
+                    // Note: Mutation operation - use coordinator.index() directly
                     #[cfg(feature = "workspace")]
-                    if let Some(workspace_index) = self.workspace_index() {
-                        workspace_index.remove_file(&uri);
+                    if let Some(coordinator) = self.coordinator() {
+                        coordinator.index().remove_file(&uri);
                     }
 
                     // Remove from document store
@@ -517,9 +522,10 @@ impl LspServer {
 
                     if !old_module.is_empty() && !new_module.is_empty() {
                         // Find all files that reference the old module
+                        // Note: Query operation - use coordinator.index() for consistency
                         #[cfg(feature = "workspace")]
-                        let dependents = if let Some(workspace_index) = self.workspace_index() {
-                            workspace_index.find_dependents(&old_module)
+                        let dependents = if let Some(coordinator) = self.coordinator() {
+                            coordinator.index().find_dependents(&old_module)
                         } else {
                             Vec::new()
                         };
@@ -561,8 +567,12 @@ impl LspServer {
                     }
 
                     // Update the index for the renamed file
+                    // Note: Mutation operation - use coordinator with lifecycle tracking
                     #[cfg(feature = "workspace")]
-                    if let Some(workspace_index) = self.workspace_index() {
+                    if let Some(coordinator) = self.coordinator() {
+                        coordinator.notify_change(old_uri);
+                        coordinator.notify_change(new_uri);
+                        let workspace_index = coordinator.index();
                         workspace_index.remove_file(old_uri);
                         if let Some(path) = uri_to_fs_path(new_uri) {
                             if let Ok(content) = std::fs::read_to_string(&path) {
@@ -571,6 +581,8 @@ impl LspServer {
                                 }
                             }
                         }
+                        coordinator.notify_parse_complete(old_uri);
+                        coordinator.notify_parse_complete(new_uri);
                     }
                 }
 
@@ -597,9 +609,12 @@ impl LspServer {
                     eprintln!("File deleted: {}", uri);
 
                     // Remove from workspace index
+                    // Note: Mutation operation - use coordinator with lifecycle tracking
                     #[cfg(feature = "workspace")]
-                    if let Some(workspace_index) = self.workspace_index() {
-                        workspace_index.remove_file(uri);
+                    if let Some(coordinator) = self.coordinator() {
+                        coordinator.notify_change(uri);
+                        coordinator.index().remove_file(uri);
+                        coordinator.notify_parse_complete(uri);
                     }
 
                     // Remove from document store
@@ -749,11 +764,14 @@ impl LspServer {
                             }
 
                             // Re-index the file after changes
+                            // Note: Mutation operation - use coordinator with lifecycle tracking
                             #[cfg(feature = "workspace")]
-                            if let Some(workspace_index) = self.workspace_index() {
+                            if let Some(coordinator) = self.coordinator() {
+                                coordinator.notify_change(uri);
                                 if let Ok(url) = url::Url::parse(uri) {
-                                    let _ = workspace_index.index_file(url, doc.text.clone());
+                                    let _ = coordinator.index().index_file(url, doc.text.clone());
                                 }
+                                coordinator.notify_parse_complete(uri);
                             }
 
                             // Clear cached AST

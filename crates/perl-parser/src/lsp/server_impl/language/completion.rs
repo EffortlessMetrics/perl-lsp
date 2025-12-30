@@ -87,12 +87,19 @@ impl LspServer {
                 // Get completions, with fallback for missing AST
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
-                    // Get completions from the local completion provider
+                    // Only provide workspace index when Full access is available
+                    // This ensures we don't bypass routing policy
+                    #[cfg(feature = "workspace")]
+                    let workspace_idx = match &workspace_mode {
+                        IndexAccessMode::Full(coordinator) => Some(Arc::clone(coordinator.index())),
+                        _ => None,
+                    };
+
                     #[cfg(feature = "workspace")]
                     let provider = CompletionProvider::new_with_index_and_source(
                         ast,
                         &doc.text,
-                        self.workspace_index(),
+                        workspace_idx,
                     );
 
                     #[cfg(not(feature = "workspace"))]
@@ -358,6 +365,9 @@ impl LspServer {
                 params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
+            // Use routing to determine workspace index access mode
+            let workspace_mode = route_index_access(self.coordinator());
+
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
@@ -378,11 +388,19 @@ impl LspServer {
 
                 // Get completions with optimized cancellation support
                 let completions = if let Some(ast) = &doc.ast {
+                    // Only provide workspace index when Full access is available
+                    // This ensures we don't bypass routing policy
+                    #[cfg(feature = "workspace")]
+                    let workspace_idx = match &workspace_mode {
+                        IndexAccessMode::Full(coordinator) => Some(Arc::clone(coordinator.index())),
+                        _ => None,
+                    };
+
                     #[cfg(feature = "workspace")]
                     let provider = CompletionProvider::new_with_index_and_source(
                         ast,
                         &doc.text,
-                        self.workspace_index(),
+                        workspace_idx,
                     );
                     #[cfg(not(feature = "workspace"))]
                     let provider =
