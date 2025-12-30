@@ -11,6 +11,7 @@ use crate::{
     CompletionItemKind, CompletionProvider,
     cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, RequestCleanupGuard},
     lsp::protocol::{JsonRpcError, REQUEST_CANCELLED, req_position, req_uri},
+    lsp::server_impl::routing::{route_index_access, IndexAccessMode},
     lsp::state::{completion_cap, completion_deadline},
     type_inference::TypeInferenceEngine,
 };
@@ -76,12 +77,8 @@ impl LspServer {
                 params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
-            // Check index readiness (soft wait, no sleeps) - provide basic completion if not ready
-            #[cfg(feature = "workspace")]
-            let index_ready = self.workspace_index.as_ref().is_some_and(|idx| idx.has_symbols());
-
-            #[cfg(not(feature = "workspace"))]
-            let index_ready = false;
+            // Use routing to determine workspace index access mode
+            let workspace_mode = route_index_access(self.coordinator());
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -142,13 +139,14 @@ impl LspServer {
                     self.lexical_complete(&doc.text, offset)
                 };
 
-                // Add workspace-wide completions (functions and modules from other files)
-                // Only if index is ready (soft wait, no sleeps) and within deadline
+                // Add workspace-wide completions using routing policy
                 #[cfg(feature = "workspace")]
-                if index_ready
-                    && start.elapsed() < deadline
-                    && let Some(ref workspace_index) = self.workspace_index
-                {
+                if start.elapsed() < deadline {
+                    match &workspace_mode {
+                        IndexAccessMode::Full(coordinator) => {
+                            // Find matching symbols in the workspace
+                            let index = coordinator.index();
+
                     // Get the current context to filter relevant completions
                     let text_before = &doc.text[..offset.min(doc.text.len())];
                     let prefix = text_before
@@ -160,10 +158,7 @@ impl LspServer {
                         .rev()
                         .collect::<String>();
 
-                    // Find matching symbols in the workspace
-                    let workspace_symbols = workspace_index.find_symbols(&prefix);
-
-                    // Add unique workspace symbols as completions
+                            let workspace_symbols = index.find_symbols(&prefix);
                     use std::collections::HashSet;
                     let mut seen = HashSet::new();
                     for completion in &completions {
@@ -171,7 +166,7 @@ impl LspServer {
                     }
 
                     for symbol in workspace_symbols {
-                        // Check deadline periodically
+                                // Check cap limit
                         if completions.len() >= cap {
                             eprintln!("Completion: cap reached ({}), stopping workspace scan", cap);
                             break;
@@ -220,6 +215,15 @@ impl LspServer {
                             additional_edits: Vec::new(),
                             text_edit_range: None, // Workspace completions don't need precise text edit
                         });
+                    }
+                        }
+                        IndexAccessMode::Partial(reason) => {
+                            // Log but continue with local completions only
+                            eprintln!("Completion: workspace index partial ({})", reason);
+                        }
+                        IndexAccessMode::None => {
+                            // No workspace completions available
+                        }
                     }
                 }
 
