@@ -351,7 +351,7 @@ impl LspServer {
             if token.is_cancelled_relaxed() {
                 return Err(JsonRpcError {
                     code: REQUEST_CANCELLED,
-                    message: "Request cancelled".to_string(),
+                    message: "Request cancelled - completion provider".to_string(),
                     data: None,
                 });
             }
