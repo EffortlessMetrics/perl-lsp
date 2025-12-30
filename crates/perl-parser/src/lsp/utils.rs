@@ -363,11 +363,7 @@ pub fn pos_to_offset_bytes(text: &str, line: u32, ch: u32) -> usize {
 }
 
 /// Slice text within range
-pub fn slice_in_range<'a>(
-    text: &'a str,
-    start: (u32, u32),
-    end: (u32, u32),
-) -> (usize, usize, &'a str) {
+pub fn slice_in_range(text: &str, start: (u32, u32), end: (u32, u32)) -> (usize, usize, &str) {
     let s = pos_to_offset_bytes(text, start.0, start.1);
     let e = pos_to_offset_bytes(text, end.0, end.1);
     (s, e, &text[s.min(text.len())..e.min(text.len())])
