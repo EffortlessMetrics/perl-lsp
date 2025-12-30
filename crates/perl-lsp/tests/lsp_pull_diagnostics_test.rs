@@ -3,7 +3,6 @@ use serde_json::json;
 
 /// Test Pull Diagnostics support (LSP 3.17)
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_diagnostic() {
     let mut server = LspServer::new();
 
@@ -18,6 +17,15 @@ fn test_document_diagnostic() {
         })),
     };
     let _ = server.handle_request(init_request);
+
+    // Send initialized notification (required after successful initialize)
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized_notification);
 
     // Open a document with errors
     let uri = "file:///test.pl";
@@ -73,7 +81,6 @@ print $y;  # Undefined variable
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_diagnostic_unchanged() {
     let mut server = LspServer::new();
 
@@ -88,6 +95,15 @@ fn test_document_diagnostic_unchanged() {
         })),
     };
     let _ = server.handle_request(init_request);
+
+    // Send initialized notification (required after successful initialize)
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized_notification);
 
     // Open a document
     let uri = "file:///test.pl";
@@ -143,7 +159,6 @@ print "Hello, World!\n";
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_diagnostic() {
     let mut server = LspServer::new();
 
@@ -158,6 +173,15 @@ fn test_workspace_diagnostic() {
         })),
     };
     let _ = server.handle_request(init_request);
+
+    // Send initialized notification (required after successful initialize)
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized_notification);
 
     // Open multiple documents
     let uri1 = "file:///test1.pl";
@@ -229,7 +253,6 @@ print "OK\n";
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_diagnostic_provider_capability() {
     let mut server = LspServer::new();
 
@@ -257,7 +280,6 @@ fn test_diagnostic_provider_capability() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_diagnostic_with_previous_ids() {
     let mut server = LspServer::new();
 
@@ -272,6 +294,15 @@ fn test_workspace_diagnostic_with_previous_ids() {
         })),
     };
     let _ = server.handle_request(init_request);
+
+    // Send initialized notification (required after successful initialize)
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized_notification);
 
     // Open a document
     let uri = "file:///test.pl";

@@ -7,7 +7,6 @@ use common::*;
 
 /// Test that UTF-16 position conversions round-trip correctly
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_utf16_position_roundtrip() {
     // Test with a string containing various Unicode characters
     let test_strings = vec![
@@ -63,7 +62,6 @@ fn test_utf16_position_roundtrip() {
 
 /// Test with generated strings to simulate property-based testing
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_utf16_handles_various_strings() {
     // Test various edge cases that would be covered by property testing
     let test_cases = vec![

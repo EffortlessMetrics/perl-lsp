@@ -250,7 +250,6 @@ impl TestContext {
 // ===================== User Story Tests =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_user_story_debugging_workflow() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -300,7 +299,6 @@ print "Fibonacci(10) = $result\n";
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_user_story_refactoring_legacy_code() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -353,7 +351,7 @@ foreach $item (@array) {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore] // BUG: Test hangs forever on workspace symbol search - timeout issue
 fn test_user_story_multi_file_project_navigation() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -419,7 +417,6 @@ sub connect {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_user_story_test_driven_development() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -457,7 +454,6 @@ is($calc->multiply(3, 4), 12, 'Multiplication works');
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_user_story_performance_profiling() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -502,7 +498,6 @@ print "Result: $result, Time: $elapsed seconds\n";
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_user_story_regex_development() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -544,7 +539,6 @@ if ($html =~ m{<div\s+class=['"]([^'"]+)['"]\s*>(.*?)</div>}i) {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_user_story_database_integration() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -592,7 +586,6 @@ $dbh->disconnect();
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_user_story_web_development() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -639,7 +632,6 @@ app->start;
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_user_story_live_collaboration() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -678,7 +670,6 @@ sub process_data {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_user_story_package_management() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -712,7 +703,6 @@ WriteMakefile(
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_user_story_documentation_generation() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -797,7 +787,6 @@ This is free software.
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_user_story_error_handling() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -847,7 +836,6 @@ finally {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_user_story_configuration_management() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -896,7 +884,6 @@ print "API Key: $api_key\n";
 // ===================== Integration Test Suite =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_comprehensive_integration() {
     // This test ensures all components work together
     let mut ctx = TestContext::new();
@@ -972,7 +959,6 @@ sub run {
 // ===================== Performance Tests =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_performance_large_file() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -1005,7 +991,7 @@ fn test_performance_large_file() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore] // BUG: Test hangs forever on get_definition/get_references - timeout issue
 fn test_concurrent_operations() {
     let mut ctx = TestContext::new();
     ctx.initialize();

@@ -40,7 +40,7 @@ fn inline_completion(
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore] // Missing initialize request - Server not initialized error
 fn test_inline_completion_after_arrow() {
     let mut server = LspServer::new();
     let uri = "file:///test.pl";
@@ -52,7 +52,7 @@ fn test_inline_completion_after_arrow() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore] // Missing initialize request - Server not initialized error
 fn test_inline_completion_after_use() {
     let mut server = LspServer::new();
     let uri = "file:///test.pl";
@@ -67,7 +67,7 @@ fn test_inline_completion_after_use() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore] // Missing initialize request - Server not initialized error
 fn test_inline_completion_shebang() {
     let mut server = LspServer::new();
     let uri = "file:///test.pl";
@@ -79,7 +79,7 @@ fn test_inline_completion_shebang() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore] // Missing initialize request - Server not initialized error
 fn test_inline_completion_sub_body() {
     let mut server = LspServer::new();
     let uri = "file:///test.pl";
@@ -91,7 +91,7 @@ fn test_inline_completion_sub_body() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[ignore] // Missing initialize request - Server not initialized error
 fn test_inline_completion_no_suggestions() {
     let mut server = LspServer::new();
     let uri = "file:///test.pl";

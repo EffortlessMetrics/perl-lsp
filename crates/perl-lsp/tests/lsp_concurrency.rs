@@ -11,7 +11,6 @@ use common::{
 /// Ensures the LSP server handles concurrent requests correctly
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_concurrent_document_modifications() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -91,7 +90,6 @@ fn test_concurrent_document_modifications() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_concurrent_requests() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -151,7 +149,6 @@ fn test_concurrent_requests() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_race_condition_open_close() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -226,7 +223,6 @@ fn test_race_condition_open_close() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_symbol_during_changes() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -299,7 +295,6 @@ fn test_workspace_symbol_during_changes() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_reference_search_during_edits() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -371,7 +366,6 @@ fn test_reference_search_during_edits() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_completion_cache_invalidation() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -443,7 +437,6 @@ fn test_completion_cache_invalidation() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_diagnostic_publishing_race() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -503,7 +496,6 @@ fn test_diagnostic_publishing_race() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_multi_file_rename_race() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -565,7 +557,6 @@ fn test_multi_file_rename_race() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_call_hierarchy_during_refactoring() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -660,7 +651,6 @@ sub qux {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_semantic_tokens_consistency() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
