@@ -16,7 +16,7 @@ use lazy_static::lazy_static;
 use std::time::Instant;
 
 #[cfg(feature = "workspace")]
-use crate::workspace_index::IndexState;
+use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
 
 lazy_static! {
     /// Regex for matching fully-qualified Perl symbol names (e.g., Package::SubPackage::function)
@@ -58,15 +58,11 @@ impl LspServer {
                     // Check index state and use appropriate search strategy
                     #[cfg(feature = "workspace")]
                     {
-                        let is_ready = self
-                            .coordinator()
-                            .map(|c| matches!(c.state(), IndexState::Ready { .. }))
-                            .unwrap_or(false);
+                        let access_mode = route_index_access(self.coordinator());
 
-                        if !is_ready {
-                            eprintln!("References: index not ready, using same-file fallback");
-                            // Fall through to same-file semantic analysis at the end
-                        } else if let Some(ref workspace_index) = self.workspace_index {
+                        match access_mode {
+                            IndexAccessMode::Full(coordinator) => {
+                                let index = coordinator.index();
                             // Use symbol_at_cursor to get the symbol key
                             let current_package =
                                 crate::declaration::current_package_at(ast, offset);
@@ -76,11 +72,11 @@ impl LspServer {
                                 eprintln!("Looking for references of {:?}", symbol_key);
 
                                 // Try to find references using the symbol key
-                                let mut all_refs = workspace_index.find_refs(&symbol_key);
+                                let mut all_refs = index.find_refs(&symbol_key);
 
                                 // Add the definition if includeDeclaration is true
                                 if include_declaration {
-                                    if let Some(def) = workspace_index.find_def(&symbol_key) {
+                                    if let Some(def) = index.find_def(&symbol_key) {
                                         all_refs.push(def);
                                     }
                                 }
@@ -194,7 +190,7 @@ impl LspServer {
                                         symbol_key.name.to_string()
                                     };
 
-                                let refs = workspace_index.find_references(&symbol_name);
+                                let refs = index.find_references(&symbol_name);
                                 if !refs.is_empty() {
                                     // Cap results before conversion
                                     let capped_refs: Vec<_> = refs.into_iter().take(cap).collect();
@@ -237,25 +233,23 @@ impl LspServer {
                                                 kind: crate::workspace_index::SymKind::Sub,
                                             };
 
-                                            if let Some(ref workspace_index) = self.workspace_index
-                                            {
                                                 // Search for all references to this qualified symbol
                                                 let mut all_refs = Vec::new();
 
                                                 // Find references via symbol key
-                                                let refs = workspace_index.find_refs(&key);
+                                                let refs = index.find_refs(&key);
                                                 all_refs.extend(refs);
 
                                                 // Also try with qualified name
                                                 let symbol_name = format!("{}::{}", pkg, name);
                                                 let alt_refs =
-                                                    workspace_index.find_references(&symbol_name);
+                                                    index.find_references(&symbol_name);
                                                 all_refs.extend(alt_refs);
 
                                                 // Add definition if includeDeclaration is true
                                                 if include_declaration {
                                                     if let Some(def) =
-                                                        workspace_index.find_def(&key)
+                                                        index.find_def(&key)
                                                     {
                                                         all_refs.push(def);
                                                     }
@@ -335,10 +329,17 @@ impl LspServer {
                                                     return Ok(Some(json!(all_locations)));
                                                 }
                                             }
+                                            break;
                                         }
-                                        break;
                                     }
                                 }
+                            }
+                            IndexAccessMode::Partial(reason) => {
+                                eprintln!("References: {}, using same-file fallback", reason);
+                                // Fall through to same-file semantic analysis
+                            }
+                            IndexAccessMode::None => {
+                                // Fall through to same-file semantic analysis
                             }
                         }
                     }
