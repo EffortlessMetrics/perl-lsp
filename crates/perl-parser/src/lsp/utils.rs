@@ -99,15 +99,6 @@ pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<S
 
 /// Check if position is at word boundary (for accurate reference matching)
 pub fn is_word_boundary(text: &[u8], pos: usize, word_len: usize) -> bool {
-    // For Perl variables with sigils, we need special handling
-    // If the match starts with a sigil ($, @, %), check the character after the variable name
-    let _sigil_offset =
-        if pos < text.len() && (text[pos] == b'$' || text[pos] == b'@' || text[pos] == b'%') {
-            1
-        } else {
-            0
-        };
-
     // Check left boundary (before the sigil if present)
     if pos > 0 && is_modchar(text[pos - 1]) {
         return false;
@@ -124,11 +115,9 @@ pub fn is_word_boundary(text: &[u8], pos: usize, word_len: usize) -> bool {
 
 /// Find matching closing parenthesis
 pub fn find_matching_paren(s: &str, open_at: usize) -> Option<usize> {
-    // s[open_at] must be '('; walk forwards tracking (), [], {} and quotes.
+    // s[open_at] must be '('; walk forwards tracking () and quotes.
     let mut i = open_at;
     let mut depth_par = 0i32;
-    let mut _depth_brk = 0i32;
-    let mut _depth_brc = 0i32;
     let mut in_s = false;
     let mut in_d = false;
     while i < s.len() {
@@ -153,10 +142,6 @@ pub fn find_matching_paren(s: &str, open_at: usize) -> Option<usize> {
                         return Some(i);
                     }
                 }
-                b'[' => _depth_brk += 1,
-                b']' => _depth_brk -= 1,
-                b'{' => _depth_brc += 1,
-                b'}' => _depth_brc -= 1,
                 _ => {}
             }
         }
@@ -301,9 +286,7 @@ pub fn smart_arg_anchor(body: &str, rel: usize) -> usize {
     // valid anchors: sigils, barewords, deref braces and array/hash derefs
     // $, @, %, &, { (for @{ ... }, %{ ... }), [ (rare, but safe), or A-Za-z_ bareword
     let b = s.as_bytes().get(i).copied().unwrap_or(b' ');
-    if matches!(b, b'$' | b'@' | b'%' | b'&' | b'{' | b'[')
-        || b.is_ascii_alphabetic()
-        || b == b'_'
+    if matches!(b, b'$' | b'@' | b'%' | b'&' | b'{' | b'[') || b.is_ascii_alphabetic() || b == b'_'
     {
         return rel + i;
     }
@@ -316,18 +299,16 @@ pub fn arg_starts_in_call_body(body: &str) -> Vec<usize> {
     let mut starts = Vec::new();
     let mut i = 0usize;
     let mut depth_par = 0i32;
-    let mut _depth_brk = 0i32;
-    let mut _depth_brc = 0i32;
+    let mut depth_brk = 0i32;
+    let mut depth_brc = 0i32;
     let mut in_s = false;
     let mut in_d = false;
-    let mut _at_token = false;
     // First arg always starts at the first non-space
     while i < body.len() && body.as_bytes()[i].is_ascii_whitespace() {
         i += 1;
     }
     if i < body.len() {
         starts.push(i);
-        _at_token = true;
     }
     let mut j = i;
     while j < body.len() {
@@ -347,11 +328,11 @@ pub fn arg_starts_in_call_body(body: &str) -> Vec<usize> {
                 b'"' => in_d = true,
                 b'(' => depth_par += 1,
                 b')' => depth_par -= 1,
-                b'[' => _depth_brk += 1,
-                b']' => _depth_brk -= 1,
-                b'{' => _depth_brc += 1,
-                b'}' => _depth_brc -= 1,
-                b',' if depth_par == 0 && _depth_brk == 0 && _depth_brc == 0 => {
+                b'[' => depth_brk += 1,
+                b']' => depth_brk -= 1,
+                b'{' => depth_brc += 1,
+                b'}' => depth_brc -= 1,
+                b',' if depth_par == 0 && depth_brk == 0 && depth_brc == 0 => {
                     // next arg start = first non-space after comma
                     let mut k = j + 1;
                     while k < body.len() && body.as_bytes()[k].is_ascii_whitespace() {

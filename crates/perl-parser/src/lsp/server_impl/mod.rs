@@ -37,6 +37,8 @@ use crate::{
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
     implementation_provider::ImplementationProvider,
+    // Import fallback implementations
+    lsp::fallback::text::extract_text_based_code_lenses,
     // Note: InlayHintConfig and InlayHintsProvider are used in language/misc.rs
     // Import from new modular lsp structure
     // Note: JsonRpcError, JsonRpcRequest, JsonRpcResponse are pub use'd above
@@ -52,12 +54,8 @@ use crate::{
     lsp::transport::{log_response, read_message, write_message},
     // Import text processing helpers
     lsp::utils::{
-        byte_to_utf16_col, byte_to_line_col, get_text_around_offset, extract_module_reference,
-        position_to_offset, offset_to_position
-    },
-    // Import fallback implementations
-    lsp::fallback::text::{
-        extract_text_based_code_lenses, extract_text_based_symbols
+        byte_to_line_col, byte_to_utf16_col, extract_module_reference, get_text_around_offset,
+        offset_to_position, position_to_offset,
     },
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
@@ -87,6 +85,9 @@ use crate::workspace_index::{
     IndexCoordinator, LspLocation, LspPosition, LspRange, LspWorkspaceSymbol, WorkspaceIndex,
     uri_to_fs_path,
 };
+
+#[cfg(feature = "workspace")]
+use crate::lsp::fallback::text::extract_text_based_symbols;
 
 /// Lightweight view of a document for scan-heavy operations
 ///
@@ -317,6 +318,15 @@ impl LspServer {
     #[inline]
     pub(crate) fn coordinator(&self) -> Option<&Arc<IndexCoordinator>> {
         self.index_coordinator.as_ref()
+    }
+
+    /// Coordinator stub when workspace feature is disabled
+    ///
+    /// Returns None since no coordinator is available without workspace indexing.
+    #[cfg(not(feature = "workspace"))]
+    #[inline]
+    pub(crate) fn coordinator(&self) -> Option<&()> {
+        None
     }
 
     /// Get the workspace index through the coordinator (DEPRECATED for handler use)
@@ -636,6 +646,7 @@ impl LspServer {
     }
 
     /// Extract symbols from text when AST parsing fails
+    #[cfg(feature = "workspace")]
     fn extract_text_based_symbols(
         &self,
         text: &str,
@@ -643,6 +654,17 @@ impl LspServer {
         query: &str,
     ) -> Vec<LspWorkspaceSymbol> {
         extract_text_based_symbols(text, uri, query)
+    }
+
+    /// Extract symbols stub when workspace feature is disabled
+    #[cfg(not(feature = "workspace"))]
+    fn extract_text_based_symbols(
+        &self,
+        _text: &str,
+        _uri: &str,
+        _query: &str,
+    ) -> Vec<serde_json::Value> {
+        Vec::new()
     }
 
     /// Extract workspace symbols from a document's AST
@@ -684,8 +706,7 @@ impl LspServer {
             NodeKind::Subroutine { name, body, .. } => {
                 // Add the subroutine as a symbol if it has a name
                 if let Some(sub_name) = name {
-                    let (start_line, start_char) =
-                        byte_to_line_col(source, node.location.start);
+                    let (start_line, start_char) = byte_to_line_col(source, node.location.start);
                     let (end_line, end_char) = byte_to_line_col(source, node.location.end);
 
                     symbols.push(LspWorkspaceSymbol {
@@ -815,8 +836,7 @@ impl LspServer {
 
             NodeKind::Package { name, block, .. } => {
                 if name.to_lowercase().contains(&query_lower) {
-                    let (start_line, start_char) =
-                        byte_to_line_col(source, node.location.start);
+                    let (start_line, start_char) = byte_to_line_col(source, node.location.start);
                     let (end_line, end_char) = byte_to_line_col(source, node.location.end);
 
                     symbols.push(json!({
@@ -1132,8 +1152,8 @@ mod tests {
 
     #[test]
     fn code_action_append_uses_document_end() {
-        use std::sync::Arc;
         use ropey::Rope;
+        use std::sync::Arc;
 
         let server = LspServer::new();
         let uri = "file:///test.pl";

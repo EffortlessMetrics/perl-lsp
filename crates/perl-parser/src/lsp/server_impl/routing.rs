@@ -47,6 +47,7 @@
 
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{DegradationReason, IndexCoordinator, IndexState};
+#[cfg(feature = "workspace")]
 use std::sync::Arc;
 
 /// The resolved access mode for index-dependent operations
@@ -55,10 +56,10 @@ use std::sync::Arc;
 /// - `Full`: Index is ready for workspace-wide queries
 /// - `Partial`: Index is not ready, handlers should use same-file/open-doc fallback
 /// - `None`: No workspace feature enabled
+#[cfg(feature = "workspace")]
 #[derive(Debug)]
 pub enum IndexAccessMode<'a> {
     /// Full workspace access available
-    #[cfg(feature = "workspace")]
     Full(&'a Arc<IndexCoordinator>),
 
     /// Partial access - use same-file or open-doc fallback
@@ -69,18 +70,23 @@ pub enum IndexAccessMode<'a> {
     None,
 }
 
+/// The resolved access mode for index-dependent operations (no workspace)
+#[cfg(not(feature = "workspace"))]
+#[derive(Debug)]
+pub enum IndexAccessMode {
+    /// Partial access - use same-file or open-doc fallback
+    Partial(&'static str),
+
+    /// No workspace feature available
+    None,
+}
+
+#[cfg(feature = "workspace")]
 impl IndexAccessMode<'_> {
     /// Returns true if full workspace access is available
     #[inline]
     pub fn is_full(&self) -> bool {
-        #[cfg(feature = "workspace")]
-        {
-            matches!(self, IndexAccessMode::Full(_))
-        }
-        #[cfg(not(feature = "workspace"))]
-        {
-            false
-        }
+        matches!(self, IndexAccessMode::Full(_))
     }
 
     /// Returns true if only partial/same-file access is available
@@ -92,8 +98,30 @@ impl IndexAccessMode<'_> {
     /// Returns a description suitable for logging
     pub fn description(&self) -> &'static str {
         match self {
-            #[cfg(feature = "workspace")]
             IndexAccessMode::Full(_) => "full workspace access",
+            IndexAccessMode::Partial(reason) => reason,
+            IndexAccessMode::None => "no workspace feature",
+        }
+    }
+}
+
+#[cfg(not(feature = "workspace"))]
+impl IndexAccessMode {
+    /// Returns true if full workspace access is available
+    #[inline]
+    pub fn is_full(&self) -> bool {
+        false
+    }
+
+    /// Returns true if only partial/same-file access is available
+    #[inline]
+    pub fn is_partial(&self) -> bool {
+        matches!(self, IndexAccessMode::Partial(_))
+    }
+
+    /// Returns a description suitable for logging
+    pub fn description(&self) -> &'static str {
+        match self {
             IndexAccessMode::Partial(reason) => reason,
             IndexAccessMode::None => "no workspace feature",
         }
@@ -148,7 +176,7 @@ pub fn route_index_access(coordinator: Option<&Arc<IndexCoordinator>>) -> IndexA
 
 /// Route to index access mode (non-workspace version)
 #[cfg(not(feature = "workspace"))]
-pub(crate) fn route_index_access<T>(_coordinator: Option<&T>) -> IndexAccessMode<'static> {
+pub(crate) fn route_index_access<T>(_coordinator: Option<&T>) -> IndexAccessMode {
     IndexAccessMode::None
 }
 
