@@ -303,9 +303,9 @@ impl LspServer {
     pub(super) fn send_index_ready_notification(&self) -> io::Result<()> {
         #[cfg(feature = "workspace")]
         let (has_symbols, file_count, symbol_count) = {
-            let has = self.workspace_index.as_ref().map(|idx| idx.has_symbols()).unwrap_or(false);
-            let files =
-                self.workspace_index.as_ref().map(|idx| idx.all_symbols().len()).unwrap_or(0);
+            let idx = self.workspace_index();
+            let has = idx.as_ref().map(|i| i.has_symbols()).unwrap_or(false);
+            let files = idx.as_ref().map(|i| i.all_symbols().len()).unwrap_or(0);
             (has, if has { 1 } else { 0 }, files)
         };
 

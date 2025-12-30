@@ -63,175 +63,183 @@ impl LspServer {
                         match access_mode {
                             IndexAccessMode::Full(coordinator) => {
                                 let index = coordinator.index();
-                            // Use symbol_at_cursor to get the symbol key
-                            let current_package =
-                                crate::declaration::current_package_at(ast, offset);
-                            if let Some(symbol_key) =
-                                crate::declaration::symbol_at_cursor(ast, offset, current_package)
-                            {
-                                eprintln!("Looking for references of {:?}", symbol_key);
+                                // Use symbol_at_cursor to get the symbol key
+                                let current_package =
+                                    crate::declaration::current_package_at(ast, offset);
+                                if let Some(symbol_key) = crate::declaration::symbol_at_cursor(
+                                    ast,
+                                    offset,
+                                    current_package,
+                                ) {
+                                    eprintln!("Looking for references of {:?}", symbol_key);
 
-                                // Try to find references using the symbol key
-                                let mut all_refs = index.find_refs(&symbol_key);
+                                    // Try to find references using the symbol key
+                                    let mut all_refs = index.find_refs(&symbol_key);
 
-                                // Add the definition if includeDeclaration is true
-                                if include_declaration {
-                                    if let Some(def) = index.find_def(&symbol_key) {
-                                        all_refs.push(def);
+                                    // Add the definition if includeDeclaration is true
+                                    if include_declaration {
+                                        if let Some(def) = index.find_def(&symbol_key) {
+                                            all_refs.push(def);
+                                        }
                                     }
-                                }
 
-                                let mut workspace_locations: Vec<Value> = Vec::new();
-                                if !all_refs.is_empty() {
-                                    eprintln!("Found {} references via find_refs", all_refs.len());
-                                    // Convert internal Locations to LSP Locations
-                                    let lsp_locations =
-                                        crate::workspace_index::lsp_adapter::to_lsp_locations(
-                                            all_refs,
+                                    let mut workspace_locations: Vec<Value> = Vec::new();
+                                    if !all_refs.is_empty() {
+                                        eprintln!(
+                                            "Found {} references via find_refs",
+                                            all_refs.len()
                                         );
-                                    for loc in lsp_locations {
-                                        workspace_locations.push(json!(loc));
+                                        // Convert internal Locations to LSP Locations
+                                        let lsp_locations =
+                                            crate::workspace_index::lsp_adapter::to_lsp_locations(
+                                                all_refs,
+                                            );
+                                        for loc in lsp_locations {
+                                            workspace_locations.push(json!(loc));
+                                        }
                                     }
-                                }
 
-                                // Check deadline before text search
-                                if start.elapsed() >= deadline {
-                                    eprintln!(
-                                        "References: deadline exceeded, returning partial results"
-                                    );
-                                    workspace_locations.truncate(cap);
-                                    return Ok(Some(json!(workspace_locations)));
-                                }
-
-                                // Enhanced fallback: always search for both qualified and unqualified references
-                                // Snapshot only (uri, text) to minimize cloning overhead - we don't need
-                                // AST, rope, or other DocumentState fields for text search
-                                let docs_snapshot: Vec<(String, String)> = documents
-                                    .iter()
-                                    .map(|(k, v)| (k.clone(), v.text.clone()))
-                                    .collect();
-
-                                let mut enhanced_locations = Vec::new();
-                                let symbol_name = &symbol_key.name;
-                                let package_name = &symbol_key.pkg;
-
-                                // Search patterns: both "symbol_name" and "package::symbol_name"
-                                let patterns = vec![
-                                    format!(r"\b{}\b", regex::escape(symbol_name)),
-                                    format!(
-                                        r"\b{}::{}\b",
-                                        regex::escape(package_name),
-                                        regex::escape(symbol_name)
-                                    ),
-                                ];
-
-                                'pattern_loop: for pattern in patterns {
-                                    // Check deadline between patterns
+                                    // Check deadline before text search
                                     if start.elapsed() >= deadline {
                                         eprintln!(
-                                            "References: deadline exceeded during text search"
+                                            "References: deadline exceeded, returning partial results"
                                         );
-                                        break 'pattern_loop;
+                                        workspace_locations.truncate(cap);
+                                        return Ok(Some(json!(workspace_locations)));
                                     }
-                                    if let Ok(search_regex) = regex::Regex::new(&pattern) {
-                                        for (doc_uri, doc_text) in &docs_snapshot {
-                                            // Early exit on cap
-                                            if enhanced_locations.len() >= cap {
-                                                break 'pattern_loop;
-                                            }
-                                            let lines: Vec<&str> = doc_text.lines().collect();
-                                            for (line_num, line) in lines.iter().enumerate() {
-                                                for mat in search_regex.find_iter(line) {
-                                                    // Convert byte offsets to UTF-16 columns for LSP compliance
-                                                    let start_utf16 =
-                                                        byte_to_utf16_col(line, mat.start());
-                                                    let end_utf16 =
-                                                        byte_to_utf16_col(line, mat.end());
-                                                    enhanced_locations.push(json!({
-                                                        "uri": doc_uri,
-                                                        "range": {
-                                                            "start": {
-                                                                "line": line_num,
-                                                                "character": start_utf16,
+
+                                    // Enhanced fallback: always search for both qualified and unqualified references
+                                    // Snapshot only (uri, text) to minimize cloning overhead - we don't need
+                                    // AST, rope, or other DocumentState fields for text search
+                                    let docs_snapshot: Vec<(String, String)> = documents
+                                        .iter()
+                                        .map(|(k, v)| (k.clone(), v.text.clone()))
+                                        .collect();
+
+                                    let mut enhanced_locations = Vec::new();
+                                    let symbol_name = &symbol_key.name;
+                                    let package_name = &symbol_key.pkg;
+
+                                    // Search patterns: both "symbol_name" and "package::symbol_name"
+                                    let patterns = vec![
+                                        format!(r"\b{}\b", regex::escape(symbol_name)),
+                                        format!(
+                                            r"\b{}::{}\b",
+                                            regex::escape(package_name),
+                                            regex::escape(symbol_name)
+                                        ),
+                                    ];
+
+                                    'pattern_loop: for pattern in patterns {
+                                        // Check deadline between patterns
+                                        if start.elapsed() >= deadline {
+                                            eprintln!(
+                                                "References: deadline exceeded during text search"
+                                            );
+                                            break 'pattern_loop;
+                                        }
+                                        if let Ok(search_regex) = regex::Regex::new(&pattern) {
+                                            for (doc_uri, doc_text) in &docs_snapshot {
+                                                // Early exit on cap
+                                                if enhanced_locations.len() >= cap {
+                                                    break 'pattern_loop;
+                                                }
+                                                let lines: Vec<&str> = doc_text.lines().collect();
+                                                for (line_num, line) in lines.iter().enumerate() {
+                                                    for mat in search_regex.find_iter(line) {
+                                                        // Convert byte offsets to UTF-16 columns for LSP compliance
+                                                        let start_utf16 =
+                                                            byte_to_utf16_col(line, mat.start());
+                                                        let end_utf16 =
+                                                            byte_to_utf16_col(line, mat.end());
+                                                        enhanced_locations.push(json!({
+                                                            "uri": doc_uri,
+                                                            "range": {
+                                                                "start": {
+                                                                    "line": line_num,
+                                                                    "character": start_utf16,
+                                                                },
+                                                                "end": {
+                                                                    "line": line_num,
+                                                                    "character": end_utf16,
+                                                                },
                                                             },
-                                                            "end": {
-                                                                "line": line_num,
-                                                                "character": end_utf16,
-                                                            },
-                                                        },
-                                                    }));
+                                                        }));
+                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                }
 
-                                // Combine workspace index results with text search results
-                                workspace_locations.extend(enhanced_locations);
-                                let mut all_combined_locations = workspace_locations;
-                                // Cap results
-                                all_combined_locations.truncate(cap);
+                                    // Combine workspace index results with text search results
+                                    workspace_locations.extend(enhanced_locations);
+                                    let mut all_combined_locations = workspace_locations;
+                                    // Cap results
+                                    all_combined_locations.truncate(cap);
 
-                                if !all_combined_locations.is_empty() {
-                                    eprintln!(
-                                        "Found {} total references via combined search (capped at {}, elapsed {:?})",
-                                        all_combined_locations.len(),
-                                        cap,
-                                        start.elapsed()
-                                    );
-                                    return Ok(Some(json!(all_combined_locations)));
-                                }
+                                    if !all_combined_locations.is_empty() {
+                                        eprintln!(
+                                            "Found {} total references via combined search (capped at {}, elapsed {:?})",
+                                            all_combined_locations.len(),
+                                            cap,
+                                            start.elapsed()
+                                        );
+                                        return Ok(Some(json!(all_combined_locations)));
+                                    }
 
-                                // Also try with find_references for backward compatibility
-                                let symbol_name =
-                                    if symbol_key.kind == crate::workspace_index::SymKind::Sub {
+                                    // Also try with find_references for backward compatibility
+                                    let symbol_name = if symbol_key.kind
+                                        == crate::workspace_index::SymKind::Sub
+                                    {
                                         format!("{}::{}", symbol_key.pkg, symbol_key.name)
                                     } else {
                                         symbol_key.name.to_string()
                                     };
 
-                                let refs = index.find_references(&symbol_name);
-                                if !refs.is_empty() {
-                                    // Cap results before conversion
-                                    let capped_refs: Vec<_> = refs.into_iter().take(cap).collect();
-                                    eprintln!(
-                                        "Found {} references via find_references for {} (capped at {})",
-                                        capped_refs.len(),
-                                        symbol_name,
-                                        cap
-                                    );
-                                    // Convert internal Locations to LSP Locations
-                                    let lsp_locations =
-                                        crate::workspace_index::lsp_adapter::to_lsp_locations(
-                                            capped_refs,
+                                    let refs = index.find_references(&symbol_name);
+                                    if !refs.is_empty() {
+                                        // Cap results before conversion
+                                        let capped_refs: Vec<_> =
+                                            refs.into_iter().take(cap).collect();
+                                        eprintln!(
+                                            "Found {} references via find_references for {} (capped at {})",
+                                            capped_refs.len(),
+                                            symbol_name,
+                                            cap
                                         );
-                                    if !lsp_locations.is_empty() {
-                                        return Ok(Some(json!(lsp_locations)));
+                                        // Convert internal Locations to LSP Locations
+                                        let lsp_locations =
+                                            crate::workspace_index::lsp_adapter::to_lsp_locations(
+                                                capped_refs,
+                                            );
+                                        if !lsp_locations.is_empty() {
+                                            return Ok(Some(json!(lsp_locations)));
+                                        }
                                     }
                                 }
-                            }
 
-                            // Regex-based fallback for fully-qualified symbols like Package::sub references
-                            let radius = 50;
-                            let text_start = offset.saturating_sub(radius);
-                            let text_around =
-                                self.get_text_around_offset(&doc.text, offset, radius);
-                            let cursor_in_text = offset - text_start;
+                                // Regex-based fallback for fully-qualified symbols like Package::sub references
+                                let radius = 50;
+                                let text_start = offset.saturating_sub(radius);
+                                let text_around =
+                                    self.get_text_around_offset(&doc.text, offset, radius);
+                                let cursor_in_text = offset - text_start;
 
-                            // Use cached regex to avoid per-request compilation overhead
-                            for captures in QUALIFIED_NAME_RE.captures_iter(&text_around) {
-                                if let Some(m) = captures.get(1) {
-                                    if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
-                                        let parts: Vec<&str> = m.as_str().split("::").collect();
-                                        if parts.len() >= 2 {
-                                            let name = parts.last().unwrap().to_string();
-                                            let pkg = parts[..parts.len() - 1].join("::");
-                                            let key = crate::workspace_index::SymbolKey {
-                                                pkg: pkg.clone().into(),
-                                                name: name.clone().into(),
-                                                sigil: None,
-                                                kind: crate::workspace_index::SymKind::Sub,
-                                            };
+                                // Use cached regex to avoid per-request compilation overhead
+                                for captures in QUALIFIED_NAME_RE.captures_iter(&text_around) {
+                                    if let Some(m) = captures.get(1) {
+                                        if cursor_in_text >= m.start() && cursor_in_text <= m.end()
+                                        {
+                                            let parts: Vec<&str> = m.as_str().split("::").collect();
+                                            if parts.len() >= 2 {
+                                                let name = parts.last().unwrap().to_string();
+                                                let pkg = parts[..parts.len() - 1].join("::");
+                                                let key = crate::workspace_index::SymbolKey {
+                                                    pkg: pkg.clone().into(),
+                                                    name: name.clone().into(),
+                                                    sigil: None,
+                                                    kind: crate::workspace_index::SymKind::Sub,
+                                                };
 
                                                 // Search for all references to this qualified symbol
                                                 let mut all_refs = Vec::new();
@@ -242,15 +250,12 @@ impl LspServer {
 
                                                 // Also try with qualified name
                                                 let symbol_name = format!("{}::{}", pkg, name);
-                                                let alt_refs =
-                                                    index.find_references(&symbol_name);
+                                                let alt_refs = index.find_references(&symbol_name);
                                                 all_refs.extend(alt_refs);
 
                                                 // Add definition if includeDeclaration is true
                                                 if include_declaration {
-                                                    if let Some(def) =
-                                                        index.find_def(&key)
-                                                    {
+                                                    if let Some(def) = index.find_def(&key) {
                                                         all_refs.push(def);
                                                     }
                                                 }

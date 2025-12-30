@@ -412,7 +412,7 @@ impl LspServer {
                     // Created
                     // Re-index the file if it's a Perl file
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
+                    if let Some(workspace_index) = self.workspace_index() {
                         if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
                             if let Some(path) = uri_to_fs_path(&uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
@@ -429,7 +429,7 @@ impl LspServer {
                     // Changed
                     // Re-index the file
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
+                    if let Some(workspace_index) = self.workspace_index() {
                         if let Some(path) = uri_to_fs_path(&uri) {
                             if let Ok(content) = std::fs::read_to_string(&path) {
                                 if let Ok(url) = url::Url::parse(&uri) {
@@ -465,7 +465,7 @@ impl LspServer {
                     // Deleted
                     // Remove from index
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
+                    if let Some(workspace_index) = self.workspace_index() {
                         workspace_index.remove_file(&uri);
                     }
 
@@ -518,7 +518,7 @@ impl LspServer {
                     if !old_module.is_empty() && !new_module.is_empty() {
                         // Find all files that reference the old module
                         #[cfg(feature = "workspace")]
-                        let dependents = if let Some(ref workspace_index) = self.workspace_index {
+                        let dependents = if let Some(workspace_index) = self.workspace_index() {
                             workspace_index.find_dependents(&old_module)
                         } else {
                             Vec::new()
@@ -562,7 +562,7 @@ impl LspServer {
 
                     // Update the index for the renamed file
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
+                    if let Some(workspace_index) = self.workspace_index() {
                         workspace_index.remove_file(old_uri);
                         if let Some(path) = uri_to_fs_path(new_uri) {
                             if let Ok(content) = std::fs::read_to_string(&path) {
@@ -598,7 +598,7 @@ impl LspServer {
 
                     // Remove from workspace index
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
+                    if let Some(workspace_index) = self.workspace_index() {
                         workspace_index.remove_file(uri);
                     }
 
@@ -750,7 +750,7 @@ impl LspServer {
 
                             // Re-index the file after changes
                             #[cfg(feature = "workspace")]
-                            if let Some(ref workspace_index) = self.workspace_index {
+                            if let Some(workspace_index) = self.workspace_index() {
                                 if let Ok(url) = url::Url::parse(uri) {
                                     let _ = workspace_index.index_file(url, doc.text.clone());
                                 }
