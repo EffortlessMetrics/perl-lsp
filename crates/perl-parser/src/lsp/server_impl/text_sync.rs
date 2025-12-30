@@ -49,12 +49,6 @@ impl LspServer {
                 }
             };
 
-            // Notify coordinator that parse is complete (may trigger recovery)
-            #[cfg(feature = "workspace")]
-            if let Some(coordinator) = self.coordinator() {
-                coordinator.notify_parse_complete(uri);
-            }
-
             // Convert AST to Arc for stable pointers
             let ast_arc = ast.map(Arc::new);
 
@@ -231,12 +225,6 @@ impl LspServer {
                         Err(e) => (None, vec![e]),
                     }
                 };
-
-                // Notify coordinator that parse is complete (may trigger recovery)
-                #[cfg(feature = "workspace")]
-                if let Some(coordinator) = self.coordinator() {
-                    coordinator.notify_parse_complete(uri);
-                }
 
                 // Convert AST to Arc for stable pointers
                 let ast_arc = ast.map(Arc::new);
