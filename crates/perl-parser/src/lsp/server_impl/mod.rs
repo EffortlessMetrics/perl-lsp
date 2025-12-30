@@ -7,6 +7,8 @@ mod diagnostics;
 mod dispatch;
 mod language;
 mod lifecycle;
+/// Routing module for lifecycle-aware index access
+pub mod routing;
 mod text_sync;
 mod workspace;
 
@@ -35,6 +37,8 @@ use crate::{
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
     implementation_provider::ImplementationProvider,
+    // Import fallback implementations
+    lsp::fallback::text::extract_text_based_code_lenses,
     // Note: InlayHintConfig and InlayHintsProvider are used in language/misc.rs
     // Import from new modular lsp structure
     // Note: JsonRpcError, JsonRpcRequest, JsonRpcResponse are pub use'd above
@@ -50,12 +54,8 @@ use crate::{
     lsp::transport::{log_response, read_message, write_message},
     // Import text processing helpers
     lsp::utils::{
-        byte_to_utf16_col, byte_to_line_col, get_text_around_offset, extract_module_reference,
-        position_to_offset, offset_to_position
-    },
-    // Import fallback implementations
-    lsp::fallback::text::{
-        extract_text_based_code_lenses, extract_text_based_symbols
+        byte_to_line_col, byte_to_utf16_col, extract_module_reference, get_text_around_offset,
+        offset_to_position, position_to_offset,
     },
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
@@ -82,8 +82,11 @@ use url::Url;
 use crate::uri::parse_uri;
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{
-    LspWorkspaceSymbol, WorkspaceIndex, uri_to_fs_path,
+    IndexCoordinator, LspWorkspaceSymbol, WorkspaceIndex, uri_to_fs_path,
 };
+
+#[cfg(feature = "workspace")]
+use crate::lsp::fallback::text::extract_text_based_symbols;
 
 /// Lightweight view of a document for scan-heavy operations
 ///
@@ -122,9 +125,9 @@ pub struct LspServer {
     pub(crate) documents: Arc<Mutex<HashMap<String, DocumentState>>>,
     /// Whether the server is initialized
     initialized: bool,
-    /// Workspace-wide index for cross-file features
+    /// Index coordinator for workspace-wide features with lifecycle management
     #[cfg(feature = "workspace")]
-    pub(crate) workspace_index: Option<Arc<WorkspaceIndex>>,
+    pub(crate) index_coordinator: Option<Arc<IndexCoordinator>>,
     /// AST cache for performance
     ast_cache: Arc<AstCache>,
     /// Symbol index for fast lookups
@@ -156,9 +159,9 @@ pub struct LspServer {
 impl LspServer {
     /// Create a new LSP server
     pub fn new() -> Self {
-        // Initialize workspace indexing (always enabled when workspace feature is on)
+        // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
-        let workspace_index = Some(Arc::new(WorkspaceIndex::new()));
+        let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
         let default_features = {
             let flags = if cfg!(feature = "lsp-ga-lock") {
@@ -173,7 +176,7 @@ impl LspServer {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
             #[cfg(feature = "workspace")]
-            workspace_index,
+            index_coordinator,
             // Cache up to 100 ASTs with 5 minute TTL
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
@@ -191,9 +194,9 @@ impl LspServer {
 
     /// Create a new LSP server with custom output (for testing)
     pub fn with_output(output: Arc<Mutex<Box<dyn Write + Send>>>) -> Self {
-        // Initialize workspace indexing (always enabled when workspace feature is on)
+        // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
-        let workspace_index = Some(Arc::new(WorkspaceIndex::new()));
+        let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
         let default_features = {
             let flags = if cfg!(feature = "lsp-ga-lock") {
@@ -208,7 +211,7 @@ impl LspServer {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
             #[cfg(feature = "workspace")]
-            workspace_index,
+            index_coordinator,
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
@@ -291,6 +294,73 @@ impl LspServer {
                 ast: v.ast.clone(),
             })
             .collect()
+    }
+
+    /// Get the index coordinator for lifecycle-aware index access
+    ///
+    /// Returns a reference to the IndexCoordinator, which provides:
+    /// - `state()`: Lock-free check of current index state (Building/Ready/Degraded)
+    /// - `index()`: Access to underlying WorkspaceIndex for queries
+    /// - `notify_change(uri)`: Notify of file change (tracks parse storm)
+    /// - `notify_parse_complete(uri)`: Notify parse done (may trigger recovery)
+    /// - `query(full, partial)`: Automatic dispatch based on state
+    ///
+    /// ## Usage Pattern
+    /// ```rust,ignore
+    /// if let Some(coordinator) = self.coordinator() {
+    ///     coordinator.notify_change(&uri);
+    ///     // ... do parsing work ...
+    ///     coordinator.notify_parse_complete(&uri);
+    /// }
+    /// ```
+    #[cfg(feature = "workspace")]
+    #[inline]
+    pub(crate) fn coordinator(&self) -> Option<&Arc<IndexCoordinator>> {
+        self.index_coordinator.as_ref()
+    }
+
+    /// Coordinator stub when workspace feature is disabled
+    ///
+    /// Returns None since no coordinator is available without workspace indexing.
+    #[cfg(not(feature = "workspace"))]
+    #[inline]
+    pub(crate) fn coordinator(&self) -> Option<&()> {
+        None
+    }
+
+    /// Get the workspace index through the coordinator (DEPRECATED for handler use)
+    ///
+    /// **WARNING**: Do NOT use this method in LSP handlers. Use one of:
+    /// - `route_index_access(self.coordinator())` for query operations
+    /// - `coordinator.index()` directly for mutation operations
+    ///
+    /// This method exists for backwards compatibility and diagnostic purposes only.
+    /// The grep guard in `scripts/gate-local.sh` enforces this restriction.
+    ///
+    /// # Usage in handlers
+    ///
+    /// Query operations (completion, references, navigation):
+    /// ```rust,ignore
+    /// let mode = route_index_access(self.coordinator());
+    /// match mode {
+    ///     IndexAccessMode::Full(coord) => { coord.index() }
+    ///     IndexAccessMode::Partial(_) | IndexAccessMode::None => { /* fallback */ }
+    /// }
+    /// ```
+    ///
+    /// Mutation operations (text sync, file watcher):
+    /// ```rust,ignore
+    /// if let Some(coordinator) = self.coordinator() {
+    ///     coordinator.notify_change(uri);
+    ///     let _ = coordinator.index().index_file(url, content);
+    ///     coordinator.notify_parse_complete(uri);
+    /// }
+    /// ```
+    #[cfg(feature = "workspace")]
+    #[inline]
+    #[allow(dead_code)] // Kept for diagnostics/compatibility, not used in handlers
+    pub(crate) fn workspace_index(&self) -> Option<Arc<WorkspaceIndex>> {
+        self.coordinator().map(|c| Arc::clone(c.index()))
     }
 
     /// Run the LSP server
@@ -469,7 +539,7 @@ impl LspServer {
     #[allow(deprecated)]
     pub fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
         // Implementation moved to lsp/utils.rs
-        position_to_offset(content, line, character).unwrap_or_else(|| content.len())
+        position_to_offset(content, line, character).unwrap_or(content.len())
     }
     // === END_TEST_ONLY_POSITION_HELPERS ===
 
@@ -575,6 +645,7 @@ impl LspServer {
     }
 
     /// Extract symbols from text when AST parsing fails
+    #[cfg(feature = "workspace")]
     fn extract_text_based_symbols(
         &self,
         text: &str,
@@ -582,6 +653,17 @@ impl LspServer {
         query: &str,
     ) -> Vec<LspWorkspaceSymbol> {
         extract_text_based_symbols(text, uri, query)
+    }
+
+    /// Extract symbols stub when workspace feature is disabled
+    #[cfg(not(feature = "workspace"))]
+    fn extract_text_based_symbols(
+        &self,
+        _text: &str,
+        _uri: &str,
+        _query: &str,
+    ) -> Vec<serde_json::Value> {
+        Vec::new()
     }
 
     /// Extract workspace symbols from a document's AST
@@ -623,8 +705,7 @@ impl LspServer {
             NodeKind::Subroutine { name, body, .. } => {
                 // Add the subroutine as a symbol if it has a name
                 if let Some(sub_name) = name {
-                    let (start_line, start_char) =
-                        byte_to_line_col(source, node.location.start);
+                    let (start_line, start_char) = byte_to_line_col(source, node.location.start);
                     let (end_line, end_char) = byte_to_line_col(source, node.location.end);
 
                     symbols.push(LspWorkspaceSymbol {
@@ -754,8 +835,7 @@ impl LspServer {
 
             NodeKind::Package { name, block, .. } => {
                 if name.to_lowercase().contains(&query_lower) {
-                    let (start_line, start_char) =
-                        byte_to_line_col(source, node.location.start);
+                    let (start_line, start_char) = byte_to_line_col(source, node.location.start);
                     let (end_line, end_char) = byte_to_line_col(source, node.location.end);
 
                     symbols.push(json!({
@@ -989,6 +1069,27 @@ impl LspServer {
         self.handle_completion(params)
     }
 
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn test_handle_hover(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_hover(params)
+    }
+
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn test_handle_document_symbols(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_document_symbol(params)
+    }
+
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn test_handle_workspace_symbols(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_workspace_symbols_v2(params)
+    }
+
     // Note: handle_document_link is implemented in language/misc.rs
 
     /// Get text around an offset position
@@ -1050,8 +1151,8 @@ mod tests {
 
     #[test]
     fn code_action_append_uses_document_end() {
-        use std::sync::Arc;
         use ropey::Rope;
+        use std::sync::Arc;
 
         let server = LspServer::new();
         let uri = "file:///test.pl";

@@ -5,6 +5,14 @@ This document provides comprehensive documentation of all LSP features implement
 ## Latest Updates
 
 ### Unreleased
+- **Index Lifecycle Management**: Lifecycle-aware dispatch for workspace features
+  - Ready state: Full workspace index queries with cooperative yielding
+  - Building/Degraded state: Graceful fallback to open document search
+  - Parse storm detection with automatic recovery
+- **Central Limits Configuration**: Configurable caps and deadlines for bounded behavior
+  - Result caps: workspace/symbol (200), references (500), completion (100)
+  - Deadline enforcement: 2s for reference search, 30s for workspace scan
+  - See [CONFIG.md](CONFIG.md) for all configuration options
 - **Document Highlights**: Smart highlighting of all symbol occurrences at cursor
 - **Type Hierarchy**: Navigate inheritance relationships with full @ISA and pragma support
 
@@ -438,38 +446,44 @@ Intelligent code folding:
 
 ## Configuration
 
-### Server Settings
+### Inlay Hints Settings
 
 ```json
 {
-  "perl.lsp.diagnostics": true,
-  "perl.lsp.completion": {
-    "enableSnippets": true,
-    "addSemicolon": true,
-    "includeBuiltins": true
-  },
-  "perl.lsp.refactoring": {
-    "extractVariable": {
-      "nameStyle": "snake_case"
-    }
-  },
-  "perl.lsp.formatting": {
-    "provider": "perltidy",
-    "options": "-pbp"  // Perl Best Practices
-  }
+  "perl.inlayHints.enabled": true,
+  "perl.inlayHints.parameterHints": true,
+  "perl.inlayHints.typeHints": true,
+  "perl.inlayHints.chainedHints": false,
+  "perl.inlayHints.maxLength": 30
 }
 ```
 
-### Performance Tuning
+### Test Runner Settings
 
 ```json
 {
-  "perl.lsp.maxFileSize": 1048576,  // 1MB
-  "perl.lsp.incrementalParsing": true,
-  "perl.lsp.cacheDuration": 300,     // seconds
-  "perl.lsp.parallelParsing": true
+  "perl.testRunner.enabled": true,
+  "perl.testRunner.testCommand": "perl",
+  "perl.testRunner.testArgs": [],
+  "perl.testRunner.testTimeout": 60000
 }
 ```
+
+### Workspace Module Resolution
+
+```json
+{
+  "perl.workspace.includePaths": ["lib", "local/lib/perl5"],
+  "perl.workspace.useSystemInc": false,
+  "perl.workspace.resolutionTimeout": 50
+}
+```
+
+Resolution precedence order:
+1. **Open Documents** - Already-opened documents take highest priority
+2. **Workspace Folders** - Searched in initialization order (multi-root aware)
+3. **Configured Include Paths** - User-specified directories per folder
+4. **System @INC** - Opt-in only (`useSystemInc: true`), filtered for security
 
 ## Editor Integration
 

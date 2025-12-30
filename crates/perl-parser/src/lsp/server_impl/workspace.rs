@@ -1,45 +1,87 @@
 //! Workspace-level operations
 //!
 //! Handles workspace symbols, configuration, file watching, and edits.
+//!
+//! # Lifecycle-Aware Behavior
+//!
+//! Uses the routing module for state-aware dispatch:
+//! - **Ready state**: Full workspace index search with cooperative yielding
+//! - **Building/Degraded state**: Open document search only (partial results)
 
 use super::*;
+#[cfg(feature = "workspace")]
+use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
+use crate::lsp::state::workspace_symbol_cap;
 
 impl LspServer {
-    /// Handle workspace/symbol request (v2 implementation with cooperative yielding)
+    /// Handle workspace/symbol request (v2 implementation with lifecycle-aware dispatch)
+    ///
+    /// Uses routing helper for state-aware behavior:
+    /// - **Ready state**: Full workspace index search with cooperative yielding
+    /// - **Building/Degraded state**: Open document search only (partial results)
     pub(super) fn handle_workspace_symbols_v2(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         let query =
             params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
+        let cap = workspace_symbol_cap();
 
-        eprintln!("Workspace symbol search v2: '{}'", query);
+        eprintln!("Workspace symbol search v2: '{}' (cap: {})", query, cap);
 
-        // Use workspace index if available
-        if let Some(ref workspace_index) = self.workspace_index {
-            let symbols = workspace_index.search_symbols(query);
+        // Use routing helper for lifecycle-aware dispatch
+        #[cfg(feature = "workspace")]
+        {
+            let access_mode = route_index_access(self.coordinator());
 
-            // Convert to LSP format with yielding
-            let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
-                .iter()
-                .enumerate()
-                .map(|(i, sym)| {
-                    // Cooperative yield every 64 symbols
-                    if i & 0x3f == 0 {
-                        std::thread::yield_now();
+            match access_mode {
+                IndexAccessMode::Full(coordinator) => {
+                    // Full query path: use workspace index
+                    let symbols = coordinator.index().search_symbols(query);
+
+                    // Convert to LSP format with yielding and result cap
+                    let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
+                        .iter()
+                        .take(cap)
+                        .enumerate()
+                        .map(|(i, sym)| {
+                            // Cooperative yield every 64 symbols
+                            if i & 0x3f == 0 {
+                                std::thread::yield_now();
+                            }
+                            sym.into()
+                        })
+                        .collect();
+
+                    if !lsp_symbols.is_empty() {
+                        eprintln!(
+                            "Workspace symbol: returned {} results from index (Ready state)",
+                            lsp_symbols.len()
+                        );
+                        return Ok(Some(json!(lsp_symbols)));
                     }
-                    sym.into()
-                })
-                .collect();
-
-            // If the workspace index is empty (e.g., due to parsing failures),
-            // fall back to document-based search for better test reliability
-            if !lsp_symbols.is_empty() {
-                return Ok(Some(json!(lsp_symbols)));
+                    // If index is empty, fall through to open-doc search
+                }
+                IndexAccessMode::Partial(reason) => {
+                    eprintln!("Workspace symbol: {}, using open-doc fallback", reason);
+                }
+                IndexAccessMode::None => {
+                    eprintln!("Workspace symbol: no workspace feature, using open-doc fallback");
+                }
             }
         }
 
-        // Fallback to document-based search
+        // Fallback/degraded path: search open documents only
+        self.search_open_documents_for_symbols(query, cap)
+    }
+
+    /// Search only open documents for symbols (degraded/fallback path)
+    #[cfg(feature = "workspace")]
+    fn search_open_documents_for_symbols(
+        &self,
+        query: &str,
+        cap: usize,
+    ) -> Result<Option<Value>, JsonRpcError> {
         let mut all_symbols = Vec::new();
 
         // Collect document snapshots without holding lock
@@ -54,6 +96,11 @@ impl LspServer {
                 std::thread::yield_now();
             }
 
+            // Early exit if we've hit the result cap
+            if all_symbols.len() >= cap {
+                break;
+            }
+
             if let Some(ref ast) = doc.ast {
                 let doc_symbols = self.extract_document_symbols(ast, &doc.text, uri);
                 let query_lower = query.to_lowercase();
@@ -61,16 +108,34 @@ impl LspServer {
                 for sym in doc_symbols {
                     if sym.name.to_lowercase().contains(&query_lower) {
                         all_symbols.push(sym);
+                        if all_symbols.len() >= cap {
+                            break;
+                        }
                     }
                 }
             } else {
                 // Text-based fallback when AST is not available
                 let text_symbols = self.extract_text_based_symbols(&doc.text, uri, query);
-                all_symbols.extend(text_symbols);
+                let remaining = cap.saturating_sub(all_symbols.len());
+                all_symbols.extend(text_symbols.into_iter().take(remaining));
             }
         }
 
+        // Truncate to cap in case we went slightly over
+        all_symbols.truncate(cap);
+        eprintln!("Workspace symbol: returned {} results from open documents", all_symbols.len());
         Ok(Some(json!(all_symbols)))
+    }
+
+    /// Search open documents for symbols (non-workspace stub)
+    #[cfg(not(feature = "workspace"))]
+    fn search_open_documents_for_symbols(
+        &self,
+        query: &str,
+        _cap: usize,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        eprintln!("Workspace symbol: no workspace feature, returning empty for query '{}'", query);
+        Ok(Some(json!([])))
     }
 
     /// Handle workspace/symbol request (legacy implementation)
@@ -322,6 +387,11 @@ impl LspServer {
     }
 
     /// Handle workspace/didChangeWatchedFiles notification
+    ///
+    /// Deterministic state transitions:
+    /// - File changes notify coordinator (never block handler threads)
+    /// - Index updates happen synchronously but quickly
+    /// - State recovery is handled by coordinator's internal logic
     pub(super) fn handle_did_change_watched_files(
         &self,
         params: Option<Value>,
@@ -343,12 +413,20 @@ impl LspServer {
 
             eprintln!("File change detected: {} (type: {:?})", uri, change_type);
 
+            // Notify coordinator of pending change (never block handler threads)
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                coordinator.notify_change(&uri);
+            }
+
             match change_type {
                 FileChangeType::CREATED => {
                     // Created
                     // Re-index the file if it's a Perl file
+                    // Note: Mutation operation - use coordinator.index() directly
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
+                    if let Some(coordinator) = self.coordinator() {
+                        let workspace_index = coordinator.index();
                         if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
                             if let Some(path) = uri_to_fs_path(&uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
@@ -364,8 +442,10 @@ impl LspServer {
                 FileChangeType::CHANGED => {
                     // Changed
                     // Re-index the file
+                    // Note: Mutation operation - use coordinator.index() directly
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
+                    if let Some(coordinator) = self.coordinator() {
+                        let workspace_index = coordinator.index();
                         if let Some(path) = uri_to_fs_path(&uri) {
                             if let Ok(content) = std::fs::read_to_string(&path) {
                                 if let Ok(url) = url::Url::parse(&uri) {
@@ -400,9 +480,10 @@ impl LspServer {
                 FileChangeType::DELETED => {
                     // Deleted
                     // Remove from index
+                    // Note: Mutation operation - use coordinator.index() directly
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
-                        workspace_index.remove_file(&uri);
+                    if let Some(coordinator) = self.coordinator() {
+                        coordinator.index().remove_file(&uri);
                     }
 
                     // Remove from document store
@@ -413,6 +494,12 @@ impl LspServer {
                     eprintln!("Removed deleted file from index: {}", uri);
                 }
                 _ => {}
+            }
+
+            // Notify coordinator that file processing is complete
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                coordinator.notify_parse_complete(&uri);
             }
         }
 
@@ -447,9 +534,10 @@ impl LspServer {
 
                     if !old_module.is_empty() && !new_module.is_empty() {
                         // Find all files that reference the old module
+                        // Note: Query operation - use coordinator.index() for consistency
                         #[cfg(feature = "workspace")]
-                        let dependents = if let Some(ref workspace_index) = self.workspace_index {
-                            workspace_index.find_dependents(&old_module)
+                        let dependents = if let Some(coordinator) = self.coordinator() {
+                            coordinator.index().find_dependents(&old_module)
                         } else {
                             Vec::new()
                         };
@@ -491,8 +579,12 @@ impl LspServer {
                     }
 
                     // Update the index for the renamed file
+                    // Note: Mutation operation - use coordinator with lifecycle tracking
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
+                    if let Some(coordinator) = self.coordinator() {
+                        coordinator.notify_change(old_uri);
+                        coordinator.notify_change(new_uri);
+                        let workspace_index = coordinator.index();
                         workspace_index.remove_file(old_uri);
                         if let Some(path) = uri_to_fs_path(new_uri) {
                             if let Ok(content) = std::fs::read_to_string(&path) {
@@ -501,6 +593,8 @@ impl LspServer {
                                 }
                             }
                         }
+                        coordinator.notify_parse_complete(old_uri);
+                        coordinator.notify_parse_complete(new_uri);
                     }
                 }
 
@@ -527,9 +621,12 @@ impl LspServer {
                     eprintln!("File deleted: {}", uri);
 
                     // Remove from workspace index
+                    // Note: Mutation operation - use coordinator with lifecycle tracking
                     #[cfg(feature = "workspace")]
-                    if let Some(ref workspace_index) = self.workspace_index {
-                        workspace_index.remove_file(uri);
+                    if let Some(coordinator) = self.coordinator() {
+                        coordinator.notify_change(uri);
+                        coordinator.index().remove_file(uri);
+                        coordinator.notify_parse_complete(uri);
                     }
 
                     // Remove from document store
@@ -679,11 +776,14 @@ impl LspServer {
                             }
 
                             // Re-index the file after changes
+                            // Note: Mutation operation - use coordinator with lifecycle tracking
                             #[cfg(feature = "workspace")]
-                            if let Some(ref workspace_index) = self.workspace_index {
+                            if let Some(coordinator) = self.coordinator() {
+                                coordinator.notify_change(uri);
                                 if let Ok(url) = url::Url::parse(uri) {
-                                    let _ = workspace_index.index_file(url, doc.text.clone());
+                                    let _ = coordinator.index().index_file(url, doc.text.clone());
                                 }
+                                coordinator.notify_parse_complete(uri);
                             }
 
                             // Clear cached AST
