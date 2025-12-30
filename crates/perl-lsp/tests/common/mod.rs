@@ -28,8 +28,13 @@
 // Re-export test_utils for semantic tests
 pub mod test_utils;
 
-// Error codes
+// Error codes aligned with crates/perl-parser/src/lsp/protocol/errors.rs
+/// JSON-RPC reserved: Server error range is -32000 to -32099
 const ERR_TEST_TIMEOUT: i64 = -32000;
+/// Connection closed - BrokenPipe or similar transport termination
+const ERR_CONNECTION_CLOSED: i64 = -32050;
+/// Transport error - general I/O failures that aren't connection closures
+const ERR_TRANSPORT_ERROR: i64 = -32051;
 
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -348,38 +353,51 @@ pub fn start_lsp_server() -> LspServer {
 }
 
 pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
-    // Ensure every request has an id so we can match the response deterministically
+    // IMPORTANT: Extract/assign ID FIRST, before any early returns.
+    // This ensures error responses can include the proper request ID.
     let id = match request.get("id") {
-        Some(v) => Some(v.clone()),
+        Some(v) => v.clone(),
         None => {
             let nid = next_id();
             request["id"] = json!(nid);
-            Some(json!(nid))
+            json!(nid)
         }
     };
 
     let body = request.to_string();
     if let Err(e) = send_message_inner(&mut server.writer, &body) {
-        // Handle write errors gracefully - BrokenPipe during teardown is expected
-        return if e.kind() == io::ErrorKind::BrokenPipe {
-            connection_closed_error()
-        } else {
-            internal_transport_error(&format!("Write failed: {}", e))
-        };
+        // Handle write errors gracefully with proper JSON-RPC envelope
+        // BrokenPipe during teardown is expected; other errors are transport failures
+        return map_send_error(Some(id), e, "send_request");
     }
 
     // Match by ID to avoid confusion with interleaved notifications
-    match id {
-        Some(Value::Number(n)) if n.as_i64().is_some() => {
+    match &id {
+        Value::Number(n) if n.as_i64().is_some() => {
             read_response_matching_i64(server, n.as_i64().unwrap(), default_timeout())
-                .unwrap_or_else(
-                    || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
-                )
+                .unwrap_or_else(|| {
+                    error_response_for_request(
+                        Some(id.clone()),
+                        ERR_TEST_TIMEOUT,
+                        "test harness timeout",
+                    )
+                })
         }
-        Some(v) => read_response_matching(server, &v, default_timeout()).unwrap_or_else(
-            || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
-        ),
-        None => unreachable!("we always assign an id"),
+        v => read_response_matching(server, v, default_timeout()).unwrap_or_else(|| {
+            error_response_for_request(Some(id.clone()), ERR_TEST_TIMEOUT, "test harness timeout")
+        }),
+    }
+}
+
+/// Maps I/O send errors to proper JSON-RPC error responses.
+///
+/// BrokenPipe → CONNECTION_CLOSED (-32050)
+/// Other I/O errors → TRANSPORT_ERROR (-32051)
+fn map_send_error(id: Option<Value>, e: io::Error, context: &str) -> Value {
+    if e.kind() == io::ErrorKind::BrokenPipe {
+        connection_closed_error_for_request(id)
+    } else {
+        transport_error_for_request(id, &format!("{}: {}", context, e))
     }
 }
 
@@ -474,14 +492,42 @@ fn send_message_inner(writer: &mut impl Write, body: &str) -> io::Result<()> {
     writer.flush()
 }
 
-/// Creates an error response for connection-closed scenarios.
-fn connection_closed_error() -> Value {
-    json!({"error":{"code":-32600,"message":"Connection closed"}})
+/// Creates a JSON-RPC 2.0 error response with proper envelope.
+///
+/// All error responses MUST include `jsonrpc` and `id` fields per JSON-RPC 2.0 spec.
+/// The `id` should be extracted from the original request before any error handling.
+fn error_response_for_request(id: Option<Value>, code: i64, message: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id.unwrap_or(Value::Null),
+        "error": {
+            "code": code,
+            "message": message
+        }
+    })
+}
+
+/// Creates an error response for connection-closed scenarios (BrokenPipe).
+fn connection_closed_error_for_request(id: Option<Value>) -> Value {
+    error_response_for_request(id, ERR_CONNECTION_CLOSED, "Connection closed")
 }
 
 /// Creates an error response for internal transport errors.
+fn transport_error_for_request(id: Option<Value>, msg: &str) -> Value {
+    error_response_for_request(id, ERR_TRANSPORT_ERROR, msg)
+}
+
+// Legacy functions for backward compatibility with code that doesn't have request context
+// These return responses with null id (valid JSON-RPC but less informative)
+
+/// Creates an error response for connection-closed scenarios (legacy, no request context).
+fn connection_closed_error() -> Value {
+    connection_closed_error_for_request(None)
+}
+
+/// Creates an error response for internal transport errors (legacy, no request context).
 fn internal_transport_error(msg: &str) -> Value {
-    json!({"error":{"code":-32603,"message":msg}})
+    transport_error_for_request(None, msg)
 }
 
 /// Blocking receive with a sane default timeout to avoid hangs.
@@ -624,12 +670,8 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
     {
         let body = init.to_string();
         if let Err(e) = send_message_inner(&mut server.writer, &body) {
-            // Handle write errors gracefully - return error response
-            return if e.kind() == io::ErrorKind::BrokenPipe {
-                connection_closed_error()
-            } else {
-                internal_transport_error(&format!("Initialize write failed: {}", e))
-            };
+            // Handle write errors gracefully with proper JSON-RPC envelope (id=1)
+            return map_send_error(Some(json!(1)), e, "initialize");
         }
     }
 

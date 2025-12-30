@@ -58,27 +58,32 @@ fi
 # Function to categorize an ignore based on reason text
 categorize_ignore() {
     local reason="$1"
+    # shellcheck disable=SC2034  # context reserved for future use
     local context="$2"
 
     # Convert to lowercase for matching
     local lower_reason="${reason,,}"
-    local lower_context="${context,,}"
+
+    # IMPORTANT: Check explicit prefixes FIRST before pattern matching.
+    # Order matters! Explicit labels override implicit pattern matching.
 
     # Check for stress tests (should be run with --ignored for stress testing)
-    if [[ "$lower_reason" =~ stress|memory.stress|performance.stress|load.test|stack.overflow|designed.to.fail ]]; then
+    if [[ "$lower_reason" =~ ^stress:|stress\ test|memory.stress|performance.stress|load.test|stack.overflow|designed.to.fail ]]; then
         echo "stress"
-    # Check for BrokenPipe/transport issues
-    elif [[ "$lower_reason" =~ brokenpipe|broken.pipe|transport|flak|timeout|race|intermittent ]]; then
-        echo "brokenpipe"
-    # Check for known bugs that need fixing
+    # Check for known bugs that need fixing (explicit BUG: prefix FIRST)
     elif [[ "$lower_reason" =~ ^bug:|bug:\ |known.bug|regression|incorrect.behavior|parser.bug|missing.*notification|missing.*initialize|server.returns.*instead|exposes.*|will.kill|mut_[0-9]+|known.inconsistencies|matching.issue|investigate|instead.of.expected|different.error.format|expects.*but.implementation ]]; then
         echo "bug"
-    # Check for feature-gated/not implemented
-    elif [[ "$lower_reason" =~ feature|not.implemented|unimplemented|wip|work.in.progress|pending|when.implemented|remove.when|ac[0-9]+:|not.yet|tdd.scaffold|scaffold|doesn\'t.support|doesn.t.support|doesn.t.handle|parser.limitation|expected.to.fail|not.fully.supported|enable.after|after.phase ]]; then
-        echo "feature"
-    # Check for infrastructure/TODO
-    elif [[ "$lower_reason" =~ infra|todo|fixme|needs|requires|setup|config|environment|run.with|only.run.after|only.run.when ]]; then
+    # Check for infrastructure/TODO (explicit TODO: prefix BEFORE brokenpipe patterns)
+    # Also match TODO anywhere in the string for inline TODOs like "edge case - TODO: fix later"
+    elif [[ "$lower_reason" =~ ^todo:|^infra:|infra\ |todo:|fixme|needs|requires|setup|config|environment|run.with|only.run.after|only.run.when ]]; then
         echo "infra"
+    # Check for feature-gated/not implemented (before brokenpipe)
+    elif [[ "$lower_reason" =~ ^feature:|feature\ |not.implemented|unimplemented|wip|work.in.progress|pending|when.implemented|remove.when|ac[0-9]+:|not.yet|tdd.scaffold|scaffold|doesn\'t.support|doesn.t.support|doesn.t.handle|parser.limitation|expected.to.fail|not.fully.supported|enable.after|after.phase|parser.doesn ]]; then
+        echo "feature"
+    # Check for BrokenPipe/transport issues (explicit BROKENPIPE: prefix or patterns)
+    # NOTE: Generic "timeout|race" patterns removed - use explicit BROKENPIPE: label instead
+    elif [[ "$lower_reason" =~ ^brokenpipe:|brokenpipe\ |broken.pipe|transport.error|transport.flake ]]; then
+        echo "brokenpipe"
     # Check for protocol compliance
     elif [[ "$lower_reason" =~ protocol|lsp|dap|compliance|spec|specification ]]; then
         echo "protocol"
@@ -113,12 +118,12 @@ echo ""
 
 # Temporary file for detailed output
 DETAILS_FILE=$(mktemp)
-trap "rm -f $DETAILS_FILE" EXIT
+trap 'rm -f "$DETAILS_FILE"' EXIT
 
 # Find all #[ignore] attributes in Rust files
 while IFS= read -r file; do
     # Get relative path for cleaner output
-    rel_path="${file#$REPO_ROOT/}"
+    rel_path="${file#"$REPO_ROOT"/}"
 
     # Use grep to find ignore lines with context
     while IFS= read -r match; do
@@ -171,7 +176,10 @@ done
 baseline_total=0
 if [[ -f "$BASELINE_FILE" ]]; then
     while IFS='=' read -r key value; do
-        if [[ -n "$key" && -n "$value" ]]; then
+        # Skip comment lines (starting with #) and empty lines
+        [[ "$key" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$key" ]] && continue
+        if [[ -n "$value" ]]; then
             baseline[$key]=$value
             if [[ "$key" == "total" ]]; then
                 baseline_total=$value
@@ -204,13 +212,13 @@ echo "-----------------------------------------------"
 
 for cat in brokenpipe feature infra protocol stress bug bare other; do
     base_val=${baseline[$cat]:-0}
-    delta=$(format_delta ${counts[$cat]} $base_val)
+    delta=$(format_delta "${counts[$cat]}" "$base_val")
     printf "%-12s %8d %8d %8b\n" "$cat" "${counts[$cat]}" "$base_val" "$delta"
 done
 
 echo "-----------------------------------------------"
 base_total=${baseline[total]:-0}
-delta=$(format_delta $total $base_total)
+delta=$(format_delta "$total" "$base_total")
 printf "%-12s %8d %8d %8b\n" "TOTAL" "$total" "$base_total" "$delta"
 echo "==============================================="
 echo ""
@@ -242,7 +250,8 @@ case "$MODE" in
     update)
         echo "Updating baseline file: $BASELINE_FILE"
         {
-            echo "# Ignored test baseline - $(date -Iseconds)"
+            # Use portable ISO 8601 date format (works on macOS and Linux)
+            echo "# Ignored test baseline - $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "# Updated by: ignored-test-count.sh --update"
             for cat in brokenpipe feature infra protocol stress bug bare other; do
                 echo "$cat=${counts[$cat]}"

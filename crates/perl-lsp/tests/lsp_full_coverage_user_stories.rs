@@ -351,7 +351,7 @@ foreach $item (@array) {
 }
 
 #[test]
-#[ignore] // BUG: Test hangs forever on workspace symbol search - timeout issue
+#[ignore = "BUG: Test hangs forever on workspace symbol search - timeout issue"]
 fn test_user_story_multi_file_project_navigation() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -991,7 +991,7 @@ fn test_performance_large_file() {
 }
 
 #[test]
-#[ignore] // BUG: Test hangs forever on get_definition/get_references - timeout issue
+#[ignore = "BUG: Test hangs forever on get_definition/get_references - timeout issue"]
 fn test_concurrent_operations() {
     let mut ctx = TestContext::new();
     ctx.initialize();

@@ -5,7 +5,6 @@ use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]
-
 #[cfg(not(feature = "lsp-ga-lock"))]
 fn full_capabilities_match_contract() {
     let mut srv = LspServer::new();

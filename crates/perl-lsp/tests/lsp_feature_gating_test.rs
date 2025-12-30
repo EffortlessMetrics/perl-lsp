@@ -60,7 +60,6 @@ fn test_non_advertised_features_hidden() {
 
 /// Test that experimental features can be toggled via feature flags
 #[test]
-
 #[cfg(feature = "experimental-features")]
 fn test_experimental_features_enabled() {
     // When experimental features are enabled, additional capabilities appear
