@@ -525,6 +525,12 @@ impl<'a> Parser<'a> {
 
     /// Check if this might be an indirect call pattern
     /// We only consider this at statement start to avoid ambiguous mid-expression cases.
+    ///
+    /// Note: When this is called, the parser has peeked at the function name (e.g., "print")
+    /// but not consumed it. So:
+    /// - peek() returns the function name (current position)
+    /// - peek_second() returns the token after the function name
+    /// - peek_third() returns two tokens after the function name
     fn is_indirect_call_pattern(&mut self, name: &str) -> bool {
         // Only check for indirect objects at statement start to avoid false positives
         // in contexts like: my $x = 1; if (1) { print $x; }
@@ -533,8 +539,13 @@ impl<'a> Parser<'a> {
         }
 
         // print "string" should not be treated as indirect object syntax
-        if name == "print" && matches!(self.peek_kind(), Some(TokenKind::String)) {
-            return false;
+        // Note: peek_second() gets the token after "print" since peek() is "print"
+        if name == "print" {
+            if let Ok(next) = self.tokens.peek_second() {
+                if next.kind == TokenKind::String {
+                    return false;
+                }
+            }
         }
 
         // Known builtins that commonly use indirect object syntax
@@ -546,8 +557,8 @@ impl<'a> Parser<'a> {
 
         // Check if it's a known builtin
         if indirect_builtins.contains(&name) {
-            // Peek at the next token (not second - we're already at the first)
-            let (next_kind, next_text) = if let Ok(next) = self.tokens.peek() {
+            // Peek at the token AFTER the function name (use peek_second since peek is the function name)
+            let (next_kind, next_text) = if let Ok(next) = self.tokens.peek_second() {
                 (next.kind, next.text.clone())
             } else {
                 return false;
@@ -563,41 +574,47 @@ impl<'a> Parser<'a> {
                 _ => {}
             }
 
-            match next_kind {
-                // print STDOUT ...
-                TokenKind::Identifier => {
-                    // Check if it's uppercase (likely a filehandle)
-                    if next_text.chars().next().is_some_and(|c| c.is_uppercase()) {
-                        return true;
+            // Check for print $fh $x pattern first (variable followed by another arg)
+            // This must be checked before the STDOUT pattern because $fh is also an Identifier
+            if next_text.starts_with('$') {
+                // Only treat $var as an indirect object if a typical argument follows
+                // without a comma. A comma means it's a regular argument list.
+                // This prevents misclassifying `print $x, $y` as indirect object.
+                // Use peek_third() to look at the token after $fh
+                if let Ok(third) = self.tokens.peek_third() {
+                    // A comma after $fh means regular argument list, NOT indirect object
+                    // e.g., print $x, $y; is print both to STDOUT
+                    if third.kind == TokenKind::Comma {
+                        return false;
                     }
+
+                    // Allow classic argument starts and sigiled variables ($x, @arr, %hash)
+                    let third_text = third.text.as_str();
+                    return matches!(
+                        third.kind,
+                        TokenKind::String       // print $fh "x"
+                        | TokenKind::LeftParen    // print $fh ($x)
+                        | TokenKind::LeftBracket  // print $fh [$x]
+                        | TokenKind::LeftBrace    // print $fh { ... }
+                    ) || third_text.starts_with('$')    // print $fh $x
+                      || third_text.starts_with('@')    // print $fh @array
+                      || third_text.starts_with('%'); // print $fh %hash
                 }
-                // print $fh ... (only if typical args follow)
-                _ if next_text.starts_with('$') => {
-                    // Only treat $var as an indirect object if a typical argument follows.
-                    // This prevents misclassifying arithmetic like `print $x + 1`
-                    if let Ok(second) = self.tokens.peek_second() {
-                        // Allow classic argument starts and sigiled variables ($x, @arr, %hash)
-                        let second_text = second.text.as_str();
-                        return matches!(
-                            second.kind,
-                            TokenKind::Comma          // print $fh, "x"
-                            | TokenKind::String       // print $fh "x"
-                            | TokenKind::LeftParen    // print $fh ($x)
-                            | TokenKind::LeftBracket  // print $fh [$x]
-                            | TokenKind::LeftBrace    // print $fh { ... }
-                        ) || second_text.starts_with('$')    // print $fh $x
-                          || second_text.starts_with('@')    // print $fh @array
-                          || second_text.starts_with('%'); // print $fh %hash
-                    }
-                    return false; // Can't see more; be conservative
+                return false; // Can't see more; be conservative
+            }
+
+            // print STDOUT ... (uppercase bareword filehandle)
+            if next_kind == TokenKind::Identifier {
+                if next_text.chars().next().is_some_and(|c| c.is_uppercase()) {
+                    return true;
                 }
-                _ => {}
             }
         }
 
         // Check for "new ClassName" pattern
         if name == "new" {
-            if let Ok(next) = self.tokens.peek() {
+            // peek_second() gets the token after "new"
+            if let Ok(next) = self.tokens.peek_second() {
                 if let TokenKind::Identifier = next.kind {
                     // Uppercase identifier after "new" suggests constructor
                     if next.text.chars().next().is_some_and(|c| c.is_uppercase()) {
@@ -2919,6 +2936,12 @@ impl<'a> Parser<'a> {
         // Check if we have a 'not' operator first
         if self.peek_kind() == Some(TokenKind::WordNot) {
             return self.parse_word_not_expr();
+        }
+
+        // Handle 'return' as an expression in expression context
+        // This allows patterns like: open $fh, $file or return;
+        if self.peek_kind() == Some(TokenKind::Return) {
+            return self.parse_return();
         }
 
         let mut expr = self.parse_ternary()?;

@@ -265,7 +265,6 @@ fn test_ac5_complex_replacements() {
 }
 
 #[test]
-#[ignore = "Exposes parsing strictness issues - will kill various mutants when parsing is hardened"]
 fn test_ac5_negative_malformed() {
     // AC5: Must include negative tests for malformed substitution operators
     let malformed_cases = vec![
