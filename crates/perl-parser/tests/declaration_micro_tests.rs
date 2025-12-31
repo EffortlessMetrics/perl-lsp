@@ -13,7 +13,7 @@
 
 #[cfg(test)]
 mod declaration_micro_tests {
-    use perl_parser::{declaration::DeclarationProvider, Parser};
+    use perl_parser::{Parser, declaration::DeclarationProvider};
     use rustc_hash::FxHashMap;
     use std::sync::Arc;
 
@@ -21,11 +21,7 @@ mod declaration_micro_tests {
 
     fn parse_and_get_provider(
         code: &str,
-    ) -> (
-        DeclarationProvider<'static>,
-        ParentMap,
-        Arc<perl_parser::ast::Node>,
-    ) {
+    ) -> (DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>) {
         let mut parser = Parser::new(code);
         let ast = parser.parse().expect("Failed to parse");
         let ast_arc = Arc::new(ast);
@@ -59,10 +55,7 @@ mod declaration_micro_tests {
         let links = links.unwrap();
         assert!(!links.is_empty(), "Links should not be empty");
         // Should point to the second qw, not the first
-        assert!(
-            links[0].target_selection_range.0 > 21,
-            "Should point to second use constant"
-        );
+        assert!(links[0].target_selection_range.0 > 21, "Should point to second use constant");
     }
 
     #[test]
@@ -115,11 +108,7 @@ mod declaration_micro_tests {
         // place caret far past EOL on line 0, ensure clamp then round-trip
         let off = cache.position_to_offset(text, 0, 999);
         let (line, col) = cache.offset_to_position(text, off);
-        assert_eq!(
-            (line, col),
-            (0, 3),
-            "Should clamp to end of line which is column 3 in UTF-16"
-        );
+        assert_eq!((line, col), (0, 3), "Should clamp to end of line which is column 3 in UTF-16");
     }
 
     // =========================================================================
@@ -163,7 +152,7 @@ mod declaration_micro_tests {
 // =============================================================================
 #[cfg(all(test, feature = "constant-advanced"))]
 mod constant_advanced_tests {
-    use perl_parser::{declaration::DeclarationProvider, Parser};
+    use perl_parser::{Parser, declaration::DeclarationProvider};
     use rustc_hash::FxHashMap;
     use std::sync::Arc;
 
@@ -171,11 +160,7 @@ mod constant_advanced_tests {
 
     fn parse_and_get_provider(
         code: &str,
-    ) -> (
-        DeclarationProvider<'static>,
-        ParentMap,
-        Arc<perl_parser::ast::Node>,
-    ) {
+    ) -> (DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>) {
         let mut parser = Parser::new(code);
         let ast = parser.parse().expect("Failed to parse");
         let ast_arc = Arc::new(ast);
@@ -267,32 +252,18 @@ mod constant_advanced_tests {
         let foo_links = provider.find_declaration(foo_off, 0);
         assert!(foo_links.is_some(), "Should find FOO");
         let foo_links = foo_links.unwrap();
-        assert!(
-            !foo_links.is_empty(),
-            "Should have at least one link for FOO"
-        );
+        assert!(!foo_links.is_empty(), "Should have at least one link for FOO");
         let foo_link = &foo_links[0].target_selection_range;
-        assert_eq!(
-            &code[foo_link.0..foo_link.1],
-            "FOO",
-            "FOO span should be exact"
-        );
+        assert_eq!(&code[foo_link.0..foo_link.1], "FOO", "FOO span should be exact");
 
         // offset for BAR
         let bar_off = code.find(" BAR;").unwrap() + 1;
         let bar_links = provider.find_declaration(bar_off, 0);
         assert!(bar_links.is_some(), "Should find BAR");
         let bar_links = bar_links.unwrap();
-        assert!(
-            !bar_links.is_empty(),
-            "Should have at least one link for BAR"
-        );
+        assert!(!bar_links.is_empty(), "Should have at least one link for BAR");
         let bar_link = &bar_links[0].target_selection_range;
-        assert_eq!(
-            &code[bar_link.0..bar_link.1],
-            "BAR",
-            "BAR span should be exact"
-        );
+        assert_eq!(&code[bar_link.0..bar_link.1], "BAR", "BAR span should be exact");
     }
 }
 
@@ -303,7 +274,7 @@ mod constant_advanced_tests {
 // =============================================================================
 #[cfg(all(test, feature = "qw-variants"))]
 mod qw_variants_tests {
-    use perl_parser::{declaration::DeclarationProvider, Parser};
+    use perl_parser::{Parser, declaration::DeclarationProvider};
     use rustc_hash::FxHashMap;
     use std::sync::Arc;
 
@@ -311,11 +282,7 @@ mod qw_variants_tests {
 
     fn parse_and_get_provider(
         code: &str,
-    ) -> (
-        DeclarationProvider<'static>,
-        ParentMap,
-        Arc<perl_parser::ast::Node>,
-    ) {
+    ) -> (DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>) {
         let mut parser = Parser::new(code);
         let ast = parser.parse().expect("Failed to parse");
         let ast_arc = Arc::new(ast);
@@ -366,7 +333,7 @@ mod qw_variants_tests {
 // =============================================================================
 #[cfg(all(test, feature = "parser-extras"))]
 mod parser_extras_tests {
-    use perl_parser::{declaration::DeclarationProvider, Parser};
+    use perl_parser::{Parser, declaration::DeclarationProvider};
     use rustc_hash::FxHashMap;
     use std::sync::Arc;
 
@@ -374,11 +341,7 @@ mod parser_extras_tests {
 
     fn parse_and_get_provider(
         code: &str,
-    ) -> (
-        DeclarationProvider<'static>,
-        ParentMap,
-        Arc<perl_parser::ast::Node>,
-    ) {
+    ) -> (DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>) {
         let mut parser = Parser::new(code);
         let ast = parser.parse().expect("Failed to parse");
         let ast_arc = Arc::new(ast);

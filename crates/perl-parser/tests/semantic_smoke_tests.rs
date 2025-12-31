@@ -440,8 +440,10 @@ require Exporter;
         let tokens = analyzer.semantic_tokens();
 
         // Should have namespace tokens
-        let ns_tokens: Vec<_> =
-            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Namespace)).collect();
+        let ns_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Namespace))
+            .collect();
 
         assert!(!ns_tokens.is_empty(), "Should have namespace tokens for modules");
     }

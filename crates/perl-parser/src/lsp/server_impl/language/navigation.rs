@@ -187,8 +187,10 @@ impl LspServer {
                                     let match_end = package_match.end();
                                     if cursor_in_text >= match_start && cursor_in_text <= match_end
                                     {
-                                        package_name_result =
-                                            Some((package_match.as_str().to_string(), text_around.clone()));
+                                        package_name_result = Some((
+                                            package_match.as_str().to_string(),
+                                            text_around.clone(),
+                                        ));
                                         break;
                                     }
                                 }
