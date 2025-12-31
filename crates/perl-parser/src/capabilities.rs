@@ -403,8 +403,10 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
                 code_action_kinds: Some(vec![
                     CodeActionKind::QUICKFIX,
                     // Only advertise refactoring capabilities that are fully implemented and tested
-                    // TODO: Add CodeActionKind::REFACTOR_EXTRACT when extract variable/subroutine tests pass
-                    // TODO: Add CodeActionKind::SOURCE_ORGANIZE_IMPORTS when import optimization is tested
+                    // NOTE: REFACTOR_EXTRACT is implemented in code_actions_enhanced.rs but not advertised.
+                    // To enable: verify lsp_code_actions_tests.rs tests pass, then add CodeActionKind::REFACTOR_EXTRACT
+                    // See Issue #181 for tracking workspace feature completeness
+                    CodeActionKind::SOURCE_ORGANIZE_IMPORTS, // Fully implemented and tested
                 ]),
                 resolve_provider: Some(true),
                 work_done_progress_options: WorkDoneProgressOptions::default(),
