@@ -51,6 +51,35 @@ fi
 echo "  ✓ No workspace_index field on LspServer"
 
 echo ""
+echo ">>> Ignored tests gate (zero tolerance for critical categories)"
+# Get counts from ignored-test-count.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/ignored-test-count.sh" ]]; then
+    # Run the script and capture output
+    OUTPUT=$(bash "$SCRIPT_DIR/ignored-test-count.sh" 2>&1) || true
+
+    # Check critical categories that MUST be zero
+    for cat in brokenpipe feature stress bare other; do
+        count=$(echo "$OUTPUT" | grep -E "^$cat " | awk '{print $2}' || echo "0")
+        if [[ "$count" != "0" && -n "$count" ]]; then
+            echo "ERROR: Category '$cat' has $count ignored tests (must be 0)"
+            echo "Run: VERBOSE=1 bash scripts/ignored-test-count.sh"
+            exit 1
+        fi
+    done
+    echo "  ✓ Critical categories (brokenpipe, feature, stress, bare, other) are all zero"
+
+    # Show allowed categories
+    manual=$(echo "$OUTPUT" | grep -E "^manual " | awk '{print $2}' || echo "0")
+    bug=$(echo "$OUTPUT" | grep -E "^bug " | awk '{print $2}' || echo "0")
+    infra=$(echo "$OUTPUT" | grep -E "^infra " | awk '{print $2}' || echo "0")
+    protocol=$(echo "$OUTPUT" | grep -E "^protocol " | awk '{print $2}' || echo "0")
+    echo "  Allowed: manual=$manual bug=$bug infra=$infra protocol=$protocol"
+else
+    echo "  (skipped - ignored-test-count.sh not found)"
+fi
+
+echo ""
 echo ">>> fmt check"
 cargo fmt --all -- --check
 

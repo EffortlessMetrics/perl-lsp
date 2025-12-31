@@ -82,7 +82,7 @@ fn print_indirect_object_still_works() {
 }
 
 #[test]
-#[ignore = "Indirect object detection requires deeper parser refactoring"]
+#[ignore = "BUG: Indirect object detection requires deeper parser refactoring"]
 fn print_filehandle_then_variable_is_indirect() {
     // Ensure: print $fh $x; is treated as indirect object form
     let code = r#"print $fh $x;"#;

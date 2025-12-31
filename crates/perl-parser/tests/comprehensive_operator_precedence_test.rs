@@ -119,7 +119,7 @@ fn test_complete_precedence_hierarchy() {
 }
 
 #[test]
-#[ignore = "Non-critical precedence edge case - TODO: fix for GA release"]
+#[ignore = "BUG: Non-critical precedence edge case - TODO: fix for GA release"]
 fn test_complex_precedence_combinations() {
     // Test complex expressions that combine multiple precedence levels
 
