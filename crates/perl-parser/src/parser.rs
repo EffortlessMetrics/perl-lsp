@@ -2971,12 +2971,14 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse ternary conditional expression
+    /// Right-associative: `$a ? $b ? $c : $d : $e` parses as `$a ? ($b ? $c : $d) : $e`
     fn parse_ternary(&mut self) -> ParseResult<Node> {
         let mut expr = self.parse_or()?;
 
         if self.peek_kind() == Some(TokenKind::Question) {
             self.tokens.next()?; // consume ?
-            let then_expr = self.parse_or()?;
+            // Allow nested ternary in then-branch for right associativity
+            let then_expr = self.parse_ternary()?;
             self.expect(TokenKind::Colon)?;
             let else_expr = self.parse_ternary()?;
 
@@ -4506,8 +4508,36 @@ impl<'a> Parser<'a> {
 
             TokenKind::Substitution => {
                 let token = self.tokens.next()?;
+                // Use strict validation that rejects invalid modifiers
                 let (pattern, replacement, modifiers) =
-                    quote_parser::extract_substitution_parts(&token.text);
+                    quote_parser::extract_substitution_parts_strict(&token.text).map_err(
+                        |e| {
+                            let message = match e {
+                                quote_parser::SubstitutionError::InvalidModifier(c) => {
+                                    format!(
+                                        "Invalid substitution modifier '{}'. Valid modifiers are: g, i, m, s, x, o, e, r",
+                                        c
+                                    )
+                                }
+                                quote_parser::SubstitutionError::MissingDelimiter => {
+                                    "Missing delimiter after 's'".to_string()
+                                }
+                                quote_parser::SubstitutionError::MissingPattern => {
+                                    "Missing pattern in substitution".to_string()
+                                }
+                                quote_parser::SubstitutionError::MissingReplacement => {
+                                    "Missing replacement in substitution".to_string()
+                                }
+                                quote_parser::SubstitutionError::MissingClosingDelimiter => {
+                                    "Missing closing delimiter in substitution".to_string()
+                                }
+                            };
+                            ParseError::SyntaxError {
+                                message,
+                                location: token.start,
+                            }
+                        },
+                    )?;
 
                 // Substitution as a standalone expression (will be used with =~ later)
                 Ok(Node::new(
