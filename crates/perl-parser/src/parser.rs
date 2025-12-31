@@ -2149,6 +2149,9 @@ impl<'a> Parser<'a> {
         let name_token = self.consume_token()?;
         let name = name_token.text.clone();
 
+        // Capture name_span from token for precise LSP navigation
+        let name_span = Some(SourceLocation { start: name_token.start, end: name_token.end });
+
         let block = self.parse_block()?;
         let end = block.location.end;
 
@@ -2156,7 +2159,7 @@ impl<'a> Parser<'a> {
         Ok(Node::new(
             NodeKind::Subroutine {
                 name: Some(name),
-                name_span: None, // TODO: Set proper name span
+                name_span,
                 prototype: None,
                 signature: None,
                 attributes: vec![],
@@ -2172,6 +2175,9 @@ impl<'a> Parser<'a> {
         let phase_token = self.consume_token()?;
         let phase = phase_token.text.clone();
 
+        // Capture phase_span from token for precise LSP navigation
+        let phase_span = Some(SourceLocation { start: phase_token.start, end: phase_token.end });
+
         // Phase blocks must be followed by a block
         if self.peek_kind() != Some(TokenKind::LeftBrace) {
             return Err(ParseError::syntax(
@@ -2185,7 +2191,7 @@ impl<'a> Parser<'a> {
 
         // Create a special node for phase blocks
         Ok(Node::new(
-            NodeKind::PhaseBlock { phase, block: Box::new(block) },
+            NodeKind::PhaseBlock { phase, phase_span, block: Box::new(block) },
             SourceLocation { start, end },
         ))
     }

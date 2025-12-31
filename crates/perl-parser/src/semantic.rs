@@ -792,7 +792,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::PhaseBlock { phase: _, block } => {
+            NodeKind::PhaseBlock { phase: _, phase_span: _, block } => {
                 // Handle BEGIN/END/INIT/CHECK/UNITCHECK blocks
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
