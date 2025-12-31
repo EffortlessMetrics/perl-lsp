@@ -95,8 +95,13 @@ fn test_complex_subroutine_signatures() {
     }
 }
 
+// =============================================================================
+// parser-extras feature: Substitution operators in AST
+// =============================================================================
+// Run with: cargo test -p perl-parser --features parser-extras
+// =============================================================================
+#[cfg(feature = "parser-extras")]
 #[test]
-#[ignore] // Pre-existing parser limitation: substitution operators not in AST (tracked in separate issue)
 fn test_complex_regex_patterns() {
     // Test complex regular expression patterns that stress the parser
     let test_cases = [

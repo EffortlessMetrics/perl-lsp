@@ -403,9 +403,5 @@ if ($condition) {
     // Note: perf_test! and perf_test_relaxed! are macros that need to be in scope
 }
 
-#[cfg(not(feature = "incremental"))]
-#[test]
-#[ignore = "Incremental feature not enabled"]
-fn test_comprehensive_incremental_feature_disabled() {
-    println!("Comprehensive incremental tests require 'incremental' feature");
-}
+// Tests in this file require the 'incremental' feature.
+// Run with: cargo test -p perl-parser --features incremental

@@ -9,7 +9,6 @@
   "codeLensProvider": {
     "resolveProvider": true
   },
-  "colorProvider": true,
   "completionProvider": {
     "resolveProvider": false,
     "triggerCharacters": [
@@ -102,7 +101,7 @@
         "operator"
       ]
     },
-    "range": false
+    "range": true
   },
   "signatureHelpProvider": {
     "retriggerCharacters": [

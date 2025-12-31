@@ -429,8 +429,13 @@ mod tests {
 
     // Integration test (requires perltidy to be installed)
     #[test]
-    #[ignore] // Run with: cargo test --ignored
     fn test_format_simple_code() {
+        // Self-skip if perltidy is not available
+        if std::process::Command::new("perltidy").arg("--version").output().is_err() {
+            eprintln!("SKIP: perltidy not installed, skipping formatting integration test");
+            return;
+        }
+
         let formatter = CodeFormatter::new();
         let options = FormattingOptions {
             tab_size: 4,

@@ -157,73 +157,80 @@ impl LspServer {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
 
+            // First, extract module reference info while holding the document lock briefly
+            // We need to release the lock before calling resolve_module_to_path to avoid deadlock
+            let module_lookup_info: Option<(String, String)> = {
+                let documents = self.documents_guard();
+                if let Some(doc) = self.get_document(&documents, uri) {
+                    let offset = self.pos16_to_offset(doc, line, character);
+                    let radius = 50;
+                    let text_start = offset.saturating_sub(radius);
+                    let text_around = self.get_text_around_offset(&doc.text, offset, radius);
+                    let cursor_in_text = offset - text_start;
+
+                    // Check for patterns like "use Module::Name", "require Module::Name"
+                    if let Some(module_name) =
+                        self.extract_module_reference(&text_around, cursor_in_text)
+                    {
+                        Some((module_name, text_around.clone()))
+                    } else {
+                        // Also check if we're on a package name followed by ->
+                        let package_pattern = regex::Regex::new(
+                            r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\s*->",
+                        )
+                        .ok();
+                        let mut package_name_result = None;
+                        if let Some(re) = package_pattern {
+                            for cap in re.captures_iter(&text_around) {
+                                if let Some(package_match) = cap.get(1) {
+                                    let match_start = package_match.start();
+                                    let match_end = package_match.end();
+                                    if cursor_in_text >= match_start && cursor_in_text <= match_end
+                                    {
+                                        package_name_result = Some((
+                                            package_match.as_str().to_string(),
+                                            text_around.clone(),
+                                        ));
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        package_name_result
+                    }
+                } else {
+                    None
+                }
+            };
+            // Lock is released here
+
+            // Now resolve module to path WITHOUT holding the document lock
+            if let Some((module_name, _text_around)) = module_lookup_info {
+                if let Some(module_path) = self.resolve_module_to_path(&module_name) {
+                    return Ok(Some(json!([{
+                        "uri": module_path,
+                        "range": {
+                            "start": {
+                                "line": 0,
+                                "character": 0,
+                            },
+                            "end": {
+                                "line": 0,
+                                "character": 0,
+                            },
+                        },
+                    }])));
+                }
+            }
+
+            // Continue with remaining definition lookup logic that needs document access
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                // First check if we're on a module name in use/require statement
                 let offset = self.pos16_to_offset(doc, line, character);
-
-                // Extract text around cursor to check for module references
                 let radius = 50;
                 let text_start = offset.saturating_sub(radius);
                 let text_around = self.get_text_around_offset(&doc.text, offset, radius);
                 let cursor_in_text = offset - text_start;
-
-                // Check for patterns like "use Module::Name", "require Module::Name", or "Module::Name->method"
-                if let Some(module_name) =
-                    self.extract_module_reference(&text_around, cursor_in_text)
-                {
-                    // Try to resolve module to file path
-                    if let Some(module_path) = self.resolve_module_to_path(&module_name) {
-                        return Ok(Some(json!([{
-                            "uri": module_path,
-                            "range": {
-                                "start": {
-                                    "line": 0,
-                                    "character": 0,
-                                },
-                                "end": {
-                                    "line": 0,
-                                    "character": 0,
-                                },
-                            },
-                        }])));
-                    }
-                }
-
-                // Also check if we're on a package name followed by ->
-                let package_pattern = regex::Regex::new(
-                    r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\s*->",
-                )
-                .ok();
-                if let Some(re) = package_pattern {
-                    for cap in re.captures_iter(&text_around) {
-                        if let Some(package_match) = cap.get(1) {
-                            let match_start = package_match.start();
-                            let match_end = package_match.end();
-
-                            // Check if cursor is within the package name
-                            if cursor_in_text >= match_start && cursor_in_text <= match_end {
-                                let package_name = package_match.as_str();
-                                if let Some(module_path) = self.resolve_module_to_path(package_name)
-                                {
-                                    return Ok(Some(json!([{
-                                        "uri": module_path,
-                                        "range": {
-                                            "start": {
-                                                "line": 0,
-                                                "character": 0,
-                                            },
-                                            "end": {
-                                                "line": 0,
-                                                "character": 0,
-                                            },
-                                        },
-                                    }])));
-                                }
-                            }
-                        }
-                    }
-                }
 
                 #[cfg(feature = "workspace")]
                 {
@@ -437,7 +444,7 @@ impl LspServer {
             if token.is_cancelled_relaxed() {
                 return Err(JsonRpcError {
                     code: REQUEST_CANCELLED,
-                    message: "Request cancelled".to_string(),
+                    message: "Request cancelled - definition provider".to_string(),
                     data: None,
                 });
             }

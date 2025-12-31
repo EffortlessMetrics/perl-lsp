@@ -178,7 +178,6 @@ fn initialize_enhanced_harness(harness: &mut LspHarness, workspace: &TempWorkspa
 // ======================== AC3: Enhanced Code Action Server Capabilities ========================
 
 #[test]
-#[ignore = "INFRA: Test infrastructure double-initialization issue needs fix"]
 // AC3:codeActions - Enhanced server capabilities with LSP 3.17+ compliance
 fn test_enhanced_code_action_server_capabilities() {
     let (mut harness, workspace) = create_enhanced_code_actions_server();
@@ -568,8 +567,8 @@ fn test_enhanced_code_action_resolve() {
 
 // ======================== AC3: Enhanced Filtering Validation ========================
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[ignore = "INFRA: Test infrastructure double-initialization issue needs fix"]
 // AC3:codeActions - Enhanced action filtering with comprehensive kind validation
 fn test_enhanced_code_actions_filtering() {
     let (mut harness, workspace) = create_enhanced_code_actions_server();

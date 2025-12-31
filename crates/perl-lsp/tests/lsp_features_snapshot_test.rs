@@ -7,7 +7,6 @@ mod support;
 use support::lsp_harness::LspHarness;
 
 #[test]
-#[ignore = "INFRA: Snapshot mismatch - lsp.color was removed from capabilities, needs snapshot update"]
 fn test_advertised_features_match_capabilities() {
     use lsp_types::*;
 

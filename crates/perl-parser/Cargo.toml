@@ -80,6 +80,10 @@ lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
 expose_lsp_test_api = []  # Expose test helpers for integration tests
 workspace_refactor = []  # Workspace-wide refactoring capabilities
 modernize = []  # Code modernization transformations
+substitution-advanced = []  # Advanced substitution operator parsing
+utf16-complete = []  # Complete UTF-16 round-trip support
+semantic-phase2 = []  # Semantic analyzer Phase 2+ features
+parser-extras = []  # General aspirational parser tests
 
 [build-dependencies]
 serde = { version = "1.0.228", features = ["derive"] }

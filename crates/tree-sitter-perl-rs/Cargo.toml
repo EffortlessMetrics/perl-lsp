@@ -61,6 +61,10 @@ test-utils = []
 # Legacy features (for benchmarking only)
 c-scanner = []
 rust-scanner = []
+# Aspirational test features - enable when implementing these capabilities
+modern-perl-syntax = []  # Subroutine signatures, postfix deref, state variables
+heredoc-advanced = []    # Complex heredoc features (delimiters, interpolation, recovery)
+stress-tests = []        # Stack overflow and stress tests
 
 [lib]
 name = "tree_sitter_perl"

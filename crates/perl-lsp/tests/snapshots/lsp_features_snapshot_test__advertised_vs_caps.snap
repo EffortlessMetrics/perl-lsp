@@ -6,7 +6,6 @@ caps:
   - lsp.call_hierarchy
   - lsp.code_action
   - lsp.code_lens
-  - lsp.color
   - lsp.completion
   - lsp.definition
   - lsp.document_highlight
