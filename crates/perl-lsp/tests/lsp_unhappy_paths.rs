@@ -13,7 +13,7 @@ use common::{
 /// Ensures the LSP server handles errors gracefully
 
 #[test]
-#[ignore = "Server crashes when receiving malformed JSON - needs robustness improvement"]
+#[cfg_attr(not(feature = "strict-jsonrpc"), ignore = "PROTOCOL: Run with --features strict-jsonrpc")]
 fn test_malformed_json_request() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -857,7 +857,7 @@ fn test_cancel_request() {
 }
 
 #[test]
-#[ignore = "PROTOCOL: Server behavior after shutdown request - needs protocol compliance review"]
+#[cfg_attr(not(feature = "strict-jsonrpc"), ignore = "PROTOCOL: Run with --features strict-jsonrpc")]
 fn test_shutdown_without_exit() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -901,7 +901,7 @@ fn test_shutdown_without_exit() {
 }
 
 #[test]
-#[ignore = "PROTOCOL: Client capability negotiation edge case - needs protocol compliance review"]
+#[cfg_attr(not(feature = "strict-jsonrpc"), ignore = "PROTOCOL: Run with --features strict-jsonrpc")]
 fn test_invalid_capability_request() {
     let mut server = start_lsp_server();
 

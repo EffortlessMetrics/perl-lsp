@@ -76,7 +76,6 @@ mod refactoring_module_tests {
 
     /// Test that refactoring.rs file exists after implementation
     #[test]
-    #[ignore] // Only run after refactoring.rs is created
     fn test_refactoring_module_exists() {
         assert!(
             Path::new("src/refactoring.rs").exists(),
@@ -86,7 +85,6 @@ mod refactoring_module_tests {
 
     /// Test refactoring module structure after implementation
     #[test]
-    #[ignore] // Only run after refactoring.rs is created
     fn test_refactoring_module_structure() {
         let content =
             std::fs::read_to_string("src/refactoring.rs").expect("Failed to read refactoring.rs");
@@ -112,7 +110,6 @@ mod refactoring_module_tests {
 
     /// Test refactoring module API compatibility
     #[test]
-    #[ignore] // Only run after refactoring.rs is created and lib.rs is updated
     fn test_refactoring_api_compatibility() {
         // This test will validate that the refactoring module can be imported
         // and used correctly once it's implemented
@@ -132,7 +129,6 @@ mod refactoring_module_tests {
 mod lib_integration_tests {
     /// Test that lib.rs module declarations are correct after uncommenting
     #[test]
-    #[ignore] // Only run after modules are uncommented in lib.rs
     fn test_lib_module_declarations() {
         let content = std::fs::read_to_string("src/lib.rs").expect("Failed to read lib.rs");
 
@@ -153,7 +149,6 @@ mod lib_integration_tests {
 
     /// Test that public API exports are added correctly
     #[test]
-    #[ignore] // Only run after modules are restored and exports are added
     fn test_public_api_exports() {
         let content = std::fs::read_to_string("src/lib.rs").expect("Failed to read lib.rs");
 
