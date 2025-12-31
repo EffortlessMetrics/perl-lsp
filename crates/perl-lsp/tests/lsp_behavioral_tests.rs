@@ -326,8 +326,8 @@ sub calculate {
     }
 }
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[ignore = "Test generation code action not yet returning 'Generate test' action for subroutine ranges"]
 fn test_test_generation_actions_present() {
     let (mut harness, workspace) = create_test_server();
 

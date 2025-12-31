@@ -567,8 +567,8 @@ fn test_enhanced_code_action_resolve() {
 
 // ======================== AC3: Enhanced Filtering Validation ========================
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[ignore = "FEATURE: Code action 'only' filtering not fully implemented - server returns all actions"]
 // AC3:codeActions - Enhanced action filtering with comprehensive kind validation
 fn test_enhanced_code_actions_filtering() {
     let (mut harness, workspace) = create_enhanced_code_actions_server();

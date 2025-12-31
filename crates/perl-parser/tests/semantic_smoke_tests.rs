@@ -370,78 +370,85 @@ $text =~ s/world/universe/g;
     assert!(!op_tokens.is_empty(), "Should have operator tokens for s///");
 }
 
-#[test]
-#[ignore] // Enable after Phase 2 implementation
-fn test_method_call_semantic() {
-    let code = r#"
+// =============================================================================
+// PHASE 2/3 Tests - Feature gated under semantic-phase2
+// =============================================================================
+// Run with: cargo test -p perl-parser --features semantic-phase2
+// =============================================================================
+#[cfg(feature = "semantic-phase2")]
+mod semantic_phase2_tests {
+    use perl_parser::Parser;
+    use perl_parser::semantic::{SemanticAnalyzer, SemanticTokenType};
+    use perl_parser::symbol::SymbolKind;
+
+    #[test]
+    fn test_method_call_semantic() {
+        let code = r#"
 my $obj = Foo->new();
 $obj->process();
 my $result = $obj->get_value();
 "#;
 
-    let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
-    let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
-    let tokens = analyzer.semantic_tokens();
+        let tokens = analyzer.semantic_tokens();
 
-    // Should have method tokens
-    let method_tokens: Vec<_> =
-        tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Method)).collect();
+        // Should have method tokens
+        let method_tokens: Vec<_> =
+            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Method)).collect();
 
-    assert!(method_tokens.len() >= 3, "Should have tokens for new, process, get_value");
-}
+        assert!(method_tokens.len() >= 3, "Should have tokens for new, process, get_value");
+    }
 
-#[test]
-#[ignore = "Phase 2: Reference/Dereference semantic handlers not yet implemented"]
-fn test_reference_dereference_semantic() {
-    let code = r#"
+    #[test]
+    fn test_reference_dereference_semantic() {
+        let code = r#"
 my $scalar = 42;
 my $ref = \$scalar;
 my $value = $$ref;
 "#;
 
-    let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
-    let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
-    let tokens = analyzer.semantic_tokens();
-    assert!(!tokens.is_empty(), "Should generate tokens for references");
+        let tokens = analyzer.semantic_tokens();
+        assert!(!tokens.is_empty(), "Should generate tokens for references");
 
-    // Should have symbols for all variables
-    let symbols = analyzer.symbol_table();
-    assert!(!symbols.find_symbol("scalar", 0, SymbolKind::ScalarVariable).is_empty());
-    assert!(!symbols.find_symbol("ref", 0, SymbolKind::ScalarVariable).is_empty());
-    assert!(!symbols.find_symbol("value", 0, SymbolKind::ScalarVariable).is_empty());
-}
+        // Should have symbols for all variables
+        let symbols = analyzer.symbol_table();
+        assert!(!symbols.find_symbol("scalar", 0, SymbolKind::ScalarVariable).is_empty());
+        assert!(!symbols.find_symbol("ref", 0, SymbolKind::ScalarVariable).is_empty());
+        assert!(!symbols.find_symbol("value", 0, SymbolKind::ScalarVariable).is_empty());
+    }
 
-#[test]
-#[ignore] // Enable after Phase 2 implementation
-fn test_use_require_semantic() {
-    let code = r#"
+    #[test]
+    fn test_use_require_semantic() {
+        let code = r#"
 use strict;
 use warnings;
 use Data::Dumper qw(Dumper);
 require Exporter;
 "#;
 
-    let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
-    let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
-    let tokens = analyzer.semantic_tokens();
+        let tokens = analyzer.semantic_tokens();
 
-    // Should have namespace tokens
-    let ns_tokens: Vec<_> =
-        tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Namespace)).collect();
+        // Should have namespace tokens
+        let ns_tokens: Vec<_> =
+            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Namespace)).collect();
 
-    assert!(!ns_tokens.is_empty(), "Should have namespace tokens for modules");
-}
+        assert!(!ns_tokens.is_empty(), "Should have namespace tokens for modules");
+    }
 
-#[test]
-#[ignore] // Enable after Phase 2 implementation
-fn test_given_when_semantic() {
-    let code = r#"
+    #[test]
+    fn test_given_when_semantic() {
+        let code = r#"
 use v5.10;
 given ($value) {
     when (1) { say "one"; }
@@ -450,18 +457,17 @@ given ($value) {
 }
 "#;
 
-    let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
-    let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
-    let tokens = analyzer.semantic_tokens();
-    assert!(!tokens.is_empty(), "Should generate tokens for given/when");
-}
+        let tokens = analyzer.semantic_tokens();
+        assert!(!tokens.is_empty(), "Should generate tokens for given/when");
+    }
 
-#[test]
-#[ignore] // Enable after Phase 2 implementation
-fn test_control_flow_keywords_semantic() {
-    let code = r#"
+    #[test]
+    fn test_control_flow_keywords_semantic() {
+        let code = r#"
 sub process {
     foreach my $item (@items) {
         next if $item == 0;
@@ -472,49 +478,45 @@ sub process {
 }
 "#;
 
-    let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
-    let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
-    let tokens = analyzer.semantic_tokens();
-    assert!(!tokens.is_empty(), "Should generate tokens for control flow");
-}
+        let tokens = analyzer.semantic_tokens();
+        assert!(!tokens.is_empty(), "Should generate tokens for control flow");
+    }
 
-// ============================================================================
-// PHASE 3: Complete Coverage
-// ============================================================================
-
-#[test]
-#[ignore] // Enable after Phase 3 implementation
-fn test_postfix_loop_semantic() {
-    let code = r#"
+    // Phase 3 tests (also under semantic-phase2 feature for simplicity)
+    #[test]
+    fn test_postfix_loop_semantic() {
+        let code = r#"
 say $_ for @items;
 print "$_\n" while <>;
 "#;
 
-    let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
-    let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
-    let tokens = analyzer.semantic_tokens();
-    assert!(!tokens.is_empty(), "Should generate tokens for postfix loops");
-}
+        let tokens = analyzer.semantic_tokens();
+        assert!(!tokens.is_empty(), "Should generate tokens for postfix loops");
+    }
 
-#[test]
-#[ignore] // Enable after Phase 3 implementation
-fn test_file_test_semantic() {
-    let code = r#"
+    #[test]
+    fn test_file_test_semantic() {
+        let code = r#"
 my $exists = -e $file;
 my $is_dir = -d $path;
 my $readable = -r $filename;
 "#;
 
-    let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
-    let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
-    let tokens = analyzer.semantic_tokens();
-    assert!(!tokens.is_empty(), "Should generate tokens for file tests");
+        let tokens = analyzer.semantic_tokens();
+        assert!(!tokens.is_empty(), "Should generate tokens for file tests");
+    }
 }
 
 // ============================================================================

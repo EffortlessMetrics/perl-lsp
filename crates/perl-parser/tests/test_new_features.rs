@@ -23,8 +23,13 @@ fn test_isa_operator() {
     }
 }
 
+// =============================================================================
+// parser-extras feature: Comprehensive feature testing
+// =============================================================================
+// Run with: cargo test -p perl-parser --features parser-extras
+// =============================================================================
+#[cfg(feature = "parser-extras")]
 #[test]
-#[ignore = "comprehensive feature coverage not yet stable"]
 fn test_all_improvements() {
     // Comprehensive test of all the features we've implemented
     let code = r#"

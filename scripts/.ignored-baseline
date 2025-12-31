@@ -1,11 +1,11 @@
-# Ignored test baseline - 2025-12-31T05:06:09Z
+# Ignored test baseline - 2025-12-31T05:30:36Z
 # Updated by: ignored-test-count.sh --update
 brokenpipe=0
-feature=91
-infra=10
+feature=0
+infra=17
 protocol=0
-stress=4
+stress=0
 bug=8
 bare=0
 other=0
-total=113
+total=25

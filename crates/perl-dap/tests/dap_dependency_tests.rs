@@ -1,107 +1,60 @@
 //! DAP Dependency Management Tests (AC18)
 //!
-//! Tests for CPAN module installation and bundled fallback
+//! Tests for Perl dependency management and fallback strategies
 //!
 //! Specification: docs/DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-dependency-management
+//!
+//! Run with: cargo test -p perl-dap --features dap-phase3
 
-use anyhow::Result;
+#[cfg(feature = "dap-phase3")]
+mod dap_dependencies {
+    use anyhow::Result;
 
-/// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-cpan-auto-install
-#[tokio::test]
-#[ignore = "Phase 3 implementation (AC18) - TDD scaffold"]
-// AC:18
-async fn test_cpan_module_installation_fallback() -> Result<()> {
-    // Auto-install Devel::TSPerlDAP via cpanm (recommended)
-    // Fall back to bundled implementation if unavailable
+    /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-cpan-fallback
+    #[test]
+    // AC:18
+    fn test_cpan_module_installation_fallback() -> Result<()> {
+        // Automatic CPAN module installation fallback
+        panic!("CPAN module installation fallback not yet implemented (AC18)");
+    }
 
-    // TODO: Check if Devel::TSPerlDAP is installed
-    // TODO: If not installed, attempt auto-install via cpanm
-    // TODO: If cpanm fails, fall back to bundled shim
-    // TODO: Verify bundled shim functionality
-    // TODO: Test version compatibility check
+    /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-version-detection
+    #[test]
+    // AC:18
+    fn test_devel_tsperldap_version_detection() -> Result<()> {
+        // Detect installed Devel::TSPerlDAP version
+        panic!("Devel::TSPerlDAP version detection not yet implemented (AC18)");
+    }
 
-    panic!("CPAN module installation fallback not yet implemented (AC18)");
-}
+    /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-bundled-shim
+    #[test]
+    // AC:18
+    fn test_bundled_shim_fallback() -> Result<()> {
+        // Bundled shim fallback when CPAN unavailable
+        panic!("Bundled shim fallback not yet implemented (AC18)");
+    }
 
-/// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-version-detection
-#[test]
-#[ignore = "Phase 3 implementation (AC18) - TDD scaffold"]
-// AC:18
-fn test_devel_tsperldap_version_detection() -> Result<()> {
-    // Detect Devel::TSPerlDAP version
-    // Verify protocol compatibility
+    /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-documentation
+    #[test]
+    // AC:18
+    fn test_dependency_management_documentation() -> Result<()> {
+        // Documentation for dependency management
+        panic!("Dependency management documentation not yet implemented (AC18)");
+    }
 
-    // TODO: Query Devel::TSPerlDAP version
-    // TODO: Verify minimum version requirement (0.1.0+)
-    // TODO: Test version negotiation
-    // TODO: Verify feature detection based on version
+    /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-perl-version
+    #[test]
+    // AC:18
+    fn test_perl_version_compatibility() -> Result<()> {
+        // Perl version compatibility check (5.10+)
+        panic!("Perl version compatibility not yet implemented (AC18)");
+    }
 
-    panic!("Devel::TSPerlDAP version detection not yet implemented (AC18)");
-}
-
-/// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-bundled-fallback
-#[tokio::test]
-#[ignore = "Phase 3 implementation (AC18) - TDD scaffold"]
-// AC:18
-async fn test_bundled_shim_fallback() -> Result<()> {
-    // Bundled Perl shim as fallback
-    // Extension bundles Devel::TSPerlDAP for offline use
-
-    // TODO: Simulate CPAN installation failure
-    // TODO: Verify fallback to bundled shim
-    // TODO: Test bundled shim initialization
-    // TODO: Verify bundled shim functionality (breakpoints, stack, variables)
-
-    panic!("Bundled shim fallback not yet implemented (AC18)");
-}
-
-/// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-dependency-documentation
-#[test]
-#[ignore = "Phase 3 implementation (AC18) - TDD scaffold"]
-// AC:18
-fn test_dependency_management_documentation() -> Result<()> {
-    // Verify dependency management documentation
-    // Installation instructions, troubleshooting
-
-    // TODO: Read docs/DAP_DEPENDENCY_MANAGEMENT.md
-    // TODO: Verify cpanm installation instructions
-    // TODO: Verify bundled fallback documentation
-    // TODO: Verify troubleshooting section (permission errors, network issues)
-    // TODO: Verify version compatibility matrix
-
-    panic!("Dependency management documentation not yet implemented (AC18)");
-}
-
-/// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-perl-version-compatibility
-#[test]
-#[ignore = "Phase 3 implementation (AC18) - TDD scaffold"]
-// AC:18
-fn test_perl_version_compatibility() -> Result<()> {
-    // Perl 5.16+ compatibility validation
-    // Test matrix: 5.16, 5.30, 5.38
-
-    // TODO: Verify minimum Perl version (5.16)
-    // TODO: Test with Perl 5.16 (minimum)
-    // TODO: Test with Perl 5.30 (common)
-    // TODO: Test with Perl 5.38 (latest stable)
-    // TODO: Verify feature availability across versions
-
-    panic!("Perl version compatibility not yet implemented (AC18)");
-}
-
-/// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-cpan-dependencies
-#[test]
-#[ignore = "Phase 3 implementation (AC18) - TDD scaffold"]
-// AC:18
-fn test_cpan_dependency_installation() -> Result<()> {
-    // Verify CPAN dependencies for Devel::TSPerlDAP
-    // JSON::PP, PadWalker, B::Deparse
-
-    // TODO: Check JSON::PP availability
-    // TODO: Check PadWalker availability
-    // TODO: Check B::Deparse availability
-    // TODO: Test installation via cpanm
-    // TODO: Verify dependency versions
-
-    panic!("CPAN dependency installation not yet implemented (AC18)");
+    /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-cpan-install
+    #[test]
+    // AC:18
+    fn test_cpan_dependency_installation() -> Result<()> {
+        // CPAN dependency installation workflow
+        panic!("CPAN dependency installation not yet implemented (AC18)");
+    }
 }

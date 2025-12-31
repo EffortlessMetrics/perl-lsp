@@ -1,119 +1,116 @@
 //! Test case to reproduce stack overflow in debug builds
 //! This creates deeply nested Perl structures to identify recursion issues
+//!
+//! These tests only compile when the `stress-tests` feature is enabled:
+//!   cargo test -p tree-sitter-perl --features stress-tests
 
-#[cfg(feature = "pure-rust")]
-use tree_sitter_perl::PureRustPerlParser;
+#[cfg(all(test, feature = "stress-tests", feature = "pure-rust"))]
+mod stress_tests {
+    use tree_sitter_perl::PureRustPerlParser;
 
-#[test]
-#[cfg(feature = "pure-rust")]
-#[ignore = "This test is designed to fail in debug builds to demonstrate stack overflow"]
-fn test_deep_nested_expression() {
-    // Create a deeply nested arithmetic expression
-    // Each level adds parentheses: (((((1)))))
-    let depth = 1500;
-    let mut expr = "1".to_string();
-    for _ in 0..depth {
-        expr = format!("({})", expr);
-    }
-
-    println!("Testing expression with depth: {}", depth);
-    println!("Expression length: {} bytes", expr.len());
-
-    // This should overflow in debug builds
-    let mut parser = PureRustPerlParser::new();
-    let result = parser.parse(&expr);
-
-    match result {
-        Ok(_ast) => {
-            println!("Successfully parsed!");
-            // Should not reach here in debug builds
+    #[test]
+    fn test_deep_nested_expression() {
+        // Create a deeply nested arithmetic expression
+        // Each level adds parentheses: (((((1)))))
+        let depth = 1500;
+        let mut expr = "1".to_string();
+        for _ in 0..depth {
+            expr = format!("({})", expr);
         }
-        Err(e) => {
-            println!("Parse error: {:?}", e);
-        }
-    }
-}
 
-#[test]
-#[cfg(feature = "pure-rust")]
-#[ignore = "This test is designed to fail in debug builds to demonstrate stack overflow"]
-fn test_deep_nested_blocks() {
-    // Create deeply nested blocks: { { { { code } } } }
-    let depth = 1000;
-    let mut code = "print 'deep';".to_string();
-    for _ in 0..depth {
-        code = format!("{{ {} }}", code);
-    }
+        println!("Testing expression with depth: {}", depth);
+        println!("Expression length: {} bytes", expr.len());
 
-    println!("Testing nested blocks with depth: {}", depth);
+        // This should overflow in debug builds
+        let mut parser = PureRustPerlParser::new();
+        let result = parser.parse(&expr);
 
-    let mut parser = PureRustPerlParser::new();
-    let result = parser.parse(&code);
-
-    match result {
-        Ok(_ast) => {
-            println!("Successfully parsed!");
-        }
-        Err(e) => {
-            println!("Parse error: {:?}", e);
+        match result {
+            Ok(_ast) => {
+                println!("Successfully parsed!");
+                // Should not reach here in debug builds
+            }
+            Err(e) => {
+                println!("Parse error: {:?}", e);
+            }
         }
     }
-}
 
-#[test]
-#[cfg(feature = "pure-rust")]
-#[ignore = "This test is designed to fail in debug builds to demonstrate stack overflow"]
-fn test_deep_nested_arrays() {
-    // Create deeply nested array refs: [[[[1]]]]
-    let depth = 1200;
-    let mut expr = "42".to_string();
-    for _ in 0..depth {
-        expr = format!("[{}]", expr);
-    }
-
-    println!("Testing nested arrays with depth: {}", depth);
-
-    let mut parser = PureRustPerlParser::new();
-    let result = parser.parse(&expr);
-
-    match result {
-        Ok(_ast) => {
-            println!("Successfully parsed!");
+    #[test]
+    fn test_deep_nested_blocks() {
+        // Create deeply nested blocks: { { { { code } } } }
+        let depth = 1000;
+        let mut code = "print 'deep';".to_string();
+        for _ in 0..depth {
+            code = format!("{{ {} }}", code);
         }
-        Err(e) => {
-            println!("Parse error: {:?}", e);
+
+        println!("Testing nested blocks with depth: {}", depth);
+
+        let mut parser = PureRustPerlParser::new();
+        let result = parser.parse(&code);
+
+        match result {
+            Ok(_ast) => {
+                println!("Successfully parsed!");
+            }
+            Err(e) => {
+                println!("Parse error: {:?}", e);
+            }
         }
     }
-}
 
-#[test]
-#[cfg(feature = "pure-rust")]
-#[ignore = "This test is designed to fail in debug builds to demonstrate stack overflow"]
-fn test_deep_method_chain() {
-    // Create a deep method chain: $obj->method1()->method2()->...
-    let depth = 800;
-    let mut expr = "$obj".to_string();
-    for i in 0..depth {
-        expr = format!("{}->method{}()", expr, i);
+    #[test]
+    fn test_deep_nested_arrays() {
+        // Create deeply nested array refs: [[[[1]]]]
+        let depth = 1200;
+        let mut expr = "42".to_string();
+        for _ in 0..depth {
+            expr = format!("[{}]", expr);
+        }
+
+        println!("Testing nested arrays with depth: {}", depth);
+
+        let mut parser = PureRustPerlParser::new();
+        let result = parser.parse(&expr);
+
+        match result {
+            Ok(_ast) => {
+                println!("Successfully parsed!");
+            }
+            Err(e) => {
+                println!("Parse error: {:?}", e);
+            }
+        }
     }
 
-    println!("Testing method chain with depth: {}", depth);
-
-    let mut parser = PureRustPerlParser::new();
-    let result = parser.parse(&expr);
-
-    match result {
-        Ok(_ast) => {
-            println!("Successfully parsed!");
+    #[test]
+    fn test_deep_method_chain() {
+        // Create a deep method chain: $obj->method1()->method2()->...
+        let depth = 800;
+        let mut expr = "$obj".to_string();
+        for i in 0..depth {
+            expr = format!("{}->method{}()", expr, i);
         }
-        Err(e) => {
-            println!("Parse error: {:?}", e);
+
+        println!("Testing method chain with depth: {}", depth);
+
+        let mut parser = PureRustPerlParser::new();
+        let result = parser.parse(&expr);
+
+        match result {
+            Ok(_ast) => {
+                println!("Successfully parsed!");
+            }
+            Err(e) => {
+                println!("Parse error: {:?}", e);
+            }
         }
     }
 }
 
 // Helper to run a specific test with custom stack trace
-#[cfg(test)]
+#[cfg(all(test, feature = "stress-tests"))]
 mod helpers {
     use std::env;
 

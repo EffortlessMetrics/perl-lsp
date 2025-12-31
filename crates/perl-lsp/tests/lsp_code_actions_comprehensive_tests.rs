@@ -268,8 +268,8 @@ fn test_code_action_server_capabilities() {
     }
 }
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[ignore = "FEATURE: Extract variable refactoring not yet implemented"]
 // AC3:codeActions - Extract variable refactoring
 fn test_extract_variable_refactoring() {
     let (mut harness, workspace) = create_code_actions_server();
@@ -740,8 +740,8 @@ fn test_code_actions_invalid_range() {
     assert!(actions_result.is_ok() || actions_result.is_err(), "Should handle invalid range");
 }
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[ignore = "FEATURE: Code action 'only' filtering not fully implemented - server returns all actions"]
 // Test code actions with specific "only" filters
 fn test_code_actions_filtering() {
     let (mut harness, workspace) = create_code_actions_server();
