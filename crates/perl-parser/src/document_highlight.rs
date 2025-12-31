@@ -63,7 +63,34 @@ impl DocumentHighlightProvider {
         let mut highlights = Vec::new();
         self.collect_highlights(ast, source, &symbol_info, &mut highlights);
 
-        highlights
+        // Deduplicate highlights by location, preferring Write over Read
+        self.deduplicate_highlights(highlights)
+    }
+
+    /// Deduplicate highlights by location, preferring Write kind over Read
+    fn deduplicate_highlights(&self, highlights: Vec<DocumentHighlight>) -> Vec<DocumentHighlight> {
+        use std::collections::HashMap;
+
+        // Group by location (start, end)
+        let mut by_location: HashMap<(usize, usize), DocumentHighlight> = HashMap::new();
+
+        for h in highlights {
+            let key = (h.location.start, h.location.end);
+            by_location
+                .entry(key)
+                .and_modify(|existing| {
+                    // Prefer Write (3) over Read (2) over Text (1)
+                    if (h.kind as u8) > (existing.kind as u8) {
+                        *existing = h.clone();
+                    }
+                })
+                .or_insert(h);
+        }
+
+        // Return sorted by position
+        let mut result: Vec<_> = by_location.into_values().collect();
+        result.sort_by_key(|h| h.location.start);
+        result
     }
 
     /// Find the node at the given byte offset

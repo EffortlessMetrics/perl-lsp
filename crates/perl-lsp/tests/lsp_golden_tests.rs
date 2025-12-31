@@ -209,7 +209,6 @@ impl Drop for TestContext {
 // ===================== Golden Tests =====================
 
 #[test]
-#[ignore = "INFRA: Missing fixture file tests/fixtures/hover_test.pl"]
 fn test_hover_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/hover_test.pl";
@@ -250,7 +249,6 @@ fn test_hover_golden() {
 }
 
 #[test]
-#[ignore = "INFRA: Missing fixture file tests/fixtures/diagnostics_test.pl"]
 fn test_diagnostics_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/diagnostics_test.pl";
@@ -273,7 +271,6 @@ fn test_diagnostics_golden() {
 }
 
 #[test]
-#[ignore = "INFRA: Missing fixture file tests/fixtures/completion_test.pl"]
 fn test_completion_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/completion_test.pl";
@@ -311,10 +308,9 @@ fn test_completion_golden() {
 }
 
 #[test]
-#[ignore = "INFRA: Missing fixture file tests/fixtures/semantic_test.pl"]
 fn test_semantic_tokens_golden() {
     let mut ctx = TestContext::new();
-    let fixture = "tests/fixtures/hover_test.pl";
+    let fixture = "tests/fixtures/semantic_test.pl";
     ctx.open_file(fixture);
 
     // Request semantic tokens
@@ -336,10 +332,9 @@ fn test_semantic_tokens_golden() {
 }
 
 #[test]
-#[ignore = "INFRA: Missing fixture file tests/fixtures/folding_test.pl"]
 fn test_folding_ranges_golden() {
     let mut ctx = TestContext::new();
-    let fixture = "tests/fixtures/hover_test.pl";
+    let fixture = "tests/fixtures/folding_test.pl";
     ctx.open_file(fixture);
 
     // Request folding ranges
@@ -353,12 +348,12 @@ fn test_folding_ranges_golden() {
         // Verify specific folds exist
         let ranges_arr = r.as_array().expect("Folding ranges should be array");
 
-        // Should have folds for subroutines and package
+        // Should have folds for subroutines (lines 11, 18) and control structures (line 28)
         let sub_folds = ranges_arr
             .iter()
             .filter(|r| {
                 let start = r.get("startLine").and_then(|v| v.as_u64()).unwrap_or(0);
-                start == 6 || start == 22 || start == 27 // Line numbers of subs
+                start == 10 || start == 17 || start == 27 // 0-indexed line numbers of foldable regions
             })
             .count();
 
