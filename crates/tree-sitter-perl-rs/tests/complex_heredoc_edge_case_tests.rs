@@ -123,13 +123,24 @@ fn find_heredoc_node(node: &tree_sitter::Node) -> Option<tree_sitter::Node> {
     None
 }
 
-#[test]
-#[ignore] // AC10: Remove when complex delimiter support is implemented
-fn test_complex_heredoc_delimiters() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+// ============================================================================
+// Enhanced Heredoc Tests - Compile-time Feature Gated
+// ============================================================================
+// These tests are aspirational and only compile when the feature is enabled.
+// Run with: cargo test -p tree-sitter-perl-rs --features heredoc-advanced
+// ============================================================================
 
-    let mut parser =
-        create_parser().context("Failed to create parser for complex delimiter tests")?;
+#[cfg(feature = "heredoc-advanced")]
+mod heredoc_advanced {
+    use super::*;
+
+    #[test]
+    fn test_complex_heredoc_delimiters() -> Result<()> {
+        // AC10: Complex delimiter support
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+
+        let mut parser =
+            create_parser().context("Failed to create parser for complex delimiter tests")?;
 
     let complex_delimiter_cases = vec![
         // Unicode delimiters
@@ -198,10 +209,10 @@ Content with emoji delimiter
     Ok(())
 }
 
-#[test]
-#[ignore] // AC10: Remove when quoted delimiter support is implemented
-fn test_quoted_heredoc_delimiters() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+    #[test]
+    fn test_quoted_heredoc_delimiters() -> Result<()> {
+        // AC10: Quoted delimiter support
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
     let mut parser =
         create_parser().context("Failed to create parser for quoted delimiter tests")?;
@@ -272,10 +283,10 @@ JavaScript"#,
     Ok(())
 }
 
-#[test]
-#[ignore] // AC10: Remove when heredoc array context support is implemented
-fn test_heredoc_in_array_context() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+    #[test]
+    fn test_heredoc_in_array_context() -> Result<()> {
+        // AC10: Heredoc array context support
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
     let mut parser =
         create_parser().context("Failed to create parser for heredoc array context tests")?;
@@ -369,10 +380,10 @@ FOOTER
     Ok(())
 }
 
-#[test]
-#[ignore] // AC10: Remove when heredoc terminator recovery is implemented
-fn test_heredoc_missing_terminator_recovery() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+    #[test]
+    fn test_heredoc_missing_terminator_recovery() -> Result<()> {
+        // AC10: Heredoc terminator recovery
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
     let mut parser =
         create_parser().context("Failed to create parser for terminator recovery tests")?;
@@ -449,10 +460,10 @@ Content but file ends"#,
     Ok(())
 }
 
-#[test]
-#[ignore] // AC10: Remove when complex interpolation support is implemented
-fn test_complex_heredoc_interpolation() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+    #[test]
+    fn test_complex_heredoc_interpolation() -> Result<()> {
+        // AC10: Complex interpolation support
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
     let mut parser =
         create_parser().context("Failed to create parser for complex interpolation tests")?;
@@ -531,10 +542,10 @@ UNICODE"#,
     Ok(())
 }
 
-#[test]
-#[ignore] // AC10: Remove when heredoc indentation support is implemented
-fn test_indented_heredoc_support() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+    #[test]
+    fn test_indented_heredoc_support() -> Result<()> {
+        // AC10: Heredoc indentation support
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
     let mut parser =
         create_parser().context("Failed to create parser for indented heredoc tests")?;
@@ -614,10 +625,10 @@ TEMPLATE"#,
     Ok(())
 }
 
-#[test]
-#[ignore] // AC10: Remove when heredoc security validation is implemented
-fn test_heredoc_security_validation() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+    #[test]
+    fn test_heredoc_security_validation() -> Result<()> {
+        // AC10: Heredoc security validation
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
     let mut parser =
         create_parser().context("Failed to create parser for heredoc security tests")?;
@@ -681,10 +692,10 @@ LARGE"#,
     Ok(())
 }
 
-#[test]
-#[ignore] // AC10: Remove when heredoc performance optimization is implemented
-fn test_heredoc_performance_edge_cases() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+    #[test]
+    fn test_heredoc_performance_edge_cases() -> Result<()> {
+        // AC10: Heredoc performance edge cases
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
     let mut parser =
         create_parser().context("Failed to create parser for heredoc performance tests")?;
@@ -754,8 +765,9 @@ fn test_heredoc_performance_edge_cases() -> Result<()> {
         );
     }
 
-    Ok(())
-}
+        Ok(())
+    }
+} // end mod heredoc_advanced
 
 // Helper functions
 

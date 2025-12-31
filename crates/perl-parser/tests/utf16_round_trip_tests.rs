@@ -1,4 +1,13 @@
+// ============================================================================
+// UTF-16 Round Trip Tests - Compile-time Feature Gated
+// ============================================================================
+// These tests validate UTF-16 position conversion edge cases and require
+// complete UTF-16 support to pass. Only compile when the feature is enabled.
+// Run with: cargo test -p perl-parser --features utf16-complete
+// ============================================================================
+
 #[cfg(test)]
+#[cfg(feature = "utf16-complete")]
 mod utf16_round_trip_tests {
     use perl_parser::lsp_server::LspServer;
 
@@ -14,7 +23,6 @@ mod utf16_round_trip_tests {
     }
 
     #[test]
-    #[ignore = "utf16 conversions not fully supported"]
     fn test_crlf_round_trip() {
         let server = LspServer::new();
         let text = "my $x = 1;\r\n$x++;\r\nprint $x;";
@@ -42,7 +50,6 @@ mod utf16_round_trip_tests {
     }
 
     #[test]
-    #[ignore = "utf16 conversions not fully supported"]
     fn test_emoji_round_trip() {
         let server = LspServer::new();
         let text = "my $x = \"🐍\";\n";
@@ -81,7 +88,6 @@ mod utf16_round_trip_tests {
     }
 
     #[test]
-    #[ignore = "utf16 conversions not fully supported"]
     fn test_pi_symbol_round_trip() {
         let server = LspServer::new();
         let text = "my $π = 3.14159;\n$π++;\n";
@@ -102,7 +108,6 @@ mod utf16_round_trip_tests {
     }
 
     #[test]
-    #[ignore = "utf16 conversions not fully supported"]
     fn test_mixed_unicode_round_trip() {
         let server = LspServer::new();
         let text = "my $café = \"☕\";\r\nmy $Σ = 100;\r\n";
@@ -133,7 +138,6 @@ mod utf16_round_trip_tests {
     }
 
     #[test]
-    #[ignore = "utf16 conversions not fully supported"]
     fn test_edge_positions() {
         let server = LspServer::new();
 
@@ -155,7 +159,6 @@ mod utf16_round_trip_tests {
     }
 
     #[test]
-    #[ignore = "utf16 conversions not fully supported"]
     fn test_complex_emoji_sequences() {
         let server = LspServer::new();
 
