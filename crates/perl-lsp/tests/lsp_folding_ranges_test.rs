@@ -103,8 +103,8 @@ sub nested {
     assert!(has_sub_range, "Should have folding range for first subroutine");
 }
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[ignore = "FEATURE: Parser does not yet support C-style for loop syntax"]
 fn test_folding_ranges_blocks() {
     let mut server = setup_server();
 

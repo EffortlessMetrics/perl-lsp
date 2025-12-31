@@ -162,8 +162,9 @@ while IFS= read -r file; do
         # Record details
         echo "$category|$rel_path:$line_num|$test_name|$reason" >> "$DETAILS_FILE"
 
-    # Note: Exclude commented-out ignores (lines containing // before #[ignore)
-    done < <(grep -n '#\[ignore' "$file" 2>/dev/null | grep -v '//' || true)
+    # Note: Only match #[ignore at start of line (with optional leading whitespace)
+    # This eliminates false positives from commented-out ignores
+    done < <(grep -nE '^[[:space:]]*#\[ignore' "$file" 2>/dev/null || true)
 
 done < <(find "$REPO_ROOT/crates" -name "*.rs" -type f 2>/dev/null)
 

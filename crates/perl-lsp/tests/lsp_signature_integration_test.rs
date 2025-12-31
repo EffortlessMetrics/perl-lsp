@@ -258,8 +258,8 @@ fn test_overloaded_operators_as_functions() {
     }
 }
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[ignore = "File test operators (-e, -f, etc.) not yet registered in signature help provider"]
 fn test_file_test_operators() {
     // Test file test operators
     let file_tests = vec![

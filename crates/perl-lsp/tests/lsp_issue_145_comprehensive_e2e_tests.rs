@@ -201,8 +201,8 @@ fn create_comprehensive_workspace_with_init() -> (LspHarness, TempWorkspace, ser
 
 // ======================== AC5: Comprehensive Integration Test Suite ========================
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[ignore = "FEATURE: perl.runCritic not detecting 'use strict' violations - perlcritic integration incomplete"]
 // AC5:integration - Complete Issue #145 workflow validation
 fn test_issue_145_complete_workflow() {
     let (mut harness, workspace, init_result) = create_comprehensive_workspace_with_init();
