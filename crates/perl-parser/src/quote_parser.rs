@@ -162,19 +162,15 @@ pub fn extract_substitution_parts_strict(
     }
 
     // Validate modifiers strictly - reject if any invalid modifiers present
-    let modifiers =
-        validate_substitution_modifiers(modifiers_str).map_err(SubstitutionError::InvalidModifier)?;
+    let modifiers = validate_substitution_modifiers(modifiers_str)
+        .map_err(SubstitutionError::InvalidModifier)?;
 
     Ok((pattern, replacement, modifiers))
 }
 
 /// Extract content between delimiters with strict tracking of whether closing was found.
 /// Returns (content, rest, found_closing).
-fn extract_delimited_content_strict(
-    text: &str,
-    open: char,
-    close: char,
-) -> (String, &str, bool) {
+fn extract_delimited_content_strict(text: &str, open: char, close: char) -> (String, &str, bool) {
     let mut chars = text.char_indices();
     let is_paired = open != close;
 

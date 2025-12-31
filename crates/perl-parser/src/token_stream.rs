@@ -309,7 +309,12 @@ pub struct TokenStream<'a> {
 impl<'a> TokenStream<'a> {
     /// Create a new token stream from source code
     pub fn new(input: &'a str) -> Self {
-        TokenStream { lexer: PerlLexer::new(input), peeked: None, peeked_second: None, peeked_third: None }
+        TokenStream {
+            lexer: PerlLexer::new(input),
+            peeked: None,
+            peeked_second: None,
+            peeked_third: None,
+        }
     }
 
     /// Peek at the next token without consuming it

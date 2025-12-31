@@ -390,8 +390,7 @@ impl LspServer {
                         let (kind, unique) = self.classify_moniker(ast, &doc.text, &key);
 
                         // Generate fully qualified identifier
-                        let qualified_id =
-                            format!("{}::{}", key.pkg, key.name).replace("::", ".");
+                        let qualified_id = format!("{}::{}", key.pkg, key.name).replace("::", ".");
 
                         // Primary moniker with full qualification
                         monikers.push(json!({
@@ -471,11 +470,7 @@ impl LspServer {
                 }
             }
             crate::workspace_index::SymKind::Var => {
-                if self.is_our_variable(ast, &key.name, key.sigil) {
-                    "project"
-                } else {
-                    "document"
-                }
+                if self.is_our_variable(ast, &key.name, key.sigil) { "project" } else { "document" }
             }
         };
 
@@ -484,10 +479,8 @@ impl LspServer {
 
     /// Check if a symbol name appears in @EXPORT or @EXPORT_OK
     fn is_symbol_exported(&self, text: &str, symbol_name: &str) -> bool {
-        let export_re = regex::Regex::new(
-            r"@EXPORT(?:_OK)?\s*=\s*qw[(\[{/|!]([^)\]}/|!]+)[)\]}/|!]",
-        )
-        .ok();
+        let export_re =
+            regex::Regex::new(r"@EXPORT(?:_OK)?\s*=\s*qw[(\[{/|!]([^)\]}/|!]+)[)\]}/|!]").ok();
 
         if let Some(re) = export_re {
             for cap in re.captures_iter(text) {
@@ -596,14 +589,18 @@ impl LspServer {
 
         fn check(node: &crate::ast::Node, name: &str, sigil: Option<char>) -> bool {
             match &node.kind {
-                NodeKind::VariableDeclaration { declarator, variable, .. } if declarator == "our" => {
+                NodeKind::VariableDeclaration { declarator, variable, .. }
+                    if declarator == "our" =>
+                {
                     if let NodeKind::Variable { name: n, sigil: s } = &variable.kind {
                         if n == name {
                             return sigil.map_or(true, |sig| s.starts_with(sig));
                         }
                     }
                 }
-                NodeKind::VariableListDeclaration { declarator, variables, .. } if declarator == "our" => {
+                NodeKind::VariableListDeclaration { declarator, variables, .. }
+                    if declarator == "our" =>
+                {
                     for var in variables {
                         if let NodeKind::Variable { name: n, sigil: s } = &var.kind {
                             if n == name {
