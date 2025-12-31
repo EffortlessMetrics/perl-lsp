@@ -31,15 +31,24 @@
 //! # Usage Examples
 //!
 //! ```rust
-//! use perl_parser::workspace_symbols::{WorkspaceSymbol, collect_workspace_symbols};
-//! use perl_parser::ast::Node;
+//! use perl_parser::workspace_symbols::WorkspaceSymbolsProvider;
+//! use perl_parser::Parser;
+//! use std::collections::HashMap;
 //!
-//! // Extract symbols from AST
-//! let ast = Node::new_root();
-//! let symbols = collect_workspace_symbols(&ast, "file:///path/to/file.pl");
+//! // Create provider and parse Perl code
+//! let mut provider = WorkspaceSymbolsProvider::new();
+//! let source = "sub hello { print 'world'; }";
+//! let mut parser = Parser::new(source);
+//! let ast = parser.parse().unwrap();
+//!
+//! // Index the document
+//! provider.index_document("file:///test.pl", &ast, source);
 //!
 //! // Search workspace symbols
-//! // let filtered = filter_symbols(&symbols, "function_name");
+//! let mut source_map = HashMap::new();
+//! source_map.insert("file:///test.pl".to_string(), source.to_string());
+//! let results = provider.search("hello", &source_map);
+//! assert!(!results.is_empty());
 //! ```
 
 use crate::{
@@ -54,6 +63,25 @@ use std::collections::HashMap;
 /// Normalize legacy package separator ' to ::
 fn norm_pkg<'a>(s: &'a str) -> Cow<'a, str> {
     if s.contains('\'') { Cow::Owned(s.replace('\'', "::")) } else { Cow::Borrowed(s) }
+}
+
+/// Extract container name from qualified symbol name.
+///
+/// Extracts the package/class portion from a fully qualified symbol name,
+/// following Perl's package qualification rules.
+///
+/// Examples:
+/// - `"Foo::Bar::baz"` → `Some("Foo::Bar")`
+/// - `"MyClass::new"` → `Some("MyClass")`
+/// - `"toplevel"` → `None`
+///
+/// # Performance
+/// - Time complexity: O(n) string scan
+/// - Memory: Allocates only when container exists
+fn extract_container_name(qualified_name: &str) -> Option<String> {
+    // "Foo::Bar::baz" → container = "Foo::Bar"
+    // Top-level symbols have no container
+    qualified_name.rfind("::").map(|idx| qualified_name[..idx].to_string())
 }
 
 /// LSP WorkspaceSymbol
@@ -125,11 +153,13 @@ impl WorkspaceSymbolsProvider {
         // Extract symbols from the symbol table
         for (name, symbol_list) in &table.symbols {
             for symbol in symbol_list {
+                let container = extract_container_name(&symbol.qualified_name);
+
                 symbols.push(SymbolInfo {
                     name: name.clone(),
                     kind: symbol.kind,
                     location: symbol.location,
-                    container: None, // TODO: Track containing package/class
+                    container,
                 });
             }
         }
@@ -432,5 +462,202 @@ sub baz {
         assert_eq!(offset_to_line_col(source, 6), (1, 0)); // 'w'
         assert_eq!(offset_to_line_col(source, 11), (1, 5)); // '\n'
         assert_eq!(offset_to_line_col(source, 12), (2, 0)); // '1'
+    }
+
+    #[test]
+    fn test_extract_container_name() {
+        // Nested package qualification
+        assert_eq!(extract_container_name("Foo::Bar::baz"), Some("Foo::Bar".to_string()));
+
+        // Simple package qualification
+        assert_eq!(extract_container_name("MyClass::new"), Some("MyClass".to_string()));
+
+        // Top-level symbol (no container)
+        assert_eq!(extract_container_name("toplevel"), None);
+
+        // Empty string
+        assert_eq!(extract_container_name(""), None);
+
+        // Package name only (no method)
+        assert_eq!(extract_container_name("Package::"), Some("Package".to_string()));
+
+        // Deep nesting
+        assert_eq!(extract_container_name("A::B::C::D::method"), Some("A::B::C::D".to_string()));
+    }
+
+    #[test]
+    fn test_container_names_workspace_symbols() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        // Multi-package workspace with same method name in different packages
+        let source = r#"
+package Foo::Bar;
+
+sub new {
+    my $class = shift;
+    return bless {}, $class;
+}
+
+sub process {
+    my $self = shift;
+}
+
+package Baz::Qux;
+
+sub new {
+    my $class = shift;
+    return bless {}, $class;
+}
+
+sub process {
+    my $self = shift;
+}
+
+package main;
+
+sub helper {
+    print "top-level\n";
+}
+"#;
+
+        source_map.insert("file:///multi.pl".to_string(), source.to_string());
+
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().unwrap();
+
+        provider.index_document("file:///multi.pl", &ast, source);
+
+        // Search for 'new' - should find both with different containers
+        let results = provider.search("new", &source_map);
+        assert_eq!(results.len(), 2, "Should find both 'new' methods");
+
+        // Verify container names are populated correctly
+        let containers: Vec<Option<String>> =
+            results.iter().map(|r| r.container_name.clone()).collect();
+
+        assert!(
+            containers.contains(&Some("Foo::Bar".to_string())),
+            "Should have Foo::Bar container"
+        );
+        assert!(
+            containers.contains(&Some("Baz::Qux".to_string())),
+            "Should have Baz::Qux container"
+        );
+
+        // Search for 'process' - should also find both with containers
+        let results = provider.search("process", &source_map);
+        assert_eq!(results.len(), 2, "Should find both 'process' methods");
+
+        let containers: Vec<Option<String>> =
+            results.iter().map(|r| r.container_name.clone()).collect();
+
+        assert!(
+            containers.contains(&Some("Foo::Bar".to_string())),
+            "Should have Foo::Bar container for process"
+        );
+        assert!(
+            containers.contains(&Some("Baz::Qux".to_string())),
+            "Should have Baz::Qux container for process"
+        );
+    }
+
+    #[test]
+    fn test_top_level_no_container() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        // Top-level symbols in main package should have "main" as container
+        let source = r#"
+sub top_level_function {
+    print "I'm at the top level\n";
+}
+
+my $top_level_var = 42;
+"#;
+
+        source_map.insert("file:///toplevel.pl".to_string(), source.to_string());
+
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().unwrap();
+
+        provider.index_document("file:///toplevel.pl", &ast, source);
+
+        // Search for top-level function
+        let results = provider.search("top_level_function", &source_map);
+        assert!(!results.is_empty(), "Should find top-level function");
+
+        // Verify container name is "main" (the default package)
+        assert_eq!(
+            results[0].container_name,
+            Some("main".to_string()),
+            "Top-level subroutine should have 'main' as container"
+        );
+
+        // Lexical variables (my) should have no container
+        let results = provider.search("top_level_var", &source_map);
+        if !results.is_empty() {
+            assert!(
+                results[0].container_name.is_none(),
+                "Lexical variable should have no container"
+            );
+        }
+    }
+
+    #[test]
+    fn test_ambiguous_symbol_resolution() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        // Same name in different packages should be disambiguated by container
+        let source = r#"
+package Database::MySQL;
+
+sub connect {
+    print "MySQL connection\n";
+}
+
+package Database::PostgreSQL;
+
+sub connect {
+    print "PostgreSQL connection\n";
+}
+
+package Database::SQLite;
+
+sub connect {
+    print "SQLite connection\n";
+}
+"#;
+
+        source_map.insert("file:///database.pl".to_string(), source.to_string());
+
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().unwrap();
+
+        provider.index_document("file:///database.pl", &ast, source);
+
+        // Search for 'connect' - should find all three
+        let results = provider.search("connect", &source_map);
+        assert_eq!(results.len(), 3, "Should find all three 'connect' methods");
+
+        // Verify all three different containers are present
+        let containers: Vec<String> =
+            results.iter().filter_map(|r| r.container_name.clone()).collect();
+
+        assert_eq!(containers.len(), 3, "Should have three containers");
+        assert!(containers.contains(&"Database::MySQL".to_string()), "Should have MySQL container");
+        assert!(
+            containers.contains(&"Database::PostgreSQL".to_string()),
+            "Should have PostgreSQL container"
+        );
+        assert!(
+            containers.contains(&"Database::SQLite".to_string()),
+            "Should have SQLite container"
+        );
+
+        // All symbols should have unique container names for disambiguation
+        let unique_containers: std::collections::HashSet<_> = containers.iter().collect();
+        assert_eq!(unique_containers.len(), 3, "Each symbol should have a unique container");
     }
 }
