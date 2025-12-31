@@ -9,6 +9,11 @@ use crate::TokenType;
 use std::sync::Arc;
 
 /// Specification for which modifiers are allowed for each operator
+///
+/// Note: These specs are currently defined for documentation and potential future use.
+/// Modifier validation has been moved to the parser layer (MUT_005 fix) to provide
+/// better error messages when invalid modifiers are encountered.
+#[allow(dead_code)]
 pub struct ModSpec {
     pub run: &'static [char], // allowed single-letter flags
     pub allow_charset: bool,  // whether one charset suffix is allowed
@@ -36,6 +41,10 @@ pub fn paired_close(open: char) -> Option<char> {
 }
 
 /// Canonicalize modifier flags to a consistent order for stable comparisons
+///
+/// Note: Currently unused as modifier validation moved to parser layer (MUT_005 fix).
+/// Retained for potential future use in normalization or code generation.
+#[allow(dead_code)]
 pub fn canon_run(run: &str, spec: &ModSpec) -> String {
     let mut out = String::new();
     for &c in spec.run {
@@ -47,6 +56,10 @@ pub fn canon_run(run: &str, spec: &ModSpec) -> String {
 }
 
 /// Split a contiguous alphabetic tail into (`run_flags`, `charset_flag`) for the given spec
+///
+/// Note: Currently unused as modifier validation moved to parser layer (MUT_005 fix).
+/// Retained for potential future use in advanced modifier analysis.
+#[allow(dead_code)]
 pub fn split_tail_for_spec(tail: &str, spec: &ModSpec) -> Option<(String, Option<&'static str>)> {
     // Must be all alphabetic
     if !tail.chars().all(|c| c.is_ascii_alphabetic()) {
