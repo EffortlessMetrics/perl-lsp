@@ -118,14 +118,8 @@ impl CallHierarchyProvider {
                 NodeKind::Subroutine { name, prototype: _, signature, name_span, .. } => {
                     if let Some(name_str) = name {
                         let range = self.node_to_range(node);
-                        // Use name_span if available for precise selection range
-                        let selection_range = match name_span {
-                            Some(span) => Range {
-                                start: self.offset_to_position(span.start),
-                                end: self.offset_to_position(span.end),
-                            },
-                            None => range.clone(),
-                        };
+                        let selection_range =
+                            self.selection_range_from_name_span(name_span, &range);
 
                         let detail = if signature.is_some() {
                             Some("(signature)".to_string())
@@ -176,13 +170,7 @@ impl CallHierarchyProvider {
             NodeKind::Subroutine { name, name_span, .. } => {
                 if let Some(name_str) = name {
                     let range = self.node_to_range(node);
-                    let selection_range = match name_span {
-                        Some(span) => Range {
-                            start: self.offset_to_position(span.start),
-                            end: self.offset_to_position(span.end),
-                        },
-                        None => range.clone(),
-                    };
+                    let selection_range = self.selection_range_from_name_span(name_span, &range);
                     let item = CallHierarchyItem {
                         name: name_str.clone(),
                         kind: "function".to_string(),
@@ -504,6 +492,24 @@ impl CallHierarchyProvider {
     fn position_to_offset(&self, line: u32, character: u32) -> usize {
         let pos = crate::position_mapper::Position { line, character };
         self.position_mapper.lsp_pos_to_byte(pos).unwrap_or(self.source.len())
+    }
+
+    /// Compute selection range from an optional name_span, falling back to full range
+    ///
+    /// If `name_span` is `Some`, returns a precise range covering just the symbol name.
+    /// Otherwise, returns the full range as a fallback for backward compatibility.
+    fn selection_range_from_name_span(
+        &self,
+        name_span: &Option<crate::SourceLocation>,
+        full_range: &Range,
+    ) -> Range {
+        match name_span {
+            Some(span) => Range {
+                start: self.offset_to_position(span.start),
+                end: self.offset_to_position(span.end),
+            },
+            None => full_range.clone(),
+        }
     }
 }
 

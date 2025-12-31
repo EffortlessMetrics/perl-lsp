@@ -594,13 +594,12 @@ my $top_level_var = 42;
             "Top-level subroutine should have 'main' as container"
         );
 
-        // Lexical variables (my) should have no container
+        // Lexical variables (my), if indexed, should have no container.
+        // Note: Whether lexical variables appear in workspace symbols is an implementation detail.
+        // This test verifies the correct container behavior when they do appear.
         let results = provider.search("top_level_var", &source_map);
-        if !results.is_empty() {
-            assert!(
-                results[0].container_name.is_none(),
-                "Lexical variable should have no container"
-            );
+        if let Some(sym) = results.iter().find(|s| s.name.contains("top_level_var")) {
+            assert!(sym.container_name.is_none(), "Lexical variable should have no container");
         }
     }
 
