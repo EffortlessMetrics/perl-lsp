@@ -1,0 +1,29 @@
+thread 'main' panicked at compiler/rustc_driver_impl/src/lib.rs:1610:6:
+Unable to install ctrlc handler: System(Os { code: 11, kind: WouldBlock, message: "Resource temporarily unavailable" })
+stack backtrace:
+   0:     0x744a3b417215 - std::backtrace::Backtrace::create::hc63226af95843b0a
+   1:     0x744a3b417165 - std::backtrace::Backtrace::force_capture::hafda1b9096fb28be
+   2:     0x744a3a3ff112 - std[868c2b82e02752c5]::panicking::update_hook::<alloc[2f8cfedda7e895ee]::boxed::Box<rustc_driver_impl[8c00ca3c7ff43d1e]::install_ice_hook::{closure#1}>>::{closure#0}
+   3:     0x744a3b41813f - std::panicking::panic_with_hook::h185ddfb86bf14d73
+   4:     0x744a3b417efa - std::panicking::panic_handler::{{closure}}::had89ddd01b6112c9
+   5:     0x744a3b411ef9 - std::sys::backtrace::__rust_end_short_backtrace::h5d0fc36eef7265ea
+   6:     0x744a3b3f286d - __rustc[eb8946e36839644a]::rust_begin_unwind
+   7:     0x744a37ae7b00 - core::panicking::panic_fmt::h92c8e5abe71dd8d1
+   8:     0x744a37d4e466 - core::result::unwrap_failed::h0501379eaec3e720
+   9:     0x744a3cdc0cc4 - rustc_driver_impl[8c00ca3c7ff43d1e]::install_ctrlc_handler
+  10:     0x744a3cdc109e - rustc_driver_impl[8c00ca3c7ff43d1e]::main
+  11:     0x6517974efa17 - rustc_main[379671e57b3192df]::main
+  12:     0x6517974efa03 - std[868c2b82e02752c5]::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  13:     0x6517974ef9f9 - std[868c2b82e02752c5]::rt::lang_start::<()>::{closure#0}
+  14:     0x744a3cdf0725 - std::rt::lang_start_internal::h6ba36b077a531782
+  15:     0x65179752ca17 - main
+  16:     0x744a3642a1ca - __libc_start_call_main
+                               at ./csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+  17:     0x744a3642a28b - __libc_start_main_impl
+                               at ./csu/../csu/libc-start.c:360:3
+  18:     0x65179752c924 - <unknown>
+  19:                0x0 - <unknown>
+
+
+rustc version: 1.91.1 (ed61e7d7e 2025-11-07)
+platform: x86_64-unknown-linux-gnu

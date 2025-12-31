@@ -2921,6 +2921,12 @@ impl<'a> Parser<'a> {
             return self.parse_word_not_expr();
         }
 
+        // Handle 'return' as an expression in expression context
+        // This allows patterns like: open $fh, $file or return;
+        if self.peek_kind() == Some(TokenKind::Return) {
+            return self.parse_return();
+        }
+
         let mut expr = self.parse_ternary()?;
 
         // Check for assignment operators

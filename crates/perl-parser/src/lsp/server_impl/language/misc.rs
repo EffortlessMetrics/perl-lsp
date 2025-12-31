@@ -359,6 +359,13 @@ impl LspServer {
     }
 
     /// Handle textDocument/moniker request
+    ///
+    /// Generates stable symbol identifiers for cross-project symbol linking.
+    /// Supports:
+    /// - Exported symbols (kind="export") for symbols in @EXPORT or @EXPORT_OK
+    /// - Imported symbols (kind="import") for symbols from use statements
+    /// - Local symbols with appropriate uniqueness classification
+    /// - Multiple monikers for aliased symbols
     pub(crate) fn handle_moniker(
         &self,
         params: Option<Value>,
@@ -377,22 +384,252 @@ impl LspServer {
                     if let Some(key) =
                         crate::declaration::symbol_at_cursor(ast, offset, current_pkg)
                     {
-                        // Generate a stable moniker for the symbol
-                        let identifier = format!("{}::{}", key.pkg, key.name).replace("::", ".");
-                        let moniker = json!({
-                            "scheme": "perl",
-                            "identifier": identifier,
-                            "unique": "project",
-                            "kind": "export"
-                        });
+                        let mut monikers = Vec::new();
 
-                        return Ok(Some(json!([moniker])));
+                        // Determine moniker properties based on symbol context
+                        let (kind, unique) = self.classify_moniker(ast, &doc.text, &key);
+
+                        // Generate fully qualified identifier
+                        let qualified_id =
+                            format!("{}::{}", key.pkg, key.name).replace("::", ".");
+
+                        // Primary moniker with full qualification
+                        monikers.push(json!({
+                            "scheme": "perl",
+                            "identifier": qualified_id,
+                            "unique": unique,
+                            "kind": kind
+                        }));
+
+                        // For imported symbols, also add a moniker pointing to the source
+                        if kind == "import" {
+                            if let Some(source_pkg) = self.find_import_source(ast, &key.name) {
+                                let source_id =
+                                    format!("{}.{}", source_pkg.replace("::", "."), key.name);
+                                monikers.push(json!({
+                                    "scheme": "perl",
+                                    "identifier": source_id,
+                                    "unique": "global",
+                                    "kind": "export"
+                                }));
+                            }
+                        }
+
+                        // For package-scoped variables (our), add a bare name alias
+                        if key.sigil.is_some() && unique != "document" {
+                            let sigil = key.sigil.unwrap_or('$');
+                            let bare_id = format!("{}{}", sigil, key.name);
+                            monikers.push(json!({
+                                "scheme": "perl",
+                                "identifier": bare_id,
+                                "unique": "document",
+                                "kind": "local"
+                            }));
+                        }
+
+                        return Ok(Some(json!(monikers)));
                     }
                 }
             }
         }
 
         Ok(Some(json!([])))
+    }
+
+    /// Classify a symbol's moniker kind and uniqueness
+    fn classify_moniker(
+        &self,
+        ast: &crate::ast::Node,
+        text: &str,
+        key: &crate::workspace_index::SymbolKey,
+    ) -> (&'static str, &'static str) {
+        // Check if symbol is exported via @EXPORT or @EXPORT_OK
+        let is_exported = self.is_symbol_exported(text, &key.name);
+
+        // Check if symbol is imported from another module
+        let is_imported = self.is_symbol_imported(ast, &key.name);
+
+        // Determine kind
+        let kind = if is_exported {
+            "export"
+        } else if is_imported {
+            "import"
+        } else {
+            "local"
+        };
+
+        // Determine uniqueness
+        let unique = match key.kind {
+            crate::workspace_index::SymKind::Pack => "global",
+            crate::workspace_index::SymKind::Sub => {
+                if is_exported {
+                    "global"
+                } else if key.pkg.as_ref() != "main" {
+                    "project"
+                } else {
+                    "document"
+                }
+            }
+            crate::workspace_index::SymKind::Var => {
+                if self.is_our_variable(ast, &key.name, key.sigil) {
+                    "project"
+                } else {
+                    "document"
+                }
+            }
+        };
+
+        (kind, unique)
+    }
+
+    /// Check if a symbol name appears in @EXPORT or @EXPORT_OK
+    fn is_symbol_exported(&self, text: &str, symbol_name: &str) -> bool {
+        let export_re = regex::Regex::new(
+            r"@EXPORT(?:_OK)?\s*=\s*qw[(\[{/|!]([^)\]}/|!]+)[)\]}/|!]",
+        )
+        .ok();
+
+        if let Some(re) = export_re {
+            for cap in re.captures_iter(text) {
+                if let Some(content) = cap.get(1) {
+                    if content.as_str().split_whitespace().any(|w| w == symbol_name) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        let array_re = regex::Regex::new(r"@EXPORT(?:_OK)?\s*=\s*\(([^)]+)\)").ok();
+        if let Some(re) = array_re {
+            for cap in re.captures_iter(text) {
+                if let Some(content) = cap.get(1) {
+                    let c = content.as_str();
+                    if c.contains(&format!("'{}'", symbol_name))
+                        || c.contains(&format!("\"{}\"", symbol_name))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Check if a symbol is imported from another module
+    fn is_symbol_imported(&self, ast: &crate::ast::Node, symbol_name: &str) -> bool {
+        use crate::ast::NodeKind;
+
+        fn check(node: &crate::ast::Node, name: &str) -> bool {
+            match &node.kind {
+                NodeKind::Use { args, .. } => {
+                    for arg in args {
+                        if arg == name {
+                            return true;
+                        }
+                        if arg.starts_with("qw") {
+                            let content = arg
+                                .trim_start_matches("qw")
+                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                            if content.split_whitespace().any(|w| w == name) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    for stmt in statements {
+                        if check(stmt, name) {
+                            return true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+            false
+        }
+
+        check(ast, symbol_name)
+    }
+
+    /// Find the source module for an imported symbol
+    fn find_import_source(&self, ast: &crate::ast::Node, symbol_name: &str) -> Option<String> {
+        use crate::ast::NodeKind;
+
+        fn find(node: &crate::ast::Node, name: &str) -> Option<String> {
+            match &node.kind {
+                NodeKind::Use { module, args } => {
+                    for arg in args {
+                        if arg == name {
+                            return Some(module.clone());
+                        }
+                        if arg.starts_with("qw") {
+                            let content = arg
+                                .trim_start_matches("qw")
+                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                            if content.split_whitespace().any(|w| w == name) {
+                                return Some(module.clone());
+                            }
+                        }
+                    }
+                }
+                NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    for stmt in statements {
+                        if let Some(src) = find(stmt, name) {
+                            return Some(src);
+                        }
+                    }
+                }
+                _ => {}
+            }
+            None
+        }
+
+        find(ast, symbol_name)
+    }
+
+    /// Check if a variable is declared with 'our' (package-scoped)
+    fn is_our_variable(&self, ast: &crate::ast::Node, var_name: &str, sigil: Option<char>) -> bool {
+        use crate::ast::NodeKind;
+
+        fn check(node: &crate::ast::Node, name: &str, sigil: Option<char>) -> bool {
+            match &node.kind {
+                NodeKind::VariableDeclaration { declarator, variable, .. } if declarator == "our" => {
+                    if let NodeKind::Variable { name: n, sigil: s } = &variable.kind {
+                        if n == name {
+                            return sigil.map_or(true, |sig| s.starts_with(sig));
+                        }
+                    }
+                }
+                NodeKind::VariableListDeclaration { declarator, variables, .. } if declarator == "our" => {
+                    for var in variables {
+                        if let NodeKind::Variable { name: n, sigil: s } = &var.kind {
+                            if n == name {
+                                return sigil.map_or(true, |sig| s.starts_with(sig));
+                            }
+                        }
+                    }
+                }
+                NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    for stmt in statements {
+                        if check(stmt, name, sigil) {
+                            return true;
+                        }
+                    }
+                }
+                NodeKind::Subroutine { body, .. } => {
+                    if check(body, name, sigil) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+            false
+        }
+
+        check(ast, var_name, sigil)
     }
 
     /// Handle textDocument/documentColor request
