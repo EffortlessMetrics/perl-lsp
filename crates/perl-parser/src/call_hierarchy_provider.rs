@@ -115,10 +115,17 @@ impl CallHierarchyProvider {
     fn find_callable_at_position(&self, node: &Node, offset: usize) -> Option<CallHierarchyItem> {
         if offset >= node.location.start && offset <= node.location.end {
             match &node.kind {
-                NodeKind::Subroutine { name, prototype: _, signature, .. } => {
+                NodeKind::Subroutine { name, prototype: _, signature, name_span, .. } => {
                     if let Some(name_str) = name {
                         let range = self.node_to_range(node);
-                        let selection_range = range.clone(); // TODO: Calculate name range
+                        // Use name_span if available for precise selection range
+                        let selection_range = match name_span {
+                            Some(span) => Range {
+                                start: self.offset_to_position(span.start),
+                                end: self.offset_to_position(span.end),
+                            },
+                            None => range.clone(),
+                        };
 
                         let detail = if signature.is_some() {
                             Some("(signature)".to_string())
@@ -166,14 +173,22 @@ impl CallHierarchyProvider {
         current_function: Option<&CallHierarchyItem>,
     ) {
         match &node.kind {
-            NodeKind::Subroutine { name, .. } => {
+            NodeKind::Subroutine { name, name_span, .. } => {
                 if let Some(name_str) = name {
+                    let range = self.node_to_range(node);
+                    let selection_range = match name_span {
+                        Some(span) => Range {
+                            start: self.offset_to_position(span.start),
+                            end: self.offset_to_position(span.end),
+                        },
+                        None => range.clone(),
+                    };
                     let item = CallHierarchyItem {
                         name: name_str.clone(),
                         kind: "function".to_string(),
                         uri: self.uri.clone(),
-                        range: self.node_to_range(node),
-                        selection_range: self.node_to_range(node),
+                        range,
+                        selection_range,
                         detail: None,
                     };
 
