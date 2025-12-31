@@ -44,8 +44,8 @@ use crate::{
     // Note: JsonRpcError, JsonRpcRequest, JsonRpcResponse are pub use'd above
     lsp::protocol::{
         CONTENT_MODIFIED, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, REQUEST_CANCELLED,
-        cancelled_response, document_not_found_error, enhanced_error, request_cancelled_error,
-        server_cancelled_error,
+        cancelled_response_with_method, document_not_found_error, enhanced_error,
+        request_cancelled_error, server_cancelled_error,
     },
     lsp::state::{
         ClientCapabilities, DocumentState, ServerConfig, WorkspaceConfig,

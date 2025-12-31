@@ -91,7 +91,7 @@
         "operator"
       ]
     },
-    "range": false
+    "range": true
   },
   "signatureHelpProvider": {
     "retriggerCharacters": [
