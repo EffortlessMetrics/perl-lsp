@@ -112,36 +112,41 @@ mod declaration_micro_tests {
     }
 
     // =========================================================================
-    // BUG category - known issues to fix (keep as ignored)
+    // Word boundary and comment handling tests
+    // (Previously BUG category - fixed with dynamic position computation)
     // =========================================================================
 
     #[test]
-    #[ignore = "BUG: Parser qw matching issue"]
     fn test_word_boundary_qwerty_not_matched() {
         let code = "my $qwerty = 'test'; print $qwerty;";
         let (provider, _map, _ast) = parse_and_get_provider(code);
 
-        // qwerty at print position - should find the variable, not think it's qw
-        let links = provider.find_declaration(27, 0);
+        // Look up $qwerty at print position - parser should NOT confuse "qwerty" with "qw" operator
+        let ref_pos = code.rfind("$qwerty").expect("reference position");
+        let links = provider.find_declaration(ref_pos, 0);
         assert!(links.is_some(), "Should find qwerty variable");
         let links = links.unwrap();
         assert!(!links.is_empty(), "Links should not be empty");
-        // The declaration should be at position 4 (after "my $")
-        assert_eq!(links[0].target_selection_range.0, 4);
+        // The declaration span includes the sigil: "$qwerty" starts at position 3
+        let decl_pos = code.find("$qwerty").expect("declaration position");
+        assert_eq!(links[0].target_selection_range.0, decl_pos);
     }
 
     #[test]
-    #[ignore = "BUG: Parser span calculation differs - test expects hardcoded byte offset"]
     fn test_comment_with_qw_in_it() {
         let code = "# qw is used here\nmy $var = 1; print $var;";
         let (provider, _map, _ast) = parse_and_get_provider(code);
 
-        // $var at print position
-        let links = provider.find_declaration(36, 0);
+        // Dynamically find the reference position (second $var, in print statement)
+        let ref_pos = code.rfind("$var").expect("reference position");
+        let links = provider.find_declaration(ref_pos, 0);
         assert!(
             links.is_some() && !links.as_ref().unwrap().is_empty(),
             "Should find $var despite qw in comment"
         );
+        // Verify it points to the declaration (first $var)
+        let decl_pos = code.find("$var").expect("declaration position");
+        assert_eq!(links.as_ref().unwrap()[0].target_selection_range.0, decl_pos);
     }
 }
 
