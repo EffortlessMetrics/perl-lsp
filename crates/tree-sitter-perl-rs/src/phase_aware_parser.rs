@@ -179,18 +179,32 @@ impl PhaseAwareParser {
                 }
             }
 
-            PerlPhase::Check | PerlPhase::Init => {
-                // Less problematic but still worth warning
+            PerlPhase::Check => {
+                // CHECK phase - executes after compilation, before main program
                 PhaseAction::PartialParse {
-                    warning: format!(
-                        "Heredoc in {} block - behavior may differ from runtime",
-                        self.phase_name()
-                    ),
+                    warning:
+                        "Heredoc in CHECK block - executes after compilation, before main program"
+                            .to_string(),
+                }
+            }
+
+            PerlPhase::Init => {
+                // INIT phase - executes before main program starts
+                PhaseAction::PartialParse {
+                    warning: "Heredoc in INIT block - executes before main program starts"
+                        .to_string(),
                 }
             }
 
             PerlPhase::Eval => {
-                // Eval heredocs are tricky
+                // Eval heredocs require runtime evaluation
+                self.deferred_heredocs.push(DeferredHeredoc {
+                    location: location.clone(),
+                    delimiter: delimiter.to_string(),
+                    phase: PerlPhase::Eval,
+                    reason: "Heredoc in eval requires runtime evaluation".to_string(),
+                });
+
                 PhaseAction::Defer {
                     reason: "Heredoc in eval - dynamic evaluation required".to_string(),
                     severity: Severity::Warning,
@@ -205,7 +219,15 @@ impl PhaseAwareParser {
                 }
             }
 
-            PerlPhase::TopLevel | PerlPhase::Runtime | PerlPhase::End => {
+            PerlPhase::End => {
+                // END phase - executes at program termination
+                PhaseAction::PartialParse {
+                    warning: "Heredoc in END block - content executes at program termination"
+                        .to_string(),
+                }
+            }
+
+            PerlPhase::TopLevel | PerlPhase::Runtime => {
                 // Normal parsing is fine
                 PhaseAction::Parse
             }
@@ -226,11 +248,23 @@ impl PhaseAwareParser {
                 },
                 message: format!("Heredoc in {} block", self.phase_name()),
                 explanation: heredoc.reason.clone(),
-                suggested_fix: Some(match heredoc.phase {
-                    PerlPhase::Begin => "Move heredoc to INIT block or runtime".to_string(),
-                    PerlPhase::Eval => "Consider using a regular string instead".to_string(),
-                    _ => "Review phase-dependent behavior".to_string(),
-                }),
+                suggested_fix: match heredoc.phase {
+                    PerlPhase::Begin => Some("Move heredoc to INIT block or runtime".to_string()),
+                    PerlPhase::Eval => Some("Consider using a regular string instead".to_string()),
+                    PerlPhase::Check => {
+                        Some("Move to INIT block or runtime if possible".to_string())
+                    }
+                    PerlPhase::Init => Some(
+                        "Consider moving to runtime if initialization order allows".to_string(),
+                    ),
+                    PerlPhase::End => Some(
+                        "Ensure cleanup logic doesn't depend on parse-time evaluation".to_string(),
+                    ),
+                    PerlPhase::Use => {
+                        Some("Avoid heredocs in use statements; use string literals".to_string())
+                    }
+                    PerlPhase::TopLevel | PerlPhase::Runtime => None,
+                },
                 references: vec!["perldoc perlmod".to_string()],
             });
         }
@@ -355,5 +389,49 @@ DONE
             }
             _ => panic!("Expected Defer action"),
         }
+    }
+
+    #[test]
+    fn test_end_phase_heredoc_warning() {
+        let mut parser = PhaseAwareParser::new();
+        parser.enter_phase(PerlPhase::End, 1);
+
+        let action =
+            parser.handle_phase_heredoc("CLEANUP", Location { line: 2, column: 5, offset: 20 });
+
+        match action {
+            PhaseAction::PartialParse { warning } => {
+                assert!(warning.contains("END block"));
+                assert!(warning.contains("program termination"));
+            }
+            _ => panic!("Expected PartialParse action for END phase"),
+        }
+    }
+
+    #[test]
+    fn test_eval_phase_heredoc_deferred() {
+        let mut parser = PhaseAwareParser::new();
+        parser.enter_phase(PerlPhase::Eval, 1);
+
+        let action =
+            parser.handle_phase_heredoc("DYNAMIC", Location { line: 2, column: 5, offset: 20 });
+
+        match action {
+            PhaseAction::Defer { reason, severity } => {
+                assert!(reason.contains("eval"));
+                assert_eq!(severity, Severity::Warning);
+            }
+            _ => panic!("Expected Defer action for eval phase"),
+        }
+
+        // Verify eval heredoc was added to deferred list
+        assert_eq!(parser.deferred_heredocs.len(), 1);
+        assert_eq!(parser.deferred_heredocs[0].phase, PerlPhase::Eval);
+        assert_eq!(parser.deferred_heredocs[0].delimiter, "DYNAMIC");
+
+        // Generate diagnostics and verify eval-specific suggestion
+        let diagnostics = parser.generate_phase_diagnostics();
+        assert_eq!(diagnostics.len(), 1);
+        assert!(diagnostics[0].suggested_fix.as_ref().unwrap().contains("regular string"));
     }
 }

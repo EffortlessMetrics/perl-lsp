@@ -633,7 +633,7 @@ impl SymbolExtractor {
                 // (constants from use constant are handled differently)
             }
 
-            NodeKind::PhaseBlock { phase: _, block } => {
+            NodeKind::PhaseBlock { phase: _, phase_span: _, block } => {
                 // BEGIN, END, CHECK, INIT blocks
                 self.visit_node(block);
             }
