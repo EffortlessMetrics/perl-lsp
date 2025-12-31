@@ -194,8 +194,14 @@ print $nested;"#;
         assert!(result.is_ok(), "Failed to parse heredoc containing heredoc-like syntax");
     }
 
+    // ============================================================================
+    // Missing Terminator Test - Feature Gated (heredoc-advanced)
+    // ============================================================================
+    // This test validates error handling for missing heredoc terminators.
+    // Run with: cargo test -p tree-sitter-perl-rs --features heredoc-advanced
+    // ============================================================================
+    #[cfg(feature = "heredoc-advanced")]
     #[test]
-    #[ignore] // Expected to fail - missing terminator
     fn test_missing_terminator() {
         let input = r#"my $incomplete = <<'EOF';
 This heredoc is never closed
