@@ -28,8 +28,14 @@ print $literal;"#;
         assert!(result.is_ok(), "Failed to parse escaped delimiter heredoc");
     }
 
+    // ============================================================================
+    // Stress Test - Feature Gated (stress-tests)
+    // ============================================================================
+    // This test is gated because it may cause stack overflow in certain environments.
+    // Run with: cargo test -p tree-sitter-perl --features stress-tests
+    // ============================================================================
+    #[cfg(feature = "stress-tests")]
     #[test]
-    #[ignore] // Likely to cause stack overflow
     fn test_heredoc_in_array_context() {
         let input = r#"my @messages = (<<MSG1, <<MSG2, "regular string");
 First message
@@ -194,8 +200,14 @@ print $nested;"#;
         assert!(result.is_ok(), "Failed to parse heredoc containing heredoc-like syntax");
     }
 
+    // ============================================================================
+    // Missing Terminator Test - Feature Gated (heredoc-advanced)
+    // ============================================================================
+    // This test validates error handling for missing heredoc terminators.
+    // Run with: cargo test -p tree-sitter-perl-rs --features heredoc-advanced
+    // ============================================================================
+    #[cfg(feature = "heredoc-advanced")]
     #[test]
-    #[ignore] // Expected to fail - missing terminator
     fn test_missing_terminator() {
         let input = r#"my $incomplete = <<'EOF';
 This heredoc is never closed

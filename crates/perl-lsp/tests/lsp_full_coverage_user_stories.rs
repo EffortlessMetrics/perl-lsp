@@ -8,6 +8,8 @@
 use perl_parser::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::io::Write;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -22,6 +24,19 @@ fn init_performance_optimizations() {
             std::env::set_var("PERL_FAST_DOC_CHECK", "1");
         }
     });
+}
+
+/// A sink writer that discards all output without blocking.
+/// This prevents stdout from blocking when the buffer fills up during tests.
+struct SinkWriter;
+
+impl Write for SinkWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 #[path = "support/mod.rs"]
@@ -43,7 +58,9 @@ impl TestContext {
         // Initialize performance optimizations for revolutionary LSP speed
         init_performance_optimizations();
 
-        let server = LspServer::new();
+        // Use a sink writer to prevent stdout from blocking when buffer fills up
+        let sink: Box<dyn Write + Send> = Box::new(SinkWriter);
+        let server = LspServer::with_output(Arc::new(Mutex::new(sink)));
 
         Self {
             server,
@@ -351,7 +368,6 @@ foreach $item (@array) {
 }
 
 #[test]
-#[ignore = "BUG: Test hangs forever on workspace symbol search - timeout issue"]
 fn test_user_story_multi_file_project_navigation() {
     let mut ctx = TestContext::new();
     ctx.initialize();
@@ -991,7 +1007,6 @@ fn test_performance_large_file() {
 }
 
 #[test]
-#[ignore = "BUG: Test hangs forever on get_definition/get_references - timeout issue"]
 fn test_concurrent_operations() {
     let mut ctx = TestContext::new();
     ctx.initialize();

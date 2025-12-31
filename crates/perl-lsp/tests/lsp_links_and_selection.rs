@@ -2,7 +2,6 @@ use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]
-#[ignore = "BUG: Missing initialized notification - Server not initialized error"]
 fn document_links_and_selection() {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
@@ -12,6 +11,15 @@ fn document_links_and_selection() {
         params: Some(json!({"capabilities":{}})),
     };
     srv.handle_request(init);
+
+    // Send initialized notification
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    srv.handle_request(initialized_notification);
 
     let uri = "file:///proj/main.pl";
     let text = "use Foo::Bar;\nFoo::Bar::baz();\n";

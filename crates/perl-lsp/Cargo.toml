@@ -48,6 +48,7 @@ test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
 lsp-ga-lock = []
 experimental-features = []  # Experimental LSP features for testing
+stress-tests = []  # Enable stress tests that are too slow for CI
 
 # Aspirational features for tests that should eventually pass
 constant-advanced = []  # Advanced constant pragma parsing (hash form, qw form)
@@ -57,6 +58,9 @@ error-classifier-v2 = []  # Next generation error classification
 lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
 expose_lsp_test_api = ["perl-parser/expose_lsp_test_api"]  # Expose test helpers for integration tests
 lsp-extras = []  # Quarantined tests for unimplemented/aspirational LSP features
+strict-jsonrpc = []  # Strict JSON-RPC 2.0 protocol validation tests
+dap-phase1 = []  # DAP Phase 1: Bridge to Perl::LanguageServer (AC1-AC4)
+dap-phase3 = []  # DAP Phase 3: Non-regression tests (AC17)
 
 [dev-dependencies]
 assert_cmd = "2.1.1"

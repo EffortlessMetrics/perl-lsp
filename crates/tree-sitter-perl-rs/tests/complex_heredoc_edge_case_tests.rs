@@ -123,178 +123,189 @@ fn find_heredoc_node(node: &tree_sitter::Node) -> Option<tree_sitter::Node> {
     None
 }
 
-#[test]
-#[ignore] // AC10: Remove when complex delimiter support is implemented
-fn test_complex_heredoc_delimiters() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+// ============================================================================
+// Enhanced Heredoc Tests - Compile-time Feature Gated
+// ============================================================================
+// These tests are aspirational and only compile when the feature is enabled.
+// Run with: cargo test -p tree-sitter-perl-rs --features heredoc-advanced
+// ============================================================================
 
-    let mut parser =
-        create_parser().context("Failed to create parser for complex delimiter tests")?;
+#[cfg(feature = "heredoc-advanced")]
+mod heredoc_advanced {
+    use super::*;
 
-    let complex_delimiter_cases = vec![
-        // Unicode delimiters
-        (
-            r#"print <<テスト;
+    #[test]
+    fn test_complex_heredoc_delimiters() -> Result<()> {
+        // AC10: Complex delimiter support
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+
+        let mut parser =
+            create_parser().context("Failed to create parser for complex delimiter tests")?;
+
+        let complex_delimiter_cases = vec![
+            // Unicode delimiters
+            (
+                r#"print <<テスト;
 Content with Unicode delimiter
 テスト"#,
-            "テスト",
-        ),
-        // Multi-character delimiters
-        (
-            r#"print <<END_OF_DATA;
+                "テスト",
+            ),
+            // Multi-character delimiters
+            (
+                r#"print <<END_OF_DATA;
 Complex multi-character delimiter
 END_OF_DATA"#,
-            "END_OF_DATA",
-        ),
-        // Delimiters with numbers and symbols
-        (
-            r#"print <<HTML5_TEMPLATE;
+                "END_OF_DATA",
+            ),
+            // Delimiters with numbers and symbols
+            (
+                r#"print <<HTML5_TEMPLATE;
 <!DOCTYPE html>
 <html>Content</html>
 HTML5_TEMPLATE"#,
-            "HTML5_TEMPLATE",
-        ),
-        // Case-sensitive delimiters
-        (
-            r#"print <<CaseSensitive;
+                "HTML5_TEMPLATE",
+            ),
+            // Case-sensitive delimiters
+            (
+                r#"print <<CaseSensitive;
 Content here
 CaseSensitive"#,
-            "CaseSensitive",
-        ),
-        // Delimiters with underscores and hyphens
-        (
-            r#"print <<SQL_QUERY_001;
+                "CaseSensitive",
+            ),
+            // Delimiters with underscores and hyphens
+            (
+                r#"print <<SQL_QUERY_001;
 SELECT * FROM table WHERE id = ?
 SQL_QUERY_001"#,
-            "SQL_QUERY_001",
-        ),
-        // Very long delimiters
-        (
-            r#"print <<VERY_LONG_DELIMITER_NAME_FOR_TESTING_EDGE_CASES;
+                "SQL_QUERY_001",
+            ),
+            // Very long delimiters
+            (
+                r#"print <<VERY_LONG_DELIMITER_NAME_FOR_TESTING_EDGE_CASES;
 Content with very long delimiter
 VERY_LONG_DELIMITER_NAME_FOR_TESTING_EDGE_CASES"#,
-            "VERY_LONG_DELIMITER_NAME_FOR_TESTING_EDGE_CASES",
-        ),
-        // Emoji delimiters
-        (
-            r#"print <<🔚;
+                "VERY_LONG_DELIMITER_NAME_FOR_TESTING_EDGE_CASES",
+            ),
+            // Emoji delimiters
+            (
+                r#"print <<🔚;
 Content with emoji delimiter
 🔚"#,
-            "🔚",
-        ),
-    ];
+                "🔚",
+            ),
+        ];
 
-    for (code, expected_delimiter) in complex_delimiter_cases {
-        let tree = parse_and_validate_heredoc(&mut parser, code, expected_delimiter).context(
-            format!("Failed to parse complex delimiter heredoc: {}", expected_delimiter),
-        )?;
+        for (code, expected_delimiter) in complex_delimiter_cases {
+            let tree = parse_and_validate_heredoc(&mut parser, code, expected_delimiter).context(
+                format!("Failed to parse complex delimiter heredoc: {}", expected_delimiter),
+            )?;
 
-        // Validate delimiter recognition
-        if let Some(heredoc_node) = find_heredoc_node(&tree.root_node()) {
-            validate_heredoc_delimiter(&heredoc_node, expected_delimiter, code)?;
+            // Validate delimiter recognition
+            if let Some(heredoc_node) = find_heredoc_node(&tree.root_node()) {
+                validate_heredoc_delimiter(&heredoc_node, expected_delimiter, code)?;
+            }
         }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    #[test]
+    fn test_quoted_heredoc_delimiters() -> Result<()> {
+        // AC10: Quoted delimiter support
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
-#[test]
-#[ignore] // AC10: Remove when quoted delimiter support is implemented
-fn test_quoted_heredoc_delimiters() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+        let mut parser =
+            create_parser().context("Failed to create parser for quoted delimiter tests")?;
 
-    let mut parser =
-        create_parser().context("Failed to create parser for quoted delimiter tests")?;
-
-    let quoted_delimiter_cases = vec![
-        // Double-quoted delimiters (interpolating)
-        (
-            r#"print <<"EOF";
+        let quoted_delimiter_cases = vec![
+            // Double-quoted delimiters (interpolating)
+            (
+                r#"print <<"EOF";
 Interpolating heredoc with $variable
 EOF"#,
-            "EOF",
-            true,
-        ),
-        // Single-quoted delimiters (non-interpolating)
-        (
-            r#"print <<'EOF';
+                "EOF",
+                true,
+            ),
+            // Single-quoted delimiters (non-interpolating)
+            (
+                r#"print <<'EOF';
 Non-interpolating heredoc with $variable
 EOF"#,
-            "EOF",
-            false,
-        ),
-        // Backslash-quoted delimiters (non-interpolating)
-        (
-            r#"print <<\EOF;
+                "EOF",
+                false,
+            ),
+            // Backslash-quoted delimiters (non-interpolating)
+            (
+                r#"print <<\EOF;
 Backslash-quoted heredoc with $variable
 EOF"#,
-            "EOF",
-            false,
-        ),
-        // Complex quoted delimiters
-        (
-            r#"print <<"HTML_TEMPLATE";
+                "EOF",
+                false,
+            ),
+            // Complex quoted delimiters
+            (
+                r#"print <<"HTML_TEMPLATE";
 <div>$title</div>
 <p>$content</p>
 HTML_TEMPLATE"#,
-            "HTML_TEMPLATE",
-            true,
-        ),
-        // Quoted delimiters with special characters
-        (
-            r#"print <<'LITERAL$DELIMITER';
+                "HTML_TEMPLATE",
+                true,
+            ),
+            // Quoted delimiters with special characters
+            (
+                r#"print <<'LITERAL$DELIMITER';
 Content with literal dollar signs $$$
 LITERAL$DELIMITER"#,
-            "LITERAL$DELIMITER",
-            false,
-        ),
-        // Mixed case quoted delimiters
-        (
-            r#"print <<"JavaScript";
+                "LITERAL$DELIMITER",
+                false,
+            ),
+            // Mixed case quoted delimiters
+            (
+                r#"print <<"JavaScript";
 var x = $value;
 console.log(x);
 JavaScript"#,
-            "JavaScript",
-            true,
-        ),
-    ];
+                "JavaScript",
+                true,
+            ),
+        ];
 
-    for (code, delimiter, should_interpolate) in quoted_delimiter_cases {
-        let tree = parse_and_validate_heredoc(&mut parser, code, delimiter)
-            .context(format!("Failed to parse quoted delimiter heredoc: {}", delimiter))?;
+        for (code, delimiter, should_interpolate) in quoted_delimiter_cases {
+            let tree = parse_and_validate_heredoc(&mut parser, code, delimiter)
+                .context(format!("Failed to parse quoted delimiter heredoc: {}", delimiter))?;
 
-        // Validate interpolation behavior
-        if let Some(heredoc_node) = find_heredoc_node(&tree.root_node()) {
-            validate_heredoc_interpolation(&heredoc_node, should_interpolate, code)?;
+            // Validate interpolation behavior
+            if let Some(heredoc_node) = find_heredoc_node(&tree.root_node()) {
+                validate_heredoc_interpolation(&heredoc_node, should_interpolate, code)?;
+            }
         }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    #[test]
+    fn test_heredoc_in_array_context() -> Result<()> {
+        // AC10: Heredoc array context support
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
-#[test]
-#[ignore] // AC10: Remove when heredoc array context support is implemented
-fn test_heredoc_in_array_context() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+        let mut parser =
+            create_parser().context("Failed to create parser for heredoc array context tests")?;
 
-    let mut parser =
-        create_parser().context("Failed to create parser for heredoc array context tests")?;
-
-    let array_context_cases = vec![
-        // Multiple heredocs in array
-        (
-            r#"my @docs = (<<EOF1, <<EOF2, <<EOF3);
+        let array_context_cases = vec![
+            // Multiple heredocs in array
+            (
+                r#"my @docs = (<<EOF1, <<EOF2, <<EOF3);
 First document
 EOF1
 Second document
 EOF2
 Third document
 EOF3"#,
-            3,
-        ),
-        // Heredoc mixed with other array elements
-        (
-            r#"my @mixed = (
+                3,
+            ),
+            // Heredoc mixed with other array elements
+            (
+                r#"my @mixed = (
     'string',
     42,
     <<HTML,
@@ -305,11 +316,11 @@ HTML
 SELECT * FROM users
 SQL
 );"#,
-            2,
-        ),
-        // Nested array with heredocs
-        (
-            r#"my @nested = (
+                2,
+            ),
+            // Nested array with heredocs
+            (
+                r#"my @nested = (
     [<<DOC1, 'text'],
 Content one
 DOC1
@@ -317,11 +328,11 @@ DOC1
 Content two
 DOC2
 );"#,
-            2,
-        ),
-        // Heredoc in array reference
-        (
-            r#"my $arrayref = [
+                2,
+            ),
+            // Heredoc in array reference
+            (
+                r#"my $arrayref = [
     <<FIRST,
 First content
 FIRST
@@ -329,11 +340,11 @@ FIRST
 Second content
 SECOND
 ];"#,
-            2,
-        ),
-        // Complex array context with interpolation
-        (
-            r#"my @templates = (
+                2,
+            ),
+            // Complex array context with interpolation
+            (
+                r#"my @templates = (
     <<"HEADER",
 <header>$title</header>
 HEADER
@@ -344,205 +355,206 @@ BODY
 <footer>$footer</footer>
 FOOTER
 );"#,
-            3,
-        ),
-    ];
+                3,
+            ),
+        ];
 
-    for (code, expected_heredoc_count) in array_context_cases {
-        let tree = parse_and_validate_heredoc(&mut parser, code, "MULTIPLE").context(format!(
-            "Failed to parse heredoc in array context with {} heredocs",
-            expected_heredoc_count
-        ))?;
+        for (code, expected_heredoc_count) in array_context_cases {
+            let tree =
+                parse_and_validate_heredoc(&mut parser, code, "MULTIPLE").context(format!(
+                    "Failed to parse heredoc in array context with {} heredocs",
+                    expected_heredoc_count
+                ))?;
 
-        // Validate multiple heredocs in array context
-        let heredoc_count = count_heredoc_nodes(&tree.root_node());
-        assert_eq!(
-            heredoc_count, expected_heredoc_count,
-            "Expected {} heredocs in array context, found {}: {}",
-            expected_heredoc_count, heredoc_count, code
-        );
+            // Validate multiple heredocs in array context
+            let heredoc_count = count_heredoc_nodes(&tree.root_node());
+            assert_eq!(
+                heredoc_count, expected_heredoc_count,
+                "Expected {} heredocs in array context, found {}: {}",
+                expected_heredoc_count, heredoc_count, code
+            );
 
-        // Validate array context parsing
-        validate_array_context_heredocs(&tree.root_node(), code)?;
+            // Validate array context parsing
+            validate_array_context_heredocs(&tree.root_node(), code)?;
+        }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    #[test]
+    fn test_heredoc_missing_terminator_recovery() -> Result<()> {
+        // AC10: Heredoc terminator recovery
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
-#[test]
-#[ignore] // AC10: Remove when heredoc terminator recovery is implemented
-fn test_heredoc_missing_terminator_recovery() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+        let mut parser =
+            create_parser().context("Failed to create parser for terminator recovery tests")?;
 
-    let mut parser =
-        create_parser().context("Failed to create parser for terminator recovery tests")?;
-
-    let missing_terminator_cases = vec![
-        // Missing terminator - should attempt recovery
-        (
-            r#"print <<EOF;
+        let missing_terminator_cases = vec![
+            // Missing terminator - should attempt recovery
+            (
+                r#"print <<EOF;
 Content without proper terminator
 "#,
-            false,
-            "Should detect missing terminator",
-        ),
-        // Incorrect terminator case
-        (
-            r#"print <<EOF;
+                false,
+                "Should detect missing terminator",
+            ),
+            // Incorrect terminator case
+            (
+                r#"print <<EOF;
 Content with case mismatch
 eof"#,
-            false,
-            "Should detect case mismatch in terminator",
-        ),
-        // Terminator with extra whitespace
-        (
-            r#"print <<EOF;
+                false,
+                "Should detect case mismatch in terminator",
+            ),
+            // Terminator with extra whitespace
+            (
+                r#"print <<EOF;
 Content with whitespace in terminator
 EOF "#,
-            false,
-            "Should detect whitespace after terminator",
-        ),
-        // Terminator with indentation
-        (
-            r#"print <<EOF;
+                false,
+                "Should detect whitespace after terminator",
+            ),
+            // Terminator with indentation
+            (
+                r#"print <<EOF;
 Content with indented terminator
     EOF"#,
-            false,
-            "Should detect indented terminator",
-        ),
-        // Partial terminator
-        (
-            r#"print <<LONG_DELIMITER;
+                false,
+                "Should detect indented terminator",
+            ),
+            // Partial terminator
+            (
+                r#"print <<LONG_DELIMITER;
 Content with partial terminator
 LONG_"#,
-            false,
-            "Should detect partial terminator",
-        ),
-        // File ends before terminator
-        (
-            r#"print <<EOF;
+                false,
+                "Should detect partial terminator",
+            ),
+            // File ends before terminator
+            (
+                r#"print <<EOF;
 Content but file ends"#,
-            false,
-            "Should detect EOF before terminator",
-        ),
-    ];
+                false,
+                "Should detect EOF before terminator",
+            ),
+        ];
 
-    for (code, should_parse_successfully, description) in missing_terminator_cases {
-        let tree = parser
-            .parse(code, None)
-            .context("Parser should not fail completely on missing terminator")?;
+        for (code, should_parse_successfully, description) in missing_terminator_cases {
+            let tree = parser
+                .parse(code, None)
+                .context("Parser should not fail completely on missing terminator")?;
 
-        let root_node = tree.root_node();
-        let has_errors = root_node.has_error();
+            let root_node = tree.root_node();
+            let has_errors = root_node.has_error();
 
-        if should_parse_successfully {
-            assert!(!has_errors, "{}: {}", description, code);
-        } else {
-            // For error cases, validate that parser handles gracefully
-            // The tree may have errors, but should still provide useful structure
+            if should_parse_successfully {
+                assert!(!has_errors, "{}: {}", description, code);
+            } else {
+                // For error cases, validate that parser handles gracefully
+                // The tree may have errors, but should still provide useful structure
 
-            // Check if heredoc recovery information is available
-            validate_heredoc_error_recovery(&root_node, code, description)?;
+                // Check if heredoc recovery information is available
+                validate_heredoc_error_recovery(&root_node, code, description)?;
+            }
         }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    #[test]
+    fn test_complex_heredoc_interpolation() -> Result<()> {
+        // AC10: Complex interpolation support
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
-#[test]
-#[ignore] // AC10: Remove when complex interpolation support is implemented
-fn test_complex_heredoc_interpolation() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+        let mut parser =
+            create_parser().context("Failed to create parser for complex interpolation tests")?;
 
-    let mut parser =
-        create_parser().context("Failed to create parser for complex interpolation tests")?;
-
-    let complex_interpolation_cases = vec![
-        // Nested interpolation
-        (
-            r#"print <<"HTML";
+        let complex_interpolation_cases = vec![
+            // Nested interpolation
+            (
+                r#"print <<"HTML";
 <div class="${class_name}">
     <p>${get_text("key_${lang}")}</p>
     <span>@{[scalar localtime]}</span>
 </div>
 HTML"#,
-            &["variable_interpolation", "function_call", "array_interpolation"],
-        ),
-        // Complex expressions in interpolation
-        (
-            r#"print <<"TEMPLATE";
+                &["variable_interpolation", "function_call", "array_interpolation"],
+            ),
+            // Complex expressions in interpolation
+            (
+                r#"print <<"TEMPLATE";
 Result: @{[
     map { "<li>$_</li>" }
     grep { defined $_ }
     @items
 ]}
 TEMPLATE"#,
-            &["array_interpolation", "map_expression", "grep_expression"],
-        ),
-        // Method call interpolation
-        (
-            r#"print <<"XML";
+                &["array_interpolation", "map_expression", "grep_expression"],
+            ),
+            // Method call interpolation
+            (
+                r#"print <<"XML";
 <data>
     <value>${object->method($param)}</value>
     <count>@{[$ref->get_items->@*]}</count>
 </data>
 XML"#,
-            &["method_call_interpolation", "postfix_deref"],
-        ),
-        // Hash and array interpolation
-        (
-            r#"print <<"CONFIG";
+                &["method_call_interpolation", "postfix_deref"],
+            ),
+            // Hash and array interpolation
+            (
+                r#"print <<"CONFIG";
 Setting: ${config{$key}}
 Items: @items
 Hash: @{[%hash]}
 CONFIG"#,
-            &["hash_interpolation", "array_interpolation", "hash_deref"],
-        ),
-        // Escaped interpolation
-        (
-            r#"print <<"ESCAPED";
+                &["hash_interpolation", "array_interpolation", "hash_deref"],
+            ),
+            // Escaped interpolation
+            (
+                r#"print <<"ESCAPED";
 Literal \$variable should not interpolate
 But $real_variable should interpolate
 Escaped \@array vs real @array
 ESCAPED"#,
-            &["escaped_interpolation", "variable_interpolation"],
-        ),
-        // Unicode in interpolation
-        (
-            r#"print <<"UNICODE";
+                &["escaped_interpolation", "variable_interpolation"],
+            ),
+            // Unicode in interpolation
+            (
+                r#"print <<"UNICODE";
 Message: ${messages{$lang}}
 Name: $user{名前}
 Status: @{[map { "✓ $_" } @completed_tasks]}
 UNICODE"#,
-            &["unicode_interpolation", "hash_access", "array_interpolation"],
-        ),
-    ];
+                &["unicode_interpolation", "hash_access", "array_interpolation"],
+            ),
+        ];
 
-    for (code, expected_interpolation_types) in complex_interpolation_cases {
-        let tree = parse_and_validate_heredoc(&mut parser, code, "INTERPOLATION")
-            .context(format!("Failed to parse complex interpolation heredoc"))?;
+        for (code, expected_interpolation_types) in complex_interpolation_cases {
+            let tree = parse_and_validate_heredoc(&mut parser, code, "INTERPOLATION")
+                .context(format!("Failed to parse complex interpolation heredoc"))?;
 
-        // Validate interpolation parsing
-        if let Some(heredoc_node) = find_heredoc_node(&tree.root_node()) {
-            validate_complex_interpolation(&heredoc_node, expected_interpolation_types, code)?;
+            // Validate interpolation parsing
+            if let Some(heredoc_node) = find_heredoc_node(&tree.root_node()) {
+                validate_complex_interpolation(&heredoc_node, expected_interpolation_types, code)?;
+            }
         }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    #[test]
+    fn test_indented_heredoc_support() -> Result<()> {
+        // AC10: Heredoc indentation support
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
-#[test]
-#[ignore] // AC10: Remove when heredoc indentation support is implemented
-fn test_indented_heredoc_support() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+        let mut parser =
+            create_parser().context("Failed to create parser for indented heredoc tests")?;
 
-    let mut parser =
-        create_parser().context("Failed to create parser for indented heredoc tests")?;
-
-    let indented_heredoc_cases = vec![
-        // Basic indented heredoc
-        (
-            r#"sub generate_html {
+        let indented_heredoc_cases = vec![
+            // Basic indented heredoc
+            (
+                r#"sub generate_html {
     return <<~HTML;
         <html>
             <body>
@@ -551,32 +563,32 @@ fn test_indented_heredoc_support() -> Result<()> {
         </html>
     HTML
 }"#,
-            4,
-        ), // 4 spaces indentation
-        // Mixed indentation levels
-        (
-            r#"if ($condition) {
+                4,
+            ), // 4 spaces indentation
+            // Mixed indentation levels
+            (
+                r#"if ($condition) {
     my $content = <<~'TEXT';
         Line one
             Indented line
         Back to base
     TEXT
 }"#,
-            4,
-        ),
-        // Tab indentation
-        (
-            r#"my $code = <<~"CODE";
+                4,
+            ),
+            // Tab indentation
+            (
+                r#"my $code = <<~"CODE";
 	sub example {
 		my $x = 1;
 		return $x;
 	}
 CODE"#,
-            1,
-        ), // 1 tab
-        // Nested indented heredoc
-        (
-            r#"sub outer {
+                1,
+            ), // 1 tab
+            // Nested indented heredoc
+            (
+                r#"sub outer {
     sub inner {
         return <<~SQL;
             SELECT *
@@ -585,177 +597,177 @@ CODE"#,
         SQL
     }
 }"#,
-            8,
-        ), // 8 spaces (2 levels)
-        // Indented heredoc with interpolation
-        (
-            r#"my $template = <<~"TEMPLATE";
+                8,
+            ), // 8 spaces (2 levels)
+            // Indented heredoc with interpolation
+            (
+                r#"my $template = <<~"TEMPLATE";
     <div class="$class">
         ${content}
         @{[map { "    <li>$_</li>" } @items]}
     </div>
 TEMPLATE"#,
-            4,
-        ),
-    ];
+                4,
+            ),
+        ];
 
-    for (code, expected_base_indent) in indented_heredoc_cases {
-        let tree = parse_and_validate_heredoc(&mut parser, code, "INDENTED").context(format!(
-            "Failed to parse indented heredoc with {} indent",
-            expected_base_indent
-        ))?;
+        for (code, expected_base_indent) in indented_heredoc_cases {
+            let tree = parse_and_validate_heredoc(&mut parser, code, "INDENTED").context(
+                format!("Failed to parse indented heredoc with {} indent", expected_base_indent),
+            )?;
 
-        // Validate indentation handling
-        if let Some(heredoc_node) = find_heredoc_node(&tree.root_node()) {
-            validate_heredoc_indentation(&heredoc_node, expected_base_indent, code)?;
+            // Validate indentation handling
+            if let Some(heredoc_node) = find_heredoc_node(&tree.root_node()) {
+                validate_heredoc_indentation(&heredoc_node, expected_base_indent, code)?;
+            }
         }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    #[test]
+    fn test_heredoc_security_validation() -> Result<()> {
+        // AC10: Heredoc security validation
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
-#[test]
-#[ignore] // AC10: Remove when heredoc security validation is implemented
-fn test_heredoc_security_validation() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+        let mut parser =
+            create_parser().context("Failed to create parser for heredoc security tests")?;
 
-    let mut parser =
-        create_parser().context("Failed to create parser for heredoc security tests")?;
-
-    let security_test_cases = vec![
-        // Code injection patterns
-        (
-            r#"print <<"HTML";
+        let security_test_cases = vec![
+            // Code injection patterns
+            (
+                r#"print <<"HTML";
 <script>alert('${user_input}')</script>
 HTML"#,
-            &["script_injection_risk"],
-        ),
-        // SQL injection patterns
-        (
-            r#"my $query = <<"SQL";
+                &["script_injection_risk"],
+            ),
+            // SQL injection patterns
+            (
+                r#"my $query = <<"SQL";
 SELECT * FROM users WHERE name = '$username'
 SQL"#,
-            &["sql_injection_risk"],
-        ),
-        // Command injection patterns
-        (
-            r#"my $command = <<"CMD";
+                &["sql_injection_risk"],
+            ),
+            // Command injection patterns
+            (
+                r#"my $command = <<"CMD";
 ls -la $directory
 CMD"#,
-            &["command_injection_risk"],
-        ),
-        // Safe templating patterns
-        (
-            r#"my $safe = <<"SAFE";
+                &["command_injection_risk"],
+            ),
+            // Safe templating patterns
+            (
+                r#"my $safe = <<"SAFE";
 User: ${encode_html($username)}
 Data: @{[map { encode_js($_) } @data]}
 SAFE"#,
-            &["safe_templating"],
-        ),
-        // Path traversal patterns
-        (
-            r#"my $file = <<"PATH";
+                &["safe_templating"],
+            ),
+            // Path traversal patterns
+            (
+                r#"my $file = <<"PATH";
 /etc/../../../$user_file
 PATH"#,
-            &["path_traversal_risk"],
-        ),
-        // Large heredoc potential DoS
-        (
-            r#"my $large = <<"LARGE";
+                &["path_traversal_risk"],
+            ),
+            // Large heredoc potential DoS
+            (
+                r#"my $large = <<"LARGE";
 ${"x" x 1000000}
 LARGE"#,
-            &["resource_exhaustion_risk"],
-        ),
-    ];
+                &["resource_exhaustion_risk"],
+            ),
+        ];
 
-    for (code, expected_security_issues) in security_test_cases {
-        let tree = parse_and_validate_heredoc(&mut parser, code, "SECURITY")
-            .context(format!("Failed to parse heredoc for security validation"))?;
+        for (code, expected_security_issues) in security_test_cases {
+            let tree = parse_and_validate_heredoc(&mut parser, code, "SECURITY")
+                .context(format!("Failed to parse heredoc for security validation"))?;
 
-        // Validate security analysis
-        if let Some(heredoc_node) = find_heredoc_node(&tree.root_node()) {
-            validate_heredoc_security(&heredoc_node, expected_security_issues, code)?;
+            // Validate security analysis
+            if let Some(heredoc_node) = find_heredoc_node(&tree.root_node()) {
+                validate_heredoc_security(&heredoc_node, expected_security_issues, code)?;
+            }
         }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    #[test]
+    fn test_heredoc_performance_edge_cases() -> Result<()> {
+        // AC10: Heredoc performance edge cases
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
 
-#[test]
-#[ignore] // AC10: Remove when heredoc performance optimization is implemented
-fn test_heredoc_performance_edge_cases() -> Result<()> {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-heredoc-processing
+        let mut parser =
+            create_parser().context("Failed to create parser for heredoc performance tests")?;
 
-    let mut parser =
-        create_parser().context("Failed to create parser for heredoc performance tests")?;
+        let performance_test_cases = vec![
+            // Very large heredoc
+            ("large_content", 100_000),
+            // Many small heredocs
+            ("many_small", 1000),
+            // Deeply nested interpolation
+            ("deep_interpolation", 50),
+            // Complex delimiter patterns
+            ("complex_delimiters", 100),
+            // Mixed encoding content
+            ("mixed_encoding", 10_000),
+        ];
 
-    let performance_test_cases = vec![
-        // Very large heredoc
-        ("large_content", 100_000),
-        // Many small heredocs
-        ("many_small", 1000),
-        // Deeply nested interpolation
-        ("deep_interpolation", 50),
-        // Complex delimiter patterns
-        ("complex_delimiters", 100),
-        // Mixed encoding content
-        ("mixed_encoding", 10_000),
-    ];
+        for (test_type, scale) in performance_test_cases {
+            let code = generate_performance_test_case(test_type, scale);
 
-    for (test_type, scale) in performance_test_cases {
-        let code = generate_performance_test_case(test_type, scale);
+            let start_time = std::time::Instant::now();
 
-        let start_time = std::time::Instant::now();
+            let tree = parser
+                .parse(&code, None)
+                .context(format!("Failed to parse performance test case: {}", test_type))?;
 
-        let tree = parser
-            .parse(&code, None)
-            .context(format!("Failed to parse performance test case: {}", test_type))?;
+            let parse_duration = start_time.elapsed();
 
-        let parse_duration = start_time.elapsed();
+            // Performance requirements (these would be tuned based on actual requirements)
+            let max_duration = match test_type {
+                "large_content" => std::time::Duration::from_millis(500),
+                "many_small" => std::time::Duration::from_millis(1000),
+                "deep_interpolation" => std::time::Duration::from_millis(100),
+                "complex_delimiters" => std::time::Duration::from_millis(200),
+                "mixed_encoding" => std::time::Duration::from_millis(300),
+                _ => std::time::Duration::from_millis(100),
+            };
 
-        // Performance requirements (these would be tuned based on actual requirements)
-        let max_duration = match test_type {
-            "large_content" => std::time::Duration::from_millis(500),
-            "many_small" => std::time::Duration::from_millis(1000),
-            "deep_interpolation" => std::time::Duration::from_millis(100),
-            "complex_delimiters" => std::time::Duration::from_millis(200),
-            "mixed_encoding" => std::time::Duration::from_millis(300),
-            _ => std::time::Duration::from_millis(100),
-        };
+            assert!(
+                parse_duration < max_duration,
+                "Performance test '{}' took {:?}, expected < {:?}",
+                test_type,
+                parse_duration,
+                max_duration
+            );
 
-        assert!(
-            parse_duration < max_duration,
-            "Performance test '{}' took {:?}, expected < {:?}",
-            test_type,
-            parse_duration,
-            max_duration
-        );
+            // Validate memory usage doesn't grow excessively
+            let root_node = tree.root_node();
+            let node_count = count_all_nodes(&root_node);
 
-        // Validate memory usage doesn't grow excessively
-        let root_node = tree.root_node();
-        let node_count = count_all_nodes(&root_node);
+            // Node count should be reasonable relative to input size
+            let max_nodes = match test_type {
+                "large_content" => scale * 2,       // 2 nodes per KB
+                "many_small" => scale * 10,         // 10 nodes per heredoc
+                "deep_interpolation" => scale * 20, // 20 nodes per nesting level
+                "complex_delimiters" => scale * 5,  // 5 nodes per delimiter
+                "mixed_encoding" => scale * 3,      // 3 nodes per character group
+                _ => scale * 5,
+            };
 
-        // Node count should be reasonable relative to input size
-        let max_nodes = match test_type {
-            "large_content" => scale * 2,       // 2 nodes per KB
-            "many_small" => scale * 10,         // 10 nodes per heredoc
-            "deep_interpolation" => scale * 20, // 20 nodes per nesting level
-            "complex_delimiters" => scale * 5,  // 5 nodes per delimiter
-            "mixed_encoding" => scale * 3,      // 3 nodes per character group
-            _ => scale * 5,
-        };
+            assert!(
+                node_count < max_nodes,
+                "Performance test '{}' created {} nodes, expected < {}",
+                test_type,
+                node_count,
+                max_nodes
+            );
+        }
 
-        assert!(
-            node_count < max_nodes,
-            "Performance test '{}' created {} nodes, expected < {}",
-            test_type,
-            node_count,
-            max_nodes
-        );
+        Ok(())
     }
-
-    Ok(())
-}
+} // end mod heredoc_advanced
 
 // Helper functions
 

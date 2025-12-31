@@ -11,6 +11,9 @@
 #   - feature: Feature-gated/not implemented
 #   - infra: Infrastructure/TODO items
 #   - protocol: Protocol compliance issues
+#   - manual: Manual helper tests (snapshot regen, etc.)
+#   - stress: Stress tests (run with --features stress-tests)
+#   - bug: Known bugs waiting to be fixed
 #   - bare: No reason given
 #   - other: Everything else
 
@@ -34,6 +37,7 @@ counts[brokenpipe]=0
 counts[feature]=0
 counts[infra]=0
 counts[protocol]=0
+counts[manual]=0
 counts[stress]=0
 counts[bug]=0
 counts[bare]=0
@@ -67,8 +71,11 @@ categorize_ignore() {
     # IMPORTANT: Check explicit prefixes FIRST before pattern matching.
     # Order matters! Explicit labels override implicit pattern matching.
 
+    # Check for manual helper tests (snapshot regen, etc.) - MUST be first
+    if [[ "$lower_reason" =~ ^manual:|manual\ |regenerate|helper ]]; then
+        echo "manual"
     # Check for stress tests (should be run with --ignored for stress testing)
-    if [[ "$lower_reason" =~ ^stress:|stress\ test|memory.stress|performance.stress|load.test|stack.overflow|designed.to.fail ]]; then
+    elif [[ "$lower_reason" =~ ^stress:|stress\ test|memory.stress|performance.stress|load.test|stack.overflow|designed.to.fail ]]; then
         echo "stress"
     # Check for known bugs that need fixing (explicit BUG: prefix FIRST)
     elif [[ "$lower_reason" =~ ^bug:|bug:\ |known.bug|regression|incorrect.behavior|parser.bug|missing.*notification|missing.*initialize|server.returns.*instead|exposes.*|will.kill|mut_[0-9]+|known.inconsistencies|matching.issue|investigate|instead.of.expected|different.error.format|expects.*but.implementation ]]; then
@@ -162,13 +169,15 @@ while IFS= read -r file; do
         # Record details
         echo "$category|$rel_path:$line_num|$test_name|$reason" >> "$DETAILS_FILE"
 
-    done < <(grep -n '#\[ignore' "$file" 2>/dev/null || true)
+    # Note: Only match #[ignore at start of line (with optional leading whitespace)
+    # This eliminates false positives from commented-out ignores
+    done < <(grep -nE '^[[:space:]]*#\[ignore' "$file" 2>/dev/null || true)
 
 done < <(find "$REPO_ROOT/crates" -name "*.rs" -type f 2>/dev/null)
 
 # Calculate total
 total=0
-for cat in brokenpipe feature infra protocol stress bug bare other; do
+for cat in brokenpipe feature infra protocol manual stress bug bare other; do
     ((total += counts[$cat])) || true
 done
 
@@ -210,7 +219,7 @@ echo "==============================================="
 printf "%-12s %8s %8s %8s\n" "Category" "Count" "Baseline" "Delta"
 echo "-----------------------------------------------"
 
-for cat in brokenpipe feature infra protocol stress bug bare other; do
+for cat in brokenpipe feature infra protocol manual stress bug bare other; do
     base_val=${baseline[$cat]:-0}
     delta=$(format_delta "${counts[$cat]}" "$base_val")
     printf "%-12s %8d %8d %8b\n" "$cat" "${counts[$cat]}" "$base_val" "$delta"
@@ -228,7 +237,7 @@ if [[ "${VERBOSE:-}" == "1" ]]; then
     echo ""
     echo "Detailed breakdown by category:"
     echo ""
-    for cat in brokenpipe feature infra protocol stress bug bare other; do
+    for cat in brokenpipe feature infra protocol manual stress bug bare other; do
         if [[ ${counts[$cat]} -gt 0 ]]; then
             echo -e "${YELLOW}=== $cat (${counts[$cat]}) ===${NC}"
             grep "^$cat|" "$DETAILS_FILE" | while IFS='|' read -r _ loc name reason; do
@@ -253,7 +262,7 @@ case "$MODE" in
             # Use portable ISO 8601 date format (works on macOS and Linux)
             echo "# Ignored test baseline - $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "# Updated by: ignored-test-count.sh --update"
-            for cat in brokenpipe feature infra protocol stress bug bare other; do
+            for cat in brokenpipe feature infra protocol manual stress bug bare other; do
                 echo "$cat=${counts[$cat]}"
             done
             echo "total=$total"

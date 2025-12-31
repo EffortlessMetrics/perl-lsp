@@ -137,7 +137,6 @@ mod integration_tests {
 
     /// Test LSP end-to-end functionality after module restoration
     #[test]
-    #[ignore] // Only run when modules are fully restored
     fn test_lsp_e2e_with_restored_modules() {
         // This test validates that LSP functionality works correctly
         // after tdd_workflow.rs and refactoring.rs are restored

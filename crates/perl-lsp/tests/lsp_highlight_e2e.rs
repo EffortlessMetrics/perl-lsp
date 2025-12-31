@@ -70,7 +70,6 @@ fn highlights_read_and_write() {
 }
 
 #[test]
-
 fn highlights_across_scopes() {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
