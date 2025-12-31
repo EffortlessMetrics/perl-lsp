@@ -195,8 +195,7 @@ fn test_substitution_empty_pattern_or_replacement() {
 }
 
 #[test]
-#[ignore = "MUT_002: Exposes empty replacement parsing bug in quote_parser.rs:80 - will kill mutant when fixed"]
-// Target MUT_002: Empty replacement with balanced delimiters - quote_parser.rs:80
+// MUT_002: Fixed in quote_parser.rs - balanced delimiters now use per-segment delimiter detection
 fn test_substitution_empty_replacement_balanced_delimiters() {
     // These test cases specifically target the empty replacement parsing logic
     // for paired delimiters in quote_parser.rs line 80
@@ -357,12 +356,16 @@ fn find_substitution_node(node: &perl_parser::ast::Node) -> Option<(String, Stri
 }
 
 #[test]
-#[ignore = "MUT_005: Exposes invalid modifier validation bug in parser_backup.rs:4231 - will kill mutant when fixed"]
-// Target MUT_005: Invalid modifier character validation - parser_backup.rs:4231
+// MUT_005 FIXED: Invalid modifier validation now properly rejects invalid modifiers
 fn test_substitution_invalid_modifier_characters() {
     // These test cases specifically target the invalid modifier validation logic
-    // in parser_backup.rs line 4231 where only 'g', 'i', 'm', 's', 'x', 'o', 'e', 'r' are allowed
+    // where only 'g', 'i', 'm', 's', 'x', 'o', 'e', 'r' are allowed.
+    //
+    // Note: Only alphanumeric characters are tested as "modifiers" since Perl's lexer
+    // treats special characters (like @, ;, etc.) as separate tokens, not as modifiers.
+    // For example, 's/foo/bar/;' is valid Perl - the ';' is a statement terminator.
     let invalid_modifier_cases = vec![
+        // Invalid single letter modifiers
         "s/foo/bar/z",   // Invalid modifier 'z'
         "s/foo/bar/a",   // Invalid modifier 'a'
         "s/foo/bar/b",   // Invalid modifier 'b'
@@ -381,41 +384,12 @@ fn test_substitution_invalid_modifier_characters() {
         "s/foo/bar/v",   // Invalid modifier 'v'
         "s/foo/bar/w",   // Invalid modifier 'w'
         "s/foo/bar/y",   // Invalid modifier 'y'
+        // Invalid numeric modifiers
         "s/foo/bar/1",   // Invalid numeric modifier '1'
         "s/foo/bar/2",   // Invalid numeric modifier '2'
         "s/foo/bar/9",   // Invalid numeric modifier '9'
         "s/foo/bar/0",   // Invalid numeric modifier '0'
-        "s/foo/bar/@",   // Invalid symbol modifier '@'
-        "s/foo/bar/#",   // Invalid symbol modifier '#'
-        "s/foo/bar/$",   // Invalid symbol modifier '$'
-        "s/foo/bar/%",   // Invalid symbol modifier '%'
-        "s/foo/bar/^",   // Invalid symbol modifier '^'
-        "s/foo/bar/&",   // Invalid symbol modifier '&'
-        "s/foo/bar/*",   // Invalid symbol modifier '*'
-        "s/foo/bar/(",   // Invalid symbol modifier '('
-        "s/foo/bar/)",   // Invalid symbol modifier ')'
-        "s/foo/bar/-",   // Invalid symbol modifier '-'
-        "s/foo/bar/+",   // Invalid symbol modifier '+'
-        "s/foo/bar/=",   // Invalid symbol modifier '='
-        "s/foo/bar/[",   // Invalid symbol modifier '['
-        "s/foo/bar/]",   // Invalid symbol modifier ']'
-        "s/foo/bar/{",   // Invalid symbol modifier '{'
-        "s/foo/bar/}",   // Invalid symbol modifier '}'
-        "s/foo/bar/|",   // Invalid symbol modifier '|'
-        "s/foo/bar/\\",  // Invalid symbol modifier '\\'
-        "s/foo/bar/:",   // Invalid symbol modifier ':'
-        "s/foo/bar/;",   // Invalid symbol modifier ';'
-        "s/foo/bar/\"",  // Invalid symbol modifier '"'
-        "s/foo/bar/'",   // Invalid symbol modifier "'"
-        "s/foo/bar/<",   // Invalid symbol modifier '<'
-        "s/foo/bar/>",   // Invalid symbol modifier '>'
-        "s/foo/bar/,",   // Invalid symbol modifier ','
-        "s/foo/bar/.",   // Invalid symbol modifier '.'
-        "s/foo/bar/?",   // Invalid symbol modifier '?'
-        "s/foo/bar/ ",   // Invalid space modifier
-        "s/foo/bar/\t",  // Invalid tab modifier
-        "s/foo/bar/\n",  // Invalid newline modifier
-        "s/foo/bar/\r",  // Invalid carriage return modifier
+        // Combinations with invalid modifiers
         "s/foo/bar/ga",  // Valid 'g' but invalid 'a' in combination
         "s/foo/bar/iz",  // Valid 'i' but invalid 'z' in combination
         "s/foo/bar/mxy", // Valid 'm', 'x' but invalid 'y' in combination
@@ -423,7 +397,6 @@ fn test_substitution_invalid_modifier_characters() {
         "s/foo/bar/xyz", // Valid 'x' but invalid 'y', 'z' in combination
         "s/foo/bar/123", // All invalid numeric modifiers
         "s/foo/bar/abc", // Mix of invalid letters
-        "s/foo/bar/!@#", // Mix of invalid symbols
     ];
 
     for code in invalid_modifier_cases {
