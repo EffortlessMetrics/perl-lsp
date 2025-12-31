@@ -329,7 +329,6 @@ fn test_issue_145_complete_workflow() {
 }
 
 #[test]
-#[ignore = "BUG: Cross-file definition lookup returns Err but test expects Ok"]
 // AC5:integration - Cross-file analysis and navigation
 fn test_cross_file_integration() {
     let (mut harness, workspace) = create_comprehensive_workspace();

@@ -9,7 +9,7 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 /// Tests all possible ways the LSP protocol can be violated
 
 #[test]
-#[ignore = "Server returns -32000 instead of -32600 for missing jsonrpc field"]
+#[ignore = "FEATURE: Strict JSON-RPC 2.0 validation - missing jsonrpc should return -32600"]
 fn test_missing_jsonrpc_version() {
     let mut server = start_lsp_server();
 
@@ -89,7 +89,7 @@ fn test_request_without_id() {
 }
 
 #[test]
-#[ignore = "Response ID is Null instead of expected 100 - need to investigate ID handling"]
+#[ignore = "FEATURE: Strict JSON-RPC 2.0 duplicate ID handling - not implemented"]
 fn test_duplicate_request_ids() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -219,7 +219,7 @@ fn test_invalid_utf8_in_message() {
 }
 
 #[test]
-#[ignore = "Server returns different error format than expected -32002 for uninitialized request"]
+#[ignore = "FEATURE: Strict initialization enforcement - -32002 error format not implemented"]
 fn test_request_before_initialization() {
     let mut server = start_lsp_server();
 

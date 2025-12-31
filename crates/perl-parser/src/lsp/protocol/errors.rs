@@ -105,6 +105,32 @@ pub fn cancelled_response(id: &Value) -> JsonRpcResponse {
     }
 }
 
+/// Create a cancelled response with method/provider context
+///
+/// This enhanced version includes the provider name in the error message and data,
+/// allowing clients to track which specific operation was cancelled.
+pub fn cancelled_response_with_method(id: &Value, method: &str) -> JsonRpcResponse {
+    // Extract the short provider name from the full method path
+    let provider_name = method.split('/').next_back().unwrap_or(method);
+    let message = format!("Request cancelled - {} provider", provider_name);
+
+    let data = json!({
+        "provider": method,
+        "request_id": id.clone(),
+        "timestamp": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+    });
+
+    JsonRpcResponse {
+        jsonrpc: "2.0".to_string(),
+        id: Some(id.clone()),
+        result: None,
+        error: Some(JsonRpcError { code: REQUEST_CANCELLED, message, data: Some(data) }),
+    }
+}
+
 /// Create a request cancelled error
 pub fn request_cancelled_error() -> JsonRpcError {
     JsonRpcError { code: REQUEST_CANCELLED, message: "Request cancelled".to_string(), data: None }

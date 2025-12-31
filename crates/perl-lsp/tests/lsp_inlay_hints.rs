@@ -13,6 +13,15 @@ fn inlay_hints_for_substr_and_types() {
     };
     srv.handle_request(init);
 
+    // Send initialized notification to complete handshake
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    srv.handle_request(initialized);
+
     let uri = "file:///hints.pl";
     let text = r#"my $s = "abcd"; my $x = substr($s, 1, 2);"#;
     let open = JsonRpcRequest {

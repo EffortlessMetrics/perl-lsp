@@ -51,12 +51,13 @@ pub(super) fn enhanced_cancelled_response(
 }
 
 /// Macro for early cancellation check in dispatcher arms
+/// Takes the method name to include provider context in cancellation responses
 macro_rules! early_cancel_or {
-    ($self:ident, $id:expr, $handler:expr) => {{
+    ($self:ident, $id:expr, $method:expr, $handler:expr) => {{
         if let Some(ref _rid) = $id {
             if $self.is_cancelled(_rid) {
                 $self.cancel_clear(_rid);
-                return Some(cancelled_response(_rid));
+                return Some(cancelled_response_with_method(_rid, $method));
             }
         }
         $handler
@@ -108,7 +109,7 @@ impl LspServer {
         if let Some(ref request_id) = id {
             // Fast path: Check for immediate cancellation before expensive setup
             if self.is_cancelled(request_id) {
-                return Some(cancelled_response(request_id));
+                return Some(cancelled_response_with_method(request_id, &request.method));
             }
 
             // Only register cancellation token for potentially long-running operations
@@ -144,7 +145,7 @@ impl LspServer {
                             GLOBAL_CANCELLATION_REGISTRY.cancel_request(request_id).ok().flatten();
                         return Some(enhanced_cancelled_response(&token, cleanup_context.as_ref()));
                     }
-                    return Some(cancelled_response(request_id));
+                    return Some(cancelled_response_with_method(request_id, &request.method));
                 }
             }
         }
@@ -210,14 +211,14 @@ impl LspServer {
                 Err(e) => Err(e),
             },
             "textDocument/willSaveWaitUntil" => self.handle_will_save_wait_until(request.params),
-            "textDocument/completion" => early_cancel_or!(self, id, {
+            "textDocument/completion" => early_cancel_or!(self, id, "textDocument/completion", {
                 self.handle_completion_cancellable(request.params, id.as_ref())
             }),
-            "textDocument/hover" => early_cancel_or!(self, id, {
+            "textDocument/hover" => early_cancel_or!(self, id, "textDocument/hover", {
                 self.handle_hover_cancellable(request.params, id.as_ref())
             }),
             "textDocument/signatureHelp" => self.handle_signature_help(request.params),
-            "textDocument/definition" => early_cancel_or!(self, id, {
+            "textDocument/definition" => early_cancel_or!(self, id, "textDocument/definition", {
                 // Use test fallback in test mode, production handler otherwise
                 let use_fallback = std::env::var("LSP_TEST_FALLBACKS").is_ok();
                 if use_fallback {
@@ -232,7 +233,7 @@ impl LspServer {
                 }
             }),
             "textDocument/declaration" => self.handle_declaration(request.params),
-            "textDocument/references" => early_cancel_or!(self, id, {
+            "textDocument/references" => early_cancel_or!(self, id, "textDocument/references", {
                 // Use test fallback in test mode, production handler otherwise
                 let use_fallback = std::env::var("LSP_TEST_FALLBACKS").is_ok();
                 if use_fallback {
@@ -258,7 +259,7 @@ impl LspServer {
             "typeHierarchy/subtypes" => self.handle_type_hierarchy_subtypes(request.params),
             "textDocument/diagnostic" => self.handle_document_diagnostic(request.params),
             "workspace/diagnostic" => {
-                early_cancel_or!(self, id, self.handle_workspace_diagnostic(request.params))
+                early_cancel_or!(self, id, "workspace/diagnostic", self.handle_workspace_diagnostic(request.params))
             }
             "textDocument/prepareRename" => self.handle_prepare_rename(request.params),
             // GA contract: not supported in v0.8.3
@@ -268,7 +269,7 @@ impl LspServer {
                 let result = self.handle_workspace_symbols_v2(request.params);
                 #[cfg(not(feature = "workspace"))]
                 let result = self.handle_workspace_symbols(request.params);
-                early_cancel_or!(self, id, result)
+                early_cancel_or!(self, id, "workspace/symbol", result)
             }
             "workspace/symbol/resolve" => self.handle_workspace_symbol_resolve(request.params),
 
@@ -279,7 +280,7 @@ impl LspServer {
             "textDocument/semanticTokens/full" => self.handle_semantic_tokens(request.params),
             // PR 7: Inlay hints
             "textDocument/inlayHint" => {
-                early_cancel_or!(self, id, self.handle_inlay_hints(request.params))
+                early_cancel_or!(self, id, "textDocument/inlayHint", self.handle_inlay_hints(request.params))
             }
             // PR 8: Document links
             "textDocument/documentLink" => self.handle_document_links(request.params),

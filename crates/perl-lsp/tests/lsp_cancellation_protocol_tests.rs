@@ -995,7 +995,6 @@ fn generate_large_perl_content(function_count: usize) -> String {
 /// Tests feature spec: LSP_CANCELLATION_PROTOCOL.md#enhanced-error-response
 /// AC:4 - Enhanced -32800 error code responses with context and performance tracking
 #[test]
-#[ignore = "BUG: Test expects provider name in error message, but implementation returns generic message"]
 fn test_enhanced_error_response_handling_ac4() {
     let mut fixture = CancellationTestFixture::new();
 
