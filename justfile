@@ -137,6 +137,31 @@ ci-policy:
     @echo "✅ Policy checks passed"
 
 # ============================================================================
+# GitHub Repository Management
+# ============================================================================
+
+# Ensure label taxonomy exists (idempotent, safe to rerun)
+gh-labels:
+    @echo "🏷️  Ensuring label taxonomy..."
+    @bash scripts/gh/ensure-labels.sh
+    @echo "✅ Labels ready"
+
+# Show issues missing required taxonomy labels
+gh-triage:
+    @echo "🔍 Issues needing taxonomy labels..."
+    @bash scripts/gh/issues-needing-triage.sh 500
+
+# Backfill prefixed labels from legacy labels (dry run)
+gh-backfill-dry:
+    @echo "🔄 Dry run: showing labels to backfill..."
+    @bash scripts/gh/backfill-prefixed-labels.sh
+
+# Backfill prefixed labels from legacy labels (apply)
+gh-backfill:
+    @echo "🔄 Applying prefixed label backfill..."
+    @bash scripts/gh/backfill-prefixed-labels.sh --apply
+
+# ============================================================================
 # Bug Tracking (BUG category ignored tests)
 # ============================================================================
 
@@ -146,11 +171,11 @@ bugs:
     @echo "==================="
     @VERBOSE=1 bash scripts/ignored-test-count.sh 2>&1 | sed -n '/=== bug/,/===/p' | head -30
 
-# Run all Wave A bug tests (lexer boundary)
+# Wave A: COMPLETE - these were test brittleness issues, not parser bugs
 bugs-wave-a:
-    @echo "🌊 Wave A: Lexer Boundary Bugs"
-    cargo test -p perl-parser --test declaration_micro_tests -- test_word_boundary_qwerty_not_matched --nocapture --ignored || true
-    cargo test -p perl-parser --test declaration_micro_tests -- test_comment_with_qw_in_it --nocapture --ignored || true
+    @echo "✅ Wave A: Complete (tests were brittle, not bugs)"
+    @echo "   - test_word_boundary_qwerty_not_matched: fixed test expectations"
+    @echo "   - test_comment_with_qw_in_it: fixed dynamic position calculation"
 
 # Run all Wave B bug tests (substitution)
 bugs-wave-b:

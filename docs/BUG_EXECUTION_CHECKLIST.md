@@ -1,47 +1,32 @@
-# Bug Execution Checklist (BUG=10 → 0)
+# Bug Execution Checklist (BUG=8)
 
 **Generated**: 2025-12-31
+**Updated**: 2025-12-31
 **Target**: Zero bugs remaining before GA release
 
----
-
-## Wave A: Lexer Boundary Bugs (Fast, Low Risk)
-
-These are test brittleness or simple lexer boundary issues.
-
-### Bug 1: `test_word_boundary_qwerty_not_matched`
-
-**File**: `crates/perl-parser/tests/declaration_micro_tests.rs:131`
-**Issue**: Parser treats `$qwerty` as if it contains `qw` operator
-**Likely Cause**: Quote-op detection doesn't enforce word boundary after `qw`
-
-```bash
-# Run the test
-cargo test -p perl-parser --test declaration_micro_tests -- test_word_boundary_qwerty_not_matched --nocapture
-
-# Fix location: quote-op scanner / tokenization path
-# Fix: Require next char after `qw` to be delimiter/whitespace, not [A-Za-z0-9_]
-```
-
-**Definition of Done**: Remove `#[ignore]`, test passes, gate passes
+**Current Status**: Wave A complete (test brittleness, not parser bugs); Wave B/C remain
 
 ---
 
-### Bug 2: `test_comment_with_qw_in_it`
+## Wave A: Lexer Boundary Bugs (Fast, Low Risk) ✅ COMPLETE
 
-**File**: `crates/perl-parser/tests/declaration_micro_tests.rs:145`
-**Issue**: Test uses hardcoded byte offset `36` that doesn't match parser span
-**Likely Cause**: Test brittleness (hardcoded offset), not actual parser bug
+These were test brittleness issues, not actual parser bugs.
 
-```bash
-# Run the test
-cargo test -p perl-parser --test declaration_micro_tests -- test_comment_with_qw_in_it --nocapture
+### Bug 1: `test_word_boundary_qwerty_not_matched` ✅ FIXED
 
-# Fix: Change test to compute expected span via search, not literal byte offset
-# Or: Verify parser actually produces correct span, update test offset
-```
+**File**: `crates/perl-parser/tests/declaration_micro_tests.rs`
+**Resolution**: Test expectation was incorrect. The parser correctly includes sigil in span.
+- Changed from hardcoded offset expectation to dynamic position computation
+- `#[ignore]` removed, test passes as part of regular suite
 
-**Definition of Done**: Remove `#[ignore]`, test passes, gate passes
+---
+
+### Bug 2: `test_comment_with_qw_in_it` ✅ FIXED
+
+**File**: `crates/perl-parser/tests/declaration_micro_tests.rs`
+**Resolution**: Test used hardcoded byte offset `36` (a space!), not the actual variable position.
+- Changed to dynamic position computation using `code.rfind("$var")`
+- `#[ignore]` removed, test passes as part of regular suite
 
 ---
 
@@ -217,8 +202,8 @@ cargo test -p perl-parser
 
 | # | Bug | Wave | Status |
 |---|-----|------|--------|
-| 1 | test_word_boundary_qwerty_not_matched | A | ⬜ TODO |
-| 2 | test_comment_with_qw_in_it | A | ⬜ TODO |
+| 1 | test_word_boundary_qwerty_not_matched | A | ✅ FIXED |
+| 2 | test_comment_with_qw_in_it | A | ✅ FIXED |
 | 3 | test_substitution_empty_replacement_balanced_delimiters | B | ⬜ TODO |
 | 4 | test_ac2_empty_replacement_balanced_delimiters | B | ⬜ TODO |
 | 5 | test_substitution_invalid_modifier_characters | B | ⬜ TODO |
