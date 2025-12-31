@@ -105,7 +105,7 @@ These workflows provide deeper test coverage beyond the merge gate.
 |-----------|-------|
 | **Name** | Check Ignored Tests |
 | **Purpose** | Tracks ignored test count baseline to prevent regression |
-| **Trigger** | Push/PR to main/master (path-filtered: tests, src, ci/ignored_baseline.txt) |
+| **Trigger** | Push/PR to main/master (path-filtered: tests, src, scripts/.ignored-baseline) |
 | **Estimated Runtime** | 2-3 minutes |
 | **Cost Tier** | Low |
 | **Recommendation** | **KEEP** - Cheap, valuable hygiene check |
@@ -198,21 +198,23 @@ These workflows provide deeper test coverage beyond the merge gate.
 | **Cost Tier** | Low (runs only on release) |
 | **Recommendation** | **MERGE** - Duplicate with vscode-publish.yml |
 
-### vscode-publish.yml
+### `vscode-publish.yml`
 | Attribute | Value |
 |-----------|-------|
 | **Name** | Publish VS Code Extension |
 | **Purpose** | Publishes VS Code extension to Marketplace (nearly identical to publish-extension.yml) |
-| **Trigger** | Push tag v*.*.*, manual dispatch |
+| **Trigger** | Push tag `v*.*.*`, manual dispatch |
 | **Estimated Runtime** | 5-10 minutes |
 | **Cost Tier** | Low (runs only on release) |
 | **Recommendation** | **MERGE** - Duplicate with publish-extension.yml; consolidate into one |
+
+> **⚠️ Trigger Mismatch Note**: `publish-extension.yml` uses `v*` while `vscode-publish.yml` uses `v*.*.*`. Recommend standardizing on `v*` to include prerelease tags (e.g., `v0.9.0-beta.1`).
 
 ---
 
 ## 5. Deprecated/Candidates for Removal
 
-### rust-ci.yml
+### `rust-ci.yml`
 | Attribute | Value |
 |-----------|-------|
 | **Name** | Rust CI |
@@ -222,7 +224,7 @@ These workflows provide deeper test coverage beyond the merge gate.
 | **Cost Tier** | High |
 | **Recommendation** | **ARCHIVE** - References non-existent branches (develop, rust-conversion), uses xtask commands that may not work, overlaps heavily with ci.yml and test.yml |
 
-### rust.yml
+### `rust.yml`
 | Attribute | Value |
 |-----------|-------|
 | **Name** | Rust CI |

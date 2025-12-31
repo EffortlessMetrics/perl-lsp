@@ -849,12 +849,14 @@ jobs:
       CARGO_NET_RETRY: 4
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      # Supply-chain security: Pin third-party actions by commit SHA
+      # Keep version tags in comments for readability; update SHAs on a schedule
+      - uses: actions/checkout@<COMMIT_SHA> # v4
+      - uses: dtolnay/rust-toolchain@<COMMIT_SHA> # stable
         with:
           toolchain: 1.90.0
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@<COMMIT_SHA> # v2
         with:
           cache-on-failure: true
 
@@ -886,7 +888,7 @@ jobs:
             --junit target/nextest/ci/junit.xml
 
       - name: Publish test results
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: EnricoMi/publish-unit-test-result-action@<COMMIT_SHA> # v2
         if: always()
         with:
           junit_files: target/nextest/ci/junit.xml
