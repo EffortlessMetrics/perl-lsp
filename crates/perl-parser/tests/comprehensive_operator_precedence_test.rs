@@ -119,7 +119,6 @@ fn test_complete_precedence_hierarchy() {
 }
 
 #[test]
-#[ignore = "BUG: 'return' after 'or' needs deeper parser refactoring - return as expression"]
 fn test_complex_precedence_combinations() {
     // Test complex expressions that combine multiple precedence levels
 
