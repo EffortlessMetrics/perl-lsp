@@ -217,7 +217,7 @@ impl FoldingRangeExtractor {
                 self.visit_node(body);
             }
 
-            NodeKind::PhaseBlock { phase: _, block } => {
+            NodeKind::PhaseBlock { phase: _, phase_span: _, block } => {
                 // BEGIN, END, CHECK, INIT blocks
                 self.add_range_from_node(node, None);
                 self.visit_node(block);
