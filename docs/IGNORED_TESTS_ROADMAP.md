@@ -8,31 +8,30 @@
 
 | Metric | Value |
 |--------|-------|
-| **Baseline** | 41 ignored tests (stored in `ci/ignored_baseline.txt`) |
+| **Baseline** | Tracked via `scripts/.ignored-baseline` |
 | **Target** | <=25 ignored tests |
-| **Required Reduction** | 16+ tests (49% target achievement) |
-| **Current Status** | 5 hard `#[ignore]` + 21 `cfg_attr` feature-gated = 26 total |
-| **Progress** | Wave A complete, Wave B complete (see below) |
+| **Current Status** | **BUG=0**, MANUAL=1, total hard ignores=1 ✅ |
+| **Progress** | Waves A, B, C complete (see below) |
 
 ### Current Breakdown
 
 | Category | Count | Status |
 |----------|-------|--------|
-| **Hard `#[ignore]`** | 5 | Active ignores needing resolution |
+| **Hard `#[ignore]`** | 1 | Only MANUAL utility test |
 | **Feature-gated (`cfg_attr`)** | 21 | By design, run with features |
 | **MANUAL** | 1 | `lsp_capabilities_snapshot.rs` - keep |
-| **BUG** | 3 | Parser limitations documented |
-| **Other** | 1 | Parsing strictness test |
+| **BUG** | 0 | All fixed in PR #261 ✅ |
 
-### Hard `#[ignore]` Tests (5 total)
+### Hard `#[ignore]` Tests (1 total)
 
 | File | Test | Category |
 |------|------|----------|
 | `lsp_capabilities_snapshot.rs:62` | `regenerate_snapshots` | MANUAL |
-| `substitution_ac_tests.rs:268` | `test_ac5_negative_malformed` | BUG |
-| `prop_whitespace_idempotence.rs:38` | `insertion_safe_is_consistent` | BUG |
-| `comprehensive_operator_precedence_test.rs:122` | `test_complex_precedence_combinations` | BUG |
-| `parser_regressions.rs:85` | `print_filehandle_then_variable_is_indirect` | BUG |
+
+**Track current count:**
+```bash
+bash scripts/ignored-test-count.sh
+```
 
 ---
 
@@ -111,31 +110,17 @@ cargo test -p perl-parser --test substitution_ac_tests -- test_ac2_invalid_flag_
 
 ---
 
-## Wave C: Parser Limitations - TODO
+## Wave C: Parser Limitations - COMPLETE ✅
 
-**Status**: 0/4 tests fixed
-**Type**: Known parser limitations requiring deeper refactoring
-**Priority**: MEDIUM - Edge cases
-**Documentation**: See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md)
+**Status**: 4/4 tests FIXED (PR #261)
+**Type**: Parser robustness improvements addressing edge cases
+**Completed**: 2025-12-31
 
-### C.1: Return After `or` Precedence
+### C.1: Return After `or` Precedence - FIXED ✅
 
 **File**: `crates/perl-parser/tests/comprehensive_operator_precedence_test.rs:122`
-
 **Test Name**: `test_complex_precedence_combinations`
-
-**Ignore Reason**: `"BUG: 'return' after 'or' needs deeper parser refactoring - return as expression"`
-
-**Issue**: `$a = 1 or return` doesn't parse correctly
-
-**Root Cause**: `return` needs to be treated as an expression in this context, not a statement.
-
-**Fix Strategy**:
-1. Investigate operator precedence table for word operators
-2. Consider treating `return` as expression when following `or`/`and`
-3. May require parser architecture changes
-
-**Complexity**: HIGH - Affects operator precedence fundamentals
+**Resolution**: Fixed in PR #261 - improved operator precedence handling
 
 **Validation**:
 ```bash
@@ -144,28 +129,11 @@ cargo test -p perl-parser --test comprehensive_operator_precedence_test -- test_
 
 ---
 
-### C.2: Indirect Object Detection
+### C.2: Indirect Object Detection - FIXED ✅
 
 **File**: `crates/perl-parser/tests/parser_regressions.rs:85`
-
 **Test Name**: `print_filehandle_then_variable_is_indirect`
-
-**Ignore Reason**: `"BUG: Indirect object detection requires deeper parser refactoring"`
-
-**Issue**: `print $fh $x;` not treated as indirect object form
-
-**Root Cause**: Ambiguous syntax requires semantic analysis to disambiguate.
-
-**Policy Decision Required**:
-- `print $fh $x;` - indirect object OR `print($fh, $x)`?
-- `new Class $arg;` - indirect object OR function call?
-
-**Fix Strategy**:
-1. Define disambiguation rules
-2. Implement heuristics for common patterns (print/say/new/open)
-3. Document edge cases in KNOWN_LIMITATIONS.md
-
-**Complexity**: HIGH - Perl's ambiguous syntax
+**Resolution**: Fixed in PR #261 - improved indirect object heuristics
 
 **Validation**:
 ```bash
@@ -174,24 +142,11 @@ cargo test -p perl-parser --test parser_regressions -- print_filehandle_then_var
 
 ---
 
-### C.3: Insertion Safe Algorithm
+### C.3: Insertion Safe Algorithm - FIXED ✅
 
 **File**: `crates/perl-parser/tests/prop_whitespace_idempotence.rs:38`
-
 **Test Name**: `insertion_safe_is_consistent`
-
-**Ignore Reason**: `"insertion_safe algorithm has known inconsistencies"`
-
-**Issue**: `insertion_safe` function produces non-deterministic results.
-
-**Root Cause**: Likely iteration order dependency (HashMap iteration without sorting).
-
-**Fix Strategy**:
-1. Make function deterministic (define ordering for iteration)
-2. Avoid HashMap iteration without sorting
-3. Add normalization step before comparison
-
-**Complexity**: MEDIUM
+**Resolution**: Fixed in PR #261 - made algorithm deterministic
 
 **Validation**:
 ```bash
@@ -200,33 +155,11 @@ cargo test -p perl-parser --test prop_whitespace_idempotence -- insertion_safe_i
 
 ---
 
-### C.4: Malformed Substitution Operators
+### C.4: Malformed Substitution Operators - FIXED ✅
 
 **File**: `crates/perl-parser/tests/substitution_ac_tests.rs:268`
-
 **Test Name**: `test_ac5_negative_malformed`
-
-**Ignore Reason**: `"Exposes parsing strictness issues - will kill various mutants when parsing is hardened"`
-
-**Issue**: Malformed substitution operators don't reliably error.
-
-**Test Cases**:
-```perl
-s/pattern/           # Missing replacement and closing delimiter
-s/pattern            # Missing replacement delimiter and replacement
-s/pattern/replacement # Missing closing delimiter
-s                    # Just the 's' keyword
-s/                   # Just 's' and opening delimiter
-s//                  # Missing replacement
-s/pattern/replacement/invalid_flag  # Invalid flag
-```
-
-**Fix Strategy**:
-1. Define expected behavior: parse must error, OR parse succeeds but `has_error()` returns true
-2. Fix parser error propagation
-3. Update test acceptance condition
-
-**Complexity**: MEDIUM
+**Resolution**: Fixed in PR #261 - improved substitution validation
 
 **Validation**:
 ```bash
@@ -295,42 +228,32 @@ cargo test -p perl-lsp --test lsp_capabilities_snapshot regenerate -- --ignored
 
 | Wave | Tests | Fixed | Remaining | Priority |
 |------|-------|-------|-----------|----------|
-| A: Brittleness | 2 | 2 | 0 | COMPLETE |
-| B: Substitution | 4 | 4 | 0 | COMPLETE |
-| C: Limitations | 4 | 0 | 4 | MEDIUM |
-| D: Audit | 0 | - | - | N/A |
-| **Total Hard Ignores** | **5** | - | **5** | - |
+| A: Brittleness | 2 | 2 | 0 | COMPLETE ✅ |
+| B: Substitution | 4 | 4 | 0 | COMPLETE ✅ |
+| C: Limitations | 4 | 4 | 0 | COMPLETE ✅ |
+| D: Feature-Gated | 21 | - | - | BY DESIGN |
+| **Total Hard Ignores** | **1** | - | **1** | MANUAL utility only |
 
 ### Current Hard Ignores
 
 | # | Test | Wave | Status |
 |---|------|------|--------|
-| 1 | `regenerate_snapshots` | MANUAL | Keep ignored |
-| 2 | `test_ac5_negative_malformed` | C | TODO |
-| 3 | `insertion_safe_is_consistent` | C | TODO |
-| 4 | `test_complex_precedence_combinations` | C | TODO |
-| 5 | `print_filehandle_then_variable_is_indirect` | C | TODO |
+| 1 | `regenerate_snapshots` | MANUAL | Keep ignored (utility) |
 
 ### Commands
 
 ```bash
 # Count current ignored tests
-scripts/ignored-test-count.sh
+bash scripts/ignored-test-count.sh
 
 # Verbose with categories
-VERBOSE=1 scripts/ignored-test-count.sh
+VERBOSE=1 bash scripts/ignored-test-count.sh
 
 # Update baseline after fixing tests
-scripts/ignored-test-count.sh --update
+bash scripts/ignored-test-count.sh --update
 
 # CI gate (fails if increased)
-scripts/ignored-test-count.sh --check
-
-# Run all Wave C tests (ignored)
-cargo test -p perl-parser --test comprehensive_operator_precedence_test -- --ignored --nocapture
-cargo test -p perl-parser --test parser_regressions -- --ignored --nocapture
-cargo test -p perl-parser --test prop_whitespace_idempotence -- --ignored --nocapture
-cargo test -p perl-parser --test substitution_ac_tests -- test_ac5_negative_malformed --ignored --nocapture
+bash scripts/ignored-test-count.sh --check
 ```
 
 ---
@@ -345,12 +268,12 @@ For each test fix:
 4. Update baseline: `scripts/ignored-test-count.sh --update`
 5. Verify gate passes: `scripts/gate-local.sh`
 
-### Target Achievement
+### Target Achievement ✅
 
 - [x] Wave A complete (2/2 tests fixed)
 - [x] Wave B complete (4/4 tests fixed)
-- [ ] Wave C complete (0/4 tests fixed)
-- [ ] Final count <=25 (currently at 5 hard ignores, 21 feature-gated)
+- [x] Wave C complete (4/4 tests fixed) - PR #261
+- [x] Final count <=25 ✅ (1 hard ignore MANUAL + 21 feature-gated)
 
 ---
 

@@ -480,7 +480,7 @@ impl LspServer {
     /// Check if a symbol name appears in @EXPORT or @EXPORT_OK
     fn is_symbol_exported(&self, text: &str, symbol_name: &str) -> bool {
         let export_re =
-            regex::Regex::new(r"@EXPORT(?:_OK)?\s*=\s*qw[(\[{/|!]([^)\]}/|!]+)[)\]}/|!]").ok();
+            regex::Regex::new(r"@EXPORT(?:_OK)?\s*=\s*qw[(\[{/<|!]([^)\]}/|!>]+)[)\]}/|!>]").ok();
 
         if let Some(re) = export_re {
             for cap in re.captures_iter(text) {
@@ -511,42 +511,13 @@ impl LspServer {
 
     /// Check if a symbol is imported from another module
     fn is_symbol_imported(&self, ast: &crate::ast::Node, symbol_name: &str) -> bool {
-        use crate::ast::NodeKind;
-
-        fn check(node: &crate::ast::Node, name: &str) -> bool {
-            match &node.kind {
-                NodeKind::Use { args, .. } => {
-                    for arg in args {
-                        if arg == name {
-                            return true;
-                        }
-                        if arg.starts_with("qw") {
-                            let content = arg
-                                .trim_start_matches("qw")
-                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                            if content.split_whitespace().any(|w| w == name) {
-                                return true;
-                            }
-                        }
-                    }
-                }
-                NodeKind::Program { statements } | NodeKind::Block { statements } => {
-                    for stmt in statements {
-                        if check(stmt, name) {
-                            return true;
-                        }
-                    }
-                }
-                _ => {}
-            }
-            false
-        }
-
-        check(ast, symbol_name)
+        self.find_import_source(ast, symbol_name).is_some()
     }
 
     /// Find the source module for an imported symbol
+    ///
+    /// Searches `use` statements for the symbol name, handling both bare imports
+    /// and `qw<...>` style import lists with all delimiter types.
     fn find_import_source(&self, ast: &crate::ast::Node, symbol_name: &str) -> Option<String> {
         use crate::ast::NodeKind;
 
@@ -558,6 +529,7 @@ impl LspServer {
                             return Some(module.clone());
                         }
                         if arg.starts_with("qw") {
+                            // Support all qw delimiters: (), [], {}, <>, //, ||, !!
                             let content = arg
                                 .trim_start_matches("qw")
                                 .trim_start_matches(|c: char| "([{/<|!".contains(c))
