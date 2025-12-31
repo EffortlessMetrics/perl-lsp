@@ -165,11 +165,14 @@ fn create_comprehensive_workspace_with_init() -> (LspHarness, TempWorkspace, ser
     let workspace = TempWorkspace::new().expect("Failed to create temp workspace");
 
     // Write all files to disk
-    workspace.write("lib/MyApp/DataProcessor.pm", e2e_fixtures::REALISTIC_PERL_MODULE)
+    workspace
+        .write("lib/MyApp/DataProcessor.pm", e2e_fixtures::REALISTIC_PERL_MODULE)
         .expect("Failed to write module file");
-    workspace.write("test_script.pl", e2e_fixtures::TEST_SCRIPT)
+    workspace
+        .write("test_script.pl", e2e_fixtures::TEST_SCRIPT)
         .expect("Failed to write script file");
-    workspace.write(".perlcriticrc", e2e_fixtures::PERLCRITIC_CONFIG)
+    workspace
+        .write(".perlcriticrc", e2e_fixtures::PERLCRITIC_CONFIG)
         .expect("Failed to write config file");
 
     let mut harness = LspHarness::new_without_initialize();

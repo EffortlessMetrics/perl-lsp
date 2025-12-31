@@ -169,7 +169,10 @@ mod modern_perl_syntax {
 
         let signature_cases = vec![
             // Basic signatures
-            ("sub foo ($x) { return $x + 1; }", &["subroutine_declaration", "signature", "parameter"]),
+            (
+                "sub foo ($x) { return $x + 1; }",
+                &["subroutine_declaration", "signature", "parameter"],
+            ),
             (
                 "sub bar ($x, $y) { return $x + $y; }",
                 &["subroutine_declaration", "signature", "parameter"],
@@ -222,11 +225,15 @@ mod modern_perl_syntax {
         // AC7: Default parameter values
         // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#subroutine-signature-parser
 
-        let mut parser = create_parser().context("Failed to create parser for default value tests")?;
+        let mut parser =
+            create_parser().context("Failed to create parser for default value tests")?;
 
         let default_value_cases = vec![
             // Simple defaults
-            ("sub foo ($x, $y = 10) { return $x + $y; }", &["parameter", "default_value", "number"]),
+            (
+                "sub foo ($x, $y = 10) { return $x + $y; }",
+                &["parameter", "default_value", "number"],
+            ),
             (
                 "sub bar ($name = 'anonymous') { return $name; }",
                 &["parameter", "default_value", "string"],
@@ -265,7 +272,11 @@ mod modern_perl_syntax {
             // Validate default value parsing
             if let Some(sub_node) = find_subroutine_node(&root) {
                 let default_params = count_parameters_with_defaults(&sub_node);
-                assert!(default_params > 0, "Should have parameters with default values for: {}", code);
+                assert!(
+                    default_params > 0,
+                    "Should have parameters with default values for: {}",
+                    code
+                );
 
                 // Validate default value expressions
                 validate_default_value_expressions(&sub_node, code)?;
@@ -403,7 +414,10 @@ mod modern_perl_syntax {
             ("my $first = ($ref->@*)[0];", &["postfix_deref", "array_access"]),
             // Complex expressions
             ("my @sorted = sort $ref->@*;", &["function_call", "postfix_deref"]),
-            ("my @processed = map { $_ * 2 } $ref->@*;", &["function_call", "postfix_deref", "block"]),
+            (
+                "my @processed = map { $_ * 2 } $ref->@*;",
+                &["function_call", "postfix_deref", "block"],
+            ),
         ];
 
         for (code, expected_nodes) in array_deref_cases {
@@ -469,7 +483,10 @@ mod modern_perl_syntax {
             ("my @items = $ref->@*->@*;", &["postfix_deref", "array_deref", "chained_deref"]),
             // Complex chaining
             ("my %result = $ref->@*->[0]->%*;", &["postfix_deref", "array_access", "hash_deref"]),
-            ("my $deep = $ref->%*->{key}->@*->[0];", &["postfix_deref", "hash_access", "array_access"]),
+            (
+                "my $deep = $ref->%*->{key}->@*->[0];",
+                &["postfix_deref", "hash_access", "array_access"],
+            ),
             // Chaining with method calls
             (
                 "my @processed = $ref->@*->map(sub { $_ * 2 })->@*;",
@@ -504,7 +521,8 @@ mod modern_perl_syntax {
         // AC9: State variable parsing
         // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#state-variable-parser
 
-        let mut parser = create_parser().context("Failed to create parser for state variable tests")?;
+        let mut parser =
+            create_parser().context("Failed to create parser for state variable tests")?;
 
         let state_variable_cases = vec![
             // Basic state declarations
@@ -636,7 +654,10 @@ mod modern_perl_syntax {
             ("sub process_データ { }", &["subroutine_declaration", "mixed_identifier"]),
             // Unicode in different contexts
             ("$object->méthode();", &["method_call", "unicode_identifier"]),
-            ("my $résultat = $obj->データ;", &["scalar_variable", "unicode_identifier", "method_call"]),
+            (
+                "my $résultat = $obj->データ;",
+                &["scalar_variable", "unicode_identifier", "method_call"],
+            ),
             // Unicode package names
             ("use モジュール::テスト;", &["use_statement", "unicode_package_name"]),
             ("require Ελληνικά::Κλάση;", &["require_statement", "unicode_package_name"]),
@@ -687,7 +708,11 @@ mod modern_perl_syntax {
                 let has_errors = root.has_error();
 
                 if should_be_valid {
-                    assert!(!has_errors, "Valid Unicode code should parse without errors: {}", code);
+                    assert!(
+                        !has_errors,
+                        "Valid Unicode code should parse without errors: {}",
+                        code
+                    );
 
                     // Additional security validation would be implemented here
                     // This would check for homograph attacks, normalization issues, etc.

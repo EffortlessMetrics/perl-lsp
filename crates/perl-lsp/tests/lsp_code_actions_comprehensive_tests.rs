@@ -197,7 +197,8 @@ fn create_capabilities_test_server() -> (LspHarness, TempWorkspace, serde_json::
     let workspace = TempWorkspace::new().expect("Failed to create temp workspace");
 
     // Write test files
-    workspace.write("test.pl", code_actions_fixtures::REFACTORING_OPPORTUNITIES_FILE)
+    workspace
+        .write("test.pl", code_actions_fixtures::REFACTORING_OPPORTUNITIES_FILE)
         .expect("Failed to write file");
 
     let mut harness = LspHarness::new_without_initialize();
@@ -249,19 +250,14 @@ fn test_code_action_server_capabilities() {
             assert!(has_quickfix, "Server should support 'quickfix' code action kind");
 
             // Log what kinds are available for diagnostic purposes
-            let available_kinds: Vec<&str> = kinds_array
-                .iter()
-                .filter_map(|k| k.as_str())
-                .collect();
+            let available_kinds: Vec<&str> =
+                kinds_array.iter().filter_map(|k| k.as_str()).collect();
             eprintln!("Available code action kinds: {:?}", available_kinds);
         }
 
         // Check for resolve provider capability (optional but validate type if present)
         if let Some(resolve_provider) = code_action_provider.get("resolveProvider") {
-            assert!(
-                resolve_provider.is_boolean(),
-                "resolveProvider should be boolean"
-            );
+            assert!(resolve_provider.is_boolean(), "resolveProvider should be boolean");
         }
     } else {
         panic!("codeActionProvider should be boolean or object");

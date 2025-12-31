@@ -137,6 +137,38 @@ ci-policy:
     @echo "✅ Policy checks passed"
 
 # ============================================================================
+# Bug Tracking (BUG category ignored tests)
+# ============================================================================
+
+# Show current bug status
+bugs:
+    @echo "🐛 Bug Queue Status"
+    @echo "==================="
+    @VERBOSE=1 bash scripts/ignored-test-count.sh 2>&1 | sed -n '/=== bug/,/===/p' | head -30
+
+# Run all Wave A bug tests (lexer boundary)
+bugs-wave-a:
+    @echo "🌊 Wave A: Lexer Boundary Bugs"
+    cargo test -p perl-parser --test declaration_micro_tests -- test_word_boundary_qwerty_not_matched --nocapture --ignored || true
+    cargo test -p perl-parser --test declaration_micro_tests -- test_comment_with_qw_in_it --nocapture --ignored || true
+
+# Run all Wave B bug tests (substitution)
+bugs-wave-b:
+    @echo "🌊 Wave B: Substitution Operator Bugs"
+    cargo test -p perl-parser --test substitution_operator_tests -- test_substitution_empty_replacement_balanced_delimiters --nocapture --ignored || true
+    cargo test -p perl-parser --test substitution_ac_tests -- test_ac2_empty_replacement_balanced_delimiters --nocapture --ignored || true
+    cargo test -p perl-parser --test substitution_operator_tests -- test_substitution_invalid_modifier_characters --nocapture --ignored || true
+    cargo test -p perl-parser --test substitution_ac_tests -- test_ac2_invalid_flag_combinations --nocapture --ignored || true
+
+# Run all Wave C bug tests (harder semantics)
+bugs-wave-c:
+    @echo "🌊 Wave C: Semantic Bugs"
+    cargo test -p perl-parser --test substitution_ac_tests -- test_ac5_negative_malformed --nocapture --ignored || true
+    cargo test -p perl-parser --test prop_whitespace_idempotence -- insertion_safe_is_consistent --nocapture --ignored || true
+    cargo test -p perl-parser --test comprehensive_operator_precedence_test -- test_complex_precedence_combinations --nocapture --ignored || true
+    cargo test -p perl-parser --test parser_regressions -- print_filehandle_then_variable_is_indirect --nocapture --ignored || true
+
+# ============================================================================
 # Health Scoreboard (keep yourself honest)
 # ============================================================================
 

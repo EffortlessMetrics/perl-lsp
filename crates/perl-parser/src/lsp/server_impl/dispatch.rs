@@ -259,7 +259,12 @@ impl LspServer {
             "typeHierarchy/subtypes" => self.handle_type_hierarchy_subtypes(request.params),
             "textDocument/diagnostic" => self.handle_document_diagnostic(request.params),
             "workspace/diagnostic" => {
-                early_cancel_or!(self, id, "workspace/diagnostic", self.handle_workspace_diagnostic(request.params))
+                early_cancel_or!(
+                    self,
+                    id,
+                    "workspace/diagnostic",
+                    self.handle_workspace_diagnostic(request.params)
+                )
             }
             "textDocument/prepareRename" => self.handle_prepare_rename(request.params),
             // GA contract: not supported in v0.8.3
@@ -280,7 +285,12 @@ impl LspServer {
             "textDocument/semanticTokens/full" => self.handle_semantic_tokens(request.params),
             // PR 7: Inlay hints
             "textDocument/inlayHint" => {
-                early_cancel_or!(self, id, "textDocument/inlayHint", self.handle_inlay_hints(request.params))
+                early_cancel_or!(
+                    self,
+                    id,
+                    "textDocument/inlayHint",
+                    self.handle_inlay_hints(request.params)
+                )
             }
             // PR 8: Document links
             "textDocument/documentLink" => self.handle_document_links(request.params),

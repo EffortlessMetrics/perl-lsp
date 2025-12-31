@@ -431,11 +431,7 @@ mod tests {
     #[test]
     fn test_format_simple_code() {
         // Self-skip if perltidy is not available
-        if std::process::Command::new("perltidy")
-            .arg("--version")
-            .output()
-            .is_err()
-        {
+        if std::process::Command::new("perltidy").arg("--version").output().is_err() {
             eprintln!("SKIP: perltidy not installed, skipping formatting integration test");
             return;
         }
