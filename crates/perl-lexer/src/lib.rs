@@ -2131,8 +2131,9 @@ impl<'a> PerlLexer<'a> {
             }
         }
 
-        // Parse replacement - same delimiter handling
-        if is_paired {
+        // Parse replacement - may use different delimiter for paired patterns (e.g., s[foo]{bar})
+        // MUT_002 fix: Detect the actual replacement delimiter instead of assuming same as pattern
+        let (repl_delimiter, repl_closing, repl_is_paired) = if is_paired {
             // Skip whitespace between pattern and replacement for paired delimiters
             while let Some(ch) = self.current_char() {
                 if ch.is_whitespace() {
@@ -2142,12 +2143,33 @@ impl<'a> PerlLexer<'a> {
                 }
             }
 
-            // Expect opening delimiter for replacement
-            if self.current_char() == Some(delimiter) {
-                self.advance();
-                depth = 1;
+            // Detect replacement delimiter - may be different from pattern delimiter
+            if let Some(repl_delim) = self.current_char() {
+                if matches!(repl_delim, '{' | '[' | '(' | '<') {
+                    let repl_close = match repl_delim {
+                        '{' => '}',
+                        '[' => ']',
+                        '(' => ')',
+                        '<' => '>',
+                        _ => repl_delim,
+                    };
+                    self.advance();
+                    depth = 1;
+                    (repl_delim, repl_close, true)
+                } else {
+                    // Non-paired replacement after paired pattern (unusual but valid)
+                    self.advance();
+                    depth = 1;
+                    (repl_delim, repl_delim, false)
+                }
+            } else {
+                // End of input - return what we have
+                (delimiter, closing, is_paired)
             }
-        }
+        } else {
+            // Non-paired delimiter - replacement uses same delimiter
+            (delimiter, closing, false)
+        };
 
         while let Some(ch) = self.current_char() {
             match ch {
@@ -2157,13 +2179,13 @@ impl<'a> PerlLexer<'a> {
                         self.advance();
                     }
                 }
-                _ if ch == delimiter && is_paired => {
+                _ if ch == repl_delimiter && repl_is_paired => {
                     depth += 1;
                     self.advance();
                 }
-                _ if ch == closing => {
+                _ if ch == repl_closing => {
                     self.advance();
-                    if is_paired {
+                    if repl_is_paired {
                         depth = depth.saturating_sub(1);
                         if depth == 0 {
                             break;

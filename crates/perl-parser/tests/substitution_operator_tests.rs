@@ -238,8 +238,8 @@ fn test_substitution_empty_replacement_balanced_delimiters() {
 }
 
 #[test]
-#[ignore = "Known issue: Parser currently swallows trailing code after balanced delimiter substitutions (MUT_002 regression)"]
 // MUT_002 Regression Test: Verify trailing code survives after balanced delimiter substitution operators
+// Fixed in lexer: parse_substitution now detects replacement delimiter independently
 // This is critical to prevent the lexer from swallowing trailing code after balanced delimiters
 // NOTE: Real Perl supports this syntax: `s[foo]{bar}; $x = 1;` - both statements should be parsed
 fn test_substitution_balanced_delimiters_with_trailing_code() {
