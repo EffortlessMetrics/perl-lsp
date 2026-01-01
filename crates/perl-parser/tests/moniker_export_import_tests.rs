@@ -15,8 +15,8 @@
 
 #[cfg(test)]
 mod moniker_export_import_tests {
-    use perl_parser::ast::{Node, NodeKind, SourceLocation};
     use perl_parser::Parser;
+    use perl_parser::ast::{Node, NodeKind, SourceLocation};
 
     // ========================================================================
     // Helper Functions
@@ -41,10 +41,7 @@ mod moniker_export_import_tests {
 
     /// Create a Program node containing multiple Use statements
     fn create_program_with_uses(uses: Vec<Node>) -> Node {
-        Node::new(
-            NodeKind::Program { statements: uses },
-            SourceLocation { start: 0, end: 0 },
-        )
+        Node::new(NodeKind::Program { statements: uses }, SourceLocation { start: 0, end: 0 })
     }
 
     // ========================================================================
@@ -361,15 +358,11 @@ package MyModule;
         // Tests feature spec: PR #262 - Use statements within nested blocks
         let use_node = create_use_node("warnings", vec![]);
         let block = Node::new(
-            NodeKind::Block {
-                statements: vec![use_node],
-            },
+            NodeKind::Block { statements: vec![use_node] },
             SourceLocation { start: 0, end: 0 },
         );
         let program = Node::new(
-            NodeKind::Program {
-                statements: vec![block],
-            },
+            NodeKind::Program { statements: vec![block] },
             SourceLocation { start: 0, end: 0 },
         );
 
@@ -438,10 +431,8 @@ package MyModule;
             if let NodeKind::Use { module, args } = &statements[0].kind {
                 assert_eq!(module, "List::Util");
                 // The find_import_source logic would split on whitespace
-                let content = args[0]
-                    .trim_start_matches("qw")
-                    .trim_start_matches('<')
-                    .trim_end_matches('>');
+                let content =
+                    args[0].trim_start_matches("qw").trim_start_matches('<').trim_end_matches('>');
                 assert!(content.split_whitespace().any(|w| w == "first"));
             }
         }
