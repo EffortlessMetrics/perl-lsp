@@ -254,9 +254,9 @@ fn test_substitution_balanced_delimiters_with_trailing_code() {
         ("s{x}{y}; if (1) { }", 2, "Substitution + if block"),
         ("s{a}{b}; s[c][d]; s(e)(f);", 3, "Three substitutions with different delimiters"),
         (
-            "s[test][value]; $var =~ s/old/new/g;",
+            "s[test]{value}; $var =~ s/old/new/g;",
             2,
-            "Substitution + bind operator with substitution",
+            "Mixed balanced delimiters + bind operator with substitution",
         ),
         ("s{}{empty}; print 'hello';", 2, "Empty pattern substitution + print statement"),
         ("s<pattern><replacement>; my ($a, $b) = @_;", 2, "Substitution + list assignment"),
