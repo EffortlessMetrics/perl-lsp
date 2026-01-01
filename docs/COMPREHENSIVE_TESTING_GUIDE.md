@@ -32,7 +32,7 @@ This guide documents the comprehensive testing infrastructure implemented in **P
 ```
 
 **Key Capabilities**:
-- **Baseline Tracking**: Maintains baseline of ignored test count in `ci/ignored_baseline.txt`
+- **Baseline Tracking**: Maintains baseline of ignored test count in `scripts/.ignored-baseline`
 - **Progress Monitoring**: Real-time calculation of reduction progress toward 49% target
 - **Budget Validation**: Enforces ≤25 ignored tests (Issue #144 target achievement)
 - **Regression Prevention**: CI fails if ignored test count increases above baseline

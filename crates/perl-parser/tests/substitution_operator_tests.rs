@@ -238,6 +238,85 @@ fn test_substitution_empty_replacement_balanced_delimiters() {
 }
 
 #[test]
+#[ignore = "Known issue: Parser currently swallows trailing code after balanced delimiter substitutions (MUT_002 regression)"]
+// MUT_002 Regression Test: Verify trailing code survives after balanced delimiter substitution operators
+// This is critical to prevent the lexer from swallowing trailing code after balanced delimiters
+// NOTE: Real Perl supports this syntax: `s[foo]{bar}; $x = 1;` - both statements should be parsed
+fn test_substitution_balanced_delimiters_with_trailing_code() {
+    // Test cases that specifically target the trailing code parsing after balanced delimiters
+    // Each case verifies that both the substitution and subsequent statements are properly parsed
+    let test_cases = vec![
+        ("s[foo]{bar}; $x = 1;", 2, "Substitution + expression statement"),
+        ("s{foo}{bar}; print;", 2, "Substitution + function call"),
+        ("s(foo)(bar); $x++;", 2, "Substitution + postfix increment"),
+        ("s<foo><bar>; my $y = 1;", 2, "Substitution + variable declaration"),
+        ("s[pattern]{repl}; s/a/b/;", 2, "Two substitutions"),
+        ("s{x}{y}; if (1) { }", 2, "Substitution + if block"),
+        ("s{a}{b}; s[c][d]; s(e)(f);", 3, "Three substitutions with different delimiters"),
+        (
+            "s[test][value]; $var =~ s/old/new/g;",
+            2,
+            "Substitution + bind operator with substitution",
+        ),
+        ("s{}{empty}; print 'hello';", 2, "Empty pattern substitution + print statement"),
+        ("s<pattern><replacement>; my ($a, $b) = @_;", 2, "Substitution + list assignment"),
+    ];
+
+    for (code, expected_stmt_count, description) in test_cases {
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap_or_else(|err| {
+            panic!("Parse failed for test case '{}': {}\nCode: {}", description, err, code)
+        });
+
+        if let NodeKind::Program { statements } = &ast.kind {
+            assert_eq!(
+                statements.len(),
+                expected_stmt_count,
+                "Statement count mismatch for test case '{}': expected {} statements but got {}\nCode: {}",
+                description,
+                expected_stmt_count,
+                statements.len(),
+                code
+            );
+
+            // Verify first statement is a substitution
+            if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
+                if !matches!(expression.kind, NodeKind::Substitution { .. }) {
+                    panic!(
+                        "First statement should be Substitution for test case '{}', got {:?}\nCode: {}",
+                        description, expression.kind, code
+                    );
+                }
+            } else {
+                panic!(
+                    "First statement should be ExpressionStatement containing Substitution for test case '{}', got {:?}\nCode: {}",
+                    description, statements[0].kind, code
+                );
+            }
+
+            // For multi-statement cases, verify subsequent statements exist and are properly parsed
+            if expected_stmt_count > 1 {
+                for (idx, stmt) in statements.iter().enumerate().skip(1) {
+                    assert!(
+                        !matches!(stmt.kind, NodeKind::Error { .. }),
+                        "Statement {} should not be Error for test case '{}', got {:?}\nCode: {}",
+                        idx,
+                        description,
+                        stmt.kind,
+                        code
+                    );
+                }
+            }
+        } else {
+            panic!(
+                "Expected Program node for test case '{}', got {:?}\nCode: {}",
+                description, ast.kind, code
+            );
+        }
+    }
+}
+
+#[test]
 // #[ignore = "substitution operator not implemented"]
 fn test_substitution_with_expressions() {
     // Test the /e modifier which evaluates replacement as Perl code
