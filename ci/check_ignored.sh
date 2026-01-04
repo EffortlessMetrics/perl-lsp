@@ -4,10 +4,11 @@ set -euo pipefail
 
 count_ignores () {
   if command -v rg &>/dev/null; then
-    rg "^\s*#\[ignore\b" "$1" --count-matches 2>/dev/null | awk -F: '{sum+=$2} END {print sum+0}'
+    # rg returns exit 1 when no matches; suppress it to work with pipefail
+    (rg "^\s*#\[ignore\b" "$1" --count-matches 2>/dev/null || true) | awk -F: '{sum+=$2} END {print sum+0}'
   else
-    # Fallback: crude but portable
-    grep -R "^[[:space:]]*#\[ignore" "$1" 2>/dev/null | wc -l | awk '{print $1+0}'
+    # Fallback: crude but portable (grep also returns exit 1 on no match)
+    (grep -R "^[[:space:]]*#\[ignore" "$1" 2>/dev/null || true) | wc -l | awk '{print $1+0}'
   fi
 }
 
