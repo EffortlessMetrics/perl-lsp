@@ -15,8 +15,8 @@
 
 #[cfg(test)]
 mod moniker_export_import_tests {
-    use perl_parser::ast::{Node, NodeKind, SourceLocation};
     use perl_parser::Parser;
+    use perl_parser::ast::{Node, NodeKind, SourceLocation};
 
     // ========================================================================
     // Helper Functions
@@ -41,124 +41,61 @@ mod moniker_export_import_tests {
 
     /// Create a Program node containing multiple Use statements
     fn create_program_with_uses(uses: Vec<Node>) -> Node {
-        Node::new(
-            NodeKind::Program { statements: uses },
-            SourceLocation { start: 0, end: 0 },
-        )
+        Node::new(NodeKind::Program { statements: uses }, SourceLocation { start: 0, end: 0 })
     }
 
     // ========================================================================
-    // @EXPORT Detection Tests - qw Delimiter Support
+    // @EXPORT Detection Tests - qw Delimiter Support (Data-Driven)
     // ========================================================================
 
+    /// Data-driven test: verify all qw delimiter variants parse correctly and produce valid AST
     #[test]
-    fn test_export_qw_angle_brackets() {
-        // Tests feature spec: PR #262 - qw<> delimiter support for @EXPORT
-        let code = r#"
-package MyModule;
-@EXPORT = qw<foo bar baz>;
-"#;
-        let text = code;
-        let ast = parse_code(code);
+    fn test_export_qw_delimiter_variants_parse() {
+        // Tests feature spec: PR #262 - All qw delimiter forms for @EXPORT
+        let cases = [
+            ("qw<foo bar baz>", "<>"),
+            ("qw(foo bar baz)", "()"),
+            ("qw[foo bar baz]", "[]"),
+            ("qw{foo bar baz}", "{}"),
+            ("qw/foo bar baz/", "//"),
+            ("qw|foo bar baz|", "||"),
+            ("qw!foo bar baz!", "!!"),
+        ];
 
-        // Use the AST to verify parsing succeeds
-        assert!(matches!(ast.kind, NodeKind::Program { .. }));
+        for (qw_form, desc) in cases {
+            let code = format!("package MyModule;\n@EXPORT = {};\n", qw_form);
+            let ast = parse_code(&code);
+            assert!(
+                matches!(ast.kind, NodeKind::Program { .. }),
+                "Parser should produce Program node for qw{} delimiter",
+                desc
+            );
 
-        // Verify the regex pattern would match this format
-        // Pattern: @EXPORT(?:_OK)?\s*=\s*qw[(\[{/<|!]([^)\]}/|!>]+)[)\]}/|!>]
-        assert!(text.contains("qw<foo bar baz>"));
-        assert!(text.contains("@EXPORT"));
+            // Verify we got a valid program with statements
+            if let NodeKind::Program { statements } = &ast.kind {
+                assert!(
+                    !statements.is_empty(),
+                    "Program should have statements for qw{} delimiter",
+                    desc
+                );
+            }
+        }
     }
 
+    /// Data-driven test: verify @EXPORT_OK also works with all delimiter variants
     #[test]
-    fn test_export_qw_parentheses() {
-        // Tests feature spec: PR #262 - qw() delimiter support for @EXPORT
-        let code = r#"
-package MyModule;
-@EXPORT = qw(foo bar baz);
-"#;
-        let text = code;
+    fn test_export_ok_qw_delimiter_variants_parse() {
+        let cases = ["qw<foo bar>", "qw(foo bar)", "qw[foo bar]", "qw{foo bar}"];
 
-        assert!(text.contains("qw(foo bar baz)"));
-        assert!(text.contains("@EXPORT"));
-    }
-
-    #[test]
-    fn test_export_qw_square_brackets() {
-        // Tests feature spec: PR #262 - qw[] delimiter support for @EXPORT
-        let code = r#"
-package MyModule;
-@EXPORT = qw[foo bar baz];
-"#;
-        let text = code;
-
-        assert!(text.contains("qw[foo bar baz]"));
-        assert!(text.contains("@EXPORT"));
-    }
-
-    #[test]
-    fn test_export_qw_curly_braces() {
-        // Tests feature spec: PR #262 - qw{} delimiter support for @EXPORT
-        let code = r#"
-package MyModule;
-@EXPORT = qw{foo bar baz};
-"#;
-        let text = code;
-
-        assert!(text.contains("qw{foo bar baz}"));
-        assert!(text.contains("@EXPORT"));
-    }
-
-    #[test]
-    fn test_export_qw_forward_slashes() {
-        // Tests feature spec: PR #262 - qw// delimiter support for @EXPORT
-        let code = r#"
-package MyModule;
-@EXPORT = qw/foo bar baz/;
-"#;
-        let text = code;
-
-        assert!(text.contains("qw/foo bar baz/"));
-        assert!(text.contains("@EXPORT"));
-    }
-
-    #[test]
-    fn test_export_qw_pipes() {
-        // Tests feature spec: PR #262 - qw|| delimiter support for @EXPORT
-        let code = r#"
-package MyModule;
-@EXPORT = qw|foo bar baz|;
-"#;
-        let text = code;
-
-        assert!(text.contains("qw|foo bar baz|"));
-        assert!(text.contains("@EXPORT"));
-    }
-
-    #[test]
-    fn test_export_qw_exclamations() {
-        // Tests feature spec: PR #262 - qw!! delimiter support for @EXPORT
-        let code = r#"
-package MyModule;
-@EXPORT = qw!foo bar baz!;
-"#;
-        let text = code;
-
-        assert!(text.contains("qw!foo bar baz!"));
-        assert!(text.contains("@EXPORT"));
-    }
-
-    #[test]
-    fn test_export_ok_qw_angle_brackets() {
-        // Tests feature spec: PR #262 - qw<> delimiter support for @EXPORT_OK
-        let code = r#"
-package MyModule;
-@EXPORT_OK = qw<foo bar baz>;
-"#;
-        let text = code;
-
-        assert!(text.contains("qw<foo bar baz>"));
-        assert!(text.contains("@EXPORT_OK"));
+        for qw_form in cases {
+            let code = format!("package MyModule;\n@EXPORT_OK = {};\n", qw_form);
+            let ast = parse_code(&code);
+            assert!(
+                matches!(ast.kind, NodeKind::Program { .. }),
+                "Parser should produce Program node for @EXPORT_OK with {}",
+                qw_form
+            );
+        }
     }
 
     #[test]
@@ -169,40 +106,32 @@ package MyModule;
 @EXPORT = qw<foo bar>;
 @EXPORT_OK = qw(baz qux);
 "#;
-        let text = code;
+        let ast = parse_code(code);
+        assert!(matches!(ast.kind, NodeKind::Program { .. }));
 
-        assert!(text.contains("qw<foo bar>"));
-        assert!(text.contains("qw(baz qux)"));
+        if let NodeKind::Program { statements } = &ast.kind {
+            // Should have package + 2 export assignments
+            assert!(statements.len() >= 2, "Expected at least package and exports");
+        }
     }
 
     #[test]
-    fn test_export_array_assignment_single_quotes() {
+    fn test_export_array_assignment_variants() {
         // Tests feature spec: PR #262 - Array assignment with quoted strings
-        let code = r#"
-package MyModule;
-@EXPORT = ('foo', 'bar', 'baz');
-"#;
-        let text = code;
+        let cases = [
+            ("@EXPORT = ('foo', 'bar', 'baz');", "single quotes"),
+            (r#"@EXPORT = ("foo", "bar", "baz");"#, "double quotes"),
+        ];
 
-        assert!(text.contains("@EXPORT"));
-        assert!(text.contains("'foo'"));
-        assert!(text.contains("'bar'"));
-        assert!(text.contains("'baz'"));
-    }
-
-    #[test]
-    fn test_export_array_assignment_double_quotes() {
-        // Tests feature spec: PR #262 - Array assignment with double quotes
-        let code = r#"
-package MyModule;
-@EXPORT = ("foo", "bar", "baz");
-"#;
-        let text = code;
-
-        assert!(text.contains("@EXPORT"));
-        assert!(text.contains(r#""foo""#));
-        assert!(text.contains(r#""bar""#));
-        assert!(text.contains(r#""baz""#));
+        for (export_stmt, desc) in cases {
+            let code = format!("package MyModule;\n{}\n", export_stmt);
+            let ast = parse_code(&code);
+            assert!(
+                matches!(ast.kind, NodeKind::Program { .. }),
+                "Parser should handle array assignment with {}",
+                desc
+            );
+        }
     }
 
     #[test]
@@ -212,117 +141,51 @@ package MyModule;
 package MyModule;
 @EXPORT    =    qw<  foo   bar   baz  >;
 "#;
-        let text = code;
-
-        assert!(text.contains("@EXPORT"));
-        assert!(text.contains("qw<"));
+        let ast = parse_code(code);
+        assert!(
+            matches!(ast.kind, NodeKind::Program { .. }),
+            "Parser should handle arbitrary whitespace in qw declarations"
+        );
     }
 
     // ========================================================================
-    // Import Source Detection Tests - AST-based Testing
+    // Import Source Detection Tests - AST-based Testing (Data-Driven)
     // ========================================================================
 
+    /// Data-driven test: verify all qw delimiter variants work in use statements
     #[test]
-    fn test_import_source_qw_angle_brackets() {
-        // Tests feature spec: PR #262 - find_import_source with qw<> delimiters
-        let use_node = create_use_node("Data::Dumper", vec!["qw<Dumper DumperX>"]);
-        let program = create_program_with_uses(vec![use_node]);
+    fn test_import_source_qw_delimiter_variants() {
+        // Tests feature spec: PR #262 - find_import_source with all qw delimiter forms
+        let cases = [
+            ("Data::Dumper", "qw<Dumper DumperX>", "qw<"),
+            ("Exporter", "qw(import)", "qw("),
+            ("File::Spec", "qw[catfile catdir]", "qw["),
+            ("List::Util", "qw{first max min}", "qw{"),
+            ("Carp", "qw/croak confess/", "qw/"),
+            ("Test::More", "qw|ok is like|", "qw|"),
+            ("Scalar::Util", "qw!blessed reftype!", "qw!"),
+        ];
 
-        // Verify the AST structure is correct
-        if let NodeKind::Program { statements } = &program.kind {
-            assert_eq!(statements.len(), 1);
-            if let NodeKind::Use { module, args } = &statements[0].kind {
-                assert_eq!(module, "Data::Dumper");
-                assert_eq!(args.len(), 1);
-                assert_eq!(args[0], "qw<Dumper DumperX>");
+        for (module_name, qw_args, expected_prefix) in cases {
+            let use_node = create_use_node(module_name, vec![qw_args]);
+            let program = create_program_with_uses(vec![use_node]);
+
+            if let NodeKind::Program { statements } = &program.kind {
+                assert_eq!(statements.len(), 1, "Expected 1 statement for {}", module_name);
+                if let NodeKind::Use { module, args } = &statements[0].kind {
+                    assert_eq!(module, module_name, "Module name mismatch");
+                    assert_eq!(args.len(), 1, "Expected 1 arg for {}", module_name);
+                    assert!(
+                        args[0].starts_with(expected_prefix),
+                        "Args should start with {} for {}",
+                        expected_prefix,
+                        module_name
+                    );
+                } else {
+                    panic!("Expected Use node for {}", module_name);
+                }
             } else {
-                panic!("Expected Use node");
-            }
-        } else {
-            panic!("Expected Program node");
-        }
-    }
-
-    #[test]
-    fn test_import_source_qw_parentheses() {
-        // Tests feature spec: PR #262 - find_import_source with qw() delimiters
-        let use_node = create_use_node("Exporter", vec!["qw(import)"]);
-        let program = create_program_with_uses(vec![use_node]);
-
-        if let NodeKind::Program { statements } = &program.kind {
-            if let NodeKind::Use { module, args } = &statements[0].kind {
-                assert_eq!(module, "Exporter");
-                assert!(args[0].starts_with("qw("));
-            }
-        }
-    }
-
-    #[test]
-    fn test_import_source_qw_square_brackets() {
-        // Tests feature spec: PR #262 - find_import_source with qw[] delimiters
-        let use_node = create_use_node("File::Spec", vec!["qw[catfile catdir]"]);
-        let program = create_program_with_uses(vec![use_node]);
-
-        if let NodeKind::Program { statements } = &program.kind {
-            if let NodeKind::Use { module, args } = &statements[0].kind {
-                assert_eq!(module, "File::Spec");
-                assert!(args[0].starts_with("qw["));
-            }
-        }
-    }
-
-    #[test]
-    fn test_import_source_qw_curly_braces() {
-        // Tests feature spec: PR #262 - find_import_source with qw{} delimiters
-        let use_node = create_use_node("List::Util", vec!["qw{first max min}"]);
-        let program = create_program_with_uses(vec![use_node]);
-
-        if let NodeKind::Program { statements } = &program.kind {
-            if let NodeKind::Use { module, args } = &statements[0].kind {
-                assert_eq!(module, "List::Util");
-                assert!(args[0].starts_with("qw{"));
-            }
-        }
-    }
-
-    #[test]
-    fn test_import_source_qw_forward_slashes() {
-        // Tests feature spec: PR #262 - find_import_source with qw// delimiters
-        let use_node = create_use_node("Carp", vec!["qw/croak confess/"]);
-        let program = create_program_with_uses(vec![use_node]);
-
-        if let NodeKind::Program { statements } = &program.kind {
-            if let NodeKind::Use { module, args } = &statements[0].kind {
-                assert_eq!(module, "Carp");
-                assert!(args[0].starts_with("qw/"));
-            }
-        }
-    }
-
-    #[test]
-    fn test_import_source_qw_pipes() {
-        // Tests feature spec: PR #262 - find_import_source with qw|| delimiters
-        let use_node = create_use_node("Test::More", vec!["qw|ok is like|"]);
-        let program = create_program_with_uses(vec![use_node]);
-
-        if let NodeKind::Program { statements } = &program.kind {
-            if let NodeKind::Use { module, args } = &statements[0].kind {
-                assert_eq!(module, "Test::More");
-                assert!(args[0].starts_with("qw|"));
-            }
-        }
-    }
-
-    #[test]
-    fn test_import_source_qw_exclamations() {
-        // Tests feature spec: PR #262 - find_import_source with qw!! delimiters
-        let use_node = create_use_node("Scalar::Util", vec!["qw!blessed reftype!"]);
-        let program = create_program_with_uses(vec![use_node]);
-
-        if let NodeKind::Program { statements } = &program.kind {
-            if let NodeKind::Use { module, args } = &statements[0].kind {
-                assert_eq!(module, "Scalar::Util");
-                assert!(args[0].starts_with("qw!"));
+                panic!("Expected Program node for {}", module_name);
             }
         }
     }
@@ -343,7 +206,7 @@ package MyModule;
 
     #[test]
     fn test_import_source_multiple_modules() {
-        // Tests feature spec: PR #262 - Multiple use statements in same program
+        // Tests feature spec: PR #262 - Multiple use statements with mixed delimiters
         let uses = vec![
             create_use_node("Data::Dumper", vec!["qw<Dumper>"]),
             create_use_node("List::Util", vec!["qw(first max)"]),
@@ -352,7 +215,7 @@ package MyModule;
         let program = create_program_with_uses(uses);
 
         if let NodeKind::Program { statements } = &program.kind {
-            assert_eq!(statements.len(), 3);
+            assert_eq!(statements.len(), 3, "Expected 3 use statements");
         }
     }
 
@@ -361,15 +224,11 @@ package MyModule;
         // Tests feature spec: PR #262 - Use statements within nested blocks
         let use_node = create_use_node("warnings", vec![]);
         let block = Node::new(
-            NodeKind::Block {
-                statements: vec![use_node],
-            },
+            NodeKind::Block { statements: vec![use_node] },
             SourceLocation { start: 0, end: 0 },
         );
         let program = Node::new(
-            NodeKind::Program {
-                statements: vec![block],
-            },
+            NodeKind::Program { statements: vec![block] },
             SourceLocation { start: 0, end: 0 },
         );
 
@@ -438,10 +297,8 @@ package MyModule;
             if let NodeKind::Use { module, args } = &statements[0].kind {
                 assert_eq!(module, "List::Util");
                 // The find_import_source logic would split on whitespace
-                let content = args[0]
-                    .trim_start_matches("qw")
-                    .trim_start_matches('<')
-                    .trim_end_matches('>');
+                let content =
+                    args[0].trim_start_matches("qw").trim_start_matches('<').trim_end_matches('>');
                 assert!(content.split_whitespace().any(|w| w == "first"));
             }
         }
