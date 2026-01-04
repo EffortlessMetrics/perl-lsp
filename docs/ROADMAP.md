@@ -156,9 +156,9 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 - [x] Sweep window progress tests: 21 → 0 ignores (**-21**)
 - [x] Sweep unhappy paths tests: 9 → 1 ignores (**-8**)
 - [x] Feature-gate `lsp_advanced_features_test.rs` (23 tests behind `lsp-extras`)
-- [ ] Continue sweep on remaining high-confidence files
-- **Current**: 572 ignores (down from 608+, **51+ tests re-enabled**)
-- **Target**: <100 ignored tests with documented reasons
+- [x] Complete sweep on all high-confidence files ✅
+- **Current**: BUG=0, MANUAL=1 (run `bash scripts/ignored-test-count.sh` for live counts)
+- **Target**: ✅ Achieved - only MANUAL utility test remains ignored
 
 **Band 3: Tag v0.9 Semantic-Ready** (1-2 weeks)
 - [ ] Align README/status docs with semantic LSP capabilities
@@ -167,7 +167,7 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 - **Target**: Externally-consumable "it just works" release
 
 ### 🚧 Known Constraints
-- **~572 ignored LSP tests**: Down from 608+ (51+ re-enabled via Band 2 sweep)
+- **Ignored tests**: BUG=0 achieved; only MANUAL utility tests remain (see `scripts/.ignored-baseline`)
 - **CI Pipeline**: Issue #211 blocks merge-blocking gates (#210)
 - **Semantic Phase 2/3**: Advanced features deferred (closures, multi-file, imports)
 

@@ -9,7 +9,7 @@ This directory now includes comprehensive CI hardening and quality enforcement t
 - `#![warn(rust_2018_idioms)]` - Modern Rust patterns
 - Strict rustdoc checks - No broken links or bare URLs
 - Dependency security via `cargo-deny`
-- Ignored test baseline enforcement (currently 41)
+- Ignored test baseline enforcement (tracked via `scripts/.ignored-baseline`)
 
 ## 📁 Files Created
 
@@ -49,7 +49,7 @@ The GitHub Actions workflow (`.github/workflows/rust-strict.yml`) automatically 
 2. **Clippy** - `cargo clippy -- -D warnings`  
 3. **Documentation** - Strict rustdoc with broken link detection
 4. **Tests** - All workspace tests
-5. **Ignored Baseline** - Ensures exactly 41 ignored tests
+5. **Ignored Baseline** - Validates ignored test count against baseline (run `bash scripts/ignored-test-count.sh`)
 6. **Security** - `cargo deny check` for dependencies
 7. **Semver** (PRs only) - API compatibility check
 
@@ -59,8 +59,8 @@ All quality gates are passing:
 - Format: ✅ Clean
 - Clippy: ✅ No errors in perl-parser
 - Docs: ✅ Build without warnings  
-- Tests: ✅ 144 passed, 0 failed, 1 ignored
-- Baseline: ✅ 41 ignored tests (correct)
+- Tests: ✅ All passing
+- Baseline: ✅ Tracked via `scripts/.ignored-baseline` (BUG=0, MANUAL=1)
 - Security: ✅ deny.toml configured
 
 ## 📝 Maintaining Quality
@@ -112,7 +112,7 @@ Current enforcement levels:
 - Zero unintended public APIs
 - Zero rustdoc warnings with strict flags
 - 100% test coverage for LSP E2E scenarios
-- 41 ignored tests (monitored baseline)
+- Ignored test count monitored via `scripts/.ignored-baseline` (BUG=0 target achieved)
 
 ## 🚦 CI Status Indicators
 

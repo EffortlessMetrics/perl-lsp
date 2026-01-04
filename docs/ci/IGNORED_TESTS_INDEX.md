@@ -129,8 +129,8 @@ cargo test -p perl-lsp --features lsp-extras --test lsp_advanced_features_test -
 - [x] Phase 1: `lsp_window_progress_test.rs` (21 → 0 ignores)
 - [x] Phase 1: `lsp_unhappy_paths.rs` (9 → 1 ignores) + dead code cleanup
 - [x] Phase 1: Quarantine `lsp_advanced_features_test.rs` (23 tests feature-gated)
-- [ ] Phase 2: Sweep remaining high-confidence files
-- [ ] Phase 3: Address real failures with proper fixes
-- [ ] Phase 4: Final audit and documentation
+- [x] Phase 2: Sweep remaining high-confidence files ✅
+- [x] Phase 3: Address real failures with proper fixes ✅
+- [x] Phase 4: Final audit and documentation ✅
 
-**Current ignore count**: 572 (down from 608+, with 51+ tests re-enabled or quarantined)
+**Current status**: BUG=0, MANUAL=1 (run `bash scripts/ignored-test-count.sh` for live counts; baseline: `scripts/.ignored-baseline`)
