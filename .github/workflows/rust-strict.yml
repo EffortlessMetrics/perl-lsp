@@ -68,12 +68,12 @@ jobs:
         RUSTFLAGS: "-D warnings"
       run: |
         # Temporarily allow warnings for perl-parser clippy due to PR #160 documentation tracking
-        RUSTFLAGS="" cargo clippy -p perl-parser --all-targets --all-features
-        cargo clippy -p perl-lexer --all-targets --all-features -- -D warnings
+        RUSTFLAGS="" cargo clippy --locked -p perl-parser --all-targets --all-features
+        cargo clippy --locked -p perl-lexer --all-targets --all-features -- -D warnings
     
     - name: Clippy (workspace smoke check)
       run: |
-        cargo clippy --workspace --all-targets --all-features \
+        cargo clippy --locked --workspace --all-targets --all-features \
           --exclude perl-parser \
           --exclude perl-lexer || true
     
