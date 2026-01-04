@@ -2083,6 +2083,18 @@ impl<'a> PerlLexer<'a> {
         None
     }
 
+    /// Returns the closing delimiter for paired delimiters, or the same character for non-paired.
+    /// This helper makes delimiter pairing explicit and avoids unreachable code paths.
+    fn paired_closing(delim: char) -> char {
+        match delim {
+            '{' => '}',
+            '[' => ']',
+            '(' => ')',
+            '<' => '>',
+            _ => delim, // non-paired delimiters use the same character
+        }
+    }
+
     fn parse_substitution(&mut self, start: usize) -> Option<Token> {
         // We've already consumed 's'
         let delimiter = self.current_char()?;
@@ -2091,13 +2103,7 @@ impl<'a> PerlLexer<'a> {
         // Parse pattern
         let mut depth = 1;
         let is_paired = matches!(delimiter, '{' | '[' | '(' | '<');
-        let closing = match delimiter {
-            '{' => '}',
-            '[' => ']',
-            '(' => ')',
-            '<' => '>',
-            _ => delimiter,
-        };
+        let closing = Self::paired_closing(delimiter);
 
         while let Some(ch) = self.current_char() {
             // Check budget
@@ -2133,6 +2139,7 @@ impl<'a> PerlLexer<'a> {
 
         // Parse replacement - may use different delimiter for paired patterns (e.g., s[foo]{bar})
         // MUT_002 fix: Detect the actual replacement delimiter instead of assuming same as pattern
+        // Note: Pattern scanning is complete at this point; we use a separate repl_depth for replacement
         let (repl_delimiter, repl_closing, repl_is_paired) = if is_paired {
             // Skip whitespace between pattern and replacement for paired delimiters
             while let Some(ch) = self.current_char() {
@@ -2146,20 +2153,12 @@ impl<'a> PerlLexer<'a> {
             // Detect replacement delimiter - may be different from pattern delimiter
             if let Some(repl_delim) = self.current_char() {
                 if matches!(repl_delim, '{' | '[' | '(' | '<') {
-                    let repl_close = match repl_delim {
-                        '{' => '}',
-                        '[' => ']',
-                        '(' => ')',
-                        '<' => '>',
-                        _ => repl_delim,
-                    };
+                    let repl_close = Self::paired_closing(repl_delim);
                     self.advance();
-                    depth = 1;
                     (repl_delim, repl_close, true)
                 } else {
                     // Non-paired replacement after paired pattern (unusual but valid)
                     self.advance();
-                    depth = 1;
                     (repl_delim, repl_delim, false)
                 }
             } else {
@@ -2171,6 +2170,8 @@ impl<'a> PerlLexer<'a> {
             (delimiter, closing, false)
         };
 
+        // Use separate depth counter for replacement to avoid confusion with pattern depth
+        let mut repl_depth: usize = 1;
         while let Some(ch) = self.current_char() {
             match ch {
                 '\\' => {
@@ -2180,14 +2181,14 @@ impl<'a> PerlLexer<'a> {
                     }
                 }
                 _ if ch == repl_delimiter && repl_is_paired => {
-                    depth += 1;
+                    repl_depth += 1;
                     self.advance();
                 }
                 _ if ch == repl_closing => {
                     self.advance();
                     if repl_is_paired {
-                        depth = depth.saturating_sub(1);
-                        if depth == 0 {
+                        repl_depth = repl_depth.saturating_sub(1);
+                        if repl_depth == 0 {
                             break;
                         }
                     } else {
@@ -2226,13 +2227,7 @@ impl<'a> PerlLexer<'a> {
         // Parse search list
         let mut depth = 1;
         let is_paired = matches!(delimiter, '{' | '[' | '(' | '<');
-        let closing = match delimiter {
-            '{' => '}',
-            '[' => ']',
-            '(' => ')',
-            '<' => '>',
-            _ => delimiter,
-        };
+        let closing = Self::paired_closing(delimiter);
 
         while let Some(ch) = self.current_char() {
             // Check budget
