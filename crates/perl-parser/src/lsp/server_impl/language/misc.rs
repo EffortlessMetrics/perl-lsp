@@ -566,7 +566,10 @@ impl LspServer {
                 {
                     if let NodeKind::Variable { name: n, sigil: s } = &variable.kind {
                         if n == name {
-                            return sigil.map_or(true, |sig| s.starts_with(sig));
+                            return match sigil {
+                                None => true,
+                                Some(sig) => s.starts_with(sig),
+                            };
                         }
                     }
                 }
@@ -576,7 +579,10 @@ impl LspServer {
                     for var in variables {
                         if let NodeKind::Variable { name: n, sigil: s } = &var.kind {
                             if n == name {
-                                return sigil.map_or(true, |sig| s.starts_with(sig));
+                                return match sigil {
+                                    None => true,
+                                    Some(sig) => s.starts_with(sig),
+                                };
                             }
                         }
                     }
