@@ -11,7 +11,6 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 /// Tests handling of permission errors, disk space, and I/O failures
 
 #[test]
-#[cfg(unix)] // set_mode API is Unix-only
 fn test_read_only_file() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -21,9 +20,9 @@ fn test_read_only_file() {
     let file_path = temp_dir.join(format!("readonly_{}.pl", std::process::id()));
     fs::write(&file_path, "print 'readonly';").unwrap();
 
-    // Make file read-only
+    // Make file read-only (cross-platform)
     let mut perms = fs::metadata(&file_path).unwrap().permissions();
-    perms.set_mode(0o444);
+    perms.set_readonly(true);
     fs::set_permissions(&file_path, perms).unwrap();
 
     let uri = format!("file://{}", file_path.display());
@@ -62,7 +61,11 @@ fn test_read_only_file() {
     let content = fs::read_to_string(&file_path).unwrap();
     assert_eq!(content, "print 'readonly';");
 
-    // Cleanup
+    // Cleanup: restore write permissions before deleting (required on Windows)
+    if let Ok(mut perms) = fs::metadata(&file_path).map(|m| m.permissions()) {
+        perms.set_readonly(false);
+        let _ = fs::set_permissions(&file_path, perms);
+    }
     let _ = fs::remove_file(&file_path);
 }
 

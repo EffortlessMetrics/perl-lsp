@@ -191,7 +191,6 @@ fn test_lsp_workspace_symbols_with_index() {
 
 /// Test cross-file go-to-definition
 #[test]
-#[cfg(unix)] // Uses Unix-style file URIs; Windows path handling differs
 fn test_cross_file_definition() {
     let mut server = LspServer::new();
 

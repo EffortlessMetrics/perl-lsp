@@ -1,7 +1,13 @@
+//! Crash reproducer tests for heredoc edge cases.
+//!
+//! These tests reproduce known parser hangs and are disabled by default.
+//! To run them: `cargo test -p perl-parser --features crash-repros --test crash_reproducer_test`
+
+#[cfg(feature = "crash-repros")]
 use perl_parser::Parser;
 
 #[test]
-#[ignore = "BUG: heredoc edge case causes parser to hang - needs timeout or infinite loop fix"]
+#[cfg(feature = "crash-repros")]
 fn test_crash_reproducer_b6dd6f9afe3c18f3efa0b5bb8454be7744f2a458() {
     // This is the crash case found in perl-corpus/fuzz/
     // Input: "xqN<<\""
@@ -20,7 +26,7 @@ fn test_crash_reproducer_b6dd6f9afe3c18f3efa0b5bb8454be7744f2a458() {
 }
 
 #[test]
-#[ignore = "BUG: heredoc edge cases cause parser to hang - needs timeout or infinite loop fix"]
+#[cfg(feature = "crash-repros")]
 fn test_related_heredoc_edge_cases() {
     // Test variations of the crash pattern to ensure robustness
     let edge_cases = [

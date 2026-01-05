@@ -84,6 +84,7 @@ substitution-advanced = []  # Advanced substitution operator parsing
 utf16-complete = []  # Complete UTF-16 round-trip support
 semantic-phase2 = []  # Semantic analyzer Phase 2+ features
 parser-extras = []  # General aspirational parser tests
+crash-repros = []  # Enable crash reproducer tests (may hang - use with timeout)
 
 [build-dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
