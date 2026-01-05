@@ -476,7 +476,25 @@ fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &s
 fn extract_substitution_modifiers(text: &str) -> String {
     text.chars()
         .take_while(|c| c.is_ascii_alphabetic())
-        .filter(|&c| matches!(c, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' | 'a' | 'd' | 'l' | 'u' | 'n' | 'p' | 'c'))
+        .filter(|&c| {
+            matches!(
+                c,
+                'g' | 'i'
+                    | 'm'
+                    | 's'
+                    | 'x'
+                    | 'o'
+                    | 'e'
+                    | 'r'
+                    | 'a'
+                    | 'd'
+                    | 'l'
+                    | 'u'
+                    | 'n'
+                    | 'p'
+                    | 'c'
+            )
+        })
         .collect()
 }
 
@@ -518,7 +536,10 @@ pub fn validate_substitution_modifiers(modifiers_str: &str) -> Result<String, ch
         }
 
         // Check if it's a valid substitution modifier
-        if matches!(c, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' | 'a' | 'd' | 'l' | 'u' | 'n' | 'p' | 'c') {
+        if matches!(
+            c,
+            'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' | 'a' | 'd' | 'l' | 'u' | 'n' | 'p' | 'c'
+        ) {
             valid_modifiers.push(c);
         } else {
             // Invalid alphabetic modifier

@@ -244,9 +244,9 @@ impl BuildFlags {
             inlay_hints: true,      // v0.8.4 feature - working
             pull_diagnostics: true, // v0.8.5 feature - working
             workspace_symbol_resolve: true,
-            semantic_tokens: true,    // v0.8.4 feature - working
-            code_actions: true,       // v0.8.4 feature - working (enhanced v0.8.9 with refactoring)
-            execute_command: true,    // v0.8.5 feature - working
+            semantic_tokens: true,          // v0.8.4 feature - working
+            code_actions: true, // v0.8.4 feature - working (enhanced v0.8.9 with refactoring)
+            execute_command: true, // v0.8.5 feature - working
             rename: true, // v0.8.4 feature - working (enhanced v0.8.9 with workspace refactoring)
             document_links: true, // v0.8.4 feature - working
             selection_ranges: true, // v0.8.4 feature - working
