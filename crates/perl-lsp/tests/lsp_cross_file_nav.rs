@@ -41,6 +41,7 @@ fn open(server: &mut LspServer, uri: &str, text: &str) {
 }
 
 #[test]
+#[cfg(unix)] // Uses Unix-style file URIs; Windows path handling differs
 fn test_cross_file_definition() {
     let mut srv = init_server();
 
@@ -112,6 +113,7 @@ print "Result: $result\n";
 }
 
 #[test]
+#[cfg(unix)] // Uses Unix-style file URIs; Windows path handling differs
 fn test_cross_file_references() {
     let mut srv = init_server();
 

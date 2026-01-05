@@ -81,6 +81,7 @@ fn create_test_server() -> (LspHarness, TempWorkspace) {
 }
 
 #[test]
+#[cfg(unix)] // Uses Unix-style file URIs via TempWorkspace; Windows path handling differs
 fn test_cross_file_definition() {
     // Ensure we use fast, deterministic fallbacks to avoid long waits
     unsafe {
@@ -123,6 +124,7 @@ fn test_cross_file_definition() {
 }
 
 #[test]
+#[cfg(unix)] // Uses Unix-style file URIs via TempWorkspace; Windows path handling differs
 fn test_cross_file_references() {
     // Ensure we use fast, deterministic fallbacks to avoid long waits
     unsafe {
