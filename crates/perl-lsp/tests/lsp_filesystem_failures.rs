@@ -11,6 +11,7 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 /// Tests handling of permission errors, disk space, and I/O failures
 
 #[test]
+#[cfg(unix)] // set_mode API is Unix-only
 fn test_read_only_file() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
