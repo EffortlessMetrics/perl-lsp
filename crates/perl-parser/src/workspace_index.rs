@@ -763,6 +763,9 @@ pub fn normalize_var(name: &str) -> (Option<char>, &str) {
 ///
 /// Properly handles percent-encoding and works with spaces, Windows paths,
 /// and non-ASCII characters. Returns None if the URI is not a valid file:// URI.
+///
+/// Note: This function is not available on wasm32 targets (no filesystem).
+#[cfg(not(target_arch = "wasm32"))]
 pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
     // Parse the URI
     let url = Url::parse(uri).ok()?;
@@ -780,6 +783,9 @@ pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
 ///
 /// Properly handles percent-encoding and works with spaces, Windows paths,
 /// and non-ASCII characters.
+///
+/// Note: This function is not available on wasm32 targets (no filesystem).
+#[cfg(not(target_arch = "wasm32"))]
 pub fn fs_path_to_uri<P: AsRef<std::path::Path>>(path: P) -> Result<String, String> {
     let path = path.as_ref();
 
@@ -960,6 +966,7 @@ impl WorkspaceIndex {
     }
 
     /// Normalize a URI to a consistent form using proper URI handling
+    #[cfg(not(target_arch = "wasm32"))]
     fn normalize_uri(uri: &str) -> String {
         // Try to parse as URL first
         if let Ok(url) = Url::parse(uri) {
@@ -987,6 +994,13 @@ impl WorkspaceIndex {
 
         // Final fallback: return as-is for special URIs like untitled:
         uri.to_string()
+    }
+
+    /// Normalize a URI to a consistent form (wasm32 version - no filesystem)
+    #[cfg(target_arch = "wasm32")]
+    fn normalize_uri(uri: &str) -> String {
+        // On wasm32, just try to parse as URL or return as-is
+        if let Ok(url) = Url::parse(uri) { url.to_string() } else { uri.to_string() }
     }
 
     /// Index a file from its URI and text content
@@ -1080,6 +1094,9 @@ impl WorkspaceIndex {
 
     /// Index a file from a URI string (convenience method)
     /// Accepts either a proper URI (file://...) or a file path
+    ///
+    /// Note: This method is not available on wasm32 targets (uses filesystem path conversion).
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn index_file_str(&self, uri: &str, text: &str) -> Result<(), String> {
         // Try parsing as URI first
         let url = url::Url::parse(uri).or_else(|_| {
@@ -1888,6 +1905,7 @@ pub mod lsp_adapter {
         all.into_iter().filter_map(|ix| to_lsp_location(&ix)).collect()
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn parse_url(s: &str) -> Option<LspUrl> {
         // lsp_types::Uri uses FromStr, not TryFrom
         use std::str::FromStr;
@@ -1902,6 +1920,13 @@ pub mod lsp_adapter {
                     .and_then(|uri_string| LspUrl::from_str(&uri_string).ok())
             })
         })
+    }
+
+    /// Parse a string as a URL (wasm32 version - no filesystem fallback)
+    #[cfg(target_arch = "wasm32")]
+    fn parse_url(s: &str) -> Option<LspUrl> {
+        use std::str::FromStr;
+        LspUrl::from_str(s).ok()
     }
 }
 

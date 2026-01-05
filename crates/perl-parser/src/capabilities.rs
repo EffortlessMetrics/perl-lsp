@@ -422,6 +422,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
             }));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     if build.execute_command {
         // Only advertise commands that are actually implemented and tested
         let commands = crate::execute_command::get_supported_commands();
