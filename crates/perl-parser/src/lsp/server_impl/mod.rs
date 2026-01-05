@@ -12,8 +12,6 @@ pub mod routing;
 mod text_sync;
 mod workspace;
 
-pub(crate) use dispatch::early_cancel_or;
-
 // Re-export protocol types for backward compatibility
 // Tests and external code import these from perl_parser::lsp_server::
 pub use crate::lsp::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
@@ -115,7 +113,6 @@ pub(crate) struct DocumentScanView {
 // Note: FQN_RE regex moved to language/navigation.rs
 
 // Note: Error codes and cancelled_response imported from crate::lsp::protocol
-// Note: enhanced_cancelled_response and early_cancel_or! macro are in dispatch.rs
 
 // Note: ClientCapabilities imported from crate::lsp::state::document
 
