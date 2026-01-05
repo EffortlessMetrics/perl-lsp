@@ -83,7 +83,7 @@ This checklist tracks the validation and merge readiness for Issue #188 Phase 1,
 - [x] Wave B: Substitution operators (4/4 fixed)
 - [x] Wave C: Parser limitations (4/4 fixed in PR #261)
 - [x] Created `docs/ci/IGNORED_TESTS_INDEX.md`
-- [x] Feature-gated 21 tests (stress, advanced) - intentional
+- [x] Feature-gated 23 tests (stress, advanced) - intentional
 
 **Final Status:** BUG=0, MANUAL=1 (run `bash scripts/ignored-test-count.sh`)
 
