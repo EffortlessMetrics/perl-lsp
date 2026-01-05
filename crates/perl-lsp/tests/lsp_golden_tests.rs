@@ -6,9 +6,18 @@ mod support;
 
 use serde_json::{Value, json};
 use std::fs;
+use std::path::Path;
+use url::Url;
 use support::test_helpers::{
     assert_completion_has_items, assert_folding_ranges_valid, assert_hover_has_text,
 };
+
+/// Convert a path to a file:// URI string, cross-platform safe
+fn path_to_uri(path: &Path) -> String {
+    Url::from_file_path(path)
+        .unwrap_or_else(|_| panic!("file path to URI failed: {}", path.display()))
+        .to_string()
+}
 
 /// Test context that manages the LSP server lifecycle
 struct TestContext {
@@ -93,7 +102,7 @@ impl TestContext {
                         "completion": {}
                     }
                 },
-                "rootUri": format!("file://{}", std::env::current_dir().unwrap().display())
+                "rootUri": path_to_uri(&std::env::current_dir().unwrap())
             })),
         );
 
@@ -184,7 +193,7 @@ impl TestContext {
 
     fn open_file(&mut self, path: &str) {
         let content = fs::read_to_string(path).expect("Failed to read fixture file");
-        let uri = format!("file://{}", std::fs::canonicalize(path).unwrap().display());
+        let uri = path_to_uri(&std::fs::canonicalize(path).unwrap());
 
         self.send_notification(
             "textDocument/didOpen",
@@ -216,7 +225,7 @@ fn test_hover_golden() {
 
     // Test hover on custom function
     let hover = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": { "uri": format!("file://{}", std::fs::canonicalize(fixture).unwrap().display()) },
+        "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
         "position": { "line": 10, "character": 15 }  // On 'calculate_sum'
     })));
 
@@ -241,7 +250,7 @@ fn test_hover_golden() {
 
     // Test hover on built-in function
     let hover_builtin = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": { "uri": format!("file://{}", std::fs::canonicalize(fixture).unwrap().display()) },
+        "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
         "position": { "line": 16, "character": 20 }  // On 'join'
     })));
 
@@ -262,7 +271,7 @@ fn test_diagnostics_golden() {
 
     // Test that we can still get hover despite errors
     let hover = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": { "uri": format!("file://{}", std::fs::canonicalize(fixture).unwrap().display()) },
+        "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
         "position": { "line": 7, "character": 10 }  // On undefined_var
     })));
 
@@ -278,7 +287,7 @@ fn test_completion_golden() {
 
     // Test variable completion
     let completion = ctx.send_request("textDocument/completion", Some(json!({
-        "textDocument": { "uri": format!("file://{}", std::fs::canonicalize(fixture).unwrap().display()) },
+        "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
         "position": { "line": 31, "character": 14 }  // After '$us' in comment
     })));
 
@@ -315,7 +324,7 @@ fn test_semantic_tokens_golden() {
 
     // Request semantic tokens
     let tokens = ctx.send_request("textDocument/semanticTokens/full", Some(json!({
-        "textDocument": { "uri": format!("file://{}", std::fs::canonicalize(fixture).unwrap().display()) }
+        "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) }
     })));
 
     if let Some(t) = tokens {
@@ -339,7 +348,7 @@ fn test_folding_ranges_golden() {
 
     // Request folding ranges
     let ranges = ctx.send_request("textDocument/foldingRange", Some(json!({
-        "textDocument": { "uri": format!("file://{}", std::fs::canonicalize(fixture).unwrap().display()) }
+        "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) }
     })));
 
     if let Some(r) = ranges {

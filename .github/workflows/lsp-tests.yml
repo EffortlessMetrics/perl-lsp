@@ -103,7 +103,8 @@ jobs:
           exit 1
         fi
         # 2) ropey must be present in the lockfile
-        LOCK="${GITHUB_WORKSPACE:-$(git rev-parse --show-toplevel)}/Cargo.lock"
+        TOP="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+        LOCK="${GITHUB_WORKSPACE:-$TOP}/Cargo.lock"
         if ! grep -q 'name = "ropey"' "$LOCK"; then
           echo "::error:: ropey not present in Cargo.lock ($LOCK)"
           exit 1
