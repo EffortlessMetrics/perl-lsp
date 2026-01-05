@@ -103,8 +103,9 @@ jobs:
           exit 1
         fi
         # 2) ropey must be present in the lockfile
-        if ! grep -q 'name = "ropey"' Cargo.lock; then
-          echo "::error:: ropey not present in Cargo.lock"
+        LOCK="${GITHUB_WORKSPACE:-$(pwd)}/Cargo.lock"
+        if ! grep -q 'name = "ropey"' "$LOCK"; then
+          echo "::error:: ropey not present in Cargo.lock ($LOCK)"
           exit 1
         fi
         echo "✅ ropey declared in manifest and present in Cargo.lock."
