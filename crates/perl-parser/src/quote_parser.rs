@@ -466,19 +466,26 @@ fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &s
 
 /// Extract and validate substitution modifiers, returning only valid ones
 ///
-/// Valid Perl substitution modifiers are: g, i, m, s, x, o, e, r
+/// Valid Perl substitution modifiers include:
+/// - Core modifiers: g, i, m, s, x, o, e, r
+/// - Charset modifiers (Perl 5.14+): a, d, l, u
+/// - Additional modifiers: n (5.22+), p, c
+///
 /// This function provides panic-safe modifier validation for substitution operators,
 /// filtering out invalid modifiers to prevent security vulnerabilities.
 fn extract_substitution_modifiers(text: &str) -> String {
     text.chars()
         .take_while(|c| c.is_ascii_alphabetic())
-        .filter(|&c| matches!(c, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r'))
+        .filter(|&c| matches!(c, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' | 'a' | 'd' | 'l' | 'u' | 'n' | 'p' | 'c'))
         .collect()
 }
 
 /// Validate substitution modifiers and return an error if any are invalid
 ///
-/// Valid Perl substitution modifiers are: g, i, m, s, x, o, e, r
+/// Valid Perl substitution modifiers include:
+/// - Core modifiers: g, i, m, s, x, o, e, r
+/// - Charset modifiers (Perl 5.14+): a, d, l, u
+/// - Additional modifiers: n (5.22+), p, c
 ///
 /// # Arguments
 ///
@@ -493,7 +500,8 @@ fn extract_substitution_modifiers(text: &str) -> String {
 ///
 /// ```ignore
 /// assert!(validate_substitution_modifiers("gi").is_ok());
-/// assert!(validate_substitution_modifiers("giz").is_err());
+/// assert!(validate_substitution_modifiers("gia").is_ok());  // 'a' for ASCII mode
+/// assert!(validate_substitution_modifiers("giz").is_err()); // 'z' is invalid
 /// ```
 pub fn validate_substitution_modifiers(modifiers_str: &str) -> Result<String, char> {
     let mut valid_modifiers = String::new();
@@ -510,7 +518,7 @@ pub fn validate_substitution_modifiers(modifiers_str: &str) -> Result<String, ch
         }
 
         // Check if it's a valid substitution modifier
-        if matches!(c, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r') {
+        if matches!(c, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' | 'a' | 'd' | 'l' | 'u' | 'n' | 'p' | 'c') {
             valid_modifiers.push(c);
         } else {
             // Invalid alphabetic modifier
