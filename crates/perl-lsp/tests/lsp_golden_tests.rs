@@ -7,10 +7,10 @@ mod support;
 use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
-use url::Url;
 use support::test_helpers::{
     assert_completion_has_items, assert_folding_ranges_valid, assert_hover_has_text,
 };
+use url::Url;
 
 /// Convert a path to a file:// URI string, cross-platform safe
 fn path_to_uri(path: &Path) -> String {
@@ -224,10 +224,13 @@ fn test_hover_golden() {
     ctx.open_file(fixture);
 
     // Test hover on custom function
-    let hover = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
-        "position": { "line": 10, "character": 15 }  // On 'calculate_sum'
-    })));
+    let hover = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
+            "position": { "line": 10, "character": 15 }  // On 'calculate_sum'
+        })),
+    );
 
     assert_hover_has_text(&hover);
 
@@ -249,10 +252,13 @@ fn test_hover_golden() {
     }
 
     // Test hover on built-in function
-    let hover_builtin = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
-        "position": { "line": 16, "character": 20 }  // On 'join'
-    })));
+    let hover_builtin = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
+            "position": { "line": 16, "character": 20 }  // On 'join'
+        })),
+    );
 
     assert_hover_has_text(&hover_builtin);
 }
@@ -270,10 +276,13 @@ fn test_diagnostics_golden() {
     // For now, we'll test that the file opens without crashing
 
     // Test that we can still get hover despite errors
-    let hover = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
-        "position": { "line": 7, "character": 10 }  // On undefined_var
-    })));
+    let hover = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
+            "position": { "line": 7, "character": 10 }  // On undefined_var
+        })),
+    );
 
     // Should handle gracefully even with syntax errors
     assert!(hover.is_none(), "Should handle invalid code gracefully");
@@ -286,10 +295,13 @@ fn test_completion_golden() {
     ctx.open_file(fixture);
 
     // Test variable completion
-    let completion = ctx.send_request("textDocument/completion", Some(json!({
-        "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
-        "position": { "line": 31, "character": 14 }  // After '$us' in comment
-    })));
+    let completion = ctx.send_request(
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
+            "position": { "line": 31, "character": 14 }  // After '$us' in comment
+        })),
+    );
 
     assert_completion_has_items(&completion);
 
@@ -323,9 +335,12 @@ fn test_semantic_tokens_golden() {
     ctx.open_file(fixture);
 
     // Request semantic tokens
-    let tokens = ctx.send_request("textDocument/semanticTokens/full", Some(json!({
-        "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) }
-    })));
+    let tokens = ctx.send_request(
+        "textDocument/semanticTokens/full",
+        Some(json!({
+            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) }
+        })),
+    );
 
     if let Some(t) = tokens {
         let data = t.get("data").and_then(|d| d.as_array());
@@ -347,9 +362,12 @@ fn test_folding_ranges_golden() {
     ctx.open_file(fixture);
 
     // Request folding ranges
-    let ranges = ctx.send_request("textDocument/foldingRange", Some(json!({
-        "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) }
-    })));
+    let ranges = ctx.send_request(
+        "textDocument/foldingRange",
+        Some(json!({
+            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) }
+        })),
+    );
 
     if let Some(r) = ranges {
         assert_folding_ranges_valid(&Some(r.clone()));

@@ -68,6 +68,7 @@ fn test_read_only_file() {
     assert_eq!(content, "print 'readonly';");
 
     // Cleanup: restore write permissions before deleting (required on Windows)
+    #[allow(clippy::permissions_set_readonly_false)]
     if let Ok(mut perms) = fs::metadata(&file_path).map(|m| m.permissions()) {
         perms.set_readonly(false);
         let _ = fs::set_permissions(&file_path, perms);
@@ -453,7 +454,7 @@ fn test_special_filename_characters() {
 
         // Try to create file (may fail on some filesystems)
         if fs::write(file_path, "print 'special';").is_ok() {
-            let uri = path_to_uri(&file_path);
+            let uri = path_to_uri(file_path);
 
             send_notification(
                 &mut server,
@@ -554,7 +555,7 @@ fn test_file_deleted_while_open() {
     let file_path = &temp_dir.join("delete_me.pl");
     fs::write(file_path, "print 'delete me';").unwrap();
 
-    let uri = path_to_uri(&file_path);
+    let uri = path_to_uri(file_path);
 
     // Open file
     send_notification(
@@ -616,7 +617,7 @@ fn test_file_modified_externally() {
     let file_path = &temp_dir.join("external.pl");
     fs::write(file_path, "print 'original';").unwrap();
 
-    let uri = path_to_uri(&file_path);
+    let uri = path_to_uri(file_path);
 
     // Open file
     send_notification(
