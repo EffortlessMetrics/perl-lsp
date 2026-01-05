@@ -1,6 +1,7 @@
 use perl_parser::{CompletionItemKind, CompletionProvider, Parser};
 use serial_test::serial;
 use std::fs;
+#[cfg(unix)]
 use std::path::Path;
 use tempfile::TempDir;
 
