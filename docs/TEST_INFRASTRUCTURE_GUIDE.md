@@ -488,15 +488,15 @@ cargo nextest run --profile local-fast --workspace
 
 ### Overview (*Diataxis: Explanation*)
 
-The project tracks **87% of ignored tests** as legacy "BrokenPipe" annotations that are actually stable. Most BrokenPipe errors were environmental/timing issues resolved by:
+Most historical "BrokenPipe" test failures were environmental/timing issues, now fully resolved by:
 1. Adaptive threading configuration (RUST_TEST_THREADS=2)
 2. Enhanced LSP harness with graceful shutdown handling
 3. Proper connection lifecycle management
 
-**Current Status** (as of 2025-12-31):
-- **Total ignored tests**: ~779 tests
-- **BrokenPipe-related**: ~677 tests (87%)
-- **Actually flaky**: ~15-20 tests (3%)
+**Current Status** (run `bash scripts/ignored-test-count.sh` for live counts):
+- **Tracked test debt**: BUG=0, MANUAL=1 (utility only)
+- **Non-default lanes**: Feature-gated tests run with `--all-features` or specific feature flags
+- **Baseline**: `scripts/.ignored-baseline`
 
 ### Known Flaky Test Categories (*Diataxis: Reference*)
 
@@ -548,9 +548,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_links_test -- --t
 
 **Root Cause**: Timing-sensitive Unicode boundary calculations during rapid message exchange
 
-**Current Status**: 14 tests marked as ignored, but **all pass reliably** with RUST_TEST_THREADS=2
-
-**Sweep Candidate**: Ready for `#[ignore]` removal after validation period
+**Current Status**: Tests pass reliably with RUST_TEST_THREADS=2. `#[ignore]` annotations removed during the Wave C cleanup (PR #261).
 
 **Mitigation**:
 ```toml
