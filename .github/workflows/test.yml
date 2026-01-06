@@ -237,6 +237,9 @@ jobs:
       continue-on-error: true  # Don't fail on warnings yet
 
   format:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:tests')
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4

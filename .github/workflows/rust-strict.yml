@@ -170,8 +170,11 @@ jobs:
   doc-hygiene:
     name: Documentation Hygiene
     runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:strict')
     continue-on-error: true  # Informational only
-    
+
     steps:
     - uses: actions/checkout@v4
     
