@@ -123,6 +123,7 @@ pub mod code_actions_pragmas;
 pub mod code_actions_provider;
 pub mod code_lens_provider;
 pub mod completion;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod dead_code_detector;
 pub mod debug_adapter;
 pub mod declaration;
@@ -137,6 +138,7 @@ pub mod error;
 /// Error classification and recovery strategies for parse failures.
 pub mod error_classifier;
 pub mod error_recovery;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod execute_command;
 /// Feature flags and capability management for LSP server functionality.
 pub mod features;
@@ -174,11 +176,16 @@ pub mod line_index;
 /// LSP linked editing provider for synchronized symbol renaming.
 pub mod linked_editing;
 /// Modular LSP server implementation (migration target)
+/// Note: LSP modules require filesystem access and are not available on wasm32.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod lsp;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod lsp_document_link;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod lsp_errors;
 pub mod lsp_on_type_formatting;
 pub mod lsp_selection_range;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod lsp_server;
 pub mod lsp_utils;
 /// Code modernization utilities for Perl best practices.
@@ -236,6 +243,7 @@ pub mod type_inference;
 pub mod uri;
 pub mod util;
 pub mod workspace_index;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod workspace_refactor;
 pub mod workspace_rename;
 pub mod workspace_symbols;
@@ -286,8 +294,10 @@ pub use import_optimizer::{
     OrganizationSuggestion, SuggestionPriority, UnusedImport,
 };
 pub use inlay_hints::{parameter_hints, trivial_type_hints};
-// Export LSP types from the new modular structure
+// Export LSP types from the new modular structure (not available on wasm32)
+#[cfg(not(target_arch = "wasm32"))]
 pub use lsp::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
+#[cfg(not(target_arch = "wasm32"))]
 pub use lsp_server::LspServer;
 pub use on_type_formatting::compute_on_type_edit;
 pub use rename::{RenameOptions, RenameProvider, RenameResult, TextEdit, apply_rename_edits};

@@ -19,6 +19,15 @@ fn test_type_hierarchy_prepare() {
     };
     let _ = server.handle_request(init_request);
 
+    // Send initialized notification (required by LSP protocol)
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized);
+
     // Open a document with class hierarchy
     let uri = "file:///test.pl";
     let content = r#"package Base;
@@ -93,6 +102,15 @@ fn test_type_hierarchy_supertypes() {
         })),
     };
     let _ = server.handle_request(init_request);
+
+    // Send initialized notification (required by LSP protocol)
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized);
 
     // Open a document with inheritance
     let uri = "file:///test.pl";
@@ -185,6 +203,15 @@ fn test_type_hierarchy_subtypes() {
         })),
     };
     let _ = server.handle_request(init_request);
+
+    // Send initialized notification (required by LSP protocol)
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized);
 
     // Open a document with derived classes
     let uri = "file:///test.pl";
@@ -307,6 +334,15 @@ fn test_type_hierarchy_with_namespace_packages() {
         })),
     };
     let _ = server.handle_request(init_request);
+
+    // Send initialized notification (required by LSP protocol)
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized);
 
     // Test with Foo::Bar -> Foo hierarchy
     let uri = "file:///test.pl";

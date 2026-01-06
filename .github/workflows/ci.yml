@@ -20,7 +20,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -nE 'cargo run -p xtask --locked --[^ ]' .github/workflows | tee /dev/stderr | grep -q .; then
+          # Match xtask invocations missing the ' -- ' separator
+          # Filter out: (1) this grep check itself, (2) comment lines
+          # Bad:  cargo run -p xtask --locked --ci
+          # Good: cargo run -p xtask --locked -- ci
+          if git grep -nE 'cargo run -p xtask --locked --[a-z]' .github/workflows \
+               | grep -v 'grep.*xtask' \
+               | grep -v '#.*Bad:' \
+               | tee /dev/stderr | grep -q .; then
             echo "::error::xtask invocations must include a space after the arg barrier: use '... -- <subcommand> ...'."
             exit 1
           fi
@@ -70,7 +77,7 @@ jobs:
             if cargo --offline test --no-fail-fast -p perl-lexer -p perl-parser -- --nocapture; then
               exit 0
             fi
-            cargo test --no-fail-fast -p perl-lexer -p perl-parser -- --nocapture
+            cargo test --locked --no-fail-fast -p perl-lexer -p perl-parser -- --nocapture
             exit $?
           fi
           # Otherwise propagate the failure

@@ -2,7 +2,8 @@
   "callHierarchyProvider": true,
   "codeActionProvider": {
     "codeActionKinds": [
-      "quickfix"
+      "quickfix",
+      "source.organizeImports"
     ],
     "resolveProvider": true
   },

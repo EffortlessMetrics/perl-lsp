@@ -72,9 +72,9 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ matrix.use_cross }}" == "true" ]]; then
-            cross build --release --target ${{ matrix.target }} -p perl-lsp --bin perl-lsp
+            cross build --locked --release --target ${{ matrix.target }} -p perl-lsp --bin perl-lsp
           else
-            cargo build --release --target ${{ matrix.target }} -p perl-lsp --bin perl-lsp
+            cargo build --locked --release --target ${{ matrix.target }} -p perl-lsp --bin perl-lsp
           fi
 
       - name: Package binary

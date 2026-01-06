@@ -2,11 +2,20 @@
 /// These tests verify actual functionality, not just response shapes
 /// They ensure the wired infrastructure produces real results
 use serde_json::json;
+use std::path::Path;
 use std::time::Duration;
+use url::Url;
 
 // Import the proper test harness
 mod support;
 use support::lsp_harness::{LspHarness, TempWorkspace};
+
+/// Convert a path to a file:// URI string, cross-platform safe
+fn path_to_uri(path: &Path) -> String {
+    Url::from_file_path(path)
+        .unwrap_or_else(|_| panic!("file path to URI failed: {}", path.display()))
+        .to_string()
+}
 
 mod test_fixtures {
     pub const MAIN_FILE: &str = r#"#!/usr/bin/env perl
@@ -259,7 +268,7 @@ sub calculate {
     // Open the document
     let file_path = workspace.dir.path().join("critic_test.pl");
     std::fs::write(&file_path, test_file).unwrap();
-    harness.open_document(&format!("file://{}", file_path.display()), test_file).unwrap();
+    harness.open_document(&path_to_uri(&file_path), test_file).unwrap();
 
     // Execute perl.runCritic command (with extended timeout for potential external tool)
     let result = harness
@@ -267,7 +276,7 @@ sub calculate {
             "workspace/executeCommand",
             json!({
                 "command": "perl.runCritic",
-                "arguments": [format!("file://{}", file_path.display())]
+                "arguments": [path_to_uri(&file_path)]
             }),
             Duration::from_secs(5),
         )
@@ -303,7 +312,7 @@ sub calculate {
         .request(
             "textDocument/codeAction",
             json!({
-                "textDocument": {"uri": format!("file://{}", file_path.display())},
+                "textDocument": {"uri": path_to_uri(&file_path)},
                 "range": {
                     "start": {"line": 0, "character": 0},
                     "end": {"line": 1, "character": 0}
@@ -539,15 +548,15 @@ use My::Module;
     let module_path = workspace.dir.path().join("lib/My/Module.pm");
     std::fs::create_dir_all(module_path.parent().unwrap()).unwrap();
     std::fs::write(&module_path, module).unwrap();
-    harness.open_document(&format!("file://{}", module_path.display()), module).unwrap();
+    harness.open_document(&path_to_uri(&module_path), module).unwrap();
 
     // Create and open the script
     let script_path = workspace.dir.path().join("script.pl");
     std::fs::write(&script_path, &script).unwrap();
-    harness.open_document(&format!("file://{}", script_path.display()), &script).unwrap();
+    harness.open_document(&path_to_uri(&script_path), &script).unwrap();
 
     // Wait until the symbol appears so we don't race the indexer
-    let module_uri = format!("file://{}", module_path.display());
+    let module_uri = path_to_uri(&module_path);
     harness
         .wait_for_symbol("My::Module", Some(&module_uri), Duration::from_millis(500))
         .expect("index ready");
@@ -562,7 +571,7 @@ use My::Module;
         .request_with_timeout(
             "textDocument/definition",
             json!({
-                "textDocument": { "uri": format!("file://{}", script_path.display()) },
+                "textDocument": { "uri": path_to_uri(&script_path) },
                 "position": { "line": line_idx, "character": char_col_utf16 }
             }),
             Duration::from_millis(500),
@@ -606,14 +615,14 @@ print $preprocessor;   # Should NOT match
 "#;
 
     std::fs::write(&file_path, content).unwrap();
-    harness.open_document(&format!("file://{}", file_path.display()), content).unwrap();
+    harness.open_document(&path_to_uri(&file_path), content).unwrap();
 
     // Find references to $process (not $process_data or $preprocessor)
     let result = harness
         .request_with_timeout(
             "textDocument/references",
             json!({
-                "textDocument": { "uri": format!("file://{}", file_path.display()) },
+                "textDocument": { "uri": path_to_uri(&file_path) },
                 "position": { "line": 1, "character": 4 },  // Position within $process
                 "context": { "includeDeclaration": true }
             }),
