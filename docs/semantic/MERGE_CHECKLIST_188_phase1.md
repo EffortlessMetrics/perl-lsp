@@ -59,7 +59,7 @@ This checklist tracks the validation and merge readiness for Issue #188 Phase 1,
 - [ ] Execution blocked by WSL resource constraints (expected)
 
 **Result:** ⚠️ Blocked by environment (not implementation)
-**Next:** Re-run via `nix flake check` or better hardware
+**Next:** Re-run via `nix develop -c just ci-gate` or better hardware
 **Evidence:** `/tmp/band1_lsp_probe.log`
 
 **Band 1 Conclusion:** ✅ Parser-level semantic stack validated and working
@@ -123,11 +123,14 @@ This checklist tracks the validation and merge readiness for Issue #188 Phase 1,
 **Status:** ✅ Expected to pass (Band 1 validated)
 
 #### 2. Nix Validation ⬜
-- [ ] `nix flake check` passes
+- [ ] `nix develop -c just ci-gate` passes
 - [ ] All targets build successfully
 - [ ] Basic test suite runs
 
 **Status:** ⬜ Pending execution
+
+> **Note**: `nix flake check` doesn't work due to sandbox network restrictions.
+> Use `nix develop -c just ci-gate` as the canonical Nix local gate.
 
 #### 3. Documentation ✅
 - [x] Band 1 results documented (`SEMANTIC_VALIDATION_BAND1_RESULTS.md`)
@@ -192,7 +195,7 @@ This checklist tracks the validation and merge readiness for Issue #188 Phase 1,
 ### ✅ Ready to Merge When:
 1. ✅ Band 1 parser-level validation complete
 2. ⬜ Band 2 ignore policy in place (prevents regression)
-3. ⬜ `nix flake check` passes (comprehensive validation)
+3. ⬜ `nix develop -c just ci-gate` passes (comprehensive validation)
 4. ✅ Documentation complete and up-to-date
 5. ⬜ No outstanding critical bugs
 
@@ -204,10 +207,10 @@ Given GitHub Actions is offline for 2+ weeks:
 
 **Process:**
 1. ✅ Run `just ci-gate` locally → must pass
-2. ⬜ Run `nix flake check` → must pass
+2. ⬜ Run `nix develop -c just ci-gate` → must pass (canonical Nix gate)
 3. ✅ Update documentation → complete
 4. ⬜ Address any review comments
-5. ⬜ Merge via `gh pr merge` with comment: "CI: ci-gate ✅, nix flake check ✅ (Actions offline)"
+5. ⬜ Merge via `gh pr merge` with comment: "CI: ci-gate ✅, nix gate ✅ (Actions offline)"
 
 ---
 
@@ -215,7 +218,7 @@ Given GitHub Actions is offline for 2+ weeks:
 
 ### Immediate (Band 1 Complete)
 1. ✅ Document Band 1 results → **DONE**
-2. ⬜ Run `nix flake check` for comprehensive validation
+2. ⬜ Run `nix develop -c just ci-gate` for comprehensive validation
 3. ✅ Create ignore policy check script → **DONE** (`scripts/ignored-test-count.sh`)
 
 ### Short-term (Band 2 Complete) ✅
