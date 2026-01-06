@@ -3,8 +3,21 @@ name: Rust Strict Quality Checks
 on:
   push:
     branches: [ master, main ]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.claude/**'
   pull_request:
     branches: [ master, main ]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.claude/**'
+
+# Cancel in-flight runs on new pushes (saves minutes)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -123,15 +136,15 @@ jobs:
     - name: Dependency Security Check
       run: cargo deny check
 
-  - name: Assert lockfile unchanged
-    if: ${{ always() }}
-    shell: bash
-    run: |
-      if ! git diff --quiet -- Cargo.lock; then
-        echo "::error::Cargo.lock changed during this job. Run 'cargo update' locally and commit the result."
-        git --no-pager diff -- Cargo.lock | sed -n '1,200p'
-        exit 1
-      fi
+    - name: Assert lockfile unchanged
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        if ! git diff --quiet -- Cargo.lock; then
+          echo "::error::Cargo.lock changed during this job. Run 'cargo update' locally and commit the result."
+          git --no-pager diff -- Cargo.lock | sed -n '1,200p'
+          exit 1
+        fi
 
   # Optional: Semver checks for published crates
   semver:

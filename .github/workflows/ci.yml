@@ -6,6 +6,11 @@ on:
   push:
     branches: [ ci-pilot/** ]
 
+# Cancel in-flight runs on new pushes (saves minutes)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
