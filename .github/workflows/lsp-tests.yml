@@ -15,6 +15,11 @@ on:
       - 'crates/perl-lexer/**'
       - 'crates/perl-lsp/**'
 
+# Cancel in-flight runs on new pushes (saves minutes)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full

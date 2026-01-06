@@ -3,6 +3,11 @@ name: docs-truth
 on:
   pull_request:
 
+# Cancel in-flight runs on new pushes (saves minutes)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate-docs:
     if: |

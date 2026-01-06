@@ -3,9 +3,22 @@ name: Benchmarks
 on:
   push:
     branches: [ master, main ]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.claude/**'
   pull_request:
     branches: [ master, main ]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.claude/**'
   workflow_dispatch:
+
+# Cancel in-flight runs on new pushes (saves minutes)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
