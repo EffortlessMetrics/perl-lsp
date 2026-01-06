@@ -24,6 +24,7 @@ jobs:
   test:
     name: Test LSP Implementation
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30  # Belt-and-suspenders: never burn hours on hanging tests
     defaults:
       run:
         shell: bash

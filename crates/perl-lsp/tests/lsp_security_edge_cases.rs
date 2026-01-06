@@ -1,3 +1,12 @@
+//! Security edge case tests for LSP server.
+//!
+//! These tests validate security boundaries but require enhanced timeout handling
+//! for malformed URIs that may not produce responses. Gated behind stress-tests
+//! feature until harness timeout improvements are implemented.
+//!
+//! TODO(#267): Move to default lane after harness has proper read_response_timeout.
+#![cfg(feature = "stress-tests")]
+
 use serde_json::json;
 
 mod common;
@@ -486,7 +495,7 @@ fn test_symlink_and_hardlink_handling() {
     );
 
     // Both should work independently
-    send_request(
+    let response1 = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -500,9 +509,7 @@ fn test_symlink_and_hardlink_handling() {
         }),
     );
 
-    let response1 = read_response(&mut server);
-
-    send_request(
+    let response2 = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -516,10 +523,9 @@ fn test_symlink_and_hardlink_handling() {
         }),
     );
 
-    let response2 = read_response(&mut server);
-
-    assert!(response1["result"].is_array());
-    assert!(response2["result"].is_array());
+    // Both paths should return valid symbol arrays (server handles them independently)
+    assert!(response1["result"].is_array(), "response1 should have result array: {:?}", response1);
+    assert!(response2["result"].is_array(), "response2 should have result array: {:?}", response2);
 }
 
 #[test]

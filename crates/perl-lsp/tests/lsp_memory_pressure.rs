@@ -1,3 +1,7 @@
+//! Memory pressure and resource exhaustion tests for LSP server.
+//! These tests are slow and should only run with `cargo test --features stress-tests`.
+#![cfg(feature = "stress-tests")]
+
 use serde_json::json;
 use std::time::{Duration, Instant};
 

@@ -1,3 +1,8 @@
+//! Stress tests for resource exhaustion and performance limits.
+//! Ensures the LSP server handles extreme loads gracefully.
+//! These tests are slow and should only run with `cargo test --features stress-tests`.
+#![cfg(feature = "stress-tests")]
+
 use serde_json::json;
 use std::time::{Duration, Instant};
 
