@@ -303,12 +303,18 @@ pub struct TokenStream<'a> {
     lexer: PerlLexer<'a>,
     peeked: Option<Token>,
     peeked_second: Option<Token>,
+    peeked_third: Option<Token>,
 }
 
 impl<'a> TokenStream<'a> {
     /// Create a new token stream from source code
     pub fn new(input: &'a str) -> Self {
-        TokenStream { lexer: PerlLexer::new(input), peeked: None, peeked_second: None }
+        TokenStream {
+            lexer: PerlLexer::new(input),
+            peeked: None,
+            peeked_second: None,
+            peeked_third: None,
+        }
     }
 
     /// Peek at the next token without consuming it
@@ -321,10 +327,11 @@ impl<'a> TokenStream<'a> {
 
     /// Consume and return the next token
     pub fn next(&mut self) -> ParseResult<Token> {
-        // If we have a peeked token, return it and move peeked_second to peeked
+        // If we have a peeked token, return it and shift the peek chain down
 
         if let Some(token) = self.peeked.take() {
             self.peeked = self.peeked_second.take();
+            self.peeked_second = self.peeked_third.take();
             Ok(token)
         } else {
             self.next_token()
@@ -349,6 +356,19 @@ impl<'a> TokenStream<'a> {
         Ok(self.peeked_second.as_ref().unwrap())
     }
 
+    /// Peek at the third token (three tokens ahead)
+    pub fn peek_third(&mut self) -> ParseResult<&Token> {
+        // First ensure we have peeked and second peeked tokens
+        self.peek_second()?;
+
+        // If we don't have a third peeked token, get it
+        if self.peeked_third.is_none() {
+            self.peeked_third = Some(self.next_token()?);
+        }
+
+        Ok(self.peeked_third.as_ref().unwrap())
+    }
+
     /// Enter format body parsing mode in the lexer
     pub fn enter_format_mode(&mut self) {
         self.lexer.enter_format_mode();
@@ -359,6 +379,7 @@ impl<'a> TokenStream<'a> {
         // Clear any cached lookahead tokens
         self.peeked = None;
         self.peeked_second = None;
+        self.peeked_third = None;
 
         // Reset lexer to expect a term (start of new statement)
         self.lexer.set_mode(LexerMode::ExpectTerm);
@@ -367,6 +388,7 @@ impl<'a> TokenStream<'a> {
     /// Pure peek cache invalidation - no mode changes
     pub fn invalidate_peek(&mut self) {
         self.peeked = None;
+        self.peeked_third = None;
         self.peeked_second = None;
     }
 

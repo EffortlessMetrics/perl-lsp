@@ -1273,6 +1273,7 @@ impl DebugAdapter {
     }
 
     /// Send interrupt signal to process (cross-platform)
+    #[allow(unused_variables)] // pid unused on non-unix/non-windows platforms (e.g., wasm32)
     fn send_interrupt_signal(&self, pid: u32) -> bool {
         #[cfg(unix)]
         {

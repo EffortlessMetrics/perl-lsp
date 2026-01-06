@@ -5,7 +5,6 @@ use serde_json::json;
 use support::lsp_harness::LspHarness;
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_type_definition_basic() {
     let mut harness = LspHarness::new();
 
@@ -84,7 +83,6 @@ $obj->method();
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_type_definition_crlf_emoji_positions() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");
@@ -121,7 +119,6 @@ fn test_type_definition_crlf_emoji_positions() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_type_definition_method_call() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");
@@ -156,7 +153,6 @@ $obj->method();
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_type_definition_blessed_reference() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");
@@ -186,7 +182,6 @@ my $type = ref $obj;
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_type_definition_isa_operator() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");
@@ -221,7 +216,6 @@ if ($pet isa Animal) {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_type_definition_no_type() {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None).expect("Failed to initialize");

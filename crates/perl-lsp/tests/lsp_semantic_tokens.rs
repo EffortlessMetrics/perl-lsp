@@ -2,7 +2,7 @@ use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn semantic_tokens_emit_data() {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
@@ -12,6 +12,15 @@ fn semantic_tokens_emit_data() {
         params: Some(json!({"capabilities":{}})),
     };
     srv.handle_request(init);
+
+    // Send initialized notification (required by LSP protocol)
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    srv.handle_request(initialized);
 
     let uri = "file:///tokens.pl";
     let text = r#"package Foo; my $x = 1; sub bar { return $x } $x = 2; bar();"#;

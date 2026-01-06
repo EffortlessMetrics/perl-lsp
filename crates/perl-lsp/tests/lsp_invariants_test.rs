@@ -6,12 +6,13 @@
 #![allow(clippy::collapsible_if)]
 
 mod common;
-use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
+use common::{
+    initialize_lsp, send_notification, send_request, shutdown_and_exit, start_lsp_server,
+};
 use serde_json::json;
 
 /// Verify all responses have proper JSON-RPC structure
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_response_structure_invariants() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -40,11 +41,11 @@ fn test_response_structure_invariants() {
 
     // Must have matching ID
     assert!(response.get("id").is_some(), "Response must have an id field");
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify error responses have proper structure
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_error_response_structure() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -77,11 +78,11 @@ fn test_error_response_structure() {
         || code < -32000, // Server-defined errors
         "Error code must be standard JSON-RPC or server-defined"
     );
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify ID matching between request and response
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_id_matching_invariants() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -117,16 +118,16 @@ fn test_id_matching_invariants() {
         }),
     );
     assert_eq!(response["id"], "test-id", "Response ID must match string request ID");
+    shutdown_and_exit(&mut server);
 }
 
-/// Verify diagnostics always include version
+/// Verify diagnostics always include version and errors are cleared when fixed
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing); Version field is optional in LSP spec
 fn test_diagnostics_version_invariant() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
-    // Open document
+    // Open document with a parse error (undefined variable usage)
     send_notification(
         &mut server,
         json!({
@@ -153,7 +154,7 @@ fn test_diagnostics_version_invariant() {
         assert!(diag["params"]["diagnostics"].is_array(), "Diagnostics must be an array");
     }
 
-    // Fix the error
+    // Fix the error by using all variables (avoids unused variable warnings)
     send_notification(
         &mut server,
         json!({
@@ -165,27 +166,30 @@ fn test_diagnostics_version_invariant() {
                     "version": 2
                 },
                 "contentChanges": [
-                    { "text": "my $x = 1;\nmy $y = 2;" }
+                    { "text": "my $x = 1;\nmy $y = 2;\nprint $x + $y;" }
                 ]
             }
         }),
     );
 
-    // Wait for clear diagnostics
+    // Wait for updated diagnostics
     if let Some(diag) = common::read_notification_method(
         &mut server,
         "textDocument/publishDiagnostics",
         common::short_timeout(),
     ) {
-        assert_eq!(diag["params"]["version"], 2, "Clear diagnostics must have updated version");
+        assert_eq!(diag["params"]["version"], 2, "Diagnostics must have updated version");
         let diags = diag["params"]["diagnostics"].as_array().unwrap();
-        assert!(diags.is_empty(), "Fixed code should have empty diagnostics array");
+        // Check that there are no error-level diagnostics (severity 1)
+        // Hints and warnings (severity 2-4) may still be present
+        let errors: Vec<_> = diags.iter().filter(|d| d["severity"] == 1).collect();
+        assert!(errors.is_empty(), "Fixed code should have no error-level diagnostics");
     }
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify server doesn't crash on malformed JSON
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_no_crash_on_malformed_json() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -210,11 +214,11 @@ fn test_no_crash_on_malformed_json() {
         }),
     );
     assert!(response["result"].is_array() || response["error"].is_object());
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify proper error for invalid method
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_invalid_request_errors() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -231,11 +235,11 @@ fn test_invalid_request_errors() {
 
     assert!(response["error"].is_object());
     assert_eq!(response["error"]["code"], -32601); // Method not found
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify notifications don't produce responses
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing); This test is flaky due to timing with diagnostics
 fn test_notifications_no_response() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -269,11 +273,11 @@ fn test_notifications_no_response() {
             Some("textDocument/publishDiagnostics")
         );
     }
+    shutdown_and_exit(&mut server);
 }
 
 /// Verify server handles concurrent requests properly
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing); This test needs rewriting for auto-generated IDs
 fn test_concurrent_request_handling() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -310,4 +314,5 @@ fn test_concurrent_request_handling() {
     // Should receive all IDs (order may vary)
     received_ids.sort();
     assert_eq!(received_ids, vec![200, 201, 202, 203, 204]);
+    shutdown_and_exit(&mut server);
 }

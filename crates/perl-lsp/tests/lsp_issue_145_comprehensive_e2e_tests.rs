@@ -156,14 +156,31 @@ severity = 3
 
 /// Create comprehensive test workspace for E2E testing
 fn create_comprehensive_workspace() -> (LspHarness, TempWorkspace) {
-    let (mut harness, workspace) = LspHarness::with_workspace(&[
-        ("lib/MyApp/DataProcessor.pm", e2e_fixtures::REALISTIC_PERL_MODULE),
-        ("test_script.pl", e2e_fixtures::TEST_SCRIPT),
-        (".perlcriticrc", e2e_fixtures::PERLCRITIC_CONFIG),
-    ])
-    .expect("Failed to create comprehensive test workspace");
+    let (harness, workspace, _init_result) = create_comprehensive_workspace_with_init();
+    (harness, workspace)
+}
 
-    // Initialize all documents
+/// Create comprehensive test workspace for E2E testing - returns init result for capability inspection
+fn create_comprehensive_workspace_with_init() -> (LspHarness, TempWorkspace, serde_json::Value) {
+    let workspace = TempWorkspace::new().expect("Failed to create temp workspace");
+
+    // Write all files to disk
+    workspace
+        .write("lib/MyApp/DataProcessor.pm", e2e_fixtures::REALISTIC_PERL_MODULE)
+        .expect("Failed to write module file");
+    workspace
+        .write("test_script.pl", e2e_fixtures::TEST_SCRIPT)
+        .expect("Failed to write script file");
+    workspace
+        .write(".perlcriticrc", e2e_fixtures::PERLCRITIC_CONFIG)
+        .expect("Failed to write config file");
+
+    let mut harness = LspHarness::new_without_initialize();
+    let init_result = harness
+        .initialize_with_root(&workspace.root_uri, None)
+        .expect("Failed to initialize LSP server");
+
+    // Open all documents
     harness
         .open_document(
             &workspace.uri("lib/MyApp/DataProcessor.pm"),
@@ -182,20 +199,19 @@ fn create_comprehensive_workspace() -> (LspHarness, TempWorkspace) {
     // Wait for comprehensive indexing and analysis
     harness.wait_for_idle(Duration::from_millis(2000));
 
-    (harness, workspace)
+    (harness, workspace, init_result)
 }
 
 // ======================== AC5: Comprehensive Integration Test Suite ========================
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - Complete Issue #145 workflow validation
 fn test_issue_145_complete_workflow() {
-    let (mut harness, workspace) = create_comprehensive_workspace();
+    let (mut harness, workspace, init_result) = create_comprehensive_workspace_with_init();
 
     // Step 1: Verify server capabilities include new features
-    // Initialize the server to get capabilities
-    let init_result = harness.initialize_default().expect("Server should initialize successfully");
+    // Server was initialized by create_comprehensive_workspace_with_init(), use the returned init_result
 
     let capabilities =
         init_result.get("capabilities").expect("Initialize result should contain capabilities");
@@ -316,7 +332,6 @@ fn test_issue_145_complete_workflow() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - Cross-file analysis and navigation
 fn test_cross_file_integration() {
     let (mut harness, workspace) = create_comprehensive_workspace();
@@ -365,7 +380,6 @@ fn test_cross_file_integration() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - Performance validation for complete workflow
 fn test_complete_workflow_performance() {
     let (mut harness, workspace) = create_comprehensive_workspace();
@@ -410,7 +424,6 @@ fn test_complete_workflow_performance() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - Error handling and recovery
 fn test_error_handling_integration() {
     let (mut harness, _workspace) = create_comprehensive_workspace();
@@ -450,7 +463,6 @@ fn test_error_handling_integration() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - Concurrent operations validation
 fn test_concurrent_operations() {
     let (mut harness, workspace) = create_comprehensive_workspace();
@@ -510,7 +522,6 @@ fn test_concurrent_operations() {
 // ======================== Protocol Compliance and Standards ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - LSP 3.17+ protocol compliance validation
 fn test_lsp_protocol_compliance() {
     let (mut harness, workspace) = create_comprehensive_workspace();
@@ -567,7 +578,6 @@ fn test_lsp_protocol_compliance() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - Workspace configuration and settings
 fn test_workspace_configuration_integration() {
     let (mut harness, workspace) = create_comprehensive_workspace();
@@ -596,7 +606,6 @@ fn test_workspace_configuration_integration() {
 // ======================== Regression and Stability Testing ========================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - Backwards compatibility with existing features
 fn test_backwards_compatibility() {
     let (mut harness, workspace) = create_comprehensive_workspace();
@@ -632,7 +641,6 @@ fn test_backwards_compatibility() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 // AC5:integration - Memory and resource management
 fn test_resource_management() {
     let (mut harness, workspace) = create_comprehensive_workspace();

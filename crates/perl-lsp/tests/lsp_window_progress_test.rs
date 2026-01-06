@@ -13,7 +13,6 @@ use support::lsp_harness::LspHarness;
 // ==================== WINDOW NOTIFICATIONS ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_window_show_document_capability_gating() {
     let mut harness = LspHarness::new();
 
@@ -51,7 +50,6 @@ fn test_window_show_document_capability_gating() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_window_log_message_notification() {
     // window/logMessage is always available, no capability gating
     let mut harness = LspHarness::new();
@@ -108,7 +106,6 @@ fn test_window_log_message_notification() {
 // ==================== WORK DONE PROGRESS ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_work_done_progress_capability_gating() {
     // Test WITHOUT work done progress support
     let mut harness = LspHarness::new();
@@ -140,7 +137,6 @@ fn test_work_done_progress_capability_gating() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_progress_notification_sequence() {
     let mut harness = LspHarness::new();
     harness
@@ -225,7 +221,6 @@ fn test_progress_notification_sequence() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_progress_percentage_monotonic() {
     // Percentages must be monotonically increasing
     let _token = "build#42";
@@ -287,7 +282,6 @@ fn test_progress_percentage_monotonic() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_work_done_progress_cancel() {
     let mut harness = LspHarness::new();
     harness
@@ -317,7 +311,6 @@ fn test_work_done_progress_cancel() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_progress_token_types() {
     // Tokens can be number or string
     let number_token = json!({
@@ -336,7 +329,6 @@ fn test_progress_token_types() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_work_done_progress_create_response() {
     let mut harness = LspHarness::new();
     harness
@@ -383,7 +375,6 @@ fn test_work_done_progress_create_response() {
 // ==================== TELEMETRY ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_telemetry_event_notification() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -425,7 +416,6 @@ fn test_telemetry_event_notification() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_telemetry_no_pii() {
     // Telemetry MUST NOT include personally identifiable information
 
@@ -458,7 +448,6 @@ fn test_telemetry_no_pii() {
 // ==================== SHOW DOCUMENT ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_show_document_request_contract() {
     // window/showDocument is server->client request (3.16+)
 
@@ -515,7 +504,6 @@ fn test_show_document_request_contract() {
 // ==================== LIFECYCLE CONSTRAINTS ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_progress_before_initialization() {
     // Server MUST NOT send progress before initialize response
     // Exception: progress for tokens provided BY the client in that request
@@ -534,7 +522,6 @@ fn test_progress_before_initialization() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_window_messages_before_initialization() {
     // Until initialize returns, server MUST NOT send requests/notifications EXCEPT:
     // - window/showMessage
@@ -586,7 +573,6 @@ fn validate_preinitialize_outbox(msgs: &[Value], init_token: Option<&Value>) -> 
 // ==================== ERROR HANDLING ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_diagnostic_server_cancellation_data() {
     // Test that DiagnosticServerCancellationData.retriggerRequest
     // tells clients whether to re-trigger
@@ -623,7 +609,6 @@ fn test_diagnostic_server_cancellation_data() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_cancelled_request_error() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -642,7 +627,6 @@ fn test_cancelled_request_error() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_content_modified_error() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -661,7 +645,6 @@ fn test_content_modified_error() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_server_cancelled_error() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -680,7 +663,6 @@ fn test_server_cancelled_error() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_request_failed_error() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -701,7 +683,6 @@ fn test_request_failed_error() {
 // ==================== COMPLEX SCENARIOS ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_parallel_progress_tokens() {
     // Multiple progress operations can run in parallel with unique tokens
 
@@ -724,7 +705,6 @@ fn test_parallel_progress_tokens() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_progress_with_partial_results() {
     let mut harness = LspHarness::new();
     harness.initialize(None).expect("init");
@@ -773,7 +753,6 @@ fn test_progress_with_partial_results() {
 // ==================== ACCEPTANCE CRITERIA ====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_window_progress_acceptance_criteria() {
     // Comprehensive acceptance test for window & progress features
 

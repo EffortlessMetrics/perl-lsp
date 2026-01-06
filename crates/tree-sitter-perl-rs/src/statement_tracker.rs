@@ -296,7 +296,25 @@ pub fn find_statement_end_line(input: &str, heredoc_line: usize) -> usize {
     let mut tracker = StatementTracker::new();
     let mut prev_char: Option<char> = None;
 
-    // Pre-scan lines before the heredoc to establish bracket state
+    // #221: Block-aware statement detection
+    // Check if heredoc line ends with semicolon (outside strings/comments)
+    let heredoc_line_text = lines[heredoc_line - 1];
+    let ends_with_semicolon = heredoc_line_text
+        .trim_end()
+        .trim_end_matches(|c: char| c.is_whitespace() || c == ';')
+        .len()
+        < heredoc_line_text.trim_end().len()
+        && heredoc_line_text.trim_end().ends_with(';');
+
+    if ends_with_semicolon {
+        // Heredoc statement is complete on this line (e.g., `my $x = <<EOF;`)
+        // Don't pre-scan - this prevents block delimiters from being tracked
+        // Just return the heredoc line itself
+        return heredoc_line;
+    }
+
+    // Heredoc is part of a larger expression (e.g., inside hash/array/function call)
+    // Pre-scan to establish bracket state for data structures
     for line in lines.iter().take(heredoc_line - 1) {
         for ch in line.chars() {
             if tracker.process_char(ch, prev_char) {

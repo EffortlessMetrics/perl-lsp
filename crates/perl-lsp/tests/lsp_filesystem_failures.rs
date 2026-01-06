@@ -2,16 +2,21 @@ use serde_json::json;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use url::Url;
 
 mod common;
+
+/// Convert a file path to a proper file:// URI (cross-platform)
+fn path_to_uri(path: &Path) -> String {
+    Url::from_file_path(path).expect("file path to URI").to_string()
+}
 use common::{initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
 
 /// Filesystem failure scenario tests
 /// Tests handling of permission errors, disk space, and I/O failures
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_read_only_file() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -21,12 +26,12 @@ fn test_read_only_file() {
     let file_path = temp_dir.join(format!("readonly_{}.pl", std::process::id()));
     fs::write(&file_path, "print 'readonly';").unwrap();
 
-    // Make file read-only
+    // Make file read-only (cross-platform)
     let mut perms = fs::metadata(&file_path).unwrap().permissions();
-    perms.set_mode(0o444);
+    perms.set_readonly(true);
     fs::set_permissions(&file_path, perms).unwrap();
 
-    let uri = format!("file://{}", file_path.display());
+    let uri = path_to_uri(&file_path);
 
     // Open read-only file (should work)
     send_notification(
@@ -62,12 +67,16 @@ fn test_read_only_file() {
     let content = fs::read_to_string(&file_path).unwrap();
     assert_eq!(content, "print 'readonly';");
 
-    // Cleanup
+    // Cleanup: restore write permissions before deleting (required on Windows)
+    #[allow(clippy::permissions_set_readonly_false)]
+    if let Ok(mut perms) = fs::metadata(&file_path).map(|m| m.permissions()) {
+        perms.set_readonly(false);
+        let _ = fs::set_permissions(&file_path, perms);
+    }
     let _ = fs::remove_file(&file_path);
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_directory_as_file() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -76,7 +85,7 @@ fn test_directory_as_file() {
     let dir_path = temp_dir.join(format!("dir_{}", std::process::id()));
     fs::create_dir(&dir_path).unwrap();
 
-    let uri = format!("file://{}", dir_path.display());
+    let uri = path_to_uri(&dir_path);
 
     // Try to open a directory as a file
     send_notification(
@@ -117,7 +126,6 @@ fn test_directory_as_file() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_non_existent_file() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -159,7 +167,6 @@ fn test_non_existent_file() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 #[cfg(unix)]
 fn test_permission_denied_directory() {
     // Skip test if running as root (no permission denied for root)
@@ -189,7 +196,7 @@ fn test_permission_denied_directory() {
     perms.set_mode(0o000);
     fs::set_permissions(restricted_dir, perms.clone()).unwrap();
 
-    let uri = format!("file://{}", file_path.display());
+    let uri = path_to_uri(&file_path);
 
     // Try to access file in restricted directory
     send_request(
@@ -217,7 +224,6 @@ fn test_permission_denied_directory() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 #[cfg(windows)]
 fn test_permission_denied_directory() {
     // Windows permission handling is different, skip for now
@@ -225,7 +231,6 @@ fn test_permission_denied_directory() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 #[cfg(unix)]
 fn test_symlink_loop() {
     let mut server = start_lsp_server();
@@ -247,7 +252,7 @@ fn test_symlink_loop() {
         std::os::unix::fs::symlink(link1, link2).unwrap();
     }
 
-    let uri = format!("file://{}", link1.display());
+    let uri = path_to_uri(link1);
 
     // Try to open symlink loop
     send_notification(
@@ -288,7 +293,6 @@ fn test_symlink_loop() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 #[cfg(windows)]
 fn test_symlink_loop() {
     // Windows symlink handling requires admin privileges, skip for now
@@ -296,7 +300,6 @@ fn test_symlink_loop() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_broken_symlink() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -317,7 +320,7 @@ fn test_broken_symlink() {
     // Delete target, leaving broken symlink
     fs::remove_file(target).unwrap();
 
-    let uri = format!("file://{}", link.display());
+    let uri = path_to_uri(link);
 
     // Try to open broken symlink
     send_notification(
@@ -355,7 +358,6 @@ fn test_broken_symlink() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_very_long_path() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -402,7 +404,6 @@ fn test_very_long_path() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_special_filename_characters() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -453,7 +454,7 @@ fn test_special_filename_characters() {
 
         // Try to create file (may fail on some filesystems)
         if fs::write(file_path, "print 'special';").is_ok() {
-            let uri = format!("file://{}", file_path.display());
+            let uri = path_to_uri(file_path);
 
             send_notification(
                 &mut server,
@@ -475,7 +476,6 @@ fn test_special_filename_characters() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_case_sensitive_filesystem() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -494,8 +494,8 @@ fn test_case_sensitive_filesystem() {
     }
 
     // Open with different case
-    let uri_lower = format!("file://{}", file_lower.display());
-    let uri_upper = format!("file://{}", file_upper.display());
+    let uri_lower = path_to_uri(file_lower);
+    let uri_upper = path_to_uri(file_upper);
 
     send_notification(
         &mut server,
@@ -547,7 +547,6 @@ fn test_case_sensitive_filesystem() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_file_deleted_while_open() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -556,7 +555,7 @@ fn test_file_deleted_while_open() {
     let file_path = &temp_dir.join("delete_me.pl");
     fs::write(file_path, "print 'delete me';").unwrap();
 
-    let uri = format!("file://{}", file_path.display());
+    let uri = path_to_uri(file_path);
 
     // Open file
     send_notification(
@@ -610,7 +609,6 @@ fn test_file_deleted_while_open() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_file_modified_externally() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -619,7 +617,7 @@ fn test_file_modified_externally() {
     let file_path = &temp_dir.join("external.pl");
     fs::write(file_path, "print 'original';").unwrap();
 
-    let uri = format!("file://{}", file_path.display());
+    let uri = path_to_uri(file_path);
 
     // Open file
     send_notification(
@@ -677,12 +675,12 @@ fn test_file_modified_externally() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_folder_deleted() {
     let mut server = start_lsp_server();
 
     let temp_dir = std::env::temp_dir();
     let workspace_path = &temp_dir.to_path_buf();
+    let workspace_uri = path_to_uri(workspace_path);
 
     // Initialize with workspace folder
     let response = send_request(
@@ -693,10 +691,10 @@ fn test_workspace_folder_deleted() {
             "method": "initialize",
             "params": {
                 "processId": null,
-                "rootUri": format!("file://{}", workspace_path.display()),
+                "rootUri": workspace_uri,
                 "capabilities": {},
                 "workspaceFolders": [{
-                    "uri": format!("file://{}", workspace_path.display()),
+                    "uri": workspace_uri,
                     "name": "test"
                 }]
             }
@@ -727,7 +725,7 @@ fn test_workspace_folder_deleted() {
                 "event": {
                     "added": [],
                     "removed": [{
-                        "uri": format!("file://{}", workspace_path.display()),
+                        "uri": workspace_uri,
                         "name": "test"
                     }]
                 }
@@ -755,7 +753,6 @@ fn test_workspace_folder_deleted() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_hidden_files() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -764,7 +761,7 @@ fn test_hidden_files() {
     let hidden_file = &temp_dir.join(".hidden.pl");
     fs::write(hidden_file, "print 'hidden';").unwrap();
 
-    let uri = format!("file://{}", hidden_file.display());
+    let uri = path_to_uri(hidden_file);
 
     // Open hidden file
     send_notification(
@@ -801,7 +798,6 @@ fn test_hidden_files() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_device_files() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -810,8 +806,9 @@ fn test_device_files() {
     let device_files = vec!["/dev/null", "/dev/zero", "/dev/random", "/dev/urandom"];
 
     for device in device_files {
-        if PathBuf::from(device).exists() {
-            let uri = format!("file://{}", device);
+        let device_path = PathBuf::from(device);
+        if device_path.exists() {
+            let uri = path_to_uri(&device_path);
 
             send_notification(
                 &mut server,
@@ -833,7 +830,6 @@ fn test_device_files() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_fifo_pipe() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -845,7 +841,7 @@ fn test_fifo_pipe() {
     let _ = std::process::Command::new("mkfifo").arg(fifo_path).output();
 
     if fifo_path.exists() {
-        let uri = format!("file://{}", fifo_path.display());
+        let uri = path_to_uri(fifo_path);
 
         // Try to open FIFO
         send_notification(

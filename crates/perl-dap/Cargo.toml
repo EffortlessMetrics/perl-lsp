@@ -27,44 +27,50 @@ perl-parser = { path = "../perl-parser" }
 lsp-types = "0.97.0"
 
 # JSON serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.148"
 
 # Error handling
-anyhow = "1.0"
-thiserror = "2.0"
+anyhow = "1.0.100"
+thiserror = "2.0.17"
 
 # Async runtime
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.48.0", features = ["full"] }
 
 # Logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 # Rope for position mapping (reuse from perl-parser)
-ropey = "1.6"
+ropey = "1.6.1"
 
 # Process management
 # Note: tokio-process not needed (using tokio::process)
 
 [dev-dependencies]
 # Property-based testing (AC13)
-proptest = "1.0"
+proptest = "1.9.0"
 
 # Performance benchmarking (AC14, AC15)
-criterion = "0.5"
+criterion = "0.8.1"
 
 # Test fixtures
-tempfile = "3.0"
+tempfile = "3.24.0"
 
-# Golden transcript validation (AC13)
-serde_yaml = "0.9"
+# Golden transcript validation (AC13) - serde_yaml removed (unused)
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.28", features = ["signal"] }  # For SIGINT handling (AC9)
+nix = { version = "0.30.1", features = ["signal"] }  # For SIGINT handling (AC9)
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["processthreadsapi"] }  # For Ctrl+C (AC9)
+winapi = { version = "0.3.9", features = ["processthreadsapi"] }  # For Ctrl+C (AC9)
+
+[features]
+default = []
+# DAP implementation phases (TDD scaffold tests)
+dap-phase1 = []  # AC1-AC4: Bridge to Perl::LanguageServer
+dap-phase2 = []  # AC5-AC16: Native adapter, integration tests, performance, security
+dap-phase3 = []  # AC17-AC19: Non-regression, dependency management, packaging
 
 # Test targets with acceptance criteria mapping
 [[test]]

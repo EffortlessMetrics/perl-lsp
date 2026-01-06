@@ -616,10 +616,5 @@ if ($condition) {
     }
 }
 
-#[cfg(not(feature = "incremental"))]
-#[test]
-#[ignore = "Incremental feature not enabled"]
-fn test_incremental_performance_feature_disabled() {
-    // Just verify the crate compiles without the feature
-    println!("Incremental performance tests require 'incremental' feature");
-}
+// Tests in this file require the 'incremental' feature.
+// Run with: cargo test -p perl-parser --features incremental

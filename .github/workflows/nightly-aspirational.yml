@@ -33,7 +33,7 @@ jobs:
       - name: Run tests with feature ${{ matrix.feature }}
         run: |
           set -euxo pipefail
-          cargo test -p perl-parser --all-targets --features "${{ matrix.feature }}"
+          cargo test --locked -p perl-parser --all-targets --features "${{ matrix.feature }}"
       
       - name: Report results
         if: always()
@@ -66,7 +66,7 @@ jobs:
       - name: Run combo tests
         run: |
           set -euxo pipefail
-          cargo test -p perl-parser --all-targets --features "${{ matrix.features }}"
+          cargo test --locked -p perl-parser --all-targets --features "${{ matrix.features }}"
       
       - name: Report combo results
         if: always()

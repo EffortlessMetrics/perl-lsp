@@ -45,6 +45,7 @@ cargo test --workspace --all-features --locked
 2. **Clippy (libs)**: `cargo clippy --workspace --lib --locked -- -D warnings -A missing_docs`
 3. **Core tests**: `cargo test --workspace --lib --bins --locked`
 4. **Policy check**: `.ci/scripts/check-from-raw.sh`
+5. **Semantic LSP tests**: `just ci-lsp-def` (semantic-aware definition resolution)
 
 **When To Use**:
 - ✅ Before every merge to master
@@ -76,6 +77,37 @@ cargo test --workspace --all-features --locked
 - ⚠️  Optionally for any merge (if you have time)
 
 **Pass Criteria**: All steps complete with exit code 0
+
+---
+
+### `just ci-lsp-def` - LSP Semantic Definition Tests (~30-60 seconds)
+
+**Purpose**: Validate semantic-aware LSP definition resolution (Issue #188, Issue #214)
+
+**What It Runs**:
+```bash
+RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+    cargo test -p perl-lsp --test semantic_definition -- --test-threads=1
+```
+
+**Test Coverage**:
+1. **Scalar variables**: `my $x = 1; $x + 2;` → resolves to declaration
+2. **Subroutines**: `sub foo { 1 } foo();` → resolves to sub definition
+3. **Lexical scope**: `my $inner` inside `sub` → resolves to correct scope
+4. **Package-qualified**: `Foo::bar()` → resolves to `sub bar` in `package Foo`
+
+**When To Use**:
+- ✅ Automatically included in `just ci-gate` (as of semantic analyzer completion)
+- ✅ After modifying `crates/perl-parser/src/semantic.rs`
+- ✅ After modifying LSP `textDocument/definition` handler
+- ✅ When changing parser symbol table logic
+
+**Pass Criteria**: All 4 test scenarios pass with correct line/position resolution
+
+**Resource Constraints**:
+- Uses `RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1` for resource-constrained environments
+- Tests include debug output (`println!`) to aid troubleshooting on failure
+- Designed to work reliably even in minimal CI environments
 
 ---
 

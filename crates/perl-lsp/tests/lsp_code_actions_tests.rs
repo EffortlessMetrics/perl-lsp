@@ -2,13 +2,12 @@
 use serde_json::json;
 
 mod common;
-use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
+use common::{
+    initialize_lsp, send_notification, send_request, shutdown_and_exit, start_lsp_server,
+};
 
 /// Test extract variable refactoring
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-// AC4:enabledTests - Extract variable may not be fully implemented yet, but test framework should work
 fn test_extract_variable() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -57,13 +56,11 @@ print $result;
     let actions = response["result"].as_array().unwrap();
     assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("Extract")
         && a["title"].as_str().unwrap().contains("variable")));
+    shutdown_and_exit(&mut server);
 }
 
 /// Test adding error checking to file operations
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-// AC3:codeActions - Add error checking refactoring
 fn test_add_error_checking() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -111,13 +108,11 @@ close($fh);
 
     let actions = response["result"].as_array().unwrap();
     assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("error checking")));
+    shutdown_and_exit(&mut server);
 }
 
 /// Test converting old-style for loops to foreach
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-// AC3:codeActions - Convert C-style for loop to foreach
 fn test_convert_loop_style() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -169,13 +164,11 @@ for (my $i = 0; $i < @array; $i++) {
         "Expected 'foreach loop' conversion action but got: {:?}",
         actions.iter().map(|a| a["title"].as_str()).collect::<Vec<_>>()
     );
+    shutdown_and_exit(&mut server);
 }
 
 /// Test converting to postfix form
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-// AC3:codeActions - Convert if statement to postfix form
 fn test_convert_to_postfix() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -223,13 +216,11 @@ if ($debug) {
 
     let actions = response["result"].as_array().unwrap();
     assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("postfix")));
+    shutdown_and_exit(&mut server);
 }
 
 /// Test adding missing pragmas
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-// AC3:codeActions - Add missing pragmas (strict/warnings/utf8)
 fn test_add_missing_pragmas() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -278,13 +269,11 @@ print $x;
 
     let actions = response["result"].as_array().unwrap();
     assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("pragma")));
+    shutdown_and_exit(&mut server);
 }
 
 /// Test quick fix for undefined variable
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-// AC3:codeActions - Fix undefined variable issues
 fn test_fix_undefined_variable() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -347,13 +336,11 @@ print $undefined_var;
     let actions = response["result"].as_array().unwrap();
     assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("Declare")
         && a["title"].as_str().unwrap().contains("my")));
+    shutdown_and_exit(&mut server);
 }
 
 /// Test extract subroutine refactoring
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-// AC3:codeActions - Extract subroutine with parameter detection
 fn test_extract_subroutine() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -406,13 +393,11 @@ my $y = 20;
 
     let actions = response["result"].as_array().unwrap();
     assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("subroutine")));
+    shutdown_and_exit(&mut server);
 }
 
 /// Test organize imports refactoring
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-// AC3:codeActions - Organize imports with existing ImportOptimizer integration
 fn test_organize_imports() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -466,13 +451,11 @@ print "test\n";
 
     let actions = response["result"].as_array().unwrap();
     assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("Organize imports")));
+    shutdown_and_exit(&mut server);
 }
 
 /// Test multiple refactorings available
 #[test]
-#[ignore]
-// Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
-// AC5:integration - Multiple refactoring operations in single request
 fn test_multiple_refactorings() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -526,4 +509,5 @@ if ($processed > 100) {
     // Should have multiple refactoring options
     assert!(!actions.is_empty(), "Expected code actions but got none");
     assert!(actions.iter().any(|a| a["kind"].as_str() == Some("refactor.extract")));
+    shutdown_and_exit(&mut server);
 }

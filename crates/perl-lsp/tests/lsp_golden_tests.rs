@@ -6,9 +6,18 @@ mod support;
 
 use serde_json::{Value, json};
 use std::fs;
+use std::path::Path;
 use support::test_helpers::{
     assert_completion_has_items, assert_folding_ranges_valid, assert_hover_has_text,
 };
+use url::Url;
+
+/// Convert a path to a file:// URI string, cross-platform safe
+fn path_to_uri(path: &Path) -> String {
+    Url::from_file_path(path)
+        .unwrap_or_else(|_| panic!("file path to URI failed: {}", path.display()))
+        .to_string()
+}
 
 /// Test context that manages the LSP server lifecycle
 struct TestContext {
@@ -17,17 +26,59 @@ struct TestContext {
     writer: std::process::ChildStdin,
 }
 
+/// Compile-time path to the perl-lsp binary, set by Cargo when building integration tests.
+const CARGO_BIN_EXE: Option<&str> = option_env!("CARGO_BIN_EXE_perl-lsp");
+
 impl TestContext {
-    fn new() -> Self {
-        // Check if we should use in-process server for better performance
-        if std::env::var("LSP_TEST_FALLBACKS").is_ok() {
-            // Use in-process server for faster tests
-            return Self::new_in_process();
+    /// Find the perl-lsp binary using multiple resolution strategies
+    fn find_perl_lsp_binary() -> std::process::Command {
+        // Resolution order:
+        // 1. Compile-time CARGO_BIN_EXE (most reliable for `cargo test`)
+        // 2. Runtime CARGO_BIN_EXE_perl-lsp env var
+        // 3. Workspace target/debug/perl-lsp
+        // 4. Fallback to cargo run (slow but always works)
+
+        if let Some(bin_path) = CARGO_BIN_EXE {
+            if std::path::Path::new(bin_path).exists() {
+                let mut cmd = std::process::Command::new(bin_path);
+                cmd.arg("--stdio");
+                return cmd;
+            }
         }
 
-        // Start LSP server with optimized settings
-        let mut server = std::process::Command::new("cargo")
-            .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
+        if let Ok(bin_path) = std::env::var("CARGO_BIN_EXE_perl-lsp") {
+            if std::path::Path::new(&bin_path).exists() {
+                let mut cmd = std::process::Command::new(bin_path);
+                cmd.arg("--stdio");
+                return cmd;
+            }
+        }
+
+        // Try workspace target directory
+        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+            let crate_dir = std::path::Path::new(&manifest_dir);
+            if let Some(workspace_root) =
+                crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists())
+            {
+                let debug_binary = workspace_root.join("target/debug/perl-lsp");
+                if debug_binary.exists() {
+                    let mut cmd = std::process::Command::new(&debug_binary);
+                    cmd.arg("--stdio");
+                    return cmd;
+                }
+            }
+        }
+
+        // Fallback to cargo run (slow)
+        let mut cmd = std::process::Command::new("cargo");
+        cmd.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"]);
+        cmd
+    }
+
+    fn new() -> Self {
+        // Start LSP server using optimized binary resolution
+        let mut cmd = Self::find_perl_lsp_binary();
+        let mut server = cmd
             .env("LSP_TEST_MODE", "1") // Enable test optimizations
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
@@ -51,7 +102,7 @@ impl TestContext {
                         "completion": {}
                     }
                 },
-                "rootUri": format!("file://{}", std::env::current_dir().unwrap().display())
+                "rootUri": path_to_uri(&std::env::current_dir().unwrap())
             })),
         );
 
@@ -63,41 +114,8 @@ impl TestContext {
         ctx
     }
 
-    /// Create in-process test context for faster testing
-    fn new_in_process() -> Self {
-        // For now, fall back to external process but with optimizations
-        // TODO: Implement true in-process server for maximum performance
-        let mut server = std::process::Command::new("cargo")
-            .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
-            .env("LSP_TEST_MODE", "1")
-            .env("LSP_FAST_MODE", "1")
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .expect("Failed to start LSP server");
-
-        let reader = std::io::BufReader::new(server.stdout.take().unwrap());
-        let writer = server.stdin.take().unwrap();
-
-        let mut ctx = TestContext { server, reader, writer };
-
-        // Fast initialization
-        ctx.send_request(
-            "initialize",
-            Some(json!({
-                "processId": std::process::id(),
-                "capabilities": {},
-                "rootUri": format!("file://{}", std::env::current_dir().unwrap().display())
-            })),
-        );
-
-        ctx.send_notification("initialized", None);
-        ctx
-    }
-
     fn send_request(&mut self, method: &str, params: Option<Value>) -> Option<Value> {
-        use std::io::{BufRead, Write};
+        use std::io::{BufRead, Read, Write};
 
         static mut REQUEST_ID: i32 = 1;
         let id = unsafe {
@@ -119,21 +137,38 @@ impl TestContext {
         self.writer.write_all(message.as_bytes()).unwrap();
         self.writer.flush().unwrap();
 
-        // Read response
-        let mut headers = String::new();
+        // Read response using proper LSP framing:
+        // 1. Parse headers line-by-line until blank line
+        // 2. Extract Content-Length from headers
+        // 3. Read exactly Content-Length bytes for body
+        // 4. Do NOT call read_line after the blank line!
+        let mut content_length: Option<usize> = None;
+        let mut line = String::new();
+
         loop {
-            headers.clear();
-            self.reader.read_line(&mut headers).ok()?;
-            if headers == "\r\n" {
+            line.clear();
+            let bytes_read = self.reader.read_line(&mut line).ok()?;
+            if bytes_read == 0 {
+                return None; // EOF
+            }
+
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                // Blank line = end of headers
                 break;
+            }
+
+            // Parse Content-Length header (case-insensitive)
+            let lower = trimmed.to_ascii_lowercase();
+            if let Some(rest) = lower.strip_prefix("content-length") {
+                let value_part = rest.trim_start_matches(':').trim();
+                content_length = value_part.parse().ok();
             }
         }
 
-        self.reader.read_line(&mut headers).ok()?;
-        let content_length: usize = headers.split(':').nth(1)?.trim().parse().ok()?;
-
-        let mut buffer = vec![0; content_length];
-        use std::io::Read;
+        // Now read exactly Content-Length bytes
+        let len = content_length?;
+        let mut buffer = vec![0u8; len];
         self.reader.read_exact(&mut buffer).ok()?;
 
         let response: Value = serde_json::from_slice(&buffer).ok()?;
@@ -158,7 +193,7 @@ impl TestContext {
 
     fn open_file(&mut self, path: &str) {
         let content = fs::read_to_string(path).expect("Failed to read fixture file");
-        let uri = format!("file://{}", std::fs::canonicalize(path).unwrap().display());
+        let uri = path_to_uri(&std::fs::canonicalize(path).unwrap());
 
         self.send_notification(
             "textDocument/didOpen",
@@ -183,17 +218,19 @@ impl Drop for TestContext {
 // ===================== Golden Tests =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_hover_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/hover_test.pl";
     ctx.open_file(fixture);
 
     // Test hover on custom function
-    let hover = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": { "uri": format!("file://{}", std::fs::canonicalize(fixture).unwrap().display()) },
-        "position": { "line": 10, "character": 15 }  // On 'calculate_sum'
-    })));
+    let hover = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
+            "position": { "line": 10, "character": 15 }  // On 'calculate_sum'
+        })),
+    );
 
     assert_hover_has_text(&hover);
 
@@ -215,16 +252,18 @@ fn test_hover_golden() {
     }
 
     // Test hover on built-in function
-    let hover_builtin = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": { "uri": format!("file://{}", std::fs::canonicalize(fixture).unwrap().display()) },
-        "position": { "line": 16, "character": 20 }  // On 'join'
-    })));
+    let hover_builtin = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
+            "position": { "line": 16, "character": 20 }  // On 'join'
+        })),
+    );
 
     assert_hover_has_text(&hover_builtin);
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_diagnostics_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/diagnostics_test.pl";
@@ -237,27 +276,32 @@ fn test_diagnostics_golden() {
     // For now, we'll test that the file opens without crashing
 
     // Test that we can still get hover despite errors
-    let hover = ctx.send_request("textDocument/hover", Some(json!({
-        "textDocument": { "uri": format!("file://{}", std::fs::canonicalize(fixture).unwrap().display()) },
-        "position": { "line": 7, "character": 10 }  // On undefined_var
-    })));
+    let hover = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
+            "position": { "line": 7, "character": 10 }  // On undefined_var
+        })),
+    );
 
     // Should handle gracefully even with syntax errors
     assert!(hover.is_none(), "Should handle invalid code gracefully");
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_completion_golden() {
     let mut ctx = TestContext::new();
     let fixture = "tests/fixtures/completion_test.pl";
     ctx.open_file(fixture);
 
     // Test variable completion
-    let completion = ctx.send_request("textDocument/completion", Some(json!({
-        "textDocument": { "uri": format!("file://{}", std::fs::canonicalize(fixture).unwrap().display()) },
-        "position": { "line": 31, "character": 14 }  // After '$us' in comment
-    })));
+    let completion = ctx.send_request(
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
+            "position": { "line": 31, "character": 14 }  // After '$us' in comment
+        })),
+    );
 
     assert_completion_has_items(&completion);
 
@@ -285,16 +329,18 @@ fn test_completion_golden() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_semantic_tokens_golden() {
     let mut ctx = TestContext::new();
-    let fixture = "tests/fixtures/hover_test.pl";
+    let fixture = "tests/fixtures/semantic_test.pl";
     ctx.open_file(fixture);
 
     // Request semantic tokens
-    let tokens = ctx.send_request("textDocument/semanticTokens/full", Some(json!({
-        "textDocument": { "uri": format!("file://{}", std::fs::canonicalize(fixture).unwrap().display()) }
-    })));
+    let tokens = ctx.send_request(
+        "textDocument/semanticTokens/full",
+        Some(json!({
+            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) }
+        })),
+    );
 
     if let Some(t) = tokens {
         let data = t.get("data").and_then(|d| d.as_array());
@@ -310,16 +356,18 @@ fn test_semantic_tokens_golden() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_folding_ranges_golden() {
     let mut ctx = TestContext::new();
-    let fixture = "tests/fixtures/hover_test.pl";
+    let fixture = "tests/fixtures/folding_test.pl";
     ctx.open_file(fixture);
 
     // Request folding ranges
-    let ranges = ctx.send_request("textDocument/foldingRange", Some(json!({
-        "textDocument": { "uri": format!("file://{}", std::fs::canonicalize(fixture).unwrap().display()) }
-    })));
+    let ranges = ctx.send_request(
+        "textDocument/foldingRange",
+        Some(json!({
+            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) }
+        })),
+    );
 
     if let Some(r) = ranges {
         assert_folding_ranges_valid(&Some(r.clone()));
@@ -327,12 +375,12 @@ fn test_folding_ranges_golden() {
         // Verify specific folds exist
         let ranges_arr = r.as_array().expect("Folding ranges should be array");
 
-        // Should have folds for subroutines and package
+        // Should have folds for subroutines (lines 11, 18) and control structures (line 28)
         let sub_folds = ranges_arr
             .iter()
             .filter(|r| {
                 let start = r.get("startLine").and_then(|v| v.as_u64()).unwrap_or(0);
-                start == 6 || start == 22 || start == 27 // Line numbers of subs
+                start == 10 || start == 17 || start == 27 // 0-indexed line numbers of foldable regions
             })
             .count();
 
@@ -343,7 +391,6 @@ fn test_folding_ranges_golden() {
 // ===================== Edit Loop Fuzzing =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_edit_loop_robustness() {
     let mut ctx = TestContext::new();
 

@@ -81,7 +81,7 @@ jobs:
         RUSTFLAGS: "-Cdebuginfo=0 -Copt-level=1 --cfg ci"
       run: |
         # Skip crash/fuzz buckets in default PR runs; those live in label-gated sweeps.
-        cargo nextest run --locked --workspace --profile ci --no-fail-fast \
+        cargo nextest run --locked --workspace --no-fail-fast \
           -- --skip crash_reproducer_test --skip fuzz_regression_test
 
     - name: Run E2E tests
@@ -190,7 +190,7 @@ jobs:
       if: matrix.os == 'ubuntu-22.04'
       run: |
         echo "Building with warnings as errors (soft check)..."
-        RUSTFLAGS="-D warnings" cargo build --release -p perl-lsp --bin perl-lsp || echo "Warning: Build with -D warnings failed"
+        RUSTFLAGS="-D warnings" cargo build --locked --release -p perl-lsp --bin perl-lsp || echo "Warning: Build with -D warnings failed"
       continue-on-error: true
 
   clippy:
@@ -210,7 +210,7 @@ jobs:
     - name: Run clippy (first-party)
       run: |
         echo "Running clippy on first-party crates..."
-        cargo clippy \
+        cargo clippy --locked \
           -p perl-lexer -p perl-parser -p perl-lsp -p perl-corpus -p perl-dap \
           --all-targets -- -D warnings 2>&1 | tee clippy-output.txt
         

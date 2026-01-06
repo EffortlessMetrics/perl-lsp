@@ -4,7 +4,7 @@ use serde_json::json;
 use support::lsp_harness::LspHarness;
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_shows_codelens_on_sub() {
     let doc = r#"
 sub add {
@@ -47,7 +47,7 @@ my $z = add(1, 2);
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_test_subroutine_gets_run_lens() {
     let doc = r#"
 sub test_addition {
@@ -89,7 +89,7 @@ sub add {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_package_gets_references_lens() {
     let doc = r#"
 package MyModule;
@@ -122,7 +122,7 @@ sub new {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_codelens_resolve() {
     let doc = r#"
 sub helper {

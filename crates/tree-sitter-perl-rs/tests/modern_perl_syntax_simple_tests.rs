@@ -64,156 +64,166 @@ pub struct UnicodeIdentifierSupport {
     pub security_validation: bool,
 }
 
-#[test]
-#[ignore] // AC7: Remove when basic subroutine signature parsing is implemented
-fn test_basic_subroutine_signatures() {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#subroutine-signature-parser
+// ============================================================================
+// Modern Perl Syntax Tests - Compile-time Feature Gated
+// ============================================================================
+// These tests are aspirational and only compile when the feature is enabled.
+// Run with: cargo test -p tree-sitter-perl-rs --features modern-perl-syntax
+// ============================================================================
 
-    let signature_cases = vec![
-        // Basic signatures
-        "sub foo ($x) { return $x + 1; }",
-        "sub bar ($x, $y) { return $x + $y; }",
-        // Optional parameters
-        "sub baz ($x, $y = 10) { return $x + $y; }",
-        // Slurpy parameters
-        "sub slurp ($first, @rest) { return @rest; }",
-        "sub hash_slurp ($x, %opts) { return %opts; }",
-    ];
+#[cfg(feature = "modern-perl-syntax")]
+mod modern_perl_syntax {
+    #[test]
+    fn test_basic_subroutine_signatures() {
+        // AC7: Subroutine signature parsing
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#subroutine-signature-parser
 
-    for case in signature_cases {
-        // Parser validation would be implemented here
-        assert!(!case.is_empty(), "Test case should not be empty: {}", case);
-        assert!(case.contains("sub "), "Should be subroutine definition: {}", case);
-        assert!(case.contains("("), "Should have parameter list: {}", case);
+        let signature_cases = vec![
+            // Basic signatures
+            "sub foo ($x) { return $x + 1; }",
+            "sub bar ($x, $y) { return $x + $y; }",
+            // Optional parameters
+            "sub baz ($x, $y = 10) { return $x + $y; }",
+            // Slurpy parameters
+            "sub slurp ($first, @rest) { return @rest; }",
+            "sub hash_slurp ($x, %opts) { return %opts; }",
+        ];
+
+        for case in signature_cases {
+            // Parser validation would be implemented here
+            assert!(!case.is_empty(), "Test case should not be empty: {}", case);
+            assert!(case.contains("sub "), "Should be subroutine definition: {}", case);
+            assert!(case.contains("("), "Should have parameter list: {}", case);
+        }
     }
-}
 
-#[test]
-#[ignore] // AC7: Remove when default parameter values are implemented
-fn test_subroutine_signature_default_values() {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#subroutine-signature-parser
+    #[test]
+    fn test_subroutine_signature_default_values() {
+        // AC7: Default parameter values
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#subroutine-signature-parser
 
-    let default_value_cases = vec![
-        // Simple defaults
-        "sub foo ($x, $y = 10) { return $x + $y; }",
-        "sub bar ($name = 'anonymous') { return $name; }",
-        // Complex defaults
-        "sub complex ($opts = {}) { return $opts; }",
-        "sub array_default ($items = []) { return $items; }",
-    ];
+        let default_value_cases = vec![
+            // Simple defaults
+            "sub foo ($x, $y = 10) { return $x + $y; }",
+            "sub bar ($name = 'anonymous') { return $name; }",
+            // Complex defaults
+            "sub complex ($opts = {}) { return $opts; }",
+            "sub array_default ($items = []) { return $items; }",
+        ];
 
-    for case in default_value_cases {
-        // Parser validation would be implemented here
-        assert!(case.contains(" = "), "Should have default value assignment: {}", case);
+        for case in default_value_cases {
+            // Parser validation would be implemented here
+            assert!(case.contains(" = "), "Should have default value assignment: {}", case);
+        }
     }
-}
 
-#[test]
-#[ignore] // AC8: Remove when array postfix dereferencing is implemented
-fn test_postfix_array_dereferencing() {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#postfix-dereferencing-parser
+    #[test]
+    fn test_postfix_array_dereferencing() {
+        // AC8: Array postfix dereferencing
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#postfix-dereferencing-parser
 
-    let array_deref_cases = vec![
-        // Basic array postfix deref
-        "my @array = $ref->@*;",
-        "my $count = $ref->@*;",
-        // Array slice postfix deref
-        "my @slice = $ref->@[0..5];",
-        "my @items = $ref->@[0, 2, 4];",
-        // Array operations with postfix deref
-        "push $ref->@*, 1, 2, 3;",
-    ];
+        let array_deref_cases = vec![
+            // Basic array postfix deref
+            "my @array = $ref->@*;",
+            "my $count = $ref->@*;",
+            // Array slice postfix deref
+            "my @slice = $ref->@[0..5];",
+            "my @items = $ref->@[0, 2, 4];",
+            // Array operations with postfix deref
+            "push $ref->@*, 1, 2, 3;",
+        ];
 
-    for case in array_deref_cases {
-        // Parser validation would be implemented here
-        assert!(case.contains("->@"), "Should have array postfix deref: {}", case);
+        for case in array_deref_cases {
+            // Parser validation would be implemented here
+            assert!(case.contains("->@"), "Should have array postfix deref: {}", case);
+        }
     }
-}
 
-#[test]
-#[ignore] // AC8: Remove when hash postfix dereferencing is implemented
-fn test_postfix_hash_dereferencing() {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#postfix-dereferencing-parser
+    #[test]
+    fn test_postfix_hash_dereferencing() {
+        // AC8: Hash postfix dereferencing
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#postfix-dereferencing-parser
 
-    let hash_deref_cases = vec![
-        // Basic hash postfix deref
-        "my %hash = $ref->%*;",
-        "my @keys = keys $ref->%*;",
-        // Hash slice postfix deref
-        "my @values = $ref->@{qw(a b c)};",
-        "my %subset = $ref->%{@keys};",
-    ];
+        let hash_deref_cases = vec![
+            // Basic hash postfix deref
+            "my %hash = $ref->%*;",
+            "my @keys = keys $ref->%*;",
+            // Hash slice postfix deref
+            "my @values = $ref->@{qw(a b c)};",
+            "my %subset = $ref->%{@keys};",
+        ];
 
-    for case in hash_deref_cases {
-        // Parser validation would be implemented here
-        assert!(
-            case.contains("->%") || case.contains("->@{"),
-            "Should have hash postfix deref: {}",
-            case
-        );
+        for case in hash_deref_cases {
+            // Parser validation would be implemented here
+            assert!(
+                case.contains("->%") || case.contains("->@{"),
+                "Should have hash postfix deref: {}",
+                case
+            );
+        }
     }
-}
 
-#[test]
-#[ignore] // AC9: Remove when basic state variable parsing is implemented
-fn test_basic_state_variables() {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#state-variable-parser
+    #[test]
+    fn test_basic_state_variables() {
+        // AC9: State variable parsing
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#state-variable-parser
 
-    let state_variable_cases = vec![
-        // Basic state declarations
-        "state $counter = 0;",
-        "state @items = (1, 2, 3);",
-        "state %cache = ();",
-        // State in subroutines
-        "sub counter { state $x = 0; return ++$x; }",
-    ];
+        let state_variable_cases = vec![
+            // Basic state declarations
+            "state $counter = 0;",
+            "state @items = (1, 2, 3);",
+            "state %cache = ();",
+            // State in subroutines
+            "sub counter { state $x = 0; return ++$x; }",
+        ];
 
-    for case in state_variable_cases {
-        // Parser validation would be implemented here
-        assert!(case.contains("state "), "Should have state declaration: {}", case);
+        for case in state_variable_cases {
+            // Parser validation would be implemented here
+            assert!(case.contains("state "), "Should have state declaration: {}", case);
+        }
     }
-}
 
-#[test]
-#[ignore] // AC11: Remove when Unicode identifier parsing is implemented
-fn test_unicode_identifiers() {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#unicode-identifier-parser
+    #[test]
+    fn test_unicode_identifiers() {
+        // AC11: Unicode identifier parsing
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#unicode-identifier-parser
 
-    let unicode_cases = vec![
-        // Basic Unicode identifiers
-        "my $测试 = 42;",
-        "sub функция { return 1; }",
-        // Emoji identifiers
-        "my $🚀 = 'rocket';",
-        "sub 🔍search { return @_; }",
-        // Mixed Unicode and ASCII
-        "my $user名前 = 'name';",
-    ];
+        let unicode_cases = vec![
+            // Basic Unicode identifiers
+            "my $测试 = 42;",
+            "sub функция { return 1; }",
+            // Emoji identifiers
+            "my $🚀 = 'rocket';",
+            "sub 🔍search { return @_; }",
+            // Mixed Unicode and ASCII
+            "my $user名前 = 'name';",
+        ];
 
-    for case in unicode_cases {
-        // Parser validation would be implemented here
-        assert!(!case.is_ascii(), "Should contain non-ASCII characters: {}", case);
+        for case in unicode_cases {
+            // Parser validation would be implemented here
+            assert!(!case.is_ascii(), "Should contain non-ASCII characters: {}", case);
+        }
     }
-}
 
-#[test]
-#[ignore] // AC11: Remove when Unicode security validation is implemented
-fn test_unicode_security_validation() {
-    // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#unicode-identifier-parser
+    #[test]
+    fn test_unicode_security_validation() {
+        // AC11: Unicode security validation
+        // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#unicode-identifier-parser
 
-    // Test cases for potential Unicode security issues
-    let security_test_cases = vec![
-        // Valid Unicode that should be accepted
-        ("my $正常な変数 = 'normal';", true),
-        ("sub 安全な関数 { return 1; }", true),
-        // Potentially confusing but valid
-        ("my $αβγ = 'greek';", true),
-    ];
+        // Test cases for potential Unicode security issues
+        let security_test_cases = vec![
+            // Valid Unicode that should be accepted
+            ("my $正常な変数 = 'normal';", true),
+            ("sub 安全な関数 { return 1; }", true),
+            // Potentially confusing but valid
+            ("my $αβγ = 'greek';", true),
+        ];
 
-    for (code, should_be_valid) in security_test_cases {
-        if should_be_valid {
-            // Security validation would be implemented here
-            assert!(!code.is_empty(), "Valid Unicode code should not be empty: {}", code);
+        for (code, should_be_valid) in security_test_cases {
+            if should_be_valid {
+                // Security validation would be implemented here
+                assert!(!code.is_empty(), "Valid Unicode code should not be empty: {}", code);
+            }
         }
     }
 }

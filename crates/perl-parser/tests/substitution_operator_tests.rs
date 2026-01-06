@@ -195,8 +195,7 @@ fn test_substitution_empty_pattern_or_replacement() {
 }
 
 #[test]
-#[ignore = "MUT_002: Exposes empty replacement parsing bug in quote_parser.rs:80 - will kill mutant when fixed"]
-// Target MUT_002: Empty replacement with balanced delimiters - quote_parser.rs:80
+// MUT_002: Fixed in quote_parser.rs - balanced delimiters now use per-segment delimiter detection
 fn test_substitution_empty_replacement_balanced_delimiters() {
     // These test cases specifically target the empty replacement parsing logic
     // for paired delimiters in quote_parser.rs line 80
@@ -234,6 +233,85 @@ fn test_substitution_empty_replacement_balanced_delimiters() {
             } else {
                 panic!("Expected ExpressionStatement node for {}", code);
             }
+        }
+    }
+}
+
+#[test]
+// MUT_002 Regression Test: Verify trailing code survives after balanced delimiter substitution operators
+// Fixed in lexer: parse_substitution now detects replacement delimiter independently
+// This is critical to prevent the lexer from swallowing trailing code after balanced delimiters
+// NOTE: Real Perl supports this syntax: `s[foo]{bar}; $x = 1;` - both statements should be parsed
+fn test_substitution_balanced_delimiters_with_trailing_code() {
+    // Test cases that specifically target the trailing code parsing after balanced delimiters
+    // Each case verifies that both the substitution and subsequent statements are properly parsed
+    let test_cases = vec![
+        ("s[foo]{bar}; $x = 1;", 2, "Substitution + expression statement"),
+        ("s{foo}{bar}; print;", 2, "Substitution + function call"),
+        ("s(foo)(bar); $x++;", 2, "Substitution + postfix increment"),
+        ("s<foo><bar>; my $y = 1;", 2, "Substitution + variable declaration"),
+        ("s[pattern]{repl}; s/a/b/;", 2, "Two substitutions"),
+        ("s{x}{y}; if (1) { }", 2, "Substitution + if block"),
+        ("s{a}{b}; s[c][d]; s(e)(f);", 3, "Three substitutions with different delimiters"),
+        (
+            "s[test]{value}; $var =~ s/old/new/g;",
+            2,
+            "Mixed balanced delimiters + bind operator with substitution",
+        ),
+        ("s{}{empty}; print 'hello';", 2, "Empty pattern substitution + print statement"),
+        ("s<pattern><replacement>; my ($a, $b) = @_;", 2, "Substitution + list assignment"),
+    ];
+
+    for (code, expected_stmt_count, description) in test_cases {
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap_or_else(|err| {
+            panic!("Parse failed for test case '{}': {}\nCode: {}", description, err, code)
+        });
+
+        if let NodeKind::Program { statements } = &ast.kind {
+            assert_eq!(
+                statements.len(),
+                expected_stmt_count,
+                "Statement count mismatch for test case '{}': expected {} statements but got {}\nCode: {}",
+                description,
+                expected_stmt_count,
+                statements.len(),
+                code
+            );
+
+            // Verify first statement is a substitution
+            if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
+                if !matches!(expression.kind, NodeKind::Substitution { .. }) {
+                    panic!(
+                        "First statement should be Substitution for test case '{}', got {:?}\nCode: {}",
+                        description, expression.kind, code
+                    );
+                }
+            } else {
+                panic!(
+                    "First statement should be ExpressionStatement containing Substitution for test case '{}', got {:?}\nCode: {}",
+                    description, statements[0].kind, code
+                );
+            }
+
+            // For multi-statement cases, verify subsequent statements exist and are properly parsed
+            if expected_stmt_count > 1 {
+                for (idx, stmt) in statements.iter().enumerate().skip(1) {
+                    assert!(
+                        !matches!(stmt.kind, NodeKind::Error { .. }),
+                        "Statement {} should not be Error for test case '{}', got {:?}\nCode: {}",
+                        idx,
+                        description,
+                        stmt.kind,
+                        code
+                    );
+                }
+            }
+        } else {
+            panic!(
+                "Expected Program node for test case '{}', got {:?}\nCode: {}",
+                description, ast.kind, code
+            );
         }
     }
 }
@@ -357,65 +435,40 @@ fn find_substitution_node(node: &perl_parser::ast::Node) -> Option<(String, Stri
 }
 
 #[test]
-#[ignore = "MUT_005: Exposes invalid modifier validation bug in parser_backup.rs:4231 - will kill mutant when fixed"]
-// Target MUT_005: Invalid modifier character validation - parser_backup.rs:4231
+// MUT_005 FIXED: Invalid modifier validation now properly rejects invalid modifiers
 fn test_substitution_invalid_modifier_characters() {
     // These test cases specifically target the invalid modifier validation logic
-    // in parser_backup.rs line 4231 where only 'g', 'i', 'm', 's', 'x', 'o', 'e', 'r' are allowed
+    // where only 'g', 'i', 'm', 's', 'x', 'o', 'e', 'r' are allowed.
+    //
+    // Note: Only alphanumeric characters are tested as "modifiers" since Perl's lexer
+    // treats special characters (like @, ;, etc.) as separate tokens, not as modifiers.
+    // For example, 's/foo/bar/;' is valid Perl - the ';' is a statement terminator.
     let invalid_modifier_cases = vec![
-        "s/foo/bar/z",   // Invalid modifier 'z'
-        "s/foo/bar/a",   // Invalid modifier 'a'
-        "s/foo/bar/b",   // Invalid modifier 'b'
-        "s/foo/bar/c",   // Invalid modifier 'c'
-        "s/foo/bar/d",   // Invalid modifier 'd'
-        "s/foo/bar/f",   // Invalid modifier 'f'
-        "s/foo/bar/h",   // Invalid modifier 'h'
-        "s/foo/bar/j",   // Invalid modifier 'j'
-        "s/foo/bar/k",   // Invalid modifier 'k'
-        "s/foo/bar/l",   // Invalid modifier 'l'
-        "s/foo/bar/n",   // Invalid modifier 'n'
-        "s/foo/bar/p",   // Invalid modifier 'p'
-        "s/foo/bar/q",   // Invalid modifier 'q'
-        "s/foo/bar/t",   // Invalid modifier 't'
-        "s/foo/bar/u",   // Invalid modifier 'u'
-        "s/foo/bar/v",   // Invalid modifier 'v'
-        "s/foo/bar/w",   // Invalid modifier 'w'
-        "s/foo/bar/y",   // Invalid modifier 'y'
-        "s/foo/bar/1",   // Invalid numeric modifier '1'
-        "s/foo/bar/2",   // Invalid numeric modifier '2'
-        "s/foo/bar/9",   // Invalid numeric modifier '9'
-        "s/foo/bar/0",   // Invalid numeric modifier '0'
-        "s/foo/bar/@",   // Invalid symbol modifier '@'
-        "s/foo/bar/#",   // Invalid symbol modifier '#'
-        "s/foo/bar/$",   // Invalid symbol modifier '$'
-        "s/foo/bar/%",   // Invalid symbol modifier '%'
-        "s/foo/bar/^",   // Invalid symbol modifier '^'
-        "s/foo/bar/&",   // Invalid symbol modifier '&'
-        "s/foo/bar/*",   // Invalid symbol modifier '*'
-        "s/foo/bar/(",   // Invalid symbol modifier '('
-        "s/foo/bar/)",   // Invalid symbol modifier ')'
-        "s/foo/bar/-",   // Invalid symbol modifier '-'
-        "s/foo/bar/+",   // Invalid symbol modifier '+'
-        "s/foo/bar/=",   // Invalid symbol modifier '='
-        "s/foo/bar/[",   // Invalid symbol modifier '['
-        "s/foo/bar/]",   // Invalid symbol modifier ']'
-        "s/foo/bar/{",   // Invalid symbol modifier '{'
-        "s/foo/bar/}",   // Invalid symbol modifier '}'
-        "s/foo/bar/|",   // Invalid symbol modifier '|'
-        "s/foo/bar/\\",  // Invalid symbol modifier '\\'
-        "s/foo/bar/:",   // Invalid symbol modifier ':'
-        "s/foo/bar/;",   // Invalid symbol modifier ';'
-        "s/foo/bar/\"",  // Invalid symbol modifier '"'
-        "s/foo/bar/'",   // Invalid symbol modifier "'"
-        "s/foo/bar/<",   // Invalid symbol modifier '<'
-        "s/foo/bar/>",   // Invalid symbol modifier '>'
-        "s/foo/bar/,",   // Invalid symbol modifier ','
-        "s/foo/bar/.",   // Invalid symbol modifier '.'
-        "s/foo/bar/?",   // Invalid symbol modifier '?'
-        "s/foo/bar/ ",   // Invalid space modifier
-        "s/foo/bar/\t",  // Invalid tab modifier
-        "s/foo/bar/\n",  // Invalid newline modifier
-        "s/foo/bar/\r",  // Invalid carriage return modifier
+        // Invalid single letter modifiers
+        "s/foo/bar/z", // Invalid modifier 'z'
+        "s/foo/bar/a", // Invalid modifier 'a'
+        "s/foo/bar/b", // Invalid modifier 'b'
+        "s/foo/bar/c", // Invalid modifier 'c'
+        "s/foo/bar/d", // Invalid modifier 'd'
+        "s/foo/bar/f", // Invalid modifier 'f'
+        "s/foo/bar/h", // Invalid modifier 'h'
+        "s/foo/bar/j", // Invalid modifier 'j'
+        "s/foo/bar/k", // Invalid modifier 'k'
+        "s/foo/bar/l", // Invalid modifier 'l'
+        "s/foo/bar/n", // Invalid modifier 'n'
+        "s/foo/bar/p", // Invalid modifier 'p'
+        "s/foo/bar/q", // Invalid modifier 'q'
+        "s/foo/bar/t", // Invalid modifier 't'
+        "s/foo/bar/u", // Invalid modifier 'u'
+        "s/foo/bar/v", // Invalid modifier 'v'
+        "s/foo/bar/w", // Invalid modifier 'w'
+        "s/foo/bar/y", // Invalid modifier 'y'
+        // Invalid numeric modifiers
+        "s/foo/bar/1", // Invalid numeric modifier '1'
+        "s/foo/bar/2", // Invalid numeric modifier '2'
+        "s/foo/bar/9", // Invalid numeric modifier '9'
+        "s/foo/bar/0", // Invalid numeric modifier '0'
+        // Combinations with invalid modifiers
         "s/foo/bar/ga",  // Valid 'g' but invalid 'a' in combination
         "s/foo/bar/iz",  // Valid 'i' but invalid 'z' in combination
         "s/foo/bar/mxy", // Valid 'm', 'x' but invalid 'y' in combination
@@ -423,7 +476,6 @@ fn test_substitution_invalid_modifier_characters() {
         "s/foo/bar/xyz", // Valid 'x' but invalid 'y', 'z' in combination
         "s/foo/bar/123", // All invalid numeric modifiers
         "s/foo/bar/abc", // Mix of invalid letters
-        "s/foo/bar/!@#", // Mix of invalid symbols
     ];
 
     for code in invalid_modifier_cases {

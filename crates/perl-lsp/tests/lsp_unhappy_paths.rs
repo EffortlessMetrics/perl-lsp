@@ -13,7 +13,10 @@ use common::{
 /// Ensures the LSP server handles errors gracefully
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+#[cfg_attr(
+    not(feature = "strict-jsonrpc"),
+    ignore = "PROTOCOL: Run with --features strict-jsonrpc"
+)]
 fn test_malformed_json_request() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -32,7 +35,6 @@ fn test_malformed_json_request() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_invalid_method() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -55,7 +57,6 @@ fn test_invalid_method() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_missing_required_params() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -101,7 +102,6 @@ fn test_missing_required_params() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_invalid_uri_format() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -171,7 +171,6 @@ fn test_invalid_uri_format() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_not_found() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -224,7 +223,6 @@ fn test_document_not_found() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_out_of_bounds_position() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -294,7 +292,11 @@ fn test_out_of_bounds_position() {
     shutdown_and_exit(&mut server);
 }
 
-#[ignore]
+#[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Rapid concurrent edits test - requires proper shutdown handling for reliability"
+)]
 fn test_concurrent_document_edits() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -357,7 +359,11 @@ fn test_concurrent_document_edits() {
     assert!(response["result"].is_array());
 }
 
-#[ignore]
+#[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Version mismatch edge case test - needs shutdown handling"
+)]
 fn test_version_mismatch() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -418,7 +424,11 @@ fn test_version_mismatch() {
     assert!(response["result"].is_array() || response["error"].is_object());
 }
 
-#[ignore]
+#[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Invalid regex edge case - needs shutdown handling for CI reliability"
+)]
 fn test_invalid_regex_pattern() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -467,7 +477,11 @@ fn test_invalid_regex_pattern() {
     assert!(response.is_object());
 }
 
-#[ignore]
+#[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Circular dependency stress test - needs proper shutdown"
+)]
 fn test_circular_module_dependency() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -531,7 +545,11 @@ fn test_circular_module_dependency() {
     assert!(response["result"].is_array());
 }
 
-#[ignore]
+#[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Long line stress test (100K char line) - run with --ignored for stress testing"
+)]
 fn test_extremely_long_line() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -580,7 +598,11 @@ fn test_extremely_long_line() {
     assert!(response.is_object());
 }
 
-#[ignore]
+#[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Deep nesting stress test (100 levels) - run with --ignored for stress testing"
+)]
 fn test_deeply_nested_structure() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -632,7 +654,6 @@ fn test_deeply_nested_structure() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_binary_content() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -682,7 +703,6 @@ fn test_binary_content() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_binary_frame() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -725,7 +745,6 @@ fn test_binary_frame() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_cancel_request() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -858,7 +877,11 @@ fn test_cancel_request() {
     shutdown_and_exit(&mut server);
 }
 
-#[ignore]
+#[test]
+#[cfg_attr(
+    not(feature = "strict-jsonrpc"),
+    ignore = "PROTOCOL: Run with --features strict-jsonrpc"
+)]
 fn test_shutdown_without_exit() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -901,7 +924,11 @@ fn test_shutdown_without_exit() {
     assert!(response["error"].is_object());
 }
 
-#[ignore]
+#[test]
+#[cfg_attr(
+    not(feature = "strict-jsonrpc"),
+    ignore = "PROTOCOL: Run with --features strict-jsonrpc"
+)]
 fn test_invalid_capability_request() {
     let mut server = start_lsp_server();
 
@@ -952,7 +979,11 @@ fn test_invalid_capability_request() {
     assert!(response.is_object());
 }
 
-#[ignore]
+#[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Unicode edge case stress test - needs proper shutdown"
+)]
 fn test_unicode_unhappy_paths() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -1001,7 +1032,11 @@ fn test_unicode_unhappy_paths() {
     assert!(response["result"].is_array());
 }
 
-#[ignore]
+#[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Memory stress test (100 documents) - run with --ignored for stress testing"
+)]
 fn test_memory_stress() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

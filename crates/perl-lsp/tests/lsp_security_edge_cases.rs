@@ -1,3 +1,12 @@
+//! Security edge case tests for LSP server.
+//!
+//! These tests validate security boundaries but require enhanced timeout handling
+//! for malformed URIs that may not produce responses. Gated behind stress-tests
+//! feature until harness timeout improvements are implemented.
+//!
+//! TODO(#267): Move to default lane after harness has proper read_response_timeout.
+#![cfg(feature = "stress-tests")]
+
 use serde_json::json;
 
 mod common;
@@ -7,7 +16,6 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 /// Ensures the LSP server is secure and handles edge cases properly
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_path_traversal_prevention() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -58,7 +66,6 @@ fn test_path_traversal_prevention() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_code_injection_prevention() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -110,7 +117,6 @@ fn test_code_injection_prevention() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_null_byte_injection() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -154,7 +160,6 @@ fn test_null_byte_injection() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_format_string_vulnerability() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -208,7 +213,6 @@ fn test_format_string_vulnerability() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_integer_overflow_prevention() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -255,7 +259,6 @@ fn test_integer_overflow_prevention() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_special_file_handling() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -308,7 +311,6 @@ fn test_special_file_handling() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_protocol_confusion() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -342,7 +344,6 @@ fn test_protocol_confusion() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_resource_uri_validation() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -396,7 +397,6 @@ fn test_resource_uri_validation() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_encoding_edge_cases() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -453,7 +453,6 @@ fn test_encoding_edge_cases() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_symlink_and_hardlink_handling() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -496,7 +495,7 @@ fn test_symlink_and_hardlink_handling() {
     );
 
     // Both should work independently
-    send_request(
+    let response1 = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -510,9 +509,7 @@ fn test_symlink_and_hardlink_handling() {
         }),
     );
 
-    let response1 = read_response(&mut server);
-
-    send_request(
+    let response2 = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -526,14 +523,12 @@ fn test_symlink_and_hardlink_handling() {
         }),
     );
 
-    let response2 = read_response(&mut server);
-
-    assert!(response1["result"].is_array());
-    assert!(response2["result"].is_array());
+    // Both paths should return valid symbol arrays (server handles them independently)
+    assert!(response1["result"].is_array(), "response1 should have result array: {:?}", response1);
+    assert!(response2["result"].is_array(), "response2 should have result array: {:?}", response2);
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_permission_denied_simulation() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -583,7 +578,6 @@ fn test_permission_denied_simulation() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_time_based_attacks() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

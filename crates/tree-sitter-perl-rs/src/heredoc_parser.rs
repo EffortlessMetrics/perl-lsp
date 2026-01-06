@@ -57,8 +57,29 @@ impl<'a> HeredocScanner<'a> {
         }
     }
 
+    /// Test-only: Scan and return skip_lines + contexts for validation
+    #[cfg(test)]
+    pub fn scan_for_test(
+        mut self,
+    ) -> (
+        String,
+        Vec<HeredocDeclaration>,
+        HashSet<usize>,
+        Vec<crate::statement_tracker::HeredocContext>,
+    ) {
+        let (output, declarations) = self.do_scan();
+        let skip_lines = self.skip_lines.clone();
+        let contexts = self.statement_tracker.heredoc_contexts().to_vec();
+        (output, declarations, skip_lines, contexts)
+    }
+
     /// Scan input for heredoc declarations and mark their positions
     pub fn scan(mut self) -> (String, Vec<HeredocDeclaration>) {
+        self.do_scan()
+    }
+
+    /// Internal scan implementation (shared by public scan() and test scan_for_test())
+    fn do_scan(&mut self) -> (String, Vec<HeredocDeclaration>) {
         // First pass: find all heredocs and mark their content lines
         let lines: Vec<&str> = self.input.lines().collect();
         let mut declarations = Vec::new();
@@ -103,9 +124,17 @@ impl<'a> HeredocScanner<'a> {
         }
 
         // Now mark lines to skip based on statement boundaries
+        // Issue #220a: Call tracker for each heredoc declaration
         for decl in &declarations {
             let statement_end_line = find_statement_end_line(self.input, decl.declaration_line);
             let content_start_line = statement_end_line + 1;
+
+            // Issue #220a: Record heredoc declaration with tracker
+            self.statement_tracker.note_heredoc_declaration(
+                decl.declaration_line,
+                &decl.terminator,
+                statement_end_line,
+            );
 
             // Mark lines from content start to terminator
             for i in content_start_line..=lines.len() {
@@ -424,6 +453,145 @@ pub fn parse_with_heredocs(input: &str) -> (String, Vec<HeredocDeclaration>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::statement_tracker::HeredocContext;
+    use std::collections::BTreeSet;
+
+    /// Test harness: Run heredoc scanner and expose skip_lines + tracker contexts
+    fn scan_for_test(input: &str) -> (BTreeSet<usize>, Vec<HeredocContext>) {
+        let scanner = HeredocScanner::new(input);
+        let (_processed, _declarations, skip_lines, contexts) = scanner.scan_for_test();
+
+        let skips: BTreeSet<_> = skip_lines.iter().copied().collect();
+        (skips, contexts)
+    }
+
+    // ===== Issue #220a: Integration Tests for Block-Aware Heredoc Handling =====
+
+    #[test]
+    fn heredoc_top_level_skip_lines_and_contexts() {
+        let code = "\
+my $x = <<EOF;
+line 1
+line 2
+EOF
+say $x;
+";
+
+        let (skips, contexts) = scan_for_test(code);
+
+        // 1 context
+        assert_eq!(contexts.len(), 1, "expected 1 heredoc context");
+        let ctx = &contexts[0];
+
+        assert_eq!(ctx.declaration_line, 1);
+        assert_eq!(ctx.block_depth_at_declaration, 0);
+        assert_eq!(ctx.terminator, "EOF");
+        assert_eq!(ctx.statement_end_line, 1);
+        assert_eq!(ctx.content_start_line, 2);
+
+        let expected: BTreeSet<_> = [2_usize, 3, 4].into_iter().collect();
+        assert_eq!(skips, expected, "unexpected skip_lines for top-level heredoc");
+    }
+
+    #[test]
+    fn heredoc_inside_if_block_tracks_depth_and_skip_lines() {
+        let code = "\
+if ($condition) {
+    my $x = <<EOF;
+line 1
+line 2
+EOF
+    say $x;
+}
+";
+
+        let (skips, contexts) = scan_for_test(code);
+
+        // 1 context at depth 1
+        assert_eq!(contexts.len(), 1, "expected 1 heredoc context");
+        let ctx = &contexts[0];
+
+        assert_eq!(ctx.declaration_line, 2);
+        assert_eq!(ctx.block_depth_at_declaration, 0); // Scanner doesn't track block depth yet
+        assert_eq!(ctx.terminator, "EOF");
+        // #221: Correct block-aware behavior
+        assert_eq!(ctx.statement_end_line, 2);
+        assert_eq!(ctx.content_start_line, 3);
+
+        // #221: Correct skip_lines for heredoc in if block
+        let expected: BTreeSet<_> = [3_usize, 4, 5].into_iter().collect();
+        assert_eq!(skips, expected, "skip_lines for heredoc in if block");
+    }
+
+    #[test]
+    fn heredoc_in_nested_blocks_tracks_depth_and_skip_lines() {
+        let code = "\
+if ($x) {
+    while ($y) {
+        my $data = <<DATA;
+content
+DATA
+    }
+}
+";
+
+        let (skips, contexts) = scan_for_test(code);
+
+        // 1 context at depth 2 (if + while)
+        assert_eq!(contexts.len(), 1, "expected 1 heredoc context");
+        let ctx = &contexts[0];
+
+        assert_eq!(ctx.declaration_line, 3);
+        assert_eq!(ctx.block_depth_at_declaration, 0); // Scanner doesn't track block depth yet
+        assert_eq!(ctx.terminator, "DATA");
+        // #221: Correct block-aware behavior
+        assert_eq!(ctx.statement_end_line, 3);
+        assert_eq!(ctx.content_start_line, 4);
+
+        // #221: Correct skip_lines for heredoc in nested blocks
+        let expected: BTreeSet<_> = [4_usize, 5].into_iter().collect();
+        assert_eq!(skips, expected, "skip_lines for heredoc in nested blocks");
+    }
+
+    #[test]
+    fn two_heredocs_in_same_block_have_separate_contexts_and_skips() {
+        let code = "\
+if ($condition) {
+    my $x = <<EOF1;
+content 1
+EOF1
+    my $y = <<EOF2;
+content 2
+EOF2
+}
+";
+
+        let (skips, contexts) = scan_for_test(code);
+
+        // 2 contexts, both at depth 1
+        assert_eq!(contexts.len(), 2, "expected 2 heredoc contexts");
+
+        let ctx1 = &contexts[0];
+        assert_eq!(ctx1.declaration_line, 2);
+        assert_eq!(ctx1.block_depth_at_declaration, 0); // Scanner doesn't track block depth yet
+        assert_eq!(ctx1.terminator, "EOF1");
+        // #221: Correct block-aware behavior
+        assert_eq!(ctx1.statement_end_line, 2);
+        assert_eq!(ctx1.content_start_line, 3);
+
+        let ctx2 = &contexts[1];
+        assert_eq!(ctx2.declaration_line, 5);
+        assert_eq!(ctx2.block_depth_at_declaration, 0); // Scanner doesn't track block depth yet
+        assert_eq!(ctx2.terminator, "EOF2");
+        assert_eq!(ctx2.statement_end_line, 5);
+        assert_eq!(ctx2.content_start_line, 6);
+
+        // #221: Correct skip_lines for two heredocs in same block
+        let expected: BTreeSet<_> = [3_usize, 4, 6, 7].into_iter().collect();
+        assert_eq!(skips, expected, "skip_lines for two heredocs in same block");
+    }
+
+    // ===== Original Tests (Preserved) =====
 
     #[test]
     fn test_basic_heredoc() {

@@ -51,7 +51,6 @@
 /// - AC9: LSP graceful degradation
 /// - LSP Workflow: Parse → Diagnostics → Continue
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_lsp_server_session_continuity_on_parse_error() {
     // AC:9
     // Test LSP server session continuity with parse errors
@@ -72,7 +71,6 @@ fn test_lsp_server_session_continuity_on_parse_error() {
 /// - Threading: RUST_TEST_THREADS=2 compatibility
 /// - Timeout: 500ms for ≤2 threads
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_lsp_graceful_degradation_with_adaptive_threading() {
     // AC:9
     // Test with RUST_TEST_THREADS=2 environment (CI constraint)
@@ -92,7 +90,6 @@ fn test_lsp_graceful_degradation_with_adaptive_threading() {
 /// - AC9: LSP graceful degradation
 /// - Diagnostic Collection: Multiple errors
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_multiple_parse_errors_diagnostic_collection() {
     // AC:9
     // Test multiple parse errors in single document
@@ -112,7 +109,6 @@ fn test_multiple_parse_errors_diagnostic_collection() {
 /// - AC9: LSP graceful degradation
 /// - Lexer Integration: Error token to diagnostic conversion
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_lexer_error_diagnostic_publication() {
     // AC:9
     // Test lexer error token to diagnostic conversion
@@ -132,7 +128,6 @@ fn test_lexer_error_diagnostic_publication() {
 /// - AC9: LSP graceful degradation
 /// - Partial AST: LSP features on valid portions
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_partial_ast_lsp_feature_availability() {
     // AC:9
     // Test LSP features with partial AST (some parse errors)
@@ -152,7 +147,6 @@ fn test_partial_ast_lsp_feature_availability() {
 /// - AC9: LSP graceful degradation
 /// - JSON-RPC 2.0: Error response format
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_jsonrpc_error_response_compliance() {
     // AC:9
     // Test JSON-RPC error response format
@@ -172,7 +166,6 @@ fn test_jsonrpc_error_response_compliance() {
 /// - AC9: LSP graceful degradation
 /// - Severity Mapping: Error types to LSP severity
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_lsp_diagnostic_severity_mapping() {
     // AC:9
     // Test diagnostic severity mapping from errors
@@ -192,7 +185,6 @@ fn test_lsp_diagnostic_severity_mapping() {
 /// - AC9: LSP graceful degradation
 /// - Performance: <1ms LSP update target
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_error_recovery_performance_budget() {
     // AC:9, Performance
     // Test error recovery performance
@@ -212,7 +204,6 @@ fn test_error_recovery_performance_budget() {
 /// - Threading: Adaptive timeout scaling
 /// - LSP Harness: Thread-aware timeouts
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_adaptive_threading_lsp_harness_timeout_validation() {
     // Adaptive Threading
     // Test LSP harness timeout adaptation
@@ -232,7 +223,6 @@ fn test_adaptive_threading_lsp_harness_timeout_validation() {
 /// - Threading: Optimized idle detection
 /// - Performance: 1000ms → 200ms cycles
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_adaptive_threading_optimized_idle_detection() {
     // Adaptive Threading
     // Test optimized idle detection
@@ -252,7 +242,6 @@ fn test_adaptive_threading_optimized_idle_detection() {
 /// - AC9: LSP graceful degradation
 /// - Session Continuity: Multiple recovery cycles
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_session_continuity_multiple_error_recovery_cycles() {
     // AC:9, Session Continuity
     // Test multiple error recovery cycles
@@ -276,7 +265,6 @@ fn test_session_continuity_multiple_error_recovery_cycles() {
 /// - AC9: LSP graceful degradation
 /// - Session Continuity: Errors during operations
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_session_continuity_error_during_lsp_operation() {
     // AC:9, Session Continuity
     // Test errors during active LSP operations
@@ -300,7 +288,6 @@ fn test_session_continuity_error_during_lsp_operation() {
 /// - AC9: LSP graceful degradation
 /// - Incremental Updates: Diagnostic publication
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_diagnostic_publication_incremental_updates() {
     // AC:9, Diagnostics
     // Test incremental diagnostic updates
@@ -320,7 +307,6 @@ fn test_diagnostic_publication_incremental_updates() {
 /// - AC9: LSP graceful degradation
 /// - Cross-File: Error correlation
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_diagnostic_publication_cross_file_error_correlation() {
     // AC:9, Diagnostics
     // Test cross-file error correlation
@@ -340,7 +326,6 @@ fn test_diagnostic_publication_cross_file_error_correlation() {
 /// - AC9: LSP graceful degradation
 /// - Workspace Indexing: Continuity with errors
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_error_recovery_workspace_indexing_continuity() {
     // AC:9, Workspace
     // Test workspace indexing with parse errors
@@ -360,7 +345,6 @@ fn test_error_recovery_workspace_indexing_continuity() {
 /// - AC9: LSP graceful degradation
 /// - Semantic Tokens: Error handling
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_error_recovery_semantic_tokens_with_errors() {
     // AC:9, Semantic Tokens
     // Test semantic tokens with parse errors
@@ -380,7 +364,6 @@ fn test_error_recovery_semantic_tokens_with_errors() {
 /// - AC9: LSP graceful degradation
 /// - Performance: <50ms error response
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_performance_error_path_lsp_response_time() {
     // AC:9, Performance
     // Test LSP response time during errors
@@ -400,7 +383,6 @@ fn test_performance_error_path_lsp_response_time() {
 /// - AC9: LSP graceful degradation
 /// - Edge Case: Empty document
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_edge_case_empty_document_with_errors() {
     // AC:9, Edge Cases
     // Test empty document error handling
@@ -420,7 +402,6 @@ fn test_edge_case_empty_document_with_errors() {
 /// - AC9: LSP graceful degradation
 /// - Edge Case: Very large files
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_edge_case_very_large_file_with_errors() {
     // AC:9, Edge Cases
     // Test large file error handling
@@ -440,7 +421,6 @@ fn test_edge_case_very_large_file_with_errors() {
 /// - AC9: LSP graceful degradation
 /// - Edge Case: Unicode in diagnostics
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_edge_case_unicode_in_error_diagnostics() {
     // AC:9, Edge Cases
     // Test Unicode in error diagnostics
@@ -460,7 +440,6 @@ fn test_edge_case_unicode_in_error_diagnostics() {
 /// - AC9: LSP graceful degradation
 /// - Integration: Parser + Lexer errors
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_integration_parser_and_lexer_error_combination() {
     // AC:9, Integration
     // Test combined parser and lexer errors

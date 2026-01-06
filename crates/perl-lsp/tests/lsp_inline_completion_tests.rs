@@ -1,7 +1,35 @@
 //! Tests for LSP inline completion support
 
-use perl_parser::{JsonRpcRequest, LspServer};
+use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::json;
+
+fn setup_server() -> LspServer {
+    let mut server = LspServer::new();
+
+    // Initialize the server
+    let init_request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "initialize".to_string(),
+        params: Some(json!({
+            "processId": 1,
+            "capabilities": {}
+        })),
+        id: Some(json!(1)),
+    };
+
+    server.handle_request(init_request);
+
+    // Send initialized notification per LSP 3.17 protocol requirements
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    };
+    server.handle_request(initialized_notification);
+
+    server
+}
 
 fn open_doc(server: &mut LspServer, uri: &str, text: &str) {
     let request = JsonRpcRequest {
@@ -40,9 +68,8 @@ fn inline_completion(
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_inline_completion_after_arrow() {
-    let mut server = LspServer::new();
+    let mut server = setup_server();
     let uri = "file:///test.pl";
     open_doc(&mut server, uri, "my $obj = Package->");
     let result = inline_completion(&mut server, uri, 0, 19);
@@ -52,9 +79,8 @@ fn test_inline_completion_after_arrow() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_inline_completion_after_use() {
-    let mut server = LspServer::new();
+    let mut server = setup_server();
     let uri = "file:///test.pl";
     open_doc(&mut server, uri, "use ");
     let result = inline_completion(&mut server, uri, 0, 4);
@@ -67,9 +93,8 @@ fn test_inline_completion_after_use() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_inline_completion_shebang() {
-    let mut server = LspServer::new();
+    let mut server = setup_server();
     let uri = "file:///test.pl";
     open_doc(&mut server, uri, "#!");
     let result = inline_completion(&mut server, uri, 0, 2);
@@ -79,9 +104,8 @@ fn test_inline_completion_shebang() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_inline_completion_sub_body() {
-    let mut server = LspServer::new();
+    let mut server = setup_server();
     let uri = "file:///test.pl";
     open_doc(&mut server, uri, "sub test ");
     let result = inline_completion(&mut server, uri, 0, 9);
@@ -91,9 +115,8 @@ fn test_inline_completion_sub_body() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_inline_completion_no_suggestions() {
-    let mut server = LspServer::new();
+    let mut server = setup_server();
     let uri = "file:///test.pl";
     open_doc(&mut server, uri, "my $x = 42;");
     let result = inline_completion(&mut server, uri, 0, 10);

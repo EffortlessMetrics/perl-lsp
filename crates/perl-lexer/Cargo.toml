@@ -16,27 +16,21 @@ include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
 
 [dependencies]
 # Core dependencies
-unicode-ident = "1.0.19"
+unicode-ident = "1.0.22"
 memchr = "2.7.6"
 
-# For regex pattern matching
-regex = "1.11.3"
-once_cell = "1.21.3"
-
 # For better error handling
-thiserror = "2.0.16"
+thiserror = "2.0.17"
 
 [dev-dependencies]
-criterion = "0.7.0"
+criterion = "0.8.1"
 pretty_assertions = "1.4.1"
-proptest = "1.8.0"
+proptest = "1.9.0"
 
 [features]
 default = []
 # Enable SIMD optimizations for string processing
 simd = []
-# Enable regex caching for better performance
-regex-cache = []
 
 [[bench]]
 name = "lexer_benchmarks"

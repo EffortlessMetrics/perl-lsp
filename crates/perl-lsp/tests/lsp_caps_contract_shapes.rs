@@ -3,7 +3,6 @@ use serde_json::json;
 
 /// Contract test ensuring all advertised capabilities have the correct shape per LSP 3.18 spec
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_capability_shapes_lsp_318_contract() {
     let build = BuildFlags::production();
     let caps = capabilities_for(build.clone());
@@ -265,7 +264,6 @@ fn test_capability_shapes_lsp_318_contract() {
 
 /// Test that non-advertised features return MethodNotFound
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_non_advertised_features_return_method_not_found() {
     // This would be tested via actual LSP server instances
     // For now, we document the expected behavior
@@ -281,7 +279,6 @@ fn test_non_advertised_features_return_method_not_found() {
 
 /// Test that all capability shapes match their handler expectations
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_capability_handler_consistency() {
     let build = BuildFlags::all();
     let caps = capabilities_for(build);
@@ -310,7 +307,6 @@ fn test_capability_handler_consistency() {
 
 /// Test ga_lock configuration is conservative
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_ga_lock_is_conservative() {
     let ga = BuildFlags::ga_lock();
     let _prod = BuildFlags::production();

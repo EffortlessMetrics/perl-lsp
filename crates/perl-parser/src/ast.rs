@@ -622,7 +622,7 @@ impl Node {
                 }
             }
 
-            NodeKind::PhaseBlock { phase, block } => {
+            NodeKind::PhaseBlock { phase, phase_span: _, block } => {
                 format!("({} {})", phase, block.to_sexp())
             }
 
@@ -1522,6 +1522,12 @@ pub enum NodeKind {
     // Phase blocks
     PhaseBlock {
         phase: String, // BEGIN, END, CHECK, INIT, UNITCHECK
+        /// Source location span of the phase block name
+        ///
+        /// ## Usage Notes
+        /// - Provides constant-time position information for BEGIN/END/etc keywords
+        /// - Essential for precise editor interactions (go-to-definition, rename)
+        phase_span: Option<SourceLocation>,
         block: Box<Node>,
     },
 

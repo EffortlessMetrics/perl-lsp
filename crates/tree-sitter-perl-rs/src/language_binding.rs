@@ -207,32 +207,35 @@ pub extern "C" fn tree_sitter_perl_external_scanner_scan(
 }
 
 /// Symbol names for debugging
-static SYMBOL_NAMES: &[&str] = &[
-    "source_file",
-    "statement",
-    "expression",
-    "identifier",
-    "number",
-    "string",
-    "scalar_variable",
-    "array_variable",
-    "hash_variable",
-    "subroutine_declaration",
-    "package_declaration",
-    "use_statement",
-    "if_statement",
-    "while_statement",
-    "for_statement",
-    "block",
-    "assignment",
-    "binary_expression",
-    "unary_expression",
-    "function_call",
-    "method_call",
-    "comment",
-    "heredoc",
-    "regex",
-    "ERROR",
+/// NOTE: These are NUL-terminated byte literals for C FFI compatibility.
+/// Rust `&str` is NOT NUL-terminated, which would cause undefined behavior
+/// when passed to C code expecting C strings.
+static SYMBOL_NAMES: &[&[u8]] = &[
+    b"source_file\0",
+    b"statement\0",
+    b"expression\0",
+    b"identifier\0",
+    b"number\0",
+    b"string\0",
+    b"scalar_variable\0",
+    b"array_variable\0",
+    b"hash_variable\0",
+    b"subroutine_declaration\0",
+    b"package_declaration\0",
+    b"use_statement\0",
+    b"if_statement\0",
+    b"while_statement\0",
+    b"for_statement\0",
+    b"block\0",
+    b"assignment\0",
+    b"binary_expression\0",
+    b"unary_expression\0",
+    b"function_call\0",
+    b"method_call\0",
+    b"comment\0",
+    b"heredoc\0",
+    b"regex\0",
+    b"ERROR\0",
 ];
 
 /// Get symbol name
@@ -246,22 +249,25 @@ pub extern "C" fn tree_sitter_perl_symbol_name(symbol: u16) -> *const c_char {
 }
 
 /// Field names
-static FIELD_NAMES: &[&str] = &[
-    "name",
-    "body",
-    "condition",
-    "then",
-    "else",
-    "operator",
-    "left",
-    "right",
-    "function",
-    "arguments",
-    "object",
-    "method",
-    "value",
-    "pattern",
-    "flags",
+/// NOTE: These are NUL-terminated byte literals for C FFI compatibility.
+/// Rust `&str` is NOT NUL-terminated, which would cause undefined behavior
+/// when passed to C code expecting C strings.
+static FIELD_NAMES: &[&[u8]] = &[
+    b"name\0",
+    b"body\0",
+    b"condition\0",
+    b"then\0",
+    b"else\0",
+    b"operator\0",
+    b"left\0",
+    b"right\0",
+    b"function\0",
+    b"arguments\0",
+    b"object\0",
+    b"method\0",
+    b"value\0",
+    b"pattern\0",
+    b"flags\0",
 ];
 
 /// Get field name
@@ -334,16 +340,17 @@ pub extern "C" fn tree_sitter_perl_delete_tree(tree_id: u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::CStr;
 
     #[test]
     fn test_parser_interface() {
         let source = "my $x = 42;";
         let tree_id = GLOBAL_PARSER.parse(source).unwrap();
         assert!(tree_id > 0);
-        
+
         let ast = GLOBAL_PARSER.get_ast(tree_id);
         assert!(ast.is_some());
-        
+
         GLOBAL_PARSER.delete_tree(tree_id);
         assert!(GLOBAL_PARSER.get_ast(tree_id).is_none());
     }
@@ -374,5 +381,81 @@ mod tests {
         );
         assert_eq!(new_state.heredoc_terminators.len(), 2);
         assert_eq!(new_state.heredoc_terminators[0], "EOF");
+    }
+
+    /// Proof test: verify symbol names are valid NUL-terminated C strings.
+    ///
+    /// This test prevents regression of UB where Rust `&str` (NOT NUL-terminated)
+    /// was incorrectly passed to C code expecting C strings.
+    #[test]
+    fn test_symbol_names_are_valid_c_strings() {
+        // Test first symbol (index 0)
+        let ptr = tree_sitter_perl_symbol_name(0);
+        assert!(!ptr.is_null(), "Symbol name at index 0 should not be null");
+
+        // Verify it's a valid C string with NUL terminator
+        let c_str = unsafe { CStr::from_ptr(ptr) };
+        let s = c_str.to_str().expect("Symbol name should be valid UTF-8");
+        assert_eq!(s, "source_file", "First symbol should be 'source_file'");
+
+        // Test that the string is properly NUL-terminated within reasonable bounds
+        let bytes = unsafe { std::slice::from_raw_parts(ptr as *const u8, 64) };
+        let nul_pos = bytes.iter().position(|&b| b == 0);
+        assert!(nul_pos.is_some(), "Symbol name must have NUL terminator within 64 bytes");
+        assert!(nul_pos.unwrap() < 50, "NUL terminator should be within reasonable bounds");
+
+        // Test that out-of-bounds returns null
+        let out_of_bounds = tree_sitter_perl_symbol_name(u16::MAX);
+        assert!(out_of_bounds.is_null(), "Out of bounds symbol should return null");
+    }
+
+    /// Proof test: verify field names are valid NUL-terminated C strings.
+    ///
+    /// This test prevents regression of UB where Rust `&str` (NOT NUL-terminated)
+    /// was incorrectly passed to C code expecting C strings.
+    #[test]
+    fn test_field_names_are_valid_c_strings() {
+        // Test first field (index 0)
+        let ptr = tree_sitter_perl_field_name(0);
+        assert!(!ptr.is_null(), "Field name at index 0 should not be null");
+
+        // Verify it's a valid C string with NUL terminator
+        let c_str = unsafe { CStr::from_ptr(ptr) };
+        let s = c_str.to_str().expect("Field name should be valid UTF-8");
+        assert_eq!(s, "name", "First field should be 'name'");
+
+        // Test that the string is properly NUL-terminated within reasonable bounds
+        let bytes = unsafe { std::slice::from_raw_parts(ptr as *const u8, 64) };
+        let nul_pos = bytes.iter().position(|&b| b == 0);
+        assert!(nul_pos.is_some(), "Field name must have NUL terminator within 64 bytes");
+        assert!(nul_pos.unwrap() < 50, "NUL terminator should be within reasonable bounds");
+
+        // Test that out-of-bounds returns null
+        let out_of_bounds = tree_sitter_perl_field_name(u16::MAX);
+        assert!(out_of_bounds.is_null(), "Out of bounds field should return null");
+    }
+
+    /// Test that all symbol and field names are properly NUL-terminated
+    #[test]
+    fn test_all_names_have_nul_terminator() {
+        // Verify all symbol names
+        for i in 0..SYMBOL_NAMES.len() {
+            let name = SYMBOL_NAMES[i];
+            assert!(
+                name.ends_with(&[0u8]),
+                "Symbol name at index {} must end with NUL byte",
+                i
+            );
+        }
+
+        // Verify all field names
+        for i in 0..FIELD_NAMES.len() {
+            let name = FIELD_NAMES[i];
+            assert!(
+                name.ends_with(&[0u8]),
+                "Field name at index {} must end with NUL byte",
+                i
+            );
+        }
     }
 }

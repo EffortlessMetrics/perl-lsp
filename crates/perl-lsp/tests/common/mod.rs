@@ -7,12 +7,13 @@
 //! - **Response Matching**: Match by ID for request/response pairing
 //! - **Timeouts**: Configurable via env vars, with sensible defaults
 //! - **Quiet Drain**: Wait for server to settle after changes before assertions
-//! - **Portable Spawn**: Attempts CARGO_BIN_EXE_perl-lsp → PATH → cargo run fallback
+//! - **Portable Spawn**: PERL_LSP_BIN → CARGO_BIN_EXE_* → PATH → cargo run fallback
 //!
 //! ## Environment Variables
 //!
+//! - `PERL_LSP_BIN`: Explicit path to perl-lsp binary (useful for custom CARGO_TARGET_DIR)
 //! - `LSP_TEST_TIMEOUT_MS`: Default per-request timeout (ms), default 5000
-//! - `LSP_TEST_SHORT_MS`: "Short" timeout for optional responses (ms), default 500  
+//! - `LSP_TEST_SHORT_MS`: "Short" timeout for optional responses (ms), default 500
 //! - `LSP_TEST_ECHO_STDERR`: If set, echo perl-lsp stderr lines in tests
 //!
 //! ## Key Functions
@@ -24,8 +25,16 @@
 
 #![allow(dead_code)] // Common test utilities - some may not be used by all test files
 
-// Error codes
+// Re-export test_utils for semantic tests
+pub mod test_utils;
+
+// Error codes aligned with crates/perl-parser/src/lsp/protocol/errors.rs
+/// JSON-RPC reserved: Server error range is -32000 to -32099
 const ERR_TEST_TIMEOUT: i64 = -32000;
+/// Connection closed - BrokenPipe or similar transport termination
+const ERR_CONNECTION_CLOSED: i64 = -32050;
+/// Transport error - general I/O failures that aren't connection closures
+const ERR_TRANSPORT_ERROR: i64 = -32051;
 
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -64,6 +73,8 @@ pub struct LspServer {
     _stdout_thread: std::thread::JoinHandle<()>,
     _stderr_thread: std::thread::JoinHandle<()>,
     pending: VecDeque<Value>,
+    /// Flag to track if shutdown has been initiated (prevents double-shutdown)
+    shutdown_initiated: std::sync::atomic::AtomicBool,
 }
 
 impl LspServer {
@@ -78,10 +89,39 @@ impl LspServer {
     }
 }
 
+/// Compile-time path to the perl-lsp binary, set by Cargo when building integration tests.
+/// This is the most reliable way to get the correct binary path.
+const CARGO_BIN_EXE: Option<&str> = option_env!("CARGO_BIN_EXE_perl-lsp");
+
 fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
-    // Try CARGO_BIN_EXE_* first, then PATH, then cargo run
+    // Resolution order (fixed for test reliability):
+    // 1. PERL_LSP_BIN env var (explicit override, useful for custom target dirs)
+    // 2. Compile-time CARGO_BIN_EXE (guaranteed correct during `cargo test -p perl-lsp`)
+    // 3. Runtime CARGO_BIN_EXE_* (fallback for edge cases)
+    // 4. Workspace target directory binaries (DEBUG first, then release)
+    // 5. PATH lookup
+    // 6. cargo run fallback (slow but always works)
+    //
+    // IMPORTANT: Debug binary is checked BEFORE release to avoid stale release binaries
+    // causing test failures. When you run `cargo test -p perl-lsp`, cargo builds debug.
     let mut v: Vec<Command> = Vec::new();
 
+    // 1. Explicit override via PERL_LSP_BIN
+    if let Ok(p) = std::env::var("PERL_LSP_BIN") {
+        let mut c = Command::new(p);
+        c.arg("--stdio");
+        v.push(c);
+    }
+
+    // 2. Compile-time CARGO_BIN_EXE (most reliable for `cargo test`)
+    // This is set at compile time by Cargo and points to the exact binary that was built
+    if let Some(p) = CARGO_BIN_EXE {
+        let mut c = Command::new(p);
+        c.arg("--stdio");
+        v.push(c);
+    }
+
+    // 3. Runtime CARGO_BIN_EXE_* (fallback, in case compile-time wasn't set)
     if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl-lsp") {
         let mut c = Command::new(p);
         c.arg("--stdio");
@@ -93,24 +133,44 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
         v.push(c);
     }
 
-    // Try perl-lsp from PATH
+    // 4. Try workspace target directory binaries (using absolute paths)
+    // IMPORTANT: Debug BEFORE release to avoid stale release binary issues
+    // CARGO_MANIFEST_DIR points to the crate directory, we need the workspace root
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        let crate_dir = std::path::Path::new(&manifest_dir);
+        // Walk up to find workspace root (contains Cargo.toml with [workspace])
+        let workspace_root =
+            crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists()).unwrap_or(crate_dir);
+
+        // Try DEBUG binary first (this is what `cargo test` builds by default)
+        let debug_binary = workspace_root.join("target/debug/perl-lsp");
+        if debug_binary.exists() {
+            let mut c = Command::new(&debug_binary);
+            c.arg("--stdio");
+            v.push(c);
+        }
+
+        // Then try release binary (only if debug doesn't exist)
+        let release_binary = workspace_root.join("target/release/perl-lsp");
+        if release_binary.exists() {
+            let mut c = Command::new(&release_binary);
+            c.arg("--stdio");
+            v.push(c);
+        }
+    }
+
+    // 5. Try perl-lsp from PATH
     {
         let mut c = Command::new("perl-lsp");
         c.arg("--stdio");
         v.push(c);
     }
 
-    // Try release binary if available
-    {
-        let mut c = Command::new("./target/release/perl-lsp");
-        c.arg("--stdio");
-        v.push(c);
-    }
-
-    // Fallback: use cargo run with release profile (avoid debug linking issues)
+    // 6. Fallback: use cargo run with debug profile (matches what tests build)
+    // This is SLOW because it may need to compile, but always works
     {
         let mut c = Command::new("cargo");
-        c.args(["run", "-q", "-p", "perl-lsp", "--release", "--", "--stdio"]);
+        c.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"]);
         v.push(c);
     }
 
@@ -142,13 +202,49 @@ pub fn start_lsp_server() -> LspServer {
             }
         }
         spawned.unwrap_or_else(|| {
-            eprintln!("Failed to start perl-lsp server - tried all methods:");
-            eprintln!("  1. CARGO_BIN_EXE_perl-lsp env var");
-            eprintln!("  2. CARGO_BIN_EXE_perl_lsp env var");
-            eprintln!("  3. perl-lsp from PATH");
-            eprintln!("  4. ./target/release/perl-lsp");
-            eprintln!("  5. cargo run --release -p perl-lsp");
-            eprintln!("Last error: {:?}", last_err);
+            eprintln!("╔════════════════════════════════════════════════════════════════════╗");
+            eprintln!("║ ERROR: Failed to start perl-lsp server                             ║");
+            eprintln!("╠════════════════════════════════════════════════════════════════════╣");
+            eprintln!("║ Resolution order tried:                                            ║");
+            eprintln!("║  1. PERL_LSP_BIN env var: {:?}", std::env::var("PERL_LSP_BIN").ok());
+            eprintln!("║  2. Compile-time CARGO_BIN_EXE: {:?}", CARGO_BIN_EXE);
+            eprintln!(
+                "║  3. Runtime CARGO_BIN_EXE_perl-lsp: {:?}",
+                std::env::var("CARGO_BIN_EXE_perl-lsp").ok()
+            );
+            eprintln!(
+                "║  4. Runtime CARGO_BIN_EXE_perl_lsp: {:?}",
+                std::env::var("CARGO_BIN_EXE_perl_lsp").ok()
+            );
+            if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+                let crate_dir = std::path::Path::new(&manifest_dir);
+                let workspace_root = crate_dir
+                    .ancestors()
+                    .find(|p| p.join("Cargo.lock").exists())
+                    .unwrap_or(crate_dir);
+                let debug_binary = workspace_root.join("target/debug/perl-lsp");
+                let release_binary = workspace_root.join("target/release/perl-lsp");
+                eprintln!(
+                    "║  5. Debug binary exists: {} ({})",
+                    debug_binary.exists(),
+                    debug_binary.display()
+                );
+                eprintln!(
+                    "║  6. Release binary exists: {} ({})",
+                    release_binary.exists(),
+                    release_binary.display()
+                );
+            }
+            eprintln!("║  7. perl-lsp in PATH: {:?}", which::which("perl-lsp").ok());
+            eprintln!("║  8. cargo run fallback");
+            eprintln!("╠════════════════════════════════════════════════════════════════════╣");
+            eprintln!("║ Last error: {:?}", last_err);
+            eprintln!("╠════════════════════════════════════════════════════════════════════╣");
+            eprintln!("║ HINTS:                                                             ║");
+            eprintln!("║  • Run: cargo build -p perl-lsp   (builds debug binary)            ║");
+            eprintln!("║  • Or:  cargo test -p perl-lsp    (builds + tests automatically)   ║");
+            eprintln!("║  • Set PERL_LSP_BIN=/path/to/perl-lsp for custom binary            ║");
+            eprintln!("╚════════════════════════════════════════════════════════════════════╝");
             panic!("Failed to start perl-lsp via any available method: {:?}", last_err)
         })
     };
@@ -175,10 +271,14 @@ pub fn start_lsp_server() -> LspServer {
     // -------- stdout LSP reader thread --------
     let stdout = process.stdout.take().expect("stdout piped");
     let (tx, rx) = mpsc::channel::<Value>();
+    let debug_reader = std::env::var_os("LSP_TEST_DEBUG_READER").is_some();
     let _stdout_thread = std::thread::Builder::new()
         .name("lsp-stdout-reader".into())
         .spawn(move || {
             let mut r = BufReader::new(stdout);
+            if debug_reader {
+                eprintln!("[reader] Thread started");
+            }
             loop {
                 // Parse headers
                 let mut content_len: Option<usize> = None;
@@ -186,7 +286,12 @@ pub fn start_lsp_server() -> LspServer {
                 loop {
                     line.clear();
                     match r.read_line(&mut line) {
-                        Ok(0) => return, // EOF
+                        Ok(0) => {
+                            if debug_reader {
+                                eprintln!("[reader] EOF on stdout");
+                            }
+                            return; // EOF
+                        }
                         Ok(_) => {
                             let l = line.trim_end();
                             if l.is_empty() {
@@ -199,7 +304,12 @@ pub fn start_lsp_server() -> LspServer {
                                 content_len = rest.parse::<usize>().ok();
                             }
                         }
-                        Err(_) => return,
+                        Err(e) => {
+                            if debug_reader {
+                                eprintln!("[reader] Error reading line: {e}");
+                            }
+                            return;
+                        }
                     }
                 }
                 let len = match content_len {
@@ -209,9 +319,17 @@ pub fn start_lsp_server() -> LspServer {
                 // Read body
                 let mut buf = vec![0u8; len];
                 if r.read_exact(&mut buf).is_err() {
+                    if debug_reader {
+                        eprintln!("[reader] Error reading body");
+                    }
                     return;
                 }
                 if let Ok(val) = serde_json::from_slice::<Value>(&buf) {
+                    if debug_reader {
+                        let id = val.get("id").map(|v| v.to_string()).unwrap_or_default();
+                        let method = val.get("method").and_then(|v| v.as_str()).unwrap_or("");
+                        eprintln!("[reader] Received message id={id} method={method}");
+                    }
                     let _ = tx.send(val);
                 }
             }
@@ -225,6 +343,7 @@ pub fn start_lsp_server() -> LspServer {
         _stdout_thread,
         _stderr_thread,
         pending: VecDeque::new(),
+        shutdown_initiated: std::sync::atomic::AtomicBool::new(false),
     };
 
     // Brief delay to allow server to fully initialize before returning
@@ -234,39 +353,58 @@ pub fn start_lsp_server() -> LspServer {
 }
 
 pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
-    // Ensure every request has an id so we can match the response deterministically
+    // IMPORTANT: Extract/assign ID FIRST, before any early returns.
+    // This ensures error responses can include the proper request ID.
     let id = match request.get("id") {
-        Some(v) => Some(v.clone()),
+        Some(v) => v.clone(),
         None => {
             let nid = next_id();
             request["id"] = json!(nid);
-            Some(json!(nid))
+            json!(nid)
         }
     };
 
     let body = request.to_string();
-    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
-    server.writer.flush().unwrap();
+    if let Err(e) = send_message_inner(&mut server.writer, &body) {
+        // Handle write errors gracefully with proper JSON-RPC envelope
+        // BrokenPipe during teardown is expected; other errors are transport failures
+        return map_send_error(Some(id), e, "send_request");
+    }
 
     // Match by ID to avoid confusion with interleaved notifications
-    match id {
-        Some(Value::Number(n)) if n.as_i64().is_some() => {
+    match &id {
+        Value::Number(n) if n.as_i64().is_some() => {
             read_response_matching_i64(server, n.as_i64().unwrap(), default_timeout())
-                .unwrap_or_else(
-                    || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
-                )
+                .unwrap_or_else(|| {
+                    error_response_for_request(
+                        Some(id.clone()),
+                        ERR_TEST_TIMEOUT,
+                        "test harness timeout",
+                    )
+                })
         }
-        Some(v) => read_response_matching(server, &v, default_timeout()).unwrap_or_else(
-            || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
-        ),
-        None => unreachable!("we always assign an id"),
+        v => read_response_matching(server, v, default_timeout()).unwrap_or_else(|| {
+            error_response_for_request(Some(id.clone()), ERR_TEST_TIMEOUT, "test harness timeout")
+        }),
+    }
+}
+
+/// Maps I/O send errors to proper JSON-RPC error responses.
+///
+/// BrokenPipe → CONNECTION_CLOSED (-32050)
+/// Other I/O errors → TRANSPORT_ERROR (-32051)
+fn map_send_error(id: Option<Value>, e: io::Error, context: &str) -> Value {
+    if e.kind() == io::ErrorKind::BrokenPipe {
+        connection_closed_error_for_request(id)
+    } else {
+        transport_error_for_request(id, &format!("{}: {}", context, e))
     }
 }
 
 pub fn send_notification(server: &mut LspServer, notification: Value) {
     let body = notification.to_string();
-    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
-    server.writer.flush().unwrap();
+    // Ignore write errors during notification sends - BrokenPipe during teardown is expected
+    let _ = send_message_inner(&mut server.writer, &body);
 }
 
 fn default_timeout() -> Duration {
@@ -347,6 +485,51 @@ pub fn adaptive_sleep_ms(base_ms: u64) -> Duration {
     Duration::from_millis(base_ms * multiplier)
 }
 
+/// Helper function to send a JSON-RPC message over the wire.
+/// Returns io::Result to allow graceful error handling.
+fn send_message_inner(writer: &mut impl Write, body: &str) -> io::Result<()> {
+    write!(writer, "Content-Length: {}\r\n\r\n{}", body.len(), body)?;
+    writer.flush()
+}
+
+/// Creates a JSON-RPC 2.0 error response with proper envelope.
+///
+/// All error responses MUST include `jsonrpc` and `id` fields per JSON-RPC 2.0 spec.
+/// The `id` should be extracted from the original request before any error handling.
+fn error_response_for_request(id: Option<Value>, code: i64, message: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id.unwrap_or(Value::Null),
+        "error": {
+            "code": code,
+            "message": message
+        }
+    })
+}
+
+/// Creates an error response for connection-closed scenarios (BrokenPipe).
+fn connection_closed_error_for_request(id: Option<Value>) -> Value {
+    error_response_for_request(id, ERR_CONNECTION_CLOSED, "Connection closed")
+}
+
+/// Creates an error response for internal transport errors.
+fn transport_error_for_request(id: Option<Value>, msg: &str) -> Value {
+    error_response_for_request(id, ERR_TRANSPORT_ERROR, msg)
+}
+
+// Legacy functions for backward compatibility with code that doesn't have request context
+// These return responses with null id (valid JSON-RPC but less informative)
+
+/// Creates an error response for connection-closed scenarios (legacy, no request context).
+fn connection_closed_error() -> Value {
+    connection_closed_error_for_request(None)
+}
+
+/// Creates an error response for internal transport errors (legacy, no request context).
+fn internal_transport_error(msg: &str) -> Value {
+    transport_error_for_request(None, msg)
+}
+
 /// Blocking receive with a sane default timeout to avoid hangs.
 pub fn read_response(server: &mut LspServer) -> Value {
     read_response_timeout(server, default_timeout()).unwrap_or_else(
@@ -411,8 +594,8 @@ pub fn read_response_matching_i64(server: &mut LspServer, id: i64, dur: Duration
 
 /// Write raw bytes (for malformed/binary frame tests).
 pub fn send_raw(server: &mut LspServer, bytes: &[u8]) {
-    server.writer.write_all(bytes).unwrap();
-    server.writer.flush().unwrap();
+    // Ignore write errors - BrokenPipe during teardown is expected
+    let _ = server.writer.write_all(bytes).and_then(|_| server.writer.flush());
 }
 
 /// Read a notification matching the given method name
@@ -486,8 +669,10 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
     // write without reading
     {
         let body = init.to_string();
-        write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
-        server.writer.flush().unwrap();
+        if let Err(e) = send_message_inner(&mut server.writer, &body) {
+            // Handle write errors gracefully with proper JSON-RPC envelope (id=1)
+            return map_send_error(Some(json!(1)), e, "initialize");
+        }
     }
 
     // wait specifically for id=1 - use extended timeout for initialization
@@ -578,6 +763,20 @@ pub fn await_index_ready(server: &mut LspServer) {
 
 /// Gracefully shut the server down (best-effort) without hanging tests.
 pub fn shutdown_and_exit(server: &mut LspServer) {
+    use std::sync::atomic::Ordering;
+
+    // Mark shutdown as initiated to prevent duplicate shutdown in Drop
+    if server.shutdown_initiated.swap(true, Ordering::SeqCst) {
+        // Already initiated, just wait for exit
+        for _ in 0..20 {
+            if server.process.try_wait().ok().flatten().is_some() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        return;
+    }
+
     // Try a graceful shutdown first; if the server ignores, we'll still exit the test.
     let _ = send_request(
         server,
@@ -597,23 +796,59 @@ pub fn shutdown_and_exit(server: &mut LspServer) {
 
 /// Send raw message to server (for testing malformed input)
 pub fn send_raw_message(server: &mut LspServer, content: &str) {
-    write!(server.writer, "Content-Length: {}\r\n\r\n{}", content.len(), content).unwrap();
-    server.writer.flush().unwrap();
+    // Ignore write errors - BrokenPipe during teardown is expected
+    let _ = send_message_inner(&mut server.writer, content);
 }
 
 /// Send request without waiting for response
 pub fn send_request_no_wait(server: &mut LspServer, req: Value) {
     let body = req.to_string();
-    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
-    server.writer.flush().unwrap();
+    // Ignore write errors - BrokenPipe during teardown is expected
+    let _ = send_message_inner(&mut server.writer, &body);
 }
 
 impl Drop for LspServer {
     fn drop(&mut self) {
-        // Best-effort cleanup if shutdown wasn't called.
-        if self.process.try_wait().ok().flatten().is_none() {
+        use std::sync::atomic::Ordering;
+
+        // Check if already exited
+        if self.process.try_wait().ok().flatten().is_some() {
+            return;
+        }
+
+        // Check if shutdown was already initiated by explicit call
+        if self.shutdown_initiated.swap(true, Ordering::SeqCst) {
+            // Already initiated, just wait for exit then force-kill if needed
+            for _ in 0..50 {
+                if self.process.try_wait().ok().flatten().is_some() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
             let _ = self.process.kill();
             let _ = self.process.wait();
+            return;
         }
+
+        // Best-effort graceful shutdown (never panic in Drop)
+        // 1. Try to send shutdown request
+        let shutdown_body = r#"{"jsonrpc":"2.0","id":999999,"method":"shutdown","params":{}}"#;
+        let _ = send_message_inner(&mut self.writer, shutdown_body);
+
+        // 2. Try to send exit notification
+        let exit_body = r#"{"jsonrpc":"2.0","method":"exit"}"#;
+        let _ = send_message_inner(&mut self.writer, exit_body);
+
+        // 3. Wait briefly for graceful exit (max 500ms)
+        for _ in 0..50 {
+            if self.process.try_wait().ok().flatten().is_some() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        // 4. Fall back to hard kill if graceful shutdown didn't work
+        let _ = self.process.kill();
+        let _ = self.process.wait();
     }
 }

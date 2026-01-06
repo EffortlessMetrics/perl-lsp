@@ -3,7 +3,7 @@ use serde_json::json;
 
 /// Test Type Hierarchy support (LSP 3.17)
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_type_hierarchy_prepare() {
     let mut server = LspServer::new();
 
@@ -18,6 +18,15 @@ fn test_type_hierarchy_prepare() {
         })),
     };
     let _ = server.handle_request(init_request);
+
+    // Send initialized notification (required by LSP protocol)
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized);
 
     // Open a document with class hierarchy
     let uri = "file:///test.pl";
@@ -78,7 +87,7 @@ sub new {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_type_hierarchy_supertypes() {
     let mut server = LspServer::new();
 
@@ -93,6 +102,15 @@ fn test_type_hierarchy_supertypes() {
         })),
     };
     let _ = server.handle_request(init_request);
+
+    // Send initialized notification (required by LSP protocol)
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized);
 
     // Open a document with inheritance
     let uri = "file:///test.pl";
@@ -170,7 +188,7 @@ package Parent2;
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_type_hierarchy_subtypes() {
     let mut server = LspServer::new();
 
@@ -185,6 +203,15 @@ fn test_type_hierarchy_subtypes() {
         })),
     };
     let _ = server.handle_request(init_request);
+
+    // Send initialized notification (required by LSP protocol)
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized);
 
     // Open a document with derived classes
     let uri = "file:///test.pl";
@@ -263,7 +290,7 @@ our @ISA = ('Base');
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_type_hierarchy_capability_advertised() {
     let mut server = LspServer::new();
 
@@ -292,7 +319,7 @@ fn test_type_hierarchy_capability_advertised() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_type_hierarchy_with_namespace_packages() {
     let mut server = LspServer::new();
 
@@ -307,6 +334,15 @@ fn test_type_hierarchy_with_namespace_packages() {
         })),
     };
     let _ = server.handle_request(init_request);
+
+    // Send initialized notification (required by LSP protocol)
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    let _ = server.handle_request(initialized);
 
     // Test with Foo::Bar -> Foo hierarchy
     let uri = "file:///test.pl";

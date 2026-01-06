@@ -6,7 +6,6 @@ use perl_parser::{
 };
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_undefined_variable_quick_fix() {
     let source = "use strict;\nprint $x;";
 
@@ -38,7 +37,6 @@ fn test_undefined_variable_quick_fix() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_unused_variable_quick_fix() {
     let source = "my $unused = 42;\nprint \"done\";";
 
@@ -70,7 +68,6 @@ fn test_unused_variable_quick_fix() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_variable_shadowing_quick_fix() {
     let source = "my $x = 1;\n{ my $x = 2; }";
 
@@ -107,7 +104,6 @@ fn test_variable_shadowing_quick_fix() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_parse_error_semicolon_fix() {
     let source = "print 'hello'\nprint 'world';";
 
@@ -142,7 +138,6 @@ fn test_parse_error_semicolon_fix() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_multiple_diagnostics_multiple_actions() {
     let source = "use strict;\nprint $x;\nmy $unused = 42;";
 

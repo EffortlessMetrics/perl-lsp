@@ -290,11 +290,11 @@ impl<'a> Parser<'a> {
 
         // Zip 1:1 in order (collector preserves input order)
         for (decl, body) in pending.into_iter().zip(out.contents.into_iter()) {
-            let attached = self.try_attach_heredoc_at_node(root, decl.decl_span, &body);
+            let _attached = self.try_attach_heredoc_at_node(root, decl.decl_span, &body);
 
             // Defensive guardrail: warn if heredoc node wasn't found at expected span
             #[cfg(debug_assertions)]
-            if !attached {
+            if !_attached {
                 eprintln!(
                     "[WARNING] drain_pending_heredocs: Failed to attach heredoc content at span {}..{} - no matching Heredoc node found in AST",
                     decl.decl_span.start, decl.decl_span.end
@@ -525,6 +525,12 @@ impl<'a> Parser<'a> {
 
     /// Check if this might be an indirect call pattern
     /// We only consider this at statement start to avoid ambiguous mid-expression cases.
+    ///
+    /// Note: When this is called, the parser has peeked at the function name (e.g., "print")
+    /// but not consumed it. So:
+    /// - peek() returns the function name (current position)
+    /// - peek_second() returns the token after the function name
+    /// - peek_third() returns two tokens after the function name
     fn is_indirect_call_pattern(&mut self, name: &str) -> bool {
         // Only check for indirect objects at statement start to avoid false positives
         // in contexts like: my $x = 1; if (1) { print $x; }
@@ -533,8 +539,13 @@ impl<'a> Parser<'a> {
         }
 
         // print "string" should not be treated as indirect object syntax
-        if name == "print" && matches!(self.peek_kind(), Some(TokenKind::String)) {
-            return false;
+        // Note: peek_second() gets the token after "print" since peek() is "print"
+        if name == "print" {
+            if let Ok(next) = self.tokens.peek_second() {
+                if next.kind == TokenKind::String {
+                    return false;
+                }
+            }
         }
 
         // Known builtins that commonly use indirect object syntax
@@ -546,8 +557,8 @@ impl<'a> Parser<'a> {
 
         // Check if it's a known builtin
         if indirect_builtins.contains(&name) {
-            // Peek at the next token (not second - we're already at the first)
-            let (next_kind, next_text) = if let Ok(next) = self.tokens.peek() {
+            // Peek at the token AFTER the function name (use peek_second since peek is the function name)
+            let (next_kind, next_text) = if let Ok(next) = self.tokens.peek_second() {
                 (next.kind, next.text.clone())
             } else {
                 return false;
@@ -563,41 +574,47 @@ impl<'a> Parser<'a> {
                 _ => {}
             }
 
-            match next_kind {
-                // print STDOUT ...
-                TokenKind::Identifier => {
-                    // Check if it's uppercase (likely a filehandle)
-                    if next_text.chars().next().is_some_and(|c| c.is_uppercase()) {
-                        return true;
+            // Check for print $fh $x pattern first (variable followed by another arg)
+            // This must be checked before the STDOUT pattern because $fh is also an Identifier
+            if next_text.starts_with('$') {
+                // Only treat $var as an indirect object if a typical argument follows
+                // without a comma. A comma means it's a regular argument list.
+                // This prevents misclassifying `print $x, $y` as indirect object.
+                // Use peek_third() to look at the token after $fh
+                if let Ok(third) = self.tokens.peek_third() {
+                    // A comma after $fh means regular argument list, NOT indirect object
+                    // e.g., print $x, $y; is print both to STDOUT
+                    if third.kind == TokenKind::Comma {
+                        return false;
                     }
+
+                    // Allow classic argument starts and sigiled variables ($x, @arr, %hash)
+                    let third_text = third.text.as_str();
+                    return matches!(
+                        third.kind,
+                        TokenKind::String       // print $fh "x"
+                        | TokenKind::LeftParen    // print $fh ($x)
+                        | TokenKind::LeftBracket  // print $fh [$x]
+                        | TokenKind::LeftBrace    // print $fh { ... }
+                    ) || third_text.starts_with('$')    // print $fh $x
+                      || third_text.starts_with('@')    // print $fh @array
+                      || third_text.starts_with('%'); // print $fh %hash
                 }
-                // print $fh ... (only if typical args follow)
-                _ if next_text.starts_with('$') => {
-                    // Only treat $var as an indirect object if a typical argument follows.
-                    // This prevents misclassifying arithmetic like `print $x + 1`
-                    if let Ok(second) = self.tokens.peek_second() {
-                        // Allow classic argument starts and sigiled variables ($x, @arr, %hash)
-                        let second_text = second.text.as_str();
-                        return matches!(
-                            second.kind,
-                            TokenKind::Comma          // print $fh, "x"
-                            | TokenKind::String       // print $fh "x"
-                            | TokenKind::LeftParen    // print $fh ($x)
-                            | TokenKind::LeftBracket  // print $fh [$x]
-                            | TokenKind::LeftBrace    // print $fh { ... }
-                        ) || second_text.starts_with('$')    // print $fh $x
-                          || second_text.starts_with('@')    // print $fh @array
-                          || second_text.starts_with('%'); // print $fh %hash
-                    }
-                    return false; // Can't see more; be conservative
+                return false; // Can't see more; be conservative
+            }
+
+            // print STDOUT ... (uppercase bareword filehandle)
+            if next_kind == TokenKind::Identifier {
+                if next_text.chars().next().is_some_and(|c| c.is_uppercase()) {
+                    return true;
                 }
-                _ => {}
             }
         }
 
         // Check for "new ClassName" pattern
         if name == "new" {
-            if let Ok(next) = self.tokens.peek() {
+            // peek_second() gets the token after "new"
+            if let Ok(next) = self.tokens.peek_second() {
                 if let TokenKind::Identifier = next.kind {
                     // Uppercase identifier after "new" suggests constructor
                     if next.text.chars().next().is_some_and(|c| c.is_uppercase()) {
@@ -2149,6 +2166,9 @@ impl<'a> Parser<'a> {
         let name_token = self.consume_token()?;
         let name = name_token.text.clone();
 
+        // Capture name_span from token for precise LSP navigation
+        let name_span = Some(SourceLocation { start: name_token.start, end: name_token.end });
+
         let block = self.parse_block()?;
         let end = block.location.end;
 
@@ -2156,7 +2176,7 @@ impl<'a> Parser<'a> {
         Ok(Node::new(
             NodeKind::Subroutine {
                 name: Some(name),
-                name_span: None, // TODO: Set proper name span
+                name_span,
                 prototype: None,
                 signature: None,
                 attributes: vec![],
@@ -2172,6 +2192,9 @@ impl<'a> Parser<'a> {
         let phase_token = self.consume_token()?;
         let phase = phase_token.text.clone();
 
+        // Capture phase_span from token for precise LSP navigation
+        let phase_span = Some(SourceLocation { start: phase_token.start, end: phase_token.end });
+
         // Phase blocks must be followed by a block
         if self.peek_kind() != Some(TokenKind::LeftBrace) {
             return Err(ParseError::syntax(
@@ -2185,7 +2208,7 @@ impl<'a> Parser<'a> {
 
         // Create a special node for phase blocks
         Ok(Node::new(
-            NodeKind::PhaseBlock { phase, block: Box::new(block) },
+            NodeKind::PhaseBlock { phase, phase_span, block: Box::new(block) },
             SourceLocation { start, end },
         ))
     }
@@ -2915,6 +2938,12 @@ impl<'a> Parser<'a> {
             return self.parse_word_not_expr();
         }
 
+        // Handle 'return' as an expression in expression context
+        // This allows patterns like: open $fh, $file or return;
+        if self.peek_kind() == Some(TokenKind::Return) {
+            return self.parse_return();
+        }
+
         let mut expr = self.parse_ternary()?;
 
         // Check for assignment operators
@@ -2965,12 +2994,14 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse ternary conditional expression
+    /// Right-associative: `$a ? $b ? $c : $d : $e` parses as `$a ? ($b ? $c : $d) : $e`
     fn parse_ternary(&mut self) -> ParseResult<Node> {
         let mut expr = self.parse_or()?;
 
         if self.peek_kind() == Some(TokenKind::Question) {
             self.tokens.next()?; // consume ?
-            let then_expr = self.parse_or()?;
+            // Allow nested ternary in then-branch for right associativity
+            let then_expr = self.parse_ternary()?;
             self.expect(TokenKind::Colon)?;
             let else_expr = self.parse_ternary()?;
 
@@ -4500,8 +4531,36 @@ impl<'a> Parser<'a> {
 
             TokenKind::Substitution => {
                 let token = self.tokens.next()?;
+                // Use strict validation that rejects invalid modifiers
                 let (pattern, replacement, modifiers) =
-                    quote_parser::extract_substitution_parts(&token.text);
+                    quote_parser::extract_substitution_parts_strict(&token.text).map_err(
+                        |e| {
+                            let message = match e {
+                                quote_parser::SubstitutionError::InvalidModifier(c) => {
+                                    format!(
+                                        "Invalid substitution modifier '{}'. Valid modifiers are: g, i, m, s, x, o, e, r",
+                                        c
+                                    )
+                                }
+                                quote_parser::SubstitutionError::MissingDelimiter => {
+                                    "Missing delimiter after 's'".to_string()
+                                }
+                                quote_parser::SubstitutionError::MissingPattern => {
+                                    "Missing pattern in substitution".to_string()
+                                }
+                                quote_parser::SubstitutionError::MissingReplacement => {
+                                    "Missing replacement in substitution".to_string()
+                                }
+                                quote_parser::SubstitutionError::MissingClosingDelimiter => {
+                                    "Missing closing delimiter in substitution".to_string()
+                                }
+                            };
+                            ParseError::SyntaxError {
+                                message,
+                                location: token.start,
+                            }
+                        },
+                    )?;
 
                 // Substitution as a standalone expression (will be used with =~ later)
                 Ok(Node::new(

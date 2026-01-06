@@ -53,7 +53,7 @@ fn get_diagnostics(server: &mut LspServer, uri: &str) -> Option<Value> {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_empty_file_handling() {
     let mut server = setup_server();
 
@@ -75,7 +75,7 @@ fn test_empty_file_handling() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_malformed_perl_recovery() {
     let mut server = setup_server();
 
@@ -98,7 +98,7 @@ for (;;  # Incomplete for loop
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_unicode_edge_cases() {
     let mut server = setup_server();
 
@@ -129,7 +129,7 @@ my $emoji = "🦀";
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_large_line_handling() {
     let mut server = setup_server();
 
@@ -142,7 +142,7 @@ fn test_large_line_handling() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_rapid_edits() {
     let mut server = setup_server();
 
@@ -174,7 +174,7 @@ fn test_rapid_edits() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_circular_references() {
     let mut server = setup_server();
 
@@ -208,7 +208,7 @@ sub bar { A::foo(); }
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_special_variable_handling() {
     let mut server = setup_server();
 
@@ -251,7 +251,7 @@ $. = 0;
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_heredoc_edge_cases() {
     let mut server = setup_server();
 
@@ -285,7 +285,7 @@ SECOND
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_regex_with_special_delimiters() {
     let mut server = setup_server();
 
@@ -307,7 +307,7 @@ $text =~ y/a-z/A-Z/;
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_incomplete_statements() {
     let mut server = setup_server();
 
@@ -327,7 +327,7 @@ sub foo {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_mixed_encodings() {
     let mut server = setup_server();
 
@@ -346,7 +346,7 @@ my $emoji = "🎉";
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_boundary_positions() {
     let mut server = setup_server();
 
@@ -403,7 +403,7 @@ fn test_boundary_positions() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_concurrent_file_operations() {
     let mut server = setup_server();
 

@@ -492,7 +492,6 @@ fn estimate_memory_usage() -> usize {
 /// Complete end-to-end cancellation workflow test
 /// Tests all acceptance criteria integrated in realistic scenarios
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_comprehensive_cancellation_workflow_e2e() {
     let mut fixture = E2ETestFixture::new();
 
@@ -553,7 +552,6 @@ fn test_comprehensive_cancellation_workflow_e2e() {
 
 /// Real-world usage pattern validation with cancellation
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_real_world_usage_patterns_e2e() {
     let fixture = E2ETestFixture::new();
 
@@ -582,7 +580,6 @@ fn test_real_world_usage_patterns_e2e() {
 
 /// High-load cancellation behavior validation
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_high_load_cancellation_behavior_e2e() {
     let mut fixture = E2ETestFixture::new();
 

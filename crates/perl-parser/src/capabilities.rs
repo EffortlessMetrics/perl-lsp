@@ -122,6 +122,8 @@ pub struct BuildFlags {
     pub moniker: bool,
     /// Document color provider compilation flag for color swatches in strings and comments
     pub document_color: bool,
+    /// Source organize imports capability (GA-lock excludes this)
+    pub source_organize_imports: bool,
     /// Document formatting provider compilation flag
     pub formatting: bool,
     /// Range formatting provider compilation flag
@@ -184,7 +186,8 @@ impl BuildFlags {
             inline_completion: true, // Deterministic inline completions
             inline_values: true,     // Debug inline values
             moniker: true,           // Stable symbol identifiers
-            document_color: true,    // Color detection
+            document_color: false,   // Handler not implemented (returns -32601)
+            source_organize_imports: true, // Fully implemented and tested
             formatting: false,       // Set based on perltidy availability
             range_formatting: false, // Set based on perltidy availability
             folding_range: true,
@@ -220,6 +223,7 @@ impl BuildFlags {
             inline_values: true,
             moniker: true,
             document_color: true,
+            source_organize_imports: true,
             formatting: true,
             range_formatting: true,
             folding_range: true,
@@ -240,9 +244,9 @@ impl BuildFlags {
             inlay_hints: true,      // v0.8.4 feature - working
             pull_diagnostics: true, // v0.8.5 feature - working
             workspace_symbol_resolve: true,
-            semantic_tokens: true,    // v0.8.4 feature - working
-            code_actions: true,       // v0.8.4 feature - working (enhanced v0.8.9 with refactoring)
-            execute_command: true,    // v0.8.5 feature - working
+            semantic_tokens: true,          // v0.8.4 feature - working
+            code_actions: true, // v0.8.4 feature - working (enhanced v0.8.9 with refactoring)
+            execute_command: true, // v0.8.5 feature - working
             rename: true, // v0.8.4 feature - working (enhanced v0.8.9 with workspace refactoring)
             document_links: true, // v0.8.4 feature - working
             selection_ranges: true, // v0.8.4 feature - working
@@ -255,6 +259,7 @@ impl BuildFlags {
             inline_values: false, // New feature, not GA yet
             moniker: false, // New feature, not GA yet
             document_color: false, // New feature, not GA yet
+            source_organize_imports: false, // Excluded from GA-lock contract
             formatting: false,
             range_formatting: false,
             folding_range: true,
@@ -392,25 +397,32 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
                         SemanticTokenModifier::DEFAULT_LIBRARY,
                     ],
                 },
-                range: Some(false),
+                range: Some(true),
                 full: Some(SemanticTokensFullOptions::Bool(true)),
             }));
     }
 
     if build.code_actions {
+        // Build code action kinds based on flags
+        let mut kinds = vec![CodeActionKind::QUICKFIX];
+
+        // Only advertise refactoring capabilities that are fully implemented and tested
+        // NOTE: REFACTOR_EXTRACT is implemented in code_actions_enhanced.rs but not advertised.
+        // To enable: verify lsp_code_actions_tests.rs tests pass, then add CodeActionKind::REFACTOR_EXTRACT
+        // See Issue #181 for tracking workspace feature completeness
+        if build.source_organize_imports {
+            kinds.push(CodeActionKind::SOURCE_ORGANIZE_IMPORTS);
+        }
+
         caps.code_action_provider =
             Some(CodeActionProviderCapability::Options(CodeActionOptions {
-                code_action_kinds: Some(vec![
-                    CodeActionKind::QUICKFIX,
-                    // Only advertise refactoring capabilities that are fully implemented and tested
-                    // TODO: Add CodeActionKind::REFACTOR_EXTRACT when extract variable/subroutine tests pass
-                    // TODO: Add CodeActionKind::SOURCE_ORGANIZE_IMPORTS when import optimization is tested
-                ]),
+                code_action_kinds: Some(kinds),
                 resolve_provider: Some(true),
                 work_done_progress_options: WorkDoneProgressOptions::default(),
             }));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     if build.execute_command {
         // Only advertise commands that are actually implemented and tested
         let commands = crate::execute_command::get_supported_commands();

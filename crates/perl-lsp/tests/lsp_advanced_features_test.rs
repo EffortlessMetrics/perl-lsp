@@ -1,6 +1,16 @@
 //! Advanced LSP Features Test Suite
 //!
 //! Tests for snippets, templates, test runner integration, and advanced IDE features
+//!
+//! NOTE: This test file is gated behind the `lsp-extras` feature because:
+//! 1. The AdvancedTestContext doesn't properly initialize the LSP server
+//! 2. Many of these tests are for speculative/future features not yet implemented
+//! 3. The tests use a broken initialization pattern (init params are computed but discarded)
+//!
+//! To run these tests: `cargo test -p perl-lsp --features lsp-extras --test lsp_advanced_features_test`
+//! These tests should be rewritten with proper LspHarness before enabling in CI.
+
+#![cfg(feature = "lsp-extras")]
 
 use perl_parser::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
@@ -156,7 +166,6 @@ impl AdvancedTestContext {
 // ===================== Snippet Tests =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_snippet_completion() {
     let ctx = AdvancedTestContext::new();
 
@@ -175,7 +184,6 @@ fn test_snippet_completion() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_custom_snippets() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -197,7 +205,6 @@ fn test_custom_snippets() {
 // ===================== Template Tests =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_create_module_from_template() {
     let ctx = AdvancedTestContext::new();
 
@@ -213,7 +220,6 @@ fn test_create_module_from_template() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_create_test_from_template() {
     let ctx = AdvancedTestContext::new();
 
@@ -230,7 +236,6 @@ fn test_create_test_from_template() {
 // ===================== Test Runner Integration =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_run_single_test() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -248,7 +253,6 @@ fn test_run_single_test() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_run_test_suite() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -267,7 +271,6 @@ fn test_run_test_suite() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_debug_test() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -290,7 +293,6 @@ fn test_debug_test() {
 // ===================== Code Generation Tests =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_generate_getters_setters() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -309,7 +311,6 @@ fn test_generate_getters_setters() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_generate_test_skeleton() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -330,7 +331,6 @@ fn test_generate_test_skeleton() {
 // ===================== Project Configuration Tests =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_project_initialization() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -351,7 +351,6 @@ fn test_project_initialization() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_dependency_management() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -380,7 +379,6 @@ fn test_dependency_management() {
 // ===================== Linting and Formatting =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_perltidy_integration() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -398,7 +396,6 @@ fn test_perltidy_integration() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_perlcritic_integration() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -419,7 +416,6 @@ fn test_perlcritic_integration() {
 // ===================== Documentation Generation =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_generate_pod_documentation() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -438,7 +434,6 @@ fn test_generate_pod_documentation() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_extract_pod_to_markdown() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -458,7 +453,6 @@ fn test_extract_pod_to_markdown() {
 // ===================== Performance Profiling =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_profile_execution() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -477,7 +471,6 @@ fn test_profile_execution() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_analyze_profile_results() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -498,7 +491,6 @@ fn test_analyze_profile_results() {
 // ===================== Version Control Integration =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_git_blame_integration() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -516,7 +508,6 @@ fn test_git_blame_integration() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_commit_with_conventional_format() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -539,7 +530,6 @@ fn test_commit_with_conventional_format() {
 // ===================== Database Integration =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_sql_preview_in_dbi_code() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -558,7 +548,6 @@ fn test_sql_preview_in_dbi_code() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_generate_dbi_code_from_schema() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -579,7 +568,6 @@ fn test_generate_dbi_code_from_schema() {
 // ===================== Container and Deployment =====================
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_dockerfile_generation() {
     let mut ctx = AdvancedTestContext::new();
 
@@ -599,7 +587,6 @@ fn test_dockerfile_generation() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_kubernetes_manifest_generation() {
     let mut ctx = AdvancedTestContext::new();
 

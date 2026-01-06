@@ -2083,6 +2083,18 @@ impl<'a> PerlLexer<'a> {
         None
     }
 
+    /// Returns the closing delimiter for paired delimiters, or the same character for non-paired.
+    /// This helper makes delimiter pairing explicit and avoids unreachable code paths.
+    fn paired_closing(delim: char) -> char {
+        match delim {
+            '{' => '}',
+            '[' => ']',
+            '(' => ')',
+            '<' => '>',
+            _ => delim, // non-paired delimiters use the same character
+        }
+    }
+
     fn parse_substitution(&mut self, start: usize) -> Option<Token> {
         // We've already consumed 's'
         let delimiter = self.current_char()?;
@@ -2091,13 +2103,7 @@ impl<'a> PerlLexer<'a> {
         // Parse pattern
         let mut depth = 1;
         let is_paired = matches!(delimiter, '{' | '[' | '(' | '<');
-        let closing = match delimiter {
-            '{' => '}',
-            '[' => ']',
-            '(' => ')',
-            '<' => '>',
-            _ => delimiter,
-        };
+        let closing = Self::paired_closing(delimiter);
 
         while let Some(ch) = self.current_char() {
             // Check budget
@@ -2131,8 +2137,10 @@ impl<'a> PerlLexer<'a> {
             }
         }
 
-        // Parse replacement - same delimiter handling
-        if is_paired {
+        // Parse replacement - may use different delimiter for paired patterns (e.g., s[foo]{bar})
+        // MUT_002 fix: Detect the actual replacement delimiter instead of assuming same as pattern
+        // Note: Pattern scanning is complete at this point; we use a separate repl_depth for replacement
+        let (repl_delimiter, repl_closing, repl_is_paired) = if is_paired {
             // Skip whitespace between pattern and replacement for paired delimiters
             while let Some(ch) = self.current_char() {
                 if ch.is_whitespace() {
@@ -2142,13 +2150,28 @@ impl<'a> PerlLexer<'a> {
                 }
             }
 
-            // Expect opening delimiter for replacement
-            if self.current_char() == Some(delimiter) {
-                self.advance();
-                depth = 1;
+            // Detect replacement delimiter - may be different from pattern delimiter
+            if let Some(repl_delim) = self.current_char() {
+                if matches!(repl_delim, '{' | '[' | '(' | '<') {
+                    let repl_close = Self::paired_closing(repl_delim);
+                    self.advance();
+                    (repl_delim, repl_close, true)
+                } else {
+                    // Non-paired replacement after paired pattern (unusual but valid)
+                    self.advance();
+                    (repl_delim, repl_delim, false)
+                }
+            } else {
+                // End of input - return what we have
+                (delimiter, closing, is_paired)
             }
-        }
+        } else {
+            // Non-paired delimiter - replacement uses same delimiter
+            (delimiter, closing, false)
+        };
 
+        // Use separate depth counter for replacement to avoid confusion with pattern depth
+        let mut repl_depth: usize = 1;
         while let Some(ch) = self.current_char() {
             match ch {
                 '\\' => {
@@ -2157,15 +2180,15 @@ impl<'a> PerlLexer<'a> {
                         self.advance();
                     }
                 }
-                _ if ch == delimiter && is_paired => {
-                    depth += 1;
+                _ if ch == repl_delimiter && repl_is_paired => {
+                    repl_depth += 1;
                     self.advance();
                 }
-                _ if ch == closing => {
+                _ if ch == repl_closing => {
                     self.advance();
-                    if is_paired {
-                        depth = depth.saturating_sub(1);
-                        if depth == 0 {
+                    if repl_is_paired {
+                        repl_depth = repl_depth.saturating_sub(1);
+                        if repl_depth == 0 {
                             break;
                         }
                     } else {
@@ -2176,9 +2199,9 @@ impl<'a> PerlLexer<'a> {
             }
         }
 
-        // Parse modifiers
+        // Parse modifiers - include all alphanumeric for proper validation in parser (MUT_005 fix)
         while let Some(ch) = self.current_char() {
-            if ch.is_alphabetic() {
+            if ch.is_ascii_alphanumeric() {
                 self.advance();
             } else {
                 break;
@@ -2204,13 +2227,7 @@ impl<'a> PerlLexer<'a> {
         // Parse search list
         let mut depth = 1;
         let is_paired = matches!(delimiter, '{' | '[' | '(' | '<');
-        let closing = match delimiter {
-            '{' => '}',
-            '[' => ']',
-            '(' => ')',
-            '<' => '>',
-            _ => delimiter,
-        };
+        let closing = Self::paired_closing(delimiter);
 
         while let Some(ch) = self.current_char() {
             // Check budget
@@ -2289,9 +2306,9 @@ impl<'a> PerlLexer<'a> {
             }
         }
 
-        // Parse modifiers
+        // Parse modifiers - include all alphanumeric for proper validation in parser (MUT_005 fix)
         while let Some(ch) = self.current_char() {
-            if ch.is_alphabetic() {
+            if ch.is_ascii_alphanumeric() {
                 self.advance();
             } else {
                 break;
@@ -2437,28 +2454,23 @@ impl<'a> PerlLexer<'a> {
     }
 
     /// Parse regex modifiers according to the given spec
-    fn parse_regex_modifiers(&mut self, spec: &quote_handler::ModSpec) {
-        let start = self.position;
-
-        // Consume all alphabetic characters
+    ///
+    /// This function includes ALL characters that could be intended as modifiers,
+    /// including invalid ones. This allows the parser to properly reject invalid
+    /// modifiers with a clear error message, rather than leaving them as separate
+    /// tokens that could be confusingly parsed.
+    fn parse_regex_modifiers(&mut self, _spec: &quote_handler::ModSpec) {
+        // Consume all alphanumeric characters that could be intended as modifiers
+        // The parser will validate and reject invalid ones
         while let Some(ch) = self.current_char() {
-            if ch.is_ascii_alphabetic() {
+            if ch.is_ascii_alphanumeric() {
                 self.advance();
             } else {
                 break;
             }
         }
-
-        // Check if this is a valid modifier sequence
-        let tail = &self.input[start..self.position];
-        if !tail.is_empty() {
-            if let Some((_run, _charset)) = quote_handler::split_tail_for_spec(tail, spec) {
-                // Valid modifiers, keep position
-            } else {
-                // Invalid modifiers, roll back
-                self.position = start;
-            }
-        }
+        // Note: We no longer validate here - the parser will validate and provide
+        // clear error messages for invalid modifiers (MUT_005 fix)
     }
 
     fn parse_regex(&mut self, start: usize) -> Option<Token> {
@@ -2473,9 +2485,9 @@ impl<'a> PerlLexer<'a> {
             match ch {
                 '/' => {
                     self.advance();
-                    // Parse flags
+                    // Parse flags - include all alphanumeric for proper validation in parser (MUT_005 fix)
                     while let Some(ch) = self.current_char() {
-                        if ch.is_alphabetic() {
+                        if ch.is_ascii_alphanumeric() {
                             self.advance();
                         } else {
                             break;

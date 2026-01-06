@@ -342,7 +342,7 @@ mod tests {
         let path = PathBuf::from("");
         let normalized = normalize_path(&path);
         // Should not panic, should return some valid path
-        assert!(!normalized.as_os_str().is_empty() || normalized == PathBuf::from(""));
+        assert!(!normalized.as_os_str().is_empty() || normalized.as_os_str() == "");
     }
 
     #[test]

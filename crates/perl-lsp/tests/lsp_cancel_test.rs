@@ -16,7 +16,6 @@ use support::{handshake_initialize, shutdown_graceful, spawn_lsp};
 /// endpoint, it uses a slow operation; otherwise it uses hover which
 /// may or may not be cancelled in time.
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_cancel_request_handling() {
     // Skip test in constrained environments where LSP initialization is unreliable
     // This includes single-threaded environments and CI systems with limited resources
@@ -275,7 +274,6 @@ fn test_cancel_deterministic_stable() {
 
 /// Test cancelling multiple requests
 #[test]
-#[ignore = "LSP cancellation test fails in CI/constrained environments - flaky BrokenPipe errors"]
 fn test_cancel_multiple_requests() {
     // Skip test in constrained environments where LSP initialization is unreliable
     // This includes single-threaded environments and CI systems with limited resources

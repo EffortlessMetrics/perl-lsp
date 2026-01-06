@@ -2,14 +2,14 @@
   "callHierarchyProvider": true,
   "codeActionProvider": {
     "codeActionKinds": [
-      "quickfix"
+      "quickfix",
+      "source.organizeImports"
     ],
     "resolveProvider": true
   },
   "codeLensProvider": {
     "resolveProvider": true
   },
-  "colorProvider": true,
   "completionProvider": {
     "resolveProvider": false,
     "triggerCharacters": [
@@ -102,7 +102,7 @@
         "operator"
       ]
     },
-    "range": false
+    "range": true
   },
   "signatureHelpProvider": {
     "retriggerCharacters": [

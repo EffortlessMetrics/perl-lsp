@@ -32,7 +32,7 @@ fn setup_server() -> LspServer {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_execute_command_run_file() {
     let mut server = setup_server();
 
@@ -83,7 +83,7 @@ print "Hello, World!\n";
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_execute_command_run_tests() {
     let mut server = setup_server();
 
@@ -143,7 +143,7 @@ is(1 + 1, 2, "Math works");
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_execute_command_unknown() {
     let mut server = setup_server();
 
@@ -171,7 +171,7 @@ fn test_execute_command_unknown() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
+
 fn test_execute_command_capabilities() {
     let mut server = LspServer::new();
 

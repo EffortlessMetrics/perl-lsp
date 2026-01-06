@@ -522,7 +522,6 @@ fn create_cross_file_scenarios() -> Vec<CrossFileScenario> {
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#incremental-parsing-cancellation
 /// AC:6 - Incremental parsing cancellation with <1ms update preservation
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_incremental_parsing_cancellation_preservation_ac6() {
     let fixture = ParserIntegrationFixture::new();
 
@@ -675,7 +674,7 @@ fn test_incremental_parsing_cancellation_preservation_ac6() {
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#checkpoint-manager
 /// AC:6 - Checkpoint-based incremental parsing with safe cancellation points
 #[test]
-#[ignore] // TODO: Cancellation infrastructure needs environment stabilization (timeout >60s)
+#[cfg_attr(not(feature = "stress-tests"), ignore = "STRESS: Run with --features stress-tests")]
 fn test_incremental_parsing_checkpoint_cancellation_ac6() {
     // Enhanced constraint checking for parser integration cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
@@ -834,7 +833,7 @@ enum ParsingPhase {
 /// Tests feature spec: LSP_CANCELLATION_INTEGRATION_SCHEMA.md#workspace-indexing-cancellation
 /// AC:7 - Workspace indexing interruption without corruption validation
 #[test]
-#[ignore] // TODO: Cancellation infrastructure needs environment stabilization (timeout >60s)
+#[cfg_attr(not(feature = "stress-tests"), ignore = "STRESS: Run with --features stress-tests")]
 fn test_workspace_indexing_cancellation_integrity_ac7() {
     // Enhanced constraint checking for workspace indexing cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
@@ -1004,7 +1003,7 @@ fn test_workspace_indexing_cancellation_integrity_ac7() {
 /// Tests feature spec: LSP_CANCELLATION_INTEGRATION_SCHEMA.md#dual-indexing-cancellation
 /// AC:7 - Dual pattern indexing cancellation with atomic operations
 #[test]
-#[ignore] // TODO: Cancellation infrastructure needs environment stabilization
+#[cfg_attr(not(feature = "stress-tests"), ignore = "STRESS: Run with --features stress-tests")]
 fn test_dual_pattern_indexing_cancellation_ac7() {
     // Enhanced constraint checking for dual pattern indexing cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
@@ -1393,7 +1392,7 @@ fn test_cross_file_reference_cancellation_ac8() {
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#multi-tier-resolver
 /// AC:8 - Multi-tier resolver cancellation with fallback preservation
 #[test]
-#[ignore] // TODO: Cancellation infrastructure needs environment stabilization (timeout >60s)
+#[cfg_attr(not(feature = "stress-tests"), ignore = "STRESS: Run with --features stress-tests")]
 fn test_multi_tier_resolver_cancellation_ac8() {
     // Enhanced constraint checking for multi-tier resolver cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization

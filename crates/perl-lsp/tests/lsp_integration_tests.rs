@@ -25,8 +25,18 @@ fn send_request(server: &mut LspServer, method: &str, params: Option<Value>) -> 
     server.handle_request(request).and_then(|response| response.result)
 }
 
+/// Helper to send the initialized notification (required after initialize request)
+fn send_initialized(server: &mut LspServer) {
+    let initialized_notification = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    };
+    server.handle_request(initialized_notification);
+}
+
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_lsp_initialization() {
     let mut server = create_test_server();
 
@@ -62,7 +72,6 @@ fn test_lsp_initialization() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_workspace_symbols_integration() {
     let mut server = create_test_server();
 
@@ -76,6 +85,7 @@ fn test_workspace_symbols_integration() {
             "rootUri": "file:///test"
         })),
     );
+    send_initialized(&mut server);
 
     // Open a document with symbols
     let test_code = r#"
@@ -130,7 +140,6 @@ my $local_var = 456;
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_code_lens_integration() {
     let mut server = create_test_server();
 
@@ -144,6 +153,7 @@ fn test_code_lens_integration() {
             "rootUri": "file:///test"
         })),
     );
+    send_initialized(&mut server);
 
     // Open a test file
     let test_code = r#"#!/usr/bin/perl
@@ -203,7 +213,7 @@ sub TestPackage::test_method {
         if let Some(cmd) = first_lens.get("command") {
             if let Some(title) = cmd.get("title") {
                 if title.as_str() == Some("▶ Run Script") {
-                    assert_eq!(cmd["command"], "perl-language-server.runScript");
+                    assert_eq!(cmd["command"], "perl.runScript");
                 }
             }
         }
@@ -211,7 +221,6 @@ sub TestPackage::test_method {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_code_lens_resolve() {
     let mut server = create_test_server();
 
@@ -225,6 +234,7 @@ fn test_code_lens_resolve() {
             "rootUri": "file:///test"
         })),
     );
+    send_initialized(&mut server);
 
     // Test resolving a code lens
     let unresolved_lens = json!({
@@ -246,7 +256,6 @@ fn test_code_lens_resolve() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_multiple_documents() {
     let mut server = create_test_server();
 
@@ -260,6 +269,7 @@ fn test_multiple_documents() {
             "rootUri": "file:///test"
         })),
     );
+    send_initialized(&mut server);
 
     // Open multiple documents
     let doc1 = r#"
@@ -326,7 +336,6 @@ sub function2 { }
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_document_updates() {
     let mut server = create_test_server();
 
@@ -340,6 +349,7 @@ fn test_document_updates() {
             "rootUri": "file:///test"
         })),
     );
+    send_initialized(&mut server);
 
     // Open a document
     send_request(
@@ -392,7 +402,6 @@ fn test_document_updates() {
 // Test removed - matches_query is private method
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_shebang_detection() {
     // Test with shebang
     let code_with_shebang = "#!/usr/bin/perl\nprint 'hello';";
@@ -409,7 +418,6 @@ fn test_shebang_detection() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_code_lens_provider() {
     let test_code = r#"
 sub test_something {
@@ -441,7 +449,6 @@ package MyPkg;
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_error_handling() {
     let mut server = create_test_server();
 
@@ -467,7 +474,6 @@ fn test_error_handling() {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_semantic_tokens_full() {
     let mut server = create_test_server();
 
@@ -534,7 +540,6 @@ process_data($obj, $global);
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_semantic_tokens_range() {
     let mut server = create_test_server();
 
@@ -600,7 +605,6 @@ print $var3;
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_call_hierarchy_prepare() {
     let mut server = create_test_server();
 
@@ -682,7 +686,6 @@ sub process_data {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_call_hierarchy_incoming() {
     let mut server = create_test_server();
 
@@ -778,7 +781,6 @@ sub target_func {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_call_hierarchy_outgoing() {
     let mut server = create_test_server();
 
@@ -872,7 +874,6 @@ sub helper {
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_inlay_hints() {
     let mut server = create_test_server();
 
@@ -950,7 +951,6 @@ my $hash = { key => "value" };
 }
 
 #[test]
-#[ignore] // Flaky BrokenPipe errors in CI during LSP initialization (environmental/timing)
 fn test_inlay_hints_range() {
     let mut server = create_test_server();
 
