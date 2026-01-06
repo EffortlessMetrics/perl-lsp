@@ -51,7 +51,6 @@
             echo "Commands:"
             echo "  just ci-gate      # Fast merge gate (~2-5 min)"
             echo "  just ci-full      # Full CI pipeline (~10-20 min)"
-            echo "  nix flake check   # Run all checks"
           '';
         };
 

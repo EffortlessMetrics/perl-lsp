@@ -25,9 +25,12 @@ just ci-gate
 # Full CI pipeline (~10-20 min) - RECOMMENDED for large changes
 just ci-full
 
-# Nix users (deterministic, reproducible)
-nix flake check -L
+# Nix users (deterministic, reproducible) - CANONICAL LOCAL GATE
+nix develop -c just ci-gate
 ```
+
+> **Note**: `nix flake check` doesn't work due to Nix sandbox blocking network
+> access for Cargo dependencies. Use `nix develop -c just ci-gate` instead.
 
 ### What `just ci-gate` Runs
 
