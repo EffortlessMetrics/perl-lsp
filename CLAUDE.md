@@ -355,6 +355,18 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- 
 
 ### Development Workflow (Enhanced)
 
+**Local-First Development** - All gates run locally before CI:
+```bash
+# Canonical local gate (REQUIRED before push)
+nix develop -c just ci-gate
+
+# Install pre-push hook (runs gate automatically)
+bash scripts/install-githooks.sh
+
+# Gate checks: format, clippy, tests, policy, LSP semantic tests
+# Includes nested Cargo.lock detection (prevents subcrate footgun)
+```
+
 **Development Server** - Automatic LSP reload on file changes:
 ```bash
 # Start development server with file watching and hot-reload
