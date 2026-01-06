@@ -1,6 +1,7 @@
 use perl_parser::{CompletionItemKind, CompletionProvider, Parser};
 use serial_test::serial;
 use std::fs;
+#[cfg(unix)]
 use std::path::Path;
 use tempfile::TempDir;
 
@@ -358,8 +359,8 @@ fn test_completion_text_edit_range() {
 
 #[test]
 #[serial]
+#[cfg(unix)] // symlink API is Unix-only
 fn test_no_symlink_following() {
-    #[cfg(unix)]
     use std::os::unix::fs::symlink;
 
     let temp_dir = TempDir::new().unwrap();

@@ -120,7 +120,7 @@ jobs:
       
       - name: Run clippy with strict settings
         run: |
-          cargo clippy --workspace --all-targets --all-features -- \
+          cargo clippy --locked --workspace --all-targets --all-features -- \
             -D warnings \
             -D clippy::all \
             -D clippy::pedantic \
@@ -209,7 +209,7 @@ jobs:
           for i in 1 2 3; do
             echo "::group::Run $i"
             set +e
-            timeout 6m cargo nextest run -p perl-parser --profile ci --no-fail-fast --hide-progress-bar --locked \
+            timeout 6m cargo nextest run -p perl-parser --no-fail-fast --hide-progress-bar --locked \
               -- --skip crash_reproducer_test --skip fuzz_regression_test \
               2>&1 | sed -E 's/^Finished in .*//; s/^\s*Time:\s.*$//' | tee "run_${i}.log"
             status=${PIPESTATUS[0]}
@@ -223,11 +223,11 @@ jobs:
               echo "Determinism run ${i} failed with status ${status}"
               if [ "$status" -eq 101 ] && grep -q "lock file .* needs to be updated but --locked was passed" "run_${i}.log"; then
                 echo "::warning:: Lock is stale; retrying (offline first, then online) ..."
-                if cargo --offline nextest run -p perl-parser --profile ci --no-fail-fast --hide-progress-bar --locked \
+                if cargo --offline nextest run -p perl-parser --no-fail-fast --hide-progress-bar --locked \
                      -- --skip crash_reproducer_test --skip fuzz_regression_test; then
                   continue
                 fi
-                cargo nextest run -p perl-parser --profile ci --no-fail-fast --hide-progress-bar --locked \
+                cargo nextest run -p perl-parser --no-fail-fast --hide-progress-bar --locked \
                      -- --skip crash_reproducer_test --skip fuzz_regression_test
                 continue
               fi

@@ -38,7 +38,7 @@ jobs:
 
     - name: Run Rust benchmarks
       run: |
-        cargo bench -p perl-parser --bench parser_benchmark -- --output-format bencher | tee output.txt
+        cargo bench --locked -p perl-parser --bench parser_benchmark -- --output-format bencher | tee output.txt
 
     - name: Run comparison benchmarks
       run: |
@@ -85,7 +85,7 @@ jobs:
         echo "# Parser Comparison Results" > comparison_report.md
         echo "" >> comparison_report.md
         echo "## Summary Statistics" >> comparison_report.md
-        cargo bench -p perl-parser --bench positions_bench -- --warm-up-time 1 --measurement-time 5 2>&1 | tee -a comparison_report.md || true
+        cargo bench --locked -p perl-parser --bench positions_bench -- --warm-up-time 1 --measurement-time 5 2>&1 | tee -a comparison_report.md || true
         
     - name: Upload comparison report
       uses: actions/upload-artifact@v4
@@ -116,7 +116,7 @@ jobs:
         echo "# Memory Usage Profile" > memory_report.md
         echo "" >> memory_report.md
         echo "Memory profiling requires valid parser binary - skipped when labeled ci:bench" >> memory_report.md
-        echo "Run parser benchmarks locally with: cargo bench -p perl-parser" >> memory_report.md
+        echo "Run parser benchmarks locally with: cargo bench --locked -p perl-parser" >> memory_report.md
 
     - name: Upload memory profile
       uses: actions/upload-artifact@v4

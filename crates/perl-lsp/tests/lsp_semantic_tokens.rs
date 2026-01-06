@@ -13,6 +13,15 @@ fn semantic_tokens_emit_data() {
     };
     srv.handle_request(init);
 
+    // Send initialized notification (required by LSP protocol)
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    srv.handle_request(initialized);
+
     let uri = "file:///tokens.pl";
     let text = r#"package Foo; my $x = 1; sub bar { return $x } $x = 2; bar();"#;
     let open = JsonRpcRequest {

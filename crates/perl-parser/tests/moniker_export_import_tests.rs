@@ -12,7 +12,6 @@
 /// correct input for those functions.
 ///
 /// Reference: misc.rs export/import heuristics at lines 481-556
-
 #[cfg(test)]
 mod moniker_export_import_tests {
     use perl_parser::Parser;
@@ -196,11 +195,11 @@ package MyModule;
         let use_node = create_use_node("strict", vec![]);
         let program = create_program_with_uses(vec![use_node]);
 
-        if let NodeKind::Program { statements } = &program.kind {
-            if let NodeKind::Use { module, args } = &statements[0].kind {
-                assert_eq!(module, "strict");
-                assert!(args.is_empty());
-            }
+        if let NodeKind::Program { statements } = &program.kind
+            && let NodeKind::Use { module, args } = &statements[0].kind
+        {
+            assert_eq!(module, "strict");
+            assert!(args.is_empty());
         }
     }
 
@@ -278,11 +277,11 @@ package MyModule;
 
         // This test verifies AST structure for non-matching symbol lookup
         // The actual find_import_source would return None for "nonexistent"
-        if let NodeKind::Program { statements } = &program.kind {
-            if let NodeKind::Use { args, .. } = &statements[0].kind {
-                // Verify "nonexistent" is not in the args
-                assert!(!args.iter().any(|arg| arg.contains("nonexistent")));
-            }
+        if let NodeKind::Program { statements } = &program.kind
+            && let NodeKind::Use { args, .. } = &statements[0].kind
+        {
+            // Verify "nonexistent" is not in the args
+            assert!(!args.iter().any(|arg| arg.contains("nonexistent")));
         }
     }
 
@@ -293,14 +292,14 @@ package MyModule;
         let program = create_program_with_uses(vec![use_node]);
 
         // Verify the exact symbol "first" would be found
-        if let NodeKind::Program { statements } = &program.kind {
-            if let NodeKind::Use { module, args } = &statements[0].kind {
-                assert_eq!(module, "List::Util");
-                // The find_import_source logic would split on whitespace
-                let content =
-                    args[0].trim_start_matches("qw").trim_start_matches('<').trim_end_matches('>');
-                assert!(content.split_whitespace().any(|w| w == "first"));
-            }
+        if let NodeKind::Program { statements } = &program.kind
+            && let NodeKind::Use { module, args } = &statements[0].kind
+        {
+            assert_eq!(module, "List::Util");
+            // The find_import_source logic would split on whitespace
+            let content =
+                args[0].trim_start_matches("qw").trim_start_matches('<').trim_end_matches('>');
+            assert!(content.split_whitespace().any(|w| w == "first"));
         }
     }
 
@@ -336,7 +335,7 @@ sub bar { return 'hello'; }
 
         // Verify parsing succeeds and structure is correct
         if let NodeKind::Program { statements } = &ast.kind {
-            assert!(statements.len() > 0, "Expected multiple statements");
+            assert!(!statements.is_empty(), "Expected multiple statements");
         } else {
             panic!("Expected Program node");
         }

@@ -13,6 +13,15 @@ fn on_type_braces_indent() {
     };
     srv.handle_request(init);
 
+    // Send initialized notification to complete handshake (required by LSP protocol)
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: None,
+    };
+    srv.handle_request(initialized);
+
     let uri = "file:///fmt.pl";
     let text = "sub f {\n\n}\n";
     let open = JsonRpcRequest {
@@ -67,6 +76,15 @@ fn on_type_closing_brace_dedent() {
         params: Some(json!({"capabilities":{}})),
     };
     srv.handle_request(init);
+
+    // Send initialized notification to complete handshake (required by LSP protocol)
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: None,
+    };
+    srv.handle_request(initialized);
 
     let uri = "file:///dedent.pl";
     let text = "sub f {\n    my $x = 1;\n    }";

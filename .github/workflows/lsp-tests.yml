@@ -24,6 +24,7 @@ jobs:
   test:
     name: Test LSP Implementation
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30  # Belt-and-suspenders: never burn hours on hanging tests
     defaults:
       run:
         shell: bash
@@ -103,8 +104,10 @@ jobs:
           exit 1
         fi
         # 2) ropey must be present in the lockfile
-        if ! grep -q 'name = "ropey"' Cargo.lock; then
-          echo "::error:: ropey not present in Cargo.lock"
+        TOP="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+        LOCK="${GITHUB_WORKSPACE:-$TOP}/Cargo.lock"
+        if ! grep -q 'name = "ropey"' "$LOCK"; then
+          echo "::error:: ropey not present in Cargo.lock ($LOCK)"
           exit 1
         fi
         echo "✅ ropey declared in manifest and present in Cargo.lock."
@@ -118,7 +121,7 @@ jobs:
     - name: Clippy (first-party only)
       shell: bash  # ensure -- is not eaten by PowerShell on Windows
       run: |
-        cargo clippy \
+        cargo clippy --locked \
           -p perl-lexer -p perl-parser -p perl-lsp -p perl-corpus \
           --all-targets -- -D warnings
       continue-on-error: ${{ matrix.experimental == true }}
@@ -143,7 +146,7 @@ jobs:
         set -euo pipefail
         set +e
         # Use nextest with CI profile for retries and improved parallelism
-        cargo +${{ matrix.toolchain }} nextest run --locked -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} 2>&1 | tee test_lsp.log
+        cargo +${{ matrix.toolchain }} nextest run --locked -p perl-lsp --test-threads=${{ env.RUST_TEST_THREADS }} 2>&1 | tee test_lsp.log
         status=${PIPESTATUS[0]}
         set -e
         if [ "$status" -ne 0 ]; then
@@ -152,10 +155,10 @@ jobs:
           echo "::endgroup::"
           if [ "$status" -eq 101 ] && grep -q "lock file .* needs to be updated but --locked was passed" test_lsp.log; then
             echo "::warning:: Lock is stale; retrying (offline first, then online) ..."
-            if cargo +${{ matrix.toolchain }} --offline nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} --locked; then
+            if cargo +${{ matrix.toolchain }} --offline nextest run -p perl-lsp --test-threads=${{ env.RUST_TEST_THREADS }} --locked; then
               exit 0
             fi
-            cargo +${{ matrix.toolchain }} nextest run -p perl-lsp --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} --locked
+            cargo +${{ matrix.toolchain }} nextest run -p perl-lsp --test-threads=${{ env.RUST_TEST_THREADS }} --locked
             exit $?
           fi
         fi
@@ -175,7 +178,7 @@ jobs:
       run: |
         set -euo pipefail
         set +e
-        cargo +${{ matrix.toolchain }} nextest run --locked --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} 2>&1 | tee test_parser.log
+        cargo +${{ matrix.toolchain }} nextest run --locked --all --test-threads=${{ env.RUST_TEST_THREADS }} 2>&1 | tee test_parser.log
         status=${PIPESTATUS[0]}
         set -e
         if [ "$status" -ne 0 ]; then
@@ -184,10 +187,10 @@ jobs:
           echo "::endgroup::"
           if [ "$status" -eq 101 ] && grep -q "lock file .* needs to be updated but --locked was passed" test_parser.log; then
             echo "::warning:: Lock is stale; retrying (offline first, then online) ..."
-            if cargo +${{ matrix.toolchain }} --offline nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} --locked; then
+            if cargo +${{ matrix.toolchain }} --offline nextest run --all --test-threads=${{ env.RUST_TEST_THREADS }} --locked; then
               exit 0
             fi
-            cargo +${{ matrix.toolchain }} nextest run --all --profile ci --test-threads=${{ env.RUST_TEST_THREADS }} --locked
+            cargo +${{ matrix.toolchain }} nextest run --all --test-threads=${{ env.RUST_TEST_THREADS }} --locked
             exit $?
           fi
         fi

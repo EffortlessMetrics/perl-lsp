@@ -1,5 +1,8 @@
-/// Performance benchmarks for LSP server
-/// Measures response times and throughput for various operations
+//! Performance benchmarks for LSP server.
+//! Measures response times and throughput for various operations.
+//! These tests are slow and should only run with `cargo test --features stress-tests`.
+#![cfg(feature = "stress-tests")]
+
 use serde_json::json;
 use std::time::{Duration, Instant};
 
