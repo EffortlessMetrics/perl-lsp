@@ -24,9 +24,20 @@ ci-full-msrv:
     @echo "🚀 Running full CI on MSRV (Rust 1.89)..."
     @RUSTUP_TOOLCHAIN=1.89.0 just ci-full
 
+# Check for nested Cargo.lock files (footgun prevention)
+ci-check-no-nested-lock:
+    @echo "🔒 Checking for nested Cargo.lock files..."
+    @if find . -name 'Cargo.lock' -type f 2>/dev/null | grep -v '^\./Cargo\.lock$' | grep -q .; then \
+        echo "❌ ERROR: Nested Cargo.lock detected! Run gates from repo root only."; \
+        find . -name 'Cargo.lock' -type f 2>/dev/null | grep -v '^\./Cargo\.lock$'; \
+        exit 1; \
+    fi
+    @echo "✅ No nested lockfiles"
+
 # Fast merge gate (~2-5 min) - REQUIRED for all merges
 ci-gate:
     @echo "🚪 Running fast merge gate..."
+    @just ci-check-no-nested-lock
     @just ci-format
     @just ci-clippy-lib
     @just ci-test-lib
