@@ -124,16 +124,23 @@ paths-ignore:
 
 ### Label-Gating
 
-Expensive jobs require explicit labels:
+Heavy workflows require explicit labels to prevent CI spend on every push:
 
-- `ci:bench` - Performance benchmarks
-- `ci:coverage` - Code coverage analysis
-- `ci:mutation` - Mutation testing
-- `ci:semver` - API compatibility checks
-- `ci:strict` - Strict quality checks
-- `ci:stress` - Stress/security tests
-- `ci:extras` - Extra LSP features
-- `ci:all-tests` - Comprehensive test suite
+| Label | Workflow | Purpose |
+|-------|----------|---------|
+| `ci:tests` | `test.yml` | Cross-platform test matrix (Ubuntu + Windows) |
+| `ci:lsp` | `lsp-tests.yml` | LSP integration tests |
+| `ci:property` | `property-tests.yml` | Property-based/fuzz tests |
+| `ci:strict` | `rust-strict.yml` | Quality gates, doc hygiene |
+| `ci:semver` | `rust-strict.yml` | API compatibility checks |
+| `ci:bench` | `lsp-tests.yml` | Performance benchmarks |
+| `ci:coverage` | `lsp-tests.yml` | Code coverage analysis |
+| `ci:mutation` | `ci-expensive.yml` | Mutation testing |
+| `ci:stress` | `ci-expensive.yml` | Stress/security tests |
+| `ci:extras` | - | Extra LSP features |
+
+> **Note**: The cheap default lane (`ci.yml`) runs on all PRs without labels.
+> Unlabeled PR syncs trigger zero billable minutes on gated workflows.
 
 ## Adding New Tests
 
