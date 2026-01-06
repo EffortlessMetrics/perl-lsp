@@ -207,11 +207,7 @@ impl StatementTracker {
     #[allow(dead_code)]
     pub fn note_block_open(&mut self, line: usize, block_type: BlockType) {
         // Parent depth is current depth - 1 (None if we're at top level)
-        let parent_depth = if self.block_depth > 0 {
-            Some(self.block_depth - 1)
-        } else {
-            None
-        };
+        let parent_depth = if self.block_depth > 0 { Some(self.block_depth - 1) } else { None };
 
         // This block's depth is the current block_depth (0-based: first block = 0)
         self.block_boundaries.push(BlockBoundary {
