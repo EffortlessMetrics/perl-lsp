@@ -1,19 +1,15 @@
 name: LSP Tests
 
 on:
-  push:
+  workflow_dispatch: {}
+  pull_request:
     branches: [ master, main ]
+    types: [labeled, synchronize, reopened]
     paths:
       - 'crates/perl-parser/**'
       - 'crates/perl-lexer/**'
       - 'crates/perl-lsp/**'
       - '.github/workflows/lsp-tests.yml'
-  pull_request:
-    branches: [ master, main ]
-    paths:
-      - 'crates/perl-parser/**'
-      - 'crates/perl-lexer/**'
-      - 'crates/perl-lsp/**'
 
 # Cancel in-flight runs on new pushes (saves minutes)
 concurrency:
@@ -28,6 +24,9 @@ env:
 jobs:
   test:
     name: Test LSP Implementation
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:lsp')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30  # Belt-and-suspenders: never burn hours on hanging tests
     defaults:
@@ -239,7 +238,9 @@ jobs:
   coverage:
     name: Code Coverage
     runs-on: ubuntu-22.04
-    if: contains(github.event.pull_request.labels.*.name, 'ci:coverage')
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:coverage')
     steps:
     - uses: actions/checkout@v4
 
@@ -277,7 +278,9 @@ jobs:
 
   benchmark:
     name: Performance Benchmarks
-    if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:bench')
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4

@@ -1,18 +1,7 @@
 name: Rust CI
 
 on:
-  push:
-    branches: [ main, develop, rust-conversion ]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - '.claude/**'
-  pull_request:
-    branches: [ main, develop, rust-conversion ]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - '.claude/**'
+  workflow_dispatch: {}
 
 # Cancel in-flight runs on new pushes (saves minutes)
 concurrency:
