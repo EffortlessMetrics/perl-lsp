@@ -220,9 +220,11 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp  # With adaptive threading
 - Documentation content (484 violations)
 
 **🔴 RED** (Needs Attention):
-- 779 ignored tests (87% BrokenPipe errors)
-- CI/CD automation (40%)
-- Statement tracker architecture (undefined)
+- CI/CD automation (40%) - See Issue #211
+- Statement tracker architecture (Phase 2 scope)
+
+**✅ RESOLVED** (was RED):
+- Ignored tests: BUG=0 achieved (run `bash scripts/ignored-test-count.sh`)
 
 ## 🚀 Let's Build Together!
 

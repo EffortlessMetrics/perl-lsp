@@ -66,25 +66,26 @@ This checklist tracks the validation and merge readiness for Issue #188 Phase 1,
 
 ---
 
-### Band 2: Ignored Test Reduction 🔄 **IN PROGRESS**
+### Band 2: Ignored Test Reduction ✅ **COMPLETE**
 
 **Goal:** Reduce ignored test count and prevent new ignores without documentation
 
-**Status:** 🔄 Ready to start
+**Status:** ✅ Complete - BUG=0 achieved (PR #261, #264)
 
-#### Ignore Policy ⬜
-- [ ] Create `.ci/scripts/check-ignores.sh`
-- [ ] Fail if new `#[ignore]` without `// Issue #...`
-- [ ] Wire into `ci-policy` target
-- [ ] Document in `LOCAL_CI_PROTOCOL.md`
+#### Ignore Policy ✅
+- [x] Baseline tracking via `scripts/.ignored-baseline`
+- [x] Automated checking via `bash scripts/ignored-test-count.sh`
+- [x] All BUG-category ignores resolved
+- [x] Only MANUAL utility test remains (by design)
 
-#### Weekly Unignore Ritual ⬜
-- [ ] Week 1: Unignore 3-5 low-complexity tests
-- [ ] Week 2: Unignore 3-5 more tests
-- [ ] Create `docs/ci/IGNORED_TESTS_INDEX.md`
-- [ ] Update `docs/SEMANTIC_TEST_INVENTORY.md`
+#### Sweep Complete ✅
+- [x] Wave A: Test brittleness (2/2 fixed)
+- [x] Wave B: Substitution operators (4/4 fixed)
+- [x] Wave C: Parser limitations (4/4 fixed in PR #261)
+- [x] Created `docs/ci/IGNORED_TESTS_INDEX.md`
+- [x] Feature-gated 23 tests (stress, advanced) - intentional
 
-**Target:** Directional progress from 779 ignored tests
+**Final Status:** BUG=0, MANUAL=1 (run `bash scripts/ignored-test-count.sh`)
 
 ---
 
@@ -215,12 +216,12 @@ Given GitHub Actions is offline for 2+ weeks:
 ### Immediate (Band 1 Complete)
 1. ✅ Document Band 1 results → **DONE**
 2. ⬜ Run `nix flake check` for comprehensive validation
-3. ⬜ Create ignore policy check script
+3. ✅ Create ignore policy check script → **DONE** (`scripts/ignored-test-count.sh`)
 
-### Short-term (Band 2 Start)
-1. ⬜ Implement `.ci/scripts/check-ignores.sh`
-2. ⬜ First weekly unignore ritual (3-5 tests)
-3. ⬜ Create `IGNORED_TESTS_INDEX.md`
+### Short-term (Band 2 Complete) ✅
+1. ✅ Implement baseline tracking → **DONE** (`scripts/.ignored-baseline`)
+2. ✅ Complete test sweep (Waves A/B/C) → **DONE** (BUG=0)
+3. ✅ Create `IGNORED_TESTS_INDEX.md` → **DONE** (`docs/ci/IGNORED_TESTS_INDEX.md`)
 
 ### Medium-term (Band 3 Prep)
 1. ⬜ Pick 1-2 Sprint B UX items

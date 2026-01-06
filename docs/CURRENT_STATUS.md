@@ -293,7 +293,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 ### Short-Term (2-3 Weeks)
 1. **Sprint A Scope**: Confirm realistic 2-3 week timeline vs original 10 days
 2. **Statement Tracker Implementation**: Separate module vs integrated approach
-3. **Test Re-enablement Strategy**: Phased approach for 779 ignored tests
+3. **Test Re-enablement Strategy**: ✅ Complete - BUG=0 achieved (see `scripts/.ignored-baseline`)
 
 ### Medium-Term (4-13 Weeks)
 1. **Issue #211 Priority**: Start during Sprint A or wait until Sprint B complete?
