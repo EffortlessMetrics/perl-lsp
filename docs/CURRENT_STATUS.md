@@ -1,515 +1,101 @@
-# perl-lsp Current Status Snapshot
-<!-- Generated: 2026-01-07 -->
-<!-- Last Updated: 2026-01-07 - Documentation truth alignment: roadmap hygiene, evidence requirements -->
-<!-- Comprehensive project health assessment -->
+# perl-lsp Current Status
 
-> **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2026-01-07. For live status, treat GitHub issues & milestones as canonical. Metrics below represent point-in-time measurements and may not reflect subsequent progress.
-
-> **📌 Truth contract**: Status claims in this document require evidence from:
+> **Truth contract**: All claims require evidence from:
 > - `nix develop -c just ci-gate` output
 > - `bash scripts/ignored-test-count.sh` output
 > - Capability snapshots or targeted tests
 
 ---
 
-## 🔬 Verification Protocol
+## Verification Protocol
 
-**The repo has three authoritative verification tiers:**
-
-### Tier A: Merge Gate (Required for all merges)
+**Tier A: Merge Gate** (required for all merges)
 ```bash
 just ci-gate  # ~2-5 min
 ```
-✅ **Last verified**: 2025-12-27 (feat/semantic-analyzer-phase1, rustc 1.89.0 MSRV)
-- Format check: ✅ Passed
-- Clippy (libs): ✅ Passed
-- Library tests: ✅ 337 passed, 1 ignored (perl-corpus: 12, perl-dap: 37, perl-lexer: 9, perl-parser: 279)
-- Policy checks: ✅ Passed
-- LSP semantic definition: ✅ 4/4 passed
 
-### Tier B: Release Confidence (Large changes/release candidates)
+**Tier B: Release Confidence** (large changes/release candidates)
 ```bash
 just ci-full  # ~10-20 min
 ```
-Includes: docs, full clippy, integration tests, LSP tests
 
-### Tier C: Real User Confirmation
+**Tier C: Real User Confirmation**
 Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rename
 
-### Canonical Documentation
-- **This file** (`CURRENT_STATUS.md`): Authoritative project status
-- **`ROADMAP.md`**: Long-term vision and component status (with Truth Rules section)
-- **`features.toml`** + server capabilities: Ground truth for LSP features
-- **Historical docs**: Archived at `docs/archive/roadmaps/`; retrieve from git history for older versions
-
 ### Metric Definitions
-- **LSP Coverage (GA)**: `advertised_ga / trackable`, computed from `features.toml` by the same rules used at build time (see `crates/perl-parser/build.rs`). **Trackable** excludes `planned`; **advertised_ga** counts only features with `maturity = "ga"|"production"` and `advertised = true`.
-- **Corpus counts**: `tree-sitter corpus sections` is the count of `====` delimiters under `tree-sitter-perl/test/corpus` (grammar fixtures); `repo test_corpus inputs` is the count of `.pl` files under `test_corpus/` (repo-owned fixtures). These are fixture counts, not a semantic coverage metric.
-- **Catalog source**: Root `features.toml` is canonical and preferred when present; `crates/perl-parser/features_sot.toml` is a vendored fallback used only when the workspace root is unavailable.
+- **LSP Coverage (GA)**: `advertised_ga / trackable` from `features.toml` (excludes `planned`)
+- **Corpus counts**: `tree-sitter-perl/test/corpus` sections + `test_corpus/*.pl` files (fixture counts, not semantic coverage)
+- **Catalog source**: Root `features.toml` is canonical
 
-### How to Update This File
-- Run `just status-update`
-- Then re-run `just ci-gate`
+---
 
-## 🎯 At a Glance
+## At a Glance
 
 | Metric | Value | Target | Status |
 | ------ | ----- | ------ | ------ |
-| **Core Goal ("Fully Working")** | 80-85% | 100% | 🟢 Validation phase |
-| **MVP Completion** | 75-80% | 100% | 🟢 2-3 weeks |
-| **Production v1.0** | 85-90% | 100% | 🟢 11-13 weeks |
-| **Tier A Tests** | 337 passed, 1 ignored | 100% | 🟢 `just ci-gate` |
-| **Tracked Test Debt** | 9 (8 bug, 1 manual) | 0 | 🟢 Near-zero |
-| **LSP Coverage** | 82% (27/33 GA advertised, `features.toml`) | 93%+ | 🟡 Sprint B |
-| **Parser Coverage** | ~100% | 100% | 🟢 Complete |
-| **Semantic Analyzer** | Phase 1 Complete | Phase 3 | 🟢 12/12 handlers |
-| **Mutation Score** | 87% | 87%+ | 🟢 Target met |
-| **Documentation** | 484 violations | 0 | 🟡 8-week plan |
-| **CI/CD Automation** | 40% | 100% | 🔴 Issue #211 |
-
-## 📈 Project Health: EXCELLENT
-
-### Strengths ✅
-- **Comprehensive parsing**: broad Perl 5 coverage via `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
-- **Solid LSP foundation**: 82% cataloged GA coverage (27/33 trackable features), production-ready (`just ci-gate`)
-- **Exceptional quality**: 100% Tier A test pass rate, 87% mutation score
-- **Enterprise security**: UTF-16 boundary fixes, path validation
-- **Performance**: Incremental parsing and LSP responses meet targets (benchmark publication pending)
-
-### Areas of Focus ⚠️
-- **Tracked test debt at 9**: 🟢 Near-zero (8 bug, 1 manual) - Legacy `#[ignore]` eliminated; feature-gated ignores are by design
-- **CI/CD at 40%**: Issue #211 addressing with $720/year savings potential
-- **484 doc violations**: Infrastructure complete, 8-week content plan ready
-- ~~**Sprint A at 75%**~~ ✅ **Sprint A 100% COMPLETE!** All heredoc/statement tracker work delivered!
-- **Semantic Analyzer (#188)**: ✅ **Phase 1 COMPLETE!** All 12/12 critical handlers + LSP textDocument/definition integration
-- **Semantic Definition Testing**: ✅ **VALIDATED** (2025-12-27) - 4/4 LSP tests + 2 unit tests passing
-- **Band 2 Test Sweep**: 🟢 **IN PROGRESS** - protocol violations, window progress, unhappy paths cleaned
-- **LSP Server Modularization**: ✅ **COMPLETE** - `lsp_server.rs` refactored to `lsp/server_impl/*`
-
-### Recent Completions (2025-12-27) 🎉
-4. ✅ **LSP Server Modularization** - Major refactoring for maintainability
-   - Implementation moved from `lsp_server.rs` to `lsp/server_impl/*.rs`
-   - Modular structure: `dispatch.rs`, `navigation.rs`, `workspace.rs`, etc.
-   - `lsp/dispatch.rs` is now a placeholder pointing to `server_impl/dispatch.rs`
-   - Tree-sitter FFI UB fix: NUL-terminated C strings with proof tests
-   - Semantic hover improvements: `symbol_at` returns most specific symbol
-1. ✅ **Batch A Sweep Complete** - 118 ignores removed (454 remaining, down from 572)
-   - `lsp_filesystem_failures.rs`: 17 → 0 ignores (all pass)
-   - `lsp_completion_tests.rs`: 17 → 0 ignores (all pass)
-   - `lsp_integration_tests.rs`: 16 → 0 ignores (fixed `initialized` notification)
-   - `lsp_api_contracts.rs`: 15 → 0 ignores (all pass)
-   - `lsp_schema_validation.rs`: 14 → 0 ignores (all pass)
-   - `lsp_encoding_edge_cases.rs`: 14 → 0 ignores (all pass)
-   - `lsp_workspace_file_ops_tests.rs`: 13 → 0 ignores (fixed `initialized` notification)
-   - `lsp_signature_integration_test.rs`: 13 → 1 ignore (file test operators not implemented)
-2. ✅ **`lsp-extras` Feature Declared** - Silences `unexpected_cfgs` warning for quarantined tests
-3. ✅ **Protocol Fixes** - Tests now send `initialized` notification after `initialize` request
-
-### Earlier Completions (2025-12-27)
-1. ✅ **Band 2 Test Sweep Progress** - 51+ tests re-enabled or quarantined (572 ignores, down from 608+)
-   - `lsp_protocol_violations.rs`: 26 → 4 ignores (-22)
-   - `lsp_window_progress_test.rs`: 21 → 0 ignores (-21)
-   - `lsp_unhappy_paths.rs`: 9 → 1 ignores (-8)
-   - `lsp_advanced_features_test.rs`: 23 tests feature-gated behind `lsp-extras`
-2. ✅ **TestContext Infrastructure Fixed** - `params: None` → `json!(null)`, added `initialize_with()`
-3. ✅ **IGNORED_TESTS_INDEX Updated** - Accurate categories, sweep strategy documented
-
-### Earlier Completions (2025-11-20)
-1. ✅ **Semantic Analyzer Phase 1** - 12/12 critical node handlers implemented with SemanticModel stable API
-2. ✅ **LSP Semantic Definition** - textDocument/definition using SemanticAnalyzer::find_definition()
-3. ✅ **Dynamic Test Infrastructure** - Tests resilient to whitespace/formatting via find_pos() helper
-4. ✅ **Statement Tracker (#182)** - 100% complete (HeredocContext, BlockBoundary, StatementTracker)
-
-### Critical Blockers 🚫
-1. ~~**Statement Tracker (#182)**: Architecture undefined~~ ✅ **COMPLETE** - Ready to close
-2. ~~**Sprint B Readiness**: Nearly unblocked~~ ✅ **UNBLOCKED** - Sprint B Phase 1 complete!
-3. ~~**Semantic Stack Validation**: Need execution on non-resource-starved hardware~~ ✅ **VALIDATED** (2025-12-27 ci-gate pass)
-4. **CI Pipeline (#211)**: Blocks merge-blocking gates (#210)
+| Tier A Tests | 337 passed, 1 ignored | 100% pass | PASS |
+| Tracked Test Debt | 9 (8 bug, 1 manual) | 0 | Near-zero |
+| LSP Coverage | 82% (27/33 GA advertised) | 93%+ | In progress |
+| Parser Coverage | ~100% | 100% | Complete |
+| Semantic Analyzer | Phase 1 (12/12 handlers) | Phase 3 | Core complete |
+| Mutation Score | 87% | 87%+ | Target met |
+| Documentation | 484 violations | 0 | 8-week plan |
 
 ---
 
-## 🏃 Active Sprint Status
+## What's True Right Now
 
-### Sprint A: Parser Foundation (Days 1-10) ✅ **COMPLETE**
-**Current**: 🎉 **100% COMPLETE** on Day 10 (exactly on schedule!)
-**Completion**: 100% ✅
-**Timeline**: Completed in 10 days as planned
-
-| Issue | Status | Completion | Timeline |
-|-------|--------|------------|----------|
-| #218 (#182a) Data Structures | ✅ **Complete** (PR #222) | 100% | Days 1-3 |
-| #219 (#182b) Pipeline Threading | ✅ **Complete** (PRs #223, #224) | 100% | Days 3-6 |
-| #220/#221 Tracker Integration + Fix | ✅ **Complete** (PRs #225, #226) | 100% | Days 6-10 |
-| #227 (#182d) AST Integration | ✅ **Complete** (PR #229) | 100% | Day 10 |
-| #183 Heredoc Backreferences | 🟡 Active | 70% | Days 1-3 |
-| #184 Heredoc Content | 🟡 Active | 75% | Days 3-6 |
-| #185 Phase Diagnostics | 🟢 Good | 70% | Days 4-5 |
-| #186 Edge Cases | 🔴 Early | 15% | Days 7-10 |
-| #144 Test Re-enablement | 🔴 Blocked | 0% | Days 8-10 |
-
-**Critical Path**: ✅ #218 → ✅ #219 → ✅ #220/#221 → ✅ #227 (ALL COMPLETE!)
-
-**Final Achievements**:
-- ✅ Statement tracker architecture implemented and integrated (4/4 slices)
-- ✅ Block-aware heredoc detection (F1-F4 fixtures passing)
-- ✅ AST-level validation (F5-F6 + edge cases, 6 tests passing)
-- ✅ 274 tests passing, CI green, all quality gates passed
-- 🎉 **Sprint A delivered on time and on scope!**
+- **Parser**: Production-ready with ~100% Perl 5 syntax coverage, 1-150us parsing, 931ns incremental updates
+- **LSP Server**: 82% feature coverage, <50ms response times, semantic definition working
+- **Semantic Analyzer**: Phase 1 complete with 12/12 critical handlers, `textDocument/definition` integrated
+- **Test Infrastructure**: 337 lib tests passing, 4/4 LSP semantic def tests passing
+- **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation
+- **DAP Server**: Phase 1 bridge to Perl::LanguageServer complete (71/71 tests)
 
 ---
 
-### Sprint B: LSP Polish (Days 11-19)
-**Status**: 🟢 **Phase 1 COMPLETE** - Semantic analyzer core + LSP definition integration done!
-**Effort**: 9 days (21 story points) - ~7 points complete (Phase 1)
-**Target**: 93%+ LSP coverage (from 82% catalog)
+## What's Next
 
-| Issue | Story Points | Days | Status |
-|-------|--------------|------|--------|
-| #180 Name Spans | 3 | 11-13 | 🔵 Pending |
-| #188 Semantic Analyzer ⭐ | 12 | 11-16 | 🟢 **Phase 1 Complete** (12/12 handlers + LSP integration) |
-| #181 Workspace Features | 3 | 11-15 | 🔵 Pending |
-| #191 Document Highlighting | 3 | 16-19 | 🔵 Pending |
+1. **CI Pipeline (#211)** - Blocks merge-blocking gates; $720/year savings potential
+2. **Sprint B remaining**: #180 (name spans), #181 (workspace features), #191 (document highlighting)
+3. **v0.9 Release**: Tag `v0.9.0-semantic-lsp-ready` after docs update
+4. **Production v1.0**: #210 (merge gates), #208 (batteries-included UX), #197 (core docs)
+5. **Semantic Phase 2/3**: Advanced features (closures, multi-file, imports) - post-v0.9
 
-**#188 Progress**:
-- ✅ Phase 1 (12/12 critical handlers): COMPLETE
-- ✅ LSP textDocument/definition: COMPLETE
-- ✅ Test infrastructure: COMPLETE
-- ⏳ Phase 2/3 (advanced features): Deferred to post-v0.9
-
-**Dependencies**:
-- #180 blocks #181 Phase 3 (selectionRange needs name_span)
-- #188 Phase 1 enables #191 (NodeKind handlers foundation ready)
-
-**Achievements**: Phase 1 delivered ahead of schedule with comprehensive test coverage
+See [ROADMAP.md](ROADMAP.md) for milestone details.
 
 ---
 
-## 📊 Component Status
+## Known Constraints
 
-### Parser (perl-parser)
-- **Status**: 🟢 **Production** - ~100% Perl 5 syntax coverage
-- **Performance**: 1-150µs parsing, 4-19x faster than legacy
-- **Incremental**: <1ms updates (actual: 931ns, 931x faster than target!)
-- **Quality**: 274/274 tests passing, 87% mutation score
-- **Semantic Analyzer**: ✅ Phase 1 COMPLETE (12/12 handlers including `VariableListDeclaration`, `Ternary`, `ArrayLiteral`, `HashLiteral`, `Try`, `PhaseBlock`, `ExpressionStatement`, `Do`, `Eval`, `VariableWithAttributes`, `Unary`, `Readline`)
-- **Next**: Phase 2 - Enhanced features (8 additional handlers for postfix loops, method calls, file tests, etc.)
-
-### LSP Server (perl-lsp)
-- **Status**: 🟢 **Production** - 82% LSP 3.18 cataloged feature coverage
-- **Response Times**: <50ms (p95), meets SLO
-- **Features**: 25+ IDE capabilities implemented
-- **Quality**: 4/4 semantic definition tests passing, 9 tracked test debt (near-zero)
-- **Next**: Sprint B for 93%+ coverage (#180, #181, #191)
-
-### DAP Server (perl-dap)
-- **Status**: 🟢 **Phase 1 Complete** - Bridge to Perl::LanguageServer
-- **Performance**: <50ms breakpoints, <100ms step/continue
-- **Testing**: 71/71 tests passing with mutation hardening
-- **Next**: Phase 2/3 native adapter (Issue #182, 8-12 weeks)
-
-### Lexer (perl-lexer)
-- **Status**: 🟢 **Production** - Context-aware tokenization
-- **Performance**: Sub-microsecond, 20-30% recent improvements
-- **Next**: Optimization opportunities (Issue #193, post-MVP)
-
-### Corpus (perl-corpus)
-- **Status**: 🟢 **Production** - Corpus sources: `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
-- **Quality**: Gap suite exercised via `tests/corpus_gap_tests.rs` (see `just ci-gate` for pass counts)
-- **Next**: Expand CPAN top 100 module coverage
+- **9 tracked test debt**: 8 bug-related, 1 manual; feature-gated ignores are by design
+- **CI Pipeline (#211)**: Blocks merge-blocking gates (#210)
+- **484 doc violations**: Infrastructure complete, content phase in progress
+- **Semantic Phase 2/3**: Advanced features deferred to post-v0.9
 
 ---
 
-## 🎯 Near-Term Milestones
+## Component Summary
 
-### Completed (as of 2025-12-27)
-
-- [x] Statement tracker architecture (#182) ✅
-- [x] Semantic Analyzer Phase 1 (#188) ✅ - 12/12 handlers
-- [x] LSP textDocument/definition integration ✅
-- [x] Tier A verification on Rust 1.89 MSRV ✅
-
-### Next Steps (Prioritized)
-
-1. **CI Pipeline Optimization (#211)** - Unblock merge-blocking gates
-2. ~~**Ignored Tests Reduction (#198)**~~ ✅ Complete (9 tracked debt, near-zero)
-3. **Sprint B Remaining Items**:
-   - Issue #180: Name spans
-   - Issue #181: Workspace features
-   - Issue #191: Document highlighting
-4. **Production v1.0 Prep**:
-   - Complete #210 (merge-blocking gates)
-   - Complete #208 (batteries included UX)
-   - Core documentation (#197 Phase 1-2)
+| Component | Status | Notes |
+|-----------|--------|-------|
+| perl-parser | Production | ~100% Perl 5, 87% mutation score |
+| perl-lsp | Production | 82% LSP 3.18 coverage |
+| perl-dap | Phase 1 | Bridge mode complete |
+| perl-lexer | Production | Context-aware, sub-microsecond |
+| perl-corpus | Production | 613 tree-sitter sections + 10 .pl files |
 
 ---
 
-## 🔍 Quality Metrics
+## How to Update This File
 
-### Testing
-| Metric | Value | Target | Status |
-| ------ | ----- | ------ | ------ |
-| Tier A (lib tests) | 337 passed, 1 ignored | 100% | 🟢 `just ci-gate` |
-| LSP Semantic Def | 4/4 passed | 4/4 | 🟢 `just ci-lsp-def` |
-| Tracked Test Debt | 9 (8 bug, 1 manual) | 0 | 🟢 Near-zero |
-| Non-Default Lanes | 0 (feature-gated) | Informational | 🟢 By design |
-| Mutation Score | 87% | 87%+ | 🟢 Target Met |
-| Fuzz Testing | 12 suites | Ongoing | 🟢 Robust |
+1. Run `just status-update` to regenerate computed metrics
+2. Run `just ci-gate` to verify all gates pass
+3. Edit "What's True Right Now" and "What's Next" sections as needed
 
-### Performance
-| Metric | Current | Target | Status |
-|--------|---------|--------|--------|
-| Parsing | 1-150µs | <1ms | 🟢 Exceeds |
-| Incremental | 931ns | <1ms | 🟢 931x faster! |
-| LSP Response | <50ms | <100ms | 🟢 Exceeds |
-| Memory | ~500KB/10K LOC | Efficient | 🟢 Good |
-
-### Documentation
-| Metric | Value | Target | Status |
-|--------|-------|--------|--------|
-| Missing Docs | 484 violations | 0 | 🟡 8-week plan |
-| Infrastructure | Complete (PR #160) | Complete | 🟢 Done |
-| API Standards | Defined | Enforced | 🟢 Ready |
-| Test Coverage | 16/25 tests | 25/25 | 🟡 Content phase |
-
-### Security
-| Metric | Value | Status |
-|--------|-------|--------|
-| UTF-16 Safety | Symmetric conversion (PR #153) | 🟢 Fixed |
-| Path Validation | Enterprise-grade | 🟢 Complete |
-| Mutation Score | 87% | 🟢 Excellent |
-| Vulnerability Detection | Fuzz + mutation tested | 🟢 Robust |
+**Historical archives**: See `docs/archive/status_snapshots/` for sprint logs and completion history.
 
 ---
 
-## 💰 Cost & Efficiency
-
-### CI/CD Optimization (Issue #211)
-- **Current Cost** (if all workflows enabled): $68/month ($816/year)
-- **Optimized Cost** (after #211): $10-15/month ($120-180/year)
-- **Savings**: **$720/year (88% reduction)**
-- **Timeline**: 3 weeks to optimization
-
-### Developer Efficiency
-- **Adaptive Threading** (PR #140): 5000x test performance improvements
-- **Incremental Parsing**: 931x faster than target (<1ms vs 931ns)
-- **LSP Response Times**: <50ms (exceeds <100ms target)
-- **Build Times**: Robust across environments with lockfile hardening
-
----
-
-## 🎬 Decision Points
-
-### Immediate (This Week)
-1. **Close Resolved Issues**: #203 (Rust 2024), #202 (rand deprecation), #194 (type hierarchy exists)
-2. **Statement Tracker Session**: 2-hour architecture decision for #182
-3. **CI Guardrail Fix**: Extend to monitor perl-lsp tests (#198)
-
-### Short-Term (2-3 Weeks)
-1. **Sprint A Scope**: Confirm realistic 2-3 week timeline vs original 10 days
-2. **Statement Tracker Implementation**: Separate module vs integrated approach
-3. **Test Re-enablement Strategy**: ✅ Complete - BUG=0 achieved (see `scripts/.ignored-baseline`)
-
-### Medium-Term (4-13 Weeks)
-1. **Issue #211 Priority**: Start during Sprint A or wait until Sprint B complete?
-2. **Batteries Included (#208)**: Parallel with CI work or sequential?
-3. **Documentation Strategy**: Phase 1 only or Phases 1-2 for v1.0?
-
----
-
-## 📚 Key Resources
-
-### Issue Tracking
-- **[Issue Status Report](ISSUE_STATUS_2025-11-12.md)** - Complete 30-issue analysis
-- **[Sprint A Meta (#212)](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/212)** - Parser foundation tracking
-- **[Sprint B Meta (#213)](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/213)** - LSP polish tracking
-
-### Roadmaps
-- **[MVP Roadmap (#195)](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/195)** - 70-75% complete, 2-3 weeks
-- **[Production Roadmap (#196)](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/196)** - 85-90% ready, 11-13 weeks
-- **[ROADMAP.md](ROADMAP.md)** - Long-term vision (2025-2026+)
-
-### Development
-- **[CLAUDE.md](../CLAUDE.md)** - Project guidance and standards
-- **[CONTRIBUTING.md](../CONTRIBUTING.md)** - Contribution guidelines
-- **[docs/](.)** - Comprehensive technical documentation
-
----
-
-## 🏆 Recent Achievements
-
-### Completed Issues (Can Be Closed)
-- ✅ **Issue #203**: Rust 2024 edition upgrade (PR #175, Oct 28)
-- ✅ **Issue #202**: rand deprecation fix (commit e768294f, Oct 1)
-- ✅ **Issue #204**: unreachable!() elimination (PR #205, October)
-- ✅ **Issue #194**: Type hierarchy (fully implemented, just needs CI test enablement)
-
-### Major Milestones Achieved
-- ✅ **PR #160/SPEC-149**: API documentation infrastructure complete
-- ✅ **PR #153**: Mutation testing with 87% score, UTF-16 security fixes
-- ✅ **PR #140**: Adaptive threading with 5000x performance improvements
-- ✅ **PR #165**: Enhanced LSP cancellation system
-- ✅ **Issue #207**: DAP Phase 1 bridge complete (71/71 tests)
-- ✅ **Issue #182**: Statement tracker + heredocs 100% complete (2025-11-20)
-- ✅ **Issue #188 Phase 1**: Semantic analyzer core + LSP definition integration (2025-11-20)
-
----
-
-## 🎯 Semantic Definition & LSP Integration Status (2025-11-20)
-
-### ✅ Semantic Analyzer Phase 1 - COMPLETE
-
-**Implementation Status**: 12/12 critical node handlers implemented
-
-| Handler | Purpose | Status |
-|---------|---------|--------|
-| `VariableListDeclaration` | Variable declarations (`my $x, $y`) | ✅ Complete |
-| `VariableWithAttributes` | Attributed variables (`my $x :shared`) | ✅ Complete |
-| `Ternary` | Ternary operators (`$x ? $y : $z`) | ✅ Complete |
-| `ArrayLiteral` | Array literals (`[1, 2, 3]`) | ✅ Complete |
-| `HashLiteral` | Hash literals (`{a => 1}`) | ✅ Complete |
-| `Try` | Try-catch blocks | ✅ Complete |
-| `PhaseBlock` | Phase blocks (`BEGIN`, `END`) | ✅ Complete |
-| `ExpressionStatement` | Expression statements | ✅ Complete |
-| `Do` | Do blocks | ✅ Complete |
-| `Eval` | Eval expressions | ✅ Complete |
-| `Unary` | Unary operators | ✅ Complete |
-| `Readline` | Readline operations (`<>`) | ✅ Complete |
-
-**SemanticModel API**: Stable production wrapper
-- `build(root, source)`: Construct from AST + source
-- `tokens()`: Semantic token stream
-- `symbol_table()`: Symbol definition queries
-- `hover_info_at(location)`: Documentation retrieval
-- `definition_at(position)`: Symbol resolution by byte offset
-
-**Test Coverage**: 13 Phase 1 smoke tests + 2 SemanticModel unit tests
-
-### ✅ LSP textDocument/definition - COMPLETE
-
-**Integration**: `SemanticAnalyzer::find_definition(byte_offset)` wired to LSP handler
-
-**Test Infrastructure** (✅ validated 2025-12-27):
-1. **Scalar Variable Definition** - `$x` reference resolves to `my $x` declaration
-2. **Subroutine Definition** - `foo()` call resolves to `sub foo` declaration
-3. **Lexical Scoped Variables** - Proper nested scope handling (`$inner` vs `$outer`)
-4. **Package-Qualified Calls** - `Foo::bar()` resolves across package boundaries
-
-**Dynamic Position Calculation**: All tests use `find_pos()` helper for resilience
-- No hard-coded line/column positions
-- Calculates positions from code strings
-- Robust across whitespace/formatting changes
-
-**Resource-Efficient Execution**:
-```bash
-# Individual test execution for constrained environments
-RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_definition \
-  -- --nocapture definition_finds_scalar_variable_declaration
-```
-
-**CI Integration**: `just ci-lsp-def` target for automated validation
-
-### 📋 Path to "Fully Working" v1.0
-
-**Band 1: Prove the Semantic Stack** ✅ **COMPLETE (2025-12-27)**
-- [x] Execute semantic analyzer unit tests
-- [x] Run all 4 LSP semantic definition tests
-- [x] Complete `just ci-gate` validation (Rust 1.89 MSRV)
-- **Result**: Semantic stack validated, 337 lib tests + 4 LSP def tests passing
-
-**Band 2: Reduce Tracked Test Debt** (1-2 weeks part-time) - ✅ **COMPLETE**
-- [x] Fix `TestContext` wrapper (params: `None` → `json!(null)`, add `initialize_with()`)
-- [x] Apply "flip strategy" to `lsp_protocol_violations.rs`: 26 → 4 ignores (**-22**)
-- [x] Sweep `lsp_window_progress_test.rs`: 21 → 0 ignores (**-21**)
-- [x] Sweep `lsp_unhappy_paths.rs`: 9 → 1 ignores (**-8**)
-- [x] Feature-gate `lsp_advanced_features_test.rs` (23 tests behind `lsp-extras`)
-- [x] Update `docs/ci/IGNORED_TESTS_INDEX.md` with accurate categories
-- [x] Migrate to feature-gated ignores (legacy `#[ignore]` near-zero)
-- **Final**: 9 tracked test debt (8 bug, 1 manual), 0 non-default lanes
-- **Invariant**: "Legacy `#[ignore]` is near-zero; feature-gated ignores are expected"
-
-**Band 3: Tag v0.9-semantic-lsp-ready** (1-2 weeks)
-- [ ] Update README/docs with semantic capabilities
-- [ ] Tag milestone: `v0.9.0-semantic-lsp-ready`
-- [ ] Update CHANGELOG with Phase 1 achievements
-- **Target**: Externally-consumable "it just works" release
-
-### 🚧 Known Constraints
-- **9 tracked test debt**: 8 bug + 1 manual (near-zero; feature-gated ignores expected)
-- **CI Pipeline**: Issue #211 blocks merge-blocking gates (#210)
-- **Semantic Phase 2/3**: Advanced features deferred (closures, multi-file, imports)
-
----
-
-## 🔮 Looking Ahead
-
-### MVP Launch (2-3 Weeks)
-**Targets**:
-- ✅ Robust parsing with heredoc edge cases
-- ✅ Accurate diagnostics
-- ✅ Basic code completion
-- ✅ Go-to-definition (semantic-aware)
-- ✅ Sprint A (parser foundation) - **COMPLETE**
-- 🔄 Sprint B (LSP polish) - In progress (Phase 1 done)
-
-**Success Criteria**:
-- 93%+ LSP coverage
-- ✅ Near-zero tracked test debt (currently 9)
-- Zero critical bugs
-- CI pipeline optimized
-- Documentation infrastructure complete
-
-### Production v1.0 (11-13 Weeks)
-**Key Deliverables**:
-- Merge-blocking gates operational (#210)
-- Batteries included UX (#208)
-- Core documentation complete (#197 Phase 1-2)
-- Test infrastructure stabilized (#198)
-- CI cost optimized (#211)
-- All P0/P1 issues resolved
-
-**Competitive Position**:
-- 4-19x faster parsing vs Perl Navigator
-- 82% LSP coverage vs ~40-70%
-- Enterprise security and quality
-- Modern architecture (Rust, async, thread-safe)
-- DAP debugging support
-
----
-
-*This snapshot provides real-time project intelligence for informed decision-making. Updated weekly during active development.*
-
-*Last Updated: 2026-01-07 (Documentation truth alignment: roadmap hygiene, evidence requirements)*
-*Next Update: After v0.9.0 release or significant milestone*
-
----
-
-## 📋 Year-End Roadmap Updates (2025-12-31)
-
-### GitHub Issue Updates Made Today
-1. ✅ **Issue #196 (Production Roadmap)**: Expanded from 8 lines to comprehensive 150+ line roadmap
-   - Added v1.0 status overview with metrics
-   - Documented all P0-CRITICAL blockers (#211, #210)
-   - Created 4-phase release milestone plan
-   - Added long-term roadmap (v0.9 → v2.0)
-
-2. ✅ **Issue #195 (MVP Roadmap)**: Already well-maintained, labels added
-
-3. ✅ **Issue #204 (unreachable!() elimination)**: Added completion status comment
-   - Implementation complete per hop log
-   - All quality gates passed
-   - Ready for code-refiner → FINALIZE
-
-4. ✅ **Labels Added to 17+ Issues**: New triage labels (type:*, P0-P3, area:*, status:*)
-   - Sprint issues: #212, #213, #180, #181
-   - P0-CRITICAL: #211 (CI Pipeline), #210 (Merge Gates)
-   - Documentation: #195, #196, #197
-   - Features: #186-193, #201, #208
-
-### Key Findings from Roadmap Analysis
-- **35 open issues** total (down from historical peak)
-- **16 issues closed** since November 2025
-- **Sprint A**: 100% complete (delivered on time!)
-- **Sprint B Phase 1**: Complete (semantic analyzer + LSP definition)
-- **Ignored tests**: Reduced from 572+ to ~0 (target met!)
-- **CI savings potential**: $720/year via Issue #211
+*Last Updated: 2026-01-07*
+*Canonical docs: [ROADMAP.md](ROADMAP.md), [features.toml](../features.toml)*

@@ -11,6 +11,8 @@ This is the front door. If you want X, read Y.
 | Capability catalog | [`features.toml`](../features.toml)        | `just ci-gate`     |
 | CI lanes           | [`CI_TEST_LANES.md`](CI_TEST_LANES.md)     | `just ci-gate`     |
 | What went wrong    | [`LESSONS.md`](LESSONS.md)                 | Human review       |
+| What went right    | [`CASEBOOK.md`](CASEBOOK.md)               | Human review       |
+| PR archaeology     | [`forensics/INDEX.md`](forensics/INDEX.md) | Human review       |
 
 **Rule**: All metrics are computed and live in `CURRENT_STATUS.md`. If you see a number elsewhere, treat it as stale.
 
@@ -83,6 +85,8 @@ bash scripts/ignored-test-count.sh
 
 - `AGENTIC_DEV.md` - Development model and budget definitions
 - `LESSONS.md` - What went wrong and what changed
+- `CASEBOOK.md` - Exhibit PRs demonstrating the model
+- `forensics/INDEX.md` - PR archaeology inventory
 - `FORENSICS_SCHEMA.md` - PR archaeology dossier template
 - `STABILITY.md` - API stability policy
 - `CONTRIBUTING_LSP.md` - LSP contribution guidelines

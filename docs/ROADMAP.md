@@ -92,7 +92,7 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 ### Not Before v0.9
 
 These items are explicitly deferred:
-- Full LSP 3.18 compliance (current: 82% advertised GA)
+- Full LSP 3.18 compliance (see CURRENT_STATUS.md for current coverage)
 - Semantic Analyzer Phase 2/3 (closures, multi-file resolution, imports)
 - Native DAP (currently bridge mode to Perl::LanguageServer)
 - Benchmark result publication (framework exists, results not committed)
