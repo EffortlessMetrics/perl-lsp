@@ -110,3 +110,9 @@ When something is discovered to be wrong:
 8. Link to relevant PRs/commits
 
 Keep entries short and falsifiable. The point is system improvement, not blame.
+
+## See Also
+
+- [`AGENTIC_DEV.md`](AGENTIC_DEV.md) - Development model and budget definitions
+- [`FORENSICS_SCHEMA.md`](FORENSICS_SCHEMA.md) - PR archaeology dossier template
+- [`INDEX.md`](INDEX.md) - Documentation front door

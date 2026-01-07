@@ -89,6 +89,17 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 - `bash scripts/ignored-test-count.sh` shows BUG=0, MANUAL≤1
 - Release notes generated, tag cut
 
+### Not Before v0.9
+
+These items are explicitly deferred:
+- Full LSP 3.18 compliance (current: 82% advertised GA)
+- Semantic Analyzer Phase 2/3 (closures, multi-file resolution, imports)
+- Native DAP (currently bridge mode to Perl::LanguageServer)
+- Benchmark result publication (framework exists, results not committed)
+- Package manager distribution (Homebrew, apt, etc.)
+
+---
+
 ### v1.0.0: "Boring Promises" (sequence after v0.9.0)
 
 **Goal**: Freeze the surfaces you're willing to support.
@@ -134,20 +145,12 @@ These gaps are tracked in [`docs/issues/`](issues/) and need closure before v0.9
 
 ## Completed Work
 
-### Recent Completions
+See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 
-1. **Statement Tracker & Heredocs** - Complete (2025-11-20)
-   - `HeredocContext`, `BlockBoundary`, `BlockType` fully implemented
-   - `StatementTracker` threaded through parser pipeline
-
-2. **Semantic Analyzer Phase 1** - Complete (2025-11-20)
-   - 12/12 critical node handlers implemented
-   - `SemanticModel` stable API wrapper
-   - LSP `textDocument/definition` integrated
-
-3. **Band 1: Semantic Stack Validation** - Complete (2025-12-27)
-   - `just ci-gate` verified on Rust 1.89 MSRV
-   - See CURRENT_STATUS.md for current test counts
+**Highlights:**
+- Statement Tracker & Heredocs (2025-11-20)
+- Semantic Analyzer Phase 1 (2025-11-20)
+- Band 1: Semantic Stack Validation (2025-12-27)
 
 ---
 
@@ -191,34 +194,12 @@ Older targets (Q1-Q4 2025, 2026 vision) have been archived. Current focus is v0.
 
 ---
 
-## How to Get Started
-
-### For Users
-```bash
-# Build from source (recommended right now)
-cargo build -p perl-lsp --release
-
-# Install locally from this workspace
-cargo install --path crates/perl-lsp
-
-# Use in your editor
-./target/release/perl-lsp --stdio
-```
-
-### For Contributors
-1. Run `nix develop -c just ci-gate` before pushing
-2. Check issues for "good first issue" labels
-3. See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines
-
----
-
 ## Resources
 
-- **[Current Status](CURRENT_STATUS.md)** - Computed metrics and project health
-- **[Architecture Overview](ARCHITECTURE_OVERVIEW.md)** - Technical details
-- **[LSP Implementation Guide](LSP_IMPLEMENTATION_GUIDE.md)** - LSP server architecture
+**Start here:** [`INDEX.md`](INDEX.md) - Routes you to the right doc.
+
+- **[Current Status](CURRENT_STATUS.md)** - Computed metrics (the only place with numbers)
 - **[features.toml](../features.toml)** - Canonical capability definitions
+- **[LESSONS.md](LESSONS.md)** - What went wrong and what changed
 
----
-
-*Last Updated: 2026-01-07*
+<!-- Last Updated: 2026-01-07 -->
