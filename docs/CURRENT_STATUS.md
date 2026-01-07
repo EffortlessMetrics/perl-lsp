@@ -42,6 +42,15 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 - **`features.toml`** + server capabilities: Ground truth for LSP features
 - **Historical docs**: Archived at `docs/archive/roadmaps/`; retrieve from git history for older versions
 
+### Metric Definitions
+- **LSP Coverage (GA)**: `advertised_ga / trackable` computed from `features.toml` using the build rules (planned excluded; GA/production advertised counted).
+- **Corpus counts**: `tree-sitter corpus sections` is the count of `====` delimiters under `tree-sitter-perl/test/corpus`; `repo test_corpus inputs` is the count of `.pl` files under `test_corpus/`.
+- **Catalog source**: `features.toml` is canonical for build + docs; `crates/perl-parser/features_sot.toml` is a vendored fallback used when the workspace root is unavailable.
+
+### How to Update This File
+- Run `just status-update`
+- Then re-run `just ci-gate`
+
 ## 🎯 At a Glance
 
 | Metric | Value | Target | Status |

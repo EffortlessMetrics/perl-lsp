@@ -134,8 +134,9 @@ def main() -> int:
         CURRENT_STATUS.write_text(updated, encoding="utf-8")
         return 0
 
-    sys.stderr.write("docs/CURRENT_STATUS.md is out of date. Run:\n")
-    sys.stderr.write("  python3 scripts/update-current-status.py --write\n")
+    sys.stderr.write("docs/CURRENT_STATUS.md is out of date.\n")
+    sys.stderr.write("Run `just status-update`\n")
+    sys.stderr.write("Then re-run `just ci-gate`\n")
     return 1
 
 
