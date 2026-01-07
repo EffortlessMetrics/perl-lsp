@@ -125,9 +125,7 @@ fn parse_corpus_layer(layer_path: &Path, layer: CorpusLayer) -> Result<Vec<Corpu
         let path = entry.path();
 
         // Skip files that are clearly not corpus files
-        let file_name = path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
         if file_name.starts_with('_')
             || file_name.starts_with('.')
@@ -168,22 +166,16 @@ pub fn generate_inventory(files: &[CorpusFile]) -> CorpusInventory {
     let total_line_count = files.iter().map(|f| f.line_count).sum();
 
     // Count files per layer
-    let mut layer_counts: std::collections::HashMap<CorpusLayer, usize> = std::collections::HashMap::new();
+    let mut layer_counts: std::collections::HashMap<CorpusLayer, usize> =
+        std::collections::HashMap::new();
     for file in files {
         *layer_counts.entry(file.layer).or_insert(0) += 1;
     }
 
-    let files_by_layer = layer_counts
-        .into_iter()
-        .map(|(layer, count)| LayerCount { layer, count })
-        .collect();
+    let files_by_layer =
+        layer_counts.into_iter().map(|(layer, count)| LayerCount { layer, count }).collect();
 
-    CorpusInventory {
-        total_files,
-        files_by_layer,
-        total_size_bytes,
-        total_line_count,
-    }
+    CorpusInventory { total_files, files_by_layer, total_size_bytes, total_line_count }
 }
 
 #[cfg(test)]

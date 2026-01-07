@@ -72,18 +72,12 @@ pub fn analyze_nodekind_coverage(
     let all_nodekinds = get_all_nodekinds();
     let total_count = all_nodekinds.len();
     let covered_count = nodekind_counts.len();
-    let coverage_percentage = if total_count > 0 {
-        (covered_count as f64 / total_count as f64) * 100.0
-    } else {
-        0.0
-    };
+    let coverage_percentage =
+        if total_count > 0 { (covered_count as f64 / total_count as f64) * 100.0 } else { 0.0 };
 
     // Find never-seen NodeKinds
-    let never_seen: Vec<String> = all_nodekinds
-        .iter()
-        .filter(|nk| !nodekind_counts.contains_key(*nk))
-        .cloned()
-        .collect();
+    let never_seen: Vec<String> =
+        all_nodekinds.iter().filter(|nk| !nodekind_counts.contains_key(*nk)).cloned().collect();
 
     // Find at-risk NodeKinds (low coverage)
     let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
@@ -99,11 +93,7 @@ pub fn analyze_nodekind_coverage(
                 RiskLevel::Medium
             };
 
-            AtRiskNodeKind {
-                name: name.clone(),
-                count,
-                risk_level,
-            }
+            AtRiskNodeKind { name: name.clone(), count, risk_level }
         })
         .collect();
 
@@ -124,11 +114,7 @@ pub fn analyze_nodekind_coverage(
 fn extract_nodekinds_from_content(_path: &PathBuf) -> Vec<String> {
     // For now, return a simple heuristic based on file path
     // In production, this would parse the file and traverse the AST
-    vec![
-        "Statement".to_string(),
-        "Expression".to_string(),
-        "Identifier".to_string(),
-    ]
+    vec!["Statement".to_string(), "Expression".to_string(), "Identifier".to_string()]
 }
 
 /// Get all NodeKinds from the parser

@@ -85,24 +85,21 @@ pub fn check_ga_feature_alignment(files: &[CorpusFile]) -> Result<GAFeatureCover
     let ga_features = define_ga_features();
 
     // Check coverage for each feature
-    let features: Vec<FeatureCoverage> = ga_features
-        .iter()
-        .map(|feature| check_feature_coverage(feature, files))
-        .collect();
+    let features: Vec<FeatureCoverage> =
+        ga_features.iter().map(|feature| check_feature_coverage(feature, files)).collect();
 
     // Calculate overall statistics
     let total_count = features.len();
     let covered_count = features.iter().filter(|f| f.covered).count();
-    let coverage_percentage = if total_count > 0 {
-        (covered_count as f64 / total_count as f64) * 100.0
-    } else {
-        0.0
-    };
+    let coverage_percentage =
+        if total_count > 0 { (covered_count as f64 / total_count as f64) * 100.0 } else { 0.0 };
 
     // Identify uncovered critical features (P0 and P1)
     let uncovered_critical: Vec<String> = features
         .iter()
-        .filter(|f| !f.covered && matches!(f.feature.priority, FeaturePriority::P0 | FeaturePriority::P1))
+        .filter(|f| {
+            !f.covered && matches!(f.feature.priority, FeaturePriority::P0 | FeaturePriority::P1)
+        })
         .map(|f| f.feature.id.clone())
         .collect();
 
@@ -143,12 +140,7 @@ fn check_feature_coverage(feature: &GAFeature, files: &[CorpusFile]) -> FeatureC
         0.0
     };
 
-    FeatureCoverage {
-        feature: feature.clone(),
-        covered,
-        covering_files,
-        coverage_percentage,
-    }
+    FeatureCoverage { feature: feature.clone(), covered, covering_files, coverage_percentage }
 }
 
 /// Check if a file covers a given GA feature

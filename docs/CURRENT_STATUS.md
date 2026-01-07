@@ -33,13 +33,13 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 
 | Metric | Value | Target | Status |
 | ------ | ----- | ------ | ------ |
-| Tier A Tests | 337 passed, 1 ignored | 100% pass | PASS |
-| Tracked Test Debt | 9 (8 bug, 1 manual) | 0 | Near-zero |
-| LSP Coverage | 82% (27/33 GA advertised) | 93%+ | In progress |
-| Parser Coverage | ~100% | 100% | Complete |
-| Semantic Analyzer | Phase 1 (12/12 handlers) | Phase 3 | Core complete |
-| Mutation Score | 87% | 87%+ | Target met |
-| Documentation | 484 violations | 0 | 8-week plan |
+| **Tier A Tests** | 337 passed, 1 ignored | 100% pass | PASS |
+| **Tracked Test Debt** | 9 (8 bug, 1 manual) | 0 | Near-zero |
+| **LSP Coverage** | 82% (27/33 GA advertised, `features.toml`) | 93%+ | In progress |
+| **Parser Coverage** | ~100% | 100% | Complete |
+| **Semantic Analyzer** | Phase 1 (12/12 handlers) | Phase 3 | Core complete |
+| **Mutation Score** | 87% | 87%+ | Target met |
+| **Documentation** | 484 violations | 0 | 8-week plan |
 
 ---
 
@@ -51,6 +51,16 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 - **Test Infrastructure**: 337 lib tests passing, 4/4 LSP semantic def tests passing
 - **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation
 - **DAP Server**: Phase 1 bridge to Perl::LanguageServer complete (71/71 tests)
+
+### Computed Metrics (auto-updated by `just status-update`)
+
+- **Comprehensive parsing**: broad Perl 5 coverage via `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
+- **Solid LSP foundation**: 82% cataloged GA coverage (27/33 trackable features), production-ready (`just ci-gate`)
+- **Status**: 🟢 **Production** - 82% LSP 3.18 cataloged feature coverage
+- **Status**: 🟢 **Production** - Corpus sources: `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
+- 82% LSP coverage vs ~40-70%
+
+**Target**: 93%+ LSP coverage (from 82% catalog)
 
 ---
 

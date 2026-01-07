@@ -85,11 +85,7 @@ pub struct TimeoutRisk {
 ///
 /// This function attempts to parse the given file content within the specified timeout.
 /// If parsing exceeds the timeout, it returns a Timeout outcome.
-pub fn parse_with_timeout(
-    _path: &PathBuf,
-    content: &str,
-    timeout: Duration,
-) -> ParseOutcome {
+pub fn parse_with_timeout(_path: &PathBuf, content: &str, timeout: Duration) -> ParseOutcome {
     let start = Instant::now();
     let content_clone = content.to_string();
     let (tx, rx) = std::sync::mpsc::channel();
@@ -101,15 +97,9 @@ pub fn parse_with_timeout(
         }));
 
         let outcome = match result {
-            Ok(Ok(_)) => ParseOutcome::Ok {
-                duration_ms: start.elapsed().as_millis() as u64,
-            },
-            Ok(Err(e)) => ParseOutcome::Error {
-                message: e.to_string(),
-            },
-            Err(_) => ParseOutcome::Panic {
-                message: "Parser panicked".to_string(),
-            },
+            Ok(Ok(_)) => ParseOutcome::Ok { duration_ms: start.elapsed().as_millis() as u64 },
+            Ok(Err(e)) => ParseOutcome::Error { message: e.to_string() },
+            Err(_) => ParseOutcome::Panic { message: "Parser panicked".to_string() },
         };
 
         let _ = tx.send(outcome);
@@ -123,13 +113,9 @@ pub fn parse_with_timeout(
         }
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
             // DO NOT join - thread may be stuck
-            ParseOutcome::Timeout {
-                timeout_ms: timeout.as_millis() as u64,
-            }
+            ParseOutcome::Timeout { timeout_ms: timeout.as_millis() as u64 }
         }
-        Err(_) => ParseOutcome::Error {
-            message: "Channel disconnected unexpectedly".to_string(),
-        },
+        Err(_) => ParseOutcome::Error { message: "Channel disconnected unexpectedly".to_string() },
     }
 }
 
@@ -203,10 +189,7 @@ fn check_deep_nesting(lines: &[&str], path: &Path) -> Vec<TimeoutRisk> {
                 description: format!("Deep nesting detected (depth {})", max_depth),
                 file_path: path.to_path_buf(),
                 line_number: Some(i + 1),
-                mitigation: format!(
-                    "Refactor to reduce nesting depth below {}",
-                    MAX_NESTING_DEPTH
-                ),
+                mitigation: format!("Refactor to reduce nesting depth below {}", MAX_NESTING_DEPTH),
             });
             break;
         }
@@ -260,7 +243,9 @@ fn check_complex_regex(lines: &[&str], path: &Path) -> Vec<TimeoutRisk> {
                     description: format!("Excessive regex alternation ({} branches)", alt_count),
                     file_path: path.to_path_buf(),
                     line_number: Some(i + 1),
-                    mitigation: "Consider using character classes or splitting into multiple patterns".to_string(),
+                    mitigation:
+                        "Consider using character classes or splitting into multiple patterns"
+                            .to_string(),
                 });
             }
         }
@@ -273,10 +258,7 @@ fn check_complex_regex(lines: &[&str], path: &Path) -> Vec<TimeoutRisk> {
             description: format!("Excessive regex operations ({} patterns)", regex_count),
             file_path: path.to_path_buf(),
             line_number: None,
-            mitigation: format!(
-                "Reduce regex operations below {}",
-                MAX_REGEX_OPERATIONS
-            ),
+            mitigation: format!("Reduce regex operations below {}", MAX_REGEX_OPERATIONS),
         });
     }
 
@@ -321,16 +303,10 @@ fn check_large_heredocs(lines: &[&str], path: &Path) -> Vec<TimeoutRisk> {
                 if heredoc_size > MAX_HEREDOC_SIZE {
                     risks.push(TimeoutRisk {
                         priority: RiskPriority::P0,
-                        description: format!(
-                            "Large heredoc ({} bytes)",
-                            heredoc_size
-                        ),
+                        description: format!("Large heredoc ({} bytes)", heredoc_size),
                         file_path: path.to_path_buf(),
                         line_number: Some(heredoc_start_line),
-                        mitigation: format!(
-                            "Reduce heredoc size below {} bytes",
-                            MAX_HEREDOC_SIZE
-                        ),
+                        mitigation: format!("Reduce heredoc size below {} bytes", MAX_HEREDOC_SIZE),
                     });
                 }
             }
@@ -349,10 +325,7 @@ fn check_large_heredocs(lines: &[&str], path: &Path) -> Vec<TimeoutRisk> {
             description: format!("Excessive heredoc nesting (depth {})", heredoc_depth),
             file_path: path.to_path_buf(),
             line_number: None,
-            mitigation: format!(
-                "Reduce heredoc nesting below {}",
-                MAX_HEREDOC_DEPTH
-            ),
+            mitigation: format!("Reduce heredoc nesting below {}", MAX_HEREDOC_DEPTH),
         });
     }
 
@@ -366,9 +339,8 @@ fn check_excessive_interpolation(lines: &[&str], path: &Path) -> Vec<TimeoutRisk
 
     for (i, line) in lines.iter().enumerate() {
         // Count interpolation patterns
-        let line_interp = line.matches("${").count()
-            + line.matches("@{").count()
-            + line.matches("%{").count();
+        let line_interp =
+            line.matches("${").count() + line.matches("@{").count() + line.matches("%{").count();
 
         interp_count += line_interp;
 
@@ -376,10 +348,15 @@ fn check_excessive_interpolation(lines: &[&str], path: &Path) -> Vec<TimeoutRisk
         if line_interp > 20 {
             risks.push(TimeoutRisk {
                 priority: RiskPriority::P1,
-                description: format!("Excessive interpolation in single line ({} occurrences)", line_interp),
+                description: format!(
+                    "Excessive interpolation in single line ({} occurrences)",
+                    line_interp
+                ),
                 file_path: path.to_path_buf(),
                 line_number: Some(i + 1),
-                mitigation: "Consider using string formatting functions or breaking into multiple lines".to_string(),
+                mitigation:
+                    "Consider using string formatting functions or breaking into multiple lines"
+                        .to_string(),
             });
         }
     }
@@ -412,14 +389,8 @@ mod tests {
 
     #[test]
     fn test_parse_outcome_duration_ms() {
-        assert_eq!(
-            ParseOutcome::Ok { duration_ms: 100 }.duration_ms(),
-            Some(100)
-        );
-        assert_eq!(
-            ParseOutcome::Error { message: "error".to_string() }.duration_ms(),
-            None
-        );
+        assert_eq!(ParseOutcome::Ok { duration_ms: 100 }.duration_ms(), Some(100));
+        assert_eq!(ParseOutcome::Error { message: "error".to_string() }.duration_ms(), None);
     }
 
     #[test]

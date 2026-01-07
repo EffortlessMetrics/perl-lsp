@@ -80,17 +80,16 @@ pub fn run(config: AuditConfig) -> Result<()> {
 
     // Create output directory if needed
     if let Some(parent) = config.output_path.parent() {
-        fs::create_dir_all(parent)
-            .context("Failed to create output directory")?;
+        fs::create_dir_all(parent).context("Failed to create output directory")?;
     }
 
     // Check if report already exists and not in fresh mode
     if !config.fresh && config.output_path.exists() && config.check {
         println!("ℹ️  Using existing report (use --fresh to regenerate)");
-        let report_content = fs::read_to_string(&config.output_path)
-            .context("Failed to read existing report")?;
-        let report: AuditReport = serde_json::from_str(&report_content)
-            .context("Failed to parse existing report")?;
+        let report_content =
+            fs::read_to_string(&config.output_path).context("Failed to read existing report")?;
+        let report: AuditReport =
+            serde_json::from_str(&report_content).context("Failed to parse existing report")?;
 
         // In check mode, validate the report and exit
         return validate_report_for_ci(&report);
@@ -125,10 +124,9 @@ pub fn run(config: AuditConfig) -> Result<()> {
     );
 
     // Write report to file
-    let report_json = serde_json::to_string_pretty(&report)
-        .context("Failed to serialize report")?;
-    fs::write(&config.output_path, report_json)
-        .context("Failed to write report file")?;
+    let report_json =
+        serde_json::to_string_pretty(&report).context("Failed to serialize report")?;
+    fs::write(&config.output_path, report_json).context("Failed to write report file")?;
 
     println!("\n✅ Corpus audit completed successfully!");
     println!("   Report written to: {}", config.output_path.display());
@@ -183,14 +181,16 @@ fn print_audit_summary(report: &AuditReport) {
     println!("     - Error: {} ❌", report.parse_outcomes.error);
     println!("     - Timeout: {} ⏱️", report.parse_outcomes.timeout);
     println!("     - Panic: {} 💥", report.parse_outcomes.panic);
-    println!("   NodeKind coverage: {}/{} ({:.1}%)",
+    println!(
+        "   NodeKind coverage: {}/{} ({:.1}%)",
         report.nodekind_coverage.covered_count,
         report.nodekind_coverage.total_count,
         report.nodekind_coverage.coverage_percentage
     );
     println!("   Never-seen NodeKinds: {}", report.nodekind_coverage.never_seen.len());
     println!("   At-risk NodeKinds (<5 occurrences): {}", report.nodekind_coverage.at_risk.len());
-    println!("   GA features covered: {}/{} ({:.1}%)",
+    println!(
+        "   GA features covered: {}/{} ({:.1}%)",
         report.ga_coverage.covered_count,
         report.ga_coverage.total_count,
         report.ga_coverage.coverage_percentage
@@ -200,7 +200,8 @@ fn print_audit_summary(report: &AuditReport) {
     if !report.timeout_risks.is_empty() {
         println!("\n⚠️  Timeout/Hang Risks:");
         for risk in &report.timeout_risks {
-            println!("   - {:?}: {} ({})",
+            println!(
+                "   - {:?}: {} ({})",
                 risk.priority,
                 risk.description,
                 risk.file_path.display()
@@ -219,38 +220,30 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
 
     // Check for parse failures
     if report.parse_outcomes.error > 0 {
-        failures.push(format!(
-            "Parse errors: {} files failed to parse",
-            report.parse_outcomes.error
-        ));
+        failures
+            .push(format!("Parse errors: {} files failed to parse", report.parse_outcomes.error));
     }
 
     // Check for timeouts
     if report.parse_outcomes.timeout > 0 {
-        failures.push(format!(
-            "Parse timeouts: {} files timed out",
-            report.parse_outcomes.timeout
-        ));
+        failures.push(format!("Parse timeouts: {} files timed out", report.parse_outcomes.timeout));
     }
 
     // Check for panics
     if report.parse_outcomes.panic > 0 {
-        failures.push(format!(
-            "Parse panics: {} files caused panics",
-            report.parse_outcomes.panic
-        ));
+        failures.push(format!("Parse panics: {} files caused panics", report.parse_outcomes.panic));
     }
 
     // Check for critical timeout risks
-    let critical_risks: Vec<_> = report.timeout_risks.iter()
+    let critical_risks: Vec<_> = report
+        .timeout_risks
+        .iter()
         .filter(|r| r.priority == timeout_detection::RiskPriority::P0)
         .collect();
 
     if !critical_risks.is_empty() {
-        failures.push(format!(
-            "Critical timeout risks: {} P0 risks detected",
-            critical_risks.len()
-        ));
+        failures
+            .push(format!("Critical timeout risks: {} P0 risks detected", critical_risks.len()));
     }
 
     // Check GA feature coverage
@@ -269,10 +262,7 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
         for failure in &failures {
             println!("   - {}", failure);
         }
-        Err(color_eyre::eyre::eyre!(
-            "CI gate validation failed: {}",
-            failures.join("; ")
-        ))
+        Err(color_eyre::eyre::eyre!("CI gate validation failed: {}", failures.join("; ")))
     }
 }
 

@@ -107,13 +107,7 @@ fn generate_parse_outcomes_summary(
         }
     }
 
-    ParseOutcomesSummary {
-        total,
-        ok,
-        error,
-        timeout,
-        panic,
-    }
+    ParseOutcomesSummary { total, ok, error, timeout, panic }
 }
 
 #[cfg(test)]
@@ -123,25 +117,15 @@ mod tests {
     #[test]
     fn test_generate_parse_outcomes_summary() {
         let mut results = std::collections::HashMap::new();
-        results.insert(
-            PathBuf::from("test1.pl"),
-            ParseOutcome::Ok { duration_ms: 100 },
-        );
+        results.insert(PathBuf::from("test1.pl"), ParseOutcome::Ok { duration_ms: 100 });
         results.insert(
             PathBuf::from("test2.pl"),
-            ParseOutcome::Error {
-                message: "error".to_string(),
-            },
+            ParseOutcome::Error { message: "error".to_string() },
         );
-        results.insert(
-            PathBuf::from("test3.pl"),
-            ParseOutcome::Timeout { timeout_ms: 1000 },
-        );
+        results.insert(PathBuf::from("test3.pl"), ParseOutcome::Timeout { timeout_ms: 1000 });
         results.insert(
             PathBuf::from("test4.pl"),
-            ParseOutcome::Panic {
-                message: "panic".to_string(),
-            },
+            ParseOutcome::Panic { message: "panic".to_string() },
         );
 
         let summary = generate_parse_outcomes_summary(&results);
