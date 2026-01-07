@@ -1,29 +1,41 @@
 # Perl Parser Project - Roadmap
 
 > **📌 CANONICAL**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for verification protocol.
-> **Stale roadmaps**: Removed from tracking; retrieve from git history if needed.
+> **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status**: ✅ **Core Goal ~80-85% Complete** – Parser v3 production-ready (100% coverage), Semantic Analyzer Phase 1 complete (12/12 handlers), LSP textDocument/definition implemented and tested. In validation/de-risking phase for v1.0 release.
-
-> **Latest Update**: 2025-12-27 – ci-gate verified on Rust 1.89 MSRV (337 lib tests + 4 LSP semantic definition tests). Statement tracker/heredocs 100% implemented. Semantic analyzer Phase 1 complete.
+> **Status (2026-01-07)**: Validation + packaging phase toward v0.9.0 ("semantic-ready") and v1.0.
+>
+> **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
+> **CI** is intentionally optional/opt-in; the repo is local-first by design.
 
 ---
 
-## 🎉 Current State (v0.8.8 – December 2025)
+## Truth Rules (read this first)
 
-We've built the most comprehensive Perl parsing solution available, **on track for v1.0 production release**:
+This roadmap describes goals, but any **status claim** must be backed by one of:
+- `nix develop -c just ci-gate` output
+- `bash scripts/ignored-test-count.sh` output
+- A tracked feature matrix / snapshot test (e.g., GA-lock capabilities snapshot)
 
-| Component | Status | Performance | Coverage | Key Features |
-|-----------|--------|-------------|----------|-------------|
-| **perl-parser** (v3) ⭐ | **Production** | **1-150µs** | **100%** | Native parser, statement tracker, heredoc support |
-| **perl-lexer** | **Production** | Sub-microsecond | **100%** | Context-aware tokenization |
-| **perl-corpus** | **Production** | N/A | **272+ tests** | Comprehensive test suite with mutation hardening |
-| **perl-parser-pest** (v2) | **Legacy** | 200-450µs | **99.995%** | Maintained for education and comparison |
-| **LSP Server** 🚀 | **~91% Ready** | <50ms | **~91% LSP 3.18** | Semantic-aware definition, workspace refactoring |
-| **Semantic Analyzer** ⭐ **NEW** | **Phase 1 Complete** | <1ms | **12/12 handlers** | Precise symbol resolution, lexical scoping |
-| **DAP Server** 🆕 | **Phase 1 Complete** | <100ms | **Bridge mode** | Full debugging support via Perl::LanguageServer |
+If a number is not backed by a receipt, it must be labeled **UNVERIFIED** or removed.
 
-*Compliance % computed from machine-readable feature catalog; only **advertised & tested** features count.*
+**Last verified**: 2026-01-07 – `ci-gate` green on Rust 1.89 MSRV (337 lib tests + 4 LSP semantic tests)
+
+---
+
+## Current State (v0.8.8 → v0.9.0)
+
+| Component | Release Stance | Evidence | Notes |
+|-----------|----------------|----------|-------|
+| **perl-parser** (v3) ⭐ | Production | `just ci-gate` | Parser v3, statement tracker + heredocs in place |
+| **perl-lexer** | Production | `just ci-gate` | Tokenization stable |
+| **perl-corpus** | Production | `just ci-gate` | Regression corpus + mutation hardening inputs |
+| **perl-lsp** | Production (advertised subset) | capability snapshots + targeted tests | Advertise only what's tested; keep GA-lock stable |
+| **perl-dap** | Experimental (bridge mode) | manual smoke | Bridges to Perl::LanguageServer; not "full" native DAP |
+| **perl-parser-pest** (v2) | Legacy | N/A | Optional crate; keep out of default gate |
+| **Semantic Analyzer** | Phase 1 Complete | `just ci-gate` | 12/12 handlers; lexical scoping + textDocument/definition |
+
+*Only features that pass `ci-gate` or have targeted integration tests count as "Production".*
 
 ---
 
@@ -170,6 +182,57 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 - **Ignored tests**: BUG=0 achieved; only MANUAL utility tests remain (see `scripts/.ignored-baseline`)
 - **CI Pipeline**: Issue #211 blocks merge-blocking gates (#210)
 - **Semantic Phase 2/3**: Advanced features deferred (closures, multi-file, imports)
+
+---
+
+## Next Releases
+
+### v0.9.0: "Semantic-Ready" Milestone (2-5 focused PRs)
+
+**Goal**: A release that external users can try without reading internal docs.
+
+**Deliverables**:
+
+1. **Docs truth pass**
+   - README + CURRENT_STATUS + ROADMAP agree on what's real and what's aspirational
+   - DAP language corrected to "bridge mode"
+   - Performance claims moved behind published results ✅
+
+2. **Release artifacts**
+   - Confirm `cargo install --path crates/perl-lsp` works cleanly
+   - Release notes that match *advertised* capabilities
+
+3. **Capability contracts**
+   - Keep GA-lock snapshot stable
+   - Any new capability is either behind feature flag or not advertised
+
+**Exit criteria**:
+- `nix develop -c just ci-gate` green on MSRV
+- `bash scripts/ignored-test-count.sh` shows BUG=0, MANUAL≤1
+- Release notes generated, tag cut
+
+### v1.0.0: "Boring Promises" (sequence after v0.9.0)
+
+**Goal**: Freeze the surfaces you're willing to support.
+
+**Deliverables**:
+
+1. **Stability statement**
+   - What "GA-lock" means (capabilities + wire protocol invariants)
+   - Versioning rules for changes
+
+2. **Packaging stance**
+   - What you ship (binaries? crates? both?)
+   - Minimum supported platforms (explicit)
+
+3. **Benchmark publication**
+   - One canonical benchmark run committed
+   - Remove "UNVERIFIED" tags where you now have receipts
+
+**Exit criteria**:
+- Capability snapshot + docs aligned
+- Benchmarks published
+- Upgrade notes exist from v0.8.x → v1.0
 
 ---
 
@@ -399,23 +462,20 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 
 ## 📊 Success Metrics
 
-### Current Achievements (February 2025)
-- ✅ **Performance Leadership**
-  - 1–150µs parser timings on our benchmark corpus*
-  - 4–19× speedups observed vs. our C baseline in the same harness*
-  - <50ms LSP response times
-  - Efficient memory usage with caching
-- ✅ **Quality Excellence**
-  - 141/141 edge cases passing (100%)
-  - 35+ IDE features implemented
-  - 530+ tests passing (100% pass rate)
-  - 11/11 behavioral tests passing
-  - Zero known critical bugs
+### Current Achievements (January 2026)
+- ✅ **Quality Excellence** (verified by `just ci-gate`)
+  - 337 library tests passing (100% pass rate)
+  - 4/4 LSP semantic definition tests passing
+  - BUG=0, MANUAL=1 ignored tests (run `bash scripts/ignored-test-count.sh`)
+  - Zero clippy warnings, consistent formatting
 - ✅ **Technical Milestones**
-  - 61% reduction in code warnings
-  - 45+ performance optimizations
   - Thread-safe architecture
-  - Production-ready status
+  - Semantic Analyzer Phase 1 complete (12/12 handlers)
+  - Statement tracker + heredoc support 100% implemented
+  - Local-first development workflow (`nix develop -c just ci-gate`)
+- ⚠️ **Performance** (UNVERIFIED - awaiting published benchmarks)
+  - Benchmark framework exists but results not yet published
+  - See `benchmarks/BENCHMARK_FRAMEWORK.md` for methodology
 
 ### 2027 Target Metrics
 - **Adoption Goals**
@@ -435,11 +495,18 @@ We've built the most comprehensive Perl parsing solution available, **on track f
 
 ---
 
-## 📊 Benchmark Methodology
+## Benchmarks
 
-*Performance measurements taken on [this has not actually been tested yet]. Tests run on warm cache with 1000 iterations, reporting median times. Test corpus includes real-world Perl files ranging from 100 lines (simple) to 5000+ lines (complex). See **[benchmarks/BENCHMARK_FRAMEWORK.md](benchmarks/BENCHMARK_FRAMEWORK.md)** for the corpus, hardware, and exact commands.*
+**Framework exists; results are not yet published as canonical numbers.**
 
-<sup>†</sup> *LSP 3.18 compliance percentage based on implemented and fully functional LSP protocol features. The server advertises only capabilities that are production-ready. See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed feature matrix.*
+Until benchmark outputs are committed under `benchmarks/results/`, we do not state performance claims in this roadmap.
+
+To publish:
+1. Run benchmark harness: `cargo bench -p perl-parser`
+2. Commit `benchmarks/results/<date>-<machine>.json`
+3. Update `benchmarks/BENCHMARK_FRAMEWORK.md` with machine + command line
+
+*LSP 3.18 compliance percentage based on implemented and fully functional LSP protocol features. The server advertises only capabilities that are production-ready. See [LSP_FEATURES.md](LSP_FEATURES.md) for detailed feature matrix.*
 
 ---
 
@@ -514,4 +581,4 @@ workspace/executeCommand: {
 
 *The future of Perl tooling is here. Join us in building it!*
 
-**Last Updated**: 2025-12-27
+**Last Updated**: 2026-01-06

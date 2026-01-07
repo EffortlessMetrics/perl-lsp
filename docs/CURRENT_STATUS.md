@@ -1,9 +1,14 @@
 # perl-lsp Current Status Snapshot
-<!-- Generated: 2025-12-31 -->
-<!-- Last Updated: 2025-12-31 - Year-end roadmap update: Issues #195/#196 expanded, 17+ issues labeled -->
+<!-- Generated: 2026-01-07 -->
+<!-- Last Updated: 2026-01-07 - Documentation truth alignment: roadmap hygiene, evidence requirements -->
 <!-- Comprehensive project health assessment -->
 
-> **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2025-12-31. For live status, treat GitHub issues & milestones as canonical. Metrics below represent point-in-time measurements and may not reflect subsequent progress.
+> **⚠️ SNAPSHOT DISCLAIMER**: Status snapshot as of 2026-01-07. For live status, treat GitHub issues & milestones as canonical. Metrics below represent point-in-time measurements and may not reflect subsequent progress.
+
+> **📌 Truth contract**: Status claims in this document require evidence from:
+> - `nix develop -c just ci-gate` output
+> - `bash scripts/ignored-test-count.sh` output
+> - Capability snapshots or targeted tests
 
 ---
 
@@ -33,9 +38,9 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 
 ### Canonical Documentation
 - **This file** (`CURRENT_STATUS.md`): Authoritative project status
-- **`ROADMAP.md`**: Long-term vision and component status
+- **`ROADMAP.md`**: Long-term vision and component status (with Truth Rules section)
 - **`features.toml`** + server capabilities: Ground truth for LSP features
-- **Historical docs**: Stale roadmaps removed from tracking; retrieve from git history if needed
+- **Historical docs**: Archived at `docs/archive/roadmaps/`; retrieve from git history for older versions
 
 ## 🎯 At a Glance
 
@@ -56,11 +61,11 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 ## 📈 Project Health: EXCELLENT
 
 ### Strengths ✅
-- **World-class parsing**: 4-19x faster than legacy, ~100% Perl 5 coverage
-- **Solid LSP foundation**: 91% feature coverage, production-ready
-- **Exceptional quality**: 99.6% test pass rate, 87% mutation score
+- **Comprehensive parsing**: ~100% Perl 5 coverage (verified by corpus tests)
+- **Solid LSP foundation**: 91% feature coverage, production-ready (`just ci-gate`)
+- **Exceptional quality**: 100% Tier A test pass rate, 87% mutation score
 - **Enterprise security**: UTF-16 boundary fixes, path validation
-- **Performance**: <1ms incremental parsing (actual: 931ns!), <50ms LSP responses
+- **Performance**: Incremental parsing and LSP responses meet targets (benchmark publication pending)
 
 ### Areas of Focus ⚠️
 - **Tracked test debt at 9**: 🟢 Near-zero (8 bug, 1 manual) - Legacy `#[ignore]` eliminated; feature-gated ignores are by design
@@ -465,8 +470,8 @@ RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
 
 *This snapshot provides real-time project intelligence for informed decision-making. Updated weekly during active development.*
 
-*Last Updated: 2025-12-31 (Year-end roadmap update)*
-*Next Update: After Sprint B completion or v0.9.0 release*
+*Last Updated: 2026-01-07 (Documentation truth alignment: roadmap hygiene, evidence requirements)*
+*Next Update: After v0.9.0 release or significant milestone*
 
 ---
 
