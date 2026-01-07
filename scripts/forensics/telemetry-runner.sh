@@ -7,10 +7,12 @@
 #   ./scripts/forensics/telemetry-runner.sh --pr <pr-number>
 #   ./scripts/forensics/telemetry-runner.sh --quick <base-sha> <head-sha>
 #   ./scripts/forensics/telemetry-runner.sh --full <base-sha> <head-sha>
+#   ./scripts/forensics/telemetry-runner.sh --research <base-sha> <head-sha>
 #
 # Modes:
-#   --quick         Always-on tools only (fmt, clippy, tests, audit)
-#   --full          Exhibit-grade analysis (adds semver-checks, geiger, etc.)
+#   --quick         Always-on tools only (fmt, clippy, tests, audit, shellcheck, actionlint)
+#   --full          Exhibit-grade analysis (adds semver-checks, geiger, typos, etc.)
+#   --research      Research mode (full + rust-code-analysis, cargo-modules, cargo-udeps)
 #
 # Options:
 #   --pr <N>        Fetch base/head from GitHub PR (requires gh CLI)
@@ -22,12 +24,20 @@
 #   - cargo clippy: warning count
 #   - cargo test: pass/fail/count
 #   - cargo audit: advisory count (if available)
+#   - shellcheck: issue count for changed scripts (if available)
+#   - actionlint: issue count for changed workflows (if available)
 #
 # Exhibit-grade tools (full mode adds):
 #   - cargo semver-checks: breaking changes (if available)
 #   - cargo geiger: unsafe block count (if available)
+#   - typos: typo count in docs and identifiers (if available)
 #   - Test count delta: Count test functions in diff
 #   - Dependency delta: Parse Cargo.lock changes
+#
+# Research tools (research mode adds):
+#   - rust-code-analysis: complexity metrics (if available)
+#   - cargo-modules: module graph analysis (if available)
+#   - cargo-udeps: unused dependency detection (if available)
 #
 # Output: YAML to stdout, artifacts to --output-dir
 
@@ -52,6 +62,12 @@ TIMEOUT_TEST=600
 TIMEOUT_AUDIT=120
 TIMEOUT_SEMVER=300
 TIMEOUT_GEIGER=600
+TIMEOUT_SHELLCHECK=60
+TIMEOUT_ACTIONLINT=60
+TIMEOUT_TYPOS=120
+TIMEOUT_RCA=300
+TIMEOUT_MODULES=120
+TIMEOUT_UDEPS=300
 
 # Colors for stderr logging
 RED='\033[0;31m'
@@ -98,6 +114,7 @@ Run static analysis tools and compute deltas between base and head commits.
 Options:
   --quick           Quick mode: always-on tools only (default)
   --full            Full mode: exhibit-grade analysis (slower)
+  --research        Research mode: full + complexity/dependency tools (slowest)
   --pr <N>          Fetch base/head from GitHub PR
   --output-dir DIR  Output directory (default: ./artifacts/telemetry)
   -h, --help        Show this help message
@@ -107,17 +124,26 @@ Quick mode tools:
   - cargo clippy
   - cargo test
   - cargo audit (if available)
+  - shellcheck (if scripts/ changed, if available)
+  - actionlint (if workflows/ changed, if available)
 
 Full mode adds:
   - cargo semver-checks (if available)
   - cargo geiger (if available)
+  - typos (if available)
   - test function count delta
   - dependency delta analysis
+
+Research mode adds:
+  - rust-code-analysis (if available)
+  - cargo-modules (if available)
+  - cargo-udeps (if available)
 
 Examples:
   $(basename "$0") abc1234 def5678
   $(basename "$0") --quick HEAD~5 HEAD
   $(basename "$0") --full origin/master HEAD
+  $(basename "$0") --research origin/master HEAD
   $(basename "$0") --pr 123
 EOF
     exit 1
@@ -134,6 +160,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --full)
             MODE="full"
+            shift
+            ;;
+        --research)
+            MODE="research"
             shift
             ;;
         --pr)
@@ -227,6 +257,12 @@ HAVE_CARGO=false
 HAVE_AUDIT=false
 HAVE_SEMVER=false
 HAVE_GEIGER=false
+HAVE_SHELLCHECK=false
+HAVE_ACTIONLINT=false
+HAVE_TYPOS=false
+HAVE_RCA=false
+HAVE_MODULES=false
+HAVE_UDEPS=false
 
 detect_tools() {
     log_progress "Detecting available tools..."
@@ -258,6 +294,48 @@ detect_tools() {
         log_info "cargo-geiger: available"
     else
         log_warn "cargo-geiger: not installed"
+    fi
+
+    if command -v shellcheck &> /dev/null; then
+        HAVE_SHELLCHECK=true
+        log_info "shellcheck: available"
+    else
+        log_warn "shellcheck: not installed"
+    fi
+
+    if command -v actionlint &> /dev/null; then
+        HAVE_ACTIONLINT=true
+        log_info "actionlint: available"
+    else
+        log_warn "actionlint: not installed"
+    fi
+
+    if command -v typos &> /dev/null; then
+        HAVE_TYPOS=true
+        log_info "typos: available"
+    else
+        log_warn "typos: not installed"
+    fi
+
+    if command -v rust-code-analysis &> /dev/null; then
+        HAVE_RCA=true
+        log_info "rust-code-analysis: available"
+    else
+        log_warn "rust-code-analysis: not installed"
+    fi
+
+    if cargo modules --version &> /dev/null 2>&1; then
+        HAVE_MODULES=true
+        log_info "cargo-modules: available"
+    else
+        log_warn "cargo-modules: not installed"
+    fi
+
+    if cargo udeps --version &> /dev/null 2>&1; then
+        HAVE_UDEPS=true
+        log_info "cargo-udeps: available"
+    else
+        log_warn "cargo-udeps: not installed"
     fi
 }
 
@@ -441,6 +519,92 @@ run_audit() {
     echo "available|${advisory_count}"
 }
 
+# shellcheck - check shell scripts (conditional on scripts/ changes)
+run_shellcheck() {
+    local base_dir="$1"
+    local head_dir="$2"
+
+    if [[ "$HAVE_SHELLCHECK" != "true" ]]; then
+        echo "unavailable|0|0"
+        return
+    fi
+
+    # Check if scripts/ directory changed between base and head
+    cd "$PROJECT_ROOT"
+    local changed_scripts
+    changed_scripts=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep '^scripts/.*\.sh$' || true)
+
+    if [[ -z "$changed_scripts" ]]; then
+        echo "skipped|0|0"
+        return
+    fi
+
+    log_info "  Running shellcheck on changed scripts..."
+
+    # Run shellcheck on base
+    local base_count=0
+    cd "$base_dir"
+    if [[ -d scripts ]]; then
+        local base_output
+        base_output=$(run_with_timeout "$TIMEOUT_SHELLCHECK" "find scripts -type f -name '*.sh' -exec shellcheck -f gcc {} + 2>&1" || true)
+        base_count=$(echo "$base_output" | grep -cE '^[^:]+:[0-9]+:[0-9]+: (error|warning):' || echo "0")
+    fi
+
+    # Run shellcheck on head
+    local head_count=0
+    cd "$head_dir"
+    if [[ -d scripts ]]; then
+        local head_output
+        head_output=$(run_with_timeout "$TIMEOUT_SHELLCHECK" "find scripts -type f -name '*.sh' -exec shellcheck -f gcc {} + 2>&1" || true)
+        head_count=$(echo "$head_output" | grep -cE '^[^:]+:[0-9]+:[0-9]+: (error|warning):' || echo "0")
+    fi
+
+    echo "available|${base_count}|${head_count}"
+}
+
+# actionlint - check GitHub workflow files (conditional on .github/workflows/ changes)
+run_actionlint() {
+    local base_dir="$1"
+    local head_dir="$2"
+
+    if [[ "$HAVE_ACTIONLINT" != "true" ]]; then
+        echo "unavailable|0|0"
+        return
+    fi
+
+    # Check if .github/workflows/ changed between base and head
+    cd "$PROJECT_ROOT"
+    local changed_workflows
+    changed_workflows=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep '^\.github/workflows/.*\.ya\?ml$' || true)
+
+    if [[ -z "$changed_workflows" ]]; then
+        echo "skipped|0|0"
+        return
+    fi
+
+    log_info "  Running actionlint on changed workflows..."
+
+    # Run actionlint on base
+    local base_count=0
+    cd "$base_dir"
+    if [[ -d .github/workflows ]]; then
+        local base_output
+        base_output=$(run_with_timeout "$TIMEOUT_ACTIONLINT" "actionlint .github/workflows/*.{yml,yaml} 2>&1" || true)
+        base_count=$(echo "$base_output" | grep -cE '^\.github/workflows/.*:' || echo "0")
+    fi
+
+    # Run actionlint on head
+    local head_count=0
+    cd "$head_dir"
+    if [[ -d .github/workflows ]]; then
+        local head_output
+        head_output=$(run_with_timeout "$TIMEOUT_ACTIONLINT" "actionlint .github/workflows/*.{yml,yaml} 2>&1" || true)
+        head_count=$(echo "$head_output" | grep -cE '^\.github/workflows/.*:' || echo "0")
+    fi
+
+    echo "available|${base_count}|${head_count}"
+}
+
 # =============================================================================
 # Tool Runners - Exhibit-Grade (Full Mode)
 # =============================================================================
@@ -580,6 +744,102 @@ analyze_dependencies() {
     echo "${added}|${removed}|${updated}"
 }
 
+# typos - check for typos in docs and identifiers (full mode only)
+run_typos() {
+    local dir="$1"
+
+    if [[ "$HAVE_TYPOS" != "true" ]]; then
+        echo "unavailable|0"
+        return
+    fi
+
+    log_info "  Running typos..."
+
+    cd "$dir"
+    local output
+    output=$(run_with_timeout "$TIMEOUT_TYPOS" "typos --format brief 2>&1" || true)
+
+    # Count typo lines
+    local typo_count
+    typo_count=$(echo "$output" | grep -c '^\S\+:' || echo "0")
+
+    echo "available|${typo_count}"
+}
+
+# =============================================================================
+# Tool Runners - Research Mode
+# =============================================================================
+
+# rust-code-analysis - complexity metrics
+run_rust_code_analysis() {
+    local dir="$1"
+
+    if [[ "$HAVE_RCA" != "true" ]]; then
+        echo "unavailable|0|0|0"
+        return
+    fi
+
+    log_info "  Running rust-code-analysis..."
+
+    cd "$dir"
+    local output
+    output=$(run_with_timeout "$TIMEOUT_RCA" "rust-code-analysis --metrics -O json crates/ 2>&1" || true)
+
+    # Parse JSON for complexity metrics
+    local cyclomatic=0 cognitive=0 sloc=0
+    if echo "$output" | jq -e '.metrics' &>/dev/null; then
+        cyclomatic=$(echo "$output" | jq '[.metrics[] | .spaces[] | .metrics.cyclomatic.sum] | add // 0' 2>/dev/null || echo "0")
+        cognitive=$(echo "$output" | jq '[.metrics[] | .spaces[] | .metrics.cognitive.sum] | add // 0' 2>/dev/null || echo "0")
+        sloc=$(echo "$output" | jq '[.metrics[] | .spaces[] | .metrics.loc.sloc] | add // 0' 2>/dev/null || echo "0")
+    fi
+
+    echo "available|${cyclomatic}|${cognitive}|${sloc}"
+}
+
+# cargo-modules - module graph analysis
+run_cargo_modules() {
+    local dir="$1"
+
+    if [[ "$HAVE_MODULES" != "true" ]]; then
+        echo "unavailable|0"
+        return
+    fi
+
+    log_info "  Running cargo-modules..."
+
+    cd "$dir"
+    local output
+    output=$(run_with_timeout "$TIMEOUT_MODULES" "cargo modules graph --lib 2>&1" || true)
+
+    # Count module declarations
+    local module_count
+    module_count=$(echo "$output" | grep -c '^\s*mod ' || echo "0")
+
+    echo "available|${module_count}"
+}
+
+# cargo-udeps - unused dependency detection
+run_cargo_udeps() {
+    local dir="$1"
+
+    if [[ "$HAVE_UDEPS" != "true" ]]; then
+        echo "unavailable|0"
+        return
+    fi
+
+    log_info "  Running cargo-udeps (this may take a while)..."
+
+    cd "$dir"
+    local output
+    output=$(run_with_timeout "$TIMEOUT_UDEPS" "cargo +nightly udeps --all-targets 2>&1" || true)
+
+    # Count unused dependencies
+    local unused_count
+    unused_count=$(echo "$output" | grep -c '^unused ' || echo "0")
+
+    echo "available|${unused_count}"
+}
+
 # =============================================================================
 # Collect All Metrics for a Commit
 # =============================================================================
@@ -610,16 +870,35 @@ collect_metrics() {
     # Full mode tools
     local semver_available="false" semver_breaking="[]"
     local geiger_available="false" geiger_unsafe="0"
+    local typos_available="false" typos_count="0"
     local test_count="0"
 
-    if [[ "$MODE" == "full" ]]; then
-        local semver_result geiger_result
+    if [[ "$MODE" == "full" ]] || [[ "$MODE" == "research" ]]; then
+        local semver_result geiger_result typos_result
         semver_result=$(run_semver_checks "$dir")
         geiger_result=$(run_geiger "$dir")
+        typos_result=$(run_typos "$dir")
         test_count=$(count_test_functions "$dir")
 
         IFS='|' read -r semver_available semver_breaking <<< "$semver_result"
         IFS='|' read -r geiger_available geiger_unsafe <<< "$geiger_result"
+        IFS='|' read -r typos_available typos_count <<< "$typos_result"
+    fi
+
+    # Research mode tools
+    local rca_available="false" rca_cyclomatic="0" rca_cognitive="0" rca_sloc="0"
+    local modules_available="false" modules_count="0"
+    local udeps_available="false" udeps_count="0"
+
+    if [[ "$MODE" == "research" ]]; then
+        local rca_result modules_result udeps_result
+        rca_result=$(run_rust_code_analysis "$dir")
+        modules_result=$(run_cargo_modules "$dir")
+        udeps_result=$(run_cargo_udeps "$dir")
+
+        IFS='|' read -r rca_available rca_cyclomatic rca_cognitive rca_sloc <<< "$rca_result"
+        IFS='|' read -r modules_available modules_count <<< "$modules_result"
+        IFS='|' read -r udeps_available udeps_count <<< "$udeps_result"
     fi
 
     # Output JSON
@@ -647,6 +926,24 @@ collect_metrics() {
   "geiger": {
     "available": $(if [[ "$geiger_available" == "available" ]]; then echo "true"; else echo "false"; fi),
     "unsafe_count": $geiger_unsafe
+  },
+  "typos": {
+    "available": $(if [[ "$typos_available" == "available" ]]; then echo "true"; else echo "false"; fi),
+    "count": $typos_count
+  },
+  "rust_code_analysis": {
+    "available": $(if [[ "$rca_available" == "available" ]]; then echo "true"; else echo "false"; fi),
+    "cyclomatic": $rca_cyclomatic,
+    "cognitive": $rca_cognitive,
+    "sloc": $rca_sloc
+  },
+  "cargo_modules": {
+    "available": $(if [[ "$modules_available" == "available" ]]; then echo "true"; else echo "false"; fi),
+    "module_count": $modules_count
+  },
+  "cargo_udeps": {
+    "available": $(if [[ "$udeps_available" == "available" ]]; then echo "true"; else echo "false"; fi),
+    "unused_count": $udeps_count
   },
   "test_count": $test_count
 }
@@ -728,6 +1025,8 @@ generate_yaml_output() {
     local base_json="$1"
     local head_json="$2"
     local dep_delta="$3"
+    local shellcheck_result="${4:-unavailable|0|0}"
+    local actionlint_result="${5:-unavailable|0|0}"
 
     local timestamp
     timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -739,6 +1038,15 @@ generate_yaml_output() {
     # Parse dependency delta
     local deps_added deps_removed deps_updated
     IFS='|' read -r deps_added deps_removed deps_updated <<< "$dep_delta"
+
+    # Parse shellcheck/actionlint results
+    local shellcheck_status shellcheck_base shellcheck_head
+    IFS='|' read -r shellcheck_status shellcheck_base shellcheck_head <<< "$shellcheck_result"
+    local shellcheck_delta=$((shellcheck_head - shellcheck_base))
+
+    local actionlint_status actionlint_base actionlint_head
+    IFS='|' read -r actionlint_status actionlint_base actionlint_head <<< "$actionlint_result"
+    local actionlint_delta=$((actionlint_head - actionlint_base))
 
     # Format arrays
     format_array() {
@@ -775,9 +1083,10 @@ generate_yaml_output() {
     # Full mode metrics
     local semver_available="false" semver_breaking="[]"
     local geiger_available="false" base_unsafe="0" head_unsafe="0" geiger_delta="0"
+    local typos_available="false" base_typos="0" head_typos="0" typos_delta="0"
     local base_test_count="0" head_test_count="0" test_count_delta="0"
 
-    if [[ "$MODE" == "full" ]]; then
+    if [[ "$MODE" == "full" ]] || [[ "$MODE" == "research" ]]; then
         semver_available=$(echo "$head_json" | jq '.semver.available')
         semver_breaking=$(echo "$head_json" | jq -c '.semver.breaking_changes')
 
@@ -786,9 +1095,45 @@ generate_yaml_output() {
         head_unsafe=$(echo "$head_json" | jq '.geiger.unsafe_count')
         geiger_delta=$((head_unsafe - base_unsafe))
 
+        typos_available=$(echo "$head_json" | jq '.typos.available')
+        base_typos=$(echo "$base_json" | jq '.typos.count')
+        head_typos=$(echo "$head_json" | jq '.typos.count')
+        typos_delta=$((head_typos - base_typos))
+
         base_test_count=$(echo "$base_json" | jq '.test_count')
         head_test_count=$(echo "$head_json" | jq '.test_count')
         test_count_delta=$((head_test_count - base_test_count))
+    fi
+
+    # Research mode metrics
+    local rca_available="false"
+    local base_cyclomatic="0" head_cyclomatic="0" cyclomatic_delta="0"
+    local base_cognitive="0" head_cognitive="0" cognitive_delta="0"
+    local base_sloc="0" head_sloc="0" sloc_delta="0"
+    local modules_available="false" base_modules="0" head_modules="0" modules_delta="0"
+    local udeps_available="false" base_udeps="0" head_udeps="0" udeps_delta="0"
+
+    if [[ "$MODE" == "research" ]]; then
+        rca_available=$(echo "$head_json" | jq '.rust_code_analysis.available')
+        base_cyclomatic=$(echo "$base_json" | jq '.rust_code_analysis.cyclomatic')
+        head_cyclomatic=$(echo "$head_json" | jq '.rust_code_analysis.cyclomatic')
+        cyclomatic_delta=$((head_cyclomatic - base_cyclomatic))
+        base_cognitive=$(echo "$base_json" | jq '.rust_code_analysis.cognitive')
+        head_cognitive=$(echo "$head_json" | jq '.rust_code_analysis.cognitive')
+        cognitive_delta=$((head_cognitive - base_cognitive))
+        base_sloc=$(echo "$base_json" | jq '.rust_code_analysis.sloc')
+        head_sloc=$(echo "$head_json" | jq '.rust_code_analysis.sloc')
+        sloc_delta=$((head_sloc - base_sloc))
+
+        modules_available=$(echo "$head_json" | jq '.cargo_modules.available')
+        base_modules=$(echo "$base_json" | jq '.cargo_modules.module_count')
+        head_modules=$(echo "$head_json" | jq '.cargo_modules.module_count')
+        modules_delta=$((head_modules - base_modules))
+
+        udeps_available=$(echo "$head_json" | jq '.cargo_udeps.available')
+        base_udeps=$(echo "$base_json" | jq '.cargo_udeps.unused_count')
+        head_udeps=$(echo "$head_json" | jq '.cargo_udeps.unused_count')
+        udeps_delta=$((head_udeps - base_udeps))
     fi
 
     # Format clippy status
@@ -835,10 +1180,22 @@ tools:
     base_advisories: $base_audit
     head_advisories: $head_audit
     delta: $audit_delta
+
+  shellcheck:
+    status: $shellcheck_status
+    base_issues: $shellcheck_base
+    head_issues: $shellcheck_head
+    delta: $shellcheck_delta
+
+  actionlint:
+    status: $actionlint_status
+    base_issues: $actionlint_base
+    head_issues: $actionlint_head
+    delta: $actionlint_delta
 EOF
 
     # Full mode sections
-    if [[ "$MODE" == "full" ]]; then
+    if [[ "$MODE" == "full" ]] || [[ "$MODE" == "research" ]]; then
         cat <<EOF
 
   semver_checks:
@@ -850,6 +1207,12 @@ EOF
     base_unsafe: $base_unsafe
     head_unsafe: $head_unsafe
     delta: $geiger_delta
+
+  typos:
+    available: $typos_available
+    base_count: $base_typos
+    head_count: $head_typos
+    delta: $typos_delta
 
   test_count:
     base: $base_test_count
@@ -879,6 +1242,39 @@ EOF
         else
             echo "$deps_updated" | tr ' ' '\n' | grep -v '^$' | sed 's/^/      - /'
         fi
+    fi
+
+    # Research mode sections
+    if [[ "$MODE" == "research" ]]; then
+        cat <<EOF
+
+  rust_code_analysis:
+    available: $rca_available
+    cyclomatic_complexity:
+      base: $base_cyclomatic
+      head: $head_cyclomatic
+      delta: $cyclomatic_delta
+    cognitive_complexity:
+      base: $base_cognitive
+      head: $head_cognitive
+      delta: $cognitive_delta
+    sloc:
+      base: $base_sloc
+      head: $head_sloc
+      delta: $sloc_delta
+
+  cargo_modules:
+    available: $modules_available
+    base_count: $base_modules
+    head_count: $head_modules
+    delta: $modules_delta
+
+  cargo_udeps:
+    available: $udeps_available
+    base_unused: $base_udeps
+    head_unused: $head_udeps
+    delta: $udeps_delta
+EOF
     fi
 
     # Summary
@@ -940,15 +1336,20 @@ main() {
     echo "$HEAD_JSON" > "${OUTPUT_DIR}/head-metrics.json"
     log_success "Head metrics collected"
 
+    # Collect shellcheck/actionlint results (always-on, runs in both worktrees)
+    log_progress "Analyzing scripts and workflows..."
+    SHELLCHECK_RESULT=$(run_shellcheck "$BASE_DIR" "$HEAD_DIR")
+    ACTIONLINT_RESULT=$(run_actionlint "$BASE_DIR" "$HEAD_DIR")
+
     # Dependency analysis (full mode only)
     DEP_DELTA=""
-    if [[ "$MODE" == "full" ]]; then
+    if [[ "$MODE" == "full" ]] || [[ "$MODE" == "research" ]]; then
         DEP_DELTA=$(analyze_dependencies "$BASE_DIR" "$HEAD_DIR")
     fi
 
     # Generate YAML output to stdout
     log_progress "Generating report..."
-    YAML_OUTPUT=$(generate_yaml_output "$BASE_JSON" "$HEAD_JSON" "$DEP_DELTA")
+    YAML_OUTPUT=$(generate_yaml_output "$BASE_JSON" "$HEAD_JSON" "$DEP_DELTA" "$SHELLCHECK_RESULT" "$ACTIONLINT_RESULT")
     echo "$YAML_OUTPUT"
 
     # Save YAML to file
