@@ -3,10 +3,9 @@
 //! This module provides timeout protection for parsing operations and
 //! detection of files that may cause timeouts or hangs.
 
-use color_eyre::eyre::Result;
 use perl_parser::Parser;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use super::MAX_HEREDOC_DEPTH;
@@ -41,6 +40,7 @@ pub enum ParseOutcome {
 
 impl ParseOutcome {
     /// Check if the parse was successful
+    #[allow(dead_code)]
     pub fn is_ok(&self) -> bool {
         matches!(self, ParseOutcome::Ok { .. })
     }
@@ -55,7 +55,7 @@ impl ParseOutcome {
 }
 
 /// Priority level for timeout risks
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[repr(usize)]
 pub enum RiskPriority {
     /// Critical - immediate action required
@@ -86,47 +86,50 @@ pub struct TimeoutRisk {
 /// This function attempts to parse the given file content within the specified timeout.
 /// If parsing exceeds the timeout, it returns a Timeout outcome.
 pub fn parse_with_timeout(
-    path: &PathBuf,
+    _path: &PathBuf,
     content: &str,
     timeout: Duration,
 ) -> ParseOutcome {
     let start = Instant::now();
-
-    // Use std::thread to enforce timeout
     let content_clone = content.to_string();
-    let path_clone = path.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
 
-    let result = std::thread::spawn(move || {
-        let mut parser = Parser::new(&content_clone);
-        match parser.parse() {
-            Ok(_) => ParseOutcome::Ok {
+    let handle = std::thread::spawn(move || {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut parser = Parser::new(&content_clone);
+            parser.parse()
+        }));
+
+        let outcome = match result {
+            Ok(Ok(_)) => ParseOutcome::Ok {
                 duration_ms: start.elapsed().as_millis() as u64,
             },
-            Err(e) => ParseOutcome::Error {
+            Ok(Err(e)) => ParseOutcome::Error {
                 message: e.to_string(),
             },
-        }
-    })
-    .join();
+            Err(_) => ParseOutcome::Panic {
+                message: "Parser panicked".to_string(),
+            },
+        };
 
-    match result {
+        let _ = tx.send(outcome);
+    });
+
+    match rx.recv_timeout(timeout) {
         Ok(outcome) => {
-            // Check if we exceeded timeout
-            let elapsed = start.elapsed();
-            if elapsed > timeout {
-                ParseOutcome::Timeout {
-                    timeout_ms: timeout.as_millis() as u64,
-                }
-            } else {
-                outcome
+            // Parse completed in time - safe to join
+            let _ = handle.join();
+            outcome
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            // DO NOT join - thread may be stuck
+            ParseOutcome::Timeout {
+                timeout_ms: timeout.as_millis() as u64,
             }
         }
-        Err(_) => {
-            // Thread panicked
-            ParseOutcome::Panic {
-                message: "Parser thread panicked".to_string(),
-            }
-        }
+        Err(_) => ParseOutcome::Error {
+            message: "Channel disconnected unexpectedly".to_string(),
+        },
     }
 }
 
@@ -173,7 +176,7 @@ fn analyze_file_for_risks(file: &super::corpus::CorpusFile) -> Vec<TimeoutRisk> 
 }
 
 /// Check for deeply nested structures
-fn check_deep_nesting(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
+fn check_deep_nesting(lines: &[&str], path: &Path) -> Vec<TimeoutRisk> {
     let mut risks = Vec::new();
     let mut depth = 0;
     let mut max_depth = 0;
@@ -198,7 +201,7 @@ fn check_deep_nesting(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
             risks.push(TimeoutRisk {
                 priority: RiskPriority::P0,
                 description: format!("Deep nesting detected (depth {})", max_depth),
-                file_path: path.clone(),
+                file_path: path.to_path_buf(),
                 line_number: Some(i + 1),
                 mitigation: format!(
                     "Refactor to reduce nesting depth below {}",
@@ -214,7 +217,7 @@ fn check_deep_nesting(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
         risks.push(TimeoutRisk {
             priority: RiskPriority::P1,
             description: format!("High nesting depth (depth {})", max_depth),
-            file_path: path.clone(),
+            file_path: path.to_path_buf(),
             line_number: None,
             mitigation: "Consider refactoring to reduce nesting".to_string(),
         });
@@ -224,7 +227,7 @@ fn check_deep_nesting(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
 }
 
 /// Check for complex regex patterns
-fn check_complex_regex(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
+fn check_complex_regex(lines: &[&str], path: &Path) -> Vec<TimeoutRisk> {
     let mut risks = Vec::new();
     let mut regex_count = 0;
 
@@ -243,7 +246,7 @@ fn check_complex_regex(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
                 risks.push(TimeoutRisk {
                     priority: RiskPriority::P0,
                     description: "Complex regex pattern with nested quantifiers".to_string(),
-                    file_path: path.clone(),
+                    file_path: path.to_path_buf(),
                     line_number: Some(i + 1),
                     mitigation: "Simplify regex pattern or use atomic grouping".to_string(),
                 });
@@ -255,7 +258,7 @@ fn check_complex_regex(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
                 risks.push(TimeoutRisk {
                     priority: RiskPriority::P1,
                     description: format!("Excessive regex alternation ({} branches)", alt_count),
-                    file_path: path.clone(),
+                    file_path: path.to_path_buf(),
                     line_number: Some(i + 1),
                     mitigation: "Consider using character classes or splitting into multiple patterns".to_string(),
                 });
@@ -268,7 +271,7 @@ fn check_complex_regex(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
         risks.push(TimeoutRisk {
             priority: RiskPriority::P0,
             description: format!("Excessive regex operations ({} patterns)", regex_count),
-            file_path: path.clone(),
+            file_path: path.to_path_buf(),
             line_number: None,
             mitigation: format!(
                 "Reduce regex operations below {}",
@@ -281,12 +284,13 @@ fn check_complex_regex(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
 }
 
 /// Check for large heredocs
-fn check_large_heredocs(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
+fn check_large_heredocs(lines: &[&str], path: &Path) -> Vec<TimeoutRisk> {
     let mut risks = Vec::new();
     let mut in_heredoc = false;
     let mut heredoc_depth = 0;
     let mut heredoc_size = 0;
     let mut heredoc_start_line = 0;
+    let mut active_marker: Option<String> = None;
 
     for (i, line) in lines.iter().enumerate() {
         // Check for heredoc start
@@ -299,15 +303,19 @@ fn check_large_heredocs(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
                     heredoc_start_line = i + 1;
                     heredoc_size = 0;
                     heredoc_depth += 1;
+                    active_marker = Some(heredoc_marker.to_string());
                 }
             }
         } else if in_heredoc {
             // Check for heredoc end marker
             let trimmed = line.trim();
-            if trimmed == trimmed {
+            if let Some(marker) = active_marker.as_deref()
+                && trimmed == marker
+            {
                 // Simple heredoc end
                 in_heredoc = false;
                 heredoc_depth -= 1;
+                active_marker = None;
 
                 // Check heredoc size
                 if heredoc_size > MAX_HEREDOC_SIZE {
@@ -317,7 +325,7 @@ fn check_large_heredocs(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
                             "Large heredoc ({} bytes)",
                             heredoc_size
                         ),
-                        file_path: path.clone(),
+                        file_path: path.to_path_buf(),
                         line_number: Some(heredoc_start_line),
                         mitigation: format!(
                             "Reduce heredoc size below {} bytes",
@@ -339,7 +347,7 @@ fn check_large_heredocs(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
         risks.push(TimeoutRisk {
             priority: RiskPriority::P0,
             description: format!("Excessive heredoc nesting (depth {})", heredoc_depth),
-            file_path: path.clone(),
+            file_path: path.to_path_buf(),
             line_number: None,
             mitigation: format!(
                 "Reduce heredoc nesting below {}",
@@ -352,7 +360,7 @@ fn check_large_heredocs(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
 }
 
 /// Check for excessive string interpolation
-fn check_excessive_interpolation(lines: &[&str], path: &PathBuf) -> Vec<TimeoutRisk> {
+fn check_excessive_interpolation(lines: &[&str], path: &Path) -> Vec<TimeoutRisk> {
     let mut risks = Vec::new();
     let mut interp_count = 0;
 
@@ -369,7 +377,7 @@ fn check_excessive_interpolation(lines: &[&str], path: &PathBuf) -> Vec<TimeoutR
             risks.push(TimeoutRisk {
                 priority: RiskPriority::P1,
                 description: format!("Excessive interpolation in single line ({} occurrences)", line_interp),
-                file_path: path.clone(),
+                file_path: path.to_path_buf(),
                 line_number: Some(i + 1),
                 mitigation: "Consider using string formatting functions or breaking into multiple lines".to_string(),
             });
@@ -381,7 +389,7 @@ fn check_excessive_interpolation(lines: &[&str], path: &PathBuf) -> Vec<TimeoutR
         risks.push(TimeoutRisk {
             priority: RiskPriority::P2,
             description: format!("High interpolation count overall ({} occurrences)", interp_count),
-            file_path: path.clone(),
+            file_path: path.to_path_buf(),
             line_number: None,
             mitigation: "Consider reducing string interpolation complexity".to_string(),
         });

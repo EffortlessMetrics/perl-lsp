@@ -82,7 +82,7 @@ pub fn generate_report(
         metadata,
         inventory,
         parse_outcomes,
-        nodekind_coverage,
+        nodekind_coverage: nodekind_stats,
         ga_coverage,
         timeout_risks,
     }

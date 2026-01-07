@@ -429,7 +429,13 @@ fn main() -> Result<()> {
         }
         Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
         Commands::CorpusAudit { corpus_path, output, check, fresh } => {
-            corpus_audit::run(corpus_path, output, check, fresh)
+            corpus_audit::run(corpus_audit::AuditConfig {
+                corpus_path,
+                output_path: output,
+                timeout: std::time::Duration::from_secs(30),
+                fresh,
+                check,
+            })
         }
         #[cfg(feature = "legacy")]
         Commands::CompareThree { verbose, format } => {

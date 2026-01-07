@@ -3,8 +3,6 @@
 //! This module analyzes corpus files to determine which NodeKinds are
 //! being exercised and identifies gaps in coverage.
 
-use color_eyre::eyre::Result;
-use perl_parser::ast::NodeKind;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -38,7 +36,7 @@ pub struct AtRiskNodeKind {
 }
 
 /// Risk level for NodeKind coverage
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum RiskLevel {
     /// Critical - never seen
     Critical,
@@ -59,7 +57,7 @@ pub fn analyze_nodekind_coverage(
 
     // Collect NodeKind counts from successful parses
     for (path, outcome) in parse_results {
-        if let Some(duration) = outcome.duration_ms() {
+        if let Some(_duration) = outcome.duration_ms() {
             // Parse was successful, extract NodeKinds from content
             // For now, we'll use a simple heuristic based on file content
             // In a real implementation, we would traverse the AST
@@ -90,8 +88,9 @@ pub fn analyze_nodekind_coverage(
     // Find at-risk NodeKinds (low coverage)
     let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
         .iter()
-        .filter(|(_, &count)| count < 5)
-        .map(|(name, &count)| {
+        .filter(|(_, count)| **count < 5)
+        .map(|(name, count)| {
+            let count = *count;
             let risk_level = if count == 0 {
                 RiskLevel::Critical
             } else if count <= 2 {
@@ -122,7 +121,7 @@ pub fn analyze_nodekind_coverage(
 ///
 /// This is a placeholder implementation. In a real implementation,
 /// this would traverse the AST and collect all NodeKinds.
-fn extract_nodekinds_from_content(path: &PathBuf) -> Vec<String> {
+fn extract_nodekinds_from_content(_path: &PathBuf) -> Vec<String> {
     // For now, return a simple heuristic based on file path
     // In production, this would parse the file and traverse the AST
     vec![

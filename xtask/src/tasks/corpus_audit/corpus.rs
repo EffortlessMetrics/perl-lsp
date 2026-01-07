@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 /// Corpus layer classification
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CorpusLayer {
     /// Tree-sitter corpus files (test/corpus/*.txt)
     TreeSitter,
@@ -138,10 +138,10 @@ fn parse_corpus_layer(layer_path: &Path, layer: CorpusLayer) -> Result<Vec<Corpu
         }
 
         // Check file extension
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            if ext != layer.extension() {
-                continue;
-            }
+        if let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && ext != layer.extension()
+        {
+            continue;
         }
 
         // Read file content

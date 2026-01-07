@@ -5,7 +5,6 @@
 
 use color_eyre::eyre::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
 
 use super::corpus::CorpusFile;
 
@@ -37,6 +36,7 @@ pub enum FeaturePriority {
 
 impl FeaturePriority {
     /// Get priority as a numeric value (0 = highest priority)
+    #[allow(dead_code)]
     pub fn as_numeric(&self) -> usize {
         match self {
             FeaturePriority::P0 => 0,
@@ -109,7 +109,7 @@ pub fn check_ga_feature_alignment(files: &[CorpusFile]) -> Result<GAFeatureCover
     // Identify features with partial coverage
     let uncovered_partial: Vec<String> = features
         .iter()
-        .filter(|f| f.coverage && f.coverage_percentage < 50.0)
+        .filter(|f| f.covered && f.coverage_percentage < 50.0)
         .map(|f| f.feature.id.clone())
         .collect();
 

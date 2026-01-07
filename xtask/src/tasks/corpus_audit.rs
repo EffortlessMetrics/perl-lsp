@@ -9,13 +9,10 @@
 
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
-use perl_parser::Parser;
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use walkdir::WalkDir;
 
 mod corpus;
 mod ga_alignment;
@@ -23,11 +20,11 @@ mod nodekind_analysis;
 mod report;
 mod timeout_detection;
 
-use corpus::{CorpusFile, CorpusLayer, parse_corpus_files};
-use ga_alignment::{GAFeature, GAFeatureCoverage, check_ga_feature_alignment};
-use nodekind_analysis::{NodeKindStats, analyze_nodekind_coverage};
+use corpus::{CorpusFile, parse_corpus_files};
+use ga_alignment::check_ga_feature_alignment;
+use nodekind_analysis::analyze_nodekind_coverage;
 use report::{AuditReport, generate_report};
-use timeout_detection::{ParseOutcome, TimeoutRisk, detect_timeout_risks, parse_with_timeout};
+use timeout_detection::{ParseOutcome, detect_timeout_risks, parse_with_timeout};
 
 /// Default timeout for parsing individual files
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -88,17 +85,15 @@ pub fn run(config: AuditConfig) -> Result<()> {
     }
 
     // Check if report already exists and not in fresh mode
-    if !config.fresh && config.output_path.exists() {
-        if config.check {
-            println!("ℹ️  Using existing report (use --fresh to regenerate)");
-            let report_content = fs::read_to_string(&config.output_path)
-                .context("Failed to read existing report")?;
-            let report: AuditReport = serde_json::from_str(&report_content)
-                .context("Failed to parse existing report")?;
+    if !config.fresh && config.output_path.exists() && config.check {
+        println!("ℹ️  Using existing report (use --fresh to regenerate)");
+        let report_content = fs::read_to_string(&config.output_path)
+            .context("Failed to read existing report")?;
+        let report: AuditReport = serde_json::from_str(&report_content)
+            .context("Failed to parse existing report")?;
 
-            // In check mode, validate the report and exit
-            return validate_report_for_ci(&report);
-        }
+        // In check mode, validate the report and exit
+        return validate_report_for_ci(&report);
     }
 
     // Step 1: Parse corpus files with timeout protection
@@ -205,7 +200,7 @@ fn print_audit_summary(report: &AuditReport) {
     if !report.timeout_risks.is_empty() {
         println!("\n⚠️  Timeout/Hang Risks:");
         for risk in &report.timeout_risks {
-            println!("   - P{}: {} ({})",
+            println!("   - {:?}: {} ({})",
                 risk.priority,
                 risk.description,
                 risk.file_path.display()
@@ -248,7 +243,7 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
 
     // Check for critical timeout risks
     let critical_risks: Vec<_> = report.timeout_risks.iter()
-        .filter(|r| r.priority == 0)
+        .filter(|r| r.priority == timeout_detection::RiskPriority::P0)
         .collect();
 
     if !critical_risks.is_empty() {
