@@ -93,9 +93,22 @@ else
     gh pr view "$PR_NUMBER" --json comments,reviews > "$HARVEST_DIR/comments.json"
 fi
 
-# Extract base and head SHAs
+# Extract base and head SHAs (with fallbacks for older gh CLI versions)
 BASE_SHA=$(jq -r '.baseRefOid // empty' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "")
 HEAD_SHA=$(jq -r '.headRefOid // empty' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "")
+MERGE_COMMIT=$(jq -r '.mergeCommit.oid // empty' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "")
+
+# Fallback: extract HEAD_SHA from last commit in PR
+if [[ -z "$HEAD_SHA" ]]; then
+    HEAD_SHA=$(jq -r '.commits[-1].oid // empty' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "")
+fi
+
+# Fallback: compute BASE_SHA from merge commit parent
+if [[ -z "$BASE_SHA" && -n "$MERGE_COMMIT" ]]; then
+    if git cat-file -t "$MERGE_COMMIT" >/dev/null 2>&1; then
+        BASE_SHA=$(git rev-parse "${MERGE_COMMIT}^1" 2>/dev/null || echo "")
+    fi
+fi
 PR_TITLE=$(jq -r '.title // "Unknown"' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "Unknown")
 PR_STATE=$(jq -r '.state // "unknown"' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "unknown")
 CREATED_AT=$(jq -r '.createdAt // ""' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "")
