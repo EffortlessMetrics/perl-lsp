@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - v0.9.0-semantic-lsp-ready
 
+> **Release checklist** (exit criteria for tagging):
+> - [ ] `nix develop -c just ci-gate` green on MSRV
+> - [ ] `bash scripts/ignored-test-count.sh` shows BUG=0, MANUAL≤1
+> - [ ] README + CURRENT_STATUS + ROADMAP aligned
+
 ### Added - Semantic Definition & LSP Integration (Issue #188 Phase 1 Complete - 2025-11-20)
 
 - **Semantic Analyzer Phase 1** - ✅ **COMPLETE (12/12 critical node handlers)**
@@ -64,6 +69,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Issue #182 (Statement Tracker)**: Ready to close - all implementation and testing complete
 - **ROADMAP.md**: Added "Validation & De-Risking" phase with 3-band path to v1.0
 - **Status Documentation**: Comprehensive updates to reflect semantic analyzer completion
+
+### Changed - Documentation Truth Alignment (2026-01-07)
+
+- **Roadmap hygiene**: Archived stale `crates/perl-parser/ROADMAP.md` (claimed 35% vs actual 91%)
+- **Truth rules**: Added evidence requirements section to canonical roadmap
+- **Status table**: Replaced performance claims with evidence-backed stance
+- **DAP clarification**: Corrected to "bridge mode" (not "full debugging support")
+- **Benchmarks**: Marked as UNVERIFIED until benchmark results are published
+- **Milestone planning**: Added concrete v0.9.0 and v1.0.0 exit criteria
+- **Local-first workflow**: Emphasized `nix develop -c just ci-gate` as canonical gate
 
 ### Documentation
 
