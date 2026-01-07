@@ -34,9 +34,14 @@ ci-check-no-nested-lock:
     fi
     @echo "✅ No nested lockfiles"
 
+# Audit workflows for ungated expensive jobs
+ci-workflow-audit:
+    @python3 scripts/ci-audit-workflows.py
+
 # Fast merge gate (~2-5 min) - REQUIRED for all merges
 ci-gate:
     @echo "🚪 Running fast merge gate..."
+    @just ci-workflow-audit
     @just ci-check-no-nested-lock
     @just ci-format
     @just ci-clippy-lib
