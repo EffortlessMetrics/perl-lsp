@@ -1,0 +1,180 @@
+# DevLT Estimation Rubric
+
+Decision-weighted human attention time estimation for AI-native development.
+
+## Core Principle
+
+**DevLT is decision time, not commit time.**
+
+In AI-native repos, LLMs do the typing. Humans do:
+- Scope calls (what's in/out)
+- Design calls (interfaces, invariants, stability)
+- Verification calls (what evidence is sufficient)
+- Acceptance calls (merge readiness)
+- Prevention calls (what guardrail gets added after wrongness)
+
+We estimate DevLT from **decision topology**, not wall clock or commit timestamps.
+
+## The Three Clocks
+
+| Clock | What it measures | Source |
+|-------|-----------------|--------|
+| **Wall clock** | PR created → merged | GitHub timestamps |
+| **Machine work** | CI + LLM compute | Run durations, token receipts |
+| **DevLT** | Human attention minutes | Decision events + friction events |
+
+Wall clock and machine work are measured. DevLT is estimated.
+
+## DevLT Buckets
+
+Split DevLT into three components:
+
+| Bucket | Description | Examples |
+|--------|-------------|----------|
+| **Control** | Scope/design/risk decisions | "Should we include X?", "What's the interface?" |
+| **Audit** | Reading receipts, interpreting failures | Reviewing test output, gate failures, PR diffs |
+| **Ops** | Mechanical publish work | Updating docs, cover sheets, housekeeping |
+
+## Decision Events (weights in minutes)
+
+Events that require human judgment:
+
+| Event | Weight (min) | Notes |
+|-------|-------------|-------|
+| Scope boundary set/changed | 8–20 | Defining what's in/out |
+| Architectural constraint decision | 10–30 | Interface design, module boundaries |
+| Interface stability decision | 8–20 | API surface, breaking changes |
+| Verification strategy decision | 8–20 | What tests/evidence is sufficient |
+| Risk acceptance/mitigation call | 5–15 | Known limits, debt tracking |
+| Design trade-off resolution | 10–25 | Choosing between approaches |
+| Acceptance decision | 5–15 | "Is this ready to merge?" |
+
+## Friction Events (weights in minutes)
+
+Events that consume attention beyond expected:
+
+| Event | Weight (min) | Notes |
+|-------|-------------|-------|
+| Gate fail requiring interpretation | 5–20 | Understanding why CI failed |
+| Flaky/non-deterministic failure | 10–30 | Investigating intermittent issues |
+| Measurement integrity incident | 15–45 | Baseline drift, metric confusion |
+| Wrongness discovered | 10–40 | Bug found, prevention work needed |
+| Scope expansion mid-PR | 10–30 | Unexpected dependency discovered |
+| Reviewer feedback cycle | 5–20 | Per round of changes requested |
+
+## Estimation Formula
+
+```
+DevLT = Σ(decision_events × weights) + Σ(friction_events × weights) × coverage_factor
+```
+
+**Coverage factors:**
+- `receipts_included`: 1.0 (narrow bounds)
+- `github_plus_agent_logs`: 1.2 (moderate bounds)
+- `github_only`: 1.5 (wider bounds)
+
+## Output Format
+
+Never output "unknown." Always output:
+
+```
+DevLT: <low>–<high>m (<confidence>; <coverage>; <basis>)
+```
+
+### Examples
+
+**Clean PR, good coverage:**
+```
+DevLT: 45–75m (high; github_plus_agent_logs; 3 decision events, 0 friction)
+```
+
+**Complex PR, limited coverage:**
+```
+DevLT: 90–180m (medium; github_only; 5 decision events, 3 friction loops)
+```
+
+**Mechanization PR with wrongness:**
+```
+DevLT: 120–200m (medium; receipts_included; 4 decisions, 2 friction + wrongness prevention)
+```
+
+## Worked Example
+
+PR #251-253 (Test Harness Hardening):
+
+**Decision events:**
+- Scope boundary (harness vs. individual tests): 15m
+- Verification strategy (what proves BrokenPipe fixed): 15m
+- Interface stability (error code API): 12m
+- Acceptance decision: 10m
+
+**Friction events:**
+- Gate failures requiring interpretation: 20m (2 × 10m)
+- Wrongness discovered + prevention: 30m
+
+**Total:**
+- Events sum: 52m (decisions) + 50m (friction) = 102m
+- Coverage: github_plus_agent_logs (×1.2)
+- Range: 90–130m
+
+**Output:**
+```
+DevLT: 90–130m (medium; github_plus_agent_logs; 4 decisions + 2 friction + wrongness)
+```
+
+## Calibration
+
+To improve estimates over time:
+
+1. **Collect reported DevLT** on ~10 PRs (even rough estimates)
+2. **Compare to estimated DevLT** from this rubric
+3. **Tune weights** until reported usually falls inside estimated range
+4. **Document error band** and revision history
+
+### Calibration Log
+
+| PR | Estimated | Reported | Error | Notes |
+|----|-----------|----------|-------|-------|
+| _TBD_ | _TBD_ | _TBD_ | _TBD_ | _Calibration data goes here_ |
+
+## Machine Work Estimation
+
+Alongside DevLT, estimate machine work in stable units:
+
+### CI Minutes (measured when available)
+```
+CI: <minutes>m (measured from workflow run)
+CI: ~<minutes>m (estimated from local gate)
+```
+
+### LLM Work Units (estimated)
+```
+LLM: <low>–<high> work units (<basis>)
+```
+
+Work units are iteration-weighted:
+- Simple iteration: 1 unit
+- Complex iteration with exploration: 2–3 units
+- Multi-file refactor iteration: 3–5 units
+
+Convert to cost later when pricing is stable.
+
+## Integration with Cover Sheets
+
+Every PR cover sheet includes:
+
+```markdown
+### Budget
+
+| Metric | Value | Provenance |
+|--------|-------|------------|
+| DevLT | 60–90m | estimated; github_plus_agent_logs; 4 decisions |
+| CI | 12m | measured; workflow run #xyz |
+| LLM | ~8 units | estimated; 4 iterations × complexity |
+```
+
+## See Also
+
+- [`FORENSICS_SCHEMA.md`](FORENSICS_SCHEMA.md) - Full dossier template
+- [`METRICS_PROVENANCE.md`](METRICS_PROVENANCE.md) - Provenance schema
+- [`CASEBOOK.md`](CASEBOOK.md) - Exhibit examples

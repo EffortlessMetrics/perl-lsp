@@ -2,6 +2,12 @@
 
 This document defines the schema for PR archaeology dossiers. Use this when mining merged PRs to extract lessons and evidence.
 
+## Core Principle
+
+> **The product isn't code. It's decisions + proof.**
+
+AI does the typing. Humans do scope calls, design calls, verification calls, acceptance calls, and prevention calls. The artifacts we publish must center those decisions.
+
 ## Purpose
 
 PR archaeology extracts actionable patterns from past work:
@@ -10,6 +16,16 @@ PR archaeology extracts actionable patterns from past work:
 - What the combined budget actually was (DevLT + compute)
 - Which guardrails improved because of the PR
 - How claims drifted from implementation
+
+## Quality-First Approach
+
+Quality is the primary output. Budget metrics are secondary.
+
+See [`QUALITY_SURFACES.md`](QUALITY_SURFACES.md) for the four quality surfaces:
+- **Maintainability**: boundaries, coupling, complexity
+- **Correctness**: tests, error paths, mutation survival
+- **Governance**: schema alignment, anti-drift, receipts
+- **Reproducibility**: gate clarity, limits, environment
 
 ## Dossier Schema
 
@@ -61,27 +77,52 @@ Severity levels:
 - **P2**: Causes confusion or maintenance burden
 - **P3**: Cleanup opportunity
 
-### 5. Budget Estimates
+### 5. Quality Deltas
 
-| Metric | Value | Notes |
-| ------ | ----- | ----- |
-| DevLT (human attention) | X min | Band: <30 / 30-120 / 120+ |
-| Compute (tokens/CI) | Y | Band: cheap / moderate / expensive |
-| Efficiency | quality / budget | Subjective assessment |
+Rate the PR's impact on each quality surface:
 
-Bands for DevLT:
+| Surface | Delta | Notes |
+| ------- | ----- | ----- |
+| Maintainability | +1/0/-1 | Boundary clarity, coupling, complexity |
+| Correctness | +1/0/-1 | Test depth, error handling, mutation survival |
+| Governance | +1/0/-1 | Schema alignment, anti-drift, receipts |
+| Reproducibility | +1/0/-1 | Gate clarity, limits declared |
 
+Delta scale:
+- **+2**: Significant improvement
+- **+1**: Minor improvement
+- **0**: No change
+- **-1**: Minor regression (justified)
+- **-2**: Significant regression (requires justification)
+
+### 6. Budget Estimates (with Provenance)
+
+Every metric includes provenance. See [`METRICS_PROVENANCE.md`](METRICS_PROVENANCE.md).
+
+| Metric | Value | Kind | Confidence | Basis |
+| ------ | ----- | ---- | ---------- | ----- |
+| DevLT | X–Ym | estimated | high/med/low | decision events, friction events |
+| CI | Zm | measured | high | workflow run ID |
+| LLM units | ~N | estimated | med | iteration count |
+
+**DevLT estimation** uses decision-weighted method. See [`DEVLT_ESTIMATION.md`](DEVLT_ESTIMATION.md).
+
+Bands for DevLT (reference):
 - **<30 min**: Quick fix, no exploration needed
 - **30-120 min**: Standard feature, some investigation
 - **120+ min**: Complex, multi-session work
 
-Bands for compute:
-
+Bands for compute (reference):
 - **Cheap**: <10K tokens, <5 CI minutes
 - **Moderate**: 10-100K tokens, 5-30 CI minutes
 - **Expensive**: >100K tokens, >30 CI minutes
 
-### 6. Factory Delta
+**Coverage declaration** (required):
+- `receipts_included`: Agent logs, token receipts available
+- `github_plus_agent_logs`: GitHub + session logs
+- `github_only`: PR thread, commits, CI only
+
+### 7. Factory Delta
 
 What systemic improvement resulted from this PR:
 
@@ -90,7 +131,7 @@ What systemic improvement resulted from this PR:
 | (e.g., status-check) | Did not exist | Enforced in ci-gate | |
 | (e.g., features.toml) | Manual tracking | Computed catalog | |
 
-### 7. Exhibit Score
+### 8. Exhibit Score
 
 Overall quality assessment:
 
@@ -102,7 +143,7 @@ Overall quality assessment:
 | Test coverage | | Did tests match claims? |
 | DevLT efficiency | | Human time well spent? |
 
-## Example Dossier
+## Example Dossier (Quality-First)
 
 ```markdown
 ## PR #153: Mutation Testing + UTF-16 Security Fixes
@@ -129,9 +170,22 @@ Overall quality assessment:
 | -------- | ------- | -------- |
 | None | Clean PR | - |
 
-### Budget
-- DevLT: 90 min (30-120 band)
-- Compute: moderate (50K tokens, 15 CI min)
+### Quality Deltas
+| Surface | Delta | Notes |
+| ------- | ----- | ----- |
+| Maintainability | +1 | Security boundary now explicit |
+| Correctness | +2 | Mutation testing + UTF-16 property tests |
+| Governance | +1 | Added cargo-mutants gate |
+| Reproducibility | 0 | No change |
+
+### Budget (with Provenance)
+| Metric | Value | Kind | Confidence | Basis |
+| ------ | ----- | ---- | ---------- | ----- |
+| DevLT | 75–105m | estimated | medium | 4 decisions, 1 friction |
+| CI | 15m | measured | high | workflow run #xyz |
+| LLM | ~6 units | estimated | medium | 3 iterations |
+
+Coverage: `github_plus_agent_logs`
 
 ### Factory Delta
 - Added: cargo-mutants to CI
@@ -155,5 +209,9 @@ Overall quality assessment:
 
 ## See Also
 
+- [`DEVLT_ESTIMATION.md`](DEVLT_ESTIMATION.md) - Decision-weighted DevLT method
+- [`METRICS_PROVENANCE.md`](METRICS_PROVENANCE.md) - Provenance schema for all metrics
+- [`QUALITY_SURFACES.md`](QUALITY_SURFACES.md) - The four quality surfaces
+- [`ANALYZER_FRAMEWORK.md`](ANALYZER_FRAMEWORK.md) - Specialist analyzer specs
 - [`LESSONS.md`](LESSONS.md) - Aggregated wrongness log
 - [`AGENTIC_DEV.md`](AGENTIC_DEV.md) - Budget definitions and workflow

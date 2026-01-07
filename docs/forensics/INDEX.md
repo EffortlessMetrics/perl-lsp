@@ -67,7 +67,7 @@ Create `pr-NNN.md` in this directory using the template in [`../FORENSICS_SCHEMA
 3. Draft cover sheet using format below
 4. Paste cover sheet into GitHub PR body with "Addendum (YYYY-MM-DD)" header
 
-## Cover Sheet Format
+## Cover Sheet Format (Quality-First)
 
 ```markdown
 ## Cover sheet (added YYYY-MM-DD; original notes below)
@@ -83,16 +83,36 @@ Create `pr-NNN.md` in this directory using the template in [`../FORENSICS_SCHEMA
 ### Known limits / follow-ups
 ### How to reproduce trust
 
+### Quality Deltas
+
+| Surface | Delta | Notes |
+|---------|-------|-------|
+| Maintainability | +1/0/-1 | boundary clarity, coupling |
+| Correctness | +1/0/-1 | test depth, mutation survival |
+| Governance | +1/0/-1 | schema alignment, anti-drift |
+| Reproducibility | +1/0/-1 | gate clarity, limits |
+
+### Budget (with Provenance)
+
+| Metric | Value | Provenance |
+|--------|-------|------------|
+| DevLT | X–Ym | estimated; coverage; confidence; basis |
+| CI | Zm | measured/estimated; source |
+| LLM | ~N units | estimated; basis |
+
 ---
 
 ### Forensics addendum (optional)
 - Diff shape
 - Complexity/risk notes
 - Friction events (wrong → caught → fix → prevention)
-- Budget (wall clock, DevLT band, compute band)
 ```
 
-See [`../FORENSICS_SCHEMA.md`](../FORENSICS_SCHEMA.md) for full template.
+See methodology docs:
+- [`../DEVLT_ESTIMATION.md`](../DEVLT_ESTIMATION.md) - DevLT estimation method
+- [`../METRICS_PROVENANCE.md`](../METRICS_PROVENANCE.md) - Provenance schema
+- [`../QUALITY_SURFACES.md`](../QUALITY_SURFACES.md) - The four quality surfaces
+- [`../FORENSICS_SCHEMA.md`](../FORENSICS_SCHEMA.md) - Full dossier template
 
 ## See Also
 
