@@ -27,7 +27,10 @@ jobs:
   test-coverage:
     name: Test Coverage
     runs-on: ubuntu-22.04
-    if: contains(github.event.pull_request.labels.*.name, 'ci:coverage')
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:coverage'))
     steps:
       - uses: actions/checkout@v4
 
@@ -93,6 +96,10 @@ jobs:
   dependency-audit:
     name: Security Audit
     runs-on: ubuntu-22.04
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:audit'))
     steps:
       - uses: actions/checkout@v4
       
@@ -121,7 +128,10 @@ jobs:
 
   clippy-strict:
     name: Clippy (Strict)
-    if: contains(github.event.pull_request.labels.*.name, 'ci:strict')
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:strict'))
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -147,7 +157,10 @@ jobs:
   test-determinism:
     name: Test Determinism
     runs-on: ubuntu-22.04
-    if: ${{ github.event_name == 'pull_request' }}
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:determinism'))
     continue-on-error: true
     timeout-minutes: 15
     steps:
@@ -273,6 +286,10 @@ jobs:
   mutation-testing:
     name: Mutation Testing
     runs-on: ubuntu-22.04
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:mutation'))
     continue-on-error: true  # Don't fail the build, just report
     steps:
       - uses: actions/checkout@v4
