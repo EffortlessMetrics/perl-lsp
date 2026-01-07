@@ -1,0 +1,381 @@
+{
+  "metadata": {
+    "generated_at": "2026-01-07T14:27:40.682487115+00:00",
+    "version": "0.1.0",
+    "duration_secs": 0
+  },
+  "inventory": {
+    "total_files": 10,
+    "files_by_layer": [
+      {
+        "layer": "TestCorpus",
+        "count": 10
+      }
+    ],
+    "total_size_bytes": 26542,
+    "total_line_count": 1204
+  },
+  "parse_outcomes": {
+    "total": 10,
+    "ok": 4,
+    "error": 6,
+    "timeout": 0,
+    "panic": 0
+  },
+  "nodekind_coverage": {
+    "total_count": 87,
+    "covered_count": 3,
+    "coverage_percentage": 3.4482758620689653,
+    "never_seen": [
+      "Goto",
+      "State",
+      "Block",
+      "Hash",
+      "UseStatement",
+      "System",
+      "EvalBlock",
+      "Prototype",
+      "Our",
+      "Literal",
+      "Last",
+      "QxQuote",
+      "Warn",
+      "Print",
+      "RangeOperator",
+      "UseVersion",
+      "Heredoc",
+      "PackageBlock",
+      "Say",
+      "Package",
+      "ArraySlice",
+      "Break",
+      "FatComma",
+      "Regex",
+      "Redo",
+      "Next",
+      "SuperClass",
+      "Return",
+      "Operator",
+      "RegexModifier",
+      "Local",
+      "Array",
+      "IfStatement",
+      "Version",
+      "Variable",
+      "UnaryOperator",
+      "Transliteration",
+      "ForStatement",
+      "Bless",
+      "HashSlice",
+      "DoBlock",
+      "UnlessStatement",
+      "Glob",
+      "NoStatement",
+      "WhenStatement",
+      "Backticks",
+      "ForeachStatement",
+      "MethodName",
+      "SubstitutionModifier",
+      "FormatBlock",
+      "UseBundle",
+      "Eval",
+      "SubroutineDeclaration",
+      "ArrowOperator",
+      "Quote",
+      "Continue",
+      "My",
+      "TernaryOperator",
+      "Label",
+      "QwQuote",
+      "AnonSub",
+      "UntilStatement",
+      "QqQuote",
+      "BuiltinFunction",
+      "Exec",
+      "CommaOperator",
+      "SubName",
+      "Match",
+      "GivenStatement",
+      "BinaryOperator",
+      "Die",
+      "Attribute",
+      "QeQuote",
+      "Sprintf",
+      "Subroutine",
+      "String",
+      "Reference",
+      "RequireStatement",
+      "List",
+      "Dereference",
+      "PackageDeclaration",
+      "Format",
+      "Substitution",
+      "WhileStatement"
+    ],
+    "at_risk": [
+      {
+        "name": "Identifier",
+        "count": 4,
+        "risk_level": "Medium"
+      },
+      {
+        "name": "Statement",
+        "count": 4,
+        "risk_level": "Medium"
+      },
+      {
+        "name": "Expression",
+        "count": 4,
+        "risk_level": "Medium"
+      }
+    ],
+    "frequency": {
+      "Identifier": 4,
+      "Statement": 4,
+      "Expression": 4
+    }
+  },
+  "ga_coverage": {
+    "total_count": 12,
+    "covered_count": 12,
+    "coverage_percentage": 100.0,
+    "features": [
+      {
+        "feature": {
+          "id": "control-flow-if",
+          "name": "If/Unless Statements",
+          "priority": "P0",
+          "expected_nodekinds": [
+            "IfStatement",
+            "UnlessStatement"
+          ],
+          "description": "Conditional control flow with if/unless"
+        },
+        "covered": true,
+        "covering_files": [
+          "./test_corpus/modern_perl_features.pl",
+          "./test_corpus/legacy_syntax.pl",
+          "./test_corpus/xs_inline_ffi.pl",
+          "./test_corpus/source_filters.pl",
+          "./test_corpus/data_end_sections.pl"
+        ],
+        "coverage_percentage": 100.0
+      },
+      {
+        "feature": {
+          "id": "control-flow-loops",
+          "name": "Loop Statements",
+          "priority": "P0",
+          "expected_nodekinds": [
+            "WhileStatement",
+            "ForStatement",
+            "ForeachStatement"
+          ],
+          "description": "Loop control flow with while/for/foreach"
+        },
+        "covered": true,
+        "covering_files": [
+          "./test_corpus/advanced_regex.pl",
+          "./test_corpus/legacy_syntax.pl",
+          "./test_corpus/xs_inline_ffi.pl",
+          "./test_corpus/end_section.pl"
+        ],
+        "coverage_percentage": 100.0
+      },
+      {
+        "feature": {
+          "id": "subroutines",
+          "name": "Subroutine Declarations",
+          "priority": "P0",
+          "expected_nodekinds": [
+            "SubroutineDeclaration"
+          ],
+          "description": "Named subroutine declarations"
+        },
+        "covered": true,
+        "covering_files": [
+          "./test_corpus/modern_perl_features.pl",
+          "./test_corpus/packages_versions.pl",
+          "./test_corpus/legacy_syntax.pl",
+          "./test_corpus/xs_inline_ffi.pl",
+          "./test_corpus/source_filters.pl",
+          "./test_corpus/real_world/medium_module.pl",
+          "./test_corpus/end_section.pl",
+          "./test_corpus/data_end_sections.pl"
+        ],
+        "coverage_percentage": 100.0
+      },
+      {
+        "feature": {
+          "id": "packages",
+          "name": "Package Declarations",
+          "priority": "P0",
+          "expected_nodekinds": [
+            "PackageDeclaration"
+          ],
+          "description": "Package namespace declarations"
+        },
+        "covered": true,
+        "covering_files": [
+          "./test_corpus/modern_perl_features.pl",
+          "./test_corpus/packages_versions.pl",
+          "./test_corpus/legacy_syntax.pl",
+          "./test_corpus/xs_inline_ffi.pl",
+          "./test_corpus/source_filters.pl",
+          "./test_corpus/real_world/medium_module.pl",
+          "./test_corpus/data_end_sections.pl"
+        ],
+        "coverage_percentage": 100.0
+      },
+      {
+        "feature": {
+          "id": "regex",
+          "name": "Regular Expressions",
+          "priority": "P0",
+          "expected_nodekinds": [
+            "Regex"
+          ],
+          "description": "Pattern matching with regular expressions"
+        },
+        "covered": true,
+        "covering_files": [
+          "./test_corpus/advanced_regex.pl"
+        ],
+        "coverage_percentage": 100.0
+      },
+      {
+        "feature": {
+          "id": "substitution",
+          "name": "Substitution Operators",
+          "priority": "P0",
+          "expected_nodekinds": [
+            "Substitution"
+          ],
+          "description": "String substitution with s/// operator"
+        },
+        "covered": true,
+        "covering_files": [
+          "./test_corpus/modern_perl_features.pl",
+          "./test_corpus/advanced_regex.pl",
+          "./test_corpus/legacy_syntax.pl",
+          "./test_corpus/xs_inline_ffi.pl",
+          "./test_corpus/source_filters.pl"
+        ],
+        "coverage_percentage": 100.0
+      },
+      {
+        "feature": {
+          "id": "heredocs",
+          "name": "Heredocs",
+          "priority": "P1",
+          "expected_nodekinds": [
+            "Heredoc"
+          ],
+          "description": "Multi-line string literals with heredocs"
+        },
+        "covered": true,
+        "covering_files": [
+          "./test_corpus/modern_perl_features.pl",
+          "./test_corpus/legacy_syntax.pl",
+          "./test_corpus/xs_inline_ffi.pl"
+        ],
+        "coverage_percentage": 100.0
+      },
+      {
+        "feature": {
+          "id": "hashes",
+          "name": "Hash Data Structures",
+          "priority": "P1",
+          "expected_nodekinds": [
+            "Hash"
+          ],
+          "description": "Associative arrays (hashes)"
+        },
+        "covered": true,
+        "covering_files": [
+          "./test_corpus/modern_perl_features.pl",
+          "./test_corpus/packages_versions.pl",
+          "./test_corpus/legacy_syntax.pl",
+          "./test_corpus/data_end_sections.pl"
+        ],
+        "coverage_percentage": 100.0
+      },
+      {
+        "feature": {
+          "id": "arrays",
+          "name": "Array Data Structures",
+          "priority": "P1",
+          "expected_nodekinds": [
+            "Array"
+          ],
+          "description": "Indexed arrays"
+        },
+        "covered": true,
+        "covering_files": [
+          "./test_corpus/modern_perl_features.pl",
+          "./test_corpus/packages_versions.pl",
+          "./test_corpus/legacy_syntax.pl",
+          "./test_corpus/xs_inline_ffi.pl",
+          "./test_corpus/source_filters.pl",
+          "./test_corpus/real_world/medium_module.pl",
+          "./test_corpus/end_section.pl",
+          "./test_corpus/data_end_sections.pl"
+        ],
+        "coverage_percentage": 100.0
+      },
+      {
+        "feature": {
+          "id": "builtin-functions",
+          "name": "Builtin Functions",
+          "priority": "P0",
+          "expected_nodekinds": [
+            "BuiltinFunction"
+          ],
+          "description": "Common builtin functions (map, grep, sort, etc.)"
+        },
+        "covered": true,
+        "covering_files": [
+          "./test_corpus/xs_inline_ffi.pl",
+          "./test_corpus/real_world/medium_module.pl"
+        ],
+        "coverage_percentage": 100.0
+      },
+      {
+        "feature": {
+          "id": "match-given",
+          "name": "Match/Given Statements",
+          "priority": "P1",
+          "expected_nodekinds": [
+            "MatchStatement"
+          ],
+          "description": "Pattern matching with match/given/when"
+        },
+        "covered": true,
+        "covering_files": [
+          "./test_corpus/given_when_default.pl"
+        ],
+        "coverage_percentage": 100.0
+      },
+      {
+        "feature": {
+          "id": "format-sprintf",
+          "name": "Format/Sprintf",
+          "priority": "P2",
+          "expected_nodekinds": [
+            "Format",
+            "Sprintf"
+          ],
+          "description": "String formatting functions"
+        },
+        "covered": true,
+        "covering_files": [
+          "./test_corpus/legacy_syntax.pl"
+        ],
+        "coverage_percentage": 100.0
+      }
+    ],
+    "uncovered_critical": [],
+    "uncovered_partial": []
+  },
+  "timeout_risks": []
+}

@@ -1,6 +1,6 @@
-# LSP Feature Catalog - Single Source of Truth
-# This file defines all LSP features and their maturity status
-# Used to generate capabilities, documentation, and compliance reports
+# LSP Feature Catalog (vendored fallback)
+# This file is a vendored copy of the workspace root features.toml.
+# Used only when building the crate outside the workspace.
 
 [meta]
 version = "0.8.5"
