@@ -14,7 +14,12 @@ Inventory of PRs analyzed for the casebook and lessons ledger.
 
 | PR # | Title | Type | Surfaces | Evidence? | Wrongness? | Level | DevLT | Compute |
 |------|-------|------|----------|-----------|------------|-------|-------|---------|
-| TBD | Placeholder | feature | parser/lsp | - | - | 0 | - | - |
+| 181/259 | Call Hierarchy and Name Span Improvements | feature | parser/lsp | Y (11 tests) | None | 1 | 60-90 | moderate |
+| 188 | Semantic Analyzer Phase 1 | feature | parser/lsp/docs | Y (receipts) | None | 1 | 60-90 | moderate |
+| 225/226/229 | Statement Tracker + Heredoc Block-Aware Integration | feature | parser/lexer | Y (F1-F6 fixtures) | None | 1 | 60-90 | moderate |
+| 260 | Substitution Operator Correctness (MUT_002, MUT_005) | hardening | parser/lexer | Y (mutant IDs) | Y (mutation bugs) | 1 | 60-90 | moderate |
+| 264 | Mixed-Delimiter Substitution Replacement | hardening | lexer/tests | Y (regression) | Y (follow-up) | 1 | 30-60 | cheap |
+| 251/252/253 | Test Harness Hardening + BrokenPipe Sweep | mechanization | lsp/tests | Y (baseline) | Y (protocol) | 1 | 90-120 | moderate |
 
 **Type codes:** feature | hardening | mechanization | docs | perf | refactor
 
