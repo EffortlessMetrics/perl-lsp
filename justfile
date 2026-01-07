@@ -282,3 +282,43 @@ health-detail:
     @echo ""
     @echo "📁 Largest source files (by lines):"
     @find crates/*/src -name '*.rs' -exec wc -l {} \; 2>/dev/null | sort -nr | head -10 || echo "  None found"
+
+# ============================================================================
+# Forensics (post-hoc PR archaeology)
+# ============================================================================
+
+# Harvest raw facts from a merged PR
+forensics-harvest pr:
+    @echo "🔬 Harvesting raw facts from PR {{pr}}..."
+    ./scripts/forensics/pr-harvest.sh {{pr}}
+    @echo "✅ Harvest complete"
+
+# Compute temporal topology (convergence, friction, oscillations)
+forensics-temporal pr:
+    @echo "⏱️  Computing temporal topology for PR {{pr}}..."
+    ./scripts/forensics/temporal-analysis.sh {{pr}}
+    @echo "✅ Temporal analysis complete"
+
+# Run static analysis deltas (quick mode)
+forensics-telemetry-quick pr:
+    @echo "📊 Running quick telemetry for PR {{pr}}..."
+    ./scripts/forensics/telemetry-runner.sh {{pr}} --mode quick
+    @echo "✅ Quick telemetry complete"
+
+# Run static analysis deltas (full mode with exhibit-grade tools)
+forensics-telemetry-full pr:
+    @echo "📊 Running full telemetry for PR {{pr}}..."
+    ./scripts/forensics/telemetry-runner.sh {{pr}} --mode full
+    @echo "✅ Full telemetry complete"
+
+# Generate complete dossier (runs full pipeline)
+forensics-dossier pr:
+    @echo "📁 Generating complete dossier for PR {{pr}}..."
+    ./scripts/forensics/dossier-runner.sh {{pr}}
+    @echo "✅ Dossier generation complete"
+
+# Render dossier markdown from existing YAML outputs
+forensics-render pr format='full':
+    @echo "📝 Rendering dossier for PR {{pr}} (format: {{format}})..."
+    ./scripts/forensics/render-dossier.sh {{pr}} --format {{format}}
+    @echo "✅ Rendering complete"

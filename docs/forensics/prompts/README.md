@@ -20,6 +20,7 @@ These prompts enable deep analysis while maintaining epistemic honesty. Each ana
 | [`design-auditor.md`](design-auditor.md) | Maintainability | Boundaries, coupling, API stability |
 | [`verification-auditor.md`](verification-auditor.md) | Correctness | Test depth, mutation survival, regression coverage |
 | [`docs-auditor.md`](docs-auditor.md) | Reproducibility | Gate clarity, snippet validity, drift risk |
+| [`policy-auditor.md`](policy-auditor.md) | Governance | Catalog drift, metrics sync, schema compliance, guardrail effectiveness |
 | [`chronologist.md`](chronologist.md) | Temporal | Convergence narrative, decision timeline |
 | [`decision-extractor.md`](decision-extractor.md) | Budget | DevLT estimation from decision events |
 
@@ -122,6 +123,7 @@ Run analyzers in this order for best results:
 2. design-auditor    (uses diff-scout hotspots)
    verification-auditor  (uses diff-scout hotspots)
    docs-auditor      (uses diff-scout file categories)
+   policy-auditor    (uses diff-scout for governance-relevant changes)
        |
        v
 3. chronologist      (uses all findings for temporal context)

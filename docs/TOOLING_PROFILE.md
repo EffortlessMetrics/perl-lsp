@@ -12,33 +12,38 @@ Static analysis tooling stack for the perl-lsp workspace. This document covers w
 
 **Quality comes first; tools are servants.**
 
-Tools in this repository fall into two categories:
+Tools in this repository fall into three categories:
 
 1. **Leading analysis** - Tools that actually pay rent: they prevent rot, catch real issues, and maintain codebase integrity. These run on every PR.
 
 2. **Exhibit-grade analysis** - Deeper tools reserved for high-risk changes, release candidates, or forensic investigations. These are expensive but valuable when applied selectively.
 
-The tradeoff is always-on vs. exhibit-grade:
+3. **Research tier** - Experimental or one-off analysis tools for deep dives, architectural investigations, and specific troubleshooting. NOT gate-blocking, run only when needed.
 
-| Always-On | Exhibit-Grade |
-|-----------|---------------|
-| Fast (<5 min) | Slow (10-60 min) |
-| Low noise | High signal depth |
-| Blocks merge | Informs decisions |
-| Every PR | Selective application |
+The tradeoff is always-on vs. exhibit-grade vs. research:
 
-**Principle**: If a tool has a high false positive rate or excessive runtime, it does not belong in `ci-gate`. Put it in exhibit-grade and run it when it matters.
+| Always-On | Exhibit-Grade | Research |
+|-----------|---------------|----------|
+| Fast (<5 min) | Slow (10-60 min) | Varies (5s-10min) |
+| Low noise | High signal depth | High noise or experimental |
+| Blocks merge | Informs decisions | Exploratory insights |
+| Every PR | Selective application | On-demand only |
+
+**Principle**: If a tool has a high false positive rate or excessive runtime, it does not belong in `ci-gate`. Put it in exhibit-grade and run it when it matters. If a tool is experimental or useful only for specific investigations, put it in research tier.
 
 ### Lane Selection Matrix
 
-| Change Type | Always-on | Exhibit-grade | Security/Policy |
-|-------------|-----------|---------------|-----------------|
-| Any PR | Required | Optional | Optional |
-| Parser changes | Required | Recommended | Optional |
-| Dependency updates | Required | Optional | Required |
-| Release candidate | Required | Required | Required |
-| LSP protocol changes | Required | Recommended | Optional |
-| CI/build changes | Required | Optional | Recommended |
+| Change Type | Always-on | Exhibit-grade | Research | Security/Policy |
+|-------------|-----------|---------------|----------|-----------------|
+| Any PR | Required | Optional | As needed | Optional |
+| Parser changes | Required | Recommended | As needed | Optional |
+| Dependency updates | Required | Optional | cargo-outdated, cargo-udeps | Required |
+| Release candidate | Required | Required | cargo-bloat, typos | Required |
+| LSP protocol changes | Required | Recommended | As needed | Optional |
+| CI/build changes | Required | Optional | actionlint | Recommended |
+| Major refactors | Required | Required | cargo-modules, rust-code-analysis | Optional |
+| Macro work | Required | Recommended | cargo-expand | Optional |
+| Script changes | Required | Optional | shellcheck | Optional |
 
 ---
 
@@ -316,7 +321,256 @@ See [MUTATION_TESTING_METHODOLOGY.md](MUTATION_TESTING_METHODOLOGY.md) for detai
 
 ---
 
-## 4. Forensics Tools
+## 4. Research Tier (Experimental/On-Demand)
+
+These tools are NOT gate-blocking and do NOT run in CI. They're useful for deep dives, specific investigations, and one-off analyses. Run these when you need insights, not as part of regular development.
+
+**Philosophy**: Research tools are expensive, noisy, or experimental. They provide value for specific questions but would harm developer flow if run routinely.
+
+### Rust Analysis Tools
+
+| Tool | Purpose | When to run | Installation |
+|------|---------|-------------|--------------|
+| **cargo-modules** | Module graph and cycle detection | Major refactors, architecture reviews | `cargo install cargo-modules` |
+| **rust-code-analysis** | Complexity metrics (cyclomatic, cognitive) | Hotspot deltas, refactoring planning | `cargo install rust-code-analysis-cli` |
+| **cargo-bloat** | Binary size analysis | Release audits, size regressions | `cargo install cargo-bloat` |
+| **cargo-udeps** | Unused dependency detection | Dependency cleanup, minimization | `cargo install cargo-udeps --locked` |
+| **cargo-outdated** | Dependency freshness check | Upgrade planning, security reviews | `cargo install cargo-outdated` |
+| **cargo-expand** | Macro expansion debugging | Macro troubleshooting, proc-macro work | `cargo install cargo-expand` |
+| **cargo-depgraph** | Dependency visualization | Understanding dep tree, cycle detection | `cargo install cargo-depgraph` |
+
+#### cargo-modules
+
+**When to use**:
+- Before major module refactorings
+- When suspecting circular dependencies
+- When planning crate splits or merges
+
+**Command**:
+```bash
+cargo modules generate graph --package perl-parser | dot -Tpng > module-graph.png
+cargo modules structure --package perl-parser
+```
+
+**How to interpret**:
+- Look for unexpected cycles
+- Identify overly coupled modules
+- Find orphaned or poorly connected modules
+
+**Cost**: ~10s. Generates graphviz output.
+
+**Warning**: Output can be overwhelming for large crates. Use `--focus-on` to zoom into specific modules.
+
+#### rust-code-analysis
+
+**When to use**:
+- Comparing complexity before/after refactor
+- Identifying high-complexity hotspots for refactoring
+- Establishing complexity baselines for new features
+
+**Command**:
+```bash
+rust-code-analysis --metrics -p crates/perl-parser/src/
+rust-code-analysis --metrics -p crates/perl-parser/src/ -O json > complexity-before.json
+```
+
+**How to interpret**:
+- **Cyclomatic Complexity**: Measures decision points (if/match/loop). Target: <15 per function.
+- **Cognitive Complexity**: Measures mental effort to understand. Target: <20 per function.
+- Compare before/after metrics to prove refactoring reduced complexity.
+
+**Cost**: ~30s for perl-parser. High noise if used for absolute scores.
+
+**Warning**: Do NOT use absolute scores as quality gates. Only use for delta analysis (before vs after).
+
+#### cargo-bloat
+
+**When to use**:
+- Release audits to understand binary size contributors
+- Investigating unexpected binary size growth
+- Optimizing for embedded or size-constrained targets
+
+**Command**:
+```bash
+cargo bloat --release -p perl-lsp --crates
+cargo bloat --release -p perl-lsp -n 50  # Top 50 symbols
+```
+
+**How to interpret**:
+- Shows size contribution by crate and symbol
+- Look for unexpectedly large dependencies
+- Identify monomorphization bloat from generics
+
+**Cost**: ~1-2 min (requires release build).
+
+#### cargo-udeps
+
+**When to use**:
+- Periodic dependency cleanup (quarterly)
+- Before releases to minimize attack surface
+- After removing features or refactoring
+
+**Command**:
+```bash
+cargo +nightly udeps --workspace
+```
+
+**How to interpret**:
+- Lists dependencies that aren't actually used
+- May have false positives for target-specific deps
+- Verify before removing (check if used in tests, examples, benches)
+
+**Cost**: ~30-60s. Requires nightly toolchain.
+
+**Warning**: Can miss dependencies used only in cfg-gated code. Always test after removing deps.
+
+#### cargo-outdated
+
+**When to use**:
+- Planning dependency update sprints
+- Security reviews (find dependencies with known CVEs)
+- Quarterly maintenance
+
+**Command**:
+```bash
+cargo outdated --workspace
+cargo outdated --workspace --root-deps-only  # Only direct deps
+```
+
+**How to interpret**:
+- Shows current, latest compatible, and latest versions
+- Color-coded by severity (red = major behind)
+- Cross-reference with `cargo audit` for security implications
+
+**Cost**: ~10-20s.
+
+#### cargo-expand
+
+**When to use**:
+- Debugging procedural macros
+- Understanding derive macro expansions
+- Troubleshooting macro hygiene issues
+
+**Command**:
+```bash
+cargo expand --package perl-parser --lib
+cargo expand --package perl-parser parser::expression  # Specific module
+```
+
+**How to interpret**:
+- Shows fully expanded Rust code after macro processing
+- Useful for understanding what generated code looks like
+- Can be verbose; pipe through `less` or save to file
+
+**Cost**: ~5-10s per module.
+
+#### cargo-depgraph
+
+**When to use**:
+- Visualizing dependency relationships
+- Finding duplicate dependencies in the tree
+- Understanding why a specific crate is included
+
+**Command**:
+```bash
+cargo depgraph --workspace-only | dot -Tpng > depgraph.png
+cargo tree -d  # Text-based duplicate detection
+```
+
+**How to interpret**:
+- Visual graph of crate dependencies
+- Identify opportunities to consolidate versions
+- Find unexpected transitive dependencies
+
+**Cost**: ~5s. Requires graphviz.
+
+### Script and Config Linters
+
+| Tool | Purpose | When to run | Installation |
+|------|---------|-------------|--------------|
+| **shellcheck** | Shell script linting | Before committing scripts/*, forensics audits | `apt install shellcheck` or `brew install shellcheck` |
+| **actionlint** | GitHub Actions workflow linting | Before committing .github/workflows/* changes | Download from [actionlint releases](https://github.com/rhysd/actionlint/releases) |
+| **typos** | Typo detection in docs and code | Before releases, documentation updates | `cargo install typos-cli` |
+
+#### shellcheck
+
+**When to use**:
+- Before committing any script in `scripts/`
+- Especially critical for `scripts/forensics/*` (they're self-referential)
+- When debugging shell script issues
+
+**Command**:
+```bash
+shellcheck scripts/*.sh
+shellcheck scripts/forensics/*.sh
+find scripts -name "*.sh" -exec shellcheck {} +
+```
+
+**How to interpret**:
+- Reports common shell pitfalls (unquoted variables, missing error checks)
+- Each issue has a SC#### code with explanation
+- Fix or add `# shellcheck disable=SC####` with justification
+
+**Cost**: <1s per script. Very low overhead.
+
+**Why not gate-blocking**: Minor style issues shouldn't block development. Run before forensics-critical changes.
+
+#### actionlint
+
+**When to use**:
+- Before committing changes to `.github/workflows/*`
+- When debugging workflow failures
+- When adding new CI jobs
+
+**Command**:
+```bash
+actionlint
+actionlint .github/workflows/ci.yml
+```
+
+**How to interpret**:
+- Validates workflow syntax and common mistakes
+- Catches typos in action names, invalid shell commands, missing required fields
+- Provides line numbers and clear error messages
+
+**Cost**: <2s. Very fast.
+
+**Why not gate-blocking**: Workflows are already validated by GitHub on push. This is for early feedback.
+
+#### typos
+
+**When to use**:
+- Before releases
+- After documentation updates
+- When adding new public APIs (catches identifier typos)
+
+**Command**:
+```bash
+typos
+typos --write-changes  # Auto-fix
+typos docs/
+typos --format brief
+```
+
+**How to interpret**:
+- Reports potential typos in files
+- Can produce false positives on domain terms (add to `.typos.toml`)
+- Useful for catching embarrassing typos before public release
+
+**Cost**: <5s for full repo scan.
+
+**Why not gate-blocking**: High false positive rate on technical terms. Useful for polish, not correctness.
+
+**Configuration**: Create `.typos.toml` to add project-specific dictionary:
+```toml
+[default.extend-words]
+perl-lsp = "perl-lsp"  # Don't flag our project name
+tokei = "tokei"        # Tool names
+```
+
+---
+
+## 5. Forensics Tools
 
 For PR archaeology and dossier generation.
 
@@ -384,7 +638,7 @@ For PR archaeology and dossier generation.
 
 ---
 
-## 5. Security/Policy Tools
+## 6. Security/Policy Tools
 
 Optional but recommended for releases and security-sensitive changes.
 
@@ -463,7 +717,7 @@ semgrep --config=p/rust .
 
 ---
 
-## 6. Tool Installation
+## 7. Tool Installation
 
 ### Always-On (included with rustup)
 
@@ -475,6 +729,24 @@ rustup component add rustfmt clippy
 
 ```bash
 cargo install cargo-audit cargo-semver-checks cargo-geiger cargo-llvm-cov cargo-mutants
+```
+
+### Research Tier
+
+```bash
+# Rust analysis tools
+cargo install cargo-modules --locked
+cargo install rust-code-analysis-cli --locked
+cargo install cargo-bloat --locked
+cargo install cargo-udeps --locked
+cargo install cargo-outdated --locked
+cargo install cargo-expand --locked
+cargo install cargo-depgraph --locked
+
+# Script and config linters
+cargo install typos-cli --locked
+# shellcheck: apt install shellcheck (or brew install shellcheck)
+# actionlint: download from https://github.com/rhysd/actionlint/releases
 ```
 
 ### Full Installation
@@ -494,6 +766,18 @@ cargo install cargo-nextest --locked
 # Forensics
 cargo install tokei --locked
 # Plus: gh, jq (from system packages)
+
+# Research tier
+cargo install cargo-modules --locked
+cargo install rust-code-analysis-cli --locked
+cargo install cargo-bloat --locked
+cargo install cargo-udeps --locked
+cargo install cargo-outdated --locked
+cargo install cargo-expand --locked
+cargo install cargo-depgraph --locked
+cargo install typos-cli --locked
+# shellcheck: apt install shellcheck (or brew install shellcheck)
+# actionlint: download from https://github.com/rhysd/actionlint/releases
 
 # Security
 cargo install cargo-deny --locked
@@ -527,11 +811,11 @@ These **must** be installed for `just ci-gate` to work.
 
 ---
 
-## 7. Adding New Tools
+## 8. Adding New Tools
 
 Checklist before adding a tool to the stack:
 
-### 7.1 Evaluation Questions
+### 8.1 Evaluation Questions
 
 1. **What rot does it prevent?**
    - Name the specific failure mode it catches
@@ -557,15 +841,15 @@ Checklist before adding a tool to the stack:
    - Document common false positives
    - Document fix patterns
 
-### 7.2 Integration Steps
+### 8.2 Integration Steps
 
 1. Add to appropriate section in this document
-2. Add installation instructions to Section 6
+2. Add installation instructions to Section 7
 3. If always-on, add to `ci-gate` in `justfile`
 4. If exhibit-grade, document selection criteria
 5. Update CLAUDE.md quick reference if needed
 
-### 7.3 Removal Criteria
+### 8.3 Removal Criteria
 
 Remove a tool from always-on if:
 - False positive rate exceeds 10%
@@ -575,7 +859,7 @@ Remove a tool from always-on if:
 
 ---
 
-## 8. See Also
+## 9. See Also
 
 - [QUALITY_SURFACES.md](QUALITY_SURFACES.md) - The four quality surfaces
 - [ANALYZER_FRAMEWORK.md](ANALYZER_FRAMEWORK.md) - Specialist analyzers for deep forensics
