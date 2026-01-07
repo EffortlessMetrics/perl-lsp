@@ -133,9 +133,46 @@ To improve estimates over time:
 
 ### Calibration Log
 
-| PR | Estimated | Reported | Error | Notes |
-|----|-----------|----------|-------|-------|
-| _TBD_ | _TBD_ | _TBD_ | _TBD_ | _Calibration data goes here_ |
+Initial calibration from casebook exhibits (v1 weights):
+
+| PR | Type | Estimated | Reported | In Range? | Notes |
+|----|------|-----------|----------|-----------|-------|
+| #231/232/234 | feature | 60–90m | — | — | Semantic analyzer; 4 decisions, 0 friction |
+| #260/264 | hardening | 60–90m | — | — | Mutation hardening; 3 decisions, 2 friction |
+| #251-253 | mechanization | 90–130m | — | — | Harness hardening; 4 decisions, 3 friction + wrongness |
+| #259 | feature | 45–75m | — | — | Name span; 3 decisions, 0 friction |
+| #225/226/229 | feature | 60–90m | — | — | Statement tracker; 4 decisions, 0 friction |
+
+**Status:** Awaiting reported values for calibration. Current estimates use v1 weights.
+
+### Weight Revision History
+
+| Version | Date | Changes | Rationale |
+|---------|------|---------|-----------|
+| v1 | 2025-01-07 | Initial weights | Based on industry heuristics |
+
+### Error Band
+
+**Current documented error band:** ±30–50% typical (uncalibrated)
+
+This will narrow after calibration with reported values. Target: ±20% for high-confidence estimates.
+
+### Calibration Procedure
+
+To calibrate from a new PR:
+
+```bash
+# 1. Run forensics harvest
+scripts/forensics/pr-harvest.sh <PR_NUMBER> -o harvest.yaml
+
+# 2. Run temporal analysis
+scripts/forensics/temporal-analysis.sh <PR_NUMBER> -o temporal.yaml
+
+# 3. Estimate DevLT using rubric (count decision + friction events)
+# 4. Record in calibration log above
+# 5. After merge, record actual reported DevLT
+# 6. If outside range, adjust weights and document in revision history
+```
 
 ## Machine Work Estimation
 
