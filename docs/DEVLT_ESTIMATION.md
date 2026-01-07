@@ -131,6 +131,64 @@ To improve estimates over time:
 3. **Tune weights** until reported usually falls inside estimated range
 4. **Document error band** and revision history
 
+### Calibration Data Collection
+
+#### Per-PR Calibration Record
+
+After each PR that goes through forensics, collect:
+
+```yaml
+pr: <number>
+# Estimated (from decision-extractor)
+estimated_devlt:
+  range_min: <minutes>
+  range_max: <minutes>
+  confidence: low|med|high
+  coverage: github_only|github_plus_agent_logs
+  basis:
+    - <event 1>
+    - <event 2>
+
+# Reported (from maintainer, if available)
+reported_devlt:
+  value: <minutes>
+  confidence: low|med|high
+  notes: <optional>
+
+# Calibration result
+calibration:
+  in_range: true|false
+  error_minutes: <if reported available>
+  error_direction: under|over|accurate
+```
+
+**Note:** Calibration requires maintainer-reported values which should be collected during PR review or retrospectives. Reported values can be rough estimates (±15m acceptable).
+
+#### Calibration Log Format
+
+Track calibration over time:
+
+| PR | Est. Range | Reported | In Range? | Error | Notes |
+|----|------------|----------|-----------|-------|-------|
+| 259 | 45–90 | 60 | ✓ | - | baseline |
+| 260 | 30–60 | 75 | ✗ | +15 under | friction underweighted |
+
+#### Weight Adjustment Protocol
+
+When calibration shows systematic bias:
+
+1. **Collect 5+ data points** showing same direction error
+2. **Identify which event category** is mis-weighted (decision vs. friction, which type)
+3. **Adjust weight by 20%** in correction direction
+4. **Document in revision history** with rationale
+5. **Re-run next 5 PRs** to validate adjustment
+
+**Example adjustment:**
+- If 5 PRs show consistent under-estimation (+20m outside high end)
+- And all involve friction events
+- Increase friction event weights by 20%
+- Document as v2 in revision history
+
 ### Calibration Log
 
 Initial calibration from casebook exhibits (v1 weights):
@@ -149,7 +207,8 @@ Initial calibration from casebook exhibits (v1 weights):
 
 | Version | Date | Changes | Rationale |
 |---------|------|---------|-----------|
-| v1 | 2025-01-07 | Initial weights | Based on industry heuristics |
+| v1 | 2025-01-07 | Initial weights | Heuristic baseline |
+| v2 | TBD | Pending calibration data | - |
 
 ### Error Band
 

@@ -36,13 +36,14 @@ Every PR dossier uses a **four-panel structure** to surface measured facts, then
 | 1. Change Surface | Measured | Where did this PR land? What got riskier? | Review map (3-8 priority files), integration points |
 | 2. Verification Depth | Measured | What is actually proven now? | Proof bundle, "Not measured" explicit list |
 | 3. Governance Integrity | Measured | Did we keep truth surfaces honest? | Claim drift list, schema compliance |
-| 4. Temporal Topology | Derived | How did it converge? | 3-line convergence story, friction zones, next prevention |
+| 4. Temporal Topology | Derived | How did it converge? | 3-line convergence story, friction zones |
 
 After the four panels come:
 - **Panel 5**: Budget Estimates (with provenance)
 - **Panel 6**: Quality Deltas (impact on four quality surfaces)
 - **Panel 7**: Factory Delta (systemic improvements)
 - **Panel 8**: Exhibit Score (overall assessment)
+- **Panel 9**: Next Prevention Actions (actionable items to prevent recurrence)
 - **Findings**: Exceptional issues only (optional)
 
 ---
@@ -276,6 +277,99 @@ Files touched across many commits, indicating uncertainty or complexity.
 **Next prevention**:
 - Pre-commit design review for parser.rs-level complexity
 - API contract validation before implementation for index.rs-level uncertainty
+
+---
+
+## Panel 9: Next Prevention Actions
+
+**Purpose**: Turn forensics into "do better next time" outputs. Every dossier must produce actionable items to prevent recurrence.
+
+Three categories of actions, ranked by priority:
+
+### 9.1 Code Health Actions (Maintainability)
+
+Actions to improve maintainability and reduce future friction:
+
+- **Split hotspots**: Files too frequently touched across commits
+- **Reduce coupling**: Modules too interdependent, changes cascade
+- **Clarify boundaries**: Unclear responsibility separation between modules
+- **Shrink/document public surface**: Public API needs refinement or documentation
+
+Each action item should include:
+
+| Field | Description |
+| ----- | ----------- |
+| **What** | Specific change needed |
+| **Where** | File path or component |
+| **Why** | What problem it prevents |
+| **Evidence** | How you know it's done |
+
+**Example**:
+
+| What | Where | Why | Evidence |
+| ---- | ----- | --- | -------- |
+| Split `parser.rs` into `parser/core.rs` and `parser/expressions.rs` | `crates/perl-parser/src/parser.rs` (800+ LOC) | Reduce churn frequency - file touched in 12/23 commits | File split complete, both <400 LOC, clippy passes |
+| Extract `IndexProvider` trait to separate module | `crates/perl-lsp/src/index.rs` | Clarify LSP provider boundaries | Trait in `lsp/providers/index.rs`, tests pass |
+
+### 9.2 Verification Actions (Correctness)
+
+Actions to strengthen test coverage and proof quality:
+
+- **Missing unhappy path tests**: Error conditions not exercised
+- **Mutation survivors → targeted tests needed**: Mutation testing reveals gaps
+- **New fixtures for edge cases discovered**: Integration test scenarios missing
+- **Coverage gaps in changed code**: Changed code lacks test coverage
+
+Each action item should include:
+
+| Field | Description |
+| ----- | ----------- |
+| **What** | Specific test or fixture needed |
+| **Where** | Test file or coverage gap location |
+| **Why** | What correctness issue it prevents |
+| **Evidence** | How you know it's done |
+
+**Example**:
+
+| What | Where | Why | Evidence |
+| ---- | ----- | --- | -------- |
+| Add property test for surrogate pair edge cases | `tests/property_utf16.rs` | Current tests missed 2-rewrite friction in utf16.rs | Quickcheck test added, utf16.rs mutation score >90% |
+| Add integration fixture for multi-file workspace navigation | `tests/fixtures/workspace_multi/` | No test for dual indexing across files | Fixture exists, LSP navigation test passes |
+| Test error recovery path in `index.rs:567` | `tests/lsp_index_test.rs` | Mutation survivor indicates untested error path | Mutation killed, test fails when error handling removed |
+
+### 9.3 Factory Actions (Process)
+
+Actions to improve the development factory itself:
+
+- **New preflight gate to prevent this friction class**: Automated check missing
+- **Tighten schema/contracts**: Documentation or API contract unclear
+- **Add/adjust lane rules**: Workflow or routing logic needs refinement
+- **New receipt requirement**: Quality evidence missing from gate
+
+Each action item should include:
+
+| Field | Description |
+| ----- | ----------- |
+| **What** | Specific process change |
+| **Where** | Justfile, CI config, or documentation |
+| **Why** | What friction class it prevents |
+| **Evidence** | How you know it's done |
+
+**Example**:
+
+| What | Where | Why | Evidence |
+| ---- | ----- | --- | -------- |
+| Add `just check-complexity` gate (max 400 LOC/file) | `justfile`, `scripts/complexity-check.sh` | Prevent parser.rs-level hotspots (800+ LOC) | Gate fails on >400 LOC, documented in COMMANDS_REFERENCE.md |
+| Require mutation score receipt in PR template | `.github/pull_request_template.md` | Ensure mutation testing runs before merge | Template updated, PR checklist includes mutation score |
+| Add pre-implementation design template for >500 LOC changes | `docs/DESIGN_TEMPLATE.md` | Prevent API oscillation (8 touches to index.rs) | Template exists, used in next large PR |
+
+### Output: Prevention Plan
+
+**Summary**: Select 2-3 actions per category (6-9 total) that best address the PR's friction patterns.
+
+**Priority ranking**: Order by expected impact on preventing similar friction in future PRs.
+
+**Tracking**: Link to issues created for each action if implementation is deferred beyond current PR.
 
 ---
 
@@ -606,6 +700,42 @@ Coverage: `github_plus_agent_logs`
 
 ---
 
+## Panel 9: Next Prevention Actions
+
+### 9.1 Code Health Actions (Maintainability)
+
+| What | Where | Why | Evidence |
+| ---- | ----- | --- | -------- |
+| Document unsafe block preconditions in utf16.rs | `crates/perl-parser/src/utf16.rs` (5 unsafe blocks) | 2 rewrites for surrogate pairs indicate complexity | Doc comments added for all unsafe blocks, reviewed |
+| Extract boundary validation to separate module | `crates/perl-parser/src/utf16/validation.rs` | Separate concerns: conversion vs. validation | Module exists, tests pass, <200 LOC |
+
+### 9.2 Verification Actions (Correctness)
+
+| What | Where | Why | Evidence |
+| ---- | ----- | --- | -------- |
+| Add property test for BMP edge cases | `tests/property_utf16.rs` | Current coverage partial for non-BMP unicode | Test added, 1000 iterations with BMP boundaries |
+| Test mutation survivor in lexer.rs:234 | `tests/lexer_test.rs` | Comment parsing boundary untested | New test kills mutation, lexer.rs score >90% |
+| Add integration fixture for LSP client compatibility | `tests/fixtures/lsp_clients/` | Only VS Code tested, gap acknowledged | Emacs, Neovim fixtures added |
+
+### 9.3 Factory Actions (Process)
+
+| What | Where | Why | Evidence |
+| ---- | ----- | --- | -------- |
+| Add cargo-mutants to pre-push hook | `scripts/install-githooks.sh` | Prevent mutation score regression | Hook runs mutants on changed files only |
+| Create Unicode research checklist | `docs/UNICODE_CHECKLIST.md` | Prevent surrogate pair discovery during implementation | Checklist exists, includes surrogate pair section |
+
+**Priority ranking**:
+1. Document unsafe blocks (immediate maintainability win)
+2. Add mutation survivor tests (close correctness gap)
+3. Add cargo-mutants to pre-push (prevent regression)
+4. Create Unicode checklist (prevent similar friction)
+5. Extract validation module (reduce future churn)
+6. Add BMP property tests (expand correctness coverage)
+
+**Tracking**: Issues #160-#165 created for deferred actions
+
+---
+
 ## Findings
 
 None - clean PR.
@@ -636,7 +766,8 @@ None - clean PR.
 **Phase 3: Synthesis**
 7. Panel 7 (Factory Delta) - Identify systemic improvements
 8. Panel 8 (Exhibit Score) - Overall assessment
-9. Findings (optional) - Document exceptional issues
+9. Panel 9 (Next Prevention Actions) - Actionable items to prevent recurrence
+10. Findings (optional) - Document exceptional issues
 
 ### Backward Compatibility
 
