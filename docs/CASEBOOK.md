@@ -112,6 +112,65 @@ Each exhibit shows:
 
 ---
 
+### Exhibit 4: Name Span for LSP Navigation (Issue #181 → PR #259)
+
+**What it proves:** Precise LSP navigation requires name_span infrastructure to place cursor on identifiers rather than full blocks.
+
+**Review map:**
+- `crates/perl-parser/src/lsp/call_hierarchy_provider.rs` (+49/-19, `selection_range_from_name_span()` helper)
+- `crates/perl-parser/src/ast.rs` (`phase_span: Option<SourceLocation>` added to PhaseBlock)
+- `crates/perl-parser/src/parser.rs` (name_span capture from tokens)
+- `crates/perl-parser/tests/name_spans_special_test.rs` (+342 lines, 11 tests)
+
+**Proof bundle:**
+- `cargo test -p perl-parser --test name_spans_special_test`: 11/11 passing
+- Tests cover: AUTOLOAD, DESTROY, BEGIN, END, CHECK, INIT, UNITCHECK spans
+- Byte-precise assertions verify exact span boundaries
+
+**Scar story:** N/A - Clean PR with no drift detected.
+
+**Factory delta:**
+- `selectionRange` now correctly identifies symbol name portion (LSP 3.17 compliant)
+- `phase_span` added to PhaseBlock AST node for phase block keywords
+- Container names added to workspace symbols for disambiguation
+
+**DevLT:** 60-90m | **Compute:** moderate
+
+**Exhibit score:** 4.8/5 (Clarity: 5, Scope: 4, Evidence: 5, Tests: 5, Efficiency: 5)
+
+**Dossier:** [`forensics/pr-259.md`](forensics/pr-259.md)
+
+---
+
+### Exhibit 5: Statement Tracker + Heredoc Block-Aware (PRs #225/226/229)
+
+**What it proves:** Multi-PR feature decomposition enables incremental delivery with independent testability.
+
+**Review map:**
+- `crates/tree-sitter-perl-rs/src/statement_tracker.rs` (+566 lines, StatementTracker API)
+- `crates/tree-sitter-perl-rs/src/heredoc_parser.rs` (HeredocScanner integration)
+- `crates/perl-parser/tests/sprint_a_heredoc_ast_tests.rs` (+236 lines, F5/F6 fixtures)
+
+**Proof bundle:**
+- 28 total tests: 14 unit (StatementTracker API), 8 integration (F1-F4), 6 AST-level (F5-F6)
+- F1-F6 fixtures document expected behavior for block scenarios
+- Sprint A completion milestone achieved with PR #229
+
+**Scar story:** N/A - Clean PRs with no drift detected.
+
+**Factory delta:**
+- Block-aware statement end detection: `find_statement_end_line()` handles semicolon vs. expression heredocs
+- `HeredocContext` captures `block_depth_at_declaration` for future semantic analysis
+- `scan_for_test()` exposes internal state for validation
+
+**DevLT:** 60-90m | **Compute:** moderate
+
+**Exhibit score:** 5/5 (Clarity: 5, Scope: 5, Evidence: 5, Tests: 5, Efficiency: 5)
+
+**Dossier:** [`forensics/pr-225-226-229.md`](forensics/pr-225-226-229.md)
+
+---
+
 ## What These Exhibits Demonstrate
 
 ### AI-Native Development Patterns
@@ -128,8 +187,10 @@ Each exhibit shows:
 | #231/232/234 Semantic | 60-90m | moderate | 12/12 handlers, clean API |
 | #260/264 Substitution | 60-90m | moderate | 4 bugs fixed, mutation-hardened |
 | #251-253 Harness | 90-120m | moderate | 365 tests unignored |
+| #259 Name Span | 60-90m | moderate | 11 span tests, LSP 3.17 compliant |
+| #225/226/229 Statement Tracker | 60-90m | moderate | 28 tests, F1-F6 fixtures |
 
-Total DevLT: ~4-5 hours for significant capability + quality improvements.
+Total DevLT: ~6-8 hours for significant capability + quality improvements.
 
 ---
 

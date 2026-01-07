@@ -14,17 +14,17 @@ Inventory of PRs analyzed for the casebook and lessons ledger.
 
 | Issue | PR(s) | Title | Type | Surfaces | Evidence? | Wrongness? | Level | Cover Sheet | Exhibit ID |
 |-------|-------|-------|------|----------|-----------|------------|-------|-------------|------------|
-| #181 | #259 | Name Span for LSP Navigation | feature | parser/lsp | Y (11 tests) | None | 2 | ✅ Ready | `name-span` |
-| #188 | #231/232/234 | Semantic Analyzer Phase 1 | feature | parser/lsp/docs | Y (receipts) | None | 2 | ✅ Ready | `semantic-phase1` |
-| — | #225/226/229 | Statement Tracker + Heredoc Block-Aware | feature | parser/lexer | Y (F1-F6 fixtures) | None | 2 | ✅ Ready | `statement-tracker` |
-| — | #260/264 | Substitution Operator Correctness | hardening | parser/lexer | Y (mutant IDs) | Y (mutation bugs) | 2 | ✅ Ready | `mutation-subst` |
-| — | #251/252/253 | Test Harness Hardening + BrokenPipe Sweep | mechanization | lsp/tests | Y (baseline) | Y (protocol) | 2 | ✅ Ready | `harness-hardening` |
+| #181 | #259 | Name Span for LSP Navigation | feature | parser/lsp | Y (11 tests) | None | 2 | ✅ Pasted | `name-span` |
+| #188 | #231/232/234 | Semantic Analyzer Phase 1 | feature | parser/lsp/docs | Y (receipts) | None | 2 | ✅ Pasted | `semantic-phase1` |
+| #182 | #225/226/229 | Statement Tracker + Heredoc Block-Aware | feature | parser/lexer | Y (F1-F6 fixtures) | None | 2 | ✅ Pasted | `statement-tracker` |
+| #144/147 | #260/264 | Substitution Operator Correctness | hardening | parser/lexer | Y (mutant IDs) | Y (mutation bugs) | 2 | ✅ Pasted | `mutation-subst` |
+| — | #251/252/253 | Test Harness Hardening + BrokenPipe Sweep | mechanization | lsp/tests | Y (baseline) | Y (protocol) | 2 | ✅ Pasted | `harness-hardening` |
 
 **Type codes:** feature | hardening | mechanization | docs | perf | refactor
 
 **Surfaces:** parser | lexer | lsp | dap | ci | docs | catalog | bench
 
-**Cover Sheet status:** ✅ Ready (drafted, paste into GitHub) | ⏳ Pending | — (not needed)
+**Cover Sheet status:** ✅ Pasted (applied to GitHub PR) | ✅ Ready (drafted, ready to paste) | ⏳ Pending | — (not needed)
 
 ### Dossier Files
 
