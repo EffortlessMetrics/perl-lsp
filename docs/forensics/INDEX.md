@@ -19,6 +19,14 @@ Inventory of PRs analyzed for the casebook and lessons ledger.
 | #182 | #225/226/229 | Statement Tracker + Heredoc Block-Aware | feature | parser/lexer | Y (F1-F6 fixtures) | None | 2 | ✅ Pasted | `statement-tracker` |
 | #144/147 | #260/264 | Substitution Operator Correctness | hardening | parser/lexer | Y (mutant IDs) | Y (mutation bugs) | 2 | ✅ Pasted | `mutation-subst` |
 | — | #251/252/253 | Test Harness Hardening + BrokenPipe Sweep | mechanization | lsp/tests | Y (baseline) | Y (protocol) | 2 | ✅ Pasted | `harness-hardening` |
+| #182c | #271 | Statement Tracker Block Depth v2 | feature | parser | Y | None | 0 | — | — |
+| — | #261 | BUG=0 Burn-down | hardening | parser/lexer | Y | Y (multi-bug) | 1 | ⏳ Pending | — |
+| — | #250 | Test Harness Hardening (29 unignored) | mechanization | lsp/tests | Y (baseline) | Y (protocol) | 0 | — | — |
+| — | #236 | LSP Modularization + Version Guard | refactor | lsp/parser | Y | None | 1 | ⏳ Pending | — |
+| #182b | #223 | Thread Statement Tracker | feature | parser | Y | None | 0 | — | — |
+| #182a | #222 | Heredoc/Statement Tracker Data Structures | feature | parser | Y | None | 0 | — | — |
+| — | #214 | Heredoc Day2 Lean CI | feature | ci/parser | Y | None | 0 | — | — |
+| #147 | #158 | Complete Substitution Operator Parsing | feature | parser | Y | None | 0 | — | — |
 
 **Type codes:** feature | hardening | mechanization | docs | perf | refactor
 
