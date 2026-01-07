@@ -145,7 +145,6 @@ fmt:
 clean:
     cargo clean
 
-
 # Policy enforcement checks
 ci-policy:
     @echo "📋 Running policy checks..."
@@ -160,6 +159,25 @@ status-update:
 # Verify CURRENT_STATUS.md derived metrics are up-to-date
 status-check:
     @python3 scripts/update-current-status.py --check
+
+# ============================================================================
+# Corpus Audit Commands
+# ============================================================================
+
+# Run corpus audit for coverage analysis
+corpus-audit:
+    @echo "🔍 Running corpus audit..."
+    @cd xtask && cargo run --no-default-features -- corpus-audit
+
+# Run corpus audit in CI check mode (fails if issues found)
+corpus-audit-check:
+    @echo "🔍 Running corpus audit (CI check mode)..."
+    @cd xtask && cargo run --no-default-features -- corpus-audit --check
+
+# Run corpus audit with fresh report regeneration
+corpus-audit-fresh:
+    @echo "🔍 Running corpus audit (fresh mode)..."
+    @cd xtask && cargo run --no-default-features -- corpus-audit --fresh
 
 # ============================================================================
 # GitHub Repository Management

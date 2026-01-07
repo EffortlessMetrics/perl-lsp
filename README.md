@@ -1,0 +1,102 @@
+# perl-lsp
+
+A production-ready Perl language server and parser ecosystem written in Rust.
+
+## What This Is
+
+Six published crates forming a complete Perl development ecosystem:
+
+| Crate | Purpose |
+|-------|---------|
+| **perl-parser** | Native recursive descent parser with comprehensive Perl 5 syntax coverage |
+| **perl-lsp** | Standalone Language Server (LSP 3.18) for all major editors |
+| **perl-dap** | Debug Adapter Protocol support (bridge mode to Perl::LanguageServer) |
+| **perl-lexer** | Context-aware tokenizer with Unicode support |
+| **perl-corpus** | Test corpus for parser validation |
+| **perl-parser-pest** | Legacy Pest-based parser (maintained) |
+
+## Quick Start
+
+```bash
+# Build from source
+cargo build -p perl-lsp --release
+
+# Install locally
+cargo install --path crates/perl-lsp
+
+# Run the LSP server (for editors)
+./target/release/perl-lsp --stdio
+```
+
+### Verify Your Installation
+
+```bash
+# Canonical local gate (required before push)
+nix develop -c just ci-gate
+```
+
+## Status
+
+**Metrics and capability coverage are computed and live in [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md).**
+
+Capabilities are sourced from [`features.toml`](features.toml).
+
+| Surface | Source of Truth |
+|---------|-----------------|
+| LSP coverage | `features.toml` (computed by `just status-check`) |
+| Corpus coverage | `tree-sitter-perl/test/corpus` + `test_corpus/` |
+| Test pass rate | `just ci-gate` output |
+| Roadmap | [`docs/ROADMAP.md`](docs/ROADMAP.md) |
+
+### What's Production vs Experimental
+
+| Component | Stance | Notes |
+|-----------|--------|-------|
+| perl-parser | Production | Comprehensive Perl 5 parsing |
+| perl-lsp | Production (advertised subset) | See `features.toml` for GA features |
+| perl-dap | Experimental (bridge mode) | Bridges to Perl::LanguageServer |
+| perl-parser-pest | Legacy | Kept out of default gate |
+
+## Editor Setup
+
+### VS Code
+```json
+{
+  "perl-lsp.serverPath": "/path/to/perl-lsp",
+  "perl-lsp.args": ["--stdio"]
+}
+```
+
+### Neovim (with lspconfig)
+```lua
+require('lspconfig').perl_lsp.setup{
+  cmd = { "perl-lsp", "--stdio" }
+}
+```
+
+## Contributing
+
+**Local-first development** - all gates run locally before CI:
+
+```bash
+# Install pre-push hook (runs gate automatically)
+bash scripts/install-githooks.sh
+
+# Gate checks: format, clippy, tests, policy, LSP semantic tests
+nix develop -c just ci-gate
+```
+
+CI is intentionally optional/opt-in. The repo is local-first by design.
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for full guidelines.
+
+## Documentation
+
+- **[Current Status](docs/CURRENT_STATUS.md)** - Computed metrics and project health
+- **[Roadmap](docs/ROADMAP.md)** - Milestones and release planning
+- **[Commands Reference](docs/COMMANDS_REFERENCE.md)** - Build and test commands
+- **[LSP Implementation Guide](docs/LSP_IMPLEMENTATION_GUIDE.md)** - Server architecture
+
+## License
+
+MIT OR Apache-2.0

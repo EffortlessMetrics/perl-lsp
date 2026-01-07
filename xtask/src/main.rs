@@ -31,7 +31,7 @@ enum Commands {
     /// Run format and clippy checks only (no tests)
     CheckOnly,
 
-    /// Build the project with various configurations
+    /// Build project with various configurations
     Build {
         /// Build in release mode
         #[arg(long)]
@@ -41,11 +41,11 @@ enum Commands {
         #[arg(long, value_delimiter = ',')]
         features: Option<Vec<String>>,
 
-        /// Build only the C scanner
+        /// Build only C scanner
         #[arg(long)]
         c_scanner: bool,
 
-        /// Build only the Rust scanner
+        /// Build only Rust scanner
         #[arg(long)]
         rust_scanner: bool,
     },
@@ -268,6 +268,25 @@ enum Commands {
         test: Option<String>,
     },
 
+    /// Run corpus audit for coverage analysis
+    CorpusAudit {
+        /// Path to corpus directory
+        #[arg(long, default_value = ".")]
+        corpus_path: PathBuf,
+
+        /// Output path for audit report
+        #[arg(long, default_value = "corpus_audit_report.json")]
+        output: PathBuf,
+
+        /// Check mode for CI (fails if issues found)
+        #[arg(long)]
+        check: bool,
+
+        /// Fresh mode (regenerate report even if it exists)
+        #[arg(long)]
+        fresh: bool,
+    },
+
     /// Run three-way parser comparison
     #[cfg(feature = "legacy")]
     CompareThree {
@@ -295,7 +314,7 @@ enum Commands {
         cleanup: bool,
     },
 
-    /// Bump version numbers across the project
+    /// Bump version numbers across project
     BumpVersion {
         /// New version to set
         version: String,
@@ -409,6 +428,9 @@ fn main() -> Result<()> {
             )
         }
         Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
+        Commands::CorpusAudit { corpus_path, output, check, fresh } => {
+            corpus_audit::run(corpus_path, output, check, fresh)
+        }
         #[cfg(feature = "legacy")]
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
