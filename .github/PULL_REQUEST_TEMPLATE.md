@@ -10,18 +10,23 @@
 
 ## Optional CI Labels
 
-Add these labels to trigger additional validation (not required for merge):
+Add these labels to trigger additional validation (not required for merge).
+See `docs/CI_TEST_LANES.md` for the canonical reference.
 
 | Label | What it runs |
 |-------|--------------|
-| `ci:mutation` | Mutation testing (~15-30 min) |
-| `ci:bench` | Performance benchmarks |
-| `ci:determinism` | Test determinism validation (runs tests 3x) |
-| `ci:audit` | Security dependency audit |
-| `ci:coverage` | Test coverage report |
-| `ci:semver` | API compatibility check |
-| `ci:strict` | Pedantic clippy lints |
-| `ci:docs-truth` | Documentation drift validation |
+| `ci:tests` | Cross-platform test matrix (`test.yml`) |
+| `ci:lsp` | LSP integration lane (`lsp-tests.yml`) |
+| `ci:property` | Property-based tests (`property-tests.yml`) |
+| `ci:strict` | Pedantic clippy lints (`quality-checks.yml`, `rust-strict.yml`) |
+| `ci:semver` | API compatibility check (`quality-checks.yml`, `rust-strict.yml`) |
+| `ci:determinism` | Test determinism validation (`quality-checks.yml`) |
+| `ci:audit` | Security dependency audit (`quality-checks.yml`) |
+| `ci:mutation` | Mutation testing (~15-30 min) (`quality-checks.yml`, `ci-expensive.yml`) |
+| `ci:bench` | Performance benchmarks (`benchmark.yml`, `lsp-tests.yml`) |
+| `ci:coverage` | Test coverage report (`quality-checks.yml`, `lsp-tests.yml`) |
+| `ci:all-tests` | Comprehensive suite (`comprehensive_tests.yml`) |
+| `ci:docs-truth` | Documentation drift validation (`docs-truth.yml`) |
 
 ## Test Plan
 
