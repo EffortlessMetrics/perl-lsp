@@ -158,12 +158,14 @@ log "Output directory: $PR_DIR"
 # -----------------------------------------------------------------------------
 log_progress "Fetching PR metadata..."
 
+# Note: baseRefOid/headRefOid may not be available in older gh versions
+# We fetch commits to extract head SHA, and compute base from merge commit parent
 PR_METADATA=$(gh pr view "$PR_NUMBER" --json \
     number,title,url,state,createdAt,mergedAt,\
 author,labels,body,\
-baseRefOid,headRefOid,baseRefName,headRefName,\
+baseRefName,headRefName,\
 additions,deletions,changedFiles,\
-mergeCommit 2>/dev/null) || die "Failed to fetch PR #$PR_NUMBER (does it exist?)"
+mergeCommit,commits 2>/dev/null) || die "Failed to fetch PR #$PR_NUMBER (does it exist?)"
 
 # Validate PR exists and has required fields
 PR_STATE=$(echo "$PR_METADATA" | jq -r '.state')
@@ -176,9 +178,22 @@ echo "$PR_METADATA" | jq '.' > "${PR_DIR}/metadata.json"
 log "Saved: metadata.json"
 
 # Extract SHAs for git operations
+# Try baseRefOid/headRefOid first (newer gh), fallback to commits/mergeCommit (older gh)
 BASE_SHA=$(echo "$PR_METADATA" | jq -r '.baseRefOid // empty')
 HEAD_SHA=$(echo "$PR_METADATA" | jq -r '.headRefOid // empty')
 MERGE_COMMIT=$(echo "$PR_METADATA" | jq -r '.mergeCommit.oid // empty')
+
+# Fallback: extract HEAD_SHA from last commit in PR
+if [[ -z "$HEAD_SHA" || "$HEAD_SHA" == "null" ]]; then
+    HEAD_SHA=$(echo "$PR_METADATA" | jq -r '.commits[-1].oid // empty')
+fi
+
+# Fallback: compute BASE_SHA from merge commit parent
+if [[ -z "$BASE_SHA" || "$BASE_SHA" == "null" ]]; then
+    if [[ -n "$MERGE_COMMIT" && "$MERGE_COMMIT" != "null" ]] && git cat-file -t "$MERGE_COMMIT" >/dev/null 2>&1; then
+        BASE_SHA=$(git rev-parse "${MERGE_COMMIT}^1" 2>/dev/null || echo "")
+    fi
+fi
 TITLE=$(echo "$PR_METADATA" | jq -r '.title')
 MERGED_AT=$(echo "$PR_METADATA" | jq -r '.mergedAt // "not merged"')
 
