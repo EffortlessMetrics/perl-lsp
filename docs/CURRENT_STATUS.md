@@ -35,7 +35,9 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 | ------ | ----- | ------ | ------ |
 | **Tier A Tests** | 337 passed, 1 ignored | 100% pass | PASS |
 | **Tracked Test Debt** | 9 (8 bug, 1 manual) | 0 | Near-zero |
+<!-- BEGIN: STATUS_METRICS_TABLE -->
 | **LSP Coverage** | 82% (27/33 GA advertised, `features.toml`) | 93%+ | In progress |
+<!-- END: STATUS_METRICS_TABLE -->
 | **Parser Coverage** | ~100% | 100% | Complete |
 | **Semantic Analyzer** | Phase 1 (12/12 handlers) | Phase 3 | Core complete |
 | **Mutation Score** | 87% | 87%+ | Target met |
@@ -54,13 +56,15 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 
 ### Computed Metrics (auto-updated by `just status-update`)
 
-- **Comprehensive parsing**: broad Perl 5 coverage via `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
-- **Solid LSP foundation**: 82% cataloged GA coverage (27/33 trackable features), production-ready (`just ci-gate`)
-- **Status**: 🟢 **Production** - 82% LSP 3.18 cataloged feature coverage
-- **Status**: 🟢 **Production** - Corpus sources: `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
-- 82% LSP coverage vs ~40-70%
+<!-- BEGIN: STATUS_METRICS_BULLETS -->
+- **LSP Coverage**: 82% cataloged GA coverage (27/33 trackable features from `features.toml`)
+- **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
+- **Test Status**: 337 lib tests passing, 1 ignored (9 total tracked debt: 8 bug, 1 manual)
+- **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
+- **Production Status**: LSP server production-ready (`just ci-gate` passing)
 
-**Target**: 93%+ LSP coverage (from 82% catalog)
+**Target**: 93%+ LSP coverage (from current 82%)
+<!-- END: STATUS_METRICS_BULLETS -->
 
 ---
 
