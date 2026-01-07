@@ -43,9 +43,9 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 - **Historical docs**: Archived at `docs/archive/roadmaps/`; retrieve from git history for older versions
 
 ### Metric Definitions
-- **LSP Coverage (GA)**: `advertised_ga / trackable` computed from `features.toml` using the build rules (planned excluded; GA/production advertised counted).
-- **Corpus counts**: `tree-sitter corpus sections` is the count of `====` delimiters under `tree-sitter-perl/test/corpus`; `repo test_corpus inputs` is the count of `.pl` files under `test_corpus/`.
-- **Catalog source**: `features.toml` is canonical for build + docs; `crates/perl-parser/features_sot.toml` is a vendored fallback used when the workspace root is unavailable.
+- **LSP Coverage (GA)**: `advertised_ga / trackable`, computed from `features.toml` by the same rules used at build time (see `crates/perl-parser/build.rs`). **Trackable** excludes `planned`; **advertised_ga** counts only features with `maturity = "ga"|"production"` and `advertised = true`.
+- **Corpus counts**: `tree-sitter corpus sections` is the count of `====` delimiters under `tree-sitter-perl/test/corpus` (grammar fixtures); `repo test_corpus inputs` is the count of `.pl` files under `test_corpus/` (repo-owned fixtures). These are fixture counts, not a semantic coverage metric.
+- **Catalog source**: Root `features.toml` is canonical and preferred when present; `crates/perl-parser/features_sot.toml` is a vendored fallback used only when the workspace root is unavailable.
 
 ### How to Update This File
 - Run `just status-update`
