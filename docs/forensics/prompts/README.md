@@ -21,6 +21,7 @@ These prompts enable deep analysis while maintaining epistemic honesty. Each ana
 | [`verification-auditor.md`](verification-auditor.md) | Correctness | Test depth, mutation survival, regression coverage |
 | [`docs-auditor.md`](docs-auditor.md) | Reproducibility | Gate clarity, snippet validity, drift risk |
 | [`policy-auditor.md`](policy-auditor.md) | Governance | Catalog drift, metrics sync, schema compliance, guardrail effectiveness |
+| [`measurement-auditor.md`](measurement-auditor.md) | Measurement Honesty | Metrics provenance, reproducibility, theater detection, delta correctness |
 | [`chronologist.md`](chronologist.md) | Temporal | Convergence narrative, decision timeline |
 | [`decision-extractor.md`](decision-extractor.md) | Budget | DevLT estimation from decision events |
 
@@ -130,6 +131,9 @@ Run analyzers in this order for best results:
        |
        v
 4. decision-extractor (uses chronologist timeline)
+       |
+       v
+5. measurement-auditor (validates metrics in synthesized dossier draft)
 ```
 
 ### Synthesis Rules
