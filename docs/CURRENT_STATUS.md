@@ -51,7 +51,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 | **Production v1.0** | 85-90% | 100% | 🟢 11-13 weeks |
 | **Tier A Tests** | 337 passed, 1 ignored | 100% | 🟢 `just ci-gate` |
 | **Tracked Test Debt** | 9 (8 bug, 1 manual) | 0 | 🟢 Near-zero |
-| **LSP Coverage** | 91% | 93%+ | 🟡 Sprint B |
+| **LSP Coverage** | 82% (27/33 GA advertised, `features.toml`) | 93%+ | 🟡 Sprint B |
 | **Parser Coverage** | ~100% | 100% | 🟢 Complete |
 | **Semantic Analyzer** | Phase 1 Complete | Phase 3 | 🟢 12/12 handlers |
 | **Mutation Score** | 87% | 87%+ | 🟢 Target met |
@@ -61,8 +61,8 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 ## 📈 Project Health: EXCELLENT
 
 ### Strengths ✅
-- **Comprehensive parsing**: ~100% Perl 5 coverage (verified by corpus tests)
-- **Solid LSP foundation**: 91% feature coverage, production-ready (`just ci-gate`)
+- **Comprehensive parsing**: broad Perl 5 coverage via `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
+- **Solid LSP foundation**: 82% cataloged GA coverage (27/33 trackable features), production-ready (`just ci-gate`)
 - **Exceptional quality**: 100% Tier A test pass rate, 87% mutation score
 - **Enterprise security**: UTF-16 boundary fixes, path validation
 - **Performance**: Incremental parsing and LSP responses meet targets (benchmark publication pending)
@@ -152,7 +152,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 ### Sprint B: LSP Polish (Days 11-19)
 **Status**: 🟢 **Phase 1 COMPLETE** - Semantic analyzer core + LSP definition integration done!
 **Effort**: 9 days (21 story points) - ~7 points complete (Phase 1)
-**Target**: 93%+ LSP coverage (from 91%)
+**Target**: 93%+ LSP coverage (from 82% catalog)
 
 | Issue | Story Points | Days | Status |
 |-------|--------------|------|--------|
@@ -186,7 +186,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 - **Next**: Phase 2 - Enhanced features (8 additional handlers for postfix loops, method calls, file tests, etc.)
 
 ### LSP Server (perl-lsp)
-- **Status**: 🟢 **Production** - 91% LSP 3.17+ feature coverage
+- **Status**: 🟢 **Production** - 82% LSP 3.18 cataloged feature coverage
 - **Response Times**: <50ms (p95), meets SLO
 - **Features**: 25+ IDE capabilities implemented
 - **Quality**: 4/4 semantic definition tests passing, 9 tracked test debt (near-zero)
@@ -204,8 +204,8 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 - **Next**: Optimization opportunities (Issue #193, post-MVP)
 
 ### Corpus (perl-corpus)
-- **Status**: 🟢 **Production** - 141 edge cases, comprehensive coverage
-- **Quality**: 100% passing on v3 parser
+- **Status**: 🟢 **Production** - Corpus sources: `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
+- **Quality**: Gap suite exercised via `tests/corpus_gap_tests.rs` (see `just ci-gate` for pass counts)
 - **Next**: Expand CPAN top 100 module coverage
 
 ---
@@ -461,7 +461,7 @@ RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
 
 **Competitive Position**:
 - 4-19x faster parsing vs Perl Navigator
-- 91%+ LSP coverage vs ~40-70%
+- 82% LSP coverage vs ~40-70%
 - Enterprise security and quality
 - Modern architecture (Rust, async, thread-safe)
 - DAP debugging support

@@ -150,7 +150,16 @@ clean:
 ci-policy:
     @echo "📋 Running policy checks..."
     @./.ci/scripts/check-from-raw.sh
+    @just status-check
     @echo "✅ Policy checks passed"
+
+# Update derived metrics in CURRENT_STATUS.md
+status-update:
+    @python3 scripts/update-current-status.py --write
+
+# Verify CURRENT_STATUS.md derived metrics are up-to-date
+status-check:
+    @python3 scripts/update-current-status.py --check
 
 # ============================================================================
 # GitHub Repository Management
