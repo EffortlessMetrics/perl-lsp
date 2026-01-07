@@ -96,6 +96,33 @@ Each entry follows the format: **wrong → evidence → fix → prevention**.
 
 ---
 
+### 2026-01-07 — Claim drift: Issue IDs treated as PR IDs
+
+**Type:** Claim drift
+
+**Where it showed up:** Dossiers and CASEBOOK.md referenced "#188" and "#181" as if they were PRs
+
+**Ground truth:** `gh issue view 188` shows issue; `gh pr view 188` returns "no PR". PRs are #231/#232/#234 (for issue #188) and #259 (for issue #181)
+
+**Impact:** Confusion in documentation; incorrect file names initially considered; readers could not verify claims
+
+**Fix:**
+- Verified all number references with `gh issue view` and `gh pr view`
+- Updated forensics/INDEX.md to have separate `Issue` and `PR(s)` columns
+- Renamed dossiers to use actual PR numbers (e.g., `pr-231-232-234.md` not `pr-188.md`)
+
+**Prevention:**
+- Schema rule: always store Issue and PR(s) as separate columns
+- Verification command in workflow: `gh pr view $n` before creating dossier
+- INDEX.md template enforces Issue/PR(s) column structure
+
+**DevLT:** ~20 min
+**Machine:** N/A
+
+**Links:** forensics/INDEX.md, CASEBOOK.md
+
+---
+
 ## How to Add Entries
 
 When something is discovered to be wrong:
