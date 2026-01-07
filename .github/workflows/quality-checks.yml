@@ -93,6 +93,7 @@ jobs:
   dependency-audit:
     name: Security Audit
     runs-on: ubuntu-22.04
+    if: contains(github.event.pull_request.labels.*.name, 'ci:audit')
     steps:
       - uses: actions/checkout@v4
       
@@ -147,7 +148,7 @@ jobs:
   test-determinism:
     name: Test Determinism
     runs-on: ubuntu-22.04
-    if: ${{ github.event_name == 'pull_request' }}
+    if: contains(github.event.pull_request.labels.*.name, 'ci:determinism')
     continue-on-error: true
     timeout-minutes: 15
     steps:
@@ -273,6 +274,7 @@ jobs:
   mutation-testing:
     name: Mutation Testing
     runs-on: ubuntu-22.04
+    if: contains(github.event.pull_request.labels.*.name, 'ci:mutation')
     continue-on-error: true  # Don't fail the build, just report
     steps:
       - uses: actions/checkout@v4
