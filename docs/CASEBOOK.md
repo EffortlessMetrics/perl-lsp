@@ -16,7 +16,7 @@ Each exhibit shows:
 
 ## Exhibits
 
-### Exhibit 1: Semantic Analyzer Phase 1 (PR #188)
+### Exhibit 1: Semantic Analyzer Phase 1 (Issue #188 → PRs #231/232/234)
 
 **What it proves:** Major capability additions can be delivered cleanly with explicit receipts and phased architecture.
 
@@ -42,7 +42,7 @@ Each exhibit shows:
 
 **Exhibit score:** 4.8/5 (Clarity: 5, Scope: 5, Evidence: 5, Tests: 4, Efficiency: 5)
 
-**Dossier:** [`forensics/pr-188.md`](forensics/pr-188.md)
+**Dossier:** [`forensics/pr-231-232-234.md`](forensics/pr-231-232-234.md)
 
 ---
 
@@ -125,7 +125,7 @@ Each exhibit shows:
 
 | Exhibit | DevLT | Compute | Quality Achieved |
 |---------|-------|---------|------------------|
-| #188 Semantic | 60-90m | moderate | 12/12 handlers, clean API |
+| #231/232/234 Semantic | 60-90m | moderate | 12/12 handlers, clean API |
 | #260/264 Substitution | 60-90m | moderate | 4 bugs fixed, mutation-hardened |
 | #251-253 Harness | 90-120m | moderate | 365 tests unignored |
 
