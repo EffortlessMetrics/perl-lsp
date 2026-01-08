@@ -228,20 +228,18 @@ if [[ -n "$PR_NUMBER" ]]; then
 
     # Fetch PR info to get commit range
     PR_JSON=$(gh pr view "$PR_NUMBER" --json \
-        number,headRefOid,mergeCommit,commits,mergedAt 2>/dev/null) || die "Failed to fetch PR #$PR_NUMBER"
+        number,headRefOid,baseRefOid,mergeCommit,commits,mergedAt 2>/dev/null) || die "Failed to fetch PR #$PR_NUMBER"
 
     MERGED_AT=$(echo "$PR_JSON" | jq -r '.mergedAt // empty')
     [[ -z "$MERGED_AT" || "$MERGED_AT" == "null" ]] && die "PR #$PR_NUMBER is not merged"
 
-    HEAD_SHA=$(echo "$PR_JSON" | jq -r '.headRefOid')
-    MERGE_COMMIT=$(echo "$PR_JSON" | jq -r '.mergeCommit.oid // empty')
+    # Extract SHAs using shared library
+    source "$SCRIPT_DIR/lib_gh.sh"
+    read -r BASE_SHA HEAD_SHA MERGE_COMMIT < <(extract_shas_from_json "$PR_JSON")
 
-    # Compute base SHA
-    if [[ -n "$MERGE_COMMIT" && "$MERGE_COMMIT" != "null" ]]; then
-        BASE_SHA=$(git rev-parse "${MERGE_COMMIT}^1" 2>/dev/null || true)
-    fi
-
+    # Validate we got the SHAs we need
     if [[ -z "$BASE_SHA" ]]; then
+        # Last resort: compute from first commit
         FIRST_COMMIT=$(echo "$PR_JSON" | jq -r '.commits[0].oid // empty')
         if [[ -n "$FIRST_COMMIT" ]]; then
             BASE_SHA=$(git rev-parse "${FIRST_COMMIT}^" 2>/dev/null || echo "unknown")

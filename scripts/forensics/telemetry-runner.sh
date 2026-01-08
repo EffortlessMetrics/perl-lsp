@@ -445,27 +445,36 @@ run_fmt_check() {
 }
 
 # cargo clippy - count warnings
+# NOTE: With -D warnings, clippy can emit "error:" without "error[E...]" codes.
+# We use exit code as primary truth, parse output only for counts.
 run_clippy() {
     local dir="$1"
     log_info "  Running cargo clippy..."
 
     cd "$dir"
     local output
-    output=$(run_with_timeout "$TIMEOUT_CLIPPY" "cargo clippy --workspace --lib -- -D warnings 2>&1" || true)
+    local rc=0
 
-    # Count warning lines
-    local warning_count
+    # Capture output AND exit code (don't suppress failure)
+    set +e
+    output=$(run_with_timeout "$TIMEOUT_CLIPPY" "cargo clippy --workspace --lib -- -D warnings 2>&1")
+    rc=$?
+    set -e
+
+    # Count warning and error lines
+    local warning_count error_count
     warning_count=$(echo "$output" | grep -c '^warning:' || echo "0")
+    error_count=$(echo "$output" | grep -c '^error:' || echo "0")
 
-    # Determine status
+    # Determine status: exit code is primary truth
     local status="pass"
-    if echo "$output" | grep -q "error\["; then
+    if [[ $rc -ne 0 ]]; then
         status="fail"
     elif [[ $warning_count -gt 0 ]]; then
         status="warn"
     fi
 
-    echo "${status}|${warning_count}"
+    echo "${status}|${warning_count}|${error_count}"
 }
 
 # cargo test - collect pass/fail counts
@@ -859,7 +868,8 @@ collect_metrics() {
 
     # Parse results
     local clippy_status clippy_warnings
-    IFS='|' read -r clippy_status clippy_warnings <<< "$clippy_result"
+    local clippy_errors
+    IFS='|' read -r clippy_status clippy_warnings clippy_errors <<< "$clippy_result"
 
     local test_status test_passed test_failed test_ignored
     IFS='|' read -r test_status test_passed test_failed test_ignored <<< "$test_result"

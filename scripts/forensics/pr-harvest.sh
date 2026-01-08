@@ -177,23 +177,10 @@ fi
 echo "$PR_METADATA" | jq '.' > "${PR_DIR}/metadata.json"
 log "Saved: metadata.json"
 
-# Extract SHAs for git operations
-# Try baseRefOid/headRefOid first (newer gh), fallback to commits/mergeCommit (older gh)
-BASE_SHA=$(echo "$PR_METADATA" | jq -r '.baseRefOid // empty')
-HEAD_SHA=$(echo "$PR_METADATA" | jq -r '.headRefOid // empty')
-MERGE_COMMIT=$(echo "$PR_METADATA" | jq -r '.mergeCommit.oid // empty')
-
-# Fallback: extract HEAD_SHA from last commit in PR
-if [[ -z "$HEAD_SHA" || "$HEAD_SHA" == "null" ]]; then
-    HEAD_SHA=$(echo "$PR_METADATA" | jq -r '.commits[-1].oid // empty')
-fi
-
-# Fallback: compute BASE_SHA from merge commit parent
-if [[ -z "$BASE_SHA" || "$BASE_SHA" == "null" ]]; then
-    if [[ -n "$MERGE_COMMIT" && "$MERGE_COMMIT" != "null" ]] && git cat-file -t "$MERGE_COMMIT" >/dev/null 2>&1; then
-        BASE_SHA=$(git rev-parse "${MERGE_COMMIT}^1" 2>/dev/null || echo "")
-    fi
-fi
+# Extract SHAs for git operations using shared library
+# Source lib_gh.sh for SHA extraction utilities (handles gh CLI version differences)
+source "$SCRIPT_DIR/lib_gh.sh"
+read -r BASE_SHA HEAD_SHA MERGE_COMMIT < <(extract_shas_from_json "$PR_METADATA")
 TITLE=$(echo "$PR_METADATA" | jq -r '.title')
 MERGED_AT=$(echo "$PR_METADATA" | jq -r '.mergedAt // "not merged"')
 

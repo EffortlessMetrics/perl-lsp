@@ -93,22 +93,10 @@ else
     gh pr view "$PR_NUMBER" --json comments,reviews > "$HARVEST_DIR/comments.json"
 fi
 
-# Extract base and head SHAs (with fallbacks for older gh CLI versions)
-BASE_SHA=$(jq -r '.baseRefOid // empty' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "")
-HEAD_SHA=$(jq -r '.headRefOid // empty' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "")
-MERGE_COMMIT=$(jq -r '.mergeCommit.oid // empty' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "")
-
-# Fallback: extract HEAD_SHA from last commit in PR
-if [[ -z "$HEAD_SHA" ]]; then
-    HEAD_SHA=$(jq -r '.commits[-1].oid // empty' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "")
-fi
-
-# Fallback: compute BASE_SHA from merge commit parent
-if [[ -z "$BASE_SHA" && -n "$MERGE_COMMIT" ]]; then
-    if git cat-file -t "$MERGE_COMMIT" >/dev/null 2>&1; then
-        BASE_SHA=$(git rev-parse "${MERGE_COMMIT}^1" 2>/dev/null || echo "")
-    fi
-fi
+# Extract base and head SHAs using shared library
+# Source lib_gh.sh for SHA extraction utilities (handles gh CLI version differences)
+source "$SCRIPT_DIR/lib_gh.sh"
+read -r BASE_SHA HEAD_SHA MERGE_COMMIT < <(extract_shas_from_file "$HARVEST_DIR/metadata.json")
 PR_TITLE=$(jq -r '.title // "Unknown"' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "Unknown")
 PR_STATE=$(jq -r '.state // "unknown"' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "unknown")
 CREATED_AT=$(jq -r '.createdAt // ""' "$HARVEST_DIR/metadata.json" 2>/dev/null || echo "")
@@ -138,7 +126,16 @@ TELEMETRY_OUTPUT="$WORK_DIR/telemetry.yaml"
 if [[ -n "$BASE_SHA" ]] && [[ -n "$HEAD_SHA" ]]; then
     if git cat-file -e "$BASE_SHA" 2>/dev/null && git cat-file -e "$HEAD_SHA" 2>/dev/null; then
         if [[ -x "$SCRIPT_DIR/telemetry-runner.sh" ]]; then
-            "$SCRIPT_DIR/telemetry-runner.sh" "$BASE_SHA" "$HEAD_SHA" --mode "$MODE" > "$TELEMETRY_OUTPUT" 2>/dev/null || {
+            # Map MODE to telemetry-runner.sh flag (telemetry uses --quick/--full/--research, not --mode)
+            telemetry_flag="--quick"
+            case "$MODE" in
+                quick) telemetry_flag="--quick" ;;
+                full) telemetry_flag="--full" ;;
+                research) telemetry_flag="--research" ;;
+                *) telemetry_flag="--quick" ;;
+            esac
+
+            "$SCRIPT_DIR/telemetry-runner.sh" "$telemetry_flag" "$BASE_SHA" "$HEAD_SHA" > "$TELEMETRY_OUTPUT" 2>/dev/null || {
                 echo "  Warning: telemetry analysis failed" >&2
                 echo "# Telemetry not available" > "$TELEMETRY_OUTPUT"
             }
