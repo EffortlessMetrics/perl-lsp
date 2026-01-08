@@ -69,6 +69,31 @@ pr: <number>
 timestamp: <ISO8601>
 coverage: <github_only|github_plus_agent_logs|receipts_included>
 
+# Measurement Contract Assessment (required)
+measurement_contract:
+  status: <stable|changed|unknown>
+  reason: <one line explanation>
+  comparability: <comparable|not_comparable|conditional>
+  evidence:
+    - <what proves contract status>
+
+# Claims Found in PR (required)
+claims_found:
+  - claim: <performance/coverage/quality claim from PR body>
+    location: <PR body|commit message|comment>
+    anchor: <line number or section reference>
+    evidence_required: <what would prove this claim>
+    evidence_found: <yes|partial|no>
+
+# Required Fixes (required when verdict is warn or fail)
+required_fixes:
+  - priority: <P0|P1|P2>
+    surface: <Correctness|Maintainability|Governance|Reproducibility>
+    action: <concrete fix description>
+    where: <file path or documentation section>
+    why: <what problem it prevents>
+    evidence_of_completion: <how to verify fix is done>
+
 provenance_audit:
   metrics_with_source:
     - metric: <metric name>
@@ -168,10 +193,43 @@ summary:
     - <bullet 1>
     - <bullet 2>
   measurement_integrity_assessment: <honest|concerning|theater>
+  contract_verdict: <comparable|not_comparable>  # Hard rule: if contract unstable, mark not_comparable
 
 assumptions:
   - <what was assumed>
 ```
+
+## Measurement Contract Rules
+
+**Hard rule**: If the measurement contract cannot be proven stable, the auditor **does not bless comparisons** - it marks them `not_comparable`.
+
+### Contract Stability Criteria
+
+A measurement contract is **stable** when:
+1. **Denominator unchanged**: Same test suite, same coverage scope, same dataset
+2. **Units unchanged**: Same metrics (percentages, counts, durations)
+3. **Methodology unchanged**: Same tools, same configurations, same flags
+4. **Baseline verified**: Comparison baseline is the correct commit (base SHA)
+
+A measurement contract is **changed** when any of the above shift without explicit acknowledgment.
+
+A measurement contract is **unknown** when insufficient evidence exists to determine stability.
+
+### Comparability Decisions
+
+| Contract Status | Comparability | Action Required |
+|-----------------|---------------|-----------------|
+| stable | comparable | Bless the comparison |
+| changed (acknowledged) | conditional | Require side-by-side with old methodology |
+| changed (unacknowledged) | not_comparable | Block publication, require fix |
+| unknown | not_comparable | Block publication, require evidence |
+
+### Common Contract Violations
+
+1. **Semantics drift**: "Coverage" meant X, now means Y
+2. **Baseline drift**: Comparing to wrong commit without stating so
+3. **Over-claiming**: Multipliers ("4x faster") without absolute numbers + contracts
+4. **Reproducibility gaps**: Missing commands, env vars, dataset hashes
 
 ## Key Questions Answered
 
@@ -352,6 +410,35 @@ pr: 259
 timestamp: 2025-01-07T12:00:00Z
 coverage: receipts_included
 
+measurement_contract:
+  status: stable
+  reason: Same test suite, same cargo test command, same threading config
+  comparability: comparable
+  evidence:
+    - cargo test output format unchanged
+    - RUST_TEST_THREADS=2 in both measurements
+    - Same test file (name_spans_special_test.rs)
+
+claims_found:
+  - claim: "11 comprehensive span tests added"
+    location: PR body
+    anchor: "Quality Deltas table, Correctness row"
+    evidence_required: cargo test output showing 11 tests
+    evidence_found: yes
+  - claim: "DevLT 4h30m"
+    location: Budget table
+    anchor: "Budget section"
+    evidence_required: git log with timestamps or decision event analysis
+    evidence_found: no
+
+required_fixes:
+  - priority: P2
+    surface: Reproducibility
+    action: Add git log receipt showing DevLT calculation basis
+    where: dossier_draft Budget section
+    why: DevLT claim lacks provenance, reduces confidence
+    evidence_of_completion: Git log output or timestamp analysis included
+
 provenance_audit:
   metrics_with_source:
     - metric: "Tests Added"
@@ -456,6 +543,7 @@ summary:
     - DevLT claim lacks provenance (P2) - needs git log receipt
     - Mutation testing explicitly marked as not run (good honesty)
   measurement_integrity_assessment: honest
+  contract_verdict: comparable
 
 assumptions:
   - Git log analysis is valid method for DevLT if timestamps provided

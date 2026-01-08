@@ -133,8 +133,27 @@ Run analyzers in this order for best results:
 4. decision-extractor (uses chronologist timeline)
        |
        v
-5. measurement-auditor (validates metrics in synthesized dossier draft)
+5. measurement-auditor (validates synthesized dossier - FINAL GATE)
+       |
+       ├─→ comparable: proceed to publication
+       └─→ not_comparable: BLOCK until contract issues fixed
 ```
+
+### Measurement Auditor (Final Gate)
+
+The measurement-auditor serves as the **final quality gate** before dossier publication. It validates:
+
+1. **Measurement Contract**: Is the comparison valid? (stable/changed/unknown)
+2. **Claims Found**: Are PR claims backed by evidence?
+3. **Required Fixes**: What must be fixed before publication?
+
+**Hard rule**: If the measurement contract is unstable or unknown, the auditor emits `contract_verdict: not_comparable` and the dossier **must not be published** until issues are resolved.
+
+**Common blocks**:
+- Performance claims without benchmark receipts
+- Coverage claims without tool output
+- Multiplier claims ("4x faster") without absolute numbers
+- Delta comparisons using wrong baseline
 
 ### Synthesis Rules
 
