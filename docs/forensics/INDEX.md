@@ -136,9 +136,23 @@ See methodology docs:
 - [`../QUALITY_SURFACES.md`](../QUALITY_SURFACES.md) - The four quality surfaces
 - [`../FORENSICS_SCHEMA.md`](../FORENSICS_SCHEMA.md) - Full dossier template
 
+## Pre-PR Workflow (Issue Work Orders)
+
+For issues with agent research, use [WORK_ORDER_FORMAT.md](WORK_ORDER_FORMAT.md) to:
+- Convert analysis into actionable PR scope
+- Define testable exit criteria
+- Anchor DevLT budget to decision events
+- Declare measurement contracts (tooling issues)
+
+See [examples/issue-278-work-order.md](examples/issue-278-work-order.md) for demonstration.
+
+For coordinating multiple issues, see [IMPLEMENTATION_PHASES.md](IMPLEMENTATION_PHASES.md).
+
 ## See Also
 
 - [`FORENSICS_SCHEMA.md`](../FORENSICS_SCHEMA.md) - Dossier template
 - [`CASEBOOK.md`](../CASEBOOK.md) - Exhibit entries
 - [`LESSONS.md`](../LESSONS.md) - Wrongness log
 - [`README.md`](README.md) - This directory's purpose
+- [`WORK_ORDER_FORMAT.md`](WORK_ORDER_FORMAT.md) - Pre-PR work order template
+- [`IMPLEMENTATION_PHASES.md`](IMPLEMENTATION_PHASES.md) - Swarm coordination
