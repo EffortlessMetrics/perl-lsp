@@ -8,6 +8,7 @@ This is the front door. If you want X, read Y.
 | ------------------ | ------------------------------------------ | ------------------ |
 | Metrics            | [`CURRENT_STATUS.md`](CURRENT_STATUS.md)   | `just status-check` |
 | Plans              | [`ROADMAP.md`](ROADMAP.md)                 | Human review       |
+| Milestones         | [`MILESTONES.md`](MILESTONES.md)           | GitHub Milestones  |
 | Capability catalog | [`features.toml`](../features.toml)        | `just ci-gate`     |
 | CI lanes           | [`CI_TEST_LANES.md`](CI_TEST_LANES.md)     | `just ci-gate`     |
 | What went wrong    | [`LESSONS.md`](LESSONS.md)                 | Human review       |
@@ -65,6 +66,7 @@ bash scripts/ignored-test-count.sh
 
 - `CURRENT_STATUS.md` - Computed project metrics
 - `ROADMAP.md` - Release plans and exit criteria
+- `MILESTONES.md` - GitHub milestone tracking and blockers
 - `COMMANDS_REFERENCE.md` - Build, test, and lint commands
 - `CI_TEST_LANES.md` - CI lane definitions
 

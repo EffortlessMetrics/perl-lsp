@@ -208,7 +208,7 @@ crates/perl-dap/benches/
 
 #### 1.1 Update `.github/workflows/benchmark.yml`
 
-**File**: `/home/steven/code/Rust/perl-lsp/review/.github/workflows/benchmark.yml`
+**File**: `.github/workflows/benchmark.yml`
 
 **Line 62-72** - Update `github-action-benchmark` configuration:
 
@@ -237,7 +237,7 @@ crates/perl-dap/benches/
 
 #### 1.2 Add `just bench-compare` Recipe
 
-**File**: `/home/steven/code/Rust/perl-lsp/review/justfile`
+**File**: `justfile`
 
 **Insert after line 325** (after forensics recipes):
 
@@ -329,7 +329,7 @@ git log origin/gh-pages --oneline -5
 
 #### 1.4 Documentation Updates
 
-**File**: `/home/steven/code/Rust/perl-lsp/review/docs/COMMANDS_REFERENCE.md`
+**File**: `docs/COMMANDS_REFERENCE.md`
 
 Add new section under "Development Commands":
 
@@ -377,7 +377,7 @@ Performance benchmarks run automatically on PRs labeled with `ci:bench`. Results
 - **Blocking**: Phase 1 uses warnings only (Phase 2 will add blocking)
 ```
 
-**File**: `/home/steven/code/Rust/perl-lsp/review/CLAUDE.md`
+**File**: `CLAUDE.md`
 
 Update "Essential Commands" section (insert after line 50):
 
@@ -488,7 +488,7 @@ cat dev/bench/data.json | jq '.entries | length'  # Should show baseline entry
 
 #### 2.1 Create Performance Gate Workflow
 
-**File**: `/home/steven/code/Rust/perl-lsp/review/.github/workflows/perf-gate.yml` (NEW)
+**File**: `.github/workflows/perf-gate.yml` (NEW)
 
 ```yaml
 name: Performance Gate
@@ -566,6 +566,19 @@ jobs:
         set -o pipefail
         critcmp main pr | tee critcmp_output.txt
 
+        # NOTE: Parsing critcmp human-readable output is FRAGILE.
+        # critcmp output format can change between versions.
+        # PREFERRED APPROACH: Use Criterion JSON directly from:
+        #   target/criterion/*/new/estimates.json (current run)
+        #   target/criterion/*/base/estimates.json (baseline)
+        #
+        # For now, this approach treats critcmp output as a HUMAN REPORT.
+        # Exit code from critcmp is NOT used for gating (it doesn't fail on regression).
+        # The regex parsing below is a SKETCH for MVP - consider migrating to:
+        #   1. Direct Criterion JSON parsing (more stable)
+        #   2. criterion-compare crate output (structured)
+        #   3. Custom benchmark comparison tool
+        #
         # Parse critcmp output for regressions
         # Format: benchmark_name   baseline   PR   delta
         # Example: parse_simple    12.0 µs    13.2 µs   +10.0%
@@ -573,6 +586,9 @@ jobs:
         python3 << 'PYTHON'
         import re
         import sys
+        import os
+        import json
+        from pathlib import Path
 
         CRITICAL_THRESHOLDS = {
             'parse_simple_script': 10.0,    # 10% max regression
@@ -581,24 +597,80 @@ jobs:
             'incremental': 10.0,            # 10% max regression
         }
 
-        with open('critcmp_output.txt', 'r') as f:
-            content = f.read()
+        def parse_criterion_json():
+            """
+            PREFERRED: Parse Criterion JSON directly for stable machine-readable output.
+            Returns dict of {benchmark_name: {'base': time_ns, 'new': time_ns, 'delta_pct': float}}
+            """
+            results = {}
+            criterion_dir = Path('target/criterion')
+            if not criterion_dir.exists():
+                return results
 
+            for bench_dir in criterion_dir.iterdir():
+                if not bench_dir.is_dir():
+                    continue
+                base_json = bench_dir / 'base' / 'estimates.json'
+                new_json = bench_dir / 'new' / 'estimates.json'
+
+                if base_json.exists() and new_json.exists():
+                    try:
+                        with open(base_json) as f:
+                            base = json.load(f)
+                        with open(new_json) as f:
+                            new = json.load(f)
+                        base_time = base.get('mean', {}).get('point_estimate', 0)
+                        new_time = new.get('mean', {}).get('point_estimate', 0)
+                        if base_time > 0:
+                            delta_pct = ((new_time - base_time) / base_time) * 100
+                            results[bench_dir.name] = {
+                                'base': base_time,
+                                'new': new_time,
+                                'delta_pct': delta_pct
+                            }
+                    except (json.JSONDecodeError, KeyError):
+                        pass
+            return results
+
+        def parse_critcmp_output(content):
+            """
+            FRAGILE: Parse critcmp human-readable output with regex.
+            This can break if critcmp changes its output format.
+            """
+            regressions = []
+            for line in content.split('\n'):
+                # Match lines with benchmark results
+                # Group name format: parse_simple_script/...
+                match = re.search(r'(\w+)\s+([\d.]+)\s+([µnm]?s)\s+.*?\s+([\d.]+)\s+([µnm]?s)\s+.*?([+-]?[\d.]+)%', line)
+                if not match:
+                    continue
+
+                bench_name = match.group(1)
+                delta_pct = float(match.group(6))
+
+                # Check if this is a critical benchmark
+                for critical_name, threshold in CRITICAL_THRESHOLDS.items():
+                    if critical_name in bench_name and delta_pct > threshold:
+                        regressions.append((bench_name, delta_pct, threshold))
+
+            return regressions
+
+        # Try Criterion JSON first (preferred, stable)
+        json_results = parse_criterion_json()
         regressions = []
-        for line in content.split('\n'):
-            # Match lines with benchmark results
-            # Group name format: parse_simple_script/...
-            match = re.search(r'(\w+)\s+([\d.]+)\s+([µnm]?s)\s+.*?\s+([\d.]+)\s+([µnm]?s)\s+.*?([+-]?[\d.]+)%', line)
-            if not match:
-                continue
 
-            bench_name = match.group(1)
-            delta_pct = float(match.group(6))
-
-            # Check if this is a critical benchmark
-            for critical_name, threshold in CRITICAL_THRESHOLDS.items():
-                if critical_name in bench_name and delta_pct > threshold:
-                    regressions.append((bench_name, delta_pct, threshold))
+        if json_results:
+            print("Using Criterion JSON for comparison (stable)")
+            for bench_name, data in json_results.items():
+                for critical_name, threshold in CRITICAL_THRESHOLDS.items():
+                    if critical_name in bench_name and data['delta_pct'] > threshold:
+                        regressions.append((bench_name, data['delta_pct'], threshold))
+        else:
+            # Fallback to critcmp parsing (fragile)
+            print("WARNING: Falling back to critcmp output parsing (fragile)")
+            with open('critcmp_output.txt', 'r') as f:
+                content = f.read()
+            regressions = parse_critcmp_output(content)
 
         if regressions:
             print("❌ Critical path performance regressions detected:")
@@ -662,7 +734,7 @@ jobs:
 
 #### 2.2 Update Main Benchmark Workflow
 
-**File**: `/home/steven/code/Rust/perl-lsp/review/.github/workflows/benchmark.yml`
+**File**: `.github/workflows/benchmark.yml`
 
 **Line 68** - Update `fail-on-alert` for Phase 2:
 
@@ -685,7 +757,7 @@ jobs:
 
 #### 2.3 Documentation Updates
 
-**File**: `/home/steven/code/Rust/perl-lsp/review/docs/PERFORMANCE_PRESERVATION_GUIDE.md`
+**File**: `docs/PERFORMANCE_PRESERVATION_GUIDE.md`
 
 Add new section after line 100 (after "Production Runtime Isolation"):
 
@@ -823,7 +895,7 @@ gh pr create --title "Test: Gate Pass" --body "No performance impact"
 
 #### 3.1 Enhanced Benchmark Configuration
 
-**File**: `/home/steven/code/Rust/perl-lsp/review/.github/workflows/benchmark.yml`
+**File**: `.github/workflows/benchmark.yml`
 
 Add comprehensive benchmark matrix:
 
@@ -869,7 +941,7 @@ Add comprehensive benchmark matrix:
 
 #### 3.2 Per-Benchmark Threshold Script
 
-**File**: `/home/steven/code/Rust/perl-lsp/review/scripts/performance-regression-check.py` (NEW)
+**File**: `scripts/performance-regression-check.py` (NEW)
 
 ```python
 #!/usr/bin/env python3
@@ -1128,7 +1200,7 @@ if __name__ == '__main__':
 
 #### 3.3 Historical Trend Dashboard
 
-**File**: `/home/steven/code/Rust/perl-lsp/review/docs/benchmarks/TRENDS.md` (NEW)
+**File**: `docs/benchmarks/TRENDS.md` (NEW)
 
 ```markdown
 # Performance Trends Dashboard

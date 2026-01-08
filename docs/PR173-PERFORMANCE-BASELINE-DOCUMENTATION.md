@@ -69,7 +69,7 @@ Revolutionary adaptive threading improvements from PR #140 validated:
 
 ### Criterion Output Structure
 ```
-/home/steven/code/Rust/perl-lsp/review/target/criterion/
+target/criterion/
 ├── ast_to_sexp/          # AST serialization benchmarks
 ├── keyword_heavy/        # Keyword processing performance
 ├── large_file/          # Large file parsing (1.61ms ± 33μs)

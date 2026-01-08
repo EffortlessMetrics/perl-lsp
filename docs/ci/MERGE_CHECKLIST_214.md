@@ -109,7 +109,7 @@ $ .ci/scripts/check-from-raw.sh
 #### 6. Documentation Build ✅
 ```bash
 $ cargo doc --no-deps --package perl-parser --locked
-Generated /home/steven/code/Rust/perl-lsp/review/target/doc/perl_parser/index.html and 1 other file
+Generated target/doc/perl_parser/index.html and 1 other file
 ```
 
 #### 7. Full Local CI ✅
