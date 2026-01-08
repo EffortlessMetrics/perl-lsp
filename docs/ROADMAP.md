@@ -143,11 +143,28 @@ These gaps are tracked in [`docs/issues/`](issues/) and need closure before v0.9
 
 ---
 
+## v0.9.0 Blockers (Critical Path)
+
+> **Canonical**: This is the authoritative blocker list. Same blockers tracked in [MILESTONES.md](MILESTONES.md).
+
+These issues must resolve before v0.9.0 release. Listed in dependency order:
+
+| Order | Issue | Category | Rationale |
+| ----- | ----- | -------- | --------- |
+| 1 | [#211](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/211) | Trust Surface | CI pipeline cleanup - establishes trusted baseline for enforcement |
+| 2 | [#210](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/210) | Enforcement | Merge-blocking gates - depends on #211 for clean CI foundation |
+| 3 | [#143](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/143) | Integrity | unwrap()/panic safety - can proceed in parallel with above |
+
+**Dependency rationale**: Trust surface (#211) must be established before enforcement (#210) can be meaningful. Without a clean CI pipeline, merge-blocking gates would be built on unreliable infrastructure. Safety cleanup (#143) is independent and can proceed in parallel with the CI/enforcement work.
+
+---
+
 ## Completed Work
 
 See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 
 **Highlights:**
+
 - Statement Tracker & Heredocs (2025-11-20)
 - Semantic Analyzer Phase 1 (2025-11-20)
 - Band 1: Semantic Stack Validation (2025-12-27)
@@ -160,7 +177,7 @@ The LSP compliance table is now auto-generated. Source of truth: `features.toml`
 
 <!-- BEGIN: COMPLIANCE_TABLE -->
 | Area | Implemented | Total | Coverage |
-|------|-------------|-------|----------|
+| ---- | ----------- | ----- | -------- |
 | debug | 0 | 2 | 0% |
 | notebook | 0 | 2 | 0% |
 | text_document | 21 | 26 | 81% |
@@ -180,6 +197,7 @@ For live metrics, run `just status-check` or see [CURRENT_STATUS.md](CURRENT_STA
 Until benchmark outputs are committed under `benchmarks/results/`, we do not state performance claims in this roadmap.
 
 To publish:
+
 1. Run benchmark harness: `cargo bench -p perl-parser`
 2. Commit `benchmarks/results/<date>-<machine>.json`
 3. Update `benchmarks/BENCHMARK_FRAMEWORK.md` with machine + command line

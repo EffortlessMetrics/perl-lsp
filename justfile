@@ -284,6 +284,26 @@ health-detail:
     @find crates/*/src -name '*.rs' -exec wc -l {} \; 2>/dev/null | sort -nr | head -10 || echo "  None found"
 
 # ============================================================================
+# Milestone Verification
+# ============================================================================
+
+# Verify v0.9.0 release exit criteria (mechanical checks)
+milestone-v0_9-check:
+    @echo "🎯 Verifying v0.9.0 exit criteria..."
+    @echo ""
+    @echo "📋 Step 1: Running ci-gate..."
+    @just ci-gate
+    @echo ""
+    @echo "📋 Step 2: Checking ignored test breakdown..."
+    @bash scripts/ignored-test-count.sh
+    @echo ""
+    @echo "📋 Step 3: Verifying metrics consistency..."
+    @just status-check
+    @echo ""
+    @echo "✅ v0.9.0 exit criteria check complete!"
+    @echo "   Next: Manual review of BUG=0, MANUAL≤1 from test count output above"
+
+# ============================================================================
 # Forensics (post-hoc PR archaeology)
 # ============================================================================
 
