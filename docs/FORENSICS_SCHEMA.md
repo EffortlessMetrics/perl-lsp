@@ -284,6 +284,27 @@ Files touched across many commits, indicating uncertainty or complexity.
 
 **Purpose**: Turn forensics into "do better next time" outputs. Every dossier must produce actionable items to prevent recurrence.
 
+### Policy Constraints (Required)
+
+These constraints ensure prevention actions are **deterministic and hard to forget**:
+
+1. **Quality Delta Rule**: If *any* quality delta is `0`, `-1`, or `-2`, at least one prevention action **must** target that surface.
+   - Example: If Correctness delta is `-1`, include at least one verification action (9.2).
+
+2. **Friction Rule**: If friction existed (temporal topology shows high-churn files, oscillations, or gate failures), at least one prevention action **must** be a **mechanized guardrail** (gate/receipt/schema), not just "write better docs".
+   - Example: If `parser.rs` had 12 touches, add a complexity check gate, not just a design guideline.
+
+3. **Wrongness Rule**: If wrongness was discovered (claim drift, bug, stub), at least one prevention action **must** mechanize detection of that wrongness class.
+   - Example: If claim drift occurred, add a drift detection script to ci-gate.
+
+### Enforcement
+
+Dossiers that violate these constraints should not be published until prevention actions are added. Reviewers should verify:
+
+- [ ] Quality deltas at 0/-1/-2 have corresponding prevention actions
+- [ ] Friction zones have at least one mechanized guardrail action
+- [ ] Discovered wrongness has mechanized detection action
+
 Three categories of actions, ranked by priority:
 
 ### 9.1 Code Health Actions (Maintainability)

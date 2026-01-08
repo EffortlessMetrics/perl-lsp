@@ -131,6 +131,21 @@ To improve estimates over time:
 3. **Tune weights** until reported usually falls inside estimated range
 4. **Document error band** and revision history
 
+### Calibration Store
+
+Calibration data is stored in [`forensics/calibration/devlt.csv`](forensics/calibration/devlt.csv).
+
+**Fields**:
+- `pr` - PR number
+- `date` - Analysis date
+- `est_lb_min`, `est_ub_min` - Estimated range (minutes)
+- `reported_min` - Actual reported DevLT (when available)
+- `coverage` - Data coverage level
+- `method_id` - Estimation method version
+- `notes` - Brief description
+
+**Adding entries**: After each forensics pass, append to the CSV. See [`forensics/calibration/README.md`](forensics/calibration/README.md) for details.
+
 ### Calibration Data Collection
 
 #### Per-PR Calibration Record
@@ -228,9 +243,30 @@ scripts/forensics/pr-harvest.sh <PR_NUMBER> -o harvest.yaml
 scripts/forensics/temporal-analysis.sh <PR_NUMBER> -o temporal.yaml
 
 # 3. Estimate DevLT using rubric (count decision + friction events)
-# 4. Record in calibration log above
-# 5. After merge, record actual reported DevLT
+# 4. Append to calibration store
+echo "275,$(date -I),60,90,,github_plus_agent_logs,devlt_est_v1:decision_weighted,description" >> docs/forensics/calibration/devlt.csv
+
+# 5. After merge, update reported_min column with actual DevLT
 # 6. If outside range, adjust weights and document in revision history
+```
+
+### Calibration Quality Check
+
+After collecting 5+ reported values:
+
+```bash
+# Check calibration accuracy
+cd docs/forensics/calibration
+grep -v '^#' devlt.csv | awk -F, '
+NR>1 && $5!="" {
+  total++
+  if ($5 >= $3 && $5 <= $4) { in_range++ }
+}
+END {
+  pct = (in_range/total) * 100
+  print "In-range: " in_range "/" total " (" pct "%)"
+  if (pct < 50) print "WARNING: Calibration needed - adjust weights"
+}'
 ```
 
 ## Machine Work Estimation

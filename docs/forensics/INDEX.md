@@ -108,6 +108,28 @@ Create `pr-NNN.md` in this directory using the template in [`../FORENSICS_SCHEMA
 - Friction events (wrong → caught → fix → prevention)
 ```
 
+### Directory Structure
+
+```
+docs/forensics/
+├── INDEX.md                    # This file - PR inventory
+├── README.md                   # Directory purpose and methodology
+├── pr-*.md                     # Individual PR dossiers
+├── prompts/                    # LLM analyzer prompt specifications
+│   ├── README.md               # Analyzer framework overview
+│   ├── diff-scout.md           # Scope surface analyzer
+│   ├── design-auditor.md       # Maintainability analyzer
+│   ├── verification-auditor.md # Correctness analyzer
+│   ├── docs-auditor.md         # Reproducibility analyzer
+│   ├── policy-auditor.md       # Governance analyzer
+│   ├── measurement-auditor.md  # Measurement integrity (final gate)
+│   ├── chronologist.md         # Temporal topology analyzer
+│   └── decision-extractor.md   # DevLT estimation analyzer
+└── calibration/                # DevLT calibration data
+    ├── README.md               # Calibration methodology
+    └── devlt.csv               # Per-PR calibration records
+```
+
 See methodology docs:
 - [`../DEVLT_ESTIMATION.md`](../DEVLT_ESTIMATION.md) - DevLT estimation method
 - [`../METRICS_PROVENANCE.md`](../METRICS_PROVENANCE.md) - Provenance schema
