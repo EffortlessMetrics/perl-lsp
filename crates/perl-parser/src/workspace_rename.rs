@@ -9,19 +9,26 @@ use std::collections::BTreeMap;
 /// Represents a text edit for a single document
 #[derive(Debug, Clone)]
 pub struct TextEdit {
-    pub start: (u32, u32), // (line, character) in UTF-16
+    /// Start position as (line, character) in UTF-16 code units
+    pub start: (u32, u32),
+    /// End position as (line, character) in UTF-16 code units
     pub end: (u32, u32),
+    /// The replacement text to insert at this range
     pub new_text: String,
 }
 
 /// Represents edits to a single document
 #[derive(Debug, Clone)]
 pub struct RenameEdit {
+    /// The document URI to apply edits to
     pub uri: String,
+    /// The list of text edits for this document
     pub edits: Vec<TextEdit>,
 }
 
-/// Build a rename edit across the workspace
+/// Build a rename edit across the workspace.
+///
+/// Finds all references to the given symbol and builds text edits to rename them.
 pub fn build_rename_edit(
     idx: &WorkspaceIndex,
     key: &SymbolKey,
@@ -87,7 +94,9 @@ pub fn build_rename_edit(
     grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect()
 }
 
-/// Convert RenameEdit to LSP WorkspaceEdit JSON
+/// Convert RenameEdit to LSP WorkspaceEdit JSON.
+///
+/// Transforms the internal rename edit representation to the LSP protocol format.
 pub fn to_workspace_edit(edits: Vec<RenameEdit>) -> Value {
     let mut changes: BTreeMap<String, Vec<Value>> = BTreeMap::new();
 
@@ -112,7 +121,9 @@ pub fn to_workspace_edit(edits: Vec<RenameEdit>) -> Value {
     json!({ "changes": changes })
 }
 
-/// Check if a rename is valid for the given symbol
+/// Check if a rename is valid for the given symbol.
+///
+/// Validates that the new name is a valid Perl identifier.
 pub fn validate_rename(_key: &SymbolKey, new_name: &str) -> Result<(), String> {
     // Basic validation
     if new_name.is_empty() {

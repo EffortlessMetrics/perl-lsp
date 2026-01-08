@@ -1274,99 +1274,163 @@ pub enum NodeKind {
         pattern: String, // <*.txt>
     },
 
-    // Literals
+    /// Numeric literal in Perl code (integer, float, hex, octal, binary)
+    ///
+    /// Represents all numeric literal forms: `42`, `3.14`, `0x1A`, `0o755`, `0b1010`.
     Number {
+        /// String representation preserving original format
         value: String,
     },
 
+    /// String literal with optional interpolation
+    ///
+    /// Handles both single-quoted (`'literal'`) and double-quoted (`"$interpolated"`) strings.
     String {
+        /// String content (after quote processing)
         value: String,
+        /// Whether the string supports variable interpolation
         interpolated: bool,
     },
 
+    /// Heredoc string literal for multi-line content
+    ///
+    /// Supports all heredoc forms: `<<EOF`, `<<'EOF'`, `<<"EOF"`, `<<~EOF` (indented).
     Heredoc {
+        /// Delimiter marking heredoc boundaries
         delimiter: String,
+        /// Content between delimiters
         content: String,
+        /// Whether content supports variable interpolation
         interpolated: bool,
+        /// Whether leading whitespace is stripped (<<~ form)
         indented: bool,
     },
 
+    /// Array literal expression: `(1, 2, 3)` or `[1, 2, 3]`
     ArrayLiteral {
+        /// Elements in the array
         elements: Vec<Node>,
     },
 
+    /// Hash literal expression: `(key => 'value')` or `{key => 'value'}`
     HashLiteral {
+        /// Key-value pairs in the hash
         pairs: Vec<(Node, Node)>,
     },
 
-    // Control flow
+    /// Block of statements: `{ ... }`
+    ///
+    /// Used for control structures, subroutine bodies, and bare blocks.
     Block {
+        /// Statements within the block
         statements: Vec<Node>,
     },
 
+    /// Eval block for exception handling: `eval { ... }`
     Eval {
+        /// Block to evaluate with exception trapping
         block: Box<Node>,
     },
 
+    /// Do block for file inclusion or expression evaluation: `do { ... }` or `do "file"`
     Do {
+        /// Block to execute or file expression
         block: Box<Node>,
     },
 
+    /// Try-catch-finally for modern exception handling (Syntax::Keyword::Try style)
     Try {
+        /// Try block body
         body: Box<Node>,
-        catch_blocks: Vec<(Option<String>, Box<Node>)>, // (variable, block)
+        /// Catch blocks: (optional exception variable, handler block)
+        catch_blocks: Vec<(Option<String>, Box<Node>)>,
+        /// Optional finally block
         finally_block: Option<Box<Node>>,
     },
 
+    /// If-elsif-else conditional statement
     If {
+        /// Condition expression
         condition: Box<Node>,
+        /// Then branch block
         then_branch: Box<Node>,
+        /// Elsif branches: (condition, block) pairs
         elsif_branches: Vec<(Box<Node>, Box<Node>)>,
+        /// Optional else branch
         else_branch: Option<Box<Node>>,
     },
 
+    /// Statement with a label for loop control: `LABEL: while (...)`
     LabeledStatement {
+        /// Label name (e.g., "OUTER", "LINE")
         label: String,
+        /// Labeled statement (typically a loop)
         statement: Box<Node>,
     },
 
+    /// While loop: `while (condition) { ... }`
     While {
+        /// Loop condition
         condition: Box<Node>,
+        /// Loop body
         body: Box<Node>,
+        /// Optional continue block
         continue_block: Option<Box<Node>>,
     },
 
+    /// C-style for loop: `for (init; cond; update) { ... }`
     For {
+        /// Initialization expression
         init: Option<Box<Node>>,
+        /// Loop condition
         condition: Option<Box<Node>>,
+        /// Update expression
         update: Option<Box<Node>>,
+        /// Loop body
         body: Box<Node>,
+        /// Optional continue block
         continue_block: Option<Box<Node>>,
     },
 
+    /// Foreach loop: `foreach my $item (@list) { ... }`
     Foreach {
+        /// Iterator variable
         variable: Box<Node>,
+        /// List to iterate
         list: Box<Node>,
+        /// Loop body
         body: Box<Node>,
     },
 
+    /// Given statement for switch-like matching (Perl 5.10+)
     Given {
+        /// Expression to match against
         expr: Box<Node>,
+        /// Body containing when/default blocks
         body: Box<Node>,
     },
 
+    /// When clause in given/switch: `when ($pattern) { ... }`
     When {
+        /// Pattern to match
         condition: Box<Node>,
+        /// Handler block
         body: Box<Node>,
     },
 
+    /// Default clause in given/switch: `default { ... }`
     Default {
+        /// Handler block for unmatched cases
         body: Box<Node>,
     },
 
+    /// Statement modifier syntax: `print "ok" if $condition`
     StatementModifier {
+        /// Statement to conditionally execute
         statement: Box<Node>,
+        /// Modifier keyword: if, unless, while, until, for, foreach
         modifier: String,
+        /// Modifier condition
         condition: Box<Node>,
     },
 
@@ -1399,87 +1463,131 @@ pub enum NodeKind {
         body: Box<Node>,
     },
 
-    // Prototype for subroutine
+    /// Subroutine prototype specification: `sub foo ($;@) { ... }`
     Prototype {
+        /// Prototype string defining argument behavior
         content: String,
     },
 
-    // Signature for subroutine
+    /// Subroutine signature (Perl 5.20+): `sub foo ($x, $y = 0) { ... }`
     Signature {
+        /// List of signature parameters
         parameters: Vec<Node>,
     },
 
-    // Signature parameter types
+    /// Mandatory signature parameter: `$x` in `sub foo ($x) { }`
     MandatoryParameter {
+        /// Variable being bound
         variable: Box<Node>,
     },
 
+    /// Optional signature parameter with default: `$y = 0` in `sub foo ($y = 0) { }`
     OptionalParameter {
+        /// Variable being bound
         variable: Box<Node>,
+        /// Default value expression
         default_value: Box<Node>,
     },
 
+    /// Slurpy parameter collecting remaining args: `@rest` or `%opts` in signature
     SlurpyParameter {
+        /// Array or hash variable to receive remaining arguments
         variable: Box<Node>,
     },
 
+    /// Named parameter placeholder in signature (future Perl feature)
     NamedParameter {
+        /// Variable for named parameter binding
         variable: Box<Node>,
     },
 
-    // Method declaration (Perl 5.38+)
+    /// Method declaration (Perl 5.38+ with `use feature 'class'`)
     Method {
+        /// Method name
         name: String,
+        /// Optional signature
         signature: Option<Box<Node>>,
+        /// Method attributes (e.g., `:lvalue`)
         attributes: Vec<String>,
+        /// Method body
         body: Box<Node>,
     },
 
+    /// Return statement: `return;` or `return $value;`
     Return {
+        /// Optional return value
         value: Option<Box<Node>>,
     },
 
+    /// Method call: `$obj->method(@args)` or `$obj->method`
     MethodCall {
+        /// Object or class expression
         object: Box<Node>,
+        /// Method name being called
         method: String,
+        /// Method arguments
         args: Vec<Node>,
     },
 
+    /// Function call: `foo(@args)` or `foo()`
     FunctionCall {
+        /// Function name (may be qualified: `Package::func`)
         name: String,
+        /// Function arguments
         args: Vec<Node>,
     },
 
+    /// Indirect object call (legacy syntax): `new Class @args`
     IndirectCall {
+        /// Method name
         method: String,
+        /// Object or class
         object: Box<Node>,
+        /// Arguments
         args: Vec<Node>,
     },
 
-    // Pattern matching
+    /// Regex literal: `/pattern/modifiers` or `qr/pattern/modifiers`
     Regex {
+        /// Regular expression pattern
         pattern: String,
+        /// Replacement string (for s/// when parsed as regex)
         replacement: Option<String>,
+        /// Regex modifiers (i, m, s, x, g, etc.)
         modifiers: String,
     },
 
+    /// Match operation: `$str =~ /pattern/modifiers`
     Match {
+        /// Expression to match against
         expr: Box<Node>,
+        /// Pattern to match
         pattern: String,
+        /// Match modifiers
         modifiers: String,
     },
 
+    /// Substitution operation: `$str =~ s/pattern/replacement/modifiers`
     Substitution {
+        /// Expression to substitute in
         expr: Box<Node>,
+        /// Pattern to find
         pattern: String,
+        /// Replacement string
         replacement: String,
+        /// Substitution modifiers (g, e, r, etc.)
         modifiers: String,
     },
 
+    /// Transliteration operation: `$str =~ tr/search/replace/` or `y///`
     Transliteration {
+        /// Expression to transliterate
         expr: Box<Node>,
+        /// Characters to search for
         search: String,
+        /// Replacement characters
         replace: String,
+        /// Transliteration modifiers (c, d, s, r)
         modifiers: String,
     },
 
@@ -1509,56 +1617,71 @@ pub enum NodeKind {
         block: Option<Box<Node>>,
     },
 
+    /// Use statement for module loading: `use Module qw(imports);`
     Use {
+        /// Module name to load
         module: String,
+        /// Import arguments (symbols to import)
         args: Vec<String>,
     },
 
+    /// No statement for disabling features: `no strict;`
     No {
+        /// Module/pragma name to disable
         module: String,
+        /// Arguments for the no statement
         args: Vec<String>,
     },
 
-    // Phase blocks
+    /// Phase block for compile/runtime hooks: `BEGIN`, `END`, `CHECK`, `INIT`, `UNITCHECK`
     PhaseBlock {
-        phase: String, // BEGIN, END, CHECK, INIT, UNITCHECK
-        /// Source location span of the phase block name
-        ///
-        /// ## Usage Notes
-        /// - Provides constant-time position information for BEGIN/END/etc keywords
-        /// - Essential for precise editor interactions (go-to-definition, rename)
+        /// Phase name: BEGIN, END, CHECK, INIT, UNITCHECK
+        phase: String,
+        /// Source location span of the phase block name for precise navigation
         phase_span: Option<SourceLocation>,
+        /// Block to execute during the specified phase
         block: Box<Node>,
     },
 
-    // Data sections
+    /// Data section marker: `__DATA__` or `__END__`
     DataSection {
-        marker: String, // __DATA__ or __END__
+        /// Section marker (__DATA__ or __END__)
+        marker: String,
+        /// Content following the marker (if any)
         body: Option<String>,
     },
 
-    // Modern Perl OOP (5.38+)
+    /// Class declaration (Perl 5.38+ with `use feature 'class'`)
     Class {
+        /// Class name
         name: String,
+        /// Class body containing methods and attributes
         body: Box<Node>,
     },
 
-    // Format declaration (legacy Perl)
+    /// Format declaration for legacy report generation
     Format {
+        /// Format name (defaults to filehandle name)
         name: String,
+        /// Format specification body
         body: String,
     },
 
-    // Misc
+    /// Bare identifier (bareword or package-qualified name)
     Identifier {
+        /// Identifier string
         name: String,
     },
 
+    /// Parse error placeholder with error message
     Error {
+        /// Error description
         message: String,
     },
 
-    // Lexer budget exceeded - preserves earlier AST
+    /// Lexer budget exceeded marker preserving partial parse results
+    ///
+    /// Used when recursion or token limits are hit to preserve already-parsed content.
     UnknownRest,
 }
 

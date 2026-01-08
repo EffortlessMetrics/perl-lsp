@@ -35,6 +35,18 @@ fn to_range(content: &str, start: usize, end: usize) -> Range {
     Range::new(start_pos, end_pos)
 }
 
+/// Collects clickable document links from Perl source code.
+///
+/// Scans the document for `use`, `require`, and `do` statements, creating links for:
+/// - Module names (e.g., `use Foo::Bar;`) → MetaCPAN URLs
+/// - File paths in quotes (e.g., `require 'path/file.pl'`) → local file URLs
+///
+/// # Arguments
+/// * `text` - The Perl source code to scan
+/// * `uri` - The document's URI, used to resolve relative file paths
+///
+/// # Returns
+/// A vector of `DocumentLink` objects with range, target URL, and tooltip.
 pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>, String> {
     let mut links = Vec::new();
 

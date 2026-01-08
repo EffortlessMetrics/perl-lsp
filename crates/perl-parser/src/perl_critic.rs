@@ -13,14 +13,22 @@ use std::process::Command;
 /// Severity levels for Perl::Critic violations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Severity {
-    Gentle = 5, // Cosmetic issues
-    Stern = 4,  // Minor issues
-    Harsh = 3,  // Important issues
-    Cruel = 2,  // Serious issues
-    Brutal = 1, // Critical issues
+    /// Cosmetic issues (severity 5)
+    Gentle = 5,
+    /// Minor issues (severity 4)
+    Stern = 4,
+    /// Important issues (severity 3)
+    Harsh = 3,
+    /// Serious issues (severity 2)
+    Cruel = 2,
+    /// Critical issues (severity 1)
+    Brutal = 1,
 }
 
 impl Severity {
+    /// Converts a numeric severity (1-5) to a `Severity` variant.
+    ///
+    /// Values outside 1-5 default to `Harsh`.
     pub fn from_number(n: u8) -> Self {
         match n {
             1 => Self::Brutal,
@@ -32,6 +40,7 @@ impl Severity {
         }
     }
 
+    /// Converts this severity to a `DiagnosticSeverity` for LSP reporting.
     pub fn to_diagnostic_severity(&self) -> crate::diagnostics::DiagnosticSeverity {
         match self {
             Self::Brutal | Self::Cruel => crate::diagnostics::DiagnosticSeverity::Error,
@@ -44,11 +53,17 @@ impl Severity {
 /// A Perl::Critic violation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Violation {
+    /// The policy name that was violated (e.g., "TestingAndDebugging::RequireUseStrict")
     pub policy: String,
+    /// A brief description of the violation
     pub description: String,
+    /// A detailed explanation of why this policy exists
     pub explanation: String,
+    /// The severity level of this violation
     pub severity: Severity,
+    /// The source location where the violation occurred
     pub range: Range,
+    /// The file path where the violation was found
     pub file: String,
 }
 
@@ -59,8 +74,9 @@ pub struct CriticConfig {
     pub severity: u8,
     /// Path to perlcriticrc file
     pub profile: Option<String>,
-    /// Include/exclude specific policies
+    /// Policies to explicitly include in analysis
     pub include: Vec<String>,
+    /// Policies to explicitly exclude from analysis
     pub exclude: Vec<String>,
     /// Theme to use
     pub theme: Option<String>,
@@ -86,11 +102,14 @@ impl Default for CriticConfig {
 
 /// Perl::Critic analyzer
 pub struct CriticAnalyzer {
+    /// Configuration settings for the analyzer
     config: CriticConfig,
+    /// Cache of violations keyed by file path
     cache: HashMap<String, Vec<Violation>>,
 }
 
 impl CriticAnalyzer {
+    /// Creates a new analyzer with the given configuration.
     pub fn new(config: CriticConfig) -> Self {
         Self { config, cache: HashMap::new() }
     }
@@ -252,26 +271,34 @@ impl CriticAnalyzer {
 /// A quick fix for a violation
 #[derive(Debug, Clone)]
 pub struct QuickFix {
+    /// Human-readable title describing the fix action
     pub title: String,
+    /// The text edit to apply as a fix
     pub edit: TextEdit,
 }
 
 /// A text edit
 #[derive(Debug, Clone)]
 pub struct TextEdit {
+    /// The range of text to replace
     pub range: Range,
+    /// The replacement text (empty string for deletion)
     pub new_text: String,
 }
 
 /// Built-in policy analyzer that works without external perlcritic
 pub struct BuiltInAnalyzer {
+    /// Collection of registered policy implementations
     policies: Vec<Box<dyn Policy>>,
 }
 
 /// Trait for implementing policies
 pub trait Policy: Send + Sync {
+    /// Returns the fully qualified policy name.
     fn name(&self) -> &str;
+    /// Returns the severity level for violations of this policy.
     fn severity(&self) -> Severity;
+    /// Analyzes the AST and source content, returning any violations found.
     fn analyze(&self, ast: &Node, content: &str) -> Vec<Violation>;
 }
 
@@ -347,6 +374,7 @@ impl Default for BuiltInAnalyzer {
 }
 
 impl BuiltInAnalyzer {
+    /// Creates a new analyzer with default built-in policies.
     pub fn new() -> Self {
         Self::default()
     }

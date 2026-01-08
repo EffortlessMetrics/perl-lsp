@@ -145,11 +145,18 @@ fmt:
 clean:
     cargo clean
 
+# Missing docs ratcheting check (Issue #197)
+ci-docs-check:
+    @echo "📝 Checking missing docs baseline..."
+    @bash ci/check_missing_docs.sh
+    @echo "✅ Missing docs check passed"
+
 # Policy enforcement checks
 ci-policy:
     @echo "📋 Running policy checks..."
     @./.ci/scripts/check-from-raw.sh
     @just status-check
+    @just ci-docs-check
     @echo "✅ Policy checks passed"
 
 # Update derived metrics in CURRENT_STATUS.md
