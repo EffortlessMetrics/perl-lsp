@@ -131,11 +131,143 @@ To improve estimates over time:
 3. **Tune weights** until reported usually falls inside estimated range
 4. **Document error band** and revision history
 
+### Calibration Store
+
+Calibration data is stored in [`forensics/calibration/devlt.csv`](forensics/calibration/devlt.csv).
+
+**Fields**:
+- `pr` - PR number
+- `date` - Analysis date
+- `est_lb_min`, `est_ub_min` - Estimated range (minutes)
+- `reported_min` - Actual reported DevLT (when available)
+- `coverage` - Data coverage level
+- `method_id` - Estimation method version
+- `notes` - Brief description
+
+**Adding entries**: After each forensics pass, append to the CSV. See [`forensics/calibration/README.md`](forensics/calibration/README.md) for details.
+
+### Calibration Data Collection
+
+#### Per-PR Calibration Record
+
+After each PR that goes through forensics, collect:
+
+```yaml
+pr: <number>
+# Estimated (from decision-extractor)
+estimated_devlt:
+  range_min: <minutes>
+  range_max: <minutes>
+  confidence: low|med|high
+  coverage: github_only|github_plus_agent_logs
+  basis:
+    - <event 1>
+    - <event 2>
+
+# Reported (from maintainer, if available)
+reported_devlt:
+  value: <minutes>
+  confidence: low|med|high
+  notes: <optional>
+
+# Calibration result
+calibration:
+  in_range: true|false
+  error_minutes: <if reported available>
+  error_direction: under|over|accurate
+```
+
+**Note:** Calibration requires maintainer-reported values which should be collected during PR review or retrospectives. Reported values can be rough estimates (±15m acceptable).
+
+#### Calibration Log Format
+
+Track calibration over time:
+
+| PR | Est. Range | Reported | In Range? | Error | Notes |
+|----|------------|----------|-----------|-------|-------|
+| 259 | 45–90 | 60 | ✓ | - | baseline |
+| 260 | 30–60 | 75 | ✗ | +15 under | friction underweighted |
+
+#### Weight Adjustment Protocol
+
+When calibration shows systematic bias:
+
+1. **Collect 5+ data points** showing same direction error
+2. **Identify which event category** is mis-weighted (decision vs. friction, which type)
+3. **Adjust weight by 20%** in correction direction
+4. **Document in revision history** with rationale
+5. **Re-run next 5 PRs** to validate adjustment
+
+**Example adjustment:**
+- If 5 PRs show consistent under-estimation (+20m outside high end)
+- And all involve friction events
+- Increase friction event weights by 20%
+- Document as v2 in revision history
+
 ### Calibration Log
 
-| PR | Estimated | Reported | Error | Notes |
-|----|-----------|----------|-------|-------|
-| _TBD_ | _TBD_ | _TBD_ | _TBD_ | _Calibration data goes here_ |
+Initial calibration from casebook exhibits (v1 weights):
+
+| PR | Type | Estimated | Reported | In Range? | Notes |
+|----|------|-----------|----------|-----------|-------|
+| #231/232/234 | feature | 60–90m | — | — | Semantic analyzer; 4 decisions, 0 friction |
+| #260/264 | hardening | 60–90m | — | — | Mutation hardening; 3 decisions, 2 friction |
+| #251-253 | mechanization | 90–130m | — | — | Harness hardening; 4 decisions, 3 friction + wrongness |
+| #259 | feature | 45–75m | — | — | Name span; 3 decisions, 0 friction |
+| #225/226/229 | feature | 60–90m | — | — | Statement tracker; 4 decisions, 0 friction |
+
+**Status:** Awaiting reported values for calibration. Current estimates use v1 weights.
+
+### Weight Revision History
+
+| Version | Date | Changes | Rationale |
+|---------|------|---------|-----------|
+| v1 | 2025-01-07 | Initial weights | Heuristic baseline |
+| v2 | TBD | Pending calibration data | - |
+
+### Error Band
+
+**Current documented error band:** ±30–50% typical (uncalibrated)
+
+This will narrow after calibration with reported values. Target: ±20% for high-confidence estimates.
+
+### Calibration Procedure
+
+To calibrate from a new PR:
+
+```bash
+# 1. Run forensics harvest
+scripts/forensics/pr-harvest.sh <PR_NUMBER> -o harvest.yaml
+
+# 2. Run temporal analysis
+scripts/forensics/temporal-analysis.sh <PR_NUMBER> -o temporal.yaml
+
+# 3. Estimate DevLT using rubric (count decision + friction events)
+# 4. Append to calibration store
+echo "275,$(date -I),60,90,,github_plus_agent_logs,devlt_est_v1:decision_weighted,description" >> docs/forensics/calibration/devlt.csv
+
+# 5. After merge, update reported_min column with actual DevLT
+# 6. If outside range, adjust weights and document in revision history
+```
+
+### Calibration Quality Check
+
+After collecting 5+ reported values:
+
+```bash
+# Check calibration accuracy
+cd docs/forensics/calibration
+grep -v '^#' devlt.csv | awk -F, '
+NR>1 && $5!="" {
+  total++
+  if ($5 >= $3 && $5 <= $4) { in_range++ }
+}
+END {
+  pct = (in_range/total) * 100
+  print "In-range: " in_range "/" total " (" pct "%)"
+  if (pct < 50) print "WARNING: Calibration needed - adjust weights"
+}'
+```
 
 ## Machine Work Estimation
 

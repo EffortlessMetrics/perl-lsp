@@ -108,11 +108,45 @@ Create `pr-NNN.md` in this directory using the template in [`../FORENSICS_SCHEMA
 - Friction events (wrong → caught → fix → prevention)
 ```
 
+### Directory Structure
+
+```
+docs/forensics/
+├── INDEX.md                    # This file - PR inventory
+├── README.md                   # Directory purpose and methodology
+├── pr-*.md                     # Individual PR dossiers
+├── prompts/                    # LLM analyzer prompt specifications
+│   ├── README.md               # Analyzer framework overview
+│   ├── diff-scout.md           # Scope surface analyzer
+│   ├── design-auditor.md       # Maintainability analyzer
+│   ├── verification-auditor.md # Correctness analyzer
+│   ├── docs-auditor.md         # Reproducibility analyzer
+│   ├── policy-auditor.md       # Governance analyzer
+│   ├── measurement-auditor.md  # Measurement integrity (final gate)
+│   ├── chronologist.md         # Temporal topology analyzer
+│   └── decision-extractor.md   # DevLT estimation analyzer
+└── calibration/                # DevLT calibration data
+    ├── README.md               # Calibration methodology
+    └── devlt.csv               # Per-PR calibration records
+```
+
 See methodology docs:
 - [`../DEVLT_ESTIMATION.md`](../DEVLT_ESTIMATION.md) - DevLT estimation method
 - [`../METRICS_PROVENANCE.md`](../METRICS_PROVENANCE.md) - Provenance schema
 - [`../QUALITY_SURFACES.md`](../QUALITY_SURFACES.md) - The four quality surfaces
 - [`../FORENSICS_SCHEMA.md`](../FORENSICS_SCHEMA.md) - Full dossier template
+
+## Pre-PR Workflow (Issue Work Orders)
+
+For issues with agent research, use [WORK_ORDER_FORMAT.md](WORK_ORDER_FORMAT.md) to:
+- Convert analysis into actionable PR scope
+- Define testable exit criteria
+- Anchor DevLT budget to decision events
+- Declare measurement contracts (tooling issues)
+
+See [examples/issue-278-work-order.md](examples/issue-278-work-order.md) for demonstration.
+
+For coordinating multiple issues, see [IMPLEMENTATION_PHASES.md](IMPLEMENTATION_PHASES.md).
 
 ## See Also
 
@@ -120,3 +154,5 @@ See methodology docs:
 - [`CASEBOOK.md`](../CASEBOOK.md) - Exhibit entries
 - [`LESSONS.md`](../LESSONS.md) - Wrongness log
 - [`README.md`](README.md) - This directory's purpose
+- [`WORK_ORDER_FORMAT.md`](WORK_ORDER_FORMAT.md) - Pre-PR work order template
+- [`IMPLEMENTATION_PHASES.md`](IMPLEMENTATION_PHASES.md) - Swarm coordination
