@@ -1038,11 +1038,13 @@ impl LspServer {
 
     // Test-only public methods (enabled for unit tests or integration tests with expose_lsp_test_api)
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    #[allow(missing_docs)] // Test scaffolding - not public API
     pub fn test_handle_did_open(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
         self.handle_did_open(params)
     }
 
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    #[allow(missing_docs)] // Test scaffolding
     pub fn test_handle_definition(
         &self,
         params: Option<Value>,
@@ -1051,6 +1053,7 @@ impl LspServer {
     }
 
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    #[allow(missing_docs)] // Test scaffolding
     pub fn test_handle_references(
         &self,
         params: Option<Value>,
@@ -1059,6 +1062,7 @@ impl LspServer {
     }
 
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    #[allow(missing_docs)] // Test scaffolding
     pub fn test_handle_completion(
         &self,
         params: Option<Value>,
@@ -1067,11 +1071,13 @@ impl LspServer {
     }
 
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    #[allow(missing_docs)] // Test scaffolding
     pub fn test_handle_hover(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         self.handle_hover(params)
     }
 
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    #[allow(missing_docs)] // Test scaffolding
     pub fn test_handle_document_symbols(
         &self,
         params: Option<Value>,
@@ -1080,6 +1086,7 @@ impl LspServer {
     }
 
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    #[allow(missing_docs)] // Test scaffolding
     pub fn test_handle_workspace_symbols(
         &self,
         params: Option<Value>,

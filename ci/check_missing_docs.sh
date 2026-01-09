@@ -3,12 +3,17 @@
 # Follows the same ratcheting pattern as check_ignored.sh (Issue #197)
 set -euo pipefail
 
-# Count missing_docs warnings by building with the warning enabled
+# Count missing_docs warnings from perl-parser only
+# perl-parser has #![warn(missing_docs)] in lib.rs, so no RUSTFLAGS needed
 count_missing_docs() {
-  # Build perl-parser with missing_docs warning and count warnings
-  # Use 2>&1 to capture stderr where warnings go
   local count
-  count=$(RUSTFLAGS="-W missing_docs" cargo build -p perl-parser 2>&1 | grep -c "warning: missing documentation" || echo "0")
+  # Build perl-parser and filter warnings to only those from perl-parser sources
+  # Use a temp file to avoid issues with subshell and grep exit codes
+  local tmp
+  tmp=$(mktemp)
+  cargo build -p perl-parser 2>&1 | grep -E "warning: missing documentation.*crates/perl-parser" > "$tmp" || true
+  count=$(wc -l < "$tmp")
+  rm -f "$tmp"
   echo "$count"
 }
 

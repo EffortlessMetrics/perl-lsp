@@ -177,7 +177,7 @@ The LSP compliance table is now auto-generated. Source of truth: `features.toml`
 
 <!-- BEGIN: COMPLIANCE_TABLE -->
 | Area | Implemented | Total | Coverage |
-| ---- | ----------- | ----- | -------- |
+|------|-------------|-------|----------|
 | debug | 0 | 2 | 0% |
 | notebook | 0 | 2 | 0% |
 | text_document | 21 | 26 | 81% |

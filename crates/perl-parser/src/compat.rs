@@ -7,6 +7,7 @@
 #![allow(deprecated)]
 
 #[cfg(any(test, feature = "test-compat"))]
+#[allow(missing_docs)] // Test compatibility shims - deprecated, not public API
 pub mod v0 {
     use crate::*;
     use serde_json::Value;
