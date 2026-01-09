@@ -442,10 +442,10 @@ impl RenameProvider {
                         .source
                         .chars()
                         .nth(absolute_pos - 1)
-                        .map_or(true, |c| !c.is_alphanumeric());
+                        .is_none_or(|c| !c.is_alphanumeric());
                 let after_pos = absolute_pos + pattern.len();
                 let after_ok = after_pos >= self.source.len()
-                    || self.source.chars().nth(after_pos).map_or(true, |c| !c.is_alphanumeric());
+                    || self.source.chars().nth(after_pos).is_none_or(|c| !c.is_alphanumeric());
 
                 if before_ok && after_ok {
                     let start = if let Some(sigil) = kind.sigil() {

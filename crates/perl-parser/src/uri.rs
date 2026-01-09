@@ -7,7 +7,8 @@ use lsp_types::Uri;
 pub fn parse_uri(s: &str) -> Uri {
     s.parse::<Uri>().unwrap_or_else(|_| {
         // This is a guaranteed valid URI as a fallback
-        "file:///invalid".parse::<Uri>()
-            .unwrap_or_else(|_| panic!("hardcoded fallback URI is invalid - this is a bug in the LSP URI parser"))
+        "file:///invalid".parse::<Uri>().unwrap_or_else(|_| {
+            panic!("hardcoded fallback URI is invalid - this is a bug in the LSP URI parser")
+        })
     })
 }
