@@ -81,15 +81,25 @@ pub enum SemanticTokenType {
 /// across different LSP clients with full Perl language semantics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SemanticTokenModifier {
+    /// Symbol is being declared at this location
     Declaration,
+    /// Symbol is being defined at this location
     Definition,
+    /// Symbol is read-only (constant)
     Readonly,
+    /// Symbol has static storage duration (state variables)
     Static,
+    /// Symbol is deprecated and should not be used
     Deprecated,
+    /// Symbol is abstract (method without implementation)
     Abstract,
+    /// Symbol represents an asynchronous operation
     Async,
+    /// Symbol is being modified (written to)
     Modification,
+    /// Symbol is documentation-related (POD)
     Documentation,
+    /// Symbol is from the Perl standard library
     DefaultLibrary,
 }
 
@@ -943,13 +953,19 @@ impl SemanticAnalyzer {
     }
 }
 
-/// Built-in function documentation
+/// Documentation entry for a Perl built-in function.
+///
+/// Provides signature and description information for display in hover tooltips.
 struct BuiltinDoc {
+    /// Function signature showing calling conventions
     signature: &'static str,
+    /// Brief description of what the function does
     description: &'static str,
 }
 
-/// Check if a function is a Perl built-in
+/// Check if a function name is a Perl built-in.
+///
+/// Returns `true` if the name matches a known Perl built-in function.
 fn is_builtin_function(name: &str) -> bool {
     matches!(
         name,
@@ -998,7 +1014,10 @@ fn is_builtin_function(name: &str) -> bool {
     )
 }
 
-/// Get documentation for built-in functions
+/// Get documentation for a Perl built-in function.
+///
+/// Returns signature and description for known built-in functions,
+/// or `None` if documentation is not available.
 fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
     match name {
         "print" => Some(BuiltinDoc {
@@ -1054,6 +1073,7 @@ fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
 /// ```
 #[derive(Debug)]
 pub struct SemanticModel {
+    /// Internal semantic analyzer instance
     analyzer: SemanticAnalyzer,
 }
 

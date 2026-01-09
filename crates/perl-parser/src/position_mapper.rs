@@ -26,11 +26,16 @@ pub struct PositionMapper {
     line_ending: LineEnding,
 }
 
+/// Line ending style detected in a document
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineEnding {
+    /// Unix-style line endings (LF only)
     Lf,
+    /// Windows-style line endings (CRLF)
     CrLf,
+    /// Classic Mac line endings (CR only)
     Cr,
+    /// Mixed line endings detected
     Mixed,
 }
 
@@ -172,7 +177,9 @@ impl PositionMapper {
     }
 }
 
-/// Convert JSON LSP position to our Position type
+/// Convert JSON LSP position to our Position type.
+///
+/// Extracts line and character fields from a JSON object.
 pub fn json_to_position(pos: &Value) -> Option<Position> {
     Some(Position {
         line: pos["line"].as_u64()? as u32,
@@ -180,7 +187,9 @@ pub fn json_to_position(pos: &Value) -> Option<Position> {
     })
 }
 
-/// Convert Position to JSON for LSP
+/// Convert Position to JSON for LSP.
+///
+/// Creates a JSON object with line and character fields.
 pub fn position_to_json(pos: Position) -> Value {
     serde_json::json!({
         "line": pos.line,
@@ -310,7 +319,9 @@ mod tests {
     }
 }
 
-/// Apply UTF-8 edit to a string
+/// Apply UTF-8 edit to a string.
+///
+/// Replaces the byte range with the given replacement text.
 pub fn apply_edit_utf8(
     text: &mut String,
     start_byte: usize,
@@ -324,12 +335,16 @@ pub fn apply_edit_utf8(
     text.replace_range(start_byte..old_end_byte, replacement);
 }
 
-/// Count newlines in text
+/// Count newlines in text.
+///
+/// Returns the number of LF characters in the string.
 pub fn newline_count(text: &str) -> usize {
     text.chars().filter(|&c| c == '\n').count()
 }
 
-/// Get the column (in UTF-8 bytes) of the last line
+/// Get the column (in UTF-8 bytes) of the last line.
+///
+/// Returns the byte offset from the last newline to the end of the string.
 pub fn last_line_column_utf8(text: &str) -> u32 {
     if let Some(last_newline) = text.rfind('\n') {
         (text.len() - last_newline - 1) as u32

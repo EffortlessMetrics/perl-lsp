@@ -4,23 +4,33 @@ use std::sync::Arc;
 /// Half-open byte offsets into the source buffer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Span {
+    /// Inclusive start byte offset.
     pub start: usize,
+    /// Exclusive end byte offset.
     pub end: usize,
 }
 
+/// Quoting style used in a heredoc declaration.
 #[derive(Debug, Copy, Clone)]
 pub enum QuoteKind {
+    /// Bare identifier (e.g., `<<EOF`), interpolates like double-quoted.
     Unquoted,
+    /// Single-quoted (e.g., `<<'EOF'`), no interpolation.
     Single,
+    /// Double-quoted (e.g., `<<"EOF"`), interpolates variables and escapes.
     Double,
 }
 
 /// Declaration info captured at parse time.
 #[derive(Debug, Clone)]
 pub struct PendingHeredoc {
-    pub label: Arc<str>,    // exact terminator token
-    pub allow_indent: bool, // true for <<~
+    /// Exact terminator token that ends this heredoc.
+    pub label: Arc<str>,
+    /// True for indented heredocs (`<<~`), allows leading whitespace before terminator.
+    pub allow_indent: bool,
+    /// Quoting style determining interpolation behavior.
     pub quote: QuoteKind,
+    /// Source span of the heredoc declaration (e.g., `<<EOF`).
     pub decl_span: Span,
     // Optional: add your node id here if convenient for AST attachment.
     // pub node_id: NodeId,
@@ -29,16 +39,25 @@ pub struct PendingHeredoc {
 /// Collected content. Each segment is a line after indent stripping (no CR/LF).
 #[derive(Debug)]
 pub struct HeredocContent {
+    /// Individual line spans after indent stripping, excluding line terminators.
     pub segments: Vec<Span>,
-    pub full_span: Span, // start of first segment .. end of last segment (or start==end if empty)
+    /// Span from start of first segment to end of last segment (empty span if no content).
+    pub full_span: Span,
 }
 
+/// Result of collecting one or more heredocs from source.
 #[derive(Debug)]
 pub struct CollectionResult {
-    pub contents: Vec<HeredocContent>, // FIFO, aligned to pending declarations
-    pub next_offset: usize,            // byte offset immediately after terminator newline
+    /// Collected heredoc contents in FIFO order, aligned to pending declarations.
+    pub contents: Vec<HeredocContent>,
+    /// Byte offset immediately after the final terminator newline.
+    pub next_offset: usize,
 }
 
+/// Collects all pending heredocs from source starting at the given offset.
+///
+/// Processes heredocs in FIFO order, returning their contents and the byte offset
+/// after the final terminator.
 pub fn collect_all(
     src: &[u8],
     mut offset: usize,
@@ -141,6 +160,7 @@ fn next_line_bounds(src: &[u8], mut off: usize) -> (usize, usize, usize) {
     (start, end_no_eol, off)
 }
 
+/// Splits a byte slice into leading whitespace length and the remainder.
 fn split_leading_ws(s: &[u8]) -> (usize, &[u8]) {
     let mut i = 0;
     while i < s.len() && (s[i] == b' ' || s[i] == b'\t') {
@@ -154,6 +174,7 @@ fn strip_trailing_cr(s: &[u8]) -> &[u8] {
     if s.last().copied() == Some(b'\r') { &s[..s.len() - 1] } else { s }
 }
 
+/// Returns the length of the common byte prefix between two slices.
 fn common_prefix_len(a: &[u8], b: &[u8]) -> usize {
     let n = a.len().min(b.len());
     let mut i = 0;

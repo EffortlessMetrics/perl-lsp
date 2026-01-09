@@ -10,11 +10,21 @@ pub enum PerlType {
     /// Array type
     Array(Box<PerlType>),
     /// Hash type with key and value types
-    Hash { key: Box<PerlType>, value: Box<PerlType> },
+    Hash {
+        /// The type of keys in the hash
+        key: Box<PerlType>,
+        /// The type of values in the hash
+        value: Box<PerlType>,
+    },
     /// Reference to another type
     Reference(Box<PerlType>),
     /// Subroutine type with parameter and return types
-    Subroutine { params: Vec<PerlType>, returns: Vec<PerlType> },
+    Subroutine {
+        /// Types of the subroutine parameters
+        params: Vec<PerlType>,
+        /// Types of the subroutine return values
+        returns: Vec<PerlType>,
+    },
     /// Object type with class name
     Object(String),
     /// Glob/typeglob type
@@ -27,31 +37,46 @@ pub enum PerlType {
     Void,
 }
 
+/// Represents specific scalar types in Perl
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ScalarType {
+    /// String value (e.g., "hello")
     String,
+    /// Integer value (e.g., 42)
     Integer,
+    /// Floating-point value (e.g., 3.14)
     Float,
+    /// Boolean value (true/false context)
     Boolean,
+    /// Undefined value
     Undef,
-    Mixed, // Can be any scalar type
+    /// Mixed scalar type (can be any scalar)
+    Mixed,
 }
 
 /// Type constraint for type checking
 #[derive(Debug, Clone)]
 pub struct TypeConstraint {
+    /// The expected type based on context
     pub expected: PerlType,
+    /// The actual inferred type
     pub actual: PerlType,
+    /// Source location where the constraint was generated
     pub location: TypeLocation,
+    /// Human-readable explanation for the constraint
     pub reason: String,
 }
 
 /// Location information for type errors
 #[derive(Debug, Clone)]
 pub struct TypeLocation {
+    /// File path where the type issue occurred
     pub file: String,
+    /// Line number (1-indexed)
     pub line: usize,
+    /// Column number (1-indexed)
     pub column: usize,
+    /// Surrounding code context for error messages
     pub context: String,
 }
 
@@ -73,10 +98,12 @@ impl Default for TypeEnvironment {
 }
 
 impl TypeEnvironment {
+    /// Creates a new empty type environment
     pub fn new() -> Self {
         Self { variables: HashMap::new(), subroutines: HashMap::new(), parent: None }
     }
 
+    /// Creates a new type environment with a parent scope
     pub fn with_parent(parent: TypeEnvironment) -> Self {
         Self {
             variables: HashMap::new(),
@@ -85,18 +112,22 @@ impl TypeEnvironment {
         }
     }
 
+    /// Sets the type for a variable in the current scope
     pub fn set_variable(&mut self, name: String, ty: PerlType) {
         self.variables.insert(name, ty);
     }
 
+    /// Gets the type of a variable, searching parent scopes if needed
     pub fn get_variable(&self, name: &str) -> Option<&PerlType> {
         self.variables.get(name).or_else(|| self.parent.as_ref().and_then(|p| p.get_variable(name)))
     }
 
+    /// Sets the type signature for a subroutine in the current scope
     pub fn set_subroutine(&mut self, name: String, ty: PerlType) {
         self.subroutines.insert(name, ty);
     }
 
+    /// Gets the type signature of a subroutine, searching parent scopes if needed
     pub fn get_subroutine(&self, name: &str) -> Option<&PerlType> {
         self.subroutines
             .get(name)
@@ -123,6 +154,7 @@ impl Default for TypeInferenceEngine {
 }
 
 impl TypeInferenceEngine {
+    /// Creates a new type inference engine with built-in function signatures
     pub fn new() -> Self {
         let mut engine = Self {
             global_env: TypeEnvironment::new(),
@@ -714,12 +746,12 @@ impl TypeInferenceEngine {
         }
     }
 
-    /// Get type information for a variable at a specific location
+    /// Gets the inferred type for a variable by name
     pub fn get_type_at(&self, name: &str) -> Option<PerlType> {
         self.global_env.get_variable(name).cloned()
     }
 
-    /// Get all type errors/warnings
+    /// Returns all type constraint violations as errors
     pub fn get_type_errors(&self) -> Vec<TypeConstraint> {
         self.constraints
             .iter()
@@ -731,15 +763,17 @@ impl TypeInferenceEngine {
 
 /// Type-based code completion suggestions
 pub struct TypeBasedCompletion {
+    /// Shared reference to the type inference engine
     engine: Arc<TypeInferenceEngine>,
 }
 
 impl TypeBasedCompletion {
+    /// Creates a new completion provider with a shared type inference engine
     pub fn new(engine: Arc<TypeInferenceEngine>) -> Self {
         Self { engine }
     }
 
-    /// Get completions based on variable type
+    /// Returns completions based on the inferred type of a variable
     pub fn get_completions(&self, var_name: &str, _context: &str) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
 
@@ -840,10 +874,14 @@ impl TypeBasedCompletion {
     }
 }
 
+/// A code completion suggestion
 #[derive(Debug, Clone)]
 pub struct CompletionItem {
+    /// Short display label for the completion
     pub label: String,
+    /// Additional detail shown alongside the label (e.g., signature)
     pub detail: String,
+    /// Full documentation for the completion item
     pub documentation: String,
 }
 

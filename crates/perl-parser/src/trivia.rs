@@ -58,17 +58,22 @@ pub struct NodeWithTrivia {
 /// A trivia token with position information
 #[derive(Debug, Clone)]
 pub struct TriviaToken {
+    /// The trivia content
     pub trivia: Trivia,
+    /// The source range of this trivia
     pub range: Range,
 }
 
 impl TriviaToken {
+    /// Create a new trivia token with the given content and range
     pub fn new(trivia: Trivia, range: Range) -> Self {
         TriviaToken { trivia, range }
     }
 }
 
-/// Extension trait for collecting trivia
+/// Extension trait for collecting trivia.
+///
+/// Implement this trait to collect leading and trailing trivia during lexing.
 pub trait TriviaCollector {
     /// Collect trivia tokens before the next meaningful token
     fn collect_leading_trivia(&mut self) -> Vec<TriviaToken>;
@@ -77,7 +82,9 @@ pub trait TriviaCollector {
     fn collect_trailing_trivia(&mut self) -> Vec<TriviaToken>;
 }
 
-/// A lexer wrapper that preserves trivia
+/// A lexer wrapper that preserves trivia.
+///
+/// Wraps the Perl lexer to collect comments and whitespace as trivia tokens.
 pub struct TriviaLexer {
     /// The underlying Perl lexer
     lexer: perl_lexer::PerlLexer<'static>,
@@ -104,7 +111,9 @@ impl TriviaLexer {
         }
     }
 
-    /// Get the next token, collecting any preceding trivia
+    /// Get the next token, collecting any preceding trivia.
+    ///
+    /// Returns the token along with any whitespace or comments that precede it.
     pub fn next_token_with_trivia(&mut self) -> Option<(perl_lexer::Token, Vec<TriviaToken>)> {
         // First, collect any trivia
         let trivia = self.collect_trivia();
@@ -248,7 +257,9 @@ impl TriviaLexer {
     }
 }
 
-/// Parser that preserves trivia
+/// Parser that preserves trivia.
+///
+/// A parser that attaches comments and whitespace to AST nodes for formatting.
 pub struct TriviaPreservingParser {
     /// Trivia-aware lexer
     lexer: TriviaLexer,
@@ -276,7 +287,9 @@ impl TriviaPreservingParser {
         self.current = self.lexer.next_token_with_trivia();
     }
 
-    /// Parse and return AST with trivia preserved
+    /// Parse and return AST with trivia preserved.
+    ///
+    /// Returns a node with leading and trailing trivia attached.
     pub fn parse(mut self) -> NodeWithTrivia {
         let leading_trivia =
             if let Some((_, trivia)) = &self.current { trivia.clone() } else { Vec::new() };

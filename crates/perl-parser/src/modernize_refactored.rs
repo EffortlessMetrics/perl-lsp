@@ -1,29 +1,48 @@
 use std::collections::HashMap;
 
+/// A suggestion for modernizing legacy Perl code patterns.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModernizationSuggestion {
+    /// The original code pattern that should be replaced.
     pub old_pattern: String,
+    /// The modern replacement pattern.
     pub new_pattern: String,
+    /// Human-readable explanation of why this change is recommended.
     pub description: String,
+    /// Whether this suggestion requires manual review before applying.
     pub manual_review_required: bool,
+    /// Start byte offset of the pattern in the source code.
     pub start: usize,
+    /// End byte offset of the pattern in the source code.
     pub end: usize,
 }
 
+/// A pattern definition for detecting legacy Perl idioms.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 struct Pattern {
+    /// The pattern to search for in source code.
     search: &'static str,
+    /// The recommended modern replacement.
     replacement: &'static str,
+    /// Explanation of the modernization benefit.
     description: &'static str,
+    /// Whether this pattern requires manual review when applying.
     manual_review: bool,
 }
 
+/// Analyzer and transformer for modernizing Perl code.
+///
+/// Detects legacy Perl idioms and suggests modern replacements,
+/// such as replacing bareword filehandles with lexical variables
+/// or adding missing `use strict` and `use warnings` pragmas.
 pub struct PerlModernizer {
+    /// Collection of patterns to check against source code.
     _patterns: Vec<Pattern>,
 }
 
 impl PerlModernizer {
+    /// Creates a new `PerlModernizer` with the default set of patterns.
     pub fn new() -> Self {
         let patterns = vec![
             Pattern {
@@ -67,6 +86,10 @@ impl PerlModernizer {
         Self { _patterns: patterns }
     }
 
+    /// Analyzes Perl source code and returns modernization suggestions.
+    ///
+    /// Checks for missing pragmas, bareword filehandles, deprecated patterns,
+    /// indirect object notation, and other legacy idioms.
     pub fn analyze(&self, code: &str) -> Vec<ModernizationSuggestion> {
         let mut suggestions = Vec::new();
 
@@ -99,6 +122,10 @@ impl PerlModernizer {
         suggestions
     }
 
+    /// Applies automatic modernization suggestions to the given code.
+    ///
+    /// Suggestions marked as requiring manual review are skipped.
+    /// Returns the transformed source code.
     pub fn apply(&self, code: &str) -> String {
         let suggestions = self.analyze(code);
         self.apply_suggestions(code, suggestions)

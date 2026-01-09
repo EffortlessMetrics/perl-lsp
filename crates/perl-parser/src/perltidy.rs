@@ -168,11 +168,14 @@ impl PerlTidyConfig {
 
 /// Perltidy formatter
 pub struct PerlTidyFormatter {
+    /// Configuration settings for perltidy invocation.
     config: PerlTidyConfig,
+    /// Cache mapping source code to formatted output.
     cache: HashMap<String, String>,
 }
 
 impl PerlTidyFormatter {
+    /// Creates a new formatter with the given configuration.
     pub fn new(config: PerlTidyConfig) -> Self {
         Self { config, cache: HashMap::new() }
     }
@@ -325,18 +328,24 @@ impl PerlTidyFormatter {
 /// A formatting suggestion
 #[derive(Debug, Clone)]
 pub struct FormatSuggestion {
+    /// Zero-based line number where the change applies.
     pub line: u32,
+    /// Original line content before formatting.
     pub original: String,
+    /// Suggested formatted line content.
     pub formatted: String,
+    /// Human-readable description of the formatting change.
     pub description: String,
 }
 
 /// Built-in formatter for when perltidy is not available
 pub struct BuiltInFormatter {
+    /// Configuration settings controlling formatting behavior.
     config: PerlTidyConfig,
 }
 
 impl BuiltInFormatter {
+    /// Creates a new built-in formatter with the given configuration.
     pub fn new(config: PerlTidyConfig) -> Self {
         Self { config }
     }

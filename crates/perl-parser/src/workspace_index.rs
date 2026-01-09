@@ -691,17 +691,24 @@ impl Default for IndexCoordinator {
 /// Symbol kinds for cross-file indexing
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum SymKind {
-    Var,  // $ @ %
-    Sub,  // sub foo
-    Pack, // package Foo
+    /// Variable symbol ($, @, or % sigil)
+    Var,
+    /// Subroutine definition (sub foo)
+    Sub,
+    /// Package declaration (package Foo)
+    Pack,
 }
 
 /// A normalized symbol key for cross-file lookups
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct SymbolKey {
+    /// Package name containing this symbol
     pub pkg: Arc<str>,
-    pub name: Arc<str>,      // bare name without sigil
-    pub sigil: Option<char>, // $, @, %
+    /// Bare name without sigil prefix
+    pub name: Arc<str>,
+    /// Variable sigil ($, @, or %) if applicable
+    pub sigil: Option<char>,
+    /// Kind of symbol (variable, subroutine, package)
     pub kind: SymKind,
 }
 
@@ -809,38 +816,58 @@ pub fn fs_path_to_uri<P: AsRef<std::path::Path>>(path: P) -> Result<String, Stri
 /// Internal location type using String URIs
 #[derive(Debug, Clone)]
 pub struct Location {
+    /// File URI where the symbol is located
     pub uri: String,
+    /// Line and character range within the file
     pub range: Range,
 }
 
 /// A symbol in the workspace
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceSymbol {
+    /// Symbol name without package qualification
     pub name: String,
+    /// Type of symbol (subroutine, variable, package, etc.)
     pub kind: SymbolKind,
+    /// File URI where the symbol is defined
     pub uri: String,
+    /// Line and character range of the symbol definition
     pub range: Range,
+    /// Fully qualified name including package (e.g., "Package::function")
     pub qualified_name: Option<String>,
+    /// POD documentation associated with the symbol
     pub documentation: Option<String>,
+    /// Name of the containing package or class
     pub container_name: Option<String>,
+    /// Whether this symbol has a body (false for forward declarations)
     #[serde(default = "default_has_body")]
-    pub has_body: bool, // For forward declarations
+    pub has_body: bool,
 }
 
 fn default_has_body() -> bool {
     true
 }
 
+/// Classification of Perl symbol types for workspace indexing
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SymbolKind {
+    /// Package declaration (package Foo;)
     Package,
+    /// Subroutine definition (sub name { })
     Subroutine,
+    /// Method definition in OO context
     Method,
+    /// Variable declaration (my, our, local)
     Variable,
+    /// Constant value (use constant NAME => value)
     Constant,
+    /// Class declaration (class keyword or Moose/Moo)
     Class,
+    /// Role definition (role keyword or Moose::Role)
     Role,
+    /// Imported symbol from use statement
     Import,
+    /// Exported symbol via Exporter
     Export,
 }
 
@@ -865,17 +892,26 @@ impl SymbolKind {
 /// Reference to a symbol
 #[derive(Debug, Clone)]
 pub struct SymbolReference {
+    /// File URI where the reference occurs
     pub uri: String,
+    /// Line and character range of the reference
     pub range: Range,
+    /// How the symbol is being referenced (definition, usage, etc.)
     pub kind: ReferenceKind,
 }
 
+/// Classification of how a symbol is referenced
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReferenceKind {
+    /// Symbol definition site (sub declaration, variable declaration)
     Definition,
+    /// General usage of the symbol (function call, method call)
     Usage,
+    /// Import via use statement
     Import,
+    /// Variable read access
     Read,
+    /// Variable write access (assignment target)
     Write,
 }
 
@@ -883,9 +919,13 @@ pub enum ReferenceKind {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LspWorkspaceSymbol {
+    /// Symbol name as displayed to the user
     pub name: String,
+    /// LSP symbol kind number (see lsp_types::SymbolKind)
     pub kind: u32,
+    /// Location of the symbol definition
     pub location: LspLocation,
+    /// Name of the containing symbol (package, class)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub container_name: Option<String>,
 }
@@ -893,21 +933,27 @@ pub struct LspWorkspaceSymbol {
 /// LSP-compliant location
 #[derive(Debug, Serialize)]
 pub struct LspLocation {
+    /// Document URI (file:// scheme)
     pub uri: String,
+    /// Range within the document
     pub range: LspRange,
 }
 
 /// LSP-compliant range
 #[derive(Debug, Serialize)]
 pub struct LspRange {
+    /// Start position (inclusive)
     pub start: LspPosition,
+    /// End position (exclusive)
     pub end: LspPosition,
 }
 
 /// LSP-compliant position
 #[derive(Debug, Serialize)]
 pub struct LspPosition {
+    /// Zero-based line number
     pub line: u32,
+    /// Zero-based UTF-16 code unit offset
     pub character: u32,
 }
 

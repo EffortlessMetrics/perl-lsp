@@ -98,9 +98,13 @@ impl Default for TestGeneratorOptions {
 /// Generated test case
 #[derive(Debug, Clone)]
 pub struct TestCase {
+    /// Unique identifier for the test (e.g., "test_add")
     pub name: String,
+    /// Human-readable description of what the test validates
     pub description: String,
+    /// Generated Perl test code
     pub code: String,
+    /// Whether the test is marked as TODO (needs user input)
     pub is_todo: bool,
 }
 
@@ -127,6 +131,12 @@ impl TestGenerator {
         Self { framework, options: TestGeneratorOptions::default() }
     }
 
+    /// Create a new test generator with custom options
+    ///
+    /// # Arguments
+    ///
+    /// * `framework` - Test framework to use for generating test code
+    /// * `options` - Custom configuration options for test generation
     pub fn with_options(framework: TestFramework, options: TestGeneratorOptions) -> Self {
         Self { framework, options }
     }
@@ -624,13 +634,16 @@ struct SubroutineInfo {
     is_private: bool,
 }
 
-/// Test runner integration
+/// Test runner integration for executing Perl tests
+///
+/// Provides functionality for running test suites, watch mode for continuous
+/// testing, and coverage tracking integration.
 pub struct TestRunner {
-    /// Command to run tests
+    /// Command to run tests (e.g., "prove -l")
     test_command: String,
-    /// Watch mode enabled
+    /// Whether watch mode is enabled for continuous testing
     watch_mode: bool,
-    /// Coverage tracking enabled
+    /// Whether coverage tracking is enabled
     coverage: bool,
 }
 
@@ -641,10 +654,18 @@ impl Default for TestRunner {
 }
 
 impl TestRunner {
+    /// Create a new test runner with default settings
+    ///
+    /// Uses "prove -l" as the default test command.
     pub fn new() -> Self {
         Self { test_command: "prove -l".to_string(), watch_mode: false, coverage: false }
     }
 
+    /// Create a new test runner with a custom command
+    ///
+    /// # Arguments
+    ///
+    /// * `command` - The shell command to execute tests (e.g., "prove -v -l")
     pub fn with_command(command: String) -> Self {
         Self { test_command: command, watch_mode: false, coverage: false }
     }
@@ -697,55 +718,91 @@ impl TestRunner {
     }
 }
 
+/// Results from executing a test suite
 #[derive(Debug, Default, Clone)]
 pub struct TestResults {
+    /// Total number of tests executed
     pub total: usize,
+    /// Number of tests that passed
     pub passed: usize,
+    /// Number of tests that failed
     pub failed: usize,
+    /// Number of tests that were skipped
     pub skipped: usize,
+    /// Number of tests marked as TODO
     pub todo: usize,
+    /// Error messages from failed tests
     pub errors: Vec<String>,
 }
 
+/// Code coverage metrics from test execution
 #[derive(Debug)]
 pub struct CoverageReport {
+    /// Percentage of lines covered (0.0 to 100.0)
     pub line_coverage: f64,
+    /// Percentage of branches covered (0.0 to 100.0)
     pub branch_coverage: f64,
+    /// Percentage of functions covered (0.0 to 100.0)
     pub function_coverage: f64,
+    /// Line numbers that were not covered by tests
     pub uncovered_lines: Vec<usize>,
 }
 
 /// Refactoring suggestions for the green-to-refactor phase
+///
+/// Analyzes code to identify opportunities for improvement such as
+/// duplicate code, complex methods, and naming issues.
 pub struct RefactoringSuggester {
+    /// Collection of refactoring suggestions found during analysis
     suggestions: Vec<RefactoringSuggestion>,
 }
 
+/// A specific refactoring suggestion with context and actions
 #[derive(Debug, Clone)]
 pub struct RefactoringSuggestion {
+    /// Short title summarizing the issue
     pub title: String,
+    /// Detailed description of the problem and recommended fix
     pub description: String,
+    /// Importance level for prioritizing refactoring efforts
     pub priority: Priority,
+    /// Type of refactoring suggested
     pub category: RefactoringCategory,
+    /// LSP code action identifier (e.g., "extract_method", "rename")
     pub code_action: Option<String>,
 }
 
+/// Priority level for refactoring suggestions
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Priority {
+    /// Minor improvement, can be addressed when convenient
     Low,
+    /// Moderate issue that should be addressed
     Medium,
+    /// Important issue requiring attention soon
     High,
+    /// Urgent issue that should be fixed immediately
     Critical,
 }
 
+/// Categories of refactoring suggestions
 #[derive(Debug, Clone, PartialEq)]
 pub enum RefactoringCategory {
+    /// Code that appears in multiple places and should be extracted
     DuplicateCode,
+    /// Method with high cyclomatic complexity
     ComplexMethod,
+    /// Method with too many lines of code
     LongMethod,
+    /// Function with excessive parameter count
     TooManyParameters,
+    /// Unreachable or unused code
     DeadCode,
+    /// Inefficient code that could be optimized
     Performance,
+    /// Poorly named variables or functions
     Naming,
+    /// Structural issues with code organization
     Structure,
 }
 
@@ -756,6 +813,7 @@ impl Default for RefactoringSuggester {
 }
 
 impl RefactoringSuggester {
+    /// Create a new refactoring suggester
     pub fn new() -> Self {
         Self { suggestions: Vec::new() }
     }

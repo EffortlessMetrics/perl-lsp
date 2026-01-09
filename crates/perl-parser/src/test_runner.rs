@@ -6,43 +6,67 @@ use std::process::{Command, Stdio};
 /// Test item representing a test that can be run
 #[derive(Debug, Clone)]
 pub struct TestItem {
+    /// Unique identifier for the test (typically URI::function_name)
     pub id: String,
+    /// Human-readable display name for the test
     pub label: String,
+    /// File URI where the test is located
     pub uri: String,
+    /// Source location range of the test
     pub range: TestRange,
+    /// Classification of this test item
     pub kind: TestKind,
+    /// Nested test items (e.g., functions within a file)
     pub children: Vec<TestItem>,
 }
 
+/// Source location range for a test item
 #[derive(Debug, Clone)]
 pub struct TestRange {
+    /// Zero-based starting line number
     pub start_line: u32,
+    /// Zero-based starting character offset within the line
     pub start_character: u32,
+    /// Zero-based ending line number
     pub end_line: u32,
+    /// Zero-based ending character offset within the line
     pub end_character: u32,
 }
 
+/// Classification of test items
 #[derive(Debug, Clone, PartialEq)]
 pub enum TestKind {
+    /// A test file (e.g., .t file)
     File,
+    /// A test suite containing multiple tests
     Suite,
+    /// An individual test function or assertion
     Test,
 }
 
 /// Test result after running a test
 #[derive(Debug, Clone)]
 pub struct TestResult {
+    /// Identifier of the test that was run
     pub test_id: String,
+    /// Outcome status of the test execution
     pub status: TestStatus,
+    /// Optional diagnostic message (e.g., error details)
     pub message: Option<String>,
-    pub duration: Option<u64>, // milliseconds
+    /// Execution time in milliseconds
+    pub duration: Option<u64>,
 }
 
+/// Outcome status of a test execution
 #[derive(Debug, Clone, PartialEq)]
 pub enum TestStatus {
+    /// Test passed successfully
     Passed,
+    /// Test failed (assertion not met)
     Failed,
+    /// Test was skipped (not executed)
     Skipped,
+    /// Test encountered an error (could not run)
     Errored,
 }
 
@@ -60,11 +84,14 @@ impl TestStatus {
 
 /// Test Runner for Perl tests
 pub struct TestRunner {
+    /// Source code content of the test file
     source: String,
+    /// URI of the test file being analyzed
     uri: String,
 }
 
 impl TestRunner {
+    /// Creates a new test runner for the given source code and file URI.
     pub fn new(source: String, uri: String) -> Self {
         Self { source, uri }
     }
@@ -534,6 +561,7 @@ impl TestRunner {
 
 /// Convert TestItem to JSON for LSP
 impl TestItem {
+    /// Serializes this test item to a JSON value for LSP communication.
     pub fn to_json(&self) -> Value {
         json!({
             "id": self.id,
@@ -557,6 +585,7 @@ impl TestItem {
 
 /// Convert TestResult to JSON for LSP
 impl TestResult {
+    /// Serializes this test result to a JSON value for LSP communication.
     pub fn to_json(&self) -> Value {
         let mut result = json!({
             "testId": self.test_id,

@@ -8,9 +8,14 @@ use crate::uri::parse_uri;
 use lsp_types::{LocationLink, Position, Range};
 use std::collections::HashMap;
 
+/// Provides go-to-type-definition functionality for Perl code.
+///
+/// Finds and locates type/class definitions for variables and references,
+/// enabling LSP clients to navigate to the source of type definitions.
 pub struct TypeDefinitionProvider;
 
 impl TypeDefinitionProvider {
+    /// Creates a new type definition provider instance.
     pub fn new() -> Self {
         Self
     }

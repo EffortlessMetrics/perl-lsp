@@ -1,20 +1,36 @@
+/// A suggestion for modernizing legacy Perl code patterns.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModernizationSuggestion {
+    /// The deprecated or outdated code pattern to be replaced.
     pub old_pattern: String,
+    /// The modern replacement pattern.
     pub new_pattern: String,
+    /// Human-readable explanation of why this change is recommended.
     pub description: String,
+    /// Whether this suggestion requires human review before applying.
     pub manual_review_required: bool,
+    /// Byte offset where the pattern starts in the source code.
     pub start: usize,
+    /// Byte offset where the pattern ends in the source code.
     pub end: usize,
 }
 
+/// Analyzes and modernizes legacy Perl code patterns.
+///
+/// Detects outdated idioms and suggests modern alternatives following
+/// Perl best practices.
 pub struct PerlModernizer {}
 
 impl PerlModernizer {
+    /// Creates a new `PerlModernizer` instance.
     pub fn new() -> Self {
         Self {}
     }
 
+    /// Analyzes Perl code and returns a list of modernization suggestions.
+    ///
+    /// Detects patterns such as bareword filehandles, two-argument open,
+    /// indirect object notation, and deprecated built-in usages.
     pub fn analyze(&self, code: &str) -> Vec<ModernizationSuggestion> {
         let mut suggestions = Vec::new();
 
@@ -135,6 +151,10 @@ impl PerlModernizer {
         suggestions
     }
 
+    /// Applies safe modernization suggestions to the given code.
+    ///
+    /// Suggestions marked as requiring manual review are skipped.
+    /// Returns the modernized code as a new string.
     pub fn apply(&self, code: &str) -> String {
         let suggestions = self.analyze(code);
         let mut result = code.to_string();

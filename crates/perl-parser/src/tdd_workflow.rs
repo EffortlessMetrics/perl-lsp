@@ -30,6 +30,10 @@ pub struct TddWorkflow {
     config: TddConfig,
 }
 
+/// Represents the current phase of the TDD (Test-Driven Development) workflow cycle.
+///
+/// Tracks the developer's position in the red-green-refactor cycle, enabling context-aware
+/// suggestions and automation during test development and implementation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum WorkflowState {
     /// Writing test (Red phase)
@@ -42,6 +46,10 @@ pub enum WorkflowState {
     Idle,
 }
 
+/// Configuration options for TDD workflow automation and behavior.
+///
+/// Customizes how the TDD workflow manager generates tests, runs them, and provides
+/// feedback. All settings have sensible defaults suitable for typical Perl development.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TddConfig {
     /// Automatically generate tests for new code
@@ -88,22 +96,32 @@ pub struct CoverageTracker {
     total_coverage: f64,
 }
 
+/// Line-level code coverage information
 #[derive(Debug, Clone)]
 pub struct LineCoverage {
+    /// Line number in the source file
     pub line: usize,
+    /// Number of times this line was executed
     pub hits: usize,
+    /// Whether this line is considered covered
     pub covered: bool,
 }
 
+/// Branch-level code coverage information
 #[derive(Debug, Clone)]
 pub struct BranchCoverage {
+    /// Line number where the branch occurs
     pub line: usize,
+    /// Unique identifier for this branch within the line
     pub branch_id: usize,
+    /// Whether this branch was taken at least once
     pub taken: bool,
+    /// Number of times this branch was executed
     pub hits: usize,
 }
 
 impl TddWorkflow {
+    /// Create a new TDD workflow manager with the given configuration
     pub fn new(config: TddConfig) -> Self {
         let framework = match config.test_framework.as_str() {
             "Test2::V0" => TestFramework::Test2V0,
@@ -403,50 +421,80 @@ impl CoverageTracker {
 /// Result of a TDD cycle action
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TddCycleResult {
+    /// Current phase of the TDD cycle (Red, Green, or Refactor)
     pub phase: String,
+    /// Human-readable message describing the cycle state
     pub message: String,
+    /// Recommended actions to take next
     pub actions: Vec<TddAction>,
 }
 
+/// Actions that can be taken during a TDD cycle
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TddAction {
+    /// Generate a test with the given name
     GenerateTest(String),
+    /// Create a new test file at the specified path
     CreateTestFile(PathBuf),
+    /// Execute the test suite
     RunTests,
+    /// Request refactoring suggestions for the code
     SuggestRefactorings,
+    /// Refresh code coverage data
     UpdateCoverage,
+    /// Display test failure details
     ShowFailures,
 }
 
+/// Types of tests that can be generated
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TestType {
+    /// Simple happy-path test with typical inputs
     Basic,
+    /// Tests for boundary conditions and unusual inputs
     EdgeCase,
+    /// Tests for error conditions and exception handling
     ErrorHandling,
+    /// Benchmarks and performance regression tests
     Performance,
+    /// Tests involving multiple components or external dependencies
     Integration,
 }
 
+/// Inline annotation for displaying coverage information in the editor
 #[derive(Debug, Clone)]
 pub struct CoverageAnnotation {
+    /// Line number to annotate
     pub line: usize,
+    /// Description of the coverage status
     pub message: String,
+    /// Severity level for display styling
     pub severity: AnnotationSeverity,
 }
 
+/// Severity levels for coverage and diagnostic annotations
 #[derive(Debug, Clone)]
 pub enum AnnotationSeverity {
+    /// Critical issue that must be addressed
     Error,
+    /// Potential problem that should be reviewed
     Warning,
+    /// Informational message
     Info,
+    /// Subtle suggestion or hint
     Hint,
 }
 
+/// Summary of the current TDD workflow status
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowStatus {
+    /// Current phase of the TDD cycle
     pub state: WorkflowState,
+    /// Overall code coverage percentage
     pub coverage: f64,
+    /// Whether all tests are currently passing
     pub tests_passing: bool,
+    /// Whether refactoring suggestions are available
     pub suggestions_available: bool,
 }
 

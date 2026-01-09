@@ -84,50 +84,77 @@ fn extract_container_name(qualified_name: &str) -> Option<String> {
     qualified_name.rfind("::").map(|idx| qualified_name[..idx].to_string())
 }
 
-/// LSP WorkspaceSymbol
+/// LSP WorkspaceSymbol representing a symbol found in the workspace.
+///
+/// Corresponds to the LSP `WorkspaceSymbol` type used in `workspace/symbol` responses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSymbol {
+    /// The symbol's name (e.g., subroutine name, package name, variable name).
     pub name: String,
+    /// LSP symbol kind as integer (e.g., 4=Namespace, 12=Function, 13=Variable).
     pub kind: i32,
+    /// Location of the symbol definition in the workspace.
     pub location: Location,
+    /// Optional containing package or class name for qualified symbols.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub container_name: Option<String>,
 }
 
-/// LSP Location
+/// LSP Location identifying a position within a document.
+///
+/// Corresponds to the LSP `Location` type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Location {
+    /// Document URI (e.g., `file:///path/to/file.pl`).
     pub uri: String,
+    /// Range within the document where the symbol is defined.
     pub range: Range,
 }
 
-/// LSP Range
+/// LSP Range representing a text span within a document.
+///
+/// Corresponds to the LSP `Range` type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Range {
+    /// Start position of the range (inclusive).
     pub start: Position,
+    /// End position of the range (exclusive).
     pub end: Position,
 }
 
-/// LSP Position
+/// LSP Position representing a cursor location in a document.
+///
+/// Corresponds to the LSP `Position` type. Both line and character are zero-indexed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Position {
+    /// Zero-indexed line number.
     pub line: u32,
+    /// Zero-indexed character offset within the line.
     pub character: u32,
 }
 
-/// Internal symbol info
+/// Internal symbol information used for indexing.
+///
+/// Stores symbol metadata extracted from parsed Perl source files.
 #[derive(Debug, Clone)]
 struct SymbolInfo {
+    /// Symbol name (bare, unqualified).
     name: String,
+    /// Kind of symbol (subroutine, package, variable, etc.).
     kind: SymbolKind,
+    /// Byte offset location in the source file.
     location: SourceLocation,
+    /// Containing package name, if any.
     container: Option<String>,
 }
 
-/// Workspace symbols provider
+/// Workspace symbols provider for LSP `workspace/symbol` requests.
+///
+/// Maintains an index of all symbols across the workspace and provides
+/// search functionality with fuzzy matching support.
 pub struct WorkspaceSymbolsProvider {
-    /// Map of file URI to symbols
+    /// Map of document URI to its extracted symbols.
     documents: HashMap<String, Vec<SymbolInfo>>,
 }
 
@@ -138,12 +165,16 @@ impl Default for WorkspaceSymbolsProvider {
 }
 
 impl WorkspaceSymbolsProvider {
-    /// Create a new workspace symbols provider
+    /// Creates a new empty workspace symbols provider.
+    #[must_use]
     pub fn new() -> Self {
         Self { documents: HashMap::new() }
     }
 
-    /// Index a document's symbols
+    /// Indexes all symbols from a parsed document.
+    ///
+    /// Extracts symbols from the AST and stores them for later search queries.
+    /// Replaces any previously indexed symbols for the same URI.
     pub fn index_document(&mut self, uri: &str, ast: &Node, source: &str) {
         let extractor = SymbolExtractor::new_with_source(source);
         let table = extractor.extract(ast);
@@ -167,12 +198,18 @@ impl WorkspaceSymbolsProvider {
         self.documents.insert(uri.to_string(), symbols);
     }
 
-    /// Remove a document from the index
+    /// Removes a document and its symbols from the index.
+    ///
+    /// Called when a file is deleted or closed in the workspace.
     pub fn remove_document(&mut self, uri: &str) {
         self.documents.remove(uri);
     }
 
-    /// Get all symbols (for indexing)
+    /// Returns all indexed symbols as LSP WorkspaceSymbols.
+    ///
+    /// Useful for bulk export or re-indexing operations.
+    /// Note: Returned symbols have minimal location info (line 0, col 0).
+    #[must_use]
     pub fn get_all_symbols(&self) -> Vec<WorkspaceSymbol> {
         let mut all_symbols = Vec::new();
 
@@ -197,8 +234,14 @@ impl WorkspaceSymbolsProvider {
         all_symbols
     }
 
-    /// Search for symbols matching a query
-    /// Search with pre-filtered candidate names for better performance
+    /// Searches for symbols matching a query within a pre-filtered candidate set.
+    ///
+    /// More efficient than `search` when the caller has already narrowed down
+    /// potential matches (e.g., from a global symbol index).
+    ///
+    /// Results are sorted by relevance: exact matches first, then prefix matches,
+    /// then alphabetically.
+    #[must_use]
     pub fn search_with_candidates(
         &self,
         query: &str,
@@ -253,6 +296,17 @@ impl WorkspaceSymbolsProvider {
         results
     }
 
+    /// Searches for symbols matching a query string.
+    ///
+    /// Supports multiple match strategies:
+    /// - Exact match (case-insensitive)
+    /// - Prefix match
+    /// - Contains match
+    /// - Fuzzy/subsequence match
+    ///
+    /// Results are sorted by relevance: exact matches first, then prefix matches,
+    /// then alphabetically.
+    #[must_use]
     pub fn search(
         &self,
         query: &str,
@@ -296,7 +350,10 @@ impl WorkspaceSymbolsProvider {
         results
     }
 
-    /// Check if a symbol name matches the query
+    /// Checks if a symbol name matches the query using multiple strategies.
+    ///
+    /// Returns true if query is empty, or if name matches via exact, prefix,
+    /// contains, or fuzzy (subsequence) matching.
     fn matches_query(&self, name: &str, query: &str) -> bool {
         if query.is_empty() {
             return true;
@@ -336,7 +393,9 @@ impl WorkspaceSymbolsProvider {
         current_char.is_none()
     }
 
-    /// Convert internal Symbol to LSP WorkspaceSymbol
+    /// Converts an internal `SymbolInfo` to an LSP `WorkspaceSymbol`.
+    ///
+    /// Resolves byte offsets to line/column positions using the source text.
     fn symbol_to_workspace_symbol(
         &self,
         uri: &str,
@@ -361,7 +420,10 @@ impl WorkspaceSymbolsProvider {
     }
 }
 
-/// Convert internal SymbolKind to LSP symbol kind
+/// Converts an internal `SymbolKind` to an LSP symbol kind integer.
+///
+/// LSP symbol kinds: 4=Namespace, 12=Function, 13=Variable, 14=Constant,
+/// 15=String (used for labels), 23=Struct (used for formats).
 fn symbol_kind_to_lsp(kind: &SymbolKind) -> i32 {
     match kind {
         SymbolKind::Package => 4,         // Namespace
@@ -375,7 +437,10 @@ fn symbol_kind_to_lsp(kind: &SymbolKind) -> i32 {
     }
 }
 
-/// Convert byte offset to line/column position
+/// Converts a byte offset to a zero-indexed (line, column) position.
+///
+/// Iterates through the source text counting newlines. Column is reset
+/// at each newline character.
 fn offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
     let mut line = 0;
     let mut col = 0;
