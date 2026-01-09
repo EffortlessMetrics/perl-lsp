@@ -4,7 +4,16 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PATTERN='\.unwrap\(|\.expect\('
+
+# Patterns for panic-prone calls:
+# - .unwrap() is always a panic risk
+# - .expect("...") with string literal is panic-prone (not domain methods like self.expect(TokenKind::...))
+# - .expect(format!(...)) with formatted message is panic-prone
+PATTERN_UNWRAP='\.unwrap\(\)'
+PATTERN_EXPECT_STR='\.expect\(\s*"'
+PATTERN_EXPECT_FMT='\.expect\(\s*&?format!\('
+# Combined for single-pass counting
+PATTERN="$PATTERN_UNWRAP|$PATTERN_EXPECT_STR|$PATTERN_EXPECT_FMT"
 
 count_unwraps() {
   local search_path="$1"
@@ -12,8 +21,13 @@ count_unwraps() {
     # Use ripgrep for fast, accurate counting
     # Count .unwrap( and .expect( patterns across all matching files
     # Exclude safe patterns like unwrap_or, unwrap_or_else, unwrap_or_default
+    # Exclude tree-sitter-perl-rs (not in production workspace)
     local count=0
     for dir in crates/*/src; do
+      # Skip tree-sitter-perl-rs (excluded from workspace, not in production)
+      if [[ "$dir" == "crates/tree-sitter-perl-rs/src" ]]; then
+        continue
+      fi
       if [ -d "$dir" ]; then
         dir_count=$(rg "$PATTERN" "$dir" --count-matches 2>/dev/null | \
           awk -F: '{sum+=$2} END {print sum+0}')
@@ -23,7 +37,9 @@ count_unwraps() {
     echo "$count"
   else
     # Fallback to grep (portable but slower)
-    find crates/*/src -name "*.rs" -type f -exec grep -h '\.unwrap(\|\.expect(' {} \; 2>/dev/null | \
+    # Exclude tree-sitter-perl-rs (not in production workspace)
+    find crates/*/src -name "*.rs" -type f ! -path "crates/tree-sitter-perl-rs/*" \
+      -exec grep -h '\.unwrap(\|\.expect(' {} \; 2>/dev/null | \
       wc -l | awk '{print $1+0}'
   fi
 }
@@ -31,7 +47,9 @@ count_unwraps() {
 show_top_offenders() {
   echo "Top offenders (by file):"
   if command -v rg &>/dev/null; then
+    # Exclude tree-sitter-perl-rs (not in production workspace)
     rg "$PATTERN" crates/*/src -c 2>/dev/null | \
+      grep -v "^crates/tree-sitter-perl-rs/" | \
       sort -t: -k2 -rn | head -15 | \
       awk -F: '{printf "  %4d  %s\n", $2, $1}'
   fi
@@ -50,7 +68,7 @@ show_new_unwraps() {
     echo "New unwrap/expect lines since merge-base (${merge_base:0:8}):"
     local new_lines
     new_lines=$(git diff -U0 "$merge_base"..HEAD -- '*.rs' 2>/dev/null | \
-      rg '^\+[^+].*\.(unwrap|expect)\(' 2>/dev/null || true)
+      rg "^\+[^+].*($PATTERN)" 2>/dev/null || true)
     if [ -n "$new_lines" ]; then
       echo "$new_lines" | head -20
       local count
@@ -125,6 +143,6 @@ else
   echo "  3. Consider using unwrap_or_default() or map_err() for safer alternatives"
   echo ""
   echo "To see recent unwraps:"
-  echo "  rg '\\.unwrap\\(|\\.expect\\(' crates/*/src -n"
+  echo "  rg '\\.unwrap\\(\\)|\\.expect\\(\\s*\"' crates/*/src -n"
   exit 1
 fi
