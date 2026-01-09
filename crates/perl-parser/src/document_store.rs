@@ -71,15 +71,18 @@ impl DocumentStore {
         let key = Self::uri_key(&uri);
         let doc = Document::new(uri, version, text);
 
-        let mut docs = self.documents.write().unwrap();
-        docs.insert(key, doc);
+        if let Ok(mut docs) = self.documents.write() {
+            docs.insert(key, doc);
+        }
     }
 
     /// Update a document's content
     pub fn update(&self, uri: &str, version: i32, text: String) -> bool {
         let key = Self::uri_key(uri);
 
-        let mut docs = self.documents.write().unwrap();
+        let Ok(mut docs) = self.documents.write() else {
+            return false;
+        };
         if let Some(doc) = docs.get_mut(&key) {
             doc.update(version, text);
             true
@@ -91,14 +94,16 @@ impl DocumentStore {
     /// Close a document
     pub fn close(&self, uri: &str) -> bool {
         let key = Self::uri_key(uri);
-        let mut docs = self.documents.write().unwrap();
+        let Ok(mut docs) = self.documents.write() else {
+            return false;
+        };
         docs.remove(&key).is_some()
     }
 
     /// Get a document by URI
     pub fn get(&self, uri: &str) -> Option<Document> {
         let key = Self::uri_key(uri);
-        let docs = self.documents.read().unwrap();
+        let docs = self.documents.read().ok()?;
         docs.get(&key).cloned()
     }
 
@@ -109,20 +114,26 @@ impl DocumentStore {
 
     /// Get all open documents
     pub fn all_documents(&self) -> Vec<Document> {
-        let docs = self.documents.read().unwrap();
+        let Ok(docs) = self.documents.read() else {
+            return Vec::new();
+        };
         docs.values().cloned().collect()
     }
 
     /// Check if a document is open
     pub fn is_open(&self, uri: &str) -> bool {
         let key = Self::uri_key(uri);
-        let docs = self.documents.read().unwrap();
+        let Ok(docs) = self.documents.read() else {
+            return false;
+        };
         docs.contains_key(&key)
     }
 
     /// Get the count of open documents
     pub fn count(&self) -> usize {
-        let docs = self.documents.read().unwrap();
+        let Ok(docs) = self.documents.read() else {
+            return 0;
+        };
         docs.len()
     }
 }

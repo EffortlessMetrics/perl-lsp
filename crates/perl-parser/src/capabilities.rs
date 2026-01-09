@@ -500,7 +500,10 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
 /// Generate capabilities as JSON Value for testing
 pub fn capabilities_json(build: BuildFlags) -> Value {
     let caps = capabilities_for(build.clone());
-    let mut json = serde_json::to_value(caps).unwrap();
+    let mut json = serde_json::to_value(caps).unwrap_or_else(|e| {
+        eprintln!("Failed to serialize capabilities to JSON: {}", e);
+        serde_json::json!({})
+    });
 
     // Manually add typeHierarchyProvider for LSP compatibility
     if build.type_hierarchy {

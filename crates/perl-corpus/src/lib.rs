@@ -12,10 +12,12 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::{fs, path::Path};
 
-static SEC_RE: once_cell::sync::Lazy<Regex> =
-    once_cell::sync::Lazy::new(|| Regex::new(r"(?m)^=+\s*$").unwrap());
+static SEC_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    Regex::new(r"(?m)^=+\s*$").expect("SEC_RE regex should compile")
+});
 static META_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-    Regex::new(r"(?m)^#\s*@(?P<k>id|tags|perl|flags):\s*(?P<v>.*)$").unwrap()
+    Regex::new(r"(?m)^#\s*@(?P<k>id|tags|perl|flags):\s*(?P<v>.*)$")
+        .expect("META_RE regex should compile")
 });
 
 /// Parse a corpus file into sections.

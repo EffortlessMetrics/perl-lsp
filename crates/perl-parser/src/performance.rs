@@ -41,7 +41,7 @@ impl AstCache {
     pub fn get(&self, uri: &str, content: &str) -> Option<Arc<Node>> {
         let content_hash = Self::hash_content(content);
 
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.lock().ok()?;
         if let Some(cached) = cache.get_mut(uri) {
             let age = cached.last_accessed.elapsed();
 
@@ -63,7 +63,9 @@ impl AstCache {
     pub fn put(&self, uri: String, content: &str, ast: Arc<Node>) {
         let content_hash = Self::hash_content(content);
 
-        let mut cache = self.cache.lock().unwrap();
+        let Ok(mut cache) = self.cache.lock() else {
+            return; // Skip caching if lock is poisoned
+        };
 
         // Evict oldest entries if cache is full
         if cache.len() >= self.max_size {
@@ -82,7 +84,9 @@ impl AstCache {
     ///
     /// Removes entries older than the TTL.
     pub fn cleanup(&self) {
-        let mut cache = self.cache.lock().unwrap();
+        let Ok(mut cache) = self.cache.lock() else {
+            return; // Skip cleanup if lock is poisoned
+        };
         let now = Instant::now();
 
         cache.retain(|_, cached| now.duration_since(cached.last_accessed) < self.ttl);
@@ -200,14 +204,18 @@ pub mod parallel {
             let handle = thread::spawn(move || {
                 loop {
                     let file = {
-                        let mut queue = work_queue.lock().unwrap();
+                        let Ok(mut queue) = work_queue.lock() else {
+                            break; // Exit if lock is poisoned
+                        };
                         queue.pop()
                     };
 
                     match file {
                         Some(f) => {
                             let result = processor(f);
-                            tx.send(result).unwrap();
+                            if tx.send(result).is_err() {
+                                break; // Exit if receiver is dropped
+                            }
                         }
                         None => break,
                     }
@@ -220,7 +228,7 @@ pub mod parallel {
         drop(tx);
 
         for handle in handles {
-            handle.join().unwrap();
+            let _ = handle.join(); // Ignore join errors - worker threads handle errors internally
         }
 
         rx.into_iter().collect()
