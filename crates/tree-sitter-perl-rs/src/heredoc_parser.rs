@@ -646,7 +646,7 @@ print $text;"#;
 
     #[test]
     fn test_indented_heredoc_in_block() {
-        // This is the original failing test - kept for future fix
+        // Tests indented heredoc (~) parsing inside a block context
         let input = r#"if (1) {
     my $text = <<~'EOF';
         Indented content
@@ -659,7 +659,7 @@ print $text;"#;
         assert_eq!(declarations.len(), 1);
         assert!(declarations[0].indented);
         assert_eq!(declarations[0].terminator, "EOF");
-        // TODO: Fix statement_tracker to handle heredocs inside blocks properly
-        // For now, this test is expected to fail
+        // NOTE: Statement tracker heredoc-in-block handling was implemented in PRs #225, #226, #229.
+        // This test validates the fix. If assertions fail, heredoc block support may have regressed.
     }
 }

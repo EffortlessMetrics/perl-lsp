@@ -711,7 +711,8 @@ mod tests {
             .count();
         assert!(critical_count > 0, "Should preserve critical symbols during batch edits");
 
-        // TODO: enable metrics assertions once multi-edit reuse is fully implemented
+        // TODO(#255): Enable metrics assertions once multi-edit reuse is fully implemented.
+        // See Issue #255 for tracking. Assertions to enable:
         // assert!(doc.metrics.nodes_reused > 0);
         // assert!(doc.metrics.last_parse_time_ms < 2.0);
     }

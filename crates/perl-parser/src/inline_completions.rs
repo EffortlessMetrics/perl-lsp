@@ -110,11 +110,12 @@ impl InlineCompletionProvider {
             });
         }
 
-        // Rule 3: After `sub <name>` without `{`, suggest ` {}`
-        if let Some(sub_match) = self.match_sub_declaration(prefix) {
+        // Rule 3: After `sub <name>` without `{`, suggest smart body based on name pattern
+        if let Some(sub_name) = self.match_sub_declaration(prefix) {
             if !full_line.contains('{') {
+                let body = self.generate_smart_body(&sub_name);
                 items.push(InlineCompletionItem {
-                    insert_text: format!(" {{\n    # TODO: implement {}\n}}", sub_match),
+                    insert_text: format!(" {{\n{}\n}}", body),
                     filter_text: Some("{".into()),
                     range: None,
                     command: None,
@@ -234,6 +235,57 @@ impl InlineCompletionProvider {
     fn is_in_constructor_context(&self, prefix: &str) -> bool {
         prefix.contains("sub new") || prefix.contains("sub BUILD")
     }
+
+    /// Generate a smart subroutine body based on naming patterns
+    ///
+    /// Detects common Perl subroutine naming conventions and generates
+    /// appropriate body templates:
+    /// - `new`, `BUILD` → constructor pattern
+    /// - `get_*` → getter pattern
+    /// - `set_*` → setter pattern
+    /// - `is_*`, `has_*`, `can_*` → boolean accessor pattern
+    /// - `_*` → private method placeholder
+    /// - default → simple method template
+    fn generate_smart_body(&self, sub_name: &str) -> String {
+        // Constructor patterns
+        if sub_name == "new" || sub_name == "BUILD" {
+            return "    my $class = shift;\n    my $self = bless {}, $class;\n    return $self;"
+                .to_string();
+        }
+
+        // Getter pattern: get_something or something_getter
+        if let Some(field) = sub_name.strip_prefix("get_") {
+            // Remove "get_" prefix
+            return format!("    my $self = shift;\n    return $self->{{{}}};", field);
+        }
+
+        // Setter pattern: set_something or something_setter
+        if let Some(field) = sub_name.strip_prefix("set_") {
+            // Remove "set_" prefix
+            return format!(
+                "    my ($self, $value) = @_;\n    $self->{{{}}} = $value;\n    return $self;",
+                field
+            );
+        }
+
+        // Boolean accessor patterns: is_*, has_*, can_*
+        if sub_name.starts_with("is_")
+            || sub_name.starts_with("has_")
+            || sub_name.starts_with("can_")
+        {
+            let prefix_len = if sub_name.starts_with("is_") { 3 } else { 4 };
+            let field = &sub_name[prefix_len..];
+            return format!("    my $self = shift;\n    return $self->{{{}}} ? 1 : 0;", field);
+        }
+
+        // Private method placeholder
+        if sub_name.starts_with('_') {
+            return "    my $self = shift;\n    ...".to_string();
+        }
+
+        // Default: simple method with shift
+        "    my $self = shift;\n    ...".to_string()
+    }
 }
 
 #[cfg(test)]
@@ -261,7 +313,54 @@ mod tests {
         let provider = InlineCompletionProvider::new();
         let completions = provider.get_inline_completions("sub hello", 0, 9);
         assert!(!completions.items.is_empty());
-        assert!(completions.items[0].insert_text.contains("TODO: implement hello"));
+        // Default method generates simple template with shift
+        assert!(completions.items[0].insert_text.contains("my $self = shift"));
+    }
+
+    #[test]
+    fn test_sub_new_constructor() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("sub new", 0, 7);
+        assert!(!completions.items.is_empty());
+        // Constructor generates bless pattern
+        assert!(completions.items[0].insert_text.contains("bless"));
+        assert!(completions.items[0].insert_text.contains("my $class = shift"));
+    }
+
+    #[test]
+    fn test_sub_getter() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("sub get_name", 0, 12);
+        assert!(!completions.items.is_empty());
+        // Getter generates accessor pattern
+        assert!(completions.items[0].insert_text.contains("return $self->{name}"));
+    }
+
+    #[test]
+    fn test_sub_setter() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("sub set_name", 0, 12);
+        assert!(!completions.items.is_empty());
+        // Setter generates mutator pattern
+        assert!(completions.items[0].insert_text.contains("$self->{name} = $value"));
+    }
+
+    #[test]
+    fn test_sub_is_predicate() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("sub is_active", 0, 13);
+        assert!(!completions.items.is_empty());
+        // Boolean accessor returns 1/0
+        assert!(completions.items[0].insert_text.contains("? 1 : 0"));
+    }
+
+    #[test]
+    fn test_sub_has_predicate() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("sub has_items", 0, 13);
+        assert!(!completions.items.is_empty());
+        // Boolean accessor returns 1/0
+        assert!(completions.items[0].insert_text.contains("? 1 : 0"));
     }
 
     #[test]
