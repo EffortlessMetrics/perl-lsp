@@ -72,6 +72,103 @@ pub struct FailingFile {
     pub category: String,
     /// Error message
     pub error_message: String,
+    /// Line number (1-based) where error occurred
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_number: Option<usize>,
+    /// Column number (1-based) where error occurred
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column: Option<usize>,
+    /// Found token kind (if parseable from error)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub found_token: Option<String>,
+    /// Expected token(s) (if parseable from error)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected: Option<String>,
+    /// Code snippet around the error (1-2 lines)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_snippet: Option<String>,
+}
+
+/// Parse byte offset from error message (e.g., "at 334")
+fn parse_byte_offset(message: &str) -> Option<usize> {
+    // Look for "at N" pattern at end of message
+    if let Some(idx) = message.rfind(" at ") {
+        let offset_str = message[idx + 4..].trim();
+        offset_str.parse().ok()
+    } else {
+        None
+    }
+}
+
+/// Convert byte offset to line and column (1-based)
+fn byte_offset_to_line_col(source: &str, byte_offset: usize) -> (usize, usize) {
+    let mut line = 1;
+    let mut col = 1;
+    let mut current_offset = 0;
+
+    for ch in source.chars() {
+        if current_offset >= byte_offset {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+        current_offset += ch.len_utf8();
+    }
+
+    (line, col)
+}
+
+/// Extract code snippet around a line (up to 2 lines context)
+fn extract_snippet(source: &str, line_number: usize) -> String {
+    let lines: Vec<&str> = source.lines().collect();
+    let line_idx = line_number.saturating_sub(1); // Convert to 0-based
+
+    if line_idx >= lines.len() {
+        return String::new();
+    }
+
+    let line = lines[line_idx];
+    // Truncate long lines
+    let truncated = if line.len() > 80 {
+        format!("{}...", &line[..77])
+    } else {
+        line.to_string()
+    };
+
+    truncated
+}
+
+/// Parse found/expected tokens from error message
+///
+/// Handles error formats like:
+/// - "Unexpected token: expected expression, found Comma at 334"
+/// - "expected RightParen, found Identifier at 2018"
+fn parse_token_info(message: &str) -> (Option<String>, Option<String>) {
+    let mut found = None;
+    let mut expected = None;
+
+    // Look for the pattern "expected X, found Y"
+    // Handle both "expected X" and "Unexpected token: expected X" formats
+    if let Some(exp_idx) = message.rfind("expected ") {
+        let after_expected = &message[exp_idx + 9..];
+        if let Some(comma_idx) = after_expected.find(", found ") {
+            expected = Some(after_expected[..comma_idx].to_string());
+            let after_found = &after_expected[comma_idx + 8..];
+            // Strip " at N" suffix if present
+            let found_token = if let Some(at_idx) = after_found.rfind(" at ") {
+                &after_found[..at_idx]
+            } else {
+                after_found
+            };
+            found = Some(found_token.to_string());
+        }
+    }
+
+    (found, expected)
 }
 
 /// Generate a comprehensive audit report
@@ -139,11 +236,32 @@ fn generate_parse_outcomes_summary(
                 // Update category counts
                 *error_by_category.entry(category_str.clone()).or_insert(0) += 1;
 
+                // Extract location info from error message
+                let byte_offset = parse_byte_offset(message);
+                let (line_number, column) = if let Some(offset) = byte_offset {
+                    let (l, c) = byte_offset_to_line_col(source, offset);
+                    (Some(l), Some(c))
+                } else {
+                    (None, None)
+                };
+
+                // Extract code snippet if we have a line number
+                let code_snippet = line_number.map(|ln| extract_snippet(source, ln))
+                    .filter(|s| !s.is_empty());
+
+                // Parse found/expected tokens
+                let (found_token, expected) = parse_token_info(message);
+
                 // Add to failing files list
                 failing_files.push(FailingFile {
                     path: path.display().to_string(),
                     category: category_str,
                     error_message: message.clone(),
+                    line_number,
+                    column,
+                    found_token,
+                    expected,
+                    code_snippet,
                 });
             }
             ParseOutcome::Timeout { .. } => timeout += 1,
@@ -154,6 +272,11 @@ fn generate_parse_outcomes_summary(
                     path: path.display().to_string(),
                     category: "Panic".to_string(),
                     error_message: message.clone(),
+                    line_number: None,
+                    column: None,
+                    found_token: None,
+                    expected: None,
+                    code_snippet: None,
                 });
             }
         }
@@ -208,5 +331,59 @@ mod tests {
 
         assert_eq!(metadata.version, "0.1.0");
         assert_eq!(metadata.duration_secs, 30);
+    }
+
+    #[test]
+    fn test_parse_byte_offset() {
+        assert_eq!(parse_byte_offset("Unexpected token at 334"), Some(334));
+        assert_eq!(parse_byte_offset("expected RightParen, found Identifier at 2018"), Some(2018));
+        assert_eq!(parse_byte_offset("no offset here"), None);
+        assert_eq!(parse_byte_offset("at the end at 42"), Some(42));
+    }
+
+    #[test]
+    fn test_byte_offset_to_line_col() {
+        let source = "line1\nline2\nline3";
+        // Offset 0 = line 1, col 1
+        assert_eq!(byte_offset_to_line_col(source, 0), (1, 1));
+        // Offset 2 = line 1, col 3 (within "line1")
+        assert_eq!(byte_offset_to_line_col(source, 2), (1, 3));
+        // Offset 6 = line 2, col 1 (start of "line2")
+        assert_eq!(byte_offset_to_line_col(source, 6), (2, 1));
+        // Offset 8 = line 2, col 3 (within "line2")
+        assert_eq!(byte_offset_to_line_col(source, 8), (2, 3));
+    }
+
+    #[test]
+    fn test_extract_snippet() {
+        let source = "line1\nline2 with more content\nline3";
+        assert_eq!(extract_snippet(source, 1), "line1");
+        assert_eq!(extract_snippet(source, 2), "line2 with more content");
+        assert_eq!(extract_snippet(source, 3), "line3");
+        // Out of range
+        assert_eq!(extract_snippet(source, 100), "");
+    }
+
+    #[test]
+    fn test_parse_token_info() {
+        // Test "Unexpected token: expected X, found Y at N" format
+        let (found, expected) = parse_token_info("Unexpected token: expected expression, found Comma at 334");
+        assert_eq!(expected, Some("expression".to_string()));
+        assert_eq!(found, Some("Comma".to_string()));
+
+        // Test "expected X, found Y at N" format
+        let (found, expected) = parse_token_info("expected RightParen, found Identifier at 2018");
+        assert_eq!(expected, Some("RightParen".to_string()));
+        assert_eq!(found, Some("Identifier".to_string()));
+
+        // Test no match
+        let (found, expected) = parse_token_info("random error message");
+        assert_eq!(expected, None);
+        assert_eq!(found, None);
+
+        // Test without "at N" suffix
+        let (found, expected) = parse_token_info("expected Semicolon, found Newline");
+        assert_eq!(expected, Some("Semicolon".to_string()));
+        assert_eq!(found, Some("Newline".to_string()));
     }
 }
