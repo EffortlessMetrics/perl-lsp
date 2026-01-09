@@ -44,6 +44,7 @@ ci-gate:
     @just ci-workflow-audit
     @just ci-check-no-nested-lock
     @just ci-format
+    @just ci-docs-check
     @just ci-clippy-lib
     @just ci-test-lib
     @just ci-policy

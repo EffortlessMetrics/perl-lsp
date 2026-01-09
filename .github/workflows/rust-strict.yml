@@ -13,7 +13,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # Standard warnings denial - missing_docs handled per-crate for PR #160 documentation tracking
+  # Standard warnings denial - missing_docs enforced via ci/check_missing_docs.sh (Issue #197)
   RUSTFLAGS: "-D warnings"
   RUSTDOCFLAGS: "-D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls"
 
@@ -71,10 +71,10 @@ jobs:
     
     - name: Clippy (strict on first-party)
       env:
-        # Allow missing_docs warnings for perl-parser due to PR #160 documentation tracking strategy
+        # perl-parser uses #![warn(missing_docs)] with baseline enforcement (Issue #197)
         RUSTFLAGS: "-D warnings"
       run: |
-        # Temporarily allow warnings for perl-parser clippy due to PR #160 documentation tracking
+        # perl-parser has crate-level #![warn(missing_docs)] - don't promote to error here
         RUSTFLAGS="" cargo clippy --locked -p perl-parser --all-targets --all-features
         cargo clippy --locked -p perl-lexer --all-targets --all-features -- -D warnings
     
@@ -92,10 +92,9 @@ jobs:
     - name: Build
       run: cargo build --locked --workspace --all-features
     
-    - name: Build perl-parser (allowing missing_docs warnings)
+    - name: Build perl-parser
       env:
-        # Temporarily allow warnings for perl-parser due to PR #160 documentation tracking strategy
-        # The missing_docs warnings are intentional for systematic resolution (605 violations tracked)
+        # perl-parser uses #![warn(missing_docs)] with baseline 0 (Issue #197, closed)
         RUSTFLAGS: ""
       run: cargo build -p perl-parser --all-features --locked
     
