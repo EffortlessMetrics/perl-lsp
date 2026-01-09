@@ -9,15 +9,72 @@ use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Sender, channel};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
 
-use lazy_static::lazy_static;
 #[cfg(unix)]
 use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
 use regex::Regex;
+
+/// Poison-safe mutex lock that recovers from poisoned state
+fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, ctx: &'static str) -> MutexGuard<'a, T> {
+    match mutex.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!("Warning: poisoned mutex recovered: {ctx}");
+            poisoned.into_inner()
+        }
+    }
+}
+
+/// Compiled regex patterns for debugger output parsing
+static CONTEXT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static PROMPT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static STACK_FRAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+#[allow(dead_code)] // Reserved for future variable parsing enhancements
+static VARIABLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static ERROR_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+
+fn context_re() -> Option<&'static Regex> {
+    CONTEXT_RE
+        .get_or_init(|| {
+            Regex::new(r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+)(?:\))?:(?P<line2>\d+):?)")
+        })
+        .as_ref()
+        .ok()
+}
+
+fn prompt_re() -> Option<&'static Regex> {
+    PROMPT_RE.get_or_init(|| Regex::new(r"^\s*DB<?\d*>?\s*$")).as_ref().ok()
+}
+
+fn stack_frame_re() -> Option<&'static Regex> {
+    STACK_FRAME_RE
+        .get_or_init(|| {
+            Regex::new(r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)")
+        })
+        .as_ref()
+        .ok()
+}
+
+#[allow(dead_code)] // Reserved for future variable parsing enhancements
+fn variable_re() -> Option<&'static Regex> {
+    VARIABLE_RE
+        .get_or_init(|| Regex::new(r"^\s*(?P<name>[\$\@\%][\w:]+)\s*=\s*(?P<value>.*?)$"))
+        .as_ref()
+        .ok()
+}
+
+fn error_re() -> Option<&'static Regex> {
+    ERROR_RE
+        .get_or_init(|| {
+            Regex::new(r"^(?:.*?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)|Syntax error|Can't locate|Global symbol).*$")
+        })
+        .as_ref()
+        .ok()
+}
 
 /// DAP server that handles debug sessions
 pub struct DebugAdapter {
@@ -551,23 +608,6 @@ impl DebugAdapter {
             let mut reader = BufReader::new(stdout);
             let mut line = String::new();
 
-            lazy_static! {
-                // Enhanced regex patterns for more robust Perl debugger output parsing
-                static ref CONTEXT_RE: Regex = Regex::new(
-                    r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+)(?:\))?:(?P<line2>\d+):?)"
-                ).unwrap();
-                static ref PROMPT_RE: Regex = Regex::new(r"^\s*DB<?\d*>?\s*$").unwrap();
-                static ref STACK_FRAME_RE: Regex = Regex::new(
-                    r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)"
-                ).unwrap();
-                static ref VARIABLE_RE: Regex = Regex::new(
-                    r"^\s*(?P<name>[\$\@\%][\w:]+)\s*=\s*(?P<value>.*?)$"
-                ).unwrap();
-                static ref ERROR_RE: Regex = Regex::new(
-                    r"^(?:.*?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)|Syntax error|Can't locate|Global symbol).*$"
-                ).unwrap();
-            }
-
             let mut current_file = String::new();
             let mut current_func = String::new();
             let mut current_line = 0;
@@ -628,61 +668,71 @@ impl DebugAdapter {
                         let mut context_updated = false;
 
                         // Try main context pattern
-                        if let Some(caps) = CONTEXT_RE.captures(&text) {
-                            if let Some(func) = caps.name("func") {
-                                current_func = func.as_str().to_string();
-                                context_updated = true;
-                            }
-                            if let Some(file) = caps.name("file").or_else(|| caps.name("file2")) {
-                                current_file = file.as_str().to_string();
-                                context_updated = true;
-                            }
-                            if let Some(line_num) = caps.name("line").or_else(|| caps.name("line2"))
-                            {
-                                current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
-                                context_updated = true;
+                        if let Some(re) = context_re() {
+                            if let Some(caps) = re.captures(&text) {
+                                if let Some(func) = caps.name("func") {
+                                    current_func = func.as_str().to_string();
+                                    context_updated = true;
+                                }
+                                if let Some(file) = caps.name("file").or_else(|| caps.name("file2"))
+                                {
+                                    current_file = file.as_str().to_string();
+                                    context_updated = true;
+                                }
+                                if let Some(line_num) =
+                                    caps.name("line").or_else(|| caps.name("line2"))
+                                {
+                                    current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
+                                    context_updated = true;
+                                }
                             }
                         }
 
                         // Try stack frame pattern as fallback
                         if !context_updated {
-                            if let Some(caps) = STACK_FRAME_RE.captures(&text) {
-                                if let Some(func) = caps.name("func") {
-                                    current_func = func.as_str().to_string();
+                            if let Some(re) = stack_frame_re() {
+                                if let Some(caps) = re.captures(&text) {
+                                    if let Some(func) = caps.name("func") {
+                                        current_func = func.as_str().to_string();
+                                    }
+                                    if let Some(file) = caps.name("file") {
+                                        current_file = file.as_str().to_string();
+                                    }
+                                    if let Some(line_num) = caps.name("line") {
+                                        current_line =
+                                            line_num.as_str().parse::<i32>().unwrap_or(0);
+                                    }
+                                    context_updated = true;
                                 }
-                                if let Some(file) = caps.name("file") {
-                                    current_file = file.as_str().to_string();
-                                }
-                                if let Some(line_num) = caps.name("line") {
-                                    current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
-                                }
-                                context_updated = true;
                             }
                         }
 
                         // Check for errors that might provide location info
                         if !context_updated {
-                            if let Some(caps) = ERROR_RE.captures(&text) {
-                                if let Some(file) = caps.name("file") {
-                                    current_file = file.as_str().to_string();
-                                }
-                                if let Some(line_num) = caps.name("line") {
-                                    current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
-                                }
-                                context_updated = true;
+                            if let Some(re) = error_re() {
+                                if let Some(caps) = re.captures(&text) {
+                                    if let Some(file) = caps.name("file") {
+                                        current_file = file.as_str().to_string();
+                                    }
+                                    if let Some(line_num) = caps.name("line") {
+                                        current_line =
+                                            line_num.as_str().parse::<i32>().unwrap_or(0);
+                                    }
+                                    context_updated = true;
 
-                                // Send error event to client
-                                if let Some(ref sender) = sender {
-                                    if let Ok(mut seq_lock) = seq.lock() {
-                                        *seq_lock += 1;
-                                        let _ = sender.send(DapMessage::Event {
-                                            seq: *seq_lock,
-                                            event: "output".to_string(),
-                                            body: Some(json!({
-                                                "category": "stderr",
-                                                "output": format!("Error: {}\n", text)
-                                            })),
-                                        });
+                                    // Send error event to client
+                                    if let Some(ref sender) = sender {
+                                        if let Ok(mut seq_lock) = seq.lock() {
+                                            *seq_lock += 1;
+                                            let _ = sender.send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "output".to_string(),
+                                                body: Some(json!({
+                                                    "category": "stderr",
+                                                    "output": format!("Error: {}\n", text)
+                                                })),
+                                            });
+                                        }
                                     }
                                 }
                             }
@@ -693,14 +743,16 @@ impl DebugAdapter {
                         }
 
                         // Detect debugger prompt (stopped state) with enhanced pattern matching
-                        if PROMPT_RE.is_match(&text)
+                        if prompt_re().is_some_and(|re| re.is_match(&text))
                             || text.trim().starts_with("DB<")
                             || text.trim().starts_with("  DB<")
                         {
                             _debugger_ready = true;
                             let thread_id = {
                                 let Ok(mut guard) = session.lock() else {
-                                    eprintln!("Failed to lock session when processing debugger prompt");
+                                    eprintln!(
+                                        "Failed to lock session when processing debugger prompt"
+                                    );
                                     continue;
                                 };
                                 if let Some(ref mut s) = *guard {
@@ -939,7 +991,9 @@ impl DebugAdapter {
                 let condition = bp_req.get("condition").and_then(|c| c.as_str());
                 let mut success = false;
 
-                if let Some(ref mut session) = *self.session.lock().unwrap() {
+                if let Some(ref mut session) =
+                    *lock_or_recover(&self.session, "debug_adapter.session")
+                {
                     if let Some(stdin) = session.process.stdin.as_mut() {
                         let cmd = if let Some(cond) = condition {
                             format!("b {} {}\n", line, cond)
@@ -970,9 +1024,7 @@ impl DebugAdapter {
             }
 
             // Store breakpoints
-            self.breakpoints
-                .lock()
-                .unwrap()
+            lock_or_recover(&self.breakpoints, "debug_adapter.breakpoints")
                 .insert(source_path.to_string(), verified_breakpoints.clone());
 
             DapMessage::Response {
@@ -1000,7 +1052,7 @@ impl DebugAdapter {
     /// Handle configurationDone request
     fn handle_configuration_done(&self, seq: i64, request_seq: i64) -> DapMessage {
         // Send initial command to get the debugger started
-        if let Some(ref mut session) = *self.session.lock().unwrap() {
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
             if let Some(stdin) = session.process.stdin.as_mut() {
                 // Send initial 'l' command to list current location
                 let _ = stdin.write_all(b"l\n");
@@ -1020,14 +1072,15 @@ impl DebugAdapter {
 
     /// Handle threads request
     fn handle_threads(&self, seq: i64, request_seq: i64) -> DapMessage {
-        let threads = if let Some(ref session) = *self.session.lock().unwrap() {
-            vec![json!({
-                "id": session.thread_id,
-                "name": "Main Thread"
-            })]
-        } else {
-            vec![]
-        };
+        let threads =
+            if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {
+                vec![json!({
+                    "id": session.thread_id,
+                    "name": "Main Thread"
+                })]
+            } else {
+                vec![]
+            };
 
         DapMessage::Response {
             seq,
@@ -1048,11 +1101,12 @@ impl DebugAdapter {
         request_seq: i64,
         _arguments: Option<Value>,
     ) -> DapMessage {
-        let stack_frames = if let Some(ref session) = *self.session.lock().unwrap() {
-            session.stack_frames.clone()
-        } else {
-            vec![]
-        };
+        let stack_frames =
+            if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {
+                session.stack_frames.clone()
+            } else {
+                vec![]
+            };
 
         DapMessage::Response {
             seq,
@@ -1108,7 +1162,9 @@ impl DebugAdapter {
             let variables_ref =
                 args.get("variablesReference").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
 
-            let variables = if let Some(ref session) = *self.session.lock().unwrap() {
+            let variables = if let Some(ref session) =
+                *lock_or_recover(&self.session, "debug_adapter.session")
+            {
                 // Try to get cached variables first
                 if let Some(vars) = session.variables.get(&variables_ref) {
                     vars.clone()
@@ -1116,7 +1172,9 @@ impl DebugAdapter {
                     // Generate some basic variables for the local scope
                     if variables_ref == 1 {
                         // Frame 1 local variables - send command to get them
-                        if let Some(ref mut session) = *self.session.lock().unwrap() {
+                        if let Some(ref mut session) =
+                            *lock_or_recover(&self.session, "debug_adapter.session")
+                        {
                             if let Some(stdin) = session.process.stdin.as_mut() {
                                 let _ = stdin.write_all(b"V\n"); // Show local variables
                                 let _ = stdin.flush();
@@ -1196,7 +1254,7 @@ impl DebugAdapter {
 
     /// Handle continue request
     fn handle_continue(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        if let Some(ref mut session) = *self.session.lock().unwrap() {
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
             if let Some(stdin) = session.process.stdin.as_mut() {
                 let _ = stdin.write_all(b"c\n");
                 let _ = stdin.flush();
@@ -1218,7 +1276,7 @@ impl DebugAdapter {
 
     /// Handle next request
     fn handle_next(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        if let Some(ref mut session) = *self.session.lock().unwrap() {
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
             if let Some(stdin) = session.process.stdin.as_mut() {
                 let _ = stdin.write_all(b"n\n");
                 let _ = stdin.flush();
@@ -1238,7 +1296,7 @@ impl DebugAdapter {
 
     /// Handle stepIn request
     fn handle_step_in(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        if let Some(ref mut session) = *self.session.lock().unwrap() {
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
             if let Some(stdin) = session.process.stdin.as_mut() {
                 let _ = stdin.write_all(b"s\n");
                 let _ = stdin.flush();
@@ -1258,7 +1316,7 @@ impl DebugAdapter {
 
     /// Handle stepOut request
     fn handle_step_out(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        if let Some(ref mut session) = *self.session.lock().unwrap() {
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
             if let Some(stdin) = session.process.stdin.as_mut() {
                 let _ = stdin.write_all(b"r\n");
                 let _ = stdin.flush();
@@ -1278,13 +1336,14 @@ impl DebugAdapter {
 
     /// Handle pause request
     fn handle_pause(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        let success = if let Some(ref session) = *self.session.lock().unwrap() {
-            let pid = session.process.id();
-            self.send_interrupt_signal(pid)
-        } else {
-            eprintln!("No active debug session to pause");
-            false
-        };
+        let success =
+            if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {
+                let pid = session.process.id();
+                self.send_interrupt_signal(pid)
+            } else {
+                eprintln!("No active debug session to pause");
+                false
+            };
 
         DapMessage::Response {
             seq,
@@ -1317,7 +1376,8 @@ impl DebugAdapter {
         {
             // On Windows, we use TerminateProcess or send Ctrl+C event
             // For Perl debugger, we can try sending input directly
-            if let Some(ref mut session) = *self.session.lock().unwrap() {
+            if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            {
                 if let Some(stdin) = session.process.stdin.as_mut() {
                     // Send interrupt character (Ctrl+C equivalent in Perl debugger)
                     match stdin.write_all(b"\x03\n") {
@@ -1373,7 +1433,8 @@ impl DebugAdapter {
             }
 
             // Send evaluation command to debugger
-            if let Some(ref mut session) = *self.session.lock().unwrap() {
+            if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            {
                 if let Some(stdin) = session.process.stdin.as_mut() {
                     // Use 'x' command for better evaluation output
                     let cmd = format!("x {}\n", expression);
@@ -1436,8 +1497,8 @@ mod tests {
     #[test]
     fn test_debug_adapter_creation() {
         let adapter = DebugAdapter::new();
-        assert!(adapter.session.lock().unwrap().is_none());
-        assert!(adapter.breakpoints.lock().unwrap().is_empty());
+        assert!(adapter.session.lock().ok().map_or(false, |guard| guard.is_none()));
+        assert!(adapter.breakpoints.lock().ok().map_or(false, |guard| guard.is_empty()));
     }
 
     #[test]

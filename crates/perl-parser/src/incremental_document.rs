@@ -162,9 +162,22 @@ impl IncrementalDocument {
 
     fn apply_edit_to_string(&self, source: &str, edit: &IncrementalEdit) -> String {
         let mut result = String::with_capacity(source.len() + edit.new_text.len());
-        result.push_str(&source[..edit.start_byte]);
-        result.push_str(&edit.new_text);
-        result.push_str(&source[edit.old_end_byte..]);
+
+        // Safely handle byte positions with bounds checking
+        let start = edit.start_byte.min(source.len());
+        let end = edit.old_end_byte.min(source.len());
+
+        // Ensure we're on UTF-8 boundaries
+        if source.is_char_boundary(start) && source.is_char_boundary(end) {
+            result.push_str(&source[..start]);
+            result.push_str(&edit.new_text);
+            result.push_str(&source[end..]);
+        } else {
+            // Fallback: if boundaries are invalid, use the original source
+            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+            result.push_str(source);
+        }
+
         result
     }
 
@@ -275,32 +288,51 @@ impl IncrementalDocument {
                 NodeKind::Number { .. } => {
                     // Re-parse just this number
                     let delta = edit.byte_shift();
-                    node.location.end = (node.location.end as isize + delta) as usize;
+                    let new_end = (node.location.end as isize + delta).max(0) as usize;
 
-                    // Update the value
-                    let new_text = &source[node.location.start..node.location.end];
-                    if let Ok(value) = new_text.parse::<f64>() {
-                        node.kind = NodeKind::Number { value: value.to_string() };
-                        return true;
+                    // Safely extract new text with bounds checking
+                    if new_end <= source.len()
+                        && source.is_char_boundary(node.location.start)
+                        && source.is_char_boundary(new_end)
+                    {
+                        node.location.end = new_end;
+                        let new_text = &source[node.location.start..node.location.end];
+                        if let Ok(value) = new_text.parse::<f64>() {
+                            node.kind = NodeKind::Number { value: value.to_string() };
+                            return true;
+                        }
                     }
                 }
                 NodeKind::String { value, .. } => {
                     // Update string content
                     let delta = edit.byte_shift();
-                    node.location.end = (node.location.end as isize + delta) as usize;
+                    let new_end = (node.location.end as isize + delta).max(0) as usize;
 
-                    // Extract new string value
-                    let new_text = &source[node.location.start..node.location.end];
-                    *value = new_text.to_string();
-                    return true;
+                    // Safely extract new string value with bounds checking
+                    if new_end <= source.len()
+                        && source.is_char_boundary(node.location.start)
+                        && source.is_char_boundary(new_end)
+                    {
+                        node.location.end = new_end;
+                        let new_text = &source[node.location.start..node.location.end];
+                        *value = new_text.to_string();
+                        return true;
+                    }
                 }
                 NodeKind::Identifier { name } => {
                     // Update identifier
                     let delta = edit.byte_shift();
-                    node.location.end = (node.location.end as isize + delta) as usize;
+                    let new_end = (node.location.end as isize + delta).max(0) as usize;
 
-                    *name = source[node.location.start..node.location.end].to_string();
-                    return true;
+                    // Safely extract identifier name with bounds checking
+                    if new_end <= source.len()
+                        && source.is_char_boundary(node.location.start)
+                        && source.is_char_boundary(new_end)
+                    {
+                        node.location.end = new_end;
+                        *name = source[node.location.start..node.location.end].to_string();
+                        return true;
+                    }
                 }
                 _ => {
                     // Recursively search children
@@ -648,32 +680,31 @@ mod tests {
     use crate::incremental_edit::IncrementalEdit;
 
     #[test]
-    fn test_incremental_single_token_edit() {
+    fn test_incremental_single_token_edit() -> ParseResult<()> {
         let source = r#"
             my $x = 42;
             my $y = 100;
             print $x + $y;
         "#;
 
-        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        let mut doc = IncrementalDocument::new(source.to_string())?;
 
         // Change 42 to 43
-        let edit = IncrementalEdit::new(
-            source.find("42").unwrap() + 1,
-            source.find("42").unwrap() + 2,
-            "3".to_string(),
-        );
+        let pos = source.find("42").expect("test source should contain '42'");
+        let edit = IncrementalEdit::new(pos + 1, pos + 2, "3".to_string());
 
-        doc.apply_edit(edit).unwrap();
+        doc.apply_edit(edit)?;
 
         // Should have high reuse
         assert!(doc.metrics.nodes_reused > 0);
         assert!(doc.metrics.nodes_reparsed < 5);
         assert!(doc.metrics.last_parse_time_ms < 1.0);
+
+        Ok(())
     }
 
     #[test]
-    fn test_incremental_multiple_edits() {
+    fn test_incremental_multiple_edits() -> ParseResult<()> {
         let source = r#"
             sub calculate {
                 my $a = 10;
@@ -682,25 +713,19 @@ mod tests {
             }
         "#;
 
-        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        let mut doc = IncrementalDocument::new(source.to_string())?;
 
         let mut edits = IncrementalEditSet::new();
 
         // Change 10 to 15
-        edits.add(IncrementalEdit::new(
-            source.find("10").unwrap(),
-            source.find("10").unwrap() + 2,
-            "15".to_string(),
-        ));
+        let pos_10 = source.find("10").expect("test source should contain '10'");
+        edits.add(IncrementalEdit::new(pos_10, pos_10 + 2, "15".to_string()));
 
         // Change 20 to 25
-        edits.add(IncrementalEdit::new(
-            source.find("20").unwrap(),
-            source.find("20").unwrap() + 2,
-            "25".to_string(),
-        ));
+        let pos_20 = source.find("20").expect("test source should contain '20'");
+        edits.add(IncrementalEdit::new(pos_20, pos_20 + 2, "25".to_string()));
 
-        doc.apply_edits(&edits).unwrap();
+        doc.apply_edits(&edits)?;
 
         // Cache should preserve critical symbols even during batch edits
         let critical_count = doc
@@ -714,24 +739,28 @@ mod tests {
         // TODO: enable metrics assertions once multi-edit reuse is fully implemented
         // assert!(doc.metrics.nodes_reused > 0);
         // assert!(doc.metrics.last_parse_time_ms < 2.0);
+
+        Ok(())
     }
 
     #[test]
-    fn test_cache_eviction() {
+    fn test_cache_eviction() -> ParseResult<()> {
         let source = "my $x = 1;";
-        let doc = IncrementalDocument::new(source.to_string()).unwrap();
+        let doc = IncrementalDocument::new(source.to_string())?;
 
         // Cache should have entries
         assert!(!doc.subtree_cache.by_range.is_empty());
         assert!(!doc.subtree_cache.by_content.is_empty());
+
+        Ok(())
     }
 
     #[test]
-    fn test_symbol_priority_classification() {
+    fn test_symbol_priority_classification() -> ParseResult<()> {
         let source = r#"
             package TestPkg;
             use strict;
-            
+
             sub test_func {
                 my $var = 42;
                 if ($var > 0) {
@@ -739,7 +768,7 @@ mod tests {
                 }
             }
         "#;
-        let doc = IncrementalDocument::new(source.to_string()).unwrap();
+        let doc = IncrementalDocument::new(source.to_string())?;
 
         // Verify we have different priority levels in cache
         let priorities: std::collections::HashSet<_> =
@@ -761,12 +790,14 @@ mod tests {
                 || priorities.contains(&SymbolPriority::Medium),
             "Should have lower priority symbols"
         );
+
+        Ok(())
     }
 
     #[test]
-    fn test_cache_respects_max_size() {
+    fn test_cache_respects_max_size() -> ParseResult<()> {
         let source = "my $x = 1; my $y = 2; my $z = 3;";
-        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        let mut doc = IncrementalDocument::new(source.to_string())?;
 
         // Ensure cache starts larger than 1 entry
         assert!(doc.subtree_cache.by_content.len() > 1);
@@ -776,29 +807,28 @@ mod tests {
         assert!(doc.subtree_cache.by_content.len() <= 1);
 
         // Applying an edit should not grow the cache beyond max_size
-        let edit = IncrementalEdit::new(
-            source.find("1").unwrap(),
-            source.find("1").unwrap() + 1,
-            "10".to_string(),
-        );
-        doc.apply_edit(edit).unwrap();
+        let pos = source.find("1").expect("test source should contain '1'");
+        let edit = IncrementalEdit::new(pos, pos + 1, "10".to_string());
+        doc.apply_edit(edit)?;
         assert!(doc.subtree_cache.by_content.len() <= 1);
+
+        Ok(())
     }
 
     #[test]
-    fn test_cache_priority_preservation() {
+    fn test_cache_priority_preservation() -> ParseResult<()> {
         let source = r#"
             package MyPackage;
             use strict;
             use warnings;
-            
+
             sub process {
                 my $x = 42;
                 my $y = "hello";
                 return $x + 1;
             }
         "#;
-        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        let mut doc = IncrementalDocument::new(source.to_string())?;
 
         // Store initial cache state
         let initial_cache_size = doc.subtree_cache.by_content.len();
@@ -818,12 +848,9 @@ mod tests {
         assert!(has_critical_symbols, "Should preserve critical symbols like package/use/sub");
 
         // Apply edit and verify critical symbols remain
-        let edit = IncrementalEdit::new(
-            source.find("42").unwrap(),
-            source.find("42").unwrap() + 2,
-            "100".to_string(),
-        );
-        doc.apply_edit(edit).unwrap();
+        let pos = source.find("42").expect("test source should contain '42'");
+        let edit = IncrementalEdit::new(pos, pos + 2, "100".to_string());
+        doc.apply_edit(edit)?;
         assert!(doc.subtree_cache.by_content.len() <= 3);
 
         // Still should have critical symbols after edit
@@ -834,19 +861,21 @@ mod tests {
             .cloned()
             .any(|p| p == SymbolPriority::Critical);
         assert!(has_critical_after_edit, "Should preserve critical symbols after edit");
+
+        Ok(())
     }
 
     #[test]
-    fn test_workspace_symbol_cache_preservation() {
+    fn test_workspace_symbol_cache_preservation() -> ParseResult<()> {
         let source = r#"
             package TestModule;
-            
+
             sub exported_function { }
             sub internal_helper { }
-            
+
             my $global_var = "test";
         "#;
-        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        let mut doc = IncrementalDocument::new(source.to_string())?;
 
         // Force small cache size
         doc.set_cache_max_size(2);
@@ -858,20 +887,22 @@ mod tests {
             .values()
             .any(|node| matches!(node.kind, NodeKind::Package { .. }));
         assert!(package_preserved, "Package declaration should be preserved for workspace symbols");
+
+        Ok(())
     }
 
     #[test]
-    fn test_completion_metadata_preservation() {
+    fn test_completion_metadata_preservation() -> ParseResult<()> {
         let source = r#"
             use Data::Dumper;
             use List::Util qw(first max);
-            
+
             sub calculate {
                 my ($input, $multiplier) = @_;
                 return $input * $multiplier;
             }
         "#;
-        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        let mut doc = IncrementalDocument::new(source.to_string())?;
 
         // Force cache eviction
         doc.set_cache_max_size(4);
@@ -895,24 +926,26 @@ mod tests {
             .values()
             .any(|node| matches!(node.kind, NodeKind::Subroutine { .. }));
         assert!(function_preserved, "Function definitions should be preserved for completion");
+
+        Ok(())
     }
 
     #[test]
-    fn test_code_lens_reference_preservation() {
+    fn test_code_lens_reference_preservation() -> ParseResult<()> {
         let source = r#"
             package MyClass;
-            
-            sub new { 
+
+            sub new {
                 my $class = shift;
                 return bless {}, $class;
             }
-            
+
             sub process_data {
                 my ($self, $data) = @_;
                 return $self->transform($data);
             }
         "#;
-        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        let mut doc = IncrementalDocument::new(source.to_string())?;
 
         // Force aggressive cache eviction
         doc.set_cache_max_size(3);
@@ -927,5 +960,7 @@ mod tests {
             })
             .count();
         assert!(critical_nodes >= 2, "Should preserve package and key subroutines for code lens");
+
+        Ok(())
     }
 }

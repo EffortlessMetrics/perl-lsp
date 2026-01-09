@@ -246,8 +246,8 @@ impl SemanticAnalyzer {
             for reference in refs {
                 if reference.location.start <= position && reference.location.end >= position {
                     let symbols = self.resolve_reference_to_symbols(reference);
-                    if !symbols.is_empty() {
-                        return Some(symbols[0]);
+                    if let Some(first_symbol) = symbols.first() {
+                        return Some(first_symbol);
                     }
                 }
             }
@@ -324,9 +324,9 @@ impl SemanticAnalyzer {
                             reference.scope_id,
                             reference.kind,
                         );
-                        if !symbols.is_empty() {
+                        if let Some(first_symbol) = symbols.first() {
                             return self
-                                .find_all_references_for_symbol(symbols[0], include_declaration);
+                                .find_all_references_for_symbol(first_symbol, include_declaration);
                         }
                     }
                 }
@@ -458,16 +458,15 @@ impl SemanticAnalyzer {
                 // Find the symbol definition
                 let symbols = self.symbol_table.find_symbol(name, scope_id, kind);
 
-                let token_type = if symbols.is_empty() {
-                    // Undefined variable
-                    SemanticTokenType::Variable
-                } else {
-                    let symbol = symbols[0];
+                let token_type = if let Some(symbol) = symbols.first() {
                     match symbol.declaration.as_deref() {
                         Some("my") | Some("state") => SemanticTokenType::Variable,
                         Some("our") => SemanticTokenType::Variable,
                         _ => SemanticTokenType::Variable,
                     }
+                } else {
+                    // Undefined variable
+                    SemanticTokenType::Variable
                 };
 
                 self.semantic_tokens.push(SemanticToken {
@@ -907,21 +906,26 @@ impl SemanticAnalyzer {
             .as_ref()
             .ok()?;
         if let Some(caps) = pod_re.captures(before) {
-            return Some(caps[1].trim().to_string());
+            if let Some(pod_text) = caps.get(1) {
+                return Some(pod_text.as_str().trim().to_string());
+            }
         }
 
         // Check for consecutive comment lines
         let comment_re =
             COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\n)+\s*$")).as_ref().ok()?;
         if let Some(caps) = comment_re.captures(before) {
-            // Strip the # prefix from each comment line
-            let doc = caps[0]
-                .lines()
-                .map(|line| line.trim_start_matches('#').trim())
-                .filter(|line| !line.is_empty())
-                .collect::<Vec<_>>()
-                .join(" ");
-            return Some(doc);
+            if let Some(comment_match) = caps.get(0) {
+                // Strip the # prefix from each comment line
+                let doc = comment_match
+                    .as_str()
+                    .lines()
+                    .map(|line| line.trim_start_matches('#').trim())
+                    .filter(|line| !line.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                return Some(doc);
+            }
         }
 
         None

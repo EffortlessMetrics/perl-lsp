@@ -147,7 +147,7 @@ fn mock_status(code: i32) -> std::process::ExitStatus {
 ///
 /// // Deserialize command from LSP request
 /// let json = r#"{"runTests": {"filePath": "/path/to/test.pl"}}"#;
-/// let command: PerlCommand = serde_json::from_str(json).unwrap();
+/// let command: Result<PerlCommand, _> = serde_json::from_str(json);
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -705,11 +705,7 @@ impl ExecuteCommandProvider {
             .ok_or_else(|| "Missing file path argument".to_string())?;
 
         // Normalize file:// URIs
-        let normalized_path = if raw_path.starts_with("file://") {
-            raw_path.strip_prefix("file://").unwrap_or(raw_path)
-        } else {
-            raw_path
-        };
+        let normalized_path = raw_path.strip_prefix("file://").unwrap_or(raw_path);
 
         // Convert to PathBuf and canonicalize to resolve .. and . components
         let path = Path::new(normalized_path);
@@ -758,11 +754,7 @@ impl ExecuteCommandProvider {
     #[deprecated(since = "0.8.9", note = "Use resolve_path_from_args for secure path resolution")]
     #[allow(dead_code)]
     fn normalize_file_path<'a>(&self, file_path: &'a str) -> &'a str {
-        if file_path.starts_with("file://") {
-            file_path.strip_prefix("file://").unwrap_or(file_path)
-        } else {
-            file_path
-        }
+        file_path.strip_prefix("file://").unwrap_or(file_path)
     }
 
     /// Format a violation with consistent structure

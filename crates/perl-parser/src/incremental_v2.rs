@@ -1579,13 +1579,13 @@ mod tests {
     }
 
     #[test]
-    fn test_performance_timing_detailed() {
+    fn test_performance_timing_detailed() -> ParseResult<()> {
         let mut parser = IncrementalParserV2::new();
 
         // Initial parse with timing
         let source1 = "my $x = 42;";
         let start = Instant::now();
-        let _tree1 = parser.parse(source1).unwrap();
+        let _tree1 = parser.parse(source1)?;
         let initial_parse_time = start.elapsed();
 
         println!("Initial parse time: {:?}", initial_parse_time);
@@ -1603,7 +1603,7 @@ mod tests {
 
         let source2 = "my $x = 4242;";
         let start = Instant::now();
-        let _tree2 = parser.parse(source2).unwrap();
+        let _tree2 = parser.parse(source2)?;
         let incremental_parse_time = start.elapsed();
 
         println!("Incremental parse time: {:?}", incremental_parse_time);
@@ -1635,16 +1635,18 @@ mod tests {
         } else {
             println!("⚠️ Limited speedup for micro-benchmark (expected for tiny examples)");
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_incremental_value_change() {
+    fn test_incremental_value_change() -> ParseResult<()> {
         let mut parser = IncrementalParserV2::new();
 
         // Initial parse with timing
         let source1 = "my $x = 42;";
         let start = Instant::now();
-        let _tree1 = parser.parse(source1).unwrap();
+        let _tree1 = parser.parse(source1)?;
         let initial_time = start.elapsed();
 
         // Initial parse counts all nodes: Program + VarDecl + Variable + Number = 4
@@ -1668,7 +1670,7 @@ mod tests {
 
         let source2 = "my $x = 4242;";
         let start = Instant::now();
-        let tree2 = parser.parse(source2).unwrap();
+        let tree2 = parser.parse(source2)?;
         let incremental_time = start.elapsed();
 
         println!(
@@ -1700,16 +1702,18 @@ mod tests {
                 }
             }
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_multiple_value_changes() {
+    fn test_multiple_value_changes() -> ParseResult<()> {
         let mut parser = IncrementalParserV2::new();
 
         // Initial parse with timing
         let source1 = "my $x = 10;\nmy $y = 20;";
         let start = Instant::now();
-        parser.parse(source1).unwrap();
+        parser.parse(source1)?;
         let initial_time = start.elapsed();
         let initial_nodes = parser.reparsed_nodes;
 
@@ -1740,7 +1744,7 @@ mod tests {
 
         let source2 = "my $x = 100;\nmy $y = 200;";
         let start = Instant::now();
-        let tree = parser.parse(source2).unwrap();
+        let tree = parser.parse(source2)?;
         let incremental_time = start.elapsed();
 
         println!(
@@ -1789,15 +1793,17 @@ mod tests {
                 }
             }
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_too_many_edits_fallback() {
+    fn test_too_many_edits_fallback() -> ParseResult<()> {
         let mut parser = IncrementalParserV2::new();
 
         // Initial parse
         let source1 = "my $x = 1;";
-        parser.parse(source1).unwrap();
+        parser.parse(source1)?;
 
         // Add too many edits (> 10)
         for i in 0..15 {
@@ -1805,14 +1811,14 @@ mod tests {
                 8 + i,
                 9 + i,
                 10 + i,
-                Position::new(8 + i, 1, (9 + i).try_into().unwrap()),
-                Position::new(9 + i, 1, (10 + i).try_into().unwrap()),
-                Position::new(10 + i, 1, (11 + i).try_into().unwrap()),
+                Position::new(8 + i, 1, (9 + i) as u32),
+                Position::new(9 + i, 1, (10 + i) as u32),
+                Position::new(10 + i, 1, (11 + i) as u32),
             ));
         }
 
         let source2 = "my $x = 123456789012345;";
-        let tree = parser.parse(source2).unwrap();
+        let tree = parser.parse(source2)?;
 
         // Advanced reuse system may still achieve some reuse even with too many edits
         // The system now uses sophisticated analysis rather than simple fallbacks
@@ -1823,15 +1829,17 @@ mod tests {
         if let NodeKind::Program { statements } = &tree.kind {
             assert_eq!(statements.len(), 1);
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_invalid_edit_bounds() {
+    fn test_invalid_edit_bounds() -> ParseResult<()> {
         let mut parser = IncrementalParserV2::new();
 
         // Initial parse
         let source1 = "my $x = 42;";
-        parser.parse(source1).unwrap();
+        parser.parse(source1)?;
 
         // Edit that goes beyond the node bounds (should fall back to full parse)
         parser.edit(Edit::new(
@@ -1844,7 +1852,7 @@ mod tests {
         ));
 
         let source2 = "my $x = 123;";
-        let tree = parser.parse(source2).unwrap();
+        let tree = parser.parse(source2)?;
 
         // Advanced reuse system may still achieve some reuse even with invalid bounds
         // The system is now more resilient and may not always fall back completely
@@ -1861,15 +1869,17 @@ mod tests {
                 }
             }
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_string_edit() {
+    fn test_string_edit() -> ParseResult<()> {
         let mut parser = IncrementalParserV2::new();
 
         // Initial parse
         let source1 = "my $name = \"hello\";";
-        parser.parse(source1).unwrap();
+        parser.parse(source1)?;
 
         // Change string content
         parser.edit(Edit::new(
@@ -1882,7 +1892,7 @@ mod tests {
         ));
 
         let source2 = "my $name = \"world\";";
-        let tree = parser.parse(source2).unwrap();
+        let tree = parser.parse(source2)?;
 
         // Should reuse most of the tree
         println!(
@@ -1902,16 +1912,18 @@ mod tests {
                 }
             }
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_empty_source_handling() {
+    fn test_empty_source_handling() -> ParseResult<()> {
         let mut parser = IncrementalParserV2::new();
 
         // Initial parse with valid source
         let source1 = "my $x = 42;";
         let start = Instant::now();
-        parser.parse(source1).unwrap();
+        parser.parse(source1)?;
         let initial_time = start.elapsed();
         println!("Initial parse time: {}µs", initial_time.as_micros());
 
@@ -1949,10 +1961,12 @@ mod tests {
 
         // Performance should still be reasonable even for empty source handling
         assert!(parse_time.as_millis() < 100, "Empty source handling should be fast");
+
+        Ok(())
     }
 
     #[test]
-    fn test_complex_nested_structure_edits() {
+    fn test_complex_nested_structure_edits() -> ParseResult<()> {
         let mut parser = IncrementalParserV2::new();
 
         // Complex nested Perl structure
@@ -1968,7 +1982,7 @@ if ($condition) {
 "#;
 
         let start = Instant::now();
-        parser.parse(source1).unwrap();
+        parser.parse(source1)?;
         let initial_time = start.elapsed();
         let initial_nodes = parser.reparsed_nodes;
 
@@ -1979,7 +1993,8 @@ if ($condition) {
         );
 
         // Edit nested value - should be challenging for incremental parser
-        let value_start = source1.find("42").unwrap();
+        let value_start =
+            source1.find("42").ok_or_else(|| crate::error::ParseError::UnexpectedEof)?;
         parser.edit(Edit::new(
             value_start,
             value_start + 2,
@@ -1991,7 +2006,7 @@ if ($condition) {
 
         let source2 = source1.replace("42", "9999");
         let start = Instant::now();
-        let _tree = parser.parse(&source2).unwrap();
+        let _tree = parser.parse(&source2)?;
         let incremental_time = start.elapsed();
 
         println!(
@@ -2010,10 +2025,12 @@ if ($condition) {
         } else {
             println!("Complex structure caused full reparse (acceptable for edge cases)");
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_large_document_performance() {
+    fn test_large_document_performance() -> ParseResult<()> {
         let mut parser = IncrementalParserV2::new();
 
         // Generate a larger Perl document
@@ -2023,7 +2040,7 @@ if ($condition) {
         }
 
         let start = Instant::now();
-        parser.parse(&large_source).unwrap();
+        parser.parse(&large_source)?;
         let initial_time = start.elapsed();
         let initial_nodes = parser.reparsed_nodes;
 
@@ -2034,7 +2051,10 @@ if ($condition) {
         );
 
         // Edit in the middle of the document
-        let edit_pos = large_source.find("my $var50 = 500").unwrap() + 13;
+        let edit_pos = large_source
+            .find("my $var50 = 500")
+            .ok_or_else(|| crate::error::ParseError::UnexpectedEof)?
+            + 13;
         parser.edit(Edit::new(
             edit_pos,
             edit_pos + 3, // "500" -> "999"
@@ -2046,7 +2066,7 @@ if ($condition) {
 
         let source2 = large_source.replace("500", "999");
         let start = Instant::now();
-        let _tree = parser.parse(&source2).unwrap();
+        let _tree = parser.parse(&source2)?;
         let incremental_time = start.elapsed();
 
         println!(
@@ -2067,23 +2087,26 @@ if ($condition) {
             println!("Large document reuse rate: {:.1}%", reuse_percentage);
             assert!(reuse_percentage > 50.0, "Large document should reuse >50% of nodes");
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_unicode_heavy_incremental_parsing() {
+    fn test_unicode_heavy_incremental_parsing() -> ParseResult<()> {
         let mut parser = IncrementalParserV2::new();
 
         // Unicode-heavy source with emojis and international characters
         let source1 = "my $🌟variable = '你好世界'; # Comment with emoji 🚀\nmy $café = 'résumé';";
 
         let start = Instant::now();
-        parser.parse(source1).unwrap();
+        parser.parse(source1)?;
         let initial_time = start.elapsed();
 
         println!("Unicode document initial parse: {}µs", initial_time.as_micros());
 
         // Edit the unicode string content
-        let edit_start = source1.find("你好世界").unwrap();
+        let edit_start =
+            source1.find("你好世界").ok_or_else(|| crate::error::ParseError::UnexpectedEof)?;
         let edit_end = edit_start + "你好世界".len();
         parser.edit(Edit::new(
             edit_start,
@@ -2096,7 +2119,7 @@ if ($condition) {
 
         let source2 = source1.replace("你好世界", "再见");
         let start = Instant::now();
-        let _tree = parser.parse(&source2).unwrap();
+        let _tree = parser.parse(&source2)?;
         let incremental_time = start.elapsed();
 
         println!(
@@ -2109,19 +2132,22 @@ if ($condition) {
         // Unicode handling should not significantly impact performance
         assert!(incremental_time.as_millis() < 5, "Unicode incremental parsing should be <5ms");
         assert!(parser.reused_nodes > 0 || parser.reparsed_nodes > 0, "Should parse successfully");
+
+        Ok(())
     }
 
     #[test]
-    fn test_edit_near_ast_node_boundaries() {
+    fn test_edit_near_ast_node_boundaries() -> ParseResult<()> {
         let mut parser = IncrementalParserV2::new();
 
         // Source with clear AST node boundaries
         let source1 = "sub func { my $x = 123; return $x * 2; }";
 
-        parser.parse(source1).unwrap();
+        parser.parse(source1)?;
 
         // Edit right at the boundary between number and semicolon
-        let number_end = source1.find("123").unwrap() + 3;
+        let number_end =
+            source1.find("123").ok_or_else(|| crate::error::ParseError::UnexpectedEof)? + 3;
         parser.edit(Edit::new(
             number_end - 1, // Edit last digit of number
             number_end,
@@ -2133,7 +2159,7 @@ if ($condition) {
 
         let source2 = source1.replace("123", "12456");
         let start = Instant::now();
-        let _tree = parser.parse(&source2).unwrap();
+        let _tree = parser.parse(&source2)?;
         let boundary_edit_time = start.elapsed();
 
         println!(
@@ -2146,10 +2172,12 @@ if ($condition) {
         // Boundary edits are tricky but should still be efficient
         assert!(boundary_edit_time.as_millis() < 5, "AST boundary edit should be <5ms");
         assert!(parser.reparsed_nodes >= 1, "Should reparse at least the modified node");
+
+        Ok(())
     }
 
     #[test]
-    fn test_performance_regression_detection() {
+    fn test_performance_regression_detection() -> ParseResult<()> {
         let mut parser = IncrementalParserV2::new();
 
         // Baseline performance measurement
@@ -2159,7 +2187,7 @@ if ($condition) {
         // Multiple runs for statistical significance
         for i in 0..10 {
             let start = Instant::now();
-            parser.parse(source).unwrap();
+            parser.parse(source)?;
             let time = start.elapsed();
             parse_times.push(time.as_micros());
 
@@ -2181,7 +2209,7 @@ if ($condition) {
             };
 
             let start = Instant::now();
-            parser.parse(test_source).unwrap();
+            parser.parse(test_source)?;
             let incremental_time = start.elapsed();
 
             println!(
@@ -2204,8 +2232,10 @@ if ($condition) {
 
         // Statistical analysis
         let avg_time = parse_times.iter().sum::<u128>() / parse_times.len() as u128;
-        let max_time = *parse_times.iter().max().unwrap();
-        let min_time = *parse_times.iter().min().unwrap();
+        let max_time =
+            *parse_times.iter().max().ok_or_else(|| crate::error::ParseError::UnexpectedEof)?;
+        let min_time =
+            *parse_times.iter().min().ok_or_else(|| crate::error::ParseError::UnexpectedEof)?;
 
         println!(
             "Performance statistics: avg={}µs, min={}µs, max={}µs",
@@ -2227,5 +2257,7 @@ if ($condition) {
                 max_time, avg_time, variation_factor
             );
         }
+
+        Ok(())
     }
 }

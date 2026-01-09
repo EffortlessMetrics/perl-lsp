@@ -7,7 +7,8 @@ use std::path::PathBuf;
 pub fn project_root() -> PathBuf {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // xtask is in xtask/, so go up one level to get project root
-    manifest_dir.parent()
+    manifest_dir
+        .parent()
         .unwrap_or_else(|| panic!("xtask should be in a subdirectory - invalid project structure"))
         .to_path_buf()
 }
