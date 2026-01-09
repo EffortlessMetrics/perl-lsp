@@ -1,17 +1,22 @@
 #!/bin/bash
 # CI ratchet gate: enforce that production unwrap/expect count only goes down
+# Enhanced with top offenders and diff analysis for actionable feedback
 set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PATTERN='\.unwrap\(|\.expect\('
 
 count_unwraps() {
   local search_path="$1"
   if command -v rg &>/dev/null; then
     # Use ripgrep for fast, accurate counting
     # Count .unwrap( and .expect( patterns across all matching files
-    # We need to expand the glob pattern first for ripgrep
+    # Exclude safe patterns like unwrap_or, unwrap_or_else, unwrap_or_default
     local count=0
     for dir in crates/*/src; do
       if [ -d "$dir" ]; then
-        dir_count=$(rg '\.unwrap\(|\.expect\(' "$dir" --count-matches 2>/dev/null | awk -F: '{sum+=$2} END {print sum+0}')
+        dir_count=$(rg "$PATTERN" "$dir" --count-matches 2>/dev/null | \
+          awk -F: '{sum+=$2} END {print sum+0}')
         count=$((count + dir_count))
       fi
     done
@@ -20,6 +25,43 @@ count_unwraps() {
     # Fallback to grep (portable but slower)
     find crates/*/src -name "*.rs" -type f -exec grep -h '\.unwrap(\|\.expect(' {} \; 2>/dev/null | \
       wc -l | awk '{print $1+0}'
+  fi
+}
+
+show_top_offenders() {
+  echo "Top offenders (by file):"
+  if command -v rg &>/dev/null; then
+    rg "$PATTERN" crates/*/src -c 2>/dev/null | \
+      sort -t: -k2 -rn | head -15 | \
+      awk -F: '{printf "  %4d  %s\n", $2, $1}'
+  fi
+  echo ""
+}
+
+show_new_unwraps() {
+  # Show newly introduced unwrap/expect in this branch relative to base
+  local base_branch
+  base_branch="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo 'master')"
+
+  local merge_base
+  merge_base="$(git merge-base HEAD "origin/$base_branch" 2>/dev/null || git merge-base HEAD "$base_branch" 2>/dev/null || echo '')"
+
+  if [ -n "$merge_base" ]; then
+    echo "New unwrap/expect lines since merge-base (${merge_base:0:8}):"
+    local new_lines
+    new_lines=$(git diff -U0 "$merge_base"..HEAD -- '*.rs' 2>/dev/null | \
+      rg '^\+[^+].*\.(unwrap|expect)\(' 2>/dev/null || true)
+    if [ -n "$new_lines" ]; then
+      echo "$new_lines" | head -20
+      local count
+      count=$(echo "$new_lines" | wc -l)
+      if [ "$count" -gt 20 ]; then
+        echo "  ... and $((count - 20)) more"
+      fi
+    else
+      echo "  (none)"
+    fi
+    echo ""
   fi
 }
 
@@ -44,6 +86,13 @@ fi
 
 echo "Production unwrap/expect count: $current (baseline: $baseline)"
 echo ""
+
+# Show top offenders for visibility
+show_top_offenders
+
+# Show new unwraps introduced in this branch
+show_new_unwraps
+
 echo "Ratchet Analysis:"
 echo "  - Current count: $current"
 echo "  - Baseline: $baseline"
