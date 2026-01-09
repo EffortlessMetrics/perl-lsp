@@ -49,6 +49,7 @@ ci-gate:
     @just ci-test-lib
     @just ci-policy
     @just ci-lsp-def
+    @just ci-parser-features-check
     @echo "✅ Merge gate passed!"
 
 # Full CI pipeline (~10-20 min) - RECOMMENDED for large changes
@@ -186,6 +187,28 @@ corpus-audit-check:
 corpus-audit-fresh:
     @echo "🔍 Running corpus audit (fresh mode)..."
     @cd xtask && cargo run --no-default-features -- corpus-audit --fresh
+
+# ============================================================================
+# Parser Feature Coverage Commands (Issue #180)
+# ============================================================================
+
+# Run parser audit for coverage analysis (detailed report)
+parser-audit:
+    @echo "📊 Running parser audit..."
+    @cargo run -p xtask --no-default-features -- corpus-audit --fresh --corpus-path .
+    @echo ""
+    @echo "Report written to: corpus_audit_report.json"
+    @python3 -c "import json; r=json.load(open('corpus_audit_report.json')); po=r['parse_outcomes']; print(f'Parse success: {po[\"ok\"]}/{po[\"total\"]} files ({100*po[\"ok\"]/po[\"total\"]:.0f}%)')"
+
+# Check parser features baseline (CI mode, fails on regression)
+ci-parser-features-check:
+    @echo "🔍 Checking parser features baseline..."
+    @bash ci/check_parse_errors.sh
+
+# Update parser feature matrix document from audit report
+parser-matrix-update:
+    @echo "📝 Updating parser feature matrix..."
+    @python3 scripts/update-parser-matrix.py
 
 # ============================================================================
 # GitHub Repository Management

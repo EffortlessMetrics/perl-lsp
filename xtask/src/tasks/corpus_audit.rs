@@ -210,26 +210,52 @@ fn print_audit_summary(report: &AuditReport) {
     }
 }
 
-/// Validate report for CI gate
+/// Validate report for CI gate with baseline ratcheting (Issue #180)
 ///
-/// Returns Ok(()) if report passes validation, otherwise returns error
+/// Returns Ok(()) if report passes validation, otherwise returns error.
+/// Parse errors use baseline ratcheting (can only decrease, never increase).
 fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
     println!("\n🔬 Validating report for CI gate...");
 
     let mut failures = Vec::new();
 
-    // Check for parse failures
-    if report.parse_outcomes.error > 0 {
-        failures
-            .push(format!("Parse errors: {} files failed to parse", report.parse_outcomes.error));
+    // Parse error ratchet: read baseline and compare (Issue #180)
+    let baseline_path = std::path::Path::new("ci/parse_errors_baseline.txt");
+    let current_errors = report.parse_outcomes.error;
+
+    if baseline_path.exists() {
+        let baseline_str = fs::read_to_string(baseline_path)
+            .context("Failed to read parse errors baseline")?;
+        let baseline: usize = baseline_str
+            .trim()
+            .parse()
+            .context("Failed to parse baseline as number")?;
+
+        println!("   Parse errors: {} (baseline: {})", current_errors, baseline);
+
+        if current_errors > baseline {
+            failures.push(format!(
+                "Parse error regression: {} > {} baseline. Fix parser or update baseline.",
+                current_errors, baseline
+            ));
+        } else if current_errors < baseline {
+            println!(
+                "   📉 IMPROVEMENT: {} fewer errors! Update baseline: echo {} > ci/parse_errors_baseline.txt",
+                baseline - current_errors,
+                current_errors
+            );
+        }
+    } else {
+        // No baseline file - just report the count
+        println!("   Parse errors: {} (no baseline file)", current_errors);
     }
 
-    // Check for timeouts
+    // Timeouts should always be zero
     if report.parse_outcomes.timeout > 0 {
         failures.push(format!("Parse timeouts: {} files timed out", report.parse_outcomes.timeout));
     }
 
-    // Check for panics
+    // Panics should always be zero
     if report.parse_outcomes.panic > 0 {
         failures.push(format!("Parse panics: {} files caused panics", report.parse_outcomes.panic));
     }
@@ -254,8 +280,18 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
         ));
     }
 
+    // Print error category breakdown if there are errors (Issue #180)
+    if current_errors > 0 && !report.parse_outcomes.error_by_category.is_empty() {
+        println!("\n   Error breakdown by category:");
+        let mut categories: Vec<_> = report.parse_outcomes.error_by_category.iter().collect();
+        categories.sort_by(|a, b| b.1.cmp(a.1)); // Sort by count descending
+        for (category, count) in categories {
+            println!("     - {}: {}", category, count);
+        }
+    }
+
     if failures.is_empty() {
-        println!("✅ CI gate passed!");
+        println!("\n✅ CI gate passed!");
         Ok(())
     } else {
         println!("\n❌ CI gate failed:");
