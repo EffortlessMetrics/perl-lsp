@@ -36,7 +36,7 @@
 #![deny(unreachable_pub)] // prevent stray pub items from escaping
 #![warn(rust_2018_idioms)]
 // NOTE: missing_docs enabled with baseline enforcement (Issue #197)
-// Baseline: 0 violations - enforced via ci/missing_docs_baseline.txt
+// Baseline enforced via ci/missing_docs_baseline.txt
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 #![allow(
