@@ -9,20 +9,34 @@ use std::collections::HashMap;
 /// Token types supported by the semantic tokens provider
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SemanticTokenType {
-    Namespace, // package names
-    Class,     // class names (modern Perl)
-    Function,  // subroutine names
-    Method,    // method names
-    Variable,  // all variables
-    Parameter, // function parameters
-    Property,  // object properties/attributes
-    Keyword,   // language keywords
-    Comment,   // comments
-    String,    // string literals
-    Number,    // numeric literals
-    Regexp,    // regular expressions
-    Operator,  // operators
-    Macro,     // constants/macros
+    /// Package and module names (e.g., `My::Module`)
+    Namespace,
+    /// Class names in modern Perl object syntax
+    Class,
+    /// Subroutine names
+    Function,
+    /// Method names in method calls
+    Method,
+    /// All variable types (`$scalar`, `@array`, `%hash`)
+    Variable,
+    /// Function/method parameters
+    Parameter,
+    /// Object properties and attributes
+    Property,
+    /// Language keywords (`my`, `sub`, `if`, etc.)
+    Keyword,
+    /// Comments (line and block)
+    Comment,
+    /// String literals (single/double quoted, heredocs)
+    String,
+    /// Numeric literals (integers, floats, hex, etc.)
+    Number,
+    /// Regular expression patterns
+    Regexp,
+    /// Operators (`+`, `-`, `->`, etc.)
+    Operator,
+    /// Constants and macros
+    Macro,
 }
 
 impl SemanticTokenType {
@@ -70,15 +84,24 @@ impl SemanticTokenType {
 /// Token modifiers that can be applied to token types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SemanticTokenModifier {
-    Declaration,    // definition site
-    Definition,     // same as declaration
-    Reference,      // usage site
-    Modification,   // being modified
-    Static,         // package-level
-    DefaultLibrary, // built-in
-    Async,          // async operations
-    Readonly,       // constants
-    Deprecated,     // deprecated items
+    /// Token is at a declaration site (first introduction)
+    Declaration,
+    /// Token is at a definition site (same as declaration)
+    Definition,
+    /// Token is a reference to a previously declared item
+    Reference,
+    /// Token is being modified (e.g., assignment target)
+    Modification,
+    /// Token is package-level (not lexically scoped)
+    Static,
+    /// Token refers to a built-in function or variable
+    DefaultLibrary,
+    /// Token is part of an async operation
+    Async,
+    /// Token is a constant or read-only value
+    Readonly,
+    /// Token refers to a deprecated item
+    Deprecated,
 }
 
 impl SemanticTokenModifier {
@@ -116,15 +139,21 @@ impl SemanticTokenModifier {
 /// A semantic token with position and type information
 #[derive(Debug, Clone)]
 pub struct SemanticToken {
+    /// Zero-based line number in the source file
     pub line: u32,
+    /// Zero-based character offset from the start of the line
     pub start_char: u32,
+    /// Length of the token in characters
     pub length: u32,
+    /// Token type for LSP semantic highlighting
     pub token_type: SemanticTokenType,
+    /// Modifiers applied to this token (e.g., declaration, readonly)
     pub modifiers: Vec<SemanticTokenModifier>,
 }
 
 /// Provider for semantic tokens - Thread-safe implementation
 pub struct SemanticTokensProvider {
+    /// The source code to extract semantic tokens from
     source: String,
 }
 
@@ -143,15 +172,19 @@ impl SemanticTokensProvider {
 
 /// Thread-safe token collector with no mutable shared state
 struct TokenCollector<'a> {
+    /// Reference to the source code being analyzed
     source: &'a str,
-    declared_vars: HashMap<String, Vec<(u32, u32)>>, // Local tracking only
+    /// Tracks declared variables with their positions for local analysis
+    declared_vars: HashMap<String, Vec<(u32, u32)>>,
 }
 
 impl<'a> TokenCollector<'a> {
+    /// Create a new token collector for the given source code
     fn new(source: &'a str) -> Self {
         Self { source, declared_vars: HashMap::new() }
     }
 
+    /// Collect all semantic tokens from the AST
     fn collect(&mut self, ast: &Node) -> Vec<SemanticToken> {
         let mut tokens = Vec::new();
 

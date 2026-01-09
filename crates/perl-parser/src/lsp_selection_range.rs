@@ -53,6 +53,10 @@ fn make_range(text: &str, start: usize, end: usize) -> Range {
     Range::new(s, e)
 }
 
+/// Generates smart selection ranges for given positions, expanding from identifier to file scope.
+///
+/// For each input position, returns a hierarchy of nested `SelectionRange` objects that allows
+/// clients to expand the selection through: identifier -> trimmed line -> full line -> statement -> block -> function -> file.
 pub fn selection_ranges(text: &str, positions: &[Position]) -> Vec<SelectionRange> {
     positions
         .iter()

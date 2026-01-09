@@ -82,6 +82,21 @@ fn compute_indent(text: &str, up_to: usize, tab_size: usize) -> usize {
     (depth.max(0) as usize) * tab_size
 }
 
+/// Formats a document by automatically adjusting indentation when a trigger character is typed.
+///
+/// This function handles LSP `textDocument/onTypeFormatting` requests by re-indenting the current line
+/// based on code structure (braces and control flow keywords). It supports both space and tab indentation.
+///
+/// # Arguments
+/// * `text` - The full document text
+/// * `_uri` - The document URI (unused)
+/// * `ch` - The character that was just typed (trigger character like `}`, `\n`, etc.)
+/// * `position` - The cursor position after the typed character
+/// * `tab_size` - Number of spaces per indentation level
+/// * `insert_spaces` - If true, use spaces; if false, use tabs
+///
+/// # Returns
+/// A vector of `TextEdit`s to apply to the document (typically one edit to re-indent the current line)
 pub fn format_on_type(
     text: &str,
     _uri: lsp_types::Uri,

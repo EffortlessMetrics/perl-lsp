@@ -69,9 +69,19 @@ pub enum RefactorError {
     /// Document not found in workspace index
     DocumentNotIndexed(String),
     /// Invalid position or range in document
-    InvalidPosition { file: String, details: String },
+    InvalidPosition {
+        /// The file path where the invalid position occurred
+        file: String,
+        /// Details about why the position is invalid
+        details: String,
+    },
     /// Symbol not found in workspace
-    SymbolNotFound { symbol: String, file: String },
+    SymbolNotFound {
+        /// The name of the symbol that could not be found
+        symbol: String,
+        /// The file path where the symbol lookup was attempted
+        file: String,
+    },
     /// Failed to parse or analyze code structure
     ParseError(String),
     /// Input validation failed

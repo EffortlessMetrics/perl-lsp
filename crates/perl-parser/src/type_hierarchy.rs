@@ -6,31 +6,48 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Represents a type in the hierarchy
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TypeHierarchyItem {
+    /// Fully qualified name of the type (e.g., package name)
     pub name: String,
+    /// Kind of symbol (Class, Method, or Function)
     pub kind: SymbolKind,
+    /// URI of the document containing this type
     pub uri: String,
+    /// Full range of the type declaration
     pub range: Range,
+    /// Range of the type name for highlighting
     pub selection_range: Range,
+    /// Optional detail string (e.g., "Perl Package")
     pub detail: Option<String>,
+    /// Optional additional data for client use
     pub data: Option<serde_json::Value>,
 }
 
+/// Kind of symbol in the type hierarchy
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum SymbolKind {
+    /// A class or package (LSP value 5)
     Class = 5,
+    /// A method (LSP value 6)
     Method = 6,
+    /// A function (LSP value 12)
     Function = 12,
 }
 
+/// A range in a text document expressed as start and end positions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Range {
+    /// Start position of the range (inclusive)
     pub start: Position,
+    /// End position of the range (exclusive)
     pub end: Position,
 }
 
+/// A position in a text document (zero-indexed line and character)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Position {
+    /// Zero-indexed line number
     pub line: u32,
+    /// Zero-indexed character offset (UTF-16 code units)
     pub character: u32,
 }
 
@@ -68,6 +85,7 @@ impl Default for TypeHierarchyProvider {
 }
 
 impl TypeHierarchyProvider {
+    /// Creates a new type hierarchy provider
     pub fn new() -> Self {
         Self
     }

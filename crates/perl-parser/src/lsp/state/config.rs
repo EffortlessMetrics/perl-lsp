@@ -7,19 +7,29 @@ use std::path::PathBuf;
 use std::process::Command;
 
 /// Server configuration
+///
+/// Runtime configuration for the LSP server features including inlay hints
+/// and test runner integration. Updated dynamically via `didChangeConfiguration`.
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
-    // Inlay hints configuration
+    /// Whether inlay hints are globally enabled.
     pub inlay_hints_enabled: bool,
+    /// Show parameter name hints at call sites.
     pub inlay_hints_parameter_hints: bool,
+    /// Show inferred type hints for variables.
     pub inlay_hints_type_hints: bool,
+    /// Show hints for method chains.
     pub inlay_hints_chained_hints: bool,
+    /// Maximum character length for hint labels before truncation.
     pub inlay_hints_max_length: usize,
 
-    // Test runner configuration
+    /// Whether the integrated test runner is enabled.
     pub test_runner_enabled: bool,
+    /// Command to execute tests (e.g., "perl", "prove").
     pub test_runner_command: String,
+    /// Additional arguments passed to the test command.
     pub test_runner_args: Vec<String>,
+    /// Test execution timeout in milliseconds.
     pub test_runner_timeout: u64,
 }
 

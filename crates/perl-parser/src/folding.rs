@@ -8,6 +8,7 @@ use perl_lexer::{PerlLexer, TokenType};
 
 /// Extracts folding ranges from a Perl AST
 pub struct FoldingRangeExtractor {
+    /// Accumulated folding ranges during extraction
     ranges: Vec<FoldingRange>,
 }
 
@@ -42,8 +43,11 @@ pub struct FoldingRange {
 /// - `Region`: Code blocks, subroutines, packages
 #[derive(Debug, Clone)]
 pub enum FoldingRangeKind {
+    /// Multi-line comments and POD documentation
     Comment,
+    /// Use and require statement blocks
     Imports,
+    /// Code blocks, subroutines, and packages
     Region,
 }
 
@@ -54,6 +58,7 @@ impl Default for FoldingRangeExtractor {
 }
 
 impl FoldingRangeExtractor {
+    /// Create a new folding range extractor
     pub fn new() -> Self {
         Self { ranges: Vec::new() }
     }
@@ -65,7 +70,9 @@ impl FoldingRangeExtractor {
         self.ranges.clone()
     }
 
-    /// Extract heredoc folding ranges from source text using the lexer
+    /// Extract heredoc folding ranges from source text using the lexer.
+    ///
+    /// Scans the source for heredoc bodies and returns their ranges.
     pub fn extract_heredoc_ranges(text: &str) -> Vec<FoldingRange> {
         let mut ranges = Vec::new();
         let mut lexer = PerlLexer::new(text);

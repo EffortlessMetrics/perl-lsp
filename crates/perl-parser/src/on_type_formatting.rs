@@ -2,6 +2,18 @@
 use serde_json::Value;
 use serde_json::json;
 
+/// Computes on-type formatting edits for a Perl document based on character input.
+///
+/// Handles special characters (`{`, `}`, `;`, newlines) to provide automatic indentation
+/// and formatting adjustments. Returns a vector of text edits to apply, or `None` if no
+/// edits are needed for the given character.
+///
+/// # Arguments
+///
+/// * `text` - The full document text
+/// * `line` - The line number where the character was typed
+/// * `col` - The column position where the character was typed
+/// * `ch` - The character that triggered the formatting request
 pub fn compute_on_type_edit(text: &str, line: u32, col: u32, ch: char) -> Option<Vec<Value>> {
     let lines: Vec<&str> = text.lines().collect();
 

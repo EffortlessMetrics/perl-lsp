@@ -54,12 +54,13 @@ pub struct RefactoringEngine {
     #[cfg(not(feature = "workspace_refactor"))]
     #[allow(dead_code)]
     workspace_refactor: temp_stubs::WorkspaceRefactor,
-    /// Code modernization engine
+    /// Code modernization engine for updating legacy Perl patterns
     #[cfg(feature = "modernize")]
     modernize: crate::modernize::PerlModernizer,
+    /// Code modernization engine stub (feature disabled)
     #[cfg(not(feature = "modernize"))]
     modernize: temp_stubs::ModernizeEngine,
-    /// Import optimization engine
+    /// Import optimization engine for cleaning up use statements
     import_optimizer: ImportOptimizer,
     /// Configuration for refactoring operations
     config: RefactoringConfig,
@@ -98,21 +99,53 @@ impl Default for RefactoringConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RefactoringType {
     /// Rename symbols across workspace
-    SymbolRename { old_name: String, new_name: String, scope: RefactoringScope },
+    SymbolRename {
+        /// Original symbol name to find
+        old_name: String,
+        /// New name to replace with
+        new_name: String,
+        /// Scope of the rename operation
+        scope: RefactoringScope,
+    },
     /// Extract methods from existing code
     ExtractMethod {
+        /// Name for the extracted method
         method_name: String,
+        /// Start position (line, column) of code to extract
         start_position: (usize, usize),
+        /// End position (line, column) of code to extract
         end_position: (usize, usize),
     },
     /// Move code between files
-    MoveCode { source_file: PathBuf, target_file: PathBuf, elements: Vec<String> },
+    MoveCode {
+        /// Source file containing the code to move
+        source_file: PathBuf,
+        /// Destination file for the moved code
+        target_file: PathBuf,
+        /// Names of elements (subs, packages) to move
+        elements: Vec<String>,
+    },
     /// Modernize legacy code patterns
-    Modernize { patterns: Vec<ModernizationPattern> },
+    Modernize {
+        /// Modernization patterns to apply
+        patterns: Vec<ModernizationPattern>,
+    },
     /// Optimize imports across files
-    OptimizeImports { remove_unused: bool, sort_alphabetically: bool, group_by_type: bool },
+    OptimizeImports {
+        /// Remove unused import statements
+        remove_unused: bool,
+        /// Sort imports alphabetically
+        sort_alphabetically: bool,
+        /// Group imports by type (core, CPAN, local)
+        group_by_type: bool,
+    },
     /// Inline variables or methods
-    Inline { symbol_name: String, all_occurrences: bool },
+    Inline {
+        /// Name of the symbol to inline
+        symbol_name: String,
+        /// Whether to inline all occurrences or just the selected one
+        all_occurrences: bool,
+    },
 }
 
 /// Scope of refactoring operations

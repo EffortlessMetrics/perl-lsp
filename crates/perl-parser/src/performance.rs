@@ -5,20 +5,30 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-/// Cache for parsed ASTs with TTL
+/// Cache for parsed ASTs with TTL.
+///
+/// Stores parsed ASTs with content hashing to avoid re-parsing unchanged files.
 pub struct AstCache {
+    /// Thread-safe cache storage
     cache: Arc<Mutex<HashMap<String, CachedAst>>>,
+    /// Maximum number of entries before eviction
     max_size: usize,
+    /// Time-to-live for cache entries
     ttl: Duration,
 }
 
+/// A cached AST entry with metadata
 struct CachedAst {
+    /// The cached AST node
     ast: Arc<Node>,
+    /// Hash of the source content for validation
     content_hash: u64,
+    /// Timestamp of last access for LRU eviction
     last_accessed: Instant,
 }
 
 impl AstCache {
+    /// Create a new AST cache with the given size limit and TTL
     pub fn new(max_size: usize, ttl_seconds: u64) -> Self {
         Self {
             cache: Arc::new(Mutex::new(HashMap::new())),
@@ -47,7 +57,9 @@ impl AstCache {
         None
     }
 
-    /// Store AST in cache
+    /// Store AST in cache.
+    ///
+    /// Evicts the oldest entry if the cache is full.
     pub fn put(&self, uri: String, content: &str, ast: Arc<Node>) {
         let content_hash = Self::hash_content(content);
 
@@ -66,7 +78,9 @@ impl AstCache {
         cache.insert(uri, CachedAst { ast, content_hash, last_accessed: Instant::now() });
     }
 
-    /// Clear expired entries
+    /// Clear expired entries.
+    ///
+    /// Removes entries older than the TTL.
     pub fn cleanup(&self) {
         let mut cache = self.cache.lock().unwrap();
         let now = Instant::now();
@@ -84,9 +98,11 @@ impl AstCache {
     }
 }
 
-/// Incremental parsing optimizer
+/// Incremental parsing optimizer.
+///
+/// Tracks changed regions to determine which AST nodes need reparsing.
 pub struct IncrementalParser {
-    /// Track changed regions for incremental parsing
+    /// Track changed regions as (start, end) byte offsets
     changed_regions: Vec<(usize, usize)>,
 }
 
@@ -97,17 +113,22 @@ impl Default for IncrementalParser {
 }
 
 impl IncrementalParser {
+    /// Create a new incremental parser with no changed regions
     pub fn new() -> Self {
         Self { changed_regions: Vec::new() }
     }
 
-    /// Mark a region as changed
+    /// Mark a region as changed.
+    ///
+    /// Overlapping regions are automatically merged.
     pub fn mark_changed(&mut self, start: usize, end: usize) {
         self.changed_regions.push((start, end));
         self.merge_overlapping_regions();
     }
 
-    /// Check if a node needs reparsing based on changed regions
+    /// Check if a node needs reparsing based on changed regions.
+    ///
+    /// Returns true if the node overlaps with any changed region.
     pub fn needs_reparse(&self, node_start: usize, node_end: usize) -> bool {
         self.changed_regions.iter().any(|(start, end)| {
             // Check if node overlaps with any changed region
@@ -115,7 +136,9 @@ impl IncrementalParser {
         })
     }
 
-    /// Clear all changed regions
+    /// Clear all changed regions.
+    ///
+    /// Call after reparsing to reset the change tracking.
     pub fn clear(&mut self) {
         self.changed_regions.clear();
     }
@@ -151,7 +174,9 @@ pub mod parallel {
     use std::sync::mpsc;
     use std::thread;
 
-    /// Process files in parallel with a worker pool
+    /// Process files in parallel with a worker pool.
+    ///
+    /// Distributes file processing across multiple threads for faster indexing.
     pub fn process_files_parallel<T, F>(
         files: Vec<String>,
         num_workers: usize,
@@ -204,7 +229,9 @@ pub mod parallel {
     use super::*;
 }
 
-/// Symbol index for fast lookups
+/// Symbol index for fast lookups.
+///
+/// Supports both prefix and fuzzy matching using a trie and inverted index.
 pub struct SymbolIndex {
     /// Trie structure for prefix matching
     trie: SymbolTrie,
@@ -212,8 +239,11 @@ pub struct SymbolIndex {
     inverted_index: HashMap<String, Vec<String>>,
 }
 
+/// Trie data structure for efficient prefix matching
 struct SymbolTrie {
+    /// Child nodes indexed by character
     children: HashMap<char, Box<SymbolTrie>>,
+    /// Symbols stored at this node
     symbols: Vec<String>,
 }
 
@@ -224,11 +254,14 @@ impl Default for SymbolIndex {
 }
 
 impl SymbolIndex {
+    /// Create a new empty symbol index
     pub fn new() -> Self {
         Self { trie: SymbolTrie::new(), inverted_index: HashMap::new() }
     }
 
-    /// Add a symbol to the index
+    /// Add a symbol to the index.
+    ///
+    /// Indexes the symbol for both prefix and fuzzy matching.
     pub fn add_symbol(&mut self, symbol: String) {
         // Add to trie for prefix matching
         self.trie.insert(&symbol);
@@ -240,12 +273,16 @@ impl SymbolIndex {
         }
     }
 
-    /// Search symbols with prefix
+    /// Search symbols with prefix.
+    ///
+    /// Returns all symbols starting with the given prefix.
     pub fn search_prefix(&self, prefix: &str) -> Vec<String> {
         self.trie.search_prefix(prefix)
     }
 
-    /// Fuzzy search symbols
+    /// Fuzzy search symbols.
+    ///
+    /// Returns symbols matching any of the tokenized query words, sorted by relevance.
     pub fn search_fuzzy(&self, query: &str) -> Vec<String> {
         let tokens = Self::tokenize(query);
         let mut results = HashMap::new();

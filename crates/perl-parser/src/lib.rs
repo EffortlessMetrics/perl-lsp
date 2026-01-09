@@ -35,9 +35,9 @@
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)] // prevent stray pub items from escaping
 #![warn(rust_2018_idioms)]
-// NOTE: missing_docs is temporarily disabled during Sprint A (heredoc) development
-// TODO: Re-enable after Sprint A to systematically resolve the 484 violations (PR #160/SPEC-149)
-// #![warn(missing_docs)]
+// NOTE: missing_docs enabled with baseline enforcement (Issue #197)
+// Baseline: 25 violations (reduced from 484) - see ci/missing_docs_baseline.txt
+#![warn(missing_docs)]
 #![warn(clippy::all)]
 #![allow(
     // Core allows for parser/lexer code
