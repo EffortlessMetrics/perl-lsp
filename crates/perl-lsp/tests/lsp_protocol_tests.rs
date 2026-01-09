@@ -1,7 +1,8 @@
 use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Cursor, Read, Write};
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 /// Simple writer that captures all output into a shared buffer
 struct CapturingWriter {
@@ -16,7 +17,7 @@ impl CapturingWriter {
 
 impl Write for CapturingWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.buffer.lock().unwrap().extend_from_slice(buf);
+        self.buffer.lock().extend_from_slice(buf);
         Ok(buf.len())
     }
 
@@ -128,7 +129,7 @@ fn test_diagnostics_clear_protocol_framing() {
     );
 
     // Parse captured output
-    let output_bytes = buffer.lock().unwrap().clone();
+    let output_bytes = buffer.lock().clone();
     let messages = parse_messages(&output_bytes);
     let diagnostics: Vec<_> = messages
         .into_iter()

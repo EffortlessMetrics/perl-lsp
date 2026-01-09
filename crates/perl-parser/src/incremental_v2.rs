@@ -256,13 +256,15 @@ impl IncrementalParserV2 {
         self.reparsed_nodes = 0;
 
         // Try incremental parsing if we have a previous tree and edits
-        if self.last_tree.is_some() && !self.pending_edits.edits.is_empty() {
-            let last_tree = self.last_tree.as_ref().unwrap().clone();
-            // Check if we can do incremental parsing
-            if let Some(new_tree) = self.try_incremental_parse(source, &last_tree) {
-                self.last_tree = Some(IncrementalTree::new(new_tree.clone(), source.to_string()));
-                self.pending_edits = EditSet::new();
-                return Ok(new_tree);
+        if let Some(ref last_tree) = self.last_tree {
+            if !self.pending_edits.edits.is_empty() {
+                let last_tree_clone = last_tree.clone();
+                // Check if we can do incremental parsing
+                if let Some(new_tree) = self.try_incremental_parse(source, &last_tree_clone) {
+                    self.last_tree = Some(IncrementalTree::new(new_tree.clone(), source.to_string()));
+                    self.pending_edits = EditSet::new();
+                    return Ok(new_tree);
+                }
             }
         }
 
@@ -282,19 +284,23 @@ impl IncrementalParserV2 {
         } else {
             // Check if this was a fallback due to too many edits, invalid conditions, or empty source
             // In such cases, we should report 0 reused nodes as it's truly a full reparse
-            if source.is_empty()
+            let should_skip_reuse = source.is_empty()
                 || self.pending_edits.edits.len() > 10
-                || !self.is_simple_value_edit(self.last_tree.as_ref().unwrap())
-            {
+                || self.last_tree.as_ref().map_or(true, |tree| !self.is_simple_value_edit(tree));
+
+            if should_skip_reuse {
                 // Full fallback - no actual reuse
                 self.reused_nodes = 0;
                 self.reparsed_nodes = self.count_nodes(&root);
-            } else {
+            } else if let Some(ref old_tree) = self.last_tree {
                 // Normal incremental fallback - still compare against old tree
-                let old_tree = self.last_tree.as_ref().unwrap();
                 let (reused, reparsed) = self.analyze_reuse(&old_tree.root, &root);
                 self.reused_nodes = reused;
                 self.reparsed_nodes = reparsed;
+            } else {
+                // No old tree - full parse
+                self.reused_nodes = 0;
+                self.reparsed_nodes = self.count_nodes(&root);
             }
         }
 
@@ -369,30 +375,31 @@ impl IncrementalParserV2 {
         self.last_reuse_analysis = Some(analysis_result);
 
         // Check if reuse analysis meets our efficiency targets
-        let analysis = self.last_reuse_analysis.as_ref().unwrap();
-        if analysis.meets_efficiency_target(self.reuse_config.min_confidence * 100.0) {
-            // Update statistics based on analysis
-            self.reused_nodes = analysis.reused_nodes;
-            self.reparsed_nodes = analysis.total_new_nodes - analysis.reused_nodes;
+        if let Some(ref analysis) = self.last_reuse_analysis {
+            if analysis.meets_efficiency_target(self.reuse_config.min_confidence * 100.0) {
+                // Update statistics based on analysis
+                self.reused_nodes = analysis.reused_nodes;
+                self.reparsed_nodes = analysis.total_new_nodes - analysis.reused_nodes;
 
-            if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                println!("DEBUG try_advanced_reuse_parse: using advanced reuse result");
-                println!(
-                    "  Reused: {}, Reparsed: {}, Efficiency: {:.1}%",
-                    self.reused_nodes, self.reparsed_nodes, analysis.reuse_percentage
-                );
+                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
+                    println!("DEBUG try_advanced_reuse_parse: using advanced reuse result");
+                    println!(
+                        "  Reused: {}, Reparsed: {}, Efficiency: {:.1}%",
+                        self.reused_nodes, self.reparsed_nodes, analysis.reuse_percentage
+                    );
+                }
+
+                // Return the new tree with reuse benefits counted
+                return Some(new_tree);
             }
 
-            // Return the new tree with reuse benefits counted
-            return Some(new_tree);
-        }
-
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!(
-                "DEBUG try_advanced_reuse_parse: efficiency target not met ({:.1}% < {:.1}%)",
-                analysis.reuse_percentage,
-                self.reuse_config.min_confidence * 100.0
-            );
+            if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
+                println!(
+                    "DEBUG try_advanced_reuse_parse: efficiency target not met ({:.1}% < {:.1}%)",
+                    analysis.reuse_percentage,
+                    self.reuse_config.min_confidence * 100.0
+                );
+            }
         }
 
         None
@@ -1147,8 +1154,9 @@ impl IncrementalParserV2 {
 
     /// Check if the last parse used advanced reuse analysis
     pub fn used_advanced_reuse(&self) -> bool {
-        self.last_reuse_analysis.is_some()
-            && self.last_reuse_analysis.as_ref().unwrap().reuse_percentage > 0.0
+        self.last_reuse_analysis
+            .as_ref()
+            .map_or(false, |analysis| analysis.reuse_percentage > 0.0)
     }
 
     /// Get detailed reuse efficiency report

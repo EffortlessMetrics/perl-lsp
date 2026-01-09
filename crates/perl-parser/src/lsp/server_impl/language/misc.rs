@@ -14,7 +14,17 @@
 use super::super::*;
 use crate::lsp::protocol::{invalid_params, req_position, req_uri};
 use crate::lsp::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
+use std::sync::OnceLock;
 use std::time::Instant;
+
+static INLINE_VALUE_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+
+fn get_inline_value_regex() -> &'static regex::Regex {
+    INLINE_VALUE_REGEX.get_or_init(|| {
+        regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)")
+            .expect("hardcoded regex should compile")
+    })
+}
 
 impl LspServer {
     /// Handle textDocument/inlayHint request
@@ -170,7 +180,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         // Gate unadvertised feature
-        if !self.advertised_features.lock().unwrap().code_lens {
+        if !self.advertised_features.lock().code_lens {
             return Err(crate::lsp_errors::method_not_advertised());
         }
 
@@ -325,8 +335,8 @@ impl LspServer {
 
                 // Simple implementation: find scalar variables in the visible range
                 let lines: Vec<&str> = doc.text.lines().collect();
-                // Move regex construction outside loop
-                let re = regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
+                // Use pre-compiled regex
+                let re = get_inline_value_regex();
 
                 for line_num in start_line..=end_line.min((lines.len() - 1) as u32) {
                     let line_text = lines[line_num as usize];
@@ -629,7 +639,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         // Gate unadvertised feature
-        if !self.advertised_features.lock().unwrap().linked_editing {
+        if !self.advertised_features.lock().linked_editing {
             return Err(crate::lsp_errors::method_not_advertised());
         }
 

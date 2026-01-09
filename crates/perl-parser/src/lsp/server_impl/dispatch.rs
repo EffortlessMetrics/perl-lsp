@@ -176,7 +176,7 @@ impl LspServer {
             }
             "shutdown" => {
                 // Clear any pending cancelled requests on shutdown
-                self.cancelled.lock().unwrap().clear();
+                self.cancelled.lock().clear();
                 Ok(Some(json!(null)))
             }
             "textDocument/didOpen" => match self.handle_did_open(request.params) {

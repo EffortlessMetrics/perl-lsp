@@ -12,13 +12,17 @@ use std::collections::HashMap;
 #[cfg(feature = "workspace")]
 use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
 #[cfg(feature = "workspace")]
-use lazy_static::lazy_static;
+use std::sync::OnceLock;
 
 #[cfg(feature = "workspace")]
-lazy_static! {
-    /// Regex for matching fully-qualified names like Package::function
-    static ref FQN_RE: regex::Regex =
-        regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)").unwrap();
+static FQN_RE: OnceLock<regex::Regex> = OnceLock::new();
+
+#[cfg(feature = "workspace")]
+fn get_fqn_regex() -> &'static regex::Regex {
+    FQN_RE.get_or_init(|| {
+        regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)")
+            .expect("hardcoded regex should compile")
+    })
 }
 
 impl LspServer {
@@ -235,12 +239,13 @@ impl LspServer {
                 #[cfg(feature = "workspace")]
                 {
                     // Attempt to resolve fully-qualified symbols like Package::sub
-                    for cap in FQN_RE.captures_iter(&text_around) {
+                    let fqn_regex = get_fqn_regex();
+                    for cap in fqn_regex.captures_iter(&text_around) {
                         if let Some(m) = cap.get(1) {
                             if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
                                 let parts: Vec<&str> = m.as_str().split("::").collect();
                                 if parts.len() >= 2 {
-                                    let name = parts.last().unwrap().to_string();
+                                    let name = parts.last().copied().unwrap_or("").to_string();
                                     let pkg = parts[..parts.len() - 1].join("::");
                                     let key = crate::workspace_index::SymbolKey {
                                         pkg: pkg.clone().into(),
