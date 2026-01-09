@@ -307,9 +307,13 @@ impl DebugAdapter {
 
     /// Get next sequence number
     fn next_seq(&self) -> i64 {
-        let mut seq = self.seq.lock().unwrap();
-        *seq += 1;
-        *seq
+        if let Ok(mut seq) = self.seq.lock() {
+            *seq += 1;
+            *seq
+        } else {
+            eprintln!("Failed to lock sequence counter, using 0");
+            0
+        }
     }
 
     /// Send an event to the client
@@ -472,9 +476,13 @@ impl DebugAdapter {
                 }
 
                 let thread_id = {
-                    let mut counter = self.thread_counter.lock().unwrap();
-                    *counter += 1;
-                    *counter
+                    if let Ok(mut counter) = self.thread_counter.lock() {
+                        *counter += 1;
+                        *counter
+                    } else {
+                        eprintln!("Failed to lock thread counter, using 1");
+                        1
+                    }
                 };
 
                 let session = DebugSession {
@@ -485,7 +493,11 @@ impl DebugAdapter {
                     thread_id,
                 };
 
-                *self.session.lock().unwrap() = Some(session);
+                if let Ok(mut guard) = self.session.lock() {
+                    *guard = Some(session);
+                } else {
+                    return Err("Failed to lock session".to_string());
+                }
 
                 // Start output reader thread
                 self.start_output_reader();
@@ -505,8 +517,12 @@ impl DebugAdapter {
         thread::spawn(move || {
             // Take stdout handle
             let stdout = {
-                let mut guard = session.lock().unwrap();
-                guard.as_mut().and_then(|s| s.process.stdout.take())
+                if let Ok(mut guard) = session.lock() {
+                    guard.as_mut().and_then(|s| s.process.stdout.take())
+                } else {
+                    eprintln!("Failed to lock session in output reader");
+                    None
+                }
             };
 
             let Some(stdout) = stdout else {
@@ -657,16 +673,17 @@ impl DebugAdapter {
 
                                 // Send error event to client
                                 if let Some(ref sender) = sender {
-                                    let mut seq_lock = seq.lock().unwrap();
-                                    *seq_lock += 1;
-                                    let _ = sender.send(DapMessage::Event {
-                                        seq: *seq_lock,
-                                        event: "output".to_string(),
-                                        body: Some(json!({
-                                            "category": "stderr",
-                                            "output": format!("Error: {}\n", text)
-                                        })),
-                                    });
+                                    if let Ok(mut seq_lock) = seq.lock() {
+                                        *seq_lock += 1;
+                                        let _ = sender.send(DapMessage::Event {
+                                            seq: *seq_lock,
+                                            event: "output".to_string(),
+                                            body: Some(json!({
+                                                "category": "stderr",
+                                                "output": format!("Error: {}\n", text)
+                                            })),
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -682,7 +699,10 @@ impl DebugAdapter {
                         {
                             _debugger_ready = true;
                             let thread_id = {
-                                let mut guard = session.lock().unwrap();
+                                let Ok(mut guard) = session.lock() else {
+                                    eprintln!("Failed to lock session when processing debugger prompt");
+                                    continue;
+                                };
                                 if let Some(ref mut s) = *guard {
                                     // Create stack frame with enhanced context validation
                                     if !current_file.is_empty() && current_line > 0 {
@@ -833,9 +853,11 @@ impl DebugAdapter {
         _arguments: Option<Value>,
     ) -> DapMessage {
         // Terminate the debug session
-        if let Some(mut session) = self.session.lock().unwrap().take() {
-            let _ = session.process.kill();
-            session.state = DebugState::Terminated;
+        if let Ok(mut guard) = self.session.lock() {
+            if let Some(mut session) = guard.take() {
+                let _ = session.process.kill();
+                session.state = DebugState::Terminated;
+            }
         }
 
         // Send terminated event
@@ -885,12 +907,14 @@ impl DebugAdapter {
             let mut has_session = false;
 
             // First, clear existing breakpoints for this file
-            if let Some(ref mut session) = *self.session.lock().unwrap() {
-                has_session = true;
-                if let Some(stdin) = session.process.stdin.as_mut() {
-                    // Clear breakpoints in file (Perl debugger 'B' command)
-                    let _ = stdin.write_all(b"B\n");
-                    let _ = stdin.flush();
+            if let Ok(mut guard) = self.session.lock() {
+                if let Some(ref mut session) = *guard {
+                    has_session = true;
+                    if let Some(stdin) = session.process.stdin.as_mut() {
+                        // Clear breakpoints in file (Perl debugger 'B' command)
+                        let _ = stdin.write_all(b"B\n");
+                        let _ = stdin.flush();
+                    }
                 }
             }
 

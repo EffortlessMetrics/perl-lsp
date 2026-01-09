@@ -136,7 +136,9 @@ impl DeadCodeDetector {
             }
 
             if ["return", "die", "exit"].iter().any(|kw| trimmed.starts_with(kw)) {
-                terminator = Some((i + 1, trimmed.split_whitespace().next().unwrap().to_string()));
+                if let Some(first_word) = trimmed.split_whitespace().next() {
+                    terminator = Some((i + 1, first_word.to_string()));
+                }
             }
         }
 

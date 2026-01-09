@@ -121,9 +121,9 @@ impl ParserContext {
     pub fn current_position(&self) -> Position {
         if let Some(token) = self.current_token() {
             token.range().start
-        } else if !self.tokens.is_empty() {
+        } else if let Some(last_token) = self.tokens.back() {
             // At EOF, use end of last token
-            self.tokens.back().unwrap().range().end
+            last_token.range().end
         } else {
             Position::new(0, 1, 1)
         }

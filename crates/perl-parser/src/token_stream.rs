@@ -322,7 +322,8 @@ impl<'a> TokenStream<'a> {
         if self.peeked.is_none() {
             self.peeked = Some(self.next_token()?);
         }
-        Ok(self.peeked.as_ref().unwrap())
+        // Safe: we just ensured peeked is Some
+        self.peeked.as_ref().ok_or(ParseError::UnexpectedEof)
     }
 
     /// Consume and return the next token
@@ -353,7 +354,8 @@ impl<'a> TokenStream<'a> {
             self.peeked_second = Some(self.next_token()?);
         }
 
-        Ok(self.peeked_second.as_ref().unwrap())
+        // Safe: we just ensured peeked_second is Some
+        self.peeked_second.as_ref().ok_or(ParseError::UnexpectedEof)
     }
 
     /// Peek at the third token (three tokens ahead)
@@ -366,7 +368,8 @@ impl<'a> TokenStream<'a> {
             self.peeked_third = Some(self.next_token()?);
         }
 
-        Ok(self.peeked_third.as_ref().unwrap())
+        // Safe: we just ensured peeked_third is Some
+        self.peeked_third.as_ref().ok_or(ParseError::UnexpectedEof)
     }
 
     /// Enter format body parsing mode in the lexer

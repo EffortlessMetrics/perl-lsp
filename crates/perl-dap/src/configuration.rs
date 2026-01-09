@@ -252,8 +252,10 @@ pub fn create_launch_json_snippet() -> String {
         "cwd": "${workspaceFolder}",
         "env": {}
     });
-    serde_json::to_string_pretty(&json)
-        .expect("Failed to serialize launch.json snippet - this is a bug")
+    serde_json::to_string_pretty(&json).unwrap_or_else(|e| {
+        eprintln!("Failed to serialize launch.json snippet: {}", e);
+        "{}".to_string()
+    })
 }
 
 /// Create an attach.json configuration snippet
@@ -284,8 +286,10 @@ pub fn create_attach_json_snippet() -> String {
         "port": 13603,
         "timeout": 5000
     });
-    serde_json::to_string_pretty(&json)
-        .expect("Failed to serialize attach.json snippet - this is a bug")
+    serde_json::to_string_pretty(&json).unwrap_or_else(|e| {
+        eprintln!("Failed to serialize attach.json snippet: {}", e);
+        "{}".to_string()
+    })
 }
 
 #[cfg(test)]

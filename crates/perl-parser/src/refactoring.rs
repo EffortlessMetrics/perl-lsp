@@ -516,7 +516,14 @@ impl RefactoringEngine {
 
 impl Default for RefactoringEngine {
     fn default() -> Self {
-        Self::new().expect("Failed to create default refactoring engine")
+        Self::new().unwrap_or_else(|e| {
+            // Log the error - this shouldn't happen in normal operation
+            // as new() only fails if sub-components fail to initialize
+            eprintln!("Warning: Failed to create refactoring engine, using fallback: {}", e);
+            // Create with default config - this path is for error recovery only
+            Self::with_config(RefactoringConfig::default())
+                .expect("RefactoringEngine fallback initialization should not fail")
+        })
     }
 }
 

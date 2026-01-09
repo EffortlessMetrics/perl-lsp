@@ -161,7 +161,10 @@ fn main() -> Result<()> {
 
             let seed = seed.unwrap_or_else(|| {
                 use std::time::{SystemTime, UNIX_EPOCH};
-                SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+                    .as_secs()
             });
 
             let config = Config { cases: count as u32, ..Config::default() };

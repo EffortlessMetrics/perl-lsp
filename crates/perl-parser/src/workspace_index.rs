@@ -743,8 +743,10 @@ pub fn normalize_var(name: &str) -> (Option<char>, &str) {
         return (None, "");
     }
 
-    // Safe to unwrap here because we've checked that name is not empty
-    let first_char = name.chars().next().expect("name is not empty");
+    // Safe: we've checked that name is not empty
+    let Some(first_char) = name.chars().next() else {
+        return (None, name); // Should never happen but handle gracefully
+    };
     match first_char {
         '$' | '@' | '%' => {
             if name.len() > 1 {
