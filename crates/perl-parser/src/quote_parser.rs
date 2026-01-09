@@ -10,19 +10,18 @@ pub fn extract_regex_parts(text: &str) -> (String, String) {
         stripped
     } else if text.starts_with('m')
         && text.len() > 1
-        && !text.chars().nth(1).unwrap().is_alphabetic()
+        && text.chars().nth(1).is_some_and(|c| !c.is_alphabetic())
     {
         &text[1..]
     } else {
         text
     };
 
-    if content.is_empty() {
-        return (String::new(), String::new());
-    }
-
-    // Get delimiter
-    let delimiter = content.chars().next().unwrap();
+    // Get delimiter - content must be non-empty to have a delimiter
+    let delimiter = match content.chars().next() {
+        Some(d) => d,
+        None => return (String::new(), String::new()),
+    };
     let closing = get_closing_delimiter(delimiter);
 
     // Extract body and modifiers
@@ -69,12 +68,11 @@ pub fn extract_substitution_parts_strict(
     // Skip 's' prefix
     let content = text.strip_prefix('s').unwrap_or(text);
 
-    // Check for missing delimiter (just 's' or 's' followed by nothing)
-    if content.is_empty() {
-        return Err(SubstitutionError::MissingDelimiter);
-    }
-
-    let delimiter = content.chars().next().unwrap();
+    // Get delimiter - check for missing delimiter (just 's' or 's' followed by nothing)
+    let delimiter = match content.chars().next() {
+        Some(d) => d,
+        None => return Err(SubstitutionError::MissingDelimiter),
+    };
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
@@ -243,11 +241,11 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
     // Skip 's' prefix
     let content = text.strip_prefix('s').unwrap_or(text);
 
-    if content.is_empty() {
-        return (String::new(), String::new(), String::new());
-    }
-
-    let delimiter = content.chars().next().unwrap();
+    // Get delimiter - content must be non-empty to have a delimiter
+    let delimiter = match content.chars().next() {
+        Some(d) => d,
+        None => return (String::new(), String::new(), String::new()),
+    };
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
@@ -324,11 +322,11 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
         text
     };
 
-    if content.is_empty() {
-        return (String::new(), String::new(), String::new());
-    }
-
-    let delimiter = content.chars().next().unwrap();
+    // Get delimiter - content must be non-empty to have a delimiter
+    let delimiter = match content.chars().next() {
+        Some(d) => d,
+        None => return (String::new(), String::new(), String::new()),
+    };
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 

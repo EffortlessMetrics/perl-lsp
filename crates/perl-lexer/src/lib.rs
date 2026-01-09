@@ -565,7 +565,8 @@ impl<'a> PerlLexer<'a> {
             if byte < 128 {
                 // ASCII fast path
                 self.position += 1;
-            } else if let Some(ch) = self.input.get(self.position..).and_then(|s| s.chars().next()) {
+            } else if let Some(ch) = self.input.get(self.position..).and_then(|s| s.chars().next())
+            {
                 self.position += ch.len_utf8();
             }
         }

@@ -22,21 +22,15 @@ use std::time::Instant;
 
 use super::super::LspServer;
 
-static SNIPPET_PLACEHOLDER_RE: OnceLock<Regex> = OnceLock::new();
-static SNIPPET_SIMPLE_RE: OnceLock<Regex> = OnceLock::new();
+static SNIPPET_PLACEHOLDER_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static SNIPPET_SIMPLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 
-fn get_snippet_placeholder_regex() -> &'static Regex {
-    SNIPPET_PLACEHOLDER_RE.get_or_init(|| {
-        Regex::new(r"\$\{(\d+):([^}]+)\}")
-            .expect("hardcoded regex should compile")
-    })
+fn get_snippet_placeholder_regex() -> Option<&'static Regex> {
+    SNIPPET_PLACEHOLDER_RE.get_or_init(|| Regex::new(r"\$\{(\d+):([^}]+)\}")).as_ref().ok()
 }
 
-fn get_snippet_simple_regex() -> &'static Regex {
-    SNIPPET_SIMPLE_RE.get_or_init(|| {
-        Regex::new(r"\$\d+")
-            .expect("hardcoded regex should compile")
-    })
+fn get_snippet_simple_regex() -> Option<&'static Regex> {
+    SNIPPET_SIMPLE_RE.get_or_init(|| Regex::new(r"\$\d+")).as_ref().ok()
 }
 
 impl LspServer {
@@ -60,12 +54,18 @@ impl LspServer {
     /// Degrade snippet syntax to plaintext for clients that don't support snippets
     pub(crate) fn degrade_snippet_to_plaintext(snippet: &str) -> String {
         // Remove snippet placeholders: ${1:placeholder} -> placeholder
-        let placeholder_re = get_snippet_placeholder_regex();
-        let result = placeholder_re.replace_all(snippet, "$2");
+        let result = if let Some(placeholder_re) = get_snippet_placeholder_regex() {
+            placeholder_re.replace_all(snippet, "$2")
+        } else {
+            std::borrow::Cow::Borrowed(snippet)
+        };
 
         // Remove simple placeholders: $1, $0, etc.
-        let simple_re = get_snippet_simple_regex();
-        simple_re.replace_all(&result, "").to_string()
+        if let Some(simple_re) = get_snippet_simple_regex() {
+            simple_re.replace_all(&result, "").to_string()
+        } else {
+            result.to_string()
+        }
     }
 
     /// Handle completion request

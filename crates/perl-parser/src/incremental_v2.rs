@@ -261,7 +261,8 @@ impl IncrementalParserV2 {
                 let last_tree_clone = last_tree.clone();
                 // Check if we can do incremental parsing
                 if let Some(new_tree) = self.try_incremental_parse(source, &last_tree_clone) {
-                    self.last_tree = Some(IncrementalTree::new(new_tree.clone(), source.to_string()));
+                    self.last_tree =
+                        Some(IncrementalTree::new(new_tree.clone(), source.to_string()));
                     self.pending_edits = EditSet::new();
                     return Ok(new_tree);
                 }
@@ -1154,9 +1155,7 @@ impl IncrementalParserV2 {
 
     /// Check if the last parse used advanced reuse analysis
     pub fn used_advanced_reuse(&self) -> bool {
-        self.last_reuse_analysis
-            .as_ref()
-            .map_or(false, |analysis| analysis.reuse_percentage > 0.0)
+        self.last_reuse_analysis.as_ref().map_or(false, |analysis| analysis.reuse_percentage > 0.0)
     }
 
     /// Get detailed reuse efficiency report

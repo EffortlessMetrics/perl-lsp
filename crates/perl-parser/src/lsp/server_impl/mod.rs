@@ -65,12 +65,12 @@ use crate::{
 };
 use lsp_types::Location;
 use md5;
+use parking_lot::Mutex;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use parking_lot::Mutex;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicU32, Ordering},
@@ -1223,7 +1223,8 @@ impl LspServer {
 // Helper functions for non-blocking handlers
 
 pub(crate) fn location_from_path(p: &Path) -> serde_json::Value {
-    let uri = Url::from_file_path(p).unwrap().to_string();
+    // Try to convert path to URI, fall back to empty string if conversion fails
+    let uri = Url::from_file_path(p).map(|u| u.to_string()).unwrap_or_default();
     // Jump to start of file or try to find 'package' later if you prefer
     serde_json::json!({
         "uri": uri,

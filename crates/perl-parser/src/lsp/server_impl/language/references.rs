@@ -18,13 +18,13 @@ use std::time::Instant;
 #[cfg(feature = "workspace")]
 use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
 
-static QUALIFIED_NAME_RE: OnceLock<regex::Regex> = OnceLock::new();
+static QUALIFIED_NAME_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
-fn get_qualified_name_regex() -> &'static regex::Regex {
-    QUALIFIED_NAME_RE.get_or_init(|| {
-        regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)")
-            .expect("hardcoded regex should compile")
-    })
+fn get_qualified_name_regex() -> Option<&'static regex::Regex> {
+    QUALIFIED_NAME_RE
+        .get_or_init(|| regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)"))
+        .as_ref()
+        .ok()
 }
 
 impl LspServer {
@@ -228,89 +228,108 @@ impl LspServer {
                                 let cursor_in_text = offset - text_start;
 
                                 // Use cached regex to avoid per-request compilation overhead
-                                let qualified_name_re = get_qualified_name_regex();
-                                for captures in qualified_name_re.captures_iter(&text_around) {
-                                    if let Some(m) = captures.get(1) {
-                                        if cursor_in_text >= m.start() && cursor_in_text <= m.end()
-                                        {
-                                            let parts: Vec<&str> = m.as_str().split("::").collect();
-                                            if parts.len() >= 2 {
-                                                let name = parts.last().copied().unwrap_or("").to_string();
-                                                let pkg = parts[..parts.len() - 1].join("::");
-                                                let key = crate::workspace_index::SymbolKey {
-                                                    pkg: pkg.clone().into(),
-                                                    name: name.clone().into(),
-                                                    sigil: None,
-                                                    kind: crate::workspace_index::SymKind::Sub,
-                                                };
+                                if let Some(qualified_name_re) = get_qualified_name_regex() {
+                                    for captures in qualified_name_re.captures_iter(&text_around) {
+                                        if let Some(m) = captures.get(1) {
+                                            if cursor_in_text >= m.start()
+                                                && cursor_in_text <= m.end()
+                                            {
+                                                let parts: Vec<&str> =
+                                                    m.as_str().split("::").collect();
+                                                if parts.len() >= 2 {
+                                                    let name = parts
+                                                        .last()
+                                                        .copied()
+                                                        .unwrap_or("")
+                                                        .to_string();
+                                                    let pkg = parts[..parts.len() - 1].join("::");
+                                                    let key = crate::workspace_index::SymbolKey {
+                                                        pkg: pkg.clone().into(),
+                                                        name: name.clone().into(),
+                                                        sigil: None,
+                                                        kind: crate::workspace_index::SymKind::Sub,
+                                                    };
 
-                                                // Search for all references to this qualified symbol
-                                                let mut all_refs = Vec::new();
+                                                    // Search for all references to this qualified symbol
+                                                    let mut all_refs = Vec::new();
 
-                                                // Find references via symbol key
-                                                let refs = index.find_refs(&key);
-                                                all_refs.extend(refs);
+                                                    // Find references via symbol key
+                                                    let refs = index.find_refs(&key);
+                                                    all_refs.extend(refs);
 
-                                                // Also try with qualified name
-                                                let symbol_name = format!("{}::{}", pkg, name);
-                                                let alt_refs = index.find_references(&symbol_name);
-                                                all_refs.extend(alt_refs);
+                                                    // Also try with qualified name
+                                                    let symbol_name = format!("{}::{}", pkg, name);
+                                                    let alt_refs =
+                                                        index.find_references(&symbol_name);
+                                                    all_refs.extend(alt_refs);
 
-                                                // Add definition if includeDeclaration is true
-                                                if include_declaration {
-                                                    if let Some(def) = index.find_def(&key) {
-                                                        all_refs.push(def);
+                                                    // Add definition if includeDeclaration is true
+                                                    if include_declaration {
+                                                        if let Some(def) = index.find_def(&key) {
+                                                            all_refs.push(def);
+                                                        }
                                                     }
-                                                }
 
-                                                if !all_refs.is_empty() {
-                                                    // Cap results
-                                                    let capped_refs: Vec<_> =
-                                                        all_refs.into_iter().take(cap).collect();
-                                                    // Convert internal Locations to LSP Locations
-                                                    let lsp_locations =
+                                                    if !all_refs.is_empty() {
+                                                        // Cap results
+                                                        let capped_refs: Vec<_> = all_refs
+                                                            .into_iter()
+                                                            .take(cap)
+                                                            .collect();
+                                                        // Convert internal Locations to LSP Locations
+                                                        let lsp_locations =
                                                     crate::workspace_index::lsp_adapter::to_lsp_locations(capped_refs);
-                                                    if !lsp_locations.is_empty() {
-                                                        return Ok(Some(json!(lsp_locations)));
+                                                        if !lsp_locations.is_empty() {
+                                                            return Ok(Some(json!(lsp_locations)));
+                                                        }
                                                     }
-                                                }
 
-                                                // Fallback: scan open documents for qualified name references
-                                                // Snapshot only (uri, text) to minimize cloning overhead
-                                                let docs_snapshot: Vec<(String, String)> =
-                                                    documents
-                                                        .iter()
-                                                        .map(|(k, v)| (k.clone(), v.text.clone()))
-                                                        .collect();
+                                                    // Fallback: scan open documents for qualified name references
+                                                    // Snapshot only (uri, text) to minimize cloning overhead
+                                                    let docs_snapshot: Vec<(String, String)> =
+                                                        documents
+                                                            .iter()
+                                                            .map(|(k, v)| {
+                                                                (k.clone(), v.text.clone())
+                                                            })
+                                                            .collect();
 
-                                                let mut all_locations = Vec::new();
-                                                let qualified_name = format!("{}::{}", pkg, name);
-                                                let Ok(search_regex) = regex::Regex::new(&format!(
-                                                    r"\b{}\b",
-                                                    regex::escape(&qualified_name)
-                                                )) else {
-                                                    continue;
-                                                };
+                                                    let mut all_locations = Vec::new();
+                                                    let qualified_name =
+                                                        format!("{}::{}", pkg, name);
+                                                    let Ok(search_regex) =
+                                                        regex::Regex::new(&format!(
+                                                            r"\b{}\b",
+                                                            regex::escape(&qualified_name)
+                                                        ))
+                                                    else {
+                                                        continue;
+                                                    };
 
-                                                'doc_scan: for (doc_uri, doc_text) in docs_snapshot
-                                                {
-                                                    // Check deadline
-                                                    if start.elapsed() >= deadline {
-                                                        break 'doc_scan;
-                                                    }
-                                                    let lines: Vec<&str> =
-                                                        doc_text.lines().collect();
-                                                    for (line_num, line) in lines.iter().enumerate()
+                                                    'doc_scan: for (doc_uri, doc_text) in
+                                                        docs_snapshot
                                                     {
-                                                        for mat in search_regex.find_iter(line) {
-                                                            // Convert byte offsets to UTF-16 columns for LSP compliance
-                                                            let start_utf16 = byte_to_utf16_col(
-                                                                line,
-                                                                mat.start(),
-                                                            );
-                                                            let end_utf16 =
-                                                                byte_to_utf16_col(line, mat.end());
-                                                            all_locations.push(json!({
+                                                        // Check deadline
+                                                        if start.elapsed() >= deadline {
+                                                            break 'doc_scan;
+                                                        }
+                                                        let lines: Vec<&str> =
+                                                            doc_text.lines().collect();
+                                                        for (line_num, line) in
+                                                            lines.iter().enumerate()
+                                                        {
+                                                            for mat in search_regex.find_iter(line)
+                                                            {
+                                                                // Convert byte offsets to UTF-16 columns for LSP compliance
+                                                                let start_utf16 = byte_to_utf16_col(
+                                                                    line,
+                                                                    mat.start(),
+                                                                );
+                                                                let end_utf16 = byte_to_utf16_col(
+                                                                    line,
+                                                                    mat.end(),
+                                                                );
+                                                                all_locations.push(json!({
                                                                 "uri": doc_uri,
                                                                 "range": {
                                                                     "start": {
@@ -323,21 +342,22 @@ impl LspServer {
                                                                     },
                                                                 },
                                                             }));
-                                                            // Early exit if we hit the cap
-                                                            if all_locations.len() >= cap {
-                                                                break 'doc_scan;
+                                                                // Early exit if we hit the cap
+                                                                if all_locations.len() >= cap {
+                                                                    break 'doc_scan;
+                                                                }
                                                             }
                                                         }
                                                     }
-                                                }
 
-                                                if !all_locations.is_empty() {
-                                                    // Truncate to cap
-                                                    all_locations.truncate(cap);
-                                                    return Ok(Some(json!(all_locations)));
+                                                    if !all_locations.is_empty() {
+                                                        // Truncate to cap
+                                                        all_locations.truncate(cap);
+                                                        return Ok(Some(json!(all_locations)));
+                                                    }
                                                 }
+                                                break;
                                             }
-                                            break;
                                         }
                                     }
                                 }
