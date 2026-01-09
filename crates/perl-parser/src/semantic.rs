@@ -912,14 +912,19 @@ impl SemanticAnalyzer {
         let before = &self.source[..start];
 
         // Check for POD blocks ending with =cut
-        let pod_re =
-            POD_RE.get_or_init(|| Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$").unwrap());
+        let pod_re = POD_RE.get_or_init(|| {
+            Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$")
+                .expect("hardcoded POD regex pattern should compile")
+        });
         if let Some(caps) = pod_re.captures(before) {
             return Some(caps[1].trim().to_string());
         }
 
         // Check for consecutive comment lines
-        let comment_re = COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\n)+\s*$").unwrap());
+        let comment_re = COMMENT_RE.get_or_init(|| {
+            Regex::new(r"(?m)(#.*\n)+\s*$")
+                .expect("hardcoded comment regex pattern should compile")
+        });
         if let Some(caps) = comment_re.captures(before) {
             // Strip the # prefix from each comment line
             let doc = caps[0]

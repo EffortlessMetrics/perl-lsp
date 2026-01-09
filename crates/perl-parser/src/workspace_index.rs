@@ -390,7 +390,7 @@ pub struct IndexCoordinator {
 impl std::fmt::Debug for IndexCoordinator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("IndexCoordinator")
-            .field("state", &*self.state.read().unwrap())
+            .field("state", &*self.state.read().expect("IndexCoordinator state lock poisoned"))
             .field("limits", &self.limits)
             .finish_non_exhaustive()
     }
@@ -451,7 +451,7 @@ impl IndexCoordinator {
     /// }
     /// ```
     pub fn state(&self) -> IndexState {
-        self.state.read().unwrap().clone()
+        self.state.read().expect("IndexCoordinator state lock poisoned").clone()
     }
 
     /// Get reference to the underlying workspace index
@@ -511,7 +511,7 @@ impl IndexCoordinator {
                 self.state()
             {
                 // Attempt recovery - transition back to Building for re-scan
-                let mut state = self.state.write().unwrap();
+                let mut state = self.state.write().expect("IndexCoordinator state lock poisoned");
                 *state = IndexState::Building {
                     indexed_count: 0,
                     total_count: 0,
@@ -544,7 +544,7 @@ impl IndexCoordinator {
     /// coordinator.transition_to_ready(100, 5000);
     /// ```
     pub fn transition_to_ready(&self, file_count: usize, symbol_count: usize) {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.write().expect("IndexCoordinator state lock poisoned");
         *state = IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
         drop(state); // Release write lock before checking limits
 
@@ -562,7 +562,7 @@ impl IndexCoordinator {
     ///
     /// * `reason` - Why the index degraded (ParseStorm, IoError, etc.)
     pub fn transition_to_degraded(&self, reason: DegradationReason) {
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.write().expect("IndexCoordinator state lock poisoned");
 
         // Get available symbols count from current state
         let available_symbols = match &*state {
@@ -594,7 +594,7 @@ impl IndexCoordinator {
     /// - Lock-free read of index state (<100ns)
     /// - Symbol counting is O(n) where n is number of files
     pub fn check_limits(&self) -> Option<DegradationReason> {
-        let files = self.index.files.read().unwrap();
+        let files = self.index.files.read().expect("WorkspaceIndex files lock poisoned");
 
         // Check max_files limit
         let file_count = files.len();
@@ -749,7 +749,8 @@ pub fn normalize_var(name: &str) -> (Option<char>, &str) {
         return (None, "");
     }
 
-    let first_char = name.chars().next().unwrap();
+    // Safe to unwrap here because we've checked that name is not empty
+    let first_char = name.chars().next().expect("name is not empty");
     match first_char {
         '$' | '@' | '%' => {
             if name.len() > 1 {
@@ -1078,15 +1079,15 @@ impl WorkspaceIndex {
         // Update the index
         let key = DocumentStore::uri_key(&uri_str);
         {
-            let mut files = self.files.write().unwrap();
+            let mut files = self.files.write().expect("WorkspaceIndex files lock poisoned");
             files.insert(key.clone(), file_index);
         }
 
         // Update global symbol map
         {
-            let files = self.files.read().unwrap();
+            let files = self.files.read().expect("WorkspaceIndex files lock poisoned");
             if let Some(file_index) = files.get(&key) {
-                let mut symbols = self.symbols.write().unwrap();
+                let mut symbols = self.symbols.write().expect("WorkspaceIndex symbols lock poisoned");
                 for symbol in &file_index.symbols {
                     if let Some(ref qname) = symbol.qualified_name {
                         symbols.insert(qname.clone(), uri_str.clone());
@@ -1109,10 +1110,10 @@ impl WorkspaceIndex {
         self.document_store.close(&uri_str);
 
         // Remove file index
-        let mut files = self.files.write().unwrap();
+        let mut files = self.files.write().expect("WorkspaceIndex files lock poisoned");
         if let Some(file_index) = files.remove(&key) {
             // Remove from global symbol map
-            let mut symbols = self.symbols.write().unwrap();
+            let mut symbols = self.symbols.write().expect("WorkspaceIndex symbols lock poisoned");
             for symbol in file_index.symbols {
                 if let Some(ref qname) = symbol.qualified_name {
                     symbols.remove(qname);
@@ -1164,7 +1165,7 @@ impl WorkspaceIndex {
     /// - Unqualified: `process_data()` (when in the same package or imported)
     pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
         let mut locations = Vec::new();
-        let files = self.files.read().unwrap();
+        let files = self.files.read().expect("WorkspaceIndex files lock poisoned");
 
         for (_uri_key, file_index) in files.iter() {
             // Search for exact match first
@@ -1191,7 +1192,7 @@ impl WorkspaceIndex {
 
     /// Find the definition of a symbol
     pub fn find_definition(&self, symbol_name: &str) -> Option<Location> {
-        let files = self.files.read().unwrap();
+        let files = self.files.read().expect("WorkspaceIndex files lock poisoned");
 
         for (_uri_key, file_index) in files.iter() {
             for symbol in &file_index.symbols {
@@ -1208,7 +1209,7 @@ impl WorkspaceIndex {
 
     /// Get all symbols in the workspace
     pub fn all_symbols(&self) -> Vec<WorkspaceSymbol> {
-        let files = self.files.read().unwrap();
+        let files = self.files.read().expect("WorkspaceIndex files lock poisoned");
         let mut symbols = Vec::new();
 
         for (_uri_key, file_index) in files.iter() {
@@ -1224,7 +1225,7 @@ impl WorkspaceIndex {
     /// at least some files have been indexed and the workspace is ready
     /// for symbol-based operations like completion.
     pub fn has_symbols(&self) -> bool {
-        let files = self.files.read().unwrap();
+        let files = self.files.read().expect("WorkspaceIndex files lock poisoned");
         files.values().any(|file_index| !file_index.symbols.is_empty())
     }
 
@@ -1252,7 +1253,7 @@ impl WorkspaceIndex {
     pub fn file_symbols(&self, uri: &str) -> Vec<WorkspaceSymbol> {
         let normalized_uri = Self::normalize_uri(uri);
         let key = DocumentStore::uri_key(&normalized_uri);
-        let files = self.files.read().unwrap();
+        let files = self.files.read().expect("WorkspaceIndex files lock poisoned");
 
         files.get(&key).map(|fi| fi.symbols.clone()).unwrap_or_default()
     }
@@ -1261,14 +1262,14 @@ impl WorkspaceIndex {
     pub fn file_dependencies(&self, uri: &str) -> HashSet<String> {
         let normalized_uri = Self::normalize_uri(uri);
         let key = DocumentStore::uri_key(&normalized_uri);
-        let files = self.files.read().unwrap();
+        let files = self.files.read().expect("WorkspaceIndex files lock poisoned");
 
         files.get(&key).map(|fi| fi.dependencies.clone()).unwrap_or_default()
     }
 
     /// Find all files that depend on a module
     pub fn find_dependents(&self, module_name: &str) -> Vec<String> {
-        let files = self.files.read().unwrap();
+        let files = self.files.read().expect("WorkspaceIndex files lock poisoned");
         let mut dependents = Vec::new();
 
         for (uri_key, file_index) in files.iter() {
@@ -1287,7 +1288,7 @@ impl WorkspaceIndex {
 
     /// Find unused symbols in the workspace
     pub fn find_unused_symbols(&self) -> Vec<WorkspaceSymbol> {
-        let files = self.files.read().unwrap();
+        let files = self.files.read().expect("WorkspaceIndex files lock poisoned");
         let mut unused = Vec::new();
 
         // Collect all defined symbols
@@ -1313,7 +1314,7 @@ impl WorkspaceIndex {
 
     /// Get all symbols that belong to a specific package
     pub fn get_package_members(&self, package_name: &str) -> Vec<WorkspaceSymbol> {
-        let files = self.files.read().unwrap();
+        let files = self.files.read().expect("WorkspaceIndex files lock poisoned");
         let mut members = Vec::new();
 
         for (_uri_key, file_index) in files.iter() {

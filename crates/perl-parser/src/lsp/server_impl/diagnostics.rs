@@ -14,7 +14,7 @@ impl LspServer {
     /// Only publishes if the client doesn't support pull diagnostics to avoid
     /// double-flow for modern clients.
     pub(crate) fn publish_diagnostics(&self, uri: &str) {
-        let documents = self.documents.lock().unwrap();
+        let documents = self.documents.lock();
         if let Some(doc) = documents.get(uri) {
             let lsp_diagnostics: Vec<Value> = if let Some(ast) = &doc.ast {
                 // Get diagnostics (already includes unused variable detection)
@@ -136,7 +136,7 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let previous_result_id = params["previousResultId"].as_str().map(|s| s.to_string());
 
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock();
             if let Some(doc) = self.get_document(&documents, uri) {
                 // Get diagnostics from the existing provider
                 if let Some(ast) = &doc.ast {
@@ -237,7 +237,7 @@ impl LspServer {
 
         // Collect document snapshots without holding lock
         let docs_snapshot: Vec<(String, DocumentState)> = {
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock();
             documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
         };
 

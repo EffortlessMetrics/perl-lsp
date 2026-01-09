@@ -70,8 +70,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
+use parking_lot::Mutex;
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicBool, AtomicU32, Ordering},
 };
 use std::time::{Duration, Instant};
@@ -142,7 +143,7 @@ pub struct LspServer {
     /// Root path for module resolution
     root_path: Arc<Mutex<Option<PathBuf>>>,
     /// Advertised server capabilities
-    advertised_features: std::sync::Mutex<crate::capabilities::AdvertisedFeatures>,
+    advertised_features: Mutex<crate::capabilities::AdvertisedFeatures>,
     /// Client supports pull diagnostics
     client_supports_pull_diags: Arc<AtomicBool>,
     /// Workspace configuration for module resolution
@@ -183,7 +184,7 @@ impl LspServer {
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
             root_path: Arc::new(Mutex::new(None)),
-            advertised_features: std::sync::Mutex::new(default_features),
+            advertised_features: Mutex::new(default_features),
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
         }
@@ -217,7 +218,7 @@ impl LspServer {
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
             root_path: Arc::new(Mutex::new(None)),
-            advertised_features: std::sync::Mutex::new(default_features),
+            advertised_features: Mutex::new(default_features),
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
         }
@@ -232,25 +233,21 @@ impl LspServer {
         });
 
         let notification_str = serde_json::to_string(&notification)?;
-        // Handle lock poisoning gracefully instead of panicking
-        let mut output = self
-            .output
-            .lock()
-            .map_err(|e| io::Error::other(format!("Failed to acquire output lock: {}", e)))?;
+        // parking_lot locks cannot be poisoned
+        let mut output = self.output.lock();
         write!(output, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)?;
         output.flush()
     }
 
-    /// Acquire a lock on the documents map with poison recovery
+    /// Acquire a lock on the documents map
     ///
-    /// This helper centralizes lock acquisition behavior, recovering from
-    /// panicked threads by unwrapping the poisoned mutex. This prevents
-    /// server crashes when another thread has panicked while holding the lock.
+    /// This helper centralizes lock acquisition behavior. parking_lot locks
+    /// cannot be poisoned, so this always succeeds (or blocks until available).
     #[inline]
     pub(crate) fn documents_guard(
         &self,
-    ) -> std::sync::MutexGuard<'_, HashMap<String, DocumentState>> {
-        self.documents.lock().unwrap_or_else(|e| e.into_inner())
+    ) -> parking_lot::MutexGuard<'_, HashMap<String, DocumentState>> {
+        self.documents.lock()
     }
 
     /// Create a lightweight snapshot of all document URIs and text content
@@ -399,9 +396,8 @@ impl LspServer {
         if let Some(request) = read_message(&mut buf_reader)? {
             if let Some(response) = self.handle_request(request) {
                 // Write response to the configured output using transport module
-                if let Ok(mut output) = self.output.lock() {
-                    write_message(&mut *output, &response)?;
-                }
+                let mut output = self.output.lock();
+                write_message(&mut *output, &response)?;
             }
         }
         Ok(())
@@ -412,21 +408,20 @@ impl LspServer {
 
     /// Mark a request as cancelled
     fn cancel_mark(&self, id: &Value) {
-        if let Ok(mut c) = self.cancelled.lock() {
-            c.insert(id.clone());
-        }
+        let mut c = self.cancelled.lock();
+        c.insert(id.clone());
     }
 
     /// Clear a cancelled request
     fn cancel_clear(&self, id: &Value) {
-        if let Ok(mut c) = self.cancelled.lock() {
-            c.remove(id);
-        }
+        let mut c = self.cancelled.lock();
+        c.remove(id);
     }
 
     /// Check if a request has been cancelled
     fn is_cancelled(&self, id: &Value) -> bool {
-        if let Ok(set) = self.cancelled.lock() { set.contains(id) } else { false }
+        let set = self.cancelled.lock();
+        set.contains(id)
     }
 
     // Note: handle_request is implemented in dispatch.rs
@@ -465,7 +460,7 @@ impl LspServer {
         let uri = parts[0];
         let test_name = parts[1..].join("::");
 
-        let documents = self.documents.lock().unwrap();
+        let documents = self.documents.lock();
         if let Some(doc) = documents.get(uri) {
             let runner = TestRunner::new(doc.text.clone(), uri.to_string());
             let results = runner.run_test(&test_name);
@@ -496,7 +491,7 @@ impl LspServer {
     pub(crate) fn run_test_file(&self, uri: &str) -> Result<Option<Value>, JsonRpcError> {
         eprintln!("Running test file: {}", uri);
 
-        let documents = self.documents.lock().unwrap();
+        let documents = self.documents.lock();
         if let Some(doc) = documents.get(uri) {
             let runner = TestRunner::new(doc.text.clone(), uri.to_string());
             let results = runner.run_test(uri);
@@ -579,7 +574,7 @@ impl LspServer {
     /// Get document by URI with normalization fallback
     pub(crate) fn get_document<'a>(
         &self,
-        documents: &'a std::sync::MutexGuard<'_, HashMap<String, DocumentState>>,
+        documents: &'a parking_lot::MutexGuard<'_, HashMap<String, DocumentState>>,
         uri: &str,
     ) -> Option<&'a DocumentState> {
         let normalized = self.normalize_uri_key(uri);
@@ -589,7 +584,7 @@ impl LspServer {
     /// Get mutable document by URI with normalization fallback
     pub(crate) fn get_document_mut<'a>(
         &self,
-        documents: &'a mut std::sync::MutexGuard<'_, HashMap<String, DocumentState>>,
+        documents: &'a mut parking_lot::MutexGuard<'_, HashMap<String, DocumentState>>,
         uri: &str,
     ) -> Option<&'a mut DocumentState> {
         let normalized = self.normalize_uri_key(uri);
@@ -612,7 +607,7 @@ impl LspServer {
     /// Ensure the request version matches the current document version
     fn ensure_latest(&self, uri: &str, req_version: Option<i32>) -> Result<(), JsonRpcError> {
         if let Some(v) = req_version {
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if v < doc.version {
                     return Err(Self::content_modified());
@@ -1214,13 +1209,13 @@ impl LspServer {
 
     /// Get buffer text for a URI
     pub(crate) fn buffer_text(&self, uri: &str) -> Option<String> {
-        let docs = self.documents.lock().unwrap();
+        let docs = self.documents.lock();
         docs.get(uri).map(|d| d.text.clone())
     }
 
     /// Iterate over all open buffers (for reference search)
     pub(crate) fn iter_open_buffers(&self) -> Vec<(String, String)> {
-        let docs = self.documents.lock().unwrap();
+        let docs = self.documents.lock();
         docs.iter().map(|(uri, doc)| (uri.clone(), doc.text.clone())).collect()
     }
 }
@@ -1264,7 +1259,7 @@ mod tests {
         let text = "package Foo;"; // No trailing newline
         let rope = Rope::from_str(text);
         let line_starts = LineStartsCache::new_rope(&rope);
-        server.documents.lock().unwrap().insert(
+        server.documents.lock().insert(
             uri.to_string(),
             DocumentState {
                 rope,

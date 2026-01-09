@@ -5,6 +5,24 @@
 
 use super::super::*;
 use crate::lsp::protocol::{req_position, req_uri};
+use std::sync::OnceLock;
+
+static SUB_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+static PACKAGE_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+
+fn get_sub_regex() -> &'static regex::Regex {
+    SUB_REGEX.get_or_init(|| {
+        regex::Regex::new(r"\bsub\s+([a-zA-Z_]\w*)\b")
+            .expect("hardcoded regex should compile")
+    })
+}
+
+fn get_package_regex() -> &'static regex::Regex {
+    PACKAGE_REGEX.get_or_init(|| {
+        regex::Regex::new(r"\bpackage\s+([a-zA-Z_][\w:]*)\b")
+            .expect("hardcoded regex should compile")
+    })
+}
 
 impl LspServer {
     /// Handle textDocument/prepareTypeHierarchy request
@@ -68,8 +86,8 @@ impl LspServer {
                 }
 
                 // Fallback to regex-based approach
-                let sub_regex = regex::Regex::new(r"\bsub\s+([a-zA-Z_]\w*)\b").unwrap();
-                let package_regex = regex::Regex::new(r"\bpackage\s+([a-zA-Z_][\w:]*)\b").unwrap();
+                let sub_regex = get_sub_regex();
+                let package_regex = get_package_regex();
 
                 // Find all subs and packages with their positions
                 let mut exact_sub: Option<(String, usize, usize)> = None;
@@ -370,7 +388,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         // Gate unadvertised feature
-        if !self.advertised_features.lock().unwrap().call_hierarchy {
+        if !self.advertised_features.lock().call_hierarchy {
             return Err(crate::lsp_errors::method_not_advertised());
         }
 

@@ -86,7 +86,7 @@ impl LspServer {
 
         // Collect document snapshots without holding lock
         let docs_snapshot: Vec<(String, DocumentState)> = {
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock();
             documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
         };
 
@@ -152,7 +152,7 @@ impl LspServer {
         // Snapshot documents without holding lock during iteration
         // (Follows same pattern as handle_workspace_symbols_v2)
         let docs_snapshot: Vec<(String, DocumentState)> = {
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock();
             documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
         };
 
@@ -199,7 +199,7 @@ impl LspServer {
             let uri_key = self.normalize_uri_key(uri);
 
             // Look up the symbol in our index to get more details
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock();
             let doc_opt = documents.get(&uri_key).or_else(|| documents.get(uri)); // try raw as a fallback
 
             if let Some(doc) = doc_opt {
@@ -313,7 +313,7 @@ impl LspServer {
 
                         // Handle workspace configuration sections
                         let value = if section.starts_with("perl.workspace.") {
-                            let workspace_config = self.workspace_config.lock().unwrap();
+                            let workspace_config = self.workspace_config.lock();
                             match section {
                                 "perl.workspace.includePaths" => {
                                     json!(workspace_config.include_paths)
@@ -327,7 +327,7 @@ impl LspServer {
                                 _ => json!(null),
                             }
                         } else {
-                            let config = self.config.lock().unwrap();
+                            let config = self.config.lock();
                             match section {
                                 "perl.inlayHints.enabled" => json!(config.inlay_hints_enabled),
                                 "perl.inlayHints.parameterHints" => {
@@ -370,14 +370,14 @@ impl LspServer {
                 if let Some(perl) = settings.get("perl") {
                     // Update server config (inlay hints, test runner)
                     {
-                        let mut config = self.config.lock().unwrap();
+                        let mut config = self.config.lock();
                         config.update_from_value(perl);
                         eprintln!("Updated server config from perl settings");
                     }
 
                     // Update workspace config (include paths, @INC)
                     {
-                        let mut workspace_config = self.workspace_config.lock().unwrap();
+                        let mut workspace_config = self.workspace_config.lock();
                         workspace_config.update_from_value(perl);
                         eprintln!("Updated workspace config from perl settings");
                     }
@@ -460,7 +460,8 @@ impl LspServer {
 
                     // Also update our internal document store if it exists
                     #[cfg(feature = "workspace")]
-                    if let Ok(mut documents) = self.documents.lock() {
+                    {
+                        let mut documents = self.documents.lock();
                         if let Some(doc) = self.get_document_mut(&mut documents, &uri) {
                             // Note: content variable is only available inside the cfg block above
                             // We'll need to re-read the file or restructure this
@@ -487,7 +488,8 @@ impl LspServer {
                     }
 
                     // Remove from document store
-                    if let Ok(mut documents) = self.documents.lock() {
+                    {
+                        let mut documents = self.documents.lock();
                         documents.remove(&uri);
                     }
 
@@ -547,9 +549,7 @@ impl LspServer {
 
                         for dependent_uri in dependents {
                             // Get the document content
-                            let Ok(documents) = self.documents.lock() else {
-                                continue;
-                            };
+                            let documents = self.documents.lock();
                             if let Some(doc) = documents.get(&dependent_uri) {
                                 let mut edits = Vec::new();
 
@@ -630,7 +630,8 @@ impl LspServer {
                     }
 
                     // Remove from document store
-                    if let Ok(mut documents) = self.documents.lock() {
+                    {
+                        let mut documents = self.documents.lock();
                         documents.remove(uri);
                     }
                 }
@@ -650,7 +651,7 @@ impl LspServer {
             if let Some(event) = params.get("event") {
                 // Handle added folders
                 if let Some(added) = event["added"].as_array() {
-                    let mut workspace_folders = self.workspace_folders.lock().unwrap();
+                    let mut workspace_folders = self.workspace_folders.lock();
                     for folder in added {
                         if let Some(uri) = folder["uri"].as_str() {
                             eprintln!("Added workspace folder: {}", uri);
@@ -661,14 +662,14 @@ impl LspServer {
 
                 // Handle removed folders
                 if let Some(removed) = event["removed"].as_array() {
-                    let mut workspace_folders = self.workspace_folders.lock().unwrap();
+                    let mut workspace_folders = self.workspace_folders.lock();
                     for folder in removed {
                         if let Some(uri) = folder["uri"].as_str() {
                             eprintln!("Removed workspace folder: {}", uri);
                             workspace_folders.retain(|f| f.as_str() != uri);
 
                             // Also remove documents from the removed workspace
-                            let mut documents = self.documents.lock().unwrap();
+                            let mut documents = self.documents.lock();
                             let docs_to_remove: Vec<String> = documents
                                 .keys()
                                 .filter(|doc_uri| doc_uri.starts_with(uri))
@@ -706,9 +707,7 @@ impl LspServer {
             if let Some(changes) = edit["changes"].as_object() {
                 for (uri, edits) in changes {
                     if let Some(edits) = edits.as_array() {
-                        let Ok(mut documents) = self.documents.lock() else {
-                            continue;
-                        };
+                        let mut documents = self.documents.lock();
                         if let Some(doc) = self.get_document_mut(&mut documents, uri) {
                             // Apply edits in reverse order to maintain positions
                             let mut sorted_edits = edits.clone();

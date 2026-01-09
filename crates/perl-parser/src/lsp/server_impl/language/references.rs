@@ -12,17 +12,19 @@ use super::super::{byte_to_utf16_col, *};
 use crate::lsp::protocol::{req_position, req_uri};
 use crate::lsp::state::{reference_search_deadline, references_cap};
 use crate::lsp::utils::{is_word_boundary, token_under_cursor};
-use lazy_static::lazy_static;
+use std::sync::OnceLock;
 use std::time::Instant;
 
 #[cfg(feature = "workspace")]
 use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
 
-lazy_static! {
-    /// Regex for matching fully-qualified Perl symbol names (e.g., Package::SubPackage::function)
-    /// Compiled once at startup to avoid per-request regex compilation overhead.
-    static ref QUALIFIED_NAME_RE: regex::Regex =
-        regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)").unwrap();
+static QUALIFIED_NAME_RE: OnceLock<regex::Regex> = OnceLock::new();
+
+fn get_qualified_name_regex() -> &'static regex::Regex {
+    QUALIFIED_NAME_RE.get_or_init(|| {
+        regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)")
+            .expect("hardcoded regex should compile")
+    })
 }
 
 impl LspServer {
@@ -226,13 +228,14 @@ impl LspServer {
                                 let cursor_in_text = offset - text_start;
 
                                 // Use cached regex to avoid per-request compilation overhead
-                                for captures in QUALIFIED_NAME_RE.captures_iter(&text_around) {
+                                let qualified_name_re = get_qualified_name_regex();
+                                for captures in qualified_name_re.captures_iter(&text_around) {
                                     if let Some(m) = captures.get(1) {
                                         if cursor_in_text >= m.start() && cursor_in_text <= m.end()
                                         {
                                             let parts: Vec<&str> = m.as_str().split("::").collect();
                                             if parts.len() >= 2 {
-                                                let name = parts.last().unwrap().to_string();
+                                                let name = parts.last().copied().unwrap_or("").to_string();
                                                 let pkg = parts[..parts.len() - 1].join("::");
                                                 let key = crate::workspace_index::SymbolKey {
                                                     pkg: pkg.clone().into(),

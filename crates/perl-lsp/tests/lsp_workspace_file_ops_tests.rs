@@ -3,7 +3,7 @@
 use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::sync::Arc;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 /// Helper to create a test LSP server
 fn create_test_server() -> LspServer {

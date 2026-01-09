@@ -68,7 +68,7 @@ impl LspServer {
 
             // Store document state with normalized URI
             let normalized_uri = self.normalize_uri_key(uri);
-            self.documents.lock().unwrap().insert(
+            self.documents.lock().insert(
                 normalized_uri,
                 DocumentState {
                     rope: rope.clone(),
@@ -97,14 +97,14 @@ impl LspServer {
                         .map(|s| s.name.clone())
                         .collect::<Vec<_>>();
 
-                    let mut index = self.symbol_index.lock().unwrap();
+                    let mut index = self.symbol_index.lock();
                     for symbol in symbols {
                         index.add_symbol(symbol);
                     }
                 }
                 #[cfg(not(feature = "workspace"))]
                 {
-                    let _index = self.symbol_index.lock().unwrap();
+                    let _index = self.symbol_index.lock();
                     // Just ensure the index exists even without workspace feature
                 }
 
@@ -165,7 +165,7 @@ impl LspServer {
 
             if let Some(changes) = params["contentChanges"].as_array() {
                 // Get current document state or create new one
-                let mut documents = self.documents.lock().unwrap();
+                let mut documents = self.documents.lock();
                 let normalized_uri = self.normalize_uri_key(uri);
                 let mut doc_state = documents
                     .get(&normalized_uri)
@@ -294,7 +294,6 @@ impl LspServer {
                             let doc_content = self
                                 .documents
                                 .lock()
-                                .unwrap()
                                 .get(uri)
                                 .map(|d| d.text.clone())
                                 .unwrap_or_default();
@@ -340,7 +339,7 @@ impl LspServer {
             }
 
             // Remove from documents
-            self.documents.lock().unwrap().remove(uri);
+            self.documents.lock().remove(uri);
 
             // Clear from workspace index
             // Note: Mutation operation - use coordinator.index() directly
@@ -383,7 +382,7 @@ impl LspServer {
             eprintln!("Document saved: {}", uri);
 
             // Re-run diagnostics on save to catch any changes
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     // Run diagnostics
@@ -458,13 +457,13 @@ impl LspServer {
 
             eprintln!("Document will save wait until: {}", uri);
 
-            let documents = self.documents.lock().unwrap();
+            let documents = self.documents.lock();
             if let Some(doc) = self.get_document(&documents, uri) {
                 // Return text edits to be applied before saving
                 // For example: format document, organize imports, etc.
 
                 // Check if we should format on save
-                let config = self.config.lock().unwrap();
+                let config = self.config.lock();
                 if config.test_runner_enabled {
                     // Using existing config field as example
                     // Could add format_on_save config option

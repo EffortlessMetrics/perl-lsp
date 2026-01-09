@@ -28,8 +28,8 @@ mod degraded_mode_tests {
     use std::sync::Arc;
 
     fn create_test_server() -> LspServer {
-        let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> =
-            Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
+        let output: Arc<parking_lot::Mutex<Box<dyn std::io::Write + Send>>> =
+            Arc::new(parking_lot::Mutex::new(Box::new(Vec::new())));
         LspServer::with_output(output)
     }
 
@@ -301,8 +301,8 @@ mod caps_enforcement_tests {
     use std::sync::Arc;
 
     fn create_test_server() -> LspServer {
-        let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> =
-            Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
+        let output: Arc<parking_lot::Mutex<Box<dyn std::io::Write + Send>>> =
+            Arc::new(parking_lot::Mutex::new(Box::new(Vec::new())));
         LspServer::with_output(output)
     }
 
@@ -446,8 +446,8 @@ mod deadline_enforcement_tests {
     use std::sync::Arc;
 
     fn create_test_server() -> LspServer {
-        let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> =
-            Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
+        let output: Arc<parking_lot::Mutex<Box<dyn std::io::Write + Send>>> =
+            Arc::new(parking_lot::Mutex::new(Box::new(Vec::new())));
         LspServer::with_output(output)
     }
 
@@ -580,8 +580,8 @@ mod windows_uri_path_tests {
     use std::sync::Arc;
 
     fn create_test_server() -> LspServer {
-        let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> =
-            Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
+        let output: Arc<parking_lot::Mutex<Box<dyn std::io::Write + Send>>> =
+            Arc::new(parking_lot::Mutex::new(Box::new(Vec::new())));
         LspServer::with_output(output)
     }
 

@@ -248,7 +248,11 @@ impl LspServer {
         let chars: Vec<char> = name.chars().collect();
 
         // First character must be letter or underscore
-        if !chars[0].is_alphabetic() && chars[0] != '_' {
+        let first_char = match chars.first() {
+            Some(c) => c,
+            None => return false, // Empty string is not a valid identifier
+        };
+        if !first_char.is_alphabetic() && *first_char != '_' {
             return false;
         }
 

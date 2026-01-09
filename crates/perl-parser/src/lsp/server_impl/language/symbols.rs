@@ -6,6 +6,24 @@ use super::super::{byte_to_utf16_col, *};
 use crate::lsp::fallback::text::folding_ranges_from_text;
 use crate::lsp::protocol::req_uri;
 use crate::lsp::state::document_symbol_cap;
+use std::sync::OnceLock;
+
+static SUB_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+static PACKAGE_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+
+fn get_sub_regex() -> &'static regex::Regex {
+    SUB_REGEX.get_or_init(|| {
+        regex::Regex::new(r"^\s*sub\s+([a-zA-Z_]\w*)\b")
+            .expect("hardcoded regex should compile")
+    })
+}
+
+fn get_package_regex() -> &'static regex::Regex {
+    PACKAGE_REGEX.get_or_init(|| {
+        regex::Regex::new(r"^\s*package\s+([a-zA-Z_][\w:]*)\b")
+            .expect("hardcoded regex should compile")
+    })
+}
 
 impl LspServer {
     /// Handle textDocument/documentSymbol request
@@ -264,9 +282,9 @@ impl LspServer {
         let mut symbols = Vec::new();
         let lines: Vec<&str> = content.lines().collect();
 
-        // Regex for subroutine declarations
-        let sub_regex = regex::Regex::new(r"^\s*sub\s+([a-zA-Z_]\w*)\b").unwrap();
-        let package_regex = regex::Regex::new(r"^\s*package\s+([a-zA-Z_][\w:]*)\b").unwrap();
+        // Get pre-compiled regexes
+        let sub_regex = get_sub_regex();
+        let package_regex = get_package_regex();
 
         for (line_num, line) in lines.iter().enumerate() {
             // Check for subroutines

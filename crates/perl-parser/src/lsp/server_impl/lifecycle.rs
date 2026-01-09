@@ -88,7 +88,7 @@ impl LspServer {
             if let Some(workspace_folders) =
                 params.get("workspaceFolders").and_then(|f| f.as_array())
             {
-                let mut folders = self.workspace_folders.lock().unwrap();
+                let mut folders = self.workspace_folders.lock();
                 for folder in workspace_folders {
                     if let Some(uri) = folder["uri"].as_str() {
                         eprintln!("Initialized with workspace folder: {}", uri);
@@ -97,7 +97,7 @@ impl LspServer {
                 }
             } else if let Some(root_uri) = params.get("rootUri").and_then(|u| u.as_str()) {
                 // Fallback to rootUri if workspaceFolders is not provided
-                let mut folders = self.workspace_folders.lock().unwrap();
+                let mut folders = self.workspace_folders.lock();
                 eprintln!("Initialized with root URI: {}", root_uri);
                 folders.push(root_uri.to_string());
                 // Also set the root path for module resolution
@@ -116,7 +116,7 @@ impl LspServer {
                             format!("file:///{}", root_path.replace('\\', "/"))
                         }
                     });
-                let mut folders = self.workspace_folders.lock().unwrap();
+                let mut folders = self.workspace_folders.lock();
                 folders.push(root_uri.clone());
                 self.set_root_uri(&root_uri);
             }
@@ -185,7 +185,7 @@ impl LspServer {
 
         // Persist advertised features for gating
         let features = build_flags.to_advertised_features();
-        *self.advertised_features.lock().unwrap() = features.clone();
+        *self.advertised_features.lock() = features.clone();
 
         // Generate capabilities from build flags
         let server_caps = crate::capabilities::capabilities_for(build_flags);
@@ -228,7 +228,7 @@ impl LspServer {
             notification::{DidChangeWatchedFiles, Notification},
         };
 
-        if !self.advertised_features.lock().unwrap().workspace_symbol {
+        if !self.advertised_features.lock().workspace_symbol {
             return;
         }
 
@@ -271,27 +271,19 @@ impl LspServer {
         });
 
         // Send using the proper output mechanism with explicit error logging
-        // (previously silenced with .ok() which hid client disconnect issues)
-        match self.output.lock() {
-            Ok(mut output) => match serde_json::to_string(&request) {
-                Ok(msg) => {
-                    if let Err(e) = write!(output, "Content-Length: {}\r\n\r\n{}", msg.len(), msg) {
-                        eprintln!("[perl-lsp] Failed to write file watcher request: {}", e);
-                        return;
-                    }
-                    if let Err(e) = output.flush() {
-                        eprintln!("[perl-lsp] Failed to flush file watcher request: {}", e);
-                    }
+        let mut output = self.output.lock();
+        match serde_json::to_string(&request) {
+            Ok(msg) => {
+                if let Err(e) = write!(output, "Content-Length: {}\r\n\r\n{}", msg.len(), msg) {
+                    eprintln!("[perl-lsp] Failed to write file watcher request: {}", e);
+                    return;
                 }
-                Err(e) => {
-                    eprintln!("[perl-lsp] Failed to serialize file watcher request: {}", e);
+                if let Err(e) = output.flush() {
+                    eprintln!("[perl-lsp] Failed to flush file watcher request: {}", e);
                 }
-            },
+            }
             Err(e) => {
-                eprintln!(
-                    "[perl-lsp] Could not acquire output lock for file watcher registration: {}",
-                    e
-                );
+                eprintln!("[perl-lsp] Failed to serialize file watcher request: {}", e);
             }
         }
     }
@@ -322,7 +314,7 @@ impl LspServer {
         #[cfg(feature = "workspace")]
         if let Some(coordinator) = self.coordinator() {
             // Check if workspace folders exist - if not, we're ready immediately
-            let folders = self.workspace_folders.lock().unwrap();
+            let folders = self.workspace_folders.lock();
             if folders.is_empty() || has_symbols {
                 coordinator.transition_to_ready(file_count, symbol_count);
                 eprintln!(
@@ -351,7 +343,7 @@ impl LspServer {
     /// Set the root path from the root URI during initialization
     pub(super) fn set_root_uri(&self, root_uri: &str) {
         let root_path = Url::parse(root_uri).ok().and_then(|u| u.to_file_path().ok());
-        *self.root_path.lock().unwrap() = root_path;
+        *self.root_path.lock() = root_path;
     }
 
     /// Enhanced module path resolver using workspace configuration
@@ -359,12 +351,12 @@ impl LspServer {
     /// Uses configurable include paths from `WorkspaceConfig` instead of
     /// hardcoded directories. Returns the absolute filesystem path for a module.
     pub(super) fn resolve_module_path(&self, module: &str) -> Option<PathBuf> {
-        let root = self.root_path.lock().unwrap().clone()?;
+        let root = self.root_path.lock().clone()?;
         let rel = module.replace("::", "/") + ".pm";
 
         // Use configured include paths
         let include_paths = {
-            let config = self.workspace_config.lock().unwrap();
+            let config = self.workspace_config.lock();
             config.include_paths.clone()
         };
 
@@ -414,13 +406,13 @@ impl LspServer {
 
         // Get configuration upfront to minimize lock contention
         let (include_paths, timeout_ms, use_system_inc) = {
-            let config = self.workspace_config.lock().unwrap();
+            let config = self.workspace_config.lock();
             (config.include_paths.clone(), config.resolution_timeout_ms, config.use_system_inc)
         };
         let timeout = Duration::from_millis(timeout_ms);
 
         // TIER 1: Open documents (fastest path - in-memory lookup)
-        let documents = self.documents.lock().unwrap();
+        let documents = self.documents.lock();
         for (uri, _doc) in documents.iter() {
             if uri.ends_with(&relative_path) {
                 return Some(uri.clone());
@@ -429,7 +421,7 @@ impl LspServer {
         drop(documents);
 
         // TIER 2 & 3: Workspace folders with configured include paths
-        let workspace_folders = self.workspace_folders.lock().unwrap().clone();
+        let workspace_folders = self.workspace_folders.lock().clone();
 
         for workspace_folder in workspace_folders.iter() {
             // Early timeout check
@@ -485,7 +477,7 @@ impl LspServer {
 
             // Get system @INC paths (lazily populated)
             let system_paths = {
-                let mut config = self.workspace_config.lock().unwrap();
+                let mut config = self.workspace_config.lock();
                 config.get_system_inc().to_vec()
             };
 

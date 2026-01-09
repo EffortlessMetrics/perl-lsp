@@ -10,7 +10,8 @@ use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::fs;
 use std::io::{Cursor, Write};
-use std::sync::{Arc, Mutex, mpsc};
+use parking_lot::Mutex;
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
@@ -339,7 +340,7 @@ impl LspHarness {
             total_checks += 1;
 
             // Check for notifications more efficiently
-            let notifications = self.notification_buffer.lock().unwrap();
+            let notifications = self.notification_buffer.lock();
             if notifications.is_empty() {
                 idle_count += 1;
                 if idle_count >= required_idle_count {
@@ -520,13 +521,13 @@ impl LspHarness {
         while start.elapsed() < timeout {
             thread::sleep(Duration::from_millis(10));
 
-            let notifications = self.notification_buffer.lock().unwrap();
+            let notifications = self.notification_buffer.lock();
             if !notifications.is_empty() {
                 break;
             }
         }
 
-        let mut notifications = self.notification_buffer.lock().unwrap();
+        let mut notifications = self.notification_buffer.lock();
         let mut result = Vec::new();
 
         while let Some(notif) = notifications.pop_front() {
@@ -577,7 +578,7 @@ impl LspHarness {
         timeout: Duration,
     ) -> Result<Value, String> {
         // Clear output buffer
-        self.output_buffer.lock().unwrap().clear();
+        self.output_buffer.lock().clear();
 
         // Format request with Content-Length header
         let request_str = request.to_string();
@@ -596,7 +597,7 @@ impl LspHarness {
             }
 
             // Check if we have a response
-            if let Ok(output) = self.output_buffer.try_lock() {
+            if let Some(output) = self.output_buffer.try_lock() {
                 let output_str = String::from_utf8_lossy(&output);
 
                 // Parse all messages in the output (might be multiple)
@@ -657,7 +658,7 @@ impl LspHarness {
         timeout: Duration,
     ) -> Result<Value, String> {
         // Clear output buffer
-        self.output_buffer.lock().unwrap().clear();
+        self.output_buffer.lock().clear();
 
         // Format request with Content-Length header
         let request_str = request.to_string();
@@ -676,7 +677,7 @@ impl LspHarness {
             }
 
             // Check if we have a response
-            if let Ok(output) = self.output_buffer.try_lock() {
+            if let Some(output) = self.output_buffer.try_lock() {
                 let output_str = String::from_utf8_lossy(&output);
 
                 // Parse all messages in the output (might be multiple)
@@ -778,7 +779,7 @@ impl LspHarness {
     /// Use assert_no_response_for_canceled() to verify cancellation worked
     pub fn cancel(&mut self, request_id: i32) {
         // Track this as a canceled ID
-        self.canceled_ids.lock().unwrap().push(request_id);
+        self.canceled_ids.lock().push(request_id);
 
         // Send $/cancelRequest notification
         self.notify(
@@ -796,7 +797,7 @@ impl LspHarness {
 
         // Wait for timeout period to ensure no response arrives
         while start.elapsed() < timeout {
-            let output = self.output_buffer.lock().unwrap();
+            let output = self.output_buffer.lock();
             let output_str = String::from_utf8_lossy(&output);
 
             // Check if we got a response for this ID
@@ -845,7 +846,7 @@ impl LspHarness {
         let start = Instant::now();
 
         while start.elapsed() < timeout {
-            let mut notifications = self.notification_buffer.lock().unwrap();
+            let mut notifications = self.notification_buffer.lock();
 
             // Search for matching notification
             if let Some(pos) = notifications
@@ -1009,7 +1010,7 @@ struct TestWriter {
 
 impl Write for TestWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let mut buffer = self.buffer.lock().unwrap();
+        let mut buffer = self.buffer.lock();
         buffer.extend_from_slice(buf);
 
         // Try to parse as notification
@@ -1019,7 +1020,7 @@ impl Write for TestWriter {
             if let Ok(value) = serde_json::from_str::<Value>(json_str) {
                 if value.get("method").is_some() && value.get("id").is_none() {
                     // It's a notification
-                    self.notifications.lock().unwrap().push_back(value);
+                    self.notifications.lock().push_back(value);
                 }
             }
         }
