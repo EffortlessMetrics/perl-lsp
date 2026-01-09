@@ -1,8 +1,48 @@
 //! Text processing utilities for LSP
 //!
 //! Common text processing helpers used across the LSP implementation.
+//! Includes panic-free accessors for safe string processing.
 
 use lsp_types::Position;
+
+// =============================================================================
+// Panic-free character accessors (Issue #143)
+// =============================================================================
+
+/// Safely get the first character of a string slice.
+/// Returns None for empty strings instead of panicking.
+#[inline]
+pub fn first_char(s: &str) -> Option<char> {
+    s.chars().next()
+}
+
+/// Safely get the nth character of a string slice.
+/// Returns None if index is out of bounds instead of panicking.
+#[inline]
+pub fn nth_char(s: &str, n: usize) -> Option<char> {
+    s.chars().nth(n)
+}
+
+/// Safely get the first character as a String.
+/// Useful when you need the sigil character as a string.
+#[inline]
+pub fn first_char_string(s: &str) -> Option<String> {
+    s.chars().next().map(|c| c.to_string())
+}
+
+/// Safely check if the first character satisfies a predicate.
+/// Returns false for empty strings.
+#[inline]
+pub fn first_char_is<F: FnOnce(char) -> bool>(s: &str, predicate: F) -> bool {
+    s.chars().next().is_some_and(predicate)
+}
+
+/// Safely check if the nth character satisfies a predicate.
+/// Returns false if index is out of bounds.
+#[inline]
+pub fn nth_char_is<F: FnOnce(char) -> bool>(s: &str, n: usize, predicate: F) -> bool {
+    s.chars().nth(n).is_some_and(predicate)
+}
 
 /// Convert byte offset to UTF-16 column position
 ///

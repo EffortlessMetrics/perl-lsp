@@ -6,7 +6,7 @@ const OPEN: &[char] = &['(', '[', '{', '<', '\'', '"'];
 const CLOSE: &[char] = &[')', ']', '}', '>', '\'', '"'];
 
 fn char_at(text: &str, byte: usize) -> Option<char> {
-    text[byte..].chars().next()
+    text.get(byte..)?.chars().next()
 }
 
 fn prev_char_pos(text: &str, mut byte: usize) -> Option<(usize, char)> {
@@ -18,7 +18,9 @@ fn prev_char_pos(text: &str, mut byte: usize) -> Option<(usize, char)> {
         byte -= 1;
     }
     let prev_start = text[..byte].char_indices().last()?.0;
-    Some((prev_start, text[prev_start..].chars().next().unwrap()))
+    // Safety: prev_start is a valid char boundary from char_indices
+    let ch = text.get(prev_start..)?.chars().next()?;
+    Some((prev_start, ch))
 }
 
 /// Find a matching bracket/quote from a byte position that sits on, or just

@@ -47,7 +47,11 @@ pub fn compute_links(uri: &str, text: &str, roots: &[Url]) -> Vec<Value> {
         if let Some(idx) = line.find("require ") {
             let rest = &line[idx + 8..];
             if let Some(start) = rest.find('"').or_else(|| rest.find('\'')) {
-                let quote_char = rest.chars().nth(start).unwrap();
+                // Safety: find returns byte offset, use get() for safe char access
+                let quote_char = match rest.get(start..).and_then(|s| s.chars().next()) {
+                    Some(c) => c,
+                    None => continue, // Skip if invalid offset
+                };
                 let s = start + 1;
                 if let Some(end) = rest[s..].find(quote_char) {
                     let req = &rest[s..s + end];

@@ -700,7 +700,11 @@ impl CompletionProvider {
             let line_prefix = &source[..context.position];
             if let Some(start) = line_prefix.rfind(['"', '\'']) {
                 // Find the end of the string to check for dangerous characters
-                let quote_char = source.chars().nth(start).unwrap();
+                // Safety: rfind returns byte offset, use get() for safe access
+                let quote_char = match source.get(start..).and_then(|s| s.chars().next()) {
+                    Some(c) => c,
+                    None => return completions, // Invalid offset, skip file completions
+                };
                 let string_end = source[start + 1..]
                     .find(quote_char)
                     .map(|i| start + 1 + i)
