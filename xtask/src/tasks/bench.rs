@@ -83,7 +83,9 @@ fn validate_output_path(output_path: &Path) -> Result<()> {
 pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .unwrap_or_else(|_| ProgressStyle::default_spinner()),
     );
 
     spinner.set_message("Running benchmarks");

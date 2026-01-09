@@ -75,21 +75,22 @@ pub fn quoted_heredoc() -> impl Strategy<Value = String> {
 
 /// Generate indented heredoc (Perl 5.26+)
 pub fn indented_heredoc() -> impl Strategy<Value = String> {
-    (heredoc_id(), heredoc_content(), prop::string::string_regex("[ \t]{0,4}").unwrap()).prop_map(
-        |(id, lines, indent)| {
-            let safe_lines = safe_content(lines, &id);
-            let mut result = format!("my $x = <<~{};\n", id);
-            for line in safe_lines {
-                result.push_str(&indent);
-                result.push_str(&line);
-                result.push('\n');
-            }
-            result.push_str(&indent);
-            result.push_str(&id);
+    // Use a simple indentation strategy instead of regex to avoid unwrap/expect
+    let indent_strategy = prop::sample::select(vec!["", " ", "  ", "   ", "    ", "\t"]);
+
+    (heredoc_id(), heredoc_content(), indent_strategy).prop_map(|(id, lines, indent)| {
+        let safe_lines = safe_content(lines, &id);
+        let mut result = format!("my $x = <<~{};\n", id);
+        for line in safe_lines {
+            result.push_str(indent);
+            result.push_str(&line);
             result.push('\n');
-            result
-        },
-    )
+        }
+        result.push_str(indent);
+        result.push_str(&id);
+        result.push('\n');
+        result
+    })
 }
 
 /// Generate backtick heredoc (command execution)

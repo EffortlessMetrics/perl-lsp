@@ -163,7 +163,10 @@ fn main() -> Result<()> {
                 use std::time::{SystemTime, UNIX_EPOCH};
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+                    .unwrap_or_else(|e| {
+                        eprintln!("Warning: system time appears to be before UNIX_EPOCH: {}", e);
+                        std::time::Duration::from_secs(0)
+                    })
                     .as_secs()
             });
 

@@ -555,7 +555,7 @@ impl Default for RefactoringEngine {
             eprintln!("Warning: Failed to create refactoring engine, using fallback: {}", e);
             // Create with default config - this path is for error recovery only
             Self::with_config(RefactoringConfig::default())
-                .expect("RefactoringEngine fallback initialization should not fail")
+                .unwrap_or_else(|_| panic!("RefactoringEngine fallback initialization failed - this is a critical bug in the refactoring system"))
         })
     }
 }
