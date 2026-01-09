@@ -14,7 +14,9 @@ pub fn run(
 ) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .context("Failed to create progress spinner template")?,
     );
 
     // Determine test profile
@@ -37,7 +39,9 @@ pub fn run(
         let features_str = features.join(",");
         feature_strings.push(features_str);
         args.push("--features");
-        args.push(feature_strings.last().unwrap());
+        if let Some(last) = feature_strings.last() {
+            args.push(last);
+        }
     }
 
     // Add verbose flag

@@ -105,7 +105,7 @@ impl std::error::Error for RefactorError {}
 // Move regex outside loop to avoid recompilation
 lazy_static::lazy_static! {
     static ref IMPORT_BLOCK_RE: Regex = Regex::new(r"(?m)^(?:use\s+[\w:]+[^\n]*\n)+")
-        .expect("IMPORT_BLOCK_RE regex should be valid");
+        .unwrap_or_else(|_| panic!("IMPORT_BLOCK_RE regex is invalid - this is a bug in the workspace refactoring system"));
 }
 
 /// A file edit as part of a refactoring operation

@@ -292,8 +292,10 @@ fn test_test_runner(test_dir: &Path) -> Result<()> {
     println!("🧪 Testing test runner...");
 
     // Run the actual test file
-    let output =
-        Command::new("perl").arg(test_dir.join("test_suite.t").to_str().unwrap()).output()?;
+    let test_path = test_dir.join("test_suite.t");
+    let test_path_str = test_path.to_str()
+        .ok_or_else(|| color_eyre::eyre::eyre!("Test path contains invalid UTF-8: {:?}", test_path))?;
+    let output = Command::new("perl").arg(test_path_str).output()?;
 
     if output.status.success() {
         println!("   ✓ Test file executes successfully");

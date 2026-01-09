@@ -1,6 +1,6 @@
 //! Release task implementation
 
-use color_eyre::eyre::{Result, bail};
+use color_eyre::eyre::{Result, WrapErr, bail};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::path::Path;
@@ -9,7 +9,9 @@ use std::process::Command;
 pub fn run(version: String, yes: bool) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .context("Failed to create progress bar template")?,
     );
 
     // Check prerequisites
@@ -57,7 +59,9 @@ pub fn run(version: String, yes: bool) -> Result<()> {
     // Package VSCode extension
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .context("Failed to create progress bar template")?,
     );
     spinner.set_message("Packaging VSCode extension...");
     package_vscode_extension(release_dir)?;
@@ -66,7 +70,9 @@ pub fn run(version: String, yes: bool) -> Result<()> {
     // Run tests
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .context("Failed to create progress bar template")?,
     );
     spinner.set_message("Running tests...");
     run_tests()?;
@@ -169,7 +175,9 @@ fn package_vscode_extension(release_dir: &Path) -> Result<()> {
         let entry = entry?;
         let path = entry.path();
         if path.extension().and_then(|s| s.to_str()) == Some("vsix") {
-            fs::rename(&path, release_dir.join(path.file_name().unwrap()))?;
+            if let Some(file_name) = path.file_name() {
+                fs::rename(&path, release_dir.join(file_name))?;
+            }
         }
     }
 

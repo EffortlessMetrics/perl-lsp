@@ -97,9 +97,10 @@ pub fn publish_vscode(yes: bool, token: Option<String>) -> Result<()> {
 
     // Publish to marketplace
     println!("Publishing to marketplace...");
+    let token = token.ok_or_else(|| color_eyre::eyre::eyre!("VSCE_PAT environment variable is required for publishing"))?;
     let output = Command::new("npx")
         .current_dir("vscode-extension")
-        .env("VSCE_PAT", token.unwrap())
+        .env("VSCE_PAT", token)
         .args(["vsce", "publish"])
         .output()?;
 
