@@ -1,7 +1,7 @@
+use parking_lot::Mutex;
 use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Cursor, Read, Write};
-use parking_lot::Mutex;
 use std::sync::Arc;
 
 /// Simple writer that captures all output into a shared buffer

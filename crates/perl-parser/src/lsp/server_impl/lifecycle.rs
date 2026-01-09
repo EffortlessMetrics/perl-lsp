@@ -189,7 +189,12 @@ impl LspServer {
 
         // Generate capabilities from build flags
         let server_caps = crate::capabilities::capabilities_for(build_flags);
-        let mut capabilities = serde_json::to_value(&server_caps).unwrap();
+        let mut capabilities = serde_json::to_value(&server_caps).map_err(|e| {
+            crate::lsp::protocol::internal_error(&format!(
+                "Failed to serialize server capabilities: {}",
+                e
+            ))
+        })?;
 
         // Add fields not yet in lsp-types 0.97
         capabilities["positionEncoding"] = json!("utf-16");
@@ -248,10 +253,17 @@ impl LspServer {
         ];
 
         let opts = DidChangeWatchedFilesRegistrationOptions { watchers };
+        let register_options = match serde_json::to_value(opts) {
+            Ok(val) => Some(val),
+            Err(e) => {
+                eprintln!("[perl-lsp] Failed to serialize file watcher options: {}", e);
+                return;
+            }
+        };
         let reg = Registration {
             id: "perl-didChangeWatchedFiles".into(),
             method: <DidChangeWatchedFiles as Notification>::METHOD.to_string(),
-            register_options: Some(serde_json::to_value(opts).unwrap_or(Value::Null)),
+            register_options,
         };
 
         let params = RegistrationParams { registrations: vec![reg] };

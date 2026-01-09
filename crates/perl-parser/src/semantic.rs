@@ -912,8 +912,7 @@ impl SemanticAnalyzer {
 
         // Check for consecutive comment lines
         let comment_re = COMMENT_RE.get_or_init(|| {
-            Regex::new(r"(?m)(#.*\n)+\s*$")
-                .expect("hardcoded comment regex pattern should compile")
+            Regex::new(r"(?m)(#.*\n)+\s*$").expect("hardcoded comment regex pattern should compile")
         });
         if let Some(caps) = comment_re.captures(before) {
             // Strip the # prefix from each comment line

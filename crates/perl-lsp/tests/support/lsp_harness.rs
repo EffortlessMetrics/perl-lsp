@@ -5,12 +5,12 @@
 #![allow(dead_code)]
 #![allow(clippy::collapsible_if)]
 
+use parking_lot::Mutex;
 use perl_parser::lsp_server::LspServer;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::fs;
 use std::io::{Cursor, Write};
-use parking_lot::Mutex;
 use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};

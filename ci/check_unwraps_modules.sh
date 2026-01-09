@@ -3,7 +3,14 @@
 # These have tighter baselines than the global ratchet
 set -euo pipefail
 
-PATTERN='\.unwrap\(|\.expect\('
+# Patterns for panic-prone calls:
+# - .unwrap() is always a panic risk
+# - .expect("...") with string literal is panic-prone (not domain methods like self.expect(TokenKind::...))
+# - .expect(format!(...)) with formatted message is panic-prone
+PATTERN_UNWRAP='\.unwrap\(\)'
+PATTERN_EXPECT_STR='\.expect\(\s*"'
+PATTERN_EXPECT_FMT='\.expect\(\s*&?format!\('
+PATTERN="$PATTERN_UNWRAP|$PATTERN_EXPECT_STR|$PATTERN_EXPECT_FMT"
 
 # Count unwraps in production code only (exclude test modules)
 # We use line-number-aware filtering to exclude #[cfg(test)] sections

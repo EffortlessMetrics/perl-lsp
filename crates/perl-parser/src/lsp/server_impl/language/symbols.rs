@@ -8,21 +8,18 @@ use crate::lsp::protocol::req_uri;
 use crate::lsp::state::document_symbol_cap;
 use std::sync::OnceLock;
 
-static SUB_REGEX: OnceLock<regex::Regex> = OnceLock::new();
-static PACKAGE_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+static SUB_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+static PACKAGE_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
-fn get_sub_regex() -> &'static regex::Regex {
-    SUB_REGEX.get_or_init(|| {
-        regex::Regex::new(r"^\s*sub\s+([a-zA-Z_]\w*)\b")
-            .expect("hardcoded regex should compile")
-    })
+fn get_sub_regex() -> Option<&'static regex::Regex> {
+    SUB_REGEX.get_or_init(|| regex::Regex::new(r"^\s*sub\s+([a-zA-Z_]\w*)\b")).as_ref().ok()
 }
 
-fn get_package_regex() -> &'static regex::Regex {
-    PACKAGE_REGEX.get_or_init(|| {
-        regex::Regex::new(r"^\s*package\s+([a-zA-Z_][\w:]*)\b")
-            .expect("hardcoded regex should compile")
-    })
+fn get_package_regex() -> Option<&'static regex::Regex> {
+    PACKAGE_REGEX
+        .get_or_init(|| regex::Regex::new(r"^\s*package\s+([a-zA-Z_][\w:]*)\b"))
+        .as_ref()
+        .ok()
 }
 
 impl LspServer {
@@ -283,8 +280,12 @@ impl LspServer {
         let lines: Vec<&str> = content.lines().collect();
 
         // Get pre-compiled regexes
-        let sub_regex = get_sub_regex();
-        let package_regex = get_package_regex();
+        let Some(sub_regex) = get_sub_regex() else {
+            return symbols;
+        };
+        let Some(package_regex) = get_package_regex() else {
+            return symbols;
+        };
 
         for (line_num, line) in lines.iter().enumerate() {
             // Check for subroutines

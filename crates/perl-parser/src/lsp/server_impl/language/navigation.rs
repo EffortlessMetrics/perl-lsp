@@ -15,14 +15,14 @@ use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
 use std::sync::OnceLock;
 
 #[cfg(feature = "workspace")]
-static FQN_RE: OnceLock<regex::Regex> = OnceLock::new();
+static FQN_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 #[cfg(feature = "workspace")]
-fn get_fqn_regex() -> &'static regex::Regex {
-    FQN_RE.get_or_init(|| {
-        regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)")
-            .expect("hardcoded regex should compile")
-    })
+fn get_fqn_regex() -> Option<&'static regex::Regex> {
+    FQN_RE
+        .get_or_init(|| regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)"))
+        .as_ref()
+        .ok()
 }
 
 impl LspServer {
@@ -239,50 +239,53 @@ impl LspServer {
                 #[cfg(feature = "workspace")]
                 {
                     // Attempt to resolve fully-qualified symbols like Package::sub
-                    let fqn_regex = get_fqn_regex();
-                    for cap in fqn_regex.captures_iter(&text_around) {
-                        if let Some(m) = cap.get(1) {
-                            if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
-                                let parts: Vec<&str> = m.as_str().split("::").collect();
-                                if parts.len() >= 2 {
-                                    let name = parts.last().copied().unwrap_or("").to_string();
-                                    let pkg = parts[..parts.len() - 1].join("::");
-                                    let key = crate::workspace_index::SymbolKey {
-                                        pkg: pkg.clone().into(),
-                                        name: name.clone().into(),
-                                        sigil: None,
-                                        kind: crate::workspace_index::SymKind::Sub,
-                                    };
+                    if let Some(fqn_regex) = get_fqn_regex() {
+                        for cap in fqn_regex.captures_iter(&text_around) {
+                            if let Some(m) = cap.get(1) {
+                                if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
+                                    let parts: Vec<&str> = m.as_str().split("::").collect();
+                                    if parts.len() >= 2 {
+                                        let name = parts.last().copied().unwrap_or("").to_string();
+                                        let pkg = parts[..parts.len() - 1].join("::");
+                                        let key = crate::workspace_index::SymbolKey {
+                                            pkg: pkg.clone().into(),
+                                            name: name.clone().into(),
+                                            sigil: None,
+                                            kind: crate::workspace_index::SymKind::Sub,
+                                        };
 
-                                    // Use routing policy for cross-file definition lookup
-                                    let access_mode = route_index_access(self.coordinator());
-                                    if let IndexAccessMode::Full(coordinator) = access_mode {
-                                        let workspace_index = coordinator.index();
-                                        if let Some(def_location) = workspace_index.find_def(&key) {
-                                            if let Some(lsp_location) =
+                                        // Use routing policy for cross-file definition lookup
+                                        let access_mode = route_index_access(self.coordinator());
+                                        if let IndexAccessMode::Full(coordinator) = access_mode {
+                                            let workspace_index = coordinator.index();
+                                            if let Some(def_location) =
+                                                workspace_index.find_def(&key)
+                                            {
+                                                if let Some(lsp_location) =
                                                 crate::workspace_index::lsp_adapter::to_lsp_location(
                                                     &def_location,
                                                 )
                                             {
                                                 return Ok(Some(json!([lsp_location])));
                                             }
-                                        }
-                                        let symbol_name = format!("{}::{}", pkg, name);
-                                        if let Some(def_location) =
-                                            workspace_index.find_definition(&symbol_name)
-                                        {
-                                            if let Some(lsp_location) =
+                                            }
+                                            let symbol_name = format!("{}::{}", pkg, name);
+                                            if let Some(def_location) =
+                                                workspace_index.find_definition(&symbol_name)
+                                            {
+                                                if let Some(lsp_location) =
                                                 crate::workspace_index::lsp_adapter::to_lsp_location(
                                                     &def_location,
                                                 )
                                             {
                                                 return Ok(Some(json!([lsp_location])));
                                             }
+                                            }
                                         }
+                                        // Partial/None: fall through to same-file resolution
                                     }
-                                    // Partial/None: fall through to same-file resolution
+                                    break;
                                 }
-                                break;
                             }
                         }
                     }
