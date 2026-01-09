@@ -835,7 +835,13 @@ impl<'a> Parser<'a> {
 
         // Special handling for @{ and %{ (array/hash dereference)
         if text == "@{" || text == "%{" {
-            let sigil = text.chars().next().unwrap().to_string();
+            let sigil = text
+                .chars()
+                .next()
+                .ok_or_else(|| {
+                    ParseError::syntax("Empty token text for array/hash dereference", token.start)
+                })?
+                .to_string();
             let start = token.start;
 
             // Parse the expression inside the braces
@@ -2847,7 +2853,11 @@ impl<'a> Parser<'a> {
 
             // Convert to hash literal if we saw fat comma and have even number of elements
             let start = expressions[0].location.start;
-            let end = expressions.last().unwrap().location.end;
+            let end = expressions
+                .last()
+                .ok_or_else(|| ParseError::syntax("Empty expression list", start))?
+                .location
+                .end;
             expr = Self::build_list_or_hash(expressions, saw_fat_comma, start, end);
         }
 
@@ -3807,11 +3817,25 @@ impl<'a> Parser<'a> {
 
                     // Create the index node - either single index or array of indices
                     let index = if indices.len() == 1 {
-                        indices.into_iter().next().unwrap()
+                        indices.into_iter().next().ok_or_else(|| {
+                            ParseError::syntax("Empty indices vector", expr.location.start)
+                        })?
                     } else {
                         // Multiple indices - create an array literal node
-                        let start = indices.first().unwrap().location.start;
-                        let end = indices.last().unwrap().location.end;
+                        let start = indices
+                            .first()
+                            .ok_or_else(|| {
+                                ParseError::syntax("Empty indices vector", expr.location.start)
+                            })?
+                            .location
+                            .start;
+                        let end = indices
+                            .last()
+                            .ok_or_else(|| {
+                                ParseError::syntax("Empty indices vector", expr.location.start)
+                            })?
+                            .location
+                            .end;
                         Node::new(
                             NodeKind::ArrayLiteral { elements: indices },
                             SourceLocation { start, end },
@@ -3900,7 +3924,12 @@ impl<'a> Parser<'a> {
                             }
 
                             let start = expr.location.start;
-                            let end = args.last().unwrap().location.end;
+
+                            let end = args
+                                .last()
+                                .ok_or_else(|| ParseError::syntax("Empty arguments list", start))?
+                                .location
+                                .end;
 
                             expr = Node::new(
                                 NodeKind::FunctionCall { name: name.clone(), args },
@@ -4044,7 +4073,14 @@ impl<'a> Parser<'a> {
                                 }
 
                                 let start = expr.location.start;
-                                let end = args.last().unwrap().location.end;
+
+                                let end = args
+                                    .last()
+                                    .ok_or_else(|| {
+                                        ParseError::syntax("Empty arguments list", start)
+                                    })?
+                                    .location
+                                    .end;
 
                                 expr = Node::new(
                                     NodeKind::FunctionCall { name: name.clone(), args },
@@ -4187,7 +4223,9 @@ impl<'a> Parser<'a> {
                 // For non-bracket delimiters, just look for the closing delimiter
                 let token = self.consume_token()?;
                 if token.text.contains(close_delim) {
-                    let pos = token.text.find(close_delim).unwrap();
+                    let pos = token.text.find(close_delim).ok_or_else(|| {
+                        ParseError::syntax("Closing delimiter not found in token", token.start)
+                    })?;
                     content.push_str(&token.text[..pos]);
                     break;
                 } else {
@@ -4206,7 +4244,10 @@ impl<'a> Parser<'a> {
             while let Ok(token) = self.tokens.peek() {
                 if token.kind == TokenKind::Identifier && token.text.len() == 1 {
                     // Single letter identifier could be a modifier
-                    let ch = token.text.chars().next().unwrap();
+                    let ch =
+                        token.text.chars().next().ok_or_else(|| {
+                            ParseError::syntax("Empty identifier token", token.start)
+                        })?;
                     if ch.is_ascii_alphabetic() {
                         modifiers.push(ch);
                         self.tokens.next()?;
@@ -4259,7 +4300,9 @@ impl<'a> Parser<'a> {
                 let mut modifiers = String::new();
                 while let Ok(token) = self.tokens.peek() {
                     if token.kind == TokenKind::Identifier && token.text.len() == 1 {
-                        let ch = token.text.chars().next().unwrap();
+                        let ch = token.text.chars().next().ok_or_else(|| {
+                            ParseError::syntax("Empty identifier token", token.start)
+                        })?;
                         if ch.is_ascii_alphabetic() {
                             modifiers.push(ch);
                             self.tokens.next()?;
@@ -4292,7 +4335,9 @@ impl<'a> Parser<'a> {
                 let mut modifiers = String::new();
                 while let Ok(token) = self.tokens.peek() {
                     if token.kind == TokenKind::Identifier && token.text.len() == 1 {
-                        let ch = token.text.chars().next().unwrap();
+                        let ch = token.text.chars().next().ok_or_else(|| {
+                            ParseError::syntax("Empty identifier token", token.start)
+                        })?;
                         if ch.is_ascii_alphabetic() {
                             modifiers.push(ch);
                             self.tokens.next()?;
