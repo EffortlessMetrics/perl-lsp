@@ -1,4 +1,3 @@
-<!-- .claude/commands/pr-cleanup.md -->
 ---
 description: Cleanup pass to make the current branch PR-ready (agents in waves; apply fixes; save purposeful receipts; report)
 argument-hint: [optional: intent/constraints e.g. "minimal churn", "run full gate", "skip benches", "prep for issue #218"]

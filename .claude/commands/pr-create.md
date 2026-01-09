@@ -1,4 +1,3 @@
-<!-- .claude/commands/pr-create.md -->
 ---
 description: Create a PR from the current branch (narrative + modern quality signals; agents in waves; purposeful receipts; creates PR)
 argument-hint: [optional: context/intent e.g. "Issue #218", "ready", "draft", "base=main", "no-ci", "local-gate-canonical"]
