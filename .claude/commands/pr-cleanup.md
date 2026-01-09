@@ -1,108 +1,110 @@
 ---
-description: Cleanup pass to make the current branch PR-ready for perl-lsp (Rust workspace)
-argument-hint: [optional: intent/constraints e.g. "minimal churn", "full gate", "skip lsp tests", "prep for issue #218"]
+description: PR cleanup pass (perl-lsp)
+argument-hint: [optional: constraints e.g. "minimal churn", "skip e2e", "docs-only", "prep for #123"]
 ---
 
 # PR Cleanup Pass (perl-lsp)
 
-Do a **quality-first cleanup pass** on the current branch to make it PR-ready.
+Goal: improve the **current working tree** so it's easier to review and safer to merge.
 
 Use any extra context provided: **$ARGUMENTS**
-
-## Goals
-
-- Reduce future change-cost
-- Make interfaces/boundaries clearer (especially `perl-parser` public API)
-- Make verification credible
-- Remove footguns (lint/test drift, `.unwrap()` in new code, risky patterns)
-
-## Crate structure
-
-| Crate | Path | Focus |
-|-------|------|-------|
-| **perl-parser** | `crates/perl-parser/` | Main parser library, LSP providers |
-| **perl-lsp** | `crates/perl-lsp/` | Standalone LSP server binary |
-| **perl-dap** | `crates/perl-dap/` | Debug Adapter Protocol |
-| **perl-lexer** | `crates/perl-lexer/` | Context-aware tokenizer |
-
-## Workflow
-
-### 1. Gather context
-
-First, understand the current state:
-- Run `git status` and `git branch --show-current`
-- Run `git log --oneline master..HEAD` (or appropriate base) to see commits
-- Run `git diff --stat master..HEAD` to see scope of changes
-- Identify which crates are affected
-
-### 2. Explore and assess
-
-- Map semantic hotspots vs mechanical changes
-- Flag parser/LSP interface touchpoints (`crates/perl-parser/src/lsp/`)
-- Flag risk surface (`.unwrap()`, concurrency, IO)
-- Note any obvious issues
-
-### 3. Plan cleanup
-
-Propose a cleanup plan:
-- Separate "quick wins" vs "follow-ups"
-- Avoid scope creep
-- Suggest commit strategy if helpful (mechanical vs semantic)
-
-### 4. Apply fixes
-
-Run the canonical gate and apply fixes:
-
-```bash
-# Fast merge gate (REQUIRED before push)
-nix develop -c just ci-gate
-
-# Or if nix isn't available:
-cargo fmt --all
-cargo clippy --workspace --lib -- -D warnings
-cargo test --workspace --lib
-```
-
-Apply safe mechanical fixes:
-- `cargo fmt`
-- Clippy lints
-- Reduce `.unwrap()` / `.expect()` in new code where feasible
-
-### 5. Verify and report
-
-After fixes:
-- Re-run the gate
-- Confirm tests pass
-
-## Report format
-
-Provide a cleanup summary including:
-
-### Summary
-What you tightened and why, what you deliberately didn't touch.
-
-### Interface verdict
-- perl-parser public API: unchanged | additive | breaking | not assessed
-- LSP protocol surface: unchanged | changed | not assessed
-- CLI flags/config: unchanged | changed | not assessed
-
-### What changed
-Key files/crates touched.
-
-### Remaining concerns
-What's still worth doing.
-
-### PR readiness
-Ready / not ready + blockers.
-If ready, recommend running `/pr-create` next.
 
 ## Start with this todo list
 
 Use TodoWrite to create these items, then work through them:
 
-1. Gather context (git status, branch, commits, diff stats)
-2. Explore changes and assess risk surface
-3. Plan cleanup approach
-4. Run gate and apply fixes
-5. Verify all checks pass
-6. Report cleanup summary and PR readiness
+1. Gather context (branch, status, base branch, diff scope)
+2. Identify hotspots + risk surface
+3. Run the best available gate and fix what fails
+4. Tighten reviewability (small refactors, docs drift, footguns)
+5. Re-run verification and confirm green
+6. Write a cleanup report + "PR ready?" verdict
+
+## 1) Gather context (portable)
+
+Run:
+- `git status -sb`
+- `git branch --show-current`
+- Determine the base branch (prefer `origin/HEAD`, else `main`/`master` as appropriate)
+- `git log --oneline <base>..HEAD`
+- `git diff --stat <base>..HEAD`
+
+Output a short "scope map":
+- which crates changed
+- which areas are semantic vs mechanical
+
+## 2) Identify hotspots and risks
+
+Look specifically for:
+- boundary changes (`perl-parser` public API, LSP/DAP surfaces)
+- user-input paths / UTF-8 / string indexing
+- concurrency/locking patterns
+- unwrap/expect regressions (ratchet scripts)
+
+## 3) Run the best available gate (mode ladder)
+
+Prefer, in order:
+
+1) If Nix is available:
+```bash
+nix develop -c just ci-gate
+```
+
+2) If Just is available:
+```bash
+just ci-gate
+```
+
+3) Pure Cargo fallback:
+```bash
+cargo fmt --all
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --lib
+```
+
+Fix failures iteratively. Avoid scope creep.
+
+## 4) Cleanup actions (keep it PR-friendly)
+
+Prioritize:
+
+* formatting + clippy
+* eliminate obvious panics introduced in new code
+* reduce diff noise (remove dead code, tighten names, add doc comments where needed)
+* keep changes local; don't redesign architecture during cleanup
+
+## 5) Verify
+
+Re-run the chosen gate and confirm:
+
+* compile
+* tests
+* ratchet scripts (unwraps / module checks) if present
+
+## 6) Cleanup report (print in chat)
+
+Include:
+
+### Summary
+
+What you changed and why. What you deliberately did not touch.
+
+### Interface verdict
+
+* perl-parser public API: unchanged | additive | breaking | not assessed
+* LSP protocol surface: unchanged | changed | not assessed
+* DAP protocol surface: unchanged | changed | not assessed
+* CLI flags/config: unchanged | changed | not assessed
+
+### Evidence
+
+What you ran and what passed. Provide reproduction commands.
+
+### Remaining concerns
+
+Anything worth a follow-up issue.
+
+### PR readiness
+
+Ready / not ready + blockers.
+If ready, recommend running `/pr-create`.
