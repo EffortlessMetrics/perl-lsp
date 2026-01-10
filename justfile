@@ -45,6 +45,7 @@ ci-gate:
     @just ci-check-no-nested-lock
     @just ci-format
     @just ci-clippy-lib
+    @just clippy-prod-no-unwrap
     @just ci-test-lib
     @just ci-policy
     @just ci-lsp-def
@@ -82,6 +83,12 @@ ci-clippy-lib:
     @echo "🔍 Running clippy (libraries only)..."
     cargo clippy --workspace --lib --locked -- -D warnings -A missing_docs
     @echo "✅ Clippy (lib) passed"
+
+# Clippy production unwrap/expect gate (Issue #143) - prevents panic-prone code in shipped binaries
+clippy-prod-no-unwrap:
+    @echo "🔒 Enforcing no unwrap/expect in production code..."
+    cargo clippy --workspace --lib --bins --no-deps -- -D clippy::unwrap_used -D clippy::expect_used
+    @echo "✅ Production code is panic-safe (no unwrap/expect)"
 
 # Core tests (fast, essential)
 ci-test-core:
