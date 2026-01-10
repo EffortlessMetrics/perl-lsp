@@ -1,5 +1,8 @@
 #!/bin/bash
-# CI ratchet gate: enforce that production unwrap/expect count only goes down
+# CI hygiene metric: track unwrap/expect count in crates/*/src/ directories
+# NOTE: This is a hygiene ratchet, NOT a production safety gate.
+# - Includes inline tests (#[cfg(test)]) within src/ directories
+# - Production safety is enforced by: just clippy-prod-no-unwrap
 # Enhanced with top offenders and diff analysis for actionable feedback
 set -euo pipefail
 
@@ -102,7 +105,7 @@ if [ "$baseline" -gt 0 ]; then
   reduction_percent=$(( (reduction * 100) / baseline ))
 fi
 
-echo "Production unwrap/expect count: $current (baseline: $baseline)"
+echo "Hygiene unwrap/expect count (includes inline tests in src/): $current (baseline: $baseline)"
 echo ""
 
 # Show top offenders for visibility
@@ -124,19 +127,20 @@ echo ""
 
 if [ "$current" -le "$baseline" ]; then
   if [ "$current" -lt "$baseline" ]; then
-    echo "✅ IMPROVEMENT: unwrap count decreased by $reduction"
+    echo "✅ IMPROVEMENT: hygiene count decreased by $reduction"
     echo "   Consider updating baseline: echo $current > ci/unwrap_prod_baseline.txt"
   else
-    echo "✅ PASS: unwrap count maintained at baseline"
+    echo "✅ PASS: hygiene count maintained at baseline"
   fi
   echo ""
-  echo "Ratchet gate passed: production unwrap count is within acceptable range"
+  echo "Hygiene ratchet passed (includes inline tests in src/)"
+  echo "NOTE: Production safety enforced separately by: just clippy-prod-no-unwrap"
   exit 0
 else
-  echo "❌ REGRESSION: unwrap count increased from $baseline to $current"
+  echo "❌ REGRESSION: hygiene count increased from $baseline to $current"
   echo "   New unwraps added: $((current - baseline))"
   echo ""
-  echo "ERROR: Production unwrap count has increased"
+  echo "WARNING: Unwrap count in src/ directories has increased"
   echo "Action required:"
   echo "  1. Replace new .unwrap() and .expect() calls with proper error handling"
   echo "  2. Use Result<T, E> propagation with ? operator"
