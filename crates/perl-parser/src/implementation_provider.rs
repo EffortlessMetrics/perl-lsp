@@ -75,8 +75,8 @@ impl ImplementationProvider {
         documents: &HashMap<String, String>,
     ) -> Vec<LocationLink> {
         // Find the node at position
-        let target_node = match self.find_node_at_position(ast, line, character, documents.get(uri))
-        {
+        let source = documents.get(uri);
+        let target_node = match self.find_node_at_position(ast, line, character, source) {
             Some(node) => node,
             None => return Vec::new(),
         };
@@ -112,7 +112,7 @@ impl ImplementationProvider {
             // Parse document
             if let Ok(ast) = crate::Parser::new(content).parse() {
                 // Find packages that inherit from base_package
-                self.find_inheriting_packages(&ast, base_package, uri, &mut results);
+                self.find_inheriting_packages(&ast, base_package, uri, content, &mut results);
             }
         }
 
@@ -163,6 +163,7 @@ impl ImplementationProvider {
                         &ast,
                         method,
                         subclass_link.target_uri.as_str(),
+                        doc_content,
                         &mut results,
                     );
                 }
@@ -178,6 +179,7 @@ impl ImplementationProvider {
         node: &Node,
         base_package: &str,
         uri: &str,
+        source: &str,
         results: &mut Vec<LocationLink>,
     ) {
         let mut current_package = String::new();
@@ -185,6 +187,7 @@ impl ImplementationProvider {
             node,
             base_package,
             uri,
+            source,
             &mut current_package,
             results,
         );
@@ -195,6 +198,7 @@ impl ImplementationProvider {
         node: &Node,
         base_package: &str,
         uri: &str,
+        source: &str,
         current_package: &mut String,
         results: &mut Vec<LocationLink>,
     ) {
@@ -211,8 +215,8 @@ impl ImplementationProvider {
                         results.push(LocationLink {
                             origin_selection_range: None,
                             target_uri,
-                            target_range: self.node_to_range(node),
-                            target_selection_range: self.node_to_range(node),
+                            target_range: self.node_to_range(node, source),
+                            target_selection_range: self.node_to_range(node, source),
                         });
                     }
                 }
@@ -227,8 +231,8 @@ impl ImplementationProvider {
                                     results.push(LocationLink {
                                         origin_selection_range: None,
                                         target_uri,
-                                        target_range: self.node_to_range(node),
-                                        target_selection_range: self.node_to_range(node),
+                                        target_range: self.node_to_range(node, source),
+                                        target_selection_range: self.node_to_range(node, source),
                                     });
                                 }
                             }
@@ -242,6 +246,7 @@ impl ImplementationProvider {
                         stmt,
                         base_package,
                         uri,
+                        source,
                         current_package,
                         results,
                     );
@@ -257,6 +262,7 @@ impl ImplementationProvider {
         node: &Node,
         method_name: &str,
         uri: &str,
+        source: &str,
         results: &mut Vec<LocationLink>,
     ) {
         match &node.kind {
@@ -265,13 +271,13 @@ impl ImplementationProvider {
                 results.push(LocationLink {
                     origin_selection_range: None,
                     target_uri,
-                    target_range: self.node_to_range(node),
-                    target_selection_range: self.node_to_range(node),
+                    target_range: self.node_to_range(node, source),
+                    target_selection_range: self.node_to_range(node, source),
                 });
             }
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
-                    self.find_method_in_ast(stmt, method_name, uri, results);
+                    self.find_method_in_ast(stmt, method_name, uri, source, results);
                 }
             }
             _ => {}
@@ -346,8 +352,16 @@ impl ImplementationProvider {
     }
 
     /// Convert node to LSP range
-    fn node_to_range(&self, _node: &Node) -> Range {
-        Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 0 } }
+    fn node_to_range(&self, node: &Node, source: &str) -> Range {
+        let (start_line, start_col) =
+            crate::position::offset_to_utf16_line_col(source, node.location.start);
+        let (end_line, end_col) =
+            crate::position::offset_to_utf16_line_col(source, node.location.end);
+
+        Range {
+            start: Position { line: start_line, character: start_col },
+            end: Position { line: end_line, character: end_col },
+        }
     }
 
     /// Extract parent name from use statement argument (not needed anymore)

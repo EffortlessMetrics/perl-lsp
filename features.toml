@@ -85,7 +85,7 @@ description = "Code actions and quick fixes"
 id = "lsp.code_lens"
 spec = "LSP 3.0"
 area = "text_document"
-maturity = "preview"
+maturity = "ga"
 advertised = true
 tests = ["tests/lsp_code_lens_tests.rs"]
 description = "Code lens with reference counts"
@@ -184,7 +184,7 @@ description = "Type hierarchy for classes/roles"
 id = "lsp.call_hierarchy"
 spec = "LSP 3.16"
 area = "text_document"
-maturity = "preview"
+maturity = "ga"
 advertised = true
 tests = ["tests/lsp_call_hierarchy_tests.rs"]
 description = "Call hierarchy navigation"
@@ -385,3 +385,435 @@ maturity = "planned"
 advertised = false
 tests = []
 description = "Breakpoint support"
+
+# Protocol / Lifecycle Features
+
+[[feature]]
+id = "lsp.initialize"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = false
+tests = []
+description = "Initialize handshake"
+
+[[feature]]
+id = "lsp.initialized"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = false
+tests = []
+description = "Initialized notification"
+
+[[feature]]
+id = "lsp.shutdown"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = false
+tests = []
+description = "Graceful shutdown request"
+
+[[feature]]
+id = "lsp.exit"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = false
+tests = []
+description = "Exit notification"
+
+[[feature]]
+id = "lsp.cancel_request"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = false
+tests = []
+description = "Request cancellation ($/cancelRequest)"
+
+[[feature]]
+id = "lsp.client_register_capability"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Dynamic capability registration (server->client)"
+
+[[feature]]
+id = "lsp.client_unregister_capability"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Dynamic capability unregistration (server->client)"
+
+[[feature]]
+id = "lsp.set_trace"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Client sets server trace level ($/setTrace)"
+
+[[feature]]
+id = "lsp.log_trace"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Server trace logging ($/logTrace)"
+
+# Text Document Synchronization
+
+[[feature]]
+id = "lsp.text_document_sync"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = false
+tests = []
+description = "didOpen/didChange/didClose text synchronization"
+
+[[feature]]
+id = "lsp.did_save"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = false
+tests = []
+description = "didSave notifications"
+
+[[feature]]
+id = "lsp.will_save"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "planned"
+advertised = false
+tests = []
+description = "willSave notifications"
+
+[[feature]]
+id = "lsp.will_save_wait_until"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "planned"
+advertised = false
+tests = []
+description = "willSaveWaitUntil request"
+
+# Additional Language Features
+
+[[feature]]
+id = "lsp.document_highlight"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "planned"
+advertised = true
+tests = []
+description = "Document highlights (local references)"
+
+[[feature]]
+id = "lsp.prepare_rename"
+spec = "LSP 3.12"
+area = "text_document"
+maturity = "planned"
+advertised = true
+tests = []
+description = "Validate rename and compute placeholder/range"
+
+[[feature]]
+id = "lsp.inline_value"
+spec = "LSP 3.17"
+area = "text_document"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Inline values during debugging (LSP inlineValue)"
+
+[[feature]]
+id = "lsp.color_presentation"
+spec = "LSP 3.6"
+area = "text_document"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Color presentation request (pairs with documentColor)"
+
+# Resolve Routes
+
+[[feature]]
+id = "lsp.completion_item_resolve"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Resolve additional completion item details"
+
+[[feature]]
+id = "lsp.code_action_resolve"
+spec = "LSP 3.16"
+area = "text_document"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Resolve additional code action details"
+
+[[feature]]
+id = "lsp.code_lens_resolve"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Resolve code lens command"
+
+[[feature]]
+id = "lsp.document_link_resolve"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Resolve document link target"
+
+[[feature]]
+id = "lsp.inlay_hint_resolve"
+spec = "LSP 3.17"
+area = "text_document"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Resolve inlay hint label locations"
+
+[[feature]]
+id = "lsp.workspace_symbol_resolve"
+spec = "LSP 3.17"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Resolve additional workspace symbol info"
+
+# Refresh Routes (Server -> Client)
+
+[[feature]]
+id = "lsp.code_lens_refresh"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Request client to refresh code lenses"
+
+[[feature]]
+id = "lsp.semantic_tokens_refresh"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Request client to refresh semantic tokens"
+
+[[feature]]
+id = "lsp.inlay_hint_refresh"
+spec = "LSP 3.17"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Request client to refresh inlay hints"
+
+[[feature]]
+id = "lsp.inline_value_refresh"
+spec = "LSP 3.17"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Request client to refresh inline values"
+
+[[feature]]
+id = "lsp.diagnostic_refresh"
+spec = "LSP 3.17"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Request client to refresh pulled diagnostics"
+
+# Workspace Plumbing
+
+[[feature]]
+id = "lsp.configuration"
+spec = "LSP 3.6"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "workspace/configuration request (server->client)"
+
+[[feature]]
+id = "lsp.did_change_configuration"
+spec = "LSP 3.0"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "workspace/didChangeConfiguration notification"
+
+[[feature]]
+id = "lsp.did_change_watched_files"
+spec = "LSP 3.0"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "workspace/didChangeWatchedFiles notification"
+
+[[feature]]
+id = "lsp.apply_edit"
+spec = "LSP 3.0"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "workspace/applyEdit request (server->client)"
+
+[[feature]]
+id = "lsp.publish_diagnostics"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = false
+tests = []
+description = "Push diagnostics via textDocument/publishDiagnostics"
+
+# Window / Telemetry
+
+[[feature]]
+id = "lsp.show_message_request"
+spec = "LSP 3.0"
+area = "window"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Prompt user with choices (showMessageRequest)"
+
+[[feature]]
+id = "lsp.show_document"
+spec = "LSP 3.16"
+area = "window"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Ask client to open/display a URI (showDocument)"
+
+[[feature]]
+id = "lsp.work_done_progress_create"
+spec = "LSP 3.15"
+area = "window"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Create server-initiated work done progress"
+
+[[feature]]
+id = "lsp.work_done_progress_cancel"
+spec = "LSP 3.15"
+area = "window"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Client cancels server-initiated work done progress"
+
+[[feature]]
+id = "lsp.telemetry_event"
+spec = "LSP 3.0"
+area = "window"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Server telemetry events (telemetry/event)"
+
+# LSP 3.18 Additions
+
+[[feature]]
+id = "lsp.text_document_content"
+spec = "LSP 3.18"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "workspace/textDocumentContent request"
+
+[[feature]]
+id = "lsp.text_document_content_refresh"
+spec = "LSP 3.18"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "workspace/textDocumentContent/refresh request"
+
+# File Operations (method-level breakdown)
+
+[[feature]]
+id = "lsp.will_create_files"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "workspace/willCreateFiles request"
+
+[[feature]]
+id = "lsp.did_create_files"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "workspace/didCreateFiles notification"
+
+[[feature]]
+id = "lsp.will_rename_files"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "ga"
+advertised = false
+tests = ["tests/lsp_file_operations_tests.rs"]
+description = "workspace/willRenameFiles request"
+
+[[feature]]
+id = "lsp.did_rename_files"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "ga"
+advertised = false
+tests = ["tests/lsp_file_operations_tests.rs"]
+description = "workspace/didRenameFiles notification"
+
+[[feature]]
+id = "lsp.will_delete_files"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "workspace/willDeleteFiles request"
+
+[[feature]]
+id = "lsp.did_delete_files"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "workspace/didDeleteFiles notification"

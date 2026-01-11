@@ -62,23 +62,14 @@ my $diff = subtract(10, 4);
         )
         .unwrap_or(json!(null));
 
-    assert!(
-        result.is_array(),
-        "codeLens should return an array of lenses"
-    );
+    assert!(result.is_array(), "codeLens should return an array of lenses");
 
     let lenses = result.as_array().unwrap();
-    assert!(
-        !lenses.is_empty(),
-        "Should have code lenses for subroutines and package"
-    );
+    assert!(!lenses.is_empty(), "Should have code lenses for subroutines and package");
 
     // Verify structure of returned lenses
     for lens in lenses {
-        assert!(
-            lens.get("range").is_some(),
-            "Each lens must have a range"
-        );
+        assert!(lens.get("range").is_some(), "Each lens must have a range");
         let range = lens.get("range").unwrap();
         assert!(
             range.get("start").is_some() && range.get("end").is_some(),
@@ -88,10 +79,7 @@ my $diff = subtract(10, 4);
         // Either command or data should be present
         let has_command = lens.get("command").is_some();
         let has_data = lens.get("data").is_some();
-        assert!(
-            has_command || has_data,
-            "Lens should have either command or data for resolution"
-        );
+        assert!(has_command || has_data, "Lens should have either command or data for resolution");
     }
 }
 
@@ -135,10 +123,7 @@ sub method {
     let lenses = result.as_array().unwrap();
 
     // Should have lenses for package, new, and method
-    assert!(
-        lenses.len() >= 3,
-        "Should have lenses for package and subroutines"
-    );
+    assert!(lenses.len() >= 3, "Should have lenses for package and subroutines");
 
     // Find the package lens
     let package_lens = lenses.iter().find(|lens| {
@@ -149,10 +134,7 @@ sub method {
             .unwrap_or(false)
     });
 
-    assert!(
-        package_lens.is_some(),
-        "Should have a lens for the package declaration"
-    );
+    assert!(package_lens.is_some(), "Should have a lens for the package declaration");
 }
 
 /// Tests feature spec: code_lens_provider.rs#test-subroutine-detection
@@ -224,10 +206,7 @@ done_testing();
             Some("perl.runTest"),
             "Run Test lens should have perl.runTest command"
         );
-        assert!(
-            command.get("arguments").is_some(),
-            "Run Test command should have arguments"
-        );
+        assert!(command.get("arguments").is_some(), "Run Test command should have arguments");
     }
 }
 
@@ -264,14 +243,10 @@ my $c = calculate(6, 7);
     let lenses = lenses_result.as_array().unwrap();
 
     // Find unresolved reference lens (has data, no command)
-    let unresolved_lens = lenses.iter().find(|lens| {
-        lens.get("data").is_some() && lens.get("command").is_none()
-    });
+    let unresolved_lens =
+        lenses.iter().find(|lens| lens.get("data").is_some() && lens.get("command").is_none());
 
-    assert!(
-        unresolved_lens.is_some(),
-        "Should have at least one unresolved reference lens"
-    );
+    assert!(unresolved_lens.is_some(), "Should have at least one unresolved reference lens");
 
     // Resolve the lens
     let resolved = harness
@@ -279,10 +254,7 @@ my $c = calculate(6, 7);
         .unwrap_or(json!(null));
 
     // After resolution, should have a command
-    assert!(
-        resolved.get("command").is_some(),
-        "Resolved lens should have a command"
-    );
+    assert!(resolved.get("command").is_some(), "Resolved lens should have a command");
 
     let command = resolved.get("command").unwrap();
     let title = command.get("title").and_then(|t| t.as_str()).unwrap_or("");
@@ -341,21 +313,14 @@ my $value = used_function();
             .unwrap_or(false)
     });
 
-    assert!(
-        unused_lens.is_some(),
-        "Should have lens for unused_function"
-    );
+    assert!(unused_lens.is_some(), "Should have lens for unused_function");
 
     // Resolve it
-    let resolved = harness
-        .request("codeLens/resolve", unused_lens.unwrap().clone())
-        .unwrap_or(json!(null));
+    let resolved =
+        harness.request("codeLens/resolve", unused_lens.unwrap().clone()).unwrap_or(json!(null));
 
-    let title = resolved
-        .get("command")
-        .and_then(|c| c.get("title"))
-        .and_then(|t| t.as_str())
-        .unwrap_or("");
+    let title =
+        resolved.get("command").and_then(|c| c.get("title")).and_then(|t| t.as_str()).unwrap_or("");
 
     assert!(
         title.contains("0 reference"),
@@ -401,16 +366,10 @@ my $total = Σ(1, 2, 3);
         )
         .unwrap_or(json!(null));
 
-    assert!(
-        result.is_array(),
-        "Should successfully return lenses for Unicode identifiers"
-    );
+    assert!(result.is_array(), "Should successfully return lenses for Unicode identifiers");
 
     let lenses = result.as_array().unwrap();
-    assert!(
-        !lenses.is_empty(),
-        "Should have code lenses for Unicode identifiers"
-    );
+    assert!(!lenses.is_empty(), "Should have code lenses for Unicode identifiers");
 
     // Verify all lenses have valid ranges
     for lens in lenses {
@@ -457,16 +416,10 @@ fn test_code_lens_crlf_line_endings() {
         )
         .unwrap_or(json!(null));
 
-    assert!(
-        result.is_array(),
-        "Should handle CRLF line endings correctly"
-    );
+    assert!(result.is_array(), "Should handle CRLF line endings correctly");
 
     let lenses = result.as_array().unwrap();
-    assert!(
-        !lenses.is_empty(),
-        "Should have code lenses with CRLF endings"
-    );
+    assert!(!lenses.is_empty(), "Should have code lenses with CRLF endings");
 
     // Verify positions are reasonable (no negative or extreme values)
     for lens in lenses {
@@ -482,16 +435,8 @@ fn test_code_lens_crlf_line_endings() {
             .and_then(|c| c.as_u64())
             .unwrap_or(u64::MAX);
 
-        assert!(
-            start_line < 100,
-            "Line number should be reasonable: {}",
-            start_line
-        );
-        assert!(
-            start_char < 1000,
-            "Character offset should be reasonable: {}",
-            start_char
-        );
+        assert!(start_line < 100, "Line number should be reasonable: {}", start_line);
+        assert!(start_char < 1000, "Character offset should be reasonable: {}", start_char);
     }
 }
 
@@ -514,15 +459,8 @@ fn test_code_lens_empty_file() {
         .unwrap_or(json!(null));
 
     // Should return empty array for empty file
-    assert!(
-        result.is_array(),
-        "Empty file should return an array"
-    );
-    assert_eq!(
-        result.as_array().unwrap().len(),
-        0,
-        "Empty file should have no code lenses"
-    );
+    assert!(result.is_array(), "Empty file should return an array");
+    assert_eq!(result.as_array().unwrap().len(), 0, "Empty file should have no code lenses");
 }
 
 /// Tests feature spec: code_lens_provider.rs#no-lensable-items
@@ -555,18 +493,12 @@ print "Hello, World\n";
         )
         .unwrap_or(json!(null));
 
-    assert!(
-        result.is_array(),
-        "Should return array even with no lenses"
-    );
+    assert!(result.is_array(), "Should return array even with no lenses");
 
     // May have 0 lenses or minimal lenses depending on implementation
     let lenses = result.as_array().unwrap();
     // This is acceptable - no subroutines means no lenses
-    assert!(
-        lenses.len() < 2,
-        "File with no subroutines should have minimal lenses"
-    );
+    assert!(lenses.len() < 2, "File with no subroutines should have minimal lenses");
 }
 
 /// Tests feature spec: code_lens_provider.rs#large-file-handling
@@ -577,10 +509,7 @@ fn test_code_lens_large_file() {
     // Generate a large file with many subroutines
     let mut doc = String::from("package LargeModule;\n\n");
     for i in 0..100 {
-        doc.push_str(&format!(
-            "sub function_{} {{\n    return {};\n}}\n\n",
-            i, i
-        ));
+        doc.push_str(&format!("sub function_{} {{\n    return {};\n}}\n\n", i, i));
     }
     doc.push_str("1;\n");
 
@@ -599,16 +528,10 @@ fn test_code_lens_large_file() {
         .unwrap_or(json!(null));
     let elapsed = start.elapsed();
 
-    assert!(
-        result.is_array(),
-        "Should handle large files"
-    );
+    assert!(result.is_array(), "Should handle large files");
 
     let lenses = result.as_array().unwrap();
-    assert!(
-        lenses.len() >= 100,
-        "Should have lenses for all 100+ functions"
-    );
+    assert!(lenses.len() >= 100, "Should have lenses for all 100+ functions");
 
     // Performance check - should complete in reasonable time
     assert!(
@@ -659,10 +582,7 @@ sub helper {
             .unwrap_or(false)
     });
 
-    assert!(
-        run_script_lens.is_some(),
-        "Script with shebang should have 'Run Script' lens"
-    );
+    assert!(run_script_lens.is_some(), "Script with shebang should have 'Run Script' lens");
 
     if let Some(lens) = run_script_lens {
         let command = lens.get("command").unwrap();
@@ -717,10 +637,7 @@ sub method_three {
     let lenses = result.as_array().unwrap();
 
     // Should have lenses for 3 packages and 3 methods (at least 6 lenses)
-    assert!(
-        lenses.len() >= 6,
-        "Should have lenses for multiple packages and their methods"
-    );
+    assert!(lenses.len() >= 6, "Should have lenses for multiple packages and their methods");
 
     // Count package lenses
     let package_lenses: Vec<_> = lenses
@@ -734,11 +651,7 @@ sub method_three {
         })
         .collect();
 
-    assert_eq!(
-        package_lenses.len(),
-        3,
-        "Should have exactly 3 package lenses"
-    );
+    assert_eq!(package_lenses.len(), 3, "Should have exactly 3 package lenses");
 }
 
 /// Tests feature spec: code_lens_provider.rs#nested-subroutines
@@ -776,10 +689,7 @@ my $result = outer();
     let lenses = result.as_array().unwrap();
 
     // Should at least have lens for outer subroutine
-    assert!(
-        !lenses.is_empty(),
-        "Should have lenses for nested subroutines"
-    );
+    assert!(!lenses.is_empty(), "Should have lenses for nested subroutines");
 }
 
 /// Tests feature spec: code_lens_provider.rs#malformed-code
@@ -815,10 +725,7 @@ sub valid_function {
         .unwrap_or(json!(null));
 
     // Should not crash, return array even if partially parsed
-    assert!(
-        result.is_array(),
-        "Should handle malformed code gracefully"
-    );
+    assert!(result.is_array(), "Should handle malformed code gracefully");
 }
 
 /// Tests feature spec: code_lens_provider.rs#position-accuracy
@@ -872,11 +779,7 @@ sub second_function {
             .unwrap_or(u64::MAX);
 
         // first_function is on line 2 (0-indexed)
-        assert!(
-            start_line == 2,
-            "first_function lens should be on line 2, got {}",
-            start_line
-        );
+        assert!(start_line == 2, "first_function lens should be on line 2, got {}", start_line);
     }
 }
 
