@@ -104,7 +104,9 @@ fn read_catalog() -> Result<Catalog, Box<dyn std::error::Error>> {
 }
 
 fn generate_feature_catalog() {
-    let out_dir = env::var("OUT_DIR").unwrap();
+    let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| {
+        panic!("OUT_DIR must be set by cargo during build - this is a build environment issue")
+    });
     let dest_path = Path::new(&out_dir).join("feature_catalog.rs");
 
     match read_catalog() {
@@ -258,7 +260,9 @@ fn generate_feature_catalog() {
             code.push_str("    COMPLIANCE_PERCENT\n");
             code.push_str("}\n");
 
-            fs::write(dest_path, code).expect("Failed to write feature_catalog.rs");
+            if let Err(e) = fs::write(&dest_path, code) {
+                panic!("Failed to write feature_catalog.rs to {:?}: {}", dest_path, e);
+            }
         }
         Err(e) => {
             eprintln!("Warning: Failed to generate feature catalog: {}", e);
@@ -291,9 +295,15 @@ fn generate_feature_catalog() {
             code.push_str("/// Returns zero compliance when features.toml is not available\n");
             code.push_str("pub fn compliance_percent() -> f32 { 0.0 }\n");
 
-            let out_dir = env::var("OUT_DIR").unwrap();
+            let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| {
+                panic!(
+                    "OUT_DIR must be set by cargo during build - this is a build environment issue"
+                )
+            });
             let dest_path = Path::new(&out_dir).join("feature_catalog.rs");
-            fs::write(dest_path, code).expect("Failed to write minimal feature_catalog.rs");
+            if let Err(e) = fs::write(&dest_path, code) {
+                panic!("Failed to write minimal feature_catalog.rs to {:?}: {}", dest_path, e);
+            }
         }
     }
 }

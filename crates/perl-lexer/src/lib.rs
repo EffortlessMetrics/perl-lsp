@@ -533,7 +533,7 @@ impl<'a> PerlLexer<'a> {
                 Some(byte as char)
             } else {
                 // For non-ASCII, fall back to proper UTF-8 parsing
-                self.input[self.position..].chars().next()
+                self.input.get(self.position..).and_then(|s| s.chars().next())
             }
         } else {
             None
@@ -550,7 +550,7 @@ impl<'a> PerlLexer<'a> {
                 Some(byte as char)
             } else {
                 // For non-ASCII, use chars iterator
-                self.input[self.position..].chars().nth(offset)
+                self.input.get(self.position..).and_then(|s| s.chars().nth(offset))
             }
         } else {
             None
@@ -565,7 +565,8 @@ impl<'a> PerlLexer<'a> {
             if byte < 128 {
                 // ASCII fast path
                 self.position += 1;
-            } else if let Some(ch) = self.input[self.position..].chars().next() {
+            } else if let Some(ch) = self.input.get(self.position..).and_then(|s| s.chars().next())
+            {
                 self.position += ch.len_utf8();
             }
         }
@@ -1231,7 +1232,7 @@ impl<'a> PerlLexer<'a> {
     fn peek_nonspace(&self) -> Option<char> {
         let mut i = self.position;
         while i < self.input.len() {
-            let c = self.input[i..].chars().next().unwrap();
+            let c = self.input.get(i..).and_then(|s| s.chars().next())?;
             if c.is_whitespace() {
                 i += c.len_utf8();
                 continue;

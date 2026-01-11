@@ -4,10 +4,11 @@
 
 #[cfg(test)]
 mod tests {
+    use parking_lot::Mutex;
     use perl_parser::lsp_server::LspServer;
     use serde_json::json;
     use std::io::{Cursor, Write};
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     /// Start a server with a writable buffer so we can reuse the harness pattern if needed.
     fn start_server() -> (LspServer, Arc<Mutex<Cursor<Vec<u8>>>>) {

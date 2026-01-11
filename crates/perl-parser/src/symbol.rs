@@ -267,7 +267,9 @@ impl SymbolTable {
     /// Add a symbol definition
     fn add_symbol(&mut self, symbol: Symbol) {
         let name = symbol.name.clone();
-        self.scopes.get_mut(&symbol.scope_id).unwrap().symbols.insert(name.clone());
+        if let Some(scope) = self.scopes.get_mut(&symbol.scope_id) {
+            scope.symbols.insert(name.clone());
+        }
         self.symbols.entry(name).or_default().push(symbol);
     }
 
@@ -863,7 +865,9 @@ impl SymbolExtractor {
     fn extract_vars_from_string(&mut self, value: &str, string_location: SourceLocation) {
         // Simple regex to find scalar variables in strings
         // This handles $var, ${var}, but not arrays/hashes for now
-        let scalar_re = Regex::new(r"\$([a-zA-Z_]\w*|\{[a-zA-Z_]\w*\})").unwrap();
+        let Ok(scalar_re) = Regex::new(r"\$([a-zA-Z_]\w*|\{[a-zA-Z_]\w*\})") else {
+            return; // Skip variable extraction if regex fails
+        };
 
         // The value includes quotes, so strip them
         let content = if value.len() >= 2 { &value[1..value.len() - 1] } else { value };

@@ -1,9 +1,9 @@
 //! Tests for workspace file operation handlers
 
+use parking_lot::Mutex;
 use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::sync::Arc;
-use std::sync::Mutex;
 
 /// Helper to create a test LSP server
 fn create_test_server() -> LspServer {
@@ -189,7 +189,7 @@ fn test_did_change_watched_files_invalid_uri() {
 }
 
 #[test]
-fn test_will_rename_files() {
+fn test_will_rename_files() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 
     // Initialize the server
@@ -225,14 +225,14 @@ fn test_will_rename_files() {
     let result = make_request(&mut server, "workspace/willRenameFiles", Some(params));
 
     // Should return a workspace edit (potentially empty if no references found)
-    assert!(result.is_ok());
-    let edit = result.unwrap().unwrap();
+    let edit = result?.ok_or("expected workspace edit response")?;
     assert!(edit.is_object());
     assert!(edit.get("changes").is_some());
+    Ok(())
 }
 
 #[test]
-fn test_will_rename_files_missing_uri() {
+fn test_will_rename_files_missing_uri() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 
     // Initialize the server
@@ -256,10 +256,10 @@ fn test_will_rename_files_missing_uri() {
     let result = make_request(&mut server, "workspace/willRenameFiles", Some(params));
 
     // Should handle gracefully and return empty edit
-    assert!(result.is_ok());
-    let edit = result.unwrap().unwrap();
+    let edit = result?.ok_or("expected workspace edit response")?;
     assert!(edit.is_object());
     assert_eq!(edit.get("changes"), Some(&json!({})));
+    Ok(())
 }
 
 #[test]
@@ -332,7 +332,7 @@ fn test_did_delete_files_invalid_uri() {
 }
 
 #[test]
-fn test_apply_edit_single_line() {
+fn test_apply_edit_single_line() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 
     // Initialize the server
@@ -375,13 +375,13 @@ fn test_apply_edit_single_line() {
     let result = make_request(&mut server, "workspace/applyEdit", Some(params));
 
     // Should return success
-    assert!(result.is_ok());
-    let response = result.unwrap().unwrap();
+    let response = result?.ok_or("expected applyEdit response")?;
     assert_eq!(response.get("applied"), Some(&json!(true)));
+    Ok(())
 }
 
 #[test]
-fn test_apply_edit_multi_line() {
+fn test_apply_edit_multi_line() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 
     // Initialize the server
@@ -424,13 +424,13 @@ fn test_apply_edit_multi_line() {
     let result = make_request(&mut server, "workspace/applyEdit", Some(params));
 
     // Should return success
-    assert!(result.is_ok());
-    let response = result.unwrap().unwrap();
+    let response = result?.ok_or("expected applyEdit response")?;
     assert_eq!(response.get("applied"), Some(&json!(true)));
+    Ok(())
 }
 
 #[test]
-fn test_apply_edit_no_document() {
+fn test_apply_edit_no_document() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 
     // Initialize the server
@@ -462,13 +462,13 @@ fn test_apply_edit_no_document() {
     let result = make_request(&mut server, "workspace/applyEdit", Some(params));
 
     // Should still return success (edit was "applied" even if document doesn't exist)
-    assert!(result.is_ok());
-    let response = result.unwrap().unwrap();
+    let response = result?.ok_or("expected applyEdit response")?;
     assert_eq!(response.get("applied"), Some(&json!(true)));
+    Ok(())
 }
 
 #[test]
-fn test_apply_edit_invalid_params() {
+fn test_apply_edit_invalid_params() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 
     // Initialize the server
@@ -486,14 +486,14 @@ fn test_apply_edit_invalid_params() {
     let result = make_request(&mut server, "workspace/applyEdit", Some(params));
 
     // Should return failure
-    assert!(result.is_ok());
-    let response = result.unwrap().unwrap();
+    let response = result?.ok_or("expected applyEdit response")?;
     assert_eq!(response.get("applied"), Some(&json!(false)));
     assert!(response.get("failureReason").is_some());
+    Ok(())
 }
 
 #[test]
-fn test_path_to_module_name() {
+fn test_path_to_module_name() -> Result<(), Box<dyn std::error::Error>> {
     // Test the path_to_module_name function indirectly through willRenameFiles
     let mut server = create_test_server();
 
@@ -526,9 +526,9 @@ fn test_path_to_module_name() {
         let result = make_request(&mut server, "workspace/willRenameFiles", Some(params));
 
         // Should always succeed and return a workspace edit
-        assert!(result.is_ok());
-        let edit = result.unwrap().unwrap();
+        let edit = result?.ok_or("expected workspace edit response")?;
         assert!(edit.is_object());
         assert!(edit.get("changes").is_some());
     }
+    Ok(())
 }

@@ -150,7 +150,9 @@ fn update_directory_versions(dir: &str, patterns: &[(impl AsRef<str>, String)]) 
             }
         } else if path.is_dir() {
             // Recurse into subdirectories
-            update_directory_versions(path.to_str().unwrap(), patterns)?;
+            if let Some(path_str) = path.to_str() {
+                update_directory_versions(path_str, patterns)?;
+            }
         }
     }
 

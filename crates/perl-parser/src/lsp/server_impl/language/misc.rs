@@ -14,7 +14,17 @@
 use super::super::*;
 use crate::lsp::protocol::{invalid_params, req_position, req_uri};
 use crate::lsp::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
+use std::sync::OnceLock;
 use std::time::Instant;
+
+static INLINE_VALUE_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+
+fn get_inline_value_regex() -> Option<&'static regex::Regex> {
+    INLINE_VALUE_REGEX
+        .get_or_init(|| regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)"))
+        .as_ref()
+        .ok()
+}
 
 impl LspServer {
     /// Handle textDocument/inlayHint request
@@ -109,7 +119,12 @@ impl LspServer {
                     data: None,
                 })?;
                 match crate::lsp_document_link::collect_document_links(&doc.text, &uri_parsed) {
-                    Ok(links) => Ok(Some(serde_json::to_value(links).unwrap_or(Value::Null))),
+                    Ok(links) => Ok(Some(serde_json::to_value(links).map_err(|e| {
+                        crate::lsp::protocol::internal_error(&format!(
+                            "Failed to serialize document links: {}",
+                            e
+                        ))
+                    })?)),
                     Err(_) => Ok(Some(Value::Null)),
                 }
             } else {
@@ -170,7 +185,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         // Gate unadvertised feature
-        if !self.advertised_features.lock().unwrap().code_lens {
+        if !self.advertised_features.lock().code_lens {
             return Err(crate::lsp_errors::method_not_advertised());
         }
 
@@ -296,7 +311,12 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 let provider = InlineCompletionProvider::new();
                 let completions = provider.get_inline_completions(&doc.text, line, character);
-                return Ok(Some(serde_json::to_value(completions).unwrap_or(Value::Null)));
+                return Ok(Some(serde_json::to_value(completions).map_err(|e| {
+                    crate::lsp::protocol::internal_error(&format!(
+                        "Failed to serialize inline completions: {}",
+                        e
+                    ))
+                })?));
             }
         }
 
@@ -325,8 +345,10 @@ impl LspServer {
 
                 // Simple implementation: find scalar variables in the visible range
                 let lines: Vec<&str> = doc.text.lines().collect();
-                // Move regex construction outside loop
-                let re = regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
+                // Use pre-compiled regex
+                let Some(re) = get_inline_value_regex() else {
+                    return Ok(Some(json!([])));
+                };
 
                 for line_num in start_line..=end_line.min((lines.len() - 1) as u32) {
                     let line_text = lines[line_num as usize];
@@ -629,7 +651,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         // Gate unadvertised feature
-        if !self.advertised_features.lock().unwrap().linked_editing {
+        if !self.advertised_features.lock().linked_editing {
             return Err(crate::lsp_errors::method_not_advertised());
         }
 
@@ -641,7 +663,12 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 let result =
                     crate::linked_editing::handle_linked_editing(&doc.text, line, character);
-                return Ok(Some(serde_json::to_value(result).unwrap_or(Value::Null)));
+                return Ok(Some(serde_json::to_value(result).map_err(|e| {
+                    crate::lsp::protocol::internal_error(&format!(
+                        "Failed to serialize linked editing ranges: {}",
+                        e
+                    ))
+                })?));
             }
         }
 

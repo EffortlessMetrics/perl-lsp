@@ -269,7 +269,8 @@ pub fn check_sections(sections: &[Section], config: &LintConfig) -> LintResult {
     let mut result = LintResult { errors: Vec::new(), warnings: Vec::new() };
 
     // Regex for valid ID format
-    let id_re = Regex::new(r"^[a-z0-9._-]+$").unwrap();
+    let id_re = Regex::new(r"^[a-z0-9._-]+$")
+        .unwrap_or_else(|_| panic!("ID regex is invalid - this is a bug in the corpus linter"));
 
     // Track seen IDs for duplicate detection
     let mut seen_ids = BTreeSet::new();

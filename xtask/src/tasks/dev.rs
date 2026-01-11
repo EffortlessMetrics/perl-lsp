@@ -6,7 +6,9 @@ use indicatif::{ProgressBar, ProgressStyle};
 pub fn run(_watch: bool, port: u16) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .unwrap_or_else(|_| ProgressStyle::default_spinner()),
     );
 
     spinner.set_message("Starting development server");

@@ -8,11 +8,12 @@
 //!
 //! Also tests legacy rootPath handling and configuration management.
 
+use parking_lot::Mutex;
 use perl_parser::lsp::state::WorkspaceConfig;
 use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::io::Write;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// Simple writer that captures all output into a shared buffer
 struct CapturingWriter {
@@ -27,7 +28,7 @@ impl CapturingWriter {
 
 impl Write for CapturingWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.buffer.lock().unwrap().extend_from_slice(buf);
+        self.buffer.lock().extend_from_slice(buf);
         Ok(buf.len())
     }
 

@@ -5,11 +5,12 @@
 //!
 //! Performance optimization: Uses fast-path validation during performance tests.
 
+use parking_lot::Mutex;
 use perl_parser::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::Write;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 

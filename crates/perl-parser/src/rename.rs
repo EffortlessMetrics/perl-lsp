@@ -360,8 +360,10 @@ impl RenameProvider {
         }
 
         // Check if it starts with a number
-        if name.chars().next().unwrap().is_numeric() {
-            return Err("Name cannot start with a number".to_string());
+        if let Some(first_char) = name.chars().next() {
+            if first_char.is_numeric() {
+                return Err("Name cannot start with a number".to_string());
+            }
         }
 
         // Check if it contains only valid characters
@@ -436,14 +438,18 @@ impl RenameProvider {
             {
                 // Make sure it's a whole word
                 let before_ok = absolute_pos == 0
-                    || !self.source.chars().nth(absolute_pos - 1).unwrap().is_alphanumeric();
+                    || self
+                        .source
+                        .chars()
+                        .nth(absolute_pos - 1)
+                        .is_none_or(|c| !c.is_alphanumeric());
                 let after_pos = absolute_pos + pattern.len();
                 let after_ok = after_pos >= self.source.len()
-                    || !self.source.chars().nth(after_pos).unwrap().is_alphanumeric();
+                    || self.source.chars().nth(after_pos).is_none_or(|c| !c.is_alphanumeric());
 
                 if before_ok && after_ok {
-                    let start = if kind.sigil().is_some() {
-                        absolute_pos + kind.sigil().unwrap().len()
+                    let start = if let Some(sigil) = kind.sigil() {
+                        absolute_pos + sigil.len()
                     } else {
                         absolute_pos
                     };
@@ -463,7 +469,11 @@ impl RenameProvider {
 
     /// Check if position is in a comment
     fn is_in_comment(&self, position: usize) -> bool {
-        let line_start = self.source[..position].rfind('\n').map(|p| p + 1).unwrap_or(0);
+        let line_start = if position == 0 {
+            0
+        } else {
+            self.source[..position].rfind('\n').map_or(0, |p| p + 1)
+        };
         let line = &self.source[line_start..];
 
         if let Some(comment_pos) = line.find('#') {

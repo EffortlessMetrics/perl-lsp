@@ -410,14 +410,17 @@ impl ImportOptimizer {
         .map_err(|e| e.to_string())?;
         let mut usage_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for caps in usage_re.captures_iter(&stripped) {
-            let module = caps.get(1).unwrap().as_str().to_string();
-            let symbol = caps.get(2).unwrap().as_str().to_string();
+            // Only process if both capture groups matched
+            if let (Some(module_match), Some(symbol_match)) = (caps.get(1), caps.get(2)) {
+                let module = module_match.as_str().to_string();
+                let symbol = symbol_match.as_str().to_string();
 
-            if imported_modules.contains(&module) || is_pragma_module(&module) {
-                continue;
+                if imported_modules.contains(&module) || is_pragma_module(&module) {
+                    continue;
+                }
+
+                usage_map.entry(module).or_default().push(symbol);
             }
-
-            usage_map.entry(module).or_default().push(symbol);
         }
         let last_import_line = imports.iter().map(|i| i.line).max().unwrap_or(0);
         let missing_imports = usage_map
@@ -935,6 +938,30 @@ my $result = JSON::encode_json({test => 1});
         let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
 
         // Should only detect the actual module usage, not the ones in strings/regex
+        assert_eq!(analysis.missing_imports.len(), 1);
+        assert_eq!(analysis.missing_imports[0].module, "JSON");
+    }
+
+    #[test]
+    fn test_malformed_regex_capture_safety() {
+        let optimizer = ImportOptimizer::new();
+        // Content with patterns that could potentially cause regex capture issues
+        let content = r#"use strict;
+use warnings;
+
+# Normal module usage
+my $result = JSON::encode_json({test => 1});
+
+# Edge case patterns that might not fully match the regex
+my $incomplete = "Something::";
+my $partial = "::Function";
+"#;
+
+        let (_temp_dir, file_path) = create_test_file(content);
+        // Should not panic even with edge case patterns
+        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+
+        // Should detect JSON usage
         assert_eq!(analysis.missing_imports.len(), 1);
         assert_eq!(analysis.missing_imports[0].module, "JSON");
     }

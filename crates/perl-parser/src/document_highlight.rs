@@ -271,17 +271,16 @@ impl DocumentHighlightProvider {
             _ => {
                 // Try to extract from source text
                 let text = &source[node.location.start..node.location.end];
-                if text.starts_with('$') || text.starts_with('@') || text.starts_with('%') {
-                    let sigil = text.chars().next().unwrap().to_string();
-                    let name = text[1..].to_string();
-                    Some(SymbolInfo {
-                        name,
-                        sigil: Some(sigil),
+                // Check for sigil prefix and extract safely
+                let first = text.chars().next();
+                match first {
+                    Some(sigil @ ('$' | '@' | '%')) => Some(SymbolInfo {
+                        name: text.get(1..).unwrap_or("").to_string(),
+                        sigil: Some(sigil.to_string()),
                         is_method: false,
                         is_function: false,
-                    })
-                } else {
-                    None
+                    }),
+                    _ => None,
                 }
             }
         }

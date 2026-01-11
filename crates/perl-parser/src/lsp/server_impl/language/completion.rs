@@ -15,21 +15,22 @@ use crate::{
     lsp::state::{completion_cap, completion_deadline},
     type_inference::TypeInferenceEngine,
 };
-use lazy_static::lazy_static;
 use regex::Regex;
 use serde_json::{Value, json};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 use super::super::LspServer;
 
-lazy_static! {
-    /// Regex for snippet placeholders like ${1:placeholder}
-    static ref SNIPPET_PLACEHOLDER_RE: Regex =
-        Regex::new(r"\$\{(\d+):([^}]+)\}").unwrap();
-    /// Regex for simple placeholders like $1, $0
-    static ref SNIPPET_SIMPLE_RE: Regex =
-        Regex::new(r"\$\d+").unwrap();
+static SNIPPET_PLACEHOLDER_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static SNIPPET_SIMPLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+
+fn get_snippet_placeholder_regex() -> Option<&'static Regex> {
+    SNIPPET_PLACEHOLDER_RE.get_or_init(|| Regex::new(r"\$\{(\d+):([^}]+)\}")).as_ref().ok()
+}
+
+fn get_snippet_simple_regex() -> Option<&'static Regex> {
+    SNIPPET_SIMPLE_RE.get_or_init(|| Regex::new(r"\$\d+")).as_ref().ok()
 }
 
 impl LspServer {
@@ -53,10 +54,18 @@ impl LspServer {
     /// Degrade snippet syntax to plaintext for clients that don't support snippets
     pub(crate) fn degrade_snippet_to_plaintext(snippet: &str) -> String {
         // Remove snippet placeholders: ${1:placeholder} -> placeholder
-        let result = SNIPPET_PLACEHOLDER_RE.replace_all(snippet, "$2");
+        let result = if let Some(placeholder_re) = get_snippet_placeholder_regex() {
+            placeholder_re.replace_all(snippet, "$2")
+        } else {
+            std::borrow::Cow::Borrowed(snippet)
+        };
 
         // Remove simple placeholders: $1, $0, etc.
-        SNIPPET_SIMPLE_RE.replace_all(&result, "").to_string()
+        if let Some(simple_re) = get_snippet_simple_regex() {
+            simple_re.replace_all(&result, "").to_string()
+        } else {
+            result.to_string()
+        }
     }
 
     /// Handle completion request

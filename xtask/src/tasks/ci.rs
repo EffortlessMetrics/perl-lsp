@@ -17,7 +17,9 @@ use crate::utils::{constrained_env_vars, project_root};
 pub fn run() -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .context("Failed to create progress spinner template")?,
     );
 
     // Change to project root
@@ -86,7 +88,9 @@ pub fn run() -> Result<()> {
 pub fn check_only() -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .context("Failed to create progress spinner template")?,
     );
 
     let root = project_root();

@@ -251,8 +251,14 @@ impl LspServer {
             j -= 1;
         }
 
-        if j == 0 && !chars[0].is_alphanumeric() && chars[0] != '_' {
-            return None;
+        if j == 0 {
+            if let Some(&first) = chars.first() {
+                if !first.is_alphanumeric() && first != '_' {
+                    return None;
+                }
+            } else {
+                return None;
+            }
         }
 
         let mut end = j + 1;
@@ -295,10 +301,16 @@ impl LspServer {
             }
 
             // Handle case where we're at the beginning
-            if start == 0 && (chars[0].is_alphanumeric() || chars[0] == '_') {
-                // Include first character
-            } else if start == 0 {
-                start = 1;
+            if start == 0 {
+                if let Some(&first) = chars.first() {
+                    if first.is_alphanumeric() || first == '_' {
+                        // Include first character
+                    } else {
+                        start = 1;
+                    }
+                } else {
+                    start = 1;
+                }
             }
         }
 
