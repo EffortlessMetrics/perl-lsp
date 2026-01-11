@@ -21,7 +21,7 @@ Clean up the current branch for review. Context: **$ARGUMENTS**
 Run these Bash commands in parallel:
 - `git status -sb`
 - `git branch --show-current`
-- `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo origin/master`
+- `(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null || echo refs/remotes/origin/master) | sed 's@^refs/remotes/origin/@origin/@'`
 
 Then with the base branch:
 - `git log --oneline <base>..HEAD`

@@ -362,15 +362,11 @@ impl DebugAdapter {
         }
     }
 
-    /// Get next sequence number
+    /// Get next sequence number (monotonically increasing, poison-safe)
     fn next_seq(&self) -> i64 {
-        if let Ok(mut seq) = self.seq.lock() {
-            *seq += 1;
-            *seq
-        } else {
-            eprintln!("Failed to lock sequence counter, using 0");
-            0
-        }
+        let mut seq = lock_or_recover(&self.seq, "next_seq");
+        *seq += 1;
+        *seq
     }
 
     /// Send an event to the client
