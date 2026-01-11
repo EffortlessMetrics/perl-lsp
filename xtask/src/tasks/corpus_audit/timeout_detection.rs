@@ -8,6 +8,124 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+/// Error category for targeting improvements (Issue #180)
+///
+/// Categorizes parse errors by the type of Perl syntax that caused them,
+/// enabling targeted improvements by syntax area.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ErrorCategory {
+    /// Quote-like operators: q/qq/qw/qx/qr, heredocs, strings
+    QuoteLike,
+    /// Regular expressions: m//, s///, tr///
+    Regex,
+    /// Modern Perl features: class, try/catch, signatures, builtin::
+    ModernFeature,
+    /// Control flow: given/when, loops with exotic forms
+    ControlFlow,
+    /// Dereferencing: ->, sigils, postfix deref
+    Dereference,
+    /// Subroutine/method declarations with complex signatures
+    Subroutine,
+    /// Uncategorized/general syntax errors
+    General,
+}
+
+impl std::fmt::Display for ErrorCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ErrorCategory::QuoteLike => write!(f, "QuoteLike"),
+            ErrorCategory::Regex => write!(f, "Regex"),
+            ErrorCategory::ModernFeature => write!(f, "ModernFeature"),
+            ErrorCategory::ControlFlow => write!(f, "ControlFlow"),
+            ErrorCategory::Dereference => write!(f, "Dereference"),
+            ErrorCategory::Subroutine => write!(f, "Subroutine"),
+            ErrorCategory::General => write!(f, "General"),
+        }
+    }
+}
+
+/// Categorize a parse error based on error message and source context
+pub fn categorize_error(message: &str, source: &str) -> ErrorCategory {
+    let msg_lower = message.to_lowercase();
+    let src_lower = source.to_lowercase();
+
+    // Check for modern Perl features (highest priority - these are intentional gaps)
+    if src_lower.contains("class ")
+        || src_lower.contains("field ")
+        || src_lower.contains("method ")
+        || src_lower.contains("try {")
+        || src_lower.contains("try{")
+        || src_lower.contains("catch ")
+        || src_lower.contains("finally ")
+        || src_lower.contains("builtin::")
+        || msg_lower.contains("class")
+        || msg_lower.contains("try")
+        || msg_lower.contains("catch")
+    {
+        return ErrorCategory::ModernFeature;
+    }
+
+    // Check for quote-like issues
+    if msg_lower.contains("string")
+        || msg_lower.contains("quote")
+        || msg_lower.contains("heredoc")
+        || msg_lower.contains("delimiter")
+        || src_lower.contains("<<")
+        || src_lower.contains("q{")
+        || src_lower.contains("qq{")
+        || src_lower.contains("qw{")
+        || src_lower.contains("qx{")
+    {
+        return ErrorCategory::QuoteLike;
+    }
+
+    // Check for regex issues
+    if msg_lower.contains("regex")
+        || msg_lower.contains("pattern")
+        || msg_lower.contains("substitution")
+        || src_lower.contains("qr/")
+        || src_lower.contains("qr{")
+        || src_lower.contains("=~ /")
+        || src_lower.contains("!~ /")
+        || (src_lower.contains("s/") && src_lower.contains("//"))
+    {
+        return ErrorCategory::Regex;
+    }
+
+    // Check for control flow
+    if msg_lower.contains("given")
+        || msg_lower.contains("when")
+        || msg_lower.contains("switch")
+        || src_lower.contains("given ")
+        || src_lower.contains("when ")
+        || src_lower.contains("default ")
+    {
+        return ErrorCategory::ControlFlow;
+    }
+
+    // Check for dereference issues
+    if msg_lower.contains("dereference")
+        || msg_lower.contains("arrow")
+        || msg_lower.contains("->")
+        || src_lower.contains("->@*")
+        || src_lower.contains("->%*")
+        || src_lower.contains("->$*")
+    {
+        return ErrorCategory::Dereference;
+    }
+
+    // Check for subroutine/signature issues
+    if msg_lower.contains("signature")
+        || msg_lower.contains("prototype")
+        || msg_lower.contains("subroutine")
+        || (src_lower.contains("sub ") && src_lower.contains("($"))
+    {
+        return ErrorCategory::Subroutine;
+    }
+
+    ErrorCategory::General
+}
+
 use super::MAX_HEREDOC_DEPTH;
 use super::MAX_HEREDOC_SIZE;
 use super::MAX_NESTING_DEPTH;
@@ -397,5 +515,72 @@ mod tests {
     fn test_risk_priority_ord() {
         assert!(RiskPriority::P0 < RiskPriority::P1);
         assert!(RiskPriority::P1 < RiskPriority::P2);
+    }
+
+    #[test]
+    fn test_categorize_error_modern_features() {
+        assert_eq!(
+            categorize_error("unexpected token", "class Foo { }"),
+            ErrorCategory::ModernFeature
+        );
+        assert_eq!(
+            categorize_error("unexpected token", "try { } catch { }"),
+            ErrorCategory::ModernFeature
+        );
+        assert_eq!(
+            categorize_error("unexpected token", "field $name;"),
+            ErrorCategory::ModernFeature
+        );
+        assert_eq!(
+            categorize_error("unexpected token", "use builtin::true;"),
+            ErrorCategory::ModernFeature
+        );
+    }
+
+    #[test]
+    fn test_categorize_error_quote_like() {
+        assert_eq!(
+            categorize_error("unexpected string", "my $x = 'test';"),
+            ErrorCategory::QuoteLike
+        );
+        assert_eq!(
+            categorize_error("unexpected token", "my $x = <<EOF;"),
+            ErrorCategory::QuoteLike
+        );
+        assert_eq!(
+            categorize_error("unclosed delimiter", "my $x = q{test};"),
+            ErrorCategory::QuoteLike
+        );
+    }
+
+    #[test]
+    fn test_categorize_error_regex() {
+        assert_eq!(categorize_error("invalid regex", "my $r = qr/test/;"), ErrorCategory::Regex);
+        assert_eq!(categorize_error("pattern error", "$x =~ /test/;"), ErrorCategory::Regex);
+    }
+
+    #[test]
+    fn test_categorize_error_control_flow() {
+        assert_eq!(
+            categorize_error("unexpected token", "given ($x) { }"),
+            ErrorCategory::ControlFlow
+        );
+        assert_eq!(
+            categorize_error("unexpected token", "when (/pattern/) { }"),
+            ErrorCategory::ControlFlow
+        );
+    }
+
+    #[test]
+    fn test_categorize_error_general() {
+        assert_eq!(categorize_error("unexpected token", "my $x = 1;"), ErrorCategory::General);
+    }
+
+    #[test]
+    fn test_error_category_display() {
+        assert_eq!(format!("{}", ErrorCategory::ModernFeature), "ModernFeature");
+        assert_eq!(format!("{}", ErrorCategory::QuoteLike), "QuoteLike");
+        assert_eq!(format!("{}", ErrorCategory::Regex), "Regex");
+        assert_eq!(format!("{}", ErrorCategory::General), "General");
     }
 }

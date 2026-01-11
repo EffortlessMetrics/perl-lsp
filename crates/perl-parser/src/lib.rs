@@ -36,7 +36,7 @@
 #![deny(unreachable_pub)] // prevent stray pub items from escaping
 #![warn(rust_2018_idioms)]
 // NOTE: missing_docs enabled with baseline enforcement (Issue #197)
-// Baseline: 25 violations (reduced from 484) - see ci/missing_docs_baseline.txt
+// Baseline enforced via ci/missing_docs_baseline.txt
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 #![allow(
@@ -424,14 +424,50 @@ mod tests {
 
     #[test]
     fn test_operators_with_context() {
-        // These operators need better context handling
-        let _cases: Vec<(&str, &str)> = vec![
-            // ("2 / 3", "/"), // Slash disambiguation issue
-            // ("$a % $b", "%"), // Percent vs hash sigil issue
-            // ("$a ** $b", "**"), // Glob pattern issue
-            // ("$a // $b", "//"), // Defined-or vs regex issue
+        // These operators require context-aware parsing to disambiguate from similar syntax:
+        // - `/` could be division or regex delimiter
+        // - `%` could be modulo or hash sigil
+        // - `**` could be exponent or glob pattern
+        // - `//` could be defined-or or regex delimiter
+        // The lexer handles disambiguation via LexerMode::ExpectTerm tracking.
+        let cases: Vec<(&str, &str)> = vec![
+            ("2 / 3", "/"),     // Division (not regex)
+            ("$a % $b", "%"),   // Modulo (not hash sigil)
+            ("$a ** $b", "**"), // Exponent (not glob)
+            ("$a // $b", "//"), // Defined-or (not regex)
         ];
-        // TODO: Implement proper context-aware parsing for these operators
+
+        for (code, expected_op) in cases {
+            let mut parser = Parser::new(code);
+            let result = parser.parse();
+            assert!(result.is_ok(), "Failed to parse: {}", code);
+
+            let ast = result.unwrap();
+            if let NodeKind::Program { statements } = &ast.kind {
+                assert!(!statements.is_empty(), "No statements found in AST for: {}", code);
+
+                // Find the binary node, which might be wrapped in an ExpressionStatement
+                let binary_node = match &statements[0].kind {
+                    NodeKind::ExpressionStatement { expression } => match &expression.kind {
+                        NodeKind::Binary { op, .. } => Some(op),
+                        _ => None,
+                    },
+                    NodeKind::Binary { op, .. } => Some(op),
+                    _ => None,
+                };
+
+                if let Some(op) = binary_node {
+                    assert_eq!(op, expected_op, "Operator mismatch for: {}", code);
+                } else {
+                    panic!(
+                        "Expected Binary operator for: {}. Found: {:?}",
+                        code, statements[0].kind
+                    );
+                }
+            } else {
+                panic!("Expected Program node, found: {:?}", ast.kind);
+            }
+        }
     }
 
     #[test]
