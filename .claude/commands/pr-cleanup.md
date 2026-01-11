@@ -1,110 +1,89 @@
 ---
 description: PR cleanup pass (perl-lsp)
-argument-hint: [optional: constraints e.g. "minimal churn", "skip e2e", "docs-only", "prep for #123"]
+argument-hint: "optional constraints like 'minimal churn' or 'skip tests'"
 ---
 
-# PR Cleanup Pass (perl-lsp)
+# PR Cleanup Pass
 
-Goal: improve the **current working tree** so it's easier to review and safer to merge.
+Clean up the current branch for review. Context: **$ARGUMENTS**
 
-Use any extra context provided: **$ARGUMENTS**
+## Use TodoWrite to track these steps:
 
-## Start with this todo list
+1. Gather context (branch, base, diff scope)
+2. Identify risks and hotspots
+3. Run gate and fix failures
+4. Apply cleanup fixes
+5. Verify gate is green
+6. Output cleanup report
 
-Use TodoWrite to create these items, then work through them:
+## Step 1: Gather context
 
-1. Gather context (branch, status, base branch, diff scope)
-2. Identify hotspots + risk surface
-3. Run the best available gate and fix what fails
-4. Tighten reviewability (small refactors, docs drift, footguns)
-5. Re-run verification and confirm green
-6. Write a cleanup report + "PR ready?" verdict
-
-## 1) Gather context (portable)
-
-Run:
+Run these Bash commands in parallel:
 - `git status -sb`
 - `git branch --show-current`
-- Determine the base branch (prefer `origin/HEAD`, else `main`/`master` as appropriate)
+- `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo origin/master`
+
+Then with the base branch:
 - `git log --oneline <base>..HEAD`
 - `git diff --stat <base>..HEAD`
 
-Output a short "scope map":
-- which crates changed
-- which areas are semantic vs mechanical
+Output a scope summary: which crates changed, semantic vs mechanical changes.
 
-## 2) Identify hotspots and risks
+## Step 2: Identify risks
 
-Look specifically for:
-- boundary changes (`perl-parser` public API, LSP/DAP surfaces)
-- user-input paths / UTF-8 / string indexing
-- concurrency/locking patterns
-- unwrap/expect regressions (ratchet scripts)
+Use Grep to search for these patterns in changed files:
+- `unwrap\(` and `expect\(` - panic sites
+- Public API changes in `crates/perl-parser/src/lib.rs`
+- LSP handler changes in `crates/perl-parser/src/lsp/`
 
-## 3) Run the best available gate (mode ladder)
+## Step 3: Run gate
 
-Prefer, in order:
-
-1) If Nix is available:
-```bash
-nix develop -c just ci-gate
-```
-
-2) If Just is available:
 ```bash
 just ci-gate
 ```
 
-3) Pure Cargo fallback:
+Fallback if just unavailable:
 ```bash
-cargo fmt --all
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace --lib
+cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --lib
 ```
 
-Fix failures iteratively. Avoid scope creep.
+Fix failures using Edit tool. Stay focused - don't expand scope.
 
-## 4) Cleanup actions (keep it PR-friendly)
+## Step 4: Cleanup actions
 
-Prioritize:
+Use Edit tool to:
+- Fix formatting/clippy issues
+- Remove dead code from this branch
+- Add doc comments where logic is unclear
 
-* formatting + clippy
-* eliminate obvious panics introduced in new code
-* reduce diff noise (remove dead code, tighten names, add doc comments where needed)
-* keep changes local; don't redesign architecture during cleanup
+Keep changes minimal.
 
-## 5) Verify
+## Step 5: Verify
 
-Re-run the chosen gate and confirm:
+Re-run the gate. Confirm green.
 
-* compile
-* tests
-* ratchet scripts (unwraps / module checks) if present
+## Step 6: Report
 
-## 6) Cleanup report (print in chat)
+Output in chat:
 
-Include:
-
+```
 ### Summary
-
-What you changed and why. What you deliberately did not touch.
+What changed and why. What you didn't touch.
 
 ### Interface verdict
-
-* perl-parser public API: unchanged | additive | breaking | not assessed
-* LSP protocol surface: unchanged | changed | not assessed
-* DAP protocol surface: unchanged | changed | not assessed
-* CLI flags/config: unchanged | changed | not assessed
+- perl-parser API: unchanged | additive | breaking
+- LSP surface: unchanged | changed
+- DAP surface: unchanged | changed
+- CLI: unchanged | changed
 
 ### Evidence
-
-What you ran and what passed. Provide reproduction commands.
+Commands run and results.
 
 ### Remaining concerns
-
-Anything worth a follow-up issue.
+Follow-up items if any.
 
 ### PR readiness
+Ready / Not ready + blockers.
+```
 
-Ready / not ready + blockers.
-If ready, recommend running `/pr-create`.
+If ready, suggest `/pr-create`.

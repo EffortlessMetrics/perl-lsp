@@ -1,91 +1,100 @@
 ---
 description: Create PR (perl-lsp)
-argument-hint: [optional: context e.g. "closes #123", "draft", "ready", "base=main"]
+argument-hint: "optional like 'closes #123' or 'draft'"
 ---
 
-# Create PR (perl-lsp)
+# Create PR
 
-Goal: produce a reviewable PR: good narrative, clear risk surface, reproducible verification.
+Create a well-structured PR. Context: **$ARGUMENTS**
 
-Use any extra context provided: **$ARGUMENTS**
+## Use TodoWrite to track these steps:
 
-## Start with this todo list
+1. Gather context (branch, base, commits)
+2. Assess impact and risks
+3. Draft PR title and body
+4. Verify gate is green
+5. Push and create PR
 
-Use TodoWrite to create these items, then work through them:
+## Step 1: Gather context
 
-1. Gather context (branch, base, diff scope)
-2. Decide PR intent + interface verdict
-3. Draft PR title + body
-4. Ensure gate is green (or declare what isn't)
-5. Push branch if needed
-6. Create PR with `gh` (or output copy/pasteable title/body)
-
-## 1) Gather context
-
-Run:
+Run these Bash commands in parallel:
 - `git status -sb`
-- Determine base branch (prefer `origin/HEAD`, else `main`/`master` as appropriate)
+- `git branch --show-current`
+- `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo origin/master`
+- `git remote -v`
+
+Then with the base branch:
 - `git log --oneline <base>..HEAD`
 - `git diff --stat <base>..HEAD`
-- Identify affected crates and key files
 
-## 2) Decide the top-line verdicts
+## Step 2: Assess impact
 
-You must state:
-- interface impact (API / protocol / CLI)
-- risk surface delta (panic sites, concurrency, IO, deps)
-- verification depth (what was run, what wasn't)
+Determine:
+- **Interface changes**: perl-parser API, LSP, DAP, CLI
+- **Risk surface**: panic sites, concurrency, IO paths
+- **Test coverage**: what was tested
 
-## 3) Draft PR title + body (write in chat)
+Use Grep on changed files if needed.
 
-Use this structure:
+## Step 3: Draft PR
 
-### Summary
-1–3 paragraphs: what changed, why, trade-offs.
+Format:
 
-### Interface & compatibility
-- perl-parser public API: unchanged | additive | breaking | not assessed
-- LSP protocol surface: unchanged | changed | not assessed
-- DAP protocol surface: unchanged | changed | not assessed
-- CLI flags/config: unchanged | changed | not assessed
+**Title**: `<type>(<scope>): <description>`
+- Types: fix, feat, refactor, docs, test, chore, ci
+- Example: `fix(parser): handle empty heredocs correctly`
 
-### What changed
-System-level explanation (not a file dump).
+**Body** (use HEREDOC with gh):
+```
+## Summary
+1-3 paragraphs: what, why, trade-offs.
 
-### How to review
-Where to start + hotspots.
+## Interface & compatibility
+- perl-parser API: unchanged | additive | breaking
+- LSP surface: unchanged | changed
+- DAP surface: unchanged | changed
+- CLI: unchanged | changed
 
-### Evidence
-Exact commands and results. Say what wasn't run.
+## What changed
+System-level explanation.
 
-### Risk & rollback
+## How to review
+Where to start, hotspots.
+
+## Evidence
+\`\`\`
+<paste gate output>
+\`\`\`
+
+## Risk & rollback
 Blast radius, failure modes, rollback path.
 
-### Known limits / follow-ups
-Explicit deferrals.
-
-## 4) Gate status (mode ladder)
-
-Prefer:
-```bash
-nix develop -c just ci-gate
+## Follow-ups
+Explicit deferrals if any.
 ```
 
-Fallbacks:
+## Step 4: Verify gate
+
 ```bash
 just ci-gate
-cargo test --workspace --lib
 ```
 
-If not green, explicitly say why and what remains.
+If not green, fix or document what remains.
 
-## 5) Push + create PR
+## Step 5: Push and create
 
-If `gh` is available:
 ```bash
 git push -u origin HEAD
-gh pr create --draft --title "…" --body "…"
 ```
 
-If `gh` isn't available:
-* output a copy/pasteable PR title + PR body in chat.
+Then create PR:
+```bash
+gh pr create --title "<title>" --body "$(cat <<'EOF'
+<body content>
+EOF
+)"
+```
+
+If gh unavailable, output the title and body for manual creation.
+
+Return the PR URL when done.
