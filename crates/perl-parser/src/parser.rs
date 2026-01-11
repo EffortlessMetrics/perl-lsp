@@ -2091,17 +2091,27 @@ impl<'a> Parser<'a> {
                             Some(TokenKind::FatArrow) => {
                                 self.consume_token()?; // consume =>
                                 // Parse the value as a simple expression
+                                // But check if an identifier is followed by => (making it a key, not a value)
                                 match self.peek_kind() {
                                     Some(TokenKind::Number | TokenKind::String) => {
                                         args.push(self.consume_token()?.text.clone());
                                     }
                                     Some(TokenKind::Identifier) => {
-                                        args.push(self.consume_token()?.text.clone());
+                                        // Peek ahead to see if this identifier is followed by =>
+                                        // If so, it's actually a key for the next pair, not a value
+                                        if self.tokens.peek_second().map(|t| t.kind)
+                                            == Ok(TokenKind::FatArrow)
+                                        {
+                                            // Don't consume - let the outer loop handle it as a key
+                                        } else {
+                                            args.push(self.consume_token()?.text.clone());
+                                        }
                                     }
                                     _ => {
                                         // For more complex expressions, just consume tokens until semicolon
                                         while !Self::is_statement_terminator(self.peek_kind())
                                             && self.peek_kind() != Some(TokenKind::Comma)
+                                            && self.peek_kind() != Some(TokenKind::FatArrow)
                                         {
                                             args.push(self.consume_token()?.text.clone());
                                         }
@@ -3967,7 +3977,16 @@ impl<'a> Parser<'a> {
                         } else if Self::is_builtin_function(name) {
                             // Builtins always become function calls, even with no arguments
                             // This ensures they work correctly in expressions like "return $x or die"
-                            if self.is_at_statement_end() {
+                            //
+                            // For nullary builtins like shift, pop, caller, wantarray, etc.,
+                            // when followed by a binary operator, they should be treated as
+                            // having no arguments (e.g., "shift || 2" means shift() || 2)
+                            let is_nullary_without_args = Self::is_nullary_builtin(name)
+                                && self
+                                    .peek_kind()
+                                    .is_some_and(|k| Self::is_binary_operator(k));
+
+                            if self.is_at_statement_end() || is_nullary_without_args {
                                 // Bare builtin with no arguments
                                 expr = Node::new(
                                     NodeKind::FunctionCall { name: name.clone(), args: vec![] },
@@ -4426,6 +4445,93 @@ impl<'a> Parser<'a> {
                 | "rand"
                 | "srand"
                 | "int"
+        )
+    }
+
+    /// Check if an identifier is a nullary builtin that can stand alone without arguments.
+    /// These builtins work on implicit variables like @_ when called without arguments.
+    fn is_nullary_builtin(name: &str) -> bool {
+        matches!(
+            name,
+            "shift"
+                | "pop"
+                | "caller"
+                | "wantarray"
+                | "__FILE__"
+                | "__LINE__"
+                | "__PACKAGE__"
+                | "time"
+                | "times"
+                | "localtime"
+                | "gmtime"
+                | "getlogin"
+                | "getppid"
+                | "getpwent"
+                | "getgrent"
+                | "gethostent"
+                | "getnetent"
+                | "getprotoent"
+                | "getservent"
+                | "setpwent"
+                | "setgrent"
+                | "endpwent"
+                | "endgrent"
+                | "endhostent"
+                | "endnetent"
+                | "endprotoent"
+                | "endservent"
+                | "fork"
+                | "wait"
+                | "dump"
+        )
+    }
+
+    /// Check if a token kind is a binary operator that couldn't start an expression argument.
+    fn is_binary_operator(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::Or
+                | TokenKind::And
+                | TokenKind::DefinedOr
+                | TokenKind::WordOr
+                | TokenKind::WordAnd
+                | TokenKind::WordXor
+                | TokenKind::Equal
+                | TokenKind::NotEqual
+                | TokenKind::Less
+                | TokenKind::Greater
+                | TokenKind::LessEqual
+                | TokenKind::GreaterEqual
+                | TokenKind::Spaceship
+                | TokenKind::StringCompare
+                | TokenKind::Match
+                | TokenKind::NotMatch
+                | TokenKind::SmartMatch
+                | TokenKind::Dot
+                | TokenKind::Range
+                | TokenKind::LeftShift
+                | TokenKind::RightShift
+                | TokenKind::BitwiseAnd
+                | TokenKind::BitwiseOr
+                | TokenKind::BitwiseXor
+                | TokenKind::Question
+                | TokenKind::Colon
+                | TokenKind::Assign
+                | TokenKind::PlusAssign
+                | TokenKind::MinusAssign
+                | TokenKind::StarAssign
+                | TokenKind::SlashAssign
+                | TokenKind::PercentAssign
+                | TokenKind::DotAssign
+                | TokenKind::AndAssign
+                | TokenKind::OrAssign
+                | TokenKind::XorAssign
+                | TokenKind::PowerAssign
+                | TokenKind::LeftShiftAssign
+                | TokenKind::RightShiftAssign
+                | TokenKind::LogicalAndAssign
+                | TokenKind::LogicalOrAssign
+                | TokenKind::DefinedOrAssign
         )
     }
 
@@ -4932,18 +5038,41 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse function arguments
+    /// Handles both comma-separated and fat-comma-separated arguments.
+    /// Fat comma (=>) auto-quotes bareword identifiers on its left side.
     fn parse_args(&mut self) -> ParseResult<Vec<Node>> {
         self.expect(TokenKind::LeftParen)?;
         let mut args = Vec::new();
 
         while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
             // Use parse_assignment instead of parse_expression to avoid comma operator handling
-            args.push(self.parse_assignment()?);
+            let mut arg = self.parse_assignment()?;
 
-            if self.peek_kind() == Some(TokenKind::Comma) {
-                self.tokens.next()?;
-            } else {
-                break;
+            // Check for fat arrow after the argument
+            // If we see =>, the argument should be auto-quoted if it's a bare identifier
+            if self.peek_kind() == Some(TokenKind::FatArrow) {
+                // Auto-quote bare identifiers before =>
+                if let NodeKind::Identifier { ref name } = arg.kind {
+                    // Convert identifier to string (auto-quoting)
+                    arg = Node::new(
+                        NodeKind::String { value: name.clone(), interpolated: false },
+                        arg.location,
+                    );
+                }
+                args.push(arg);
+                self.tokens.next()?; // consume =>
+                // Continue to parse more arguments (the value after =>)
+                continue;
+            }
+
+            args.push(arg);
+
+            // Accept both comma and fat arrow as separators
+            match self.peek_kind() {
+                Some(TokenKind::Comma) | Some(TokenKind::FatArrow) => {
+                    self.tokens.next()?;
+                }
+                _ => break,
             }
         }
 
