@@ -12,7 +12,7 @@ use std::time::Duration;
 use super::corpus::{CorpusFile, CorpusInventory};
 use super::ga_alignment::GAFeatureCoverage;
 use super::nodekind_analysis::NodeKindStats;
-use super::timeout_detection::{categorize_error, ParseOutcome, TimeoutRisk};
+use super::timeout_detection::{ParseOutcome, TimeoutRisk, categorize_error};
 
 /// Comprehensive audit report
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,11 +133,7 @@ fn extract_snippet(source: &str, line_number: usize) -> String {
 
     let line = lines[line_idx];
     // Truncate long lines
-    let truncated = if line.len() > 80 {
-        format!("{}...", &line[..77])
-    } else {
-        line.to_string()
-    };
+    let truncated = if line.len() > 80 { format!("{}...", &line[..77]) } else { line.to_string() };
 
     truncated
 }
@@ -184,10 +180,8 @@ pub fn generate_report(
     let inventory = super::corpus::generate_inventory(&corpus_files);
 
     // Build source content map for error categorization
-    let sources: HashMap<PathBuf, String> = corpus_files
-        .iter()
-        .map(|f| (f.path.clone(), f.content.clone()))
-        .collect();
+    let sources: HashMap<PathBuf, String> =
+        corpus_files.iter().map(|f| (f.path.clone(), f.content.clone())).collect();
 
     // Generate parse outcomes summary with category breakdown
     let parse_outcomes = generate_parse_outcomes_summary(&parse_results, &sources);
@@ -246,8 +240,8 @@ fn generate_parse_outcomes_summary(
                 };
 
                 // Extract code snippet if we have a line number
-                let code_snippet = line_number.map(|ln| extract_snippet(source, ln))
-                    .filter(|s| !s.is_empty());
+                let code_snippet =
+                    line_number.map(|ln| extract_snippet(source, ln)).filter(|s| !s.is_empty());
 
                 // Parse found/expected tokens
                 let (found_token, expected) = parse_token_info(message);
@@ -367,7 +361,8 @@ mod tests {
     #[test]
     fn test_parse_token_info() {
         // Test "Unexpected token: expected X, found Y at N" format
-        let (found, expected) = parse_token_info("Unexpected token: expected expression, found Comma at 334");
+        let (found, expected) =
+            parse_token_info("Unexpected token: expected expression, found Comma at 334");
         assert_eq!(expected, Some("expression".to_string()));
         assert_eq!(found, Some("Comma".to_string()));
 

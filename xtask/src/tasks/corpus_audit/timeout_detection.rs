@@ -555,14 +555,8 @@ mod tests {
 
     #[test]
     fn test_categorize_error_regex() {
-        assert_eq!(
-            categorize_error("invalid regex", "my $r = qr/test/;"),
-            ErrorCategory::Regex
-        );
-        assert_eq!(
-            categorize_error("pattern error", "$x =~ /test/;"),
-            ErrorCategory::Regex
-        );
+        assert_eq!(categorize_error("invalid regex", "my $r = qr/test/;"), ErrorCategory::Regex);
+        assert_eq!(categorize_error("pattern error", "$x =~ /test/;"), ErrorCategory::Regex);
     }
 
     #[test]
@@ -579,10 +573,7 @@ mod tests {
 
     #[test]
     fn test_categorize_error_general() {
-        assert_eq!(
-            categorize_error("unexpected token", "my $x = 1;"),
-            ErrorCategory::General
-        );
+        assert_eq!(categorize_error("unexpected token", "my $x = 1;"), ErrorCategory::General);
     }
 
     #[test]

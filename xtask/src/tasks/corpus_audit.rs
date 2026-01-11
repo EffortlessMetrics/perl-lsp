@@ -224,12 +224,10 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
     let current_errors = report.parse_outcomes.error;
 
     if baseline_path.exists() {
-        let baseline_str = fs::read_to_string(baseline_path)
-            .context("Failed to read parse errors baseline")?;
-        let baseline: usize = baseline_str
-            .trim()
-            .parse()
-            .context("Failed to parse baseline as number")?;
+        let baseline_str =
+            fs::read_to_string(baseline_path).context("Failed to read parse errors baseline")?;
+        let baseline: usize =
+            baseline_str.trim().parse().context("Failed to parse baseline as number")?;
 
         println!("   Parse errors: {} (baseline: {})", current_errors, baseline);
 

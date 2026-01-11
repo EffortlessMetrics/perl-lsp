@@ -3982,9 +3982,7 @@ impl<'a> Parser<'a> {
                             // when followed by a binary operator, they should be treated as
                             // having no arguments (e.g., "shift || 2" means shift() || 2)
                             let is_nullary_without_args = Self::is_nullary_builtin(name)
-                                && self
-                                    .peek_kind()
-                                    .is_some_and(|k| Self::is_binary_operator(k));
+                                && self.peek_kind().is_some_and(Self::is_binary_operator);
 
                             if self.is_at_statement_end() || is_nullary_without_args {
                                 // Bare builtin with no arguments
