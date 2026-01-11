@@ -30,6 +30,18 @@ use serde_json::{Value, json};
 ///
 /// This variant allows a custom message, unlike `server_cancelled_error()` which
 /// uses a default message.
+///
+/// # LSP Workflow Context
+///
+/// Used during LSP request processing when the server must cancel an operation:
+/// - **Parse stage**: Cancel expensive parsing operations on outdated documents
+/// - **Index stage**: Abort indexing when workspace changes invalidate current index
+/// - **Navigate stage**: Stop symbol resolution when document is modified
+/// - **Complete stage**: Halt completion computation when user continues typing
+///
+/// # Recovery Strategy
+///
+/// Client should handle gracefully by discarding pending results and requesting fresh data.
 pub fn server_cancelled(message: &str) -> JsonRpcError {
     JsonRpcError { code: error_codes::SERVER_CANCELLED, message: message.to_string(), data: None }
 }
@@ -55,11 +67,34 @@ pub fn internal_error_value(message: &str) -> Value {
 }
 
 /// Alias for invalid_params returning JsonRpcError
+///
+/// # LSP Workflow Context
+///
+/// Used when LSP request parameters fail validation:
+/// - **Navigate stage**: Invalid position or URI in goto-definition requests
+/// - **Complete stage**: Malformed completion context parameters
+/// - **Analyze stage**: Invalid diagnostic request parameters
+///
+/// # Recovery Strategy
+///
+/// Client should validate parameters before sending. Server logs the error for debugging.
 pub fn invalid_params_err(message: &str) -> JsonRpcError {
     invalid_params(message)
 }
 
 /// Alias for internal_error returning JsonRpcError
+///
+/// # LSP Workflow Context
+///
+/// Used when unexpected server-side errors occur during LSP operations:
+/// - **Parse stage**: Internal parser failures or memory allocation errors
+/// - **Index stage**: Database corruption or indexing inconsistencies
+/// - **Navigate stage**: Symbol resolution failures or cross-file analysis errors
+/// - **Analyze stage**: Diagnostic computation crashes or threading issues
+///
+/// # Recovery Strategy
+///
+/// Server logs full error details. Client may retry request or prompt user to restart server.
 pub fn internal_error_err(message: &str) -> JsonRpcError {
     internal_error(message)
 }

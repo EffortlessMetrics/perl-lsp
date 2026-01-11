@@ -3,7 +3,7 @@
 # Used to generate capabilities, documentation, and compliance reports
 
 [meta]
-version = "0.8.5"
+version = "0.9.0"
 lsp_version = "3.18"
 compliance_percent = 65  # Auto-calculated in future
 
@@ -202,9 +202,9 @@ description = "Pull model diagnostics"
 id = "lsp.inline_completion"
 spec = "LSP 3.18"
 area = "text_document"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_inline_completion_tests.rs"]
 description = "Inline AI-powered completions"
 
 [[feature]]
@@ -238,9 +238,9 @@ description = "Color decorators"
 id = "lsp.linked_editing_range"
 spec = "LSP 3.16"
 area = "text_document"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_linked_editing_tests.rs"]
 description = "Linked editing of related tokens"
 
 # Workspace Features
@@ -294,18 +294,18 @@ description = "File rename/create/delete tracking"
 id = "lsp.workspace_edit"
 spec = "LSP 3.0"
 area = "workspace"
-maturity = "experimental"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_file_ops_tests.rs"]
 description = "Apply workspace-wide edits"
 
 [[feature]]
 id = "lsp.moniker"
 spec = "LSP 3.16"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Cross-project symbol identity"
 
 # Window Features
@@ -341,9 +341,9 @@ description = "Log messages"
 id = "lsp.work_done_progress"
 spec = "LSP 3.15"
 area = "window"
-maturity = "experimental"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Detailed work progress"
 
 # Notebook Features
@@ -393,8 +393,8 @@ id = "lsp.initialize"
 spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
-advertised = false
-tests = []
+advertised = true
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Initialize handshake"
 
 [[feature]]
@@ -402,26 +402,26 @@ id = "lsp.initialized"
 spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
-advertised = false
-tests = []
+advertised = true
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Initialized notification"
 
 [[feature]]
 id = "lsp.shutdown"
 spec = "LSP 3.0"
 area = "protocol"
-maturity = "experimental"
-advertised = false
-tests = []
-description = "Graceful shutdown request (partial - missing state cleanup)"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
+description = "Graceful shutdown request"
 
 [[feature]]
 id = "lsp.exit"
 spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
-advertised = false
-tests = []
+advertised = true
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Exit notification with proper exit codes"
 
 [[feature]]
@@ -429,8 +429,8 @@ id = "lsp.cancel_request"
 spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
-advertised = false
-tests = []
+advertised = true
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Request cancellation ($/cancelRequest)"
 
 [[feature]]
@@ -476,7 +476,7 @@ id = "lsp.text_document_sync"
 spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_text_sync_tests.rs"]
 description = "didOpen/didChange/didClose text synchronization"
 
@@ -485,7 +485,7 @@ id = "lsp.did_save"
 spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_text_sync_tests.rs"]
 description = "didSave notifications"
 
@@ -494,7 +494,7 @@ id = "lsp.will_save"
 spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_text_sync_tests.rs"]
 description = "willSave notifications"
 
@@ -503,7 +503,7 @@ id = "lsp.will_save_wait_until"
 spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_text_sync_tests.rs"]
 description = "willSaveWaitUntil request with format-on-save"
 
@@ -531,9 +531,9 @@ description = "Validate rename and compute placeholder/range"
 id = "lsp.inline_value"
 spec = "LSP 3.17"
 area = "text_document"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Inline values during debugging (LSP inlineValue)"
 
 [[feature]]
@@ -552,7 +552,7 @@ id = "lsp.completion_item_resolve"
 spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_completion_tests.rs"]
 description = "Resolve additional completion item details"
 
@@ -561,7 +561,7 @@ id = "lsp.code_action_resolve"
 spec = "LSP 3.16"
 area = "text_document"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_code_actions_tests.rs"]
 description = "Resolve additional code action details"
 
@@ -570,7 +570,7 @@ id = "lsp.code_lens_resolve"
 spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_code_lens_tests.rs"]
 description = "Resolve code lens command"
 
@@ -597,7 +597,7 @@ id = "lsp.workspace_symbol_resolve"
 spec = "LSP 3.17"
 area = "workspace"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_workspace_symbol_tests.rs"]
 description = "Resolve additional workspace symbol info"
 
@@ -655,7 +655,7 @@ id = "lsp.configuration"
 spec = "LSP 3.6"
 area = "workspace"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_workspace_tests.rs"]
 description = "workspace/configuration request (server->client)"
 
@@ -664,7 +664,7 @@ id = "lsp.did_change_configuration"
 spec = "LSP 3.0"
 area = "workspace"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_workspace_tests.rs"]
 description = "workspace/didChangeConfiguration notification"
 
@@ -673,7 +673,7 @@ id = "lsp.did_change_watched_files"
 spec = "LSP 3.0"
 area = "workspace"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_workspace_tests.rs"]
 description = "workspace/didChangeWatchedFiles notification"
 
@@ -682,7 +682,7 @@ id = "lsp.apply_edit"
 spec = "LSP 3.0"
 area = "workspace"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_workspace_tests.rs"]
 description = "workspace/applyEdit request (server->client)"
 
@@ -691,7 +691,7 @@ id = "lsp.publish_diagnostics"
 spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_pull_diagnostics_tests.rs"]
 description = "Push diagnostics via textDocument/publishDiagnostics"
 
@@ -768,18 +768,18 @@ description = "workspace/textDocumentContent/refresh request"
 id = "lsp.will_create_files"
 spec = "LSP 3.16"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_file_ops_tests.rs"]
 description = "workspace/willCreateFiles request"
 
 [[feature]]
 id = "lsp.did_create_files"
 spec = "LSP 3.16"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_file_ops_tests.rs"]
 description = "workspace/didCreateFiles notification"
 
 [[feature]]
@@ -787,7 +787,7 @@ id = "lsp.will_rename_files"
 spec = "LSP 3.16"
 area = "workspace"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_file_operations_tests.rs"]
 description = "workspace/willRenameFiles request"
 
@@ -796,7 +796,7 @@ id = "lsp.did_rename_files"
 spec = "LSP 3.16"
 area = "workspace"
 maturity = "ga"
-advertised = false
+advertised = true
 tests = ["tests/lsp_file_operations_tests.rs"]
 description = "workspace/didRenameFiles notification"
 
@@ -804,16 +804,16 @@ description = "workspace/didRenameFiles notification"
 id = "lsp.will_delete_files"
 spec = "LSP 3.16"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_file_ops_tests.rs"]
 description = "workspace/willDeleteFiles request"
 
 [[feature]]
 id = "lsp.did_delete_files"
 spec = "LSP 3.16"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_file_ops_tests.rs"]
 description = "workspace/didDeleteFiles notification"

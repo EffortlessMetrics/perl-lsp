@@ -122,6 +122,7 @@ use thiserror::Error;
 /// strategies across all pipeline stages.
 pub type ParseResult<T> = Result<T, ParseError>;
 
+#[derive(Error, Debug, Clone, PartialEq)]
 /// Comprehensive error types that can occur during Perl parsing within Perl parsing workflow workflows
 ///
 /// These errors are designed to provide detailed context about parsing failures that occur during
@@ -139,7 +140,6 @@ pub type ParseResult<T> = Result<T, ParseError>;
 ///
 /// Error handling is optimized for processing 50GB+ Perl files with thousands of Perl scripts
 /// and embedded Perl content, ensuring memory-efficient error propagation and logging.
-#[derive(Error, Debug, Clone, PartialEq)]
 pub enum ParseError {
     /// Parser encountered unexpected end of input during Perl code analysis
     ///

@@ -371,7 +371,11 @@ impl LspServer {
                 Ok(None) // Notification, no response
             }
             "workspace/willRenameFiles" => self.handle_will_rename_files(request.params),
+            "workspace/didRenameFiles" => self.handle_did_rename_files(request.params),
+            "workspace/willDeleteFiles" => self.handle_will_delete_files(request.params),
             "workspace/didDeleteFiles" => self.handle_did_delete_files(request.params),
+            "workspace/willCreateFiles" => self.handle_will_create_files(request.params),
+            "workspace/didCreateFiles" => self.handle_did_create_files(request.params),
             "workspace/applyEdit" => self.handle_apply_edit(request.params),
             // Test-specific slow operation for cancellation testing
             // This is available in all builds but only used by tests

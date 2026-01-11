@@ -144,6 +144,34 @@ impl From<crate::ast::SourceLocation> for Range {
 ///
 /// Provides symmetric position conversion that handles Unicode characters correctly
 /// and ensures roundtrip consistency between offset ↔ (line, column) conversions.
+///
+/// # Arguments
+///
+/// * `text` - The source text containing the position to convert
+/// * `offset` - Byte offset from the start of the text (0-based)
+///
+/// # Returns
+///
+/// A tuple `(line, column)` where:
+/// - `line` is the 0-based line number
+/// - `column` is the UTF-16 code unit offset within the line
+///
+/// # LSP Workflow Context
+///
+/// Critical for LSP protocol compliance throughout the workflow pipeline:
+/// - **Navigate stage**: Convert parser byte offsets to LSP positions for go-to-definition
+/// - **Complete stage**: Map completion trigger points to LSP protocol positions
+/// - **Analyze stage**: Transform diagnostic byte ranges to LSP line/column ranges
+///
+/// # Examples
+///
+/// ```
+/// use perl_parser::position::offset_to_utf16_line_col;
+///
+/// let text = "hello\nworld";
+/// let (line, col) = offset_to_utf16_line_col(text, 6);
+/// assert_eq!((line, col), (1, 0)); // Start of "world"
+/// ```
 pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
     // If offset is beyond text length, clamp to end
     if offset > text.len() {
@@ -216,6 +244,34 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
 ///
 /// Provides symmetric position conversion that maps UTF-16 positions back to
 /// exact character boundaries, ensuring roundtrip consistency.
+///
+/// # Arguments
+///
+/// * `text` - The source text to find the position in
+/// * `line` - 0-based line number from LSP protocol
+/// * `col` - UTF-16 code unit offset within the line
+///
+/// # Returns
+///
+/// The byte offset from the start of the text corresponding to the LSP position.
+/// Returns the end of the text if the position is beyond the document bounds.
+///
+/// # LSP Workflow Context
+///
+/// Essential for processing LSP client requests throughout the workflow:
+/// - **Navigate stage**: Convert LSP positions to byte offsets for symbol lookup
+/// - **Complete stage**: Map completion request positions to parser coordinates
+/// - **Analyze stage**: Transform LSP range edits to byte-based text modifications
+///
+/// # Examples
+///
+/// ```
+/// use perl_parser::position::utf16_line_col_to_offset;
+///
+/// let text = "hello\nworld";
+/// let offset = utf16_line_col_to_offset(text, 1, 0);
+/// assert_eq!(offset, 6); // Start of "world"
+/// ```
 pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
     let mut offset = 0usize;
 
