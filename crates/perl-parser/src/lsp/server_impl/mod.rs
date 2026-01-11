@@ -123,6 +123,8 @@ pub struct LspServer {
     pub(crate) documents: Arc<Mutex<HashMap<String, DocumentState>>>,
     /// Whether the server is initialized
     initialized: bool,
+    /// Whether shutdown was received (for LSP-compliant exit handling)
+    shutdown_received: bool,
     /// Index coordinator for workspace-wide features with lifecycle management
     #[cfg(feature = "workspace")]
     pub(crate) index_coordinator: Option<Arc<IndexCoordinator>>,
@@ -173,6 +175,7 @@ impl LspServer {
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
+            shutdown_received: false,
             #[cfg(feature = "workspace")]
             index_coordinator,
             // Cache up to 100 ASTs with 5 minute TTL
@@ -208,6 +211,7 @@ impl LspServer {
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
+            shutdown_received: false,
             #[cfg(feature = "workspace")]
             index_coordinator,
             ast_cache: Arc::new(AstCache::new(100, 300)),
@@ -237,6 +241,40 @@ impl LspServer {
         let mut output = self.output.lock();
         write!(output, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)?;
         output.flush()
+    }
+
+    /// Show a message to the user via window/showMessage
+    ///
+    /// This sends a notification that clients typically display as a popup or notification.
+    ///
+    /// # Arguments
+    /// * `message_type` - Message severity: 1=Error, 2=Warning, 3=Info, 4=Log
+    /// * `message` - The message text to display
+    pub fn show_message(&self, message_type: u8, message: &str) -> io::Result<()> {
+        self.notify(
+            "window/showMessage",
+            json!({
+                "type": message_type,
+                "message": message
+            }),
+        )
+    }
+
+    /// Log a message to the client output via window/logMessage
+    ///
+    /// This sends a notification that clients typically write to their output/log panel.
+    ///
+    /// # Arguments
+    /// * `message_type` - Message severity: 1=Error, 2=Warning, 3=Info, 4=Log
+    /// * `message` - The message text to log
+    pub fn log_message(&self, message_type: u8, message: &str) -> io::Result<()> {
+        self.notify(
+            "window/logMessage",
+            json!({
+                "type": message_type,
+                "message": message
+            }),
+        )
     }
 
     /// Acquire a lock on the documents map

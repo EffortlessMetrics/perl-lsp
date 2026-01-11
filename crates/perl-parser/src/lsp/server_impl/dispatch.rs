@@ -177,7 +177,14 @@ impl LspServer {
             "shutdown" => {
                 // Clear any pending cancelled requests on shutdown
                 self.cancelled.lock().clear();
+                self.shutdown_received = true;
                 Ok(Some(json!(null)))
+            }
+            "exit" => {
+                // LSP spec: exit with 0 if shutdown was called, 1 otherwise
+                let exit_code = if self.shutdown_received { 0 } else { 1 };
+                eprintln!("LSP server exiting with code {}", exit_code);
+                std::process::exit(exit_code);
             }
             "textDocument/didOpen" => match self.handle_did_open(request.params) {
                 Ok(_) => Ok(None),
@@ -214,6 +221,7 @@ impl LspServer {
             "textDocument/completion" => early_cancel_or!(self, id, "textDocument/completion", {
                 self.handle_completion_cancellable(request.params, id.as_ref())
             }),
+            "completionItem/resolve" => self.handle_completion_resolve(request.params),
             "textDocument/hover" => early_cancel_or!(self, id, "textDocument/hover", {
                 self.handle_hover_cancellable(request.params, id.as_ref())
             }),

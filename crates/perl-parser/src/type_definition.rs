@@ -51,7 +51,8 @@ impl TypeDefinitionProvider {
                 // Attributes are Vec<String>
                 for attr in attributes {
                     // Check if the attribute looks like a package name
-                    if attr.contains("::") || attr.chars().next().is_some_and(|c| c.is_uppercase()) {
+                    if attr.contains("::") || attr.chars().next().is_some_and(|c| c.is_uppercase())
+                    {
                         // Type is specified as an attribute
                         return Some(attr.clone());
                     }
@@ -80,15 +81,22 @@ impl TypeDefinitionProvider {
                 // For now, return None and rely on context
                 None
             }
-            // Package method: Package::method or Package->method
-            NodeKind::Identifier { name } if name.contains("::") => {
-                let parts: Vec<&str> = name.split("::").collect();
-                if parts.len() >= 2 {
-                    // Get the package name (everything except the last part)
-                    Some(parts[..parts.len() - 1].join("::"))
-                } else {
-                    None
+            // Package identifier or Package::method
+            NodeKind::Identifier { name } => {
+                if name.contains("::") {
+                    // Qualified name like Package::method
+                    let parts: Vec<&str> = name.split("::").collect();
+                    if parts.len() >= 2 {
+                        // Get the package name (everything except the last part)
+                        return Some(parts[..parts.len() - 1].join("::"));
+                    }
                 }
+                // Check if this identifier looks like a package name (starts with uppercase)
+                if name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                    // Likely a package/class name
+                    return Some(name.clone());
+                }
+                None
             }
             // Constructor: Package->new or new Package
             NodeKind::Binary { op, left, right } if op == "->" => {
@@ -322,9 +330,9 @@ impl TypeDefinitionProvider {
                 // Prefer the smallest (most specific) node
                 if best_match.is_none()
                     || found.location.end - found.location.start
-                        < best_match.as_ref().map_or(usize::MAX, |n: &Node| {
-                            n.location.end - n.location.start
-                        })
+                        < best_match
+                            .as_ref()
+                            .map_or(usize::MAX, |n: &Node| n.location.end - n.location.start)
                 {
                     best_match = Some(found);
                 }
@@ -385,5 +393,65 @@ $obj->method();
 
         // Would need to traverse to find the right node
         // This is a simplified test
+    }
+
+    #[test]
+    fn test_full_type_definition_flow() {
+        let code = r#"
+package MyClass;
+
+sub new {
+    my $class = shift;
+    bless {}, $class;
+}
+
+package main;
+
+my $obj = MyClass->new();
+$obj->method();
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().expect("Failed to parse");
+
+        let provider = TypeDefinitionProvider::new();
+        let uri = "file:///test.pl";
+
+        let mut documents = std::collections::HashMap::new();
+        documents.insert(uri.to_string(), code.to_string());
+
+        // Line 10 (0-indexed: 10) is "my $obj = MyClass->new();"
+        // Character position 10 should be around "MyClass"
+        let line = 10;
+        let character = 10;
+
+        let locations = provider.find_type_definition(&ast, line, character, uri, &documents);
+
+        // Debug: print what we found
+        if let Some(ref locs) = locations {
+            eprintln!("Found {} locations", locs.len());
+            for loc in locs {
+                eprintln!("Location: {:?}", loc);
+            }
+        } else {
+            eprintln!("No locations found");
+
+            // Debug: try to find what node we're getting
+            let offset = crate::position::utf16_line_col_to_offset(code, line, character);
+            eprintln!("Offset: {}", offset);
+            if let Some(node) = provider.find_node_at_offset(&ast, offset) {
+                eprintln!("Node kind: {:?}", node.kind);
+                if let Some(type_name) = provider.extract_type_name(&node) {
+                    eprintln!("Extracted type name: {}", type_name);
+                } else {
+                    eprintln!("Could not extract type name from node");
+                }
+            } else {
+                eprintln!("Could not find node at offset");
+            }
+        }
+
+        assert!(locations.is_some(), "Should find type definition for MyClass->new()");
+        let locs = locations.unwrap();
+        assert_eq!(locs.len(), 1, "Should find exactly one definition");
     }
 }

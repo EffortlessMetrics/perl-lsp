@@ -642,11 +642,243 @@ impl LspServer {
 
         completions
     }
+
+    /// Handle completionItem/resolve request
+    ///
+    /// This method enriches a completion item with additional information
+    /// such as documentation for built-in functions. This enables lazy loading
+    /// of completion details, improving initial completion list performance.
+    pub(crate) fn handle_completion_resolve(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let Some(mut item) = params else {
+            return Ok(None);
+        };
+
+        // Extract the label and kind upfront (clone to avoid borrow issues)
+        let label = item.get("label").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let kind = item.get("kind").and_then(|v| v.as_u64()).unwrap_or(0);
+        let has_doc = item.get("documentation").is_some();
+
+        // Check if this is a built-in function and add documentation
+        let builtin_signatures = crate::builtin_signatures::create_builtin_signatures();
+        if let Some(sig) = builtin_signatures.get(label.as_str()) {
+            // Build markdown documentation
+            let mut doc_parts = Vec::new();
+
+            // Add signatures
+            if !sig.signatures.is_empty() {
+                doc_parts.push("**Signatures:**".to_string());
+                for signature in &sig.signatures {
+                    doc_parts.push(format!("- `{}`", signature));
+                }
+                doc_parts.push(String::new()); // blank line
+            }
+
+            // Add documentation
+            doc_parts.push(sig.documentation.to_string());
+
+            let documentation = doc_parts.join("\n");
+
+            // Add documentation to the completion item
+            if let Some(obj) = item.as_object_mut() {
+                obj.insert(
+                    "documentation".to_string(),
+                    json!({
+                        "kind": "markdown",
+                        "value": documentation
+                    }),
+                );
+            }
+            return Ok(Some(item));
+        }
+
+        // For variables, add type hint documentation if available
+        if kind == 6 && !has_doc {
+            // Variable kind
+            let type_doc = if label.starts_with('$') {
+                Some("Scalar variable - holds a single value (string, number, or reference)")
+            } else if label.starts_with('@') {
+                Some("Array variable - holds an ordered list of scalars")
+            } else if label.starts_with('%') {
+                Some("Hash variable - holds a set of key-value pairs")
+            } else {
+                None
+            };
+
+            if let Some(doc) = type_doc {
+                if let Some(obj) = item.as_object_mut() {
+                    obj.insert(
+                        "documentation".to_string(),
+                        json!({
+                            "kind": "markdown",
+                            "value": doc
+                        }),
+                    );
+                }
+            }
+            return Ok(Some(item));
+        }
+
+        // For keywords, add brief documentation
+        if kind == 14 && !has_doc {
+            // Keyword kind
+            let keyword_doc = match label.as_str() {
+                "my" => Some("Declares a lexically scoped variable"),
+                "our" => Some("Declares a package variable visible to all code in its package"),
+                "local" => Some("Temporarily saves and restores a variable's value"),
+                "state" => Some("Declares a persistent lexical variable (Perl 5.10+)"),
+                "sub" => Some("Declares a subroutine"),
+                "package" => Some("Declares a namespace"),
+                "use" => Some("Imports a module at compile time"),
+                "require" => Some("Loads a module at runtime"),
+                "if" => Some("Conditional execution"),
+                "elsif" => Some("Additional conditional branch"),
+                "else" => Some("Default conditional branch"),
+                "unless" => Some("Negated conditional execution"),
+                "while" => Some("Loop while condition is true"),
+                "until" => Some("Loop until condition is true"),
+                "for" => Some("C-style loop or list iteration"),
+                "foreach" => Some("Iterate over a list"),
+                "given" => Some("Switch statement (Perl 5.10+)"),
+                "when" => Some("Case in a switch statement"),
+                "default" => Some("Default case in a switch statement"),
+                "return" => Some("Returns from a subroutine"),
+                "last" => Some("Exits a loop immediately"),
+                "next" => Some("Skips to the next iteration of a loop"),
+                "redo" => Some("Restarts the current iteration without re-evaluating condition"),
+                "goto" => Some("Transfers control to another location"),
+                _ => None,
+            };
+
+            if let Some(doc) = keyword_doc {
+                if let Some(obj) = item.as_object_mut() {
+                    obj.insert(
+                        "documentation".to_string(),
+                        json!({
+                            "kind": "markdown",
+                            "value": doc
+                        }),
+                    );
+                }
+            }
+        }
+
+        Ok(Some(item))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_completion_resolve_builtin_function() {
+        // Test that built-in function documentation is added
+        let item = json!({
+            "label": "print",
+            "kind": 3  // Function
+        });
+
+        let server = LspServer::default();
+        let result = server.handle_completion_resolve(Some(item));
+
+        assert!(result.is_ok());
+        let resolved = result.unwrap().unwrap();
+
+        // Check that documentation was added
+        assert!(resolved.get("documentation").is_some());
+        let doc = resolved.get("documentation").unwrap();
+        assert_eq!(doc.get("kind").and_then(|v| v.as_str()), Some("markdown"));
+
+        let value = doc.get("value").and_then(|v| v.as_str()).unwrap_or("");
+        assert!(value.contains("Signatures:"));
+        assert!(value.contains("print"));
+    }
+
+    #[test]
+    fn test_completion_resolve_keyword() {
+        // Test that keyword documentation is added
+        let item = json!({
+            "label": "my",
+            "kind": 14  // Keyword
+        });
+
+        let server = LspServer::default();
+        let result = server.handle_completion_resolve(Some(item));
+
+        assert!(result.is_ok());
+        let resolved = result.unwrap().unwrap();
+
+        // Check that documentation was added
+        assert!(resolved.get("documentation").is_some());
+        let doc = resolved.get("documentation").unwrap();
+        let value = doc.get("value").and_then(|v| v.as_str()).unwrap_or("");
+        assert!(value.contains("lexically scoped"));
+    }
+
+    #[test]
+    fn test_completion_resolve_variable() {
+        // Test that variable documentation is added
+        let item = json!({
+            "label": "$foo",
+            "kind": 6  // Variable
+        });
+
+        let server = LspServer::default();
+        let result = server.handle_completion_resolve(Some(item));
+
+        assert!(result.is_ok());
+        let resolved = result.unwrap().unwrap();
+
+        // Check that documentation was added
+        assert!(resolved.get("documentation").is_some());
+        let doc = resolved.get("documentation").unwrap();
+        let value = doc.get("value").and_then(|v| v.as_str()).unwrap_or("");
+        assert!(value.contains("Scalar variable"));
+    }
+
+    #[test]
+    fn test_completion_resolve_array_variable() {
+        // Test that array variable documentation is added
+        let item = json!({
+            "label": "@items",
+            "kind": 6  // Variable
+        });
+
+        let server = LspServer::default();
+        let result = server.handle_completion_resolve(Some(item));
+
+        assert!(result.is_ok());
+        let resolved = result.unwrap().unwrap();
+
+        // Check that documentation was added
+        assert!(resolved.get("documentation").is_some());
+        let doc = resolved.get("documentation").unwrap();
+        let value = doc.get("value").and_then(|v| v.as_str()).unwrap_or("");
+        assert!(value.contains("Array variable"));
+    }
+
+    #[test]
+    fn test_completion_resolve_passthrough() {
+        // Test that unknown items are passed through unchanged (except for no documentation)
+        let item = json!({
+            "label": "some_custom_function",
+            "kind": 3  // Function
+        });
+
+        let server = LspServer::default();
+        let result = server.handle_completion_resolve(Some(item.clone()));
+
+        assert!(result.is_ok());
+        let resolved = result.unwrap().unwrap();
+
+        // Label should be preserved
+        assert_eq!(resolved.get("label").and_then(|v| v.as_str()), Some("some_custom_function"));
+        // Kind should be preserved
+        assert_eq!(resolved.get("kind").and_then(|v| v.as_u64()), Some(3));
+    }
 
     #[test]
     fn test_degrade_snippet_removes_placeholders_with_defaults() {

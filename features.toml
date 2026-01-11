@@ -211,7 +211,7 @@ description = "Inline AI-powered completions"
 id = "lsp.type_definition"
 spec = "LSP 3.6"
 area = "text_document"
-maturity = "experimental"
+maturity = "ga"
 advertised = true
 tests = ["tests/lsp_type_definition_tests.rs"]
 description = "Go to type definition"
@@ -220,7 +220,7 @@ description = "Go to type definition"
 id = "lsp.implementation"
 spec = "LSP 3.6"
 area = "text_document"
-maturity = "experimental"
+maturity = "ga"
 advertised = true
 tests = ["tests/lsp_implementation_tests.rs"]
 description = "Go to implementation"
@@ -410,10 +410,10 @@ description = "Initialized notification"
 id = "lsp.shutdown"
 spec = "LSP 3.0"
 area = "protocol"
-maturity = "ga"
+maturity = "experimental"
 advertised = false
 tests = []
-description = "Graceful shutdown request"
+description = "Graceful shutdown request (partial - missing state cleanup)"
 
 [[feature]]
 id = "lsp.exit"
@@ -422,7 +422,7 @@ area = "protocol"
 maturity = "ga"
 advertised = false
 tests = []
-description = "Exit notification"
+description = "Exit notification with proper exit codes"
 
 [[feature]]
 id = "lsp.cancel_request"
@@ -477,7 +477,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = false
-tests = []
+tests = ["tests/lsp_text_sync_tests.rs"]
 description = "didOpen/didChange/didClose text synchronization"
 
 [[feature]]
@@ -486,26 +486,26 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = false
-tests = []
+tests = ["tests/lsp_text_sync_tests.rs"]
 description = "didSave notifications"
 
 [[feature]]
 id = "lsp.will_save"
 spec = "LSP 3.0"
 area = "text_document"
-maturity = "planned"
+maturity = "ga"
 advertised = false
-tests = []
+tests = ["tests/lsp_text_sync_tests.rs"]
 description = "willSave notifications"
 
 [[feature]]
 id = "lsp.will_save_wait_until"
 spec = "LSP 3.0"
 area = "text_document"
-maturity = "planned"
+maturity = "ga"
 advertised = false
-tests = []
-description = "willSaveWaitUntil request"
+tests = ["tests/lsp_text_sync_tests.rs"]
+description = "willSaveWaitUntil request with format-on-save"
 
 # Additional Language Features
 
@@ -513,18 +513,18 @@ description = "willSaveWaitUntil request"
 id = "lsp.document_highlight"
 spec = "LSP 3.0"
 area = "text_document"
-maturity = "planned"
+maturity = "ga"
 advertised = true
-tests = []
+tests = ["tests/lsp_document_highlight_tests.rs"]
 description = "Document highlights (local references)"
 
 [[feature]]
 id = "lsp.prepare_rename"
 spec = "LSP 3.12"
 area = "text_document"
-maturity = "planned"
+maturity = "ga"
 advertised = true
-tests = []
+tests = ["tests/lsp_rename_tests.rs"]
 description = "Validate rename and compute placeholder/range"
 
 [[feature]]
@@ -551,27 +551,27 @@ description = "Color presentation request (pairs with documentColor)"
 id = "lsp.completion_item_resolve"
 spec = "LSP 3.0"
 area = "text_document"
-maturity = "planned"
+maturity = "ga"
 advertised = false
-tests = []
+tests = ["tests/lsp_completion_tests.rs"]
 description = "Resolve additional completion item details"
 
 [[feature]]
 id = "lsp.code_action_resolve"
 spec = "LSP 3.16"
 area = "text_document"
-maturity = "planned"
+maturity = "ga"
 advertised = false
-tests = []
+tests = ["tests/lsp_code_actions_tests.rs"]
 description = "Resolve additional code action details"
 
 [[feature]]
 id = "lsp.code_lens_resolve"
 spec = "LSP 3.0"
 area = "text_document"
-maturity = "planned"
+maturity = "ga"
 advertised = false
-tests = []
+tests = ["tests/lsp_code_lens_tests.rs"]
 description = "Resolve code lens command"
 
 [[feature]]
@@ -596,9 +596,9 @@ description = "Resolve inlay hint label locations"
 id = "lsp.workspace_symbol_resolve"
 spec = "LSP 3.17"
 area = "workspace"
-maturity = "planned"
+maturity = "ga"
 advertised = false
-tests = []
+tests = ["tests/lsp_workspace_symbol_tests.rs"]
 description = "Resolve additional workspace symbol info"
 
 # Refresh Routes (Server -> Client)
@@ -654,36 +654,36 @@ description = "Request client to refresh pulled diagnostics"
 id = "lsp.configuration"
 spec = "LSP 3.6"
 area = "workspace"
-maturity = "planned"
+maturity = "ga"
 advertised = false
-tests = []
+tests = ["tests/lsp_workspace_tests.rs"]
 description = "workspace/configuration request (server->client)"
 
 [[feature]]
 id = "lsp.did_change_configuration"
 spec = "LSP 3.0"
 area = "workspace"
-maturity = "planned"
+maturity = "ga"
 advertised = false
-tests = []
+tests = ["tests/lsp_workspace_tests.rs"]
 description = "workspace/didChangeConfiguration notification"
 
 [[feature]]
 id = "lsp.did_change_watched_files"
 spec = "LSP 3.0"
 area = "workspace"
-maturity = "planned"
+maturity = "ga"
 advertised = false
-tests = []
+tests = ["tests/lsp_workspace_tests.rs"]
 description = "workspace/didChangeWatchedFiles notification"
 
 [[feature]]
 id = "lsp.apply_edit"
 spec = "LSP 3.0"
 area = "workspace"
-maturity = "planned"
+maturity = "ga"
 advertised = false
-tests = []
+tests = ["tests/lsp_workspace_tests.rs"]
 description = "workspace/applyEdit request (server->client)"
 
 [[feature]]
@@ -692,7 +692,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = false
-tests = []
+tests = ["tests/lsp_pull_diagnostics_tests.rs"]
 description = "Push diagnostics via textDocument/publishDiagnostics"
 
 # Window / Telemetry

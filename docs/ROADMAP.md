@@ -180,10 +180,11 @@ The LSP compliance table is now auto-generated. Source of truth: `features.toml`
 |------|-------------|-------|----------|
 | debug | 0 | 2 | 0% |
 | notebook | 0 | 2 | 0% |
-| text_document | 21 | 26 | 81% |
-| window | 3 | 4 | 75% |
-| workspace | 5 | 7 | 71% |
-| **Overall** | **29** | **41** | **71%** |
+| protocol | 4 | 9 | 44% |
+| text_document | 32 | 40 | 80% |
+| window | 3 | 9 | 33% |
+| workspace | 12 | 25 | 48% |
+| **Overall** | **51** | **87** | **59%** |
 <!-- END: COMPLIANCE_TABLE -->
 
 For live metrics, run `just status-check` or see [CURRENT_STATUS.md](CURRENT_STATUS.md).
