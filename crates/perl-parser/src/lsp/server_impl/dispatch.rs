@@ -218,6 +218,22 @@ impl LspServer {
                 Err(e) => Err(e),
             },
             "textDocument/willSaveWaitUntil" => self.handle_will_save_wait_until(request.params),
+            "notebookDocument/didOpen" => match self.handle_notebook_did_open(request.params) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            },
+            "notebookDocument/didChange" => match self.handle_notebook_did_change(request.params) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            },
+            "notebookDocument/didSave" => match self.handle_notebook_did_save(request.params) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            },
+            "notebookDocument/didClose" => match self.handle_notebook_did_close(request.params) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            },
             "textDocument/completion" => early_cancel_or!(self, id, "textDocument/completion", {
                 self.handle_completion_cancellable(request.params, id.as_ref())
             }),

@@ -381,6 +381,9 @@ impl LspServer {
                         workspace_config.update_from_value(perl);
                         eprintln!("Updated workspace config from perl settings");
                     }
+
+                    // Trigger client refresh for configuration-dependent features
+                    let _ = self.refresh_controller.refresh_all(self);
                 }
             }
         }
@@ -635,6 +638,9 @@ impl LspServer {
                         documents.remove(uri);
                     }
                 }
+
+                // Trigger client refresh after file deletions
+                let _ = self.refresh_controller.refresh_all(self);
             }
         }
 
@@ -716,6 +722,9 @@ impl LspServer {
                         }
                     }
                 }
+
+                // Trigger client refresh after file creations
+                let _ = self.refresh_controller.refresh_all(self);
             }
         }
 
@@ -777,6 +786,9 @@ impl LspServer {
                         }
                     }
                 }
+
+                // Trigger client refresh after file renames
+                let _ = self.refresh_controller.refresh_all(self);
             }
         }
 
@@ -825,6 +837,9 @@ impl LspServer {
                         }
                     }
                 }
+
+                // Trigger client refresh after workspace folder changes
+                let _ = self.refresh_controller.refresh_all(self);
             }
         }
 

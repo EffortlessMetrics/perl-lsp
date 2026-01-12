@@ -151,6 +151,7 @@ fn is_pragma(pkg: &str) -> bool {
     )
 }
 
+#[allow(dead_code)] // Reserved for future document link resolution
 fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
     let rel = pkg.replace("::", "/") + ".pm";
     // Try each workspace root
@@ -172,6 +173,7 @@ fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
     None
 }
 
+#[allow(dead_code)] // Reserved for future document link resolution
 fn resolve_file(path: &str, roots: &[Url]) -> Option<String> {
     // Try to resolve relative to workspace roots - return first match
     if let Some(base) = roots.first() {
@@ -187,6 +189,7 @@ fn resolve_file(path: &str, roots: &[Url]) -> Option<String> {
     None
 }
 
+#[allow(dead_code)] // Reserved for future document link resolution
 fn make_link(_src: &str, line: u32, line_text: &str, pkg: &str, target: String) -> Option<Value> {
     // Find the package name in the line to get exact column positions
     if let Some(idx) = line_text.find(pkg) {

@@ -80,10 +80,14 @@ pub mod bridge_adapter;
 pub mod configuration;
 pub mod platform;
 
+// Phase 2 modules (AC5-AC12) - IN PROGRESS
+pub mod breakpoints;
+pub mod dispatcher; // AC5: Message dispatcher
+pub mod protocol; // AC5: DAP protocol types // AC7: Breakpoint manager
+
 // Phase 2 modules (AC5-AC12) - TODO
-// TODO: Implement DAP protocol types (AC5)
 // TODO: Implement session management (AC5)
-// TODO: Implement breakpoint manager with AST validation (AC7)
+// TODO: Implement AST-based breakpoint validation (AC7)
 // TODO: Implement variable renderer with lazy expansion (AC8)
 // TODO: Implement stack trace provider (AC8)
 // TODO: Implement control flow handlers (AC9)
@@ -97,6 +101,14 @@ pub use bridge_adapter::BridgeAdapter;
 pub use configuration::{
     AttachConfiguration, LaunchConfiguration, create_attach_json_snippet,
     create_launch_json_snippet,
+};
+
+// Re-export Phase 2 public types
+pub use breakpoints::{BreakpointRecord, BreakpointStore};
+pub use dispatcher::DapDispatcher;
+pub use protocol::{
+    Breakpoint, Capabilities, Event, InitializeRequestArguments, LaunchRequestArguments, Request,
+    Response, SetBreakpointsArguments, SetBreakpointsResponseBody, Source, SourceBreakpoint,
 };
 
 /// DAP server configuration (Phase 2 placeholder)

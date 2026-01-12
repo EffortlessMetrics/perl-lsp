@@ -4,7 +4,18 @@
 //! and provides color presentation options for editors.
 
 use super::super::*;
+use lazy_static::lazy_static;
 use regex::Regex;
+
+lazy_static! {
+    /// Regex for hex color codes: #RGB, #RRGGBB, #RRGGBBAA
+    static ref HEX_COLOR_RE: Regex = Regex::new(r"#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})\b")
+        .unwrap_or_else(|_| panic!("HEX_COLOR_RE regex is invalid - this is a bug"));
+
+    /// Regex for ANSI escape codes: \e[31m, \e[32m, etc.
+    static ref ANSI_COLOR_RE: Regex = Regex::new(r"\\e\[([0-9;]+)m")
+        .unwrap_or_else(|_| panic!("ANSI_COLOR_RE regex is invalid - this is a bug"));
+}
 
 /// Color information with range and RGBA values
 #[derive(Debug, Clone)]
@@ -53,12 +64,8 @@ pub(crate) fn detect_colors(text: &str) -> Vec<ColorInformation> {
 fn detect_hex_colors(text: &str) -> Vec<ColorInformation> {
     let mut colors = Vec::new();
 
-    // Match hex colors in comments or strings
-    // Patterns: #RGB, #RRGGBB, #RRGGBBAA
-    let hex_pattern = Regex::new(r"#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})\b").unwrap();
-
     for (line_num, line) in text.lines().enumerate() {
-        for cap in hex_pattern.captures_iter(line) {
+        for cap in HEX_COLOR_RE.captures_iter(line) {
             if let Some(mat) = cap.get(0) {
                 let hex = &cap[1];
                 let color = parse_hex_color(hex);
@@ -128,11 +135,8 @@ fn parse_hex_color(hex: &str) -> Color {
 fn detect_ansi_colors(text: &str) -> Vec<ColorInformation> {
     let mut colors = Vec::new();
 
-    // Match ANSI escape codes for basic colors
-    let ansi_pattern = Regex::new(r"\\e\[([0-9;]+)m").unwrap();
-
     for (line_num, line) in text.lines().enumerate() {
-        for cap in ansi_pattern.captures_iter(line) {
+        for cap in ANSI_COLOR_RE.captures_iter(line) {
             if let Some(mat) = cap.get(0) {
                 let code = &cap[1];
                 if let Some(color) = parse_ansi_color(code) {

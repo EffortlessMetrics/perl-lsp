@@ -20,17 +20,41 @@ TREE_SITTER_CORPUS = ROOT / "tree-sitter-perl" / "test" / "corpus"
 GAP_CORPUS = ROOT / "test_corpus"
 
 
-def _count_lsp_coverage() -> tuple[int, int, int]:
+def _count_lsp_coverage() -> tuple[int, int, int, int, int, int]:
+    """Calculate both UX coverage (headline) and protocol compliance metrics.
+
+    Returns:
+        tuple of (ux_percent, ux_implemented, ux_total, protocol_percent, protocol_implemented, protocol_total)
+    """
     data = tomllib.loads(FEATURES_TOML.read_text(encoding="utf-8"))
     features = data.get("feature", [])
-    trackable = [f for f in features if f.get("maturity") != "planned"]
-    advertised = [
-        f
-        for f in features
+
+    # UX Coverage: User-visible features that count toward public-facing metric
+    # Only include features where counts_in_coverage != false AND advertised = true
+    ux_trackable = [
+        f for f in features
+        if f.get("maturity") != "planned"
+        and f.get("counts_in_coverage", True) is not False
+    ]
+    ux_implemented = [
+        f for f in ux_trackable
         if f.get("advertised") and f.get("maturity") in ("ga", "production")
     ]
-    percent = round(len(advertised) / len(trackable) * 100) if trackable else 0
-    return percent, len(advertised), len(trackable)
+    ux_percent = round(len(ux_implemented) / len(ux_trackable) * 100) if ux_trackable else 0
+
+    # Protocol Compliance: All features regardless of counts_in_coverage
+    protocol_trackable = [f for f in features if f.get("maturity") != "planned"]
+    protocol_implemented = [
+        f
+        for f in protocol_trackable
+        if f.get("advertised") and f.get("maturity") in ("ga", "production")
+    ]
+    protocol_percent = round(len(protocol_implemented) / len(protocol_trackable) * 100) if protocol_trackable else 0
+
+    return (
+        ux_percent, len(ux_implemented), len(ux_trackable),
+        protocol_percent, len(protocol_implemented), len(protocol_trackable)
+    )
 
 
 def _compute_compliance_table() -> str:
@@ -99,17 +123,21 @@ def _replace_block(text: str, begin_marker: str, end_marker: str, new_content: s
 
 
 def _update_current_status() -> str:
-    percent, advertised, trackable = _count_lsp_coverage()
+    ux_percent, ux_impl, ux_total, protocol_percent, protocol_impl, protocol_total = _count_lsp_coverage()
     corpus_sections = _count_corpus_sections()
     gap_files = _count_gap_files()
 
-    # Build the table row content
-    lsp_table_row = f"| **LSP Coverage** | {percent}% ({advertised}/{trackable} GA advertised, `features.toml`) | 93%+ | In progress |"
+    # Build the table row content - uses UX coverage (headline metric)
+    lsp_table_row = f"| **LSP Coverage** | {ux_percent}% ({ux_impl}/{ux_total} user-visible features, `features.toml`) | 93%+ | In progress |"
 
     # Build the bullets section content (clean, factual metrics only)
     lsp_coverage = (
-        f"- **LSP Coverage**: {percent}% cataloged GA coverage "
-        f"({advertised}/{trackable} trackable features from `features.toml`)"
+        f"- **LSP Coverage**: {ux_percent}% user-visible feature coverage "
+        f"({ux_impl}/{ux_total} trackable features from `features.toml`)"
+    )
+    protocol_compliance = (
+        f"- **Protocol Compliance**: {protocol_percent}% overall LSP protocol support "
+        f"({protocol_impl}/{protocol_total} including plumbing)"
     )
     parser_coverage = (
         "- **Parser Coverage**: ~100% Perl 5 syntax via "
@@ -127,10 +155,11 @@ def _update_current_status() -> str:
     production_status = (
         "- **Production Status**: LSP server production-ready (`just ci-gate` passing)"
     )
-    lsp_target = f"**Target**: 93%+ LSP coverage (from current {percent}%)"
+    lsp_target = f"**Target**: 93%+ LSP coverage (from current {ux_percent}%)"
 
     bullets_content = "\n".join([
         lsp_coverage,
+        protocol_compliance,
         parser_coverage,
         test_status,
         quality_metrics,

@@ -7,6 +7,8 @@ mod diagnostics;
 mod dispatch;
 mod language;
 mod lifecycle;
+mod notebook;
+mod refresh;
 /// Routing module for lifecycle-aware index access
 pub mod routing;
 mod text_sync;
@@ -158,6 +160,8 @@ pub struct LspServer {
     next_request_id: Arc<AtomicI64>,
     /// Active progress tokens for work done progress tracking
     progress_tokens: Arc<Mutex<HashSet<String>>>,
+    /// Refresh controller for debounced client refresh requests
+    refresh_controller: refresh::RefreshController,
 }
 
 // Note: DocumentState, ServerConfig, and normalize_package_separator are
@@ -200,6 +204,7 @@ impl LspServer {
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
             next_request_id: Arc::new(AtomicI64::new(1)),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            refresh_controller: refresh::RefreshController::new(),
         }
     }
 
@@ -237,6 +242,7 @@ impl LspServer {
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
             next_request_id: Arc::new(AtomicI64::new(1)),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            refresh_controller: refresh::RefreshController::new(),
         }
     }
 

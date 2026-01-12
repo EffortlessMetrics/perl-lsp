@@ -334,6 +334,7 @@ spec = "LSP 3.0"
 area = "window"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = []
 description = "Show messages to user"
 
@@ -343,6 +344,7 @@ spec = "LSP 3.0"
 area = "window"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = []
 description = "Log messages"
 
@@ -361,19 +363,21 @@ description = "Detailed work progress"
 id = "lsp.notebook_document_sync"
 spec = "LSP 3.17"
 area = "notebook"
-maturity = "planned"
+maturity = "preview"
 advertised = false
+counts_in_coverage = false
 tests = []
-description = "Notebook document synchronization"
+description = "Notebook document synchronization (didOpen/didChange/didSave/didClose handlers)"
 
 [[feature]]
 id = "lsp.notebook_cell_execution"
 spec = "LSP 3.17"
 area = "notebook"
-maturity = "planned"
+maturity = "preview"
 advertised = false
+counts_in_coverage = false
 tests = []
-description = "Execute notebook cells"
+description = "Notebook cell execution summary tracking (LSP does not execute cells; this tracks executionSummary metadata)"
 
 # Debug Features (DAP)
 
@@ -383,17 +387,19 @@ spec = "DAP 1.0"
 area = "debug"
 maturity = "planned"
 advertised = false
+counts_in_coverage = false
 tests = []
-description = "Inline variable values while debugging"
+description = "Inline variable values while debugging (NOTE: DAP has no inlineValues request; use LSP textDocument/inlineValue with DAP frameId)"
 
 [[feature]]
 id = "dap.breakpoints"
 spec = "DAP 1.0"
 area = "debug"
-maturity = "planned"
+maturity = "preview"
 advertised = false
+counts_in_coverage = false
 tests = []
-description = "Breakpoint support"
+description = "Breakpoint support (setBreakpoints with REPLACE semantics, BreakpointStore)"
 
 # Protocol / Lifecycle Features
 
@@ -403,6 +409,7 @@ spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Initialize handshake"
 
@@ -412,6 +419,7 @@ spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Initialized notification"
 
@@ -421,6 +429,7 @@ spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Graceful shutdown request"
 
@@ -430,6 +439,7 @@ spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Exit notification with proper exit codes"
 
@@ -439,6 +449,7 @@ spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Request cancellation ($/cancelRequest)"
 
@@ -448,6 +459,7 @@ spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_registration_tests.rs"]
 description = "Dynamic capability registration (server->client)"
 
@@ -457,6 +469,7 @@ spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_registration_tests.rs"]
 description = "Dynamic capability unregistration (server->client)"
 
@@ -466,6 +479,7 @@ spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_trace_tests.rs"]
 description = "Client sets server trace level ($/setTrace)"
 
@@ -475,6 +489,7 @@ spec = "LSP 3.0"
 area = "protocol"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_trace_tests.rs"]
 description = "Server trace logging ($/logTrace)"
 
@@ -486,6 +501,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_text_sync_tests.rs"]
 description = "didOpen/didChange/didClose text synchronization"
 
@@ -495,6 +511,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_text_sync_tests.rs"]
 description = "didSave notifications"
 
@@ -504,6 +521,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_text_sync_tests.rs"]
 description = "willSave notifications"
 
@@ -513,6 +531,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_text_sync_tests.rs"]
 description = "willSaveWaitUntil request with format-on-save"
 
@@ -618,6 +637,7 @@ spec = "LSP 3.16"
 area = "workspace"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh code lenses"
 
@@ -627,6 +647,7 @@ spec = "LSP 3.16"
 area = "workspace"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh semantic tokens"
 
@@ -636,6 +657,7 @@ spec = "LSP 3.17"
 area = "workspace"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh inlay hints"
 
@@ -645,6 +667,7 @@ spec = "LSP 3.17"
 area = "workspace"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh inline values"
 
@@ -654,6 +677,7 @@ spec = "LSP 3.17"
 area = "workspace"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh pulled diagnostics"
 
@@ -663,6 +687,7 @@ spec = "LSP 3.18"
 area = "workspace"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh folding ranges (workspace/foldingRange/refresh, @proposed)"
 
@@ -674,6 +699,7 @@ spec = "LSP 3.6"
 area = "workspace"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_workspace_tests.rs"]
 description = "workspace/configuration request (server->client)"
 
@@ -683,6 +709,7 @@ spec = "LSP 3.0"
 area = "workspace"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_workspace_tests.rs"]
 description = "workspace/didChangeConfiguration notification"
 
@@ -692,6 +719,7 @@ spec = "LSP 3.0"
 area = "workspace"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_workspace_tests.rs"]
 description = "workspace/didChangeWatchedFiles notification"
 
@@ -701,6 +729,7 @@ spec = "LSP 3.0"
 area = "workspace"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_workspace_tests.rs"]
 description = "workspace/applyEdit request (server->client)"
 
@@ -710,6 +739,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_pull_diagnostics_tests.rs"]
 description = "Push diagnostics via textDocument/publishDiagnostics"
 
@@ -721,6 +751,7 @@ spec = "LSP 3.0"
 area = "window"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_window_tests.rs"]
 description = "Prompt user with choices (showMessageRequest)"
 
@@ -730,6 +761,7 @@ spec = "LSP 3.16"
 area = "window"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_window_tests.rs"]
 description = "Ask client to open/display a URI (showDocument)"
 
@@ -739,6 +771,7 @@ spec = "LSP 3.15"
 area = "window"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_window_tests.rs"]
 description = "Create server-initiated work done progress"
 
@@ -748,6 +781,7 @@ spec = "LSP 3.15"
 area = "window"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_window_tests.rs"]
 description = "Client cancels server-initiated work done progress"
 
@@ -757,6 +791,7 @@ spec = "LSP 3.0"
 area = "window"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_window_tests.rs"]
 description = "Server telemetry events (telemetry/event)"
 
@@ -777,6 +812,7 @@ spec = "LSP 3.18"
 area = "workspace"
 maturity = "ga"
 advertised = true
+counts_in_coverage = false
 tests = ["tests/lsp_virtual_content_tests.rs"]
 description = "workspace/textDocumentContent/refresh request (@proposed)"
 

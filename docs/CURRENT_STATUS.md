@@ -36,7 +36,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 | **Tier A Tests** | 337 passed, 1 ignored | 100% pass | PASS |
 | **Tracked Test Debt** | 9 (8 bug, 1 manual) | 0 | Near-zero |
 <!-- BEGIN: STATUS_METRICS_TABLE -->
-| **LSP Coverage** | 100% (63/63 GA advertised, `features.toml`) | 93%+ | In progress |
+| **LSP Coverage** | 100% (53/53 user-visible features, `features.toml`) | 93%+ | In progress |
 <!-- END: STATUS_METRICS_TABLE -->
 | **Parser Coverage** | ~100% | 100% | Complete |
 | **Semantic Analyzer** | Phase 1 (12/12 handlers) | Phase 3 | Core complete |
@@ -57,7 +57,8 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 ### Computed Metrics (auto-updated by `just status-update`)
 
 <!-- BEGIN: STATUS_METRICS_BULLETS -->
-- **LSP Coverage**: 100% cataloged GA coverage (63/63 trackable features from `features.toml`)
+- **LSP Coverage**: 100% user-visible feature coverage (53/53 trackable features from `features.toml`)
+- **Protocol Compliance**: 97% overall LSP protocol support (85/88 including plumbing)
 - **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
 - **Test Status**: 337 lib tests passing, 1 ignored (9 total tracked debt: 8 bug, 1 manual)
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
