@@ -13,3 +13,6 @@ pub use super::server_impl::LspServer;
 
 // Re-export protocol types for convenience
 pub use super::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
+
+// Re-export window types for public API
+pub use super::server_impl::{MessageType, ShowDocumentOptions};

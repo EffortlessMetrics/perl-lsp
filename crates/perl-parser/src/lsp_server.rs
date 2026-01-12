@@ -14,3 +14,6 @@ pub use crate::lsp::server::LspServer;
 
 // Re-export protocol types for backward compatibility
 pub use crate::lsp::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
+
+// Re-export window types for public API
+pub use crate::lsp::server::{MessageType, ShowDocumentOptions};

@@ -300,8 +300,10 @@ impl LspServer {
                     self.handle_inlay_hints(request.params)
                 )
             }
+            "inlayHint/resolve" => self.handle_inlay_hint_resolve(request.params),
             // PR 8: Document links
             "textDocument/documentLink" => self.handle_document_links(request.params),
+            "documentLink/resolve" => self.handle_document_link_resolve(request.params),
             // PR 8: Selection ranges
             "textDocument/selectionRange" => self.handle_selection_range(request.params),
             // PR 9: On-type formatting
@@ -371,6 +373,10 @@ impl LspServer {
                 self.handle_did_change_configuration(request.params);
                 Ok(None) // Notification, no response
             }
+            "window/workDoneProgress/cancel" => {
+                self.handle_progress_cancel(request.params);
+                Ok(None) // Notification, no response
+            }
             "workspace/willRenameFiles" => self.handle_will_rename_files(request.params),
             "workspace/didRenameFiles" => self.handle_did_rename_files(request.params),
             "workspace/willDeleteFiles" => self.handle_will_delete_files(request.params),
@@ -378,6 +384,7 @@ impl LspServer {
             "workspace/willCreateFiles" => self.handle_will_create_files(request.params),
             "workspace/didCreateFiles" => self.handle_did_create_files(request.params),
             "workspace/applyEdit" => self.handle_apply_edit(request.params),
+            "workspace/textDocumentContent" => self.handle_text_document_content(request.params),
             // Test-specific slow operation for cancellation testing
             // This is available in all builds but only used by tests
             "$/test/slowOperation" => {

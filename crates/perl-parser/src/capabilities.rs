@@ -61,6 +61,8 @@ pub struct AdvertisedFeatures {
     pub type_hierarchy: bool,
     /// Pull-based diagnostic reporting for error detection
     pub diagnostic_provider: bool,
+    /// Document color detection for hex codes and ANSI colors
+    pub document_color: bool,
 }
 
 /// Build-time feature flags for conditional LSP capability compilation
@@ -155,6 +157,7 @@ impl BuildFlags {
             call_hierarchy: self.call_hierarchy,
             type_hierarchy: self.type_hierarchy,
             diagnostic_provider: self.pull_diagnostics,
+            document_color: self.document_color,
         }
     }
 
@@ -186,7 +189,7 @@ impl BuildFlags {
             inline_completion: true, // Deterministic inline completions
             inline_values: true,     // Debug inline values
             moniker: true,           // Stable symbol identifiers
-            document_color: false,   // Handler not implemented (returns -32601)
+            document_color: true,    // LSP 3.18 color detection for hex/ANSI codes
             source_organize_imports: true, // Fully implemented and tested
             formatting: false,       // Set based on perltidy availability
             range_formatting: false, // Set based on perltidy availability
@@ -441,7 +444,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
 
     if build.document_links {
         caps.document_link_provider = Some(DocumentLinkOptions {
-            resolve_provider: Some(false),
+            resolve_provider: Some(true),
             work_done_progress_options: WorkDoneProgressOptions::default(),
         });
     }

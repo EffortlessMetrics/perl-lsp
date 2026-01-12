@@ -238,9 +238,9 @@ description = "Go to implementation"
 id = "lsp.document_color"
 spec = "LSP 3.6"
 area = "text_document"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_color_tests.rs"]
 description = "Color decorators"
 
 [[feature]]
@@ -446,36 +446,36 @@ description = "Request cancellation ($/cancelRequest)"
 id = "lsp.client_register_capability"
 spec = "LSP 3.0"
 area = "protocol"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_registration_tests.rs"]
 description = "Dynamic capability registration (server->client)"
 
 [[feature]]
 id = "lsp.client_unregister_capability"
 spec = "LSP 3.0"
 area = "protocol"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_registration_tests.rs"]
 description = "Dynamic capability unregistration (server->client)"
 
 [[feature]]
 id = "lsp.set_trace"
 spec = "LSP 3.0"
 area = "protocol"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_trace_tests.rs"]
 description = "Client sets server trace level ($/setTrace)"
 
 [[feature]]
 id = "lsp.log_trace"
 spec = "LSP 3.0"
 area = "protocol"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_trace_tests.rs"]
 description = "Server trace logging ($/logTrace)"
 
 # Text Document Synchronization
@@ -549,9 +549,9 @@ description = "Inline values during debugging (LSP inlineValue)"
 id = "lsp.color_presentation"
 spec = "LSP 3.6"
 area = "text_document"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_color_tests.rs"]
 description = "Color presentation request (pairs with documentColor)"
 
 # Resolve Routes
@@ -587,18 +587,18 @@ description = "Resolve code lens command"
 id = "lsp.document_link_resolve"
 spec = "LSP 3.0"
 area = "text_document"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_document_link_resolve_tests.rs"]
 description = "Resolve document link target"
 
 [[feature]]
 id = "lsp.inlay_hint_resolve"
 spec = "LSP 3.17"
 area = "text_document"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_inlay_hint_resolve_tests.rs"]
 description = "Resolve inlay hint label locations"
 
 [[feature]]
@@ -616,54 +616,54 @@ description = "Resolve additional workspace symbol info"
 id = "lsp.code_lens_refresh"
 spec = "LSP 3.16"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh code lenses"
 
 [[feature]]
 id = "lsp.semantic_tokens_refresh"
 spec = "LSP 3.16"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh semantic tokens"
 
 [[feature]]
 id = "lsp.inlay_hint_refresh"
 spec = "LSP 3.17"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh inlay hints"
 
 [[feature]]
 id = "lsp.inline_value_refresh"
 spec = "LSP 3.17"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh inline values"
 
 [[feature]]
 id = "lsp.diagnostic_refresh"
 spec = "LSP 3.17"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh pulled diagnostics"
 
 [[feature]]
 id = "lsp.folding_range_refresh"
 spec = "LSP 3.18"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh folding ranges (workspace/foldingRange/refresh, @proposed)"
 
 # Workspace Plumbing
@@ -719,45 +719,45 @@ description = "Push diagnostics via textDocument/publishDiagnostics"
 id = "lsp.show_message_request"
 spec = "LSP 3.0"
 area = "window"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_window_tests.rs"]
 description = "Prompt user with choices (showMessageRequest)"
 
 [[feature]]
 id = "lsp.show_document"
 spec = "LSP 3.16"
 area = "window"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_window_tests.rs"]
 description = "Ask client to open/display a URI (showDocument)"
 
 [[feature]]
 id = "lsp.work_done_progress_create"
 spec = "LSP 3.15"
 area = "window"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_window_tests.rs"]
 description = "Create server-initiated work done progress"
 
 [[feature]]
 id = "lsp.work_done_progress_cancel"
 spec = "LSP 3.15"
 area = "window"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_window_tests.rs"]
 description = "Client cancels server-initiated work done progress"
 
 [[feature]]
 id = "lsp.telemetry_event"
 spec = "LSP 3.0"
 area = "window"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_window_tests.rs"]
 description = "Server telemetry events (telemetry/event)"
 
 # LSP 3.18 Additions
@@ -766,18 +766,18 @@ description = "Server telemetry events (telemetry/event)"
 id = "lsp.text_document_content"
 spec = "LSP 3.18"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_virtual_content_tests.rs"]
 description = "workspace/textDocumentContent request (@proposed)"
 
 [[feature]]
 id = "lsp.text_document_content_refresh"
 spec = "LSP 3.18"
 area = "workspace"
-maturity = "planned"
-advertised = false
-tests = []
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_virtual_content_tests.rs"]
 description = "workspace/textDocumentContent/refresh request (@proposed)"
 
 # File Operations (method-level breakdown)

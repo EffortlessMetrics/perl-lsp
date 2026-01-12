@@ -22,11 +22,7 @@ impl LspServer {
     ///
     /// A markdown-formatted string with the diagnostic information
     fn generate_diagnostic_markdown(&self, code: Option<&str>, message: &str) -> String {
-        if let Some(c) = code {
-            format!("**{}**: {}", c, message)
-        } else {
-            message.to_string()
-        }
+        if let Some(c) = code { format!("**{}**: {}", c, message) } else { message.to_string() }
     }
 
     /// Publish diagnostics for a document (push diagnostics)
@@ -254,10 +250,8 @@ impl LspServer {
 
                             // Add markdown content if client supports it (LSP 3.18)
                             if self.client_capabilities.markup_message_support {
-                                let markdown = self.generate_diagnostic_markdown(
-                                    d.code.as_deref(),
-                                    &d.message
-                                );
+                                let markdown = self
+                                    .generate_diagnostic_markdown(d.code.as_deref(), &d.message);
                                 diag["data"] = json!({
                                     "messageMarkup": {
                                         "kind": "markdown",

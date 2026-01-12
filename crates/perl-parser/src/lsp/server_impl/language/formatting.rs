@@ -199,48 +199,43 @@ impl LspServer {
 
                 // Process each range
                 for (idx, range_val) in ranges_array.iter().enumerate() {
-                    let start_line_u64 = range_val
-                        .pointer("/start/line")
-                        .and_then(|v| v.as_u64())
-                        .ok_or_else(|| {
-                            invalid_params(&format!("Missing ranges[{}].start.line", idx))
-                        })?;
+                    let start_line_u64 =
+                        range_val.pointer("/start/line").and_then(|v| v.as_u64()).ok_or_else(
+                            || invalid_params(&format!("Missing ranges[{}].start.line", idx)),
+                        )?;
                     let start_line = u32::try_from(start_line_u64).map_err(|_| {
                         invalid_params(&format!("ranges[{}].start.line exceeds u32::MAX", idx))
                     })?;
 
-                    let start_char_u64 = range_val
-                        .pointer("/start/character")
-                        .and_then(|v| v.as_u64())
-                        .ok_or_else(|| {
-                            invalid_params(&format!("Missing ranges[{}].start.character", idx))
-                        })?;
+                    let start_char_u64 =
+                        range_val.pointer("/start/character").and_then(|v| v.as_u64()).ok_or_else(
+                            || invalid_params(&format!("Missing ranges[{}].start.character", idx)),
+                        )?;
                     let start_char = u32::try_from(start_char_u64).map_err(|_| {
                         invalid_params(&format!("ranges[{}].start.character exceeds u32::MAX", idx))
                     })?;
 
-                    let end_line_u64 = range_val
-                        .pointer("/end/line")
-                        .and_then(|v| v.as_u64())
-                        .ok_or_else(|| {
-                            invalid_params(&format!("Missing ranges[{}].end.line", idx))
-                        })?;
+                    let end_line_u64 =
+                        range_val.pointer("/end/line").and_then(|v| v.as_u64()).ok_or_else(
+                            || invalid_params(&format!("Missing ranges[{}].end.line", idx)),
+                        )?;
                     let end_line = u32::try_from(end_line_u64).map_err(|_| {
                         invalid_params(&format!("ranges[{}].end.line exceeds u32::MAX", idx))
                     })?;
 
-                    let end_char_u64 = range_val
-                        .pointer("/end/character")
-                        .and_then(|v| v.as_u64())
-                        .ok_or_else(|| {
-                            invalid_params(&format!("Missing ranges[{}].end.character", idx))
-                        })?;
+                    let end_char_u64 =
+                        range_val.pointer("/end/character").and_then(|v| v.as_u64()).ok_or_else(
+                            || invalid_params(&format!("Missing ranges[{}].end.character", idx)),
+                        )?;
                     let end_char = u32::try_from(end_char_u64).map_err(|_| {
                         invalid_params(&format!("ranges[{}].end.character exceeds u32::MAX", idx))
                     })?;
 
                     let range = crate::formatting::Range {
-                        start: crate::formatting::Position { line: start_line, character: start_char },
+                        start: crate::formatting::Position {
+                            line: start_line,
+                            character: start_char,
+                        },
                         end: crate::formatting::Position { line: end_line, character: end_char },
                     };
 
@@ -252,7 +247,10 @@ impl LspServer {
                             eprintln!("Range formatting error for range {}: {}", idx, e);
                             return Err(JsonRpcError {
                                 code: -32603,
-                                message: format!("Range formatting failed for range {}: {}", idx, e),
+                                message: format!(
+                                    "Range formatting failed for range {}: {}",
+                                    idx, e
+                                ),
                                 data: None,
                             });
                         }

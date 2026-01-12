@@ -64,15 +64,97 @@ impl LspServer {
                     &|off| self.offset_to_pos16(doc, off),
                     range,
                 ));
+
+                // Add data field to hints for later resolution
+                // This enables deferred tooltip computation
+                let enriched_hints: Vec<Value> = hints
+                    .iter()
+                    .map(|hint| {
+                        let mut h = hint.clone();
+                        if let Some(obj) = h.as_object_mut() {
+                            obj.insert(
+                                "data".to_string(),
+                                json!({
+                                    "uri": uri
+                                }),
+                            );
+                        }
+                        h
+                    })
+                    .collect();
+
                 // Apply cap to inlay hints
-                if hints.len() > cap {
-                    eprintln!("InlayHints: capping from {} to {}", hints.len(), cap);
-                    hints.truncate(cap);
+                let mut result = enriched_hints;
+                if result.len() > cap {
+                    eprintln!("InlayHints: capping from {} to {}", result.len(), cap);
+                    result.truncate(cap);
                 }
-                return Ok(Some(json!(hints)));
+                return Ok(Some(json!(result)));
             }
         }
         Ok(Some(json!([])))
+    }
+
+    /// Handle inlayHint/resolve request
+    ///
+    /// Resolves deferred properties of an inlay hint, such as:
+    /// - tooltip: detailed explanation of the hint
+    /// - label.location: source location for the hint label
+    /// - command: executable command associated with the hint
+    ///
+    /// This allows the initial inlayHint response to be fast and defer
+    /// expensive computations until the user actually views the hint.
+    pub(crate) fn handle_inlay_hint_resolve(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(mut hint) = params {
+            // If hint already has a tooltip, return as-is
+            if hint.get("tooltip").is_some() {
+                return Ok(Some(hint));
+            }
+
+            // Extract hint properties for tooltip generation
+            let label = hint.get("label").and_then(|l| l.as_str()).unwrap_or("");
+            let kind = hint.get("kind").and_then(|k| k.as_u64()).unwrap_or(0);
+
+            // Generate tooltip based on hint kind and label
+            let tooltip = match kind {
+                1 => {
+                    // Type hint
+                    if label.contains("Str") {
+                        "String value".to_string()
+                    } else if label.contains("Num") {
+                        "Numeric value".to_string()
+                    } else if label.contains("Array") || label.contains("ARRAY") {
+                        "Array reference".to_string()
+                    } else if label.contains("Hash") || label.contains("HASH") {
+                        "Hash reference".to_string()
+                    } else if label.contains("Regex") {
+                        "Regular expression".to_string()
+                    } else if label.contains("CodeRef") {
+                        "Code reference (anonymous subroutine)".to_string()
+                    } else {
+                        "Type annotation".to_string()
+                    }
+                }
+                2 => {
+                    // Parameter hint
+                    let param_name = label.trim_end_matches(':').trim();
+                    format!("Parameter: {}", param_name)
+                }
+                _ => "Inlay hint".to_string(),
+            };
+
+            // Add tooltip to hint
+            if let Some(obj) = hint.as_object_mut() {
+                obj.insert("tooltip".to_string(), json!(tooltip));
+            }
+
+            Ok(Some(hint))
+        } else {
+            Err(invalid_params("Missing inlay hint parameter"))
+        }
     }
 
     /// Handle textDocument/documentLink request
@@ -99,6 +181,108 @@ impl LspServer {
             Ok(Some(json!(links)))
         } else {
             Ok(Some(json!([])))
+        }
+    }
+
+    /// Handle documentLink/resolve request
+    ///
+    /// Resolves a document link by filling in the target URI based on the data field.
+    /// This allows the initial documentLink response to defer expensive resolution
+    /// until the user actually hovers over or clicks the link.
+    pub(crate) fn handle_document_link_resolve(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(mut link) = params {
+            // Extract data field to determine link type
+            let data = link.get("data").cloned();
+
+            // If link already has a target, return as-is (already resolved)
+            if link.get("target").and_then(|t| t.as_str()).is_some() {
+                return Ok(Some(link));
+            }
+
+            // Resolve based on data field
+            if let Some(data_obj) = data {
+                let link_type = data_obj.get("type").and_then(|t| t.as_str());
+
+                match link_type {
+                    Some("module") => {
+                        // Module reference - resolve to file path or MetaCPAN
+                        let module_name = data_obj
+                            .get("module")
+                            .and_then(|m| m.as_str())
+                            .ok_or_else(|| JsonRpcError {
+                                code: INVALID_PARAMS,
+                                message: "Missing module name in data".into(),
+                                data: None,
+                            })?;
+
+                        // Try to resolve module to local file
+                        if let Some(target) = self.resolve_module_to_path(module_name) {
+                            link["target"] = json!(target);
+                        } else {
+                            // Fallback to MetaCPAN
+                            let target = format!("https://metacpan.org/pod/{}", module_name);
+                            link["target"] = json!(target);
+                        }
+                    }
+                    Some("file") => {
+                        // File reference - resolve to absolute path
+                        let file_path =
+                            data_obj.get("path").and_then(|p| p.as_str()).ok_or_else(|| {
+                                JsonRpcError {
+                                    code: INVALID_PARAMS,
+                                    message: "Missing file path in data".into(),
+                                    data: None,
+                                }
+                            })?;
+
+                        let base_uri = data_obj
+                            .get("baseUri")
+                            .and_then(|u| u.as_str())
+                            .ok_or_else(|| JsonRpcError {
+                                code: INVALID_PARAMS,
+                                message: "Missing base URI in data".into(),
+                                data: None,
+                            })?;
+
+                        // Resolve relative to base URI
+                        if let Ok(base_url) = url::Url::parse(base_uri) {
+                            if let Ok(base_path) = base_url.to_file_path() {
+                                if let Some(parent) = base_path.parent() {
+                                    let resolved = parent.join(file_path);
+                                    if let Ok(target_url) = url::Url::from_file_path(&resolved) {
+                                        link["target"] = json!(target_url.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Some("url") => {
+                        // URL reference - already resolved, just copy from data
+                        if let Some(url) = data_obj.get("url").and_then(|u| u.as_str()) {
+                            link["target"] = json!(url);
+                        }
+                    }
+                    _ => {
+                        // Unknown link type - return error
+                        return Err(JsonRpcError {
+                            code: INVALID_PARAMS,
+                            message: "Unknown link type in data field".into(),
+                            data: Some(json!({"linkType": link_type})),
+                        });
+                    }
+                }
+            }
+
+            Ok(Some(link))
+        } else {
+            Err(JsonRpcError {
+                code: INVALID_PARAMS,
+                message: "Missing parameters for documentLink/resolve".into(),
+                data: None,
+            })
         }
     }
 
@@ -632,17 +816,89 @@ impl LspServer {
     /// Handle textDocument/documentColor request
     pub(crate) fn handle_document_color(
         &self,
-        _params: Option<Value>,
+        params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        Err(JsonRpcError { code: -32601, message: "Method not found".into(), data: None })
+        // Gate unadvertised feature
+        if !self.advertised_features.lock().document_color {
+            return Err(crate::lsp_errors::method_not_advertised());
+        }
+
+        let params = params.ok_or_else(|| invalid_params("Missing params"))?;
+        let uri = req_uri(&params)?;
+
+        let documents = self.documents_guard();
+        let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
+            code: -32602,
+            message: format!("Document not found: {}", uri),
+            data: None,
+        })?;
+
+        // Detect colors in the document text
+        let color_infos = super::colors::detect_colors(&doc.text);
+
+        // Convert to LSP format
+        let lsp_colors: Vec<Value> = color_infos
+            .iter()
+            .map(|info| {
+                json!({
+                    "range": {
+                        "start": {
+                            "line": info.range.start.line,
+                            "character": info.range.start.character
+                        },
+                        "end": {
+                            "line": info.range.end.line,
+                            "character": info.range.end.character
+                        }
+                    },
+                    "color": {
+                        "red": info.color.red,
+                        "green": info.color.green,
+                        "blue": info.color.blue,
+                        "alpha": info.color.alpha
+                    }
+                })
+            })
+            .collect();
+
+        Ok(Some(json!(lsp_colors)))
     }
 
     /// Handle textDocument/colorPresentation request
     pub(crate) fn handle_color_presentation(
         &self,
-        _params: Option<Value>,
+        params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        Err(JsonRpcError { code: -32601, message: "Method not found".into(), data: None })
+        // Gate unadvertised feature
+        if !self.advertised_features.lock().document_color {
+            return Err(crate::lsp_errors::method_not_advertised());
+        }
+
+        let params = params.ok_or_else(|| invalid_params("Missing params"))?;
+
+        // Extract color from params
+        let color_obj = params.get("color").ok_or_else(|| invalid_params("Missing color field"))?;
+
+        let red = color_obj
+            .get("red")
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| invalid_params("Invalid red value"))?;
+        let green = color_obj
+            .get("green")
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| invalid_params("Invalid green value"))?;
+        let blue = color_obj
+            .get("blue")
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| invalid_params("Invalid blue value"))?;
+        let alpha = color_obj.get("alpha").and_then(|v| v.as_f64()).unwrap_or(1.0);
+
+        let color = super::colors::Color { red, green, blue, alpha };
+
+        // Generate color presentations
+        let presentations = super::colors::color_to_presentations(&color);
+
+        Ok(Some(json!(presentations)))
     }
 
     /// Handle textDocument/linkedEditingRange request

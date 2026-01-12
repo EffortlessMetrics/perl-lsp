@@ -31,6 +31,9 @@ pub struct ServerConfig {
     pub test_runner_args: Vec<String>,
     /// Test execution timeout in milliseconds.
     pub test_runner_timeout: u64,
+
+    /// Whether telemetry events are enabled.
+    pub telemetry_enabled: bool,
 }
 
 impl Default for ServerConfig {
@@ -45,6 +48,7 @@ impl Default for ServerConfig {
             test_runner_command: "perl".to_string(),
             test_runner_args: vec![],
             test_runner_timeout: 60000,
+            telemetry_enabled: false,
         }
     }
 }
@@ -83,6 +87,12 @@ impl ServerConfig {
             }
             if let Some(timeout) = test.get("timeout").and_then(|v| v.as_u64()) {
                 self.test_runner_timeout = timeout;
+            }
+        }
+
+        if let Some(telemetry) = settings.get("telemetry") {
+            if let Some(enabled) = telemetry.get("enabled").and_then(|v| v.as_bool()) {
+                self.telemetry_enabled = enabled;
             }
         }
     }
