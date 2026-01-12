@@ -381,6 +381,9 @@ impl LspServer {
                         workspace_config.update_from_value(perl);
                         eprintln!("Updated workspace config from perl settings");
                     }
+
+                    // Trigger client refresh for configuration-dependent features
+                    let _ = self.refresh_controller.refresh_all(self);
                 }
             }
         }
@@ -635,6 +638,157 @@ impl LspServer {
                         documents.remove(uri);
                     }
                 }
+
+                // Trigger client refresh after file deletions
+                let _ = self.refresh_controller.refresh_all(self);
+            }
+        }
+
+        // This is a notification, no response needed
+        Ok(None)
+    }
+
+    /// Handle workspace/willDeleteFiles request
+    pub(super) fn handle_will_delete_files(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            if let Some(files) = params["files"].as_array() {
+                for file in files {
+                    let Some(uri) = file["uri"].as_str() else {
+                        continue;
+                    };
+
+                    eprintln!("File will be deleted: {}", uri);
+                }
+            }
+        }
+
+        // Return empty edit - no cleanup edits needed for now
+        Ok(Some(json!({"changes": {}})))
+    }
+
+    /// Handle workspace/willCreateFiles request
+    pub(super) fn handle_will_create_files(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            if let Some(files) = params["files"].as_array() {
+                for file in files {
+                    let Some(uri) = file["uri"].as_str() else {
+                        continue;
+                    };
+
+                    eprintln!("File will be created: {}", uri);
+                }
+            }
+        }
+
+        // Return empty edit - no setup edits needed for now
+        Ok(Some(json!({"changes": {}})))
+    }
+
+    /// Handle workspace/didCreateFiles notification
+    pub(super) fn handle_did_create_files(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            if let Some(files) = params["files"].as_array() {
+                for file in files {
+                    let Some(uri) = file["uri"].as_str() else {
+                        continue;
+                    };
+
+                    eprintln!("File created: {}", uri);
+
+                    // Index the new file if it's a Perl file
+                    // Note: Mutation operation - use coordinator with lifecycle tracking
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = self.coordinator() {
+                        if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
+                            if let Some(path) = uri_to_fs_path(uri) {
+                                if let Ok(content) = std::fs::read_to_string(&path) {
+                                    coordinator.notify_change(uri);
+                                    if let Ok(url) = url::Url::parse(uri) {
+                                        let _ = coordinator.index().index_file(url, content);
+                                        eprintln!("Indexed new file: {}", uri);
+                                    }
+                                    coordinator.notify_parse_complete(uri);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Trigger client refresh after file creations
+                let _ = self.refresh_controller.refresh_all(self);
+            }
+        }
+
+        // This is a notification, no response needed
+        Ok(None)
+    }
+
+    /// Handle workspace/didRenameFiles notification
+    pub(super) fn handle_did_rename_files(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            if let Some(files) = params["files"].as_array() {
+                for file in files {
+                    let Some(old_uri) = file["oldUri"].as_str() else {
+                        continue;
+                    };
+                    let Some(new_uri) = file["newUri"].as_str() else {
+                        continue;
+                    };
+
+                    eprintln!("File renamed: {} -> {}", old_uri, new_uri);
+
+                    // Update the index for the renamed file
+                    // Note: Mutation operation - use coordinator with lifecycle tracking
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = self.coordinator() {
+                        coordinator.notify_change(old_uri);
+                        coordinator.notify_change(new_uri);
+
+                        // Remove old file from index
+                        coordinator.index().remove_file(old_uri);
+
+                        // Index new file if it's a Perl file
+                        if new_uri.ends_with(".pl")
+                            || new_uri.ends_with(".pm")
+                            || new_uri.ends_with(".t")
+                        {
+                            if let Some(path) = uri_to_fs_path(new_uri) {
+                                if let Ok(content) = std::fs::read_to_string(&path) {
+                                    if let Ok(url) = url::Url::parse(new_uri) {
+                                        let _ = coordinator.index().index_file(url, content);
+                                        eprintln!("Indexed renamed file: {}", new_uri);
+                                    }
+                                }
+                            }
+                        }
+
+                        coordinator.notify_parse_complete(old_uri);
+                        coordinator.notify_parse_complete(new_uri);
+                    }
+
+                    // Update document store
+                    {
+                        let mut documents = self.documents.lock();
+                        if let Some(doc) = documents.remove(old_uri) {
+                            documents.insert(new_uri.to_string(), doc);
+                        }
+                    }
+                }
+
+                // Trigger client refresh after file renames
+                let _ = self.refresh_controller.refresh_all(self);
             }
         }
 
@@ -683,6 +837,9 @@ impl LspServer {
                         }
                     }
                 }
+
+                // Trigger client refresh after workspace folder changes
+                let _ = self.refresh_controller.refresh_all(self);
             }
         }
 

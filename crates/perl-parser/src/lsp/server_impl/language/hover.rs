@@ -7,7 +7,24 @@ use crate::cancellation::RequestCleanupGuard;
 use crate::lsp::protocol::{req_position, req_uri};
 
 impl LspServer {
-    /// Handle hover request
+    /// Handle textDocument/hover request for symbol information display
+    ///
+    /// Provides rich hover information for Perl symbols including type information,
+    /// documentation, and declaration context. Integrates with semantic analysis
+    /// to show inferred types and cross-references.
+    ///
+    /// # LSP Protocol
+    ///
+    /// Request: `textDocument/hover`
+    /// Response: `Hover | null`
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - JSON-RPC parameters containing document URI and position
+    ///
+    /// # Returns
+    ///
+    /// Hover information with markdown content or null if no information available
     pub(crate) fn handle_hover(
         &self,
         params: Option<Value>,
@@ -95,7 +112,20 @@ impl LspServer {
         Ok(Some(json!(null)))
     }
 
-    /// Handle hover request with cancellation support
+    /// Handle textDocument/hover request with cancellation support
+    ///
+    /// Provides hover information with request cancellation capability for
+    /// responsive editing in large Perl codebases. Uses RAII cleanup guard
+    /// to ensure proper resource cleanup on all exit paths.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - JSON-RPC parameters containing document URI and position
+    /// * `request_id` - Optional request ID for cancellation tracking
+    ///
+    /// # Returns
+    ///
+    /// Hover information or cancellation error if request was cancelled
     pub(crate) fn handle_hover_cancellable(
         &self,
         params: Option<Value>,
@@ -138,7 +168,24 @@ impl LspServer {
         }
     }
 
-    /// Handle textDocument/signatureHelp request
+    /// Handle textDocument/signatureHelp request for function parameter hints
+    ///
+    /// Provides signature information for function calls showing parameter names,
+    /// types, and documentation. Supports both built-in Perl functions and
+    /// user-defined subroutines with signature extraction.
+    ///
+    /// # LSP Protocol
+    ///
+    /// Request: `textDocument/signatureHelp`
+    /// Response: `SignatureHelp | null`
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - JSON-RPC parameters containing document URI and position
+    ///
+    /// # Returns
+    ///
+    /// Signature information including parameter list and active parameter index
     pub(crate) fn handle_signature_help(
         &self,
         params: Option<Value>,
@@ -194,7 +241,20 @@ impl LspServer {
         Ok(None)
     }
 
-    /// Find function context at position (returns function name and active parameter index)
+    /// Find function context at position for signature help
+    ///
+    /// Analyzes source code at the given offset to determine if the cursor
+    /// is within a function call, and if so, identifies the function name
+    /// and current parameter position.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - Source code text to analyze
+    /// * `offset` - Byte offset position to check
+    ///
+    /// # Returns
+    ///
+    /// Tuple of (function_name, active_parameter_index) if in function call context
     pub(crate) fn find_function_context(
         &self,
         content: &str,
@@ -340,6 +400,19 @@ impl LspServer {
     }
 
     /// Get signature for user-defined functions from AST
+    ///
+    /// Extracts function signature information by analyzing the AST for
+    /// subroutine definitions. Supports both explicit signatures and
+    /// parameter extraction from `my (...) = @_` patterns.
+    ///
+    /// # Arguments
+    ///
+    /// * `ast` - Parsed AST to search for subroutine definitions
+    /// * `function_name` - Name of the function to find signature for
+    ///
+    /// # Returns
+    ///
+    /// LSP SignatureInformation JSON or None if function not found
     pub(crate) fn get_user_function_signature(
         &self,
         ast: &Node,
@@ -470,6 +543,17 @@ impl LspServer {
     }
 
     /// Get function signature for built-in Perl functions
+    ///
+    /// Provides signature information for Perl's built-in functions including
+    /// I/O operations, string manipulation, array/hash operations, and system calls.
+    ///
+    /// # Arguments
+    ///
+    /// * `function_name` - Name of the built-in function
+    ///
+    /// # Returns
+    ///
+    /// LSP SignatureInformation JSON or None if not a recognized built-in
     pub(crate) fn get_builtin_function_signature(&self, function_name: &str) -> Option<Value> {
         // Define signatures for common Perl built-in functions
         let signature = match function_name {

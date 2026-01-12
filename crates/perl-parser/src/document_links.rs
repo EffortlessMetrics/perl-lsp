@@ -5,9 +5,8 @@ use url::Url;
 /// Computes document links for a given Perl document.
 ///
 /// This function scans the text for `use` and `require` statements and creates
-/// document links for them. It tries to resolve the module paths relative to the
-/// workspace roots. If a module cannot be resolved locally, it creates a link
-/// to its page on MetaCPAN.
+/// document links for them. Links are returned with a `data` field containing
+/// metadata for deferred resolution via `documentLink/resolve`.
 ///
 /// # Arguments
 ///
@@ -18,24 +17,32 @@ use url::Url;
 /// # Returns
 ///
 /// A vector of `serde_json::Value` objects, each representing a document link.
-pub fn compute_links(uri: &str, text: &str, roots: &[Url]) -> Vec<Value> {
+pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
     let mut out = Vec::new();
 
     for (i, line) in text.lines().enumerate() {
-        // "use Foo::Bar;" — resolve Foo::Bar -> Foo/Bar.pm
+        // "use Foo::Bar;" — defer resolution to documentLink/resolve
         if let Some(rest) = line.trim().strip_prefix("use ") {
             if let Some(pkg) = rest.split_whitespace().next() {
                 let pkg = pkg.trim_end_matches(';');
                 // Skip pragmas and core modules
                 if !is_pragma(pkg) {
-                    if let Some(target) = resolve_pkg(pkg, roots) {
-                        if let Some(link) = make_link(uri, i as u32, line, pkg, target) {
-                            out.push(link);
-                        }
-                    } else {
-                        // Link to metacpan for CPAN modules
-                        let target = format!("https://metacpan.org/pod/{}", pkg);
-                        if let Some(link) = make_link(uri, i as u32, line, pkg, target) {
+                    // Defer expensive resolution - use data field
+                    if let Some(link) = make_deferred_module_link(uri, i as u32, line, pkg) {
+                        out.push(link);
+                    }
+                }
+            }
+        }
+
+        // "require Module::Name" (module form)
+        if let Some(rest) = line.trim().strip_prefix("require ") {
+            if let Some(pkg) = rest.split_whitespace().next() {
+                let pkg = pkg.trim_end_matches(';');
+                // Check if it's a module name (not a quoted file path)
+                if !pkg.starts_with('"') && !pkg.starts_with('\'') && pkg.contains("::") {
+                    if !is_pragma(pkg) {
+                        if let Some(link) = make_deferred_module_link(uri, i as u32, line, pkg) {
                             out.push(link);
                         }
                     }
@@ -55,23 +62,53 @@ pub fn compute_links(uri: &str, text: &str, roots: &[Url]) -> Vec<Value> {
                 let s = start + 1;
                 if let Some(end) = rest[s..].find(quote_char) {
                     let req = &rest[s..s + end];
-                    // Try to resolve as file path
-                    if let Some(target) = resolve_file(req, roots) {
-                        let col_start = (idx + 8 + start + 1) as u32;
-                        let col_end = (idx + 8 + start + 1 + end) as u32;
-                        out.push(json!({
-                            "range": {
-                                "start": {"line": i as u32, "character": col_start},
-                                "end":   {"line": i as u32, "character": col_end}
-                            },
-                            "target": target
-                        }));
-                    }
+                    // Defer file resolution to documentLink/resolve
+                    let col_start = (idx + 8 + start + 1) as u32;
+                    let col_end = (idx + 8 + start + 1 + end) as u32;
+                    out.push(json!({
+                        "range": {
+                            "start": {"line": i as u32, "character": col_start},
+                            "end":   {"line": i as u32, "character": col_end}
+                        },
+                        "tooltip": format!("Open {}", req),
+                        "data": {
+                            "type": "file",
+                            "path": req,
+                            "baseUri": uri
+                        }
+                    }));
                 }
             }
         }
     }
     out
+}
+
+/// Create a document link with deferred target resolution
+///
+/// Returns a link structure with a `data` field that will be used
+/// by `documentLink/resolve` to compute the actual target URI.
+fn make_deferred_module_link(uri: &str, line: u32, line_text: &str, module: &str) -> Option<Value> {
+    // Find the module name position in the line
+    if let Some(start) = line_text.find(module) {
+        let col_start = start as u32;
+        let col_end = (start + module.len()) as u32;
+
+        Some(json!({
+            "range": {
+                "start": {"line": line, "character": col_start},
+                "end": {"line": line, "character": col_end}
+            },
+            "tooltip": format!("Open {}", module),
+            "data": {
+                "type": "module",
+                "module": module,
+                "baseUri": uri
+            }
+        }))
+    } else {
+        None
+    }
 }
 
 fn is_pragma(pkg: &str) -> bool {
@@ -114,6 +151,7 @@ fn is_pragma(pkg: &str) -> bool {
     )
 }
 
+#[allow(dead_code)] // Reserved for future document link resolution
 fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
     let rel = pkg.replace("::", "/") + ".pm";
     // Try each workspace root
@@ -135,6 +173,7 @@ fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
     None
 }
 
+#[allow(dead_code)] // Reserved for future document link resolution
 fn resolve_file(path: &str, roots: &[Url]) -> Option<String> {
     // Try to resolve relative to workspace roots - return first match
     if let Some(base) = roots.first() {
@@ -150,6 +189,7 @@ fn resolve_file(path: &str, roots: &[Url]) -> Option<String> {
     None
 }
 
+#[allow(dead_code)] // Reserved for future document link resolution
 fn make_link(_src: &str, line: u32, line_text: &str, pkg: &str, target: String) -> Option<Value> {
     // Find the package name in the line to get exact column positions
     if let Some(idx) = line_text.find(pkg) {

@@ -7,12 +7,50 @@
 use super::*;
 
 impl LspServer {
+    /// Generate markdown-formatted diagnostic message (LSP 3.18)
+    ///
+    /// Creates a rich markdown representation of a diagnostic that includes
+    /// the error code (if available) and formatted message content. This is
+    /// used when the client supports `textDocument.diagnostic.markupMessageSupport`.
+    ///
+    /// # Arguments
+    ///
+    /// * `code` - Optional diagnostic code (e.g., "parse-error", "W001")
+    /// * `message` - The diagnostic message text
+    ///
+    /// # Returns
+    ///
+    /// A markdown-formatted string with the diagnostic information
+    fn generate_diagnostic_markdown(&self, code: Option<&str>, message: &str) -> String {
+        if let Some(c) = code { format!("**{}**: {}", c, message) } else { message.to_string() }
+    }
+
     /// Publish diagnostics for a document (push diagnostics)
     ///
-    /// This method computes diagnostics for the given document and publishes them
-    /// to the client via the `textDocument/publishDiagnostics` notification.
-    /// Only publishes if the client doesn't support pull diagnostics to avoid
-    /// double-flow for modern clients.
+    /// Computes and publishes diagnostics for a Perl document including syntax
+    /// errors, semantic issues, and Perl::Critic-style code quality checks.
+    /// Uses push-based notification model for backward compatibility with LSP 3.16 clients.
+    ///
+    /// # LSP Protocol
+    ///
+    /// Notification: `textDocument/publishDiagnostics`
+    /// Capability: `textDocument.publishDiagnostics`
+    ///
+    /// # Arguments
+    ///
+    /// * `uri` - Document URI to compute diagnostics for
+    ///
+    /// # Diagnostics Sources
+    ///
+    /// - Parse errors from Perl parser
+    /// - Unused variable warnings from scope analysis
+    /// - Perl::Critic built-in policy violations
+    /// - Semantic errors from type inference
+    ///
+    /// # Performance
+    ///
+    /// Only publishes if client doesn't support pull diagnostics to avoid
+    /// double-flow for modern LSP 3.17+ clients.
     pub(crate) fn publish_diagnostics(&self, uri: &str) {
         let documents = self.documents.lock();
         if let Some(doc) = documents.get(uri) {
@@ -126,8 +164,28 @@ impl LspServer {
 
     /// Handle textDocument/diagnostic request (pull diagnostics - LSP 3.17)
     ///
-    /// Returns diagnostics for a single document. Supports result caching via
-    /// `previousResultId` to return "unchanged" when the document hasn't changed.
+    /// Computes diagnostics for a single document using the pull-based model
+    /// introduced in LSP 3.17. Supports efficient incremental updates via
+    /// content-based result IDs to avoid re-sending unchanged diagnostics.
+    ///
+    /// # LSP Protocol
+    ///
+    /// Request: `textDocument/diagnostic`
+    /// Response: `DocumentDiagnosticReport`
+    /// Capability: `textDocument.diagnostic`
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - JSON-RPC parameters containing document URI and optional previousResultId
+    ///
+    /// # Returns
+    ///
+    /// DocumentDiagnosticReport with kind "unchanged" or "full" depending on content changes
+    ///
+    /// # Caching Strategy
+    ///
+    /// Uses MD5 hash of document content as result ID for efficient change detection.
+    /// Returns "unchanged" response when content hash matches previousResultId.
     pub(super) fn handle_document_diagnostic(
         &self,
         params: Option<Value>,
@@ -169,7 +227,7 @@ impl LspServer {
                                 doc.line_starts.offset_to_position_rope(&doc.rope, d.range.0);
                             let end_pos =
                                 doc.line_starts.offset_to_position_rope(&doc.rope, d.range.1);
-                            json!({
+                            let mut diag = json!({
                                 "range": {
                                     "start": {
                                         "line": start_pos.0,
@@ -187,8 +245,22 @@ impl LspServer {
                                     InternalDiagnosticSeverity::Hint => 4,
                                 },
                                 "source": "perl-lsp",
-                                "message": d.message,
-                            })
+                                "message": d.message.clone(),
+                            });
+
+                            // Add markdown content if client supports it (LSP 3.18)
+                            if self.client_capabilities.markup_message_support {
+                                let markdown = self
+                                    .generate_diagnostic_markdown(d.code.as_deref(), &d.message);
+                                diag["data"] = json!({
+                                    "messageMarkup": {
+                                        "kind": "markdown",
+                                        "value": markdown
+                                    }
+                                });
+                            }
+
+                            diag
                         })
                         .collect();
 
@@ -210,9 +282,30 @@ impl LspServer {
 
     /// Handle workspace/diagnostic request (LSP 3.17 pull diagnostics)
     ///
-    /// Returns diagnostics for all open documents in the workspace. Supports
-    /// incremental updates via `previousResultIds` to return "unchanged" for
-    /// documents that haven't changed.
+    /// Computes diagnostics for all open documents in the workspace using the
+    /// pull-based model. Provides efficient batch processing with incremental
+    /// updates via content-based result IDs.
+    ///
+    /// # LSP Protocol
+    ///
+    /// Request: `workspace/diagnostic`
+    /// Response: `WorkspaceDiagnosticReport`
+    /// Capability: `workspace.diagnostics`
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - JSON-RPC parameters with optional previousResultIds map
+    ///
+    /// # Returns
+    ///
+    /// WorkspaceDiagnosticReport containing document diagnostic reports with
+    /// "unchanged" or "full" kind per document based on content changes
+    ///
+    /// # Performance
+    ///
+    /// - Cooperative yielding every 8 documents for responsiveness
+    /// - MD5-based content hashing for efficient change detection
+    /// - Lock-free document snapshot to avoid blocking other requests
     pub(super) fn handle_workspace_diagnostic(
         &self,
         params: Option<Value>,

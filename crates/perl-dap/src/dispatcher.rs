@@ -1,0 +1,644 @@
+//! DAP Message Dispatcher
+//!
+//! This module handles routing of incoming DAP requests to appropriate handlers
+//! and constructs responses following the JSON-RPC 2.0 protocol.
+//!
+//! # Architecture
+//!
+//! - **DapDispatcher**: Central message router with handler registry
+//! - **Handler Pattern**: Command-specific handlers for initialize, setBreakpoints, etc.
+//! - **Error Handling**: Consistent error response formatting with proper status codes
+//! - **Event Emission**: Supports DAP events like `initialized` after capability exchange
+//!
+//! # Message Flow
+//!
+//! 1. Client sends Request with command and arguments
+//! 2. Dispatcher routes to command handler
+//! 3. Handler processes request and returns Result
+//! 4. Dispatcher wraps in Response with success/error status
+//! 5. For `initialize`, also queues an `initialized` event
+//!
+//! # DAP Protocol Requirements
+//!
+//! The DAP spec requires:
+//! - Client sends `initialize` request
+//! - Adapter responds with capabilities
+//! - Adapter sends `initialized` event (signals ready for configuration)
+//! - Client sends configuration requests like `setBreakpoints`, `configurationDone`
+//!
+//! # References
+//!
+//! - [DAP Protocol Schema](../../docs/DAP_PROTOCOL_SCHEMA.md)
+//! - [DAP Implementation Spec](../../docs/DAP_IMPLEMENTATION_SPECIFICATION.md#ac5-adapter-scaffolding)
+//! - [DAP Spec - Initialization](https://microsoft.github.io/debug-adapter-protocol/specification#Requests_Initialize)
+
+use crate::breakpoints::BreakpointStore;
+use crate::protocol::{
+    Breakpoint, Capabilities, Event, InitializeRequestArguments, Request, Response,
+    SetBreakpointsArguments, SetBreakpointsResponseBody,
+};
+use anyhow::{Context, Result};
+use serde_json::Value;
+use std::sync::{Arc, Mutex};
+
+/// Result of dispatching a request
+///
+/// Contains the response and any events that should be sent to the client.
+pub struct DispatchResult {
+    /// The response to send
+    pub response: Response,
+    /// Events to send after the response (e.g., `initialized` after `initialize`)
+    pub events: Vec<Event>,
+}
+
+/// DAP message dispatcher
+///
+/// Routes incoming requests to command handlers and manages session state
+/// including breakpoint storage and sequence number tracking.
+#[derive(Debug, Clone)]
+pub struct DapDispatcher {
+    /// Breakpoint storage (shared across session)
+    breakpoint_store: BreakpointStore,
+    /// Response sequence number (monotonically increasing)
+    response_seq: Arc<Mutex<i64>>,
+    /// Event sequence number (monotonically increasing)
+    event_seq: Arc<Mutex<i64>>,
+    /// Whether initialization is complete
+    initialized: Arc<Mutex<bool>>,
+}
+
+impl DapDispatcher {
+    /// Create a new DAP dispatcher
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_dap::dispatcher::DapDispatcher;
+    ///
+    /// let dispatcher = DapDispatcher::new();
+    /// ```
+    pub fn new() -> Self {
+        Self {
+            breakpoint_store: BreakpointStore::new(),
+            response_seq: Arc::new(Mutex::new(1)),
+            event_seq: Arc::new(Mutex::new(1)),
+            initialized: Arc::new(Mutex::new(false)),
+        }
+    }
+
+    /// Dispatch a request to the appropriate handler
+    ///
+    /// Routes the request based on command name and returns a Response.
+    /// All errors are caught and converted to error responses.
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - Incoming DAP request
+    ///
+    /// # Returns
+    ///
+    /// DAP response with success=true and body, or success=false with message.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use perl_dap::dispatcher::DapDispatcher;
+    /// use perl_dap::protocol::{Request, Source, SourceBreakpoint, SetBreakpointsArguments};
+    /// use serde_json::json;
+    ///
+    /// let dispatcher = DapDispatcher::new();
+    /// let request = Request {
+    ///     seq: 1,
+    ///     msg_type: "request".to_string(),
+    ///     command: "setBreakpoints".to_string(),
+    ///     arguments: Some(json!({
+    ///         "source": { "path": "/workspace/script.pl" },
+    ///         "breakpoints": [{ "line": 10 }]
+    ///     })),
+    /// };
+    ///
+    /// let response = dispatcher.dispatch(&request);
+    /// assert!(response.success);
+    /// ```
+    pub fn dispatch(&self, request: &Request) -> Response {
+        self.dispatch_with_events(request).response
+    }
+
+    /// Dispatch a request and return both response and any events
+    ///
+    /// This method should be used when you need to send events after responses.
+    /// For example, after `initialize`, the adapter must send an `initialized` event.
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - Incoming DAP request
+    ///
+    /// # Returns
+    ///
+    /// `DispatchResult` containing the response and any events to send.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use perl_dap::dispatcher::DapDispatcher;
+    /// use perl_dap::protocol::Request;
+    ///
+    /// let dispatcher = DapDispatcher::new();
+    /// let request = Request {
+    ///     seq: 1,
+    ///     msg_type: "request".to_string(),
+    ///     command: "initialize".to_string(),
+    ///     arguments: None,
+    /// };
+    ///
+    /// let result = dispatcher.dispatch_with_events(&request);
+    /// assert!(result.response.success);
+    /// // After initialize, we get an initialized event
+    /// assert_eq!(result.events.len(), 1);
+    /// assert_eq!(result.events[0].event, "initialized");
+    /// ```
+    pub fn dispatch_with_events(&self, request: &Request) -> DispatchResult {
+        let result = self.dispatch_inner(request);
+        let success = result.is_ok();
+        let command = request.command.as_str();
+        let response = self.create_response(request, result);
+
+        // Generate events based on command
+        let events = match (command, success) {
+            ("initialize", true) => {
+                // After successful initialize, send initialized event
+                vec![self.create_initialized_event()]
+            }
+            _ => Vec::new(),
+        };
+
+        DispatchResult { response, events }
+    }
+
+    /// Internal dispatch logic (returns Result for error handling)
+    fn dispatch_inner(&self, request: &Request) -> Result<Value> {
+        match request.command.as_str() {
+            "initialize" => self.handle_initialize(request),
+            "configurationDone" => self.handle_configuration_done(request),
+            "setBreakpoints" => self.handle_set_breakpoints(request),
+            _ => {
+                // Unknown command - return error
+                anyhow::bail!("Unknown command: {}", request.command)
+            }
+        }
+    }
+
+    /// Create an initialized event
+    ///
+    /// This event signals to the client that the adapter is ready to receive
+    /// configuration requests (breakpoints, etc.)
+    fn create_initialized_event(&self) -> Event {
+        let mut seq = self.event_seq.lock().unwrap_or_else(|e| e.into_inner());
+        let event_seq = *seq;
+        *seq += 1;
+
+        // Mark as initialized
+        if let Ok(mut init) = self.initialized.lock() {
+            *init = true;
+        }
+
+        Event {
+            seq: event_seq,
+            msg_type: "event".to_string(),
+            event: "initialized".to_string(),
+            body: None, // initialized event has no body
+        }
+    }
+
+    /// Handle initialize request
+    ///
+    /// Returns adapter capabilities to the client.
+    fn handle_initialize(&self, request: &Request) -> Result<Value> {
+        // Parse initialize arguments (optional validation)
+        let _args: InitializeRequestArguments = request
+            .arguments
+            .as_ref()
+            .map(|v| serde_json::from_value(v.clone()))
+            .transpose()
+            .context("Failed to parse initialize arguments")?
+            .unwrap_or(InitializeRequestArguments {
+                client_id: None,
+                client_name: None,
+                adapter_id: "perl-rs".to_string(),
+                locale: None,
+                lines_start_at1: Some(true),
+                columns_start_at1: Some(true),
+                path_format: None,
+            });
+
+        // Return adapter capabilities
+        let capabilities = Capabilities {
+            supports_configuration_done_request: Some(true),
+            supports_evaluate_for_hovers: Some(true),
+            supports_conditional_breakpoints: Some(false), // TODO: Phase 2 (AC7)
+            supports_terminate_request: Some(true),
+        };
+
+        serde_json::to_value(&capabilities).context("Failed to serialize capabilities")
+    }
+
+    /// Handle configurationDone request
+    ///
+    /// This request is sent by the client after it has finished sending all
+    /// configuration requests (breakpoints, exception filters, etc.)
+    /// The adapter can use this to start the debuggee if needed.
+    fn handle_configuration_done(&self, _request: &Request) -> Result<Value> {
+        // Verify we're in initialized state
+        let initialized = self.initialized.lock().unwrap_or_else(|e| e.into_inner());
+        if !*initialized {
+            anyhow::bail!("configurationDone received before initialized");
+        }
+
+        // configurationDone has no response body per spec
+        Ok(serde_json::Value::Null)
+    }
+
+    /// Handle setBreakpoints request
+    ///
+    /// Sets breakpoints for a source file using REPLACE semantics.
+    /// Returns verified breakpoints in SAME ORDER as request.
+    fn handle_set_breakpoints(&self, request: &Request) -> Result<Value> {
+        // Parse setBreakpoints arguments
+        let args: SetBreakpointsArguments = request
+            .arguments
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Missing arguments for setBreakpoints"))
+            .and_then(|v| serde_json::from_value(v.clone()).context("Invalid arguments"))?;
+
+        // Set breakpoints (REPLACE semantics)
+        let breakpoints: Vec<Breakpoint> = self.breakpoint_store.set_breakpoints(&args);
+
+        // Create response body
+        let body = SetBreakpointsResponseBody { breakpoints };
+
+        serde_json::to_value(&body).context("Failed to serialize setBreakpoints response")
+    }
+
+    /// Create response from request and result
+    fn create_response(&self, request: &Request, result: Result<Value>) -> Response {
+        let mut seq = self.response_seq.lock().unwrap_or_else(|e| e.into_inner());
+        let response_seq = *seq;
+        *seq += 1;
+
+        match result {
+            Ok(body) => Response {
+                seq: response_seq,
+                msg_type: "response".to_string(),
+                request_seq: request.seq,
+                success: true,
+                command: request.command.clone(),
+                message: None,
+                body: Some(body),
+            },
+            Err(err) => Response {
+                seq: response_seq,
+                msg_type: "response".to_string(),
+                request_seq: request.seq,
+                success: false,
+                command: request.command.clone(),
+                message: Some(err.to_string()),
+                body: None,
+            },
+        }
+    }
+
+    /// Get reference to breakpoint store (for testing)
+    #[cfg(test)]
+    pub fn breakpoint_store(&self) -> &BreakpointStore {
+        &self.breakpoint_store
+    }
+}
+
+impl Default for DapDispatcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_dispatcher_new() {
+        let dispatcher = DapDispatcher::new();
+        let breakpoints = dispatcher.breakpoint_store.get_breakpoints("/test.pl");
+        assert_eq!(breakpoints.len(), 0);
+    }
+
+    #[test]
+    fn test_handle_initialize() {
+        let dispatcher = DapDispatcher::new();
+        let request = Request {
+            seq: 1,
+            msg_type: "request".to_string(),
+            command: "initialize".to_string(),
+            arguments: Some(json!({
+                "clientId": "vscode",
+                "clientName": "Visual Studio Code",
+                "adapterId": "perl-rs",
+                "linesStartAt1": true,
+                "columnsStartAt1": true,
+            })),
+        };
+
+        let response = dispatcher.dispatch(&request);
+
+        if !response.success {
+            eprintln!("Error: {:?}", response.message);
+        }
+        assert!(response.success);
+        assert_eq!(response.command, "initialize");
+        assert!(response.body.is_some());
+
+        // Parse capabilities
+        let capabilities: Capabilities = serde_json::from_value(response.body.unwrap()).unwrap();
+        assert_eq!(capabilities.supports_configuration_done_request, Some(true));
+        assert_eq!(capabilities.supports_evaluate_for_hovers, Some(true));
+    }
+
+    #[test]
+    fn test_handle_set_breakpoints() {
+        let dispatcher = DapDispatcher::new();
+        let request = Request {
+            seq: 2,
+            msg_type: "request".to_string(),
+            command: "setBreakpoints".to_string(),
+            arguments: Some(json!({
+                "source": {
+                    "path": "/workspace/script.pl",
+                    "name": "script.pl"
+                },
+                "breakpoints": [
+                    { "line": 10, "column": 0 },
+                    { "line": 25, "column": 0 }
+                ]
+            })),
+        };
+
+        let response = dispatcher.dispatch(&request);
+
+        assert!(response.success);
+        assert_eq!(response.command, "setBreakpoints");
+        assert!(response.body.is_some());
+
+        // Parse response body
+        let body: SetBreakpointsResponseBody =
+            serde_json::from_value(response.body.unwrap()).unwrap();
+        assert_eq!(body.breakpoints.len(), 2);
+        assert_eq!(body.breakpoints[0].line, 10);
+        assert_eq!(body.breakpoints[1].line, 25);
+        assert!(body.breakpoints[0].verified);
+        assert!(body.breakpoints[1].verified);
+    }
+
+    #[test]
+    fn test_handle_set_breakpoints_replace_semantics() {
+        let dispatcher = DapDispatcher::new();
+
+        // Set initial breakpoints
+        let request1 = Request {
+            seq: 2,
+            msg_type: "request".to_string(),
+            command: "setBreakpoints".to_string(),
+            arguments: Some(json!({
+                "source": { "path": "/workspace/script.pl" },
+                "breakpoints": [{ "line": 10 }]
+            })),
+        };
+        dispatcher.dispatch(&request1);
+
+        // Replace with new breakpoints
+        let request2 = Request {
+            seq: 3,
+            msg_type: "request".to_string(),
+            command: "setBreakpoints".to_string(),
+            arguments: Some(json!({
+                "source": { "path": "/workspace/script.pl" },
+                "breakpoints": [{ "line": 20 }, { "line": 30 }]
+            })),
+        };
+        let response = dispatcher.dispatch(&request2);
+
+        assert!(response.success);
+        let body: SetBreakpointsResponseBody =
+            serde_json::from_value(response.body.unwrap()).unwrap();
+        assert_eq!(body.breakpoints.len(), 2);
+        assert_eq!(body.breakpoints[0].line, 20);
+        assert_eq!(body.breakpoints[1].line, 30);
+    }
+
+    #[test]
+    fn test_handle_set_breakpoints_preserves_order() {
+        let dispatcher = DapDispatcher::new();
+        let request = Request {
+            seq: 2,
+            msg_type: "request".to_string(),
+            command: "setBreakpoints".to_string(),
+            arguments: Some(json!({
+                "source": { "path": "/workspace/script.pl" },
+                "breakpoints": [
+                    { "line": 100 },
+                    { "line": 50 },
+                    { "line": 75 }
+                ]
+            })),
+        };
+
+        let response = dispatcher.dispatch(&request);
+
+        assert!(response.success);
+        let body: SetBreakpointsResponseBody =
+            serde_json::from_value(response.body.unwrap()).unwrap();
+
+        // Order must match request
+        assert_eq!(body.breakpoints[0].line, 100);
+        assert_eq!(body.breakpoints[1].line, 50);
+        assert_eq!(body.breakpoints[2].line, 75);
+    }
+
+    #[test]
+    fn test_handle_unknown_command() {
+        let dispatcher = DapDispatcher::new();
+        let request = Request {
+            seq: 99,
+            msg_type: "request".to_string(),
+            command: "unknownCommand".to_string(),
+            arguments: None,
+        };
+
+        let response = dispatcher.dispatch(&request);
+
+        assert!(!response.success);
+        assert_eq!(response.command, "unknownCommand");
+        assert!(response.message.is_some());
+        assert!(response.message.unwrap().contains("Unknown command: unknownCommand"));
+    }
+
+    #[test]
+    fn test_handle_set_breakpoints_missing_arguments() {
+        let dispatcher = DapDispatcher::new();
+        let request = Request {
+            seq: 2,
+            msg_type: "request".to_string(),
+            command: "setBreakpoints".to_string(),
+            arguments: None,
+        };
+
+        let response = dispatcher.dispatch(&request);
+
+        assert!(!response.success);
+        assert!(response.message.is_some());
+    }
+
+    #[test]
+    fn test_response_sequence_numbers() {
+        let dispatcher = DapDispatcher::new();
+
+        let request1 = Request {
+            seq: 1,
+            msg_type: "request".to_string(),
+            command: "initialize".to_string(),
+            arguments: None,
+        };
+        let response1 = dispatcher.dispatch(&request1);
+
+        let request2 = Request {
+            seq: 2,
+            msg_type: "request".to_string(),
+            command: "initialize".to_string(),
+            arguments: None,
+        };
+        let response2 = dispatcher.dispatch(&request2);
+
+        // Response sequence numbers should increment
+        assert_eq!(response1.seq, 1);
+        assert_eq!(response2.seq, 2);
+    }
+
+    #[test]
+    fn test_initialize_emits_initialized_event() {
+        let dispatcher = DapDispatcher::new();
+        let request = Request {
+            seq: 1,
+            msg_type: "request".to_string(),
+            command: "initialize".to_string(),
+            arguments: Some(json!({
+                "clientId": "vscode",
+                "adapterId": "perl-rs",
+            })),
+        };
+
+        let result = dispatcher.dispatch_with_events(&request);
+
+        // Response should be successful
+        assert!(result.response.success);
+        assert_eq!(result.response.command, "initialize");
+
+        // Should emit initialized event
+        assert_eq!(result.events.len(), 1);
+        let event = &result.events[0];
+        assert_eq!(event.event, "initialized");
+        assert_eq!(event.msg_type, "event");
+        assert!(event.body.is_none()); // initialized event has no body
+    }
+
+    #[test]
+    fn test_configuration_done_after_initialize() {
+        let dispatcher = DapDispatcher::new();
+
+        // First, initialize
+        let init_request = Request {
+            seq: 1,
+            msg_type: "request".to_string(),
+            command: "initialize".to_string(),
+            arguments: None,
+        };
+        let init_result = dispatcher.dispatch_with_events(&init_request);
+        assert!(init_result.response.success);
+
+        // Then, configurationDone should succeed
+        let config_done_request = Request {
+            seq: 2,
+            msg_type: "request".to_string(),
+            command: "configurationDone".to_string(),
+            arguments: None,
+        };
+        let response = dispatcher.dispatch(&config_done_request);
+
+        assert!(response.success);
+        assert_eq!(response.command, "configurationDone");
+    }
+
+    #[test]
+    fn test_configuration_done_before_initialize_fails() {
+        let dispatcher = DapDispatcher::new();
+
+        // configurationDone without initialize should fail
+        let request = Request {
+            seq: 1,
+            msg_type: "request".to_string(),
+            command: "configurationDone".to_string(),
+            arguments: None,
+        };
+        let response = dispatcher.dispatch(&request);
+
+        assert!(!response.success);
+        assert!(response.message.is_some());
+        assert!(response.message.unwrap().contains("before initialized"));
+    }
+
+    #[test]
+    fn test_event_sequence_numbers() {
+        let dispatcher = DapDispatcher::new();
+
+        // Multiple initializations should have incrementing event seq numbers
+        let request1 = Request {
+            seq: 1,
+            msg_type: "request".to_string(),
+            command: "initialize".to_string(),
+            arguments: None,
+        };
+        let result1 = dispatcher.dispatch_with_events(&request1);
+
+        let request2 = Request {
+            seq: 2,
+            msg_type: "request".to_string(),
+            command: "initialize".to_string(),
+            arguments: None,
+        };
+        let result2 = dispatcher.dispatch_with_events(&request2);
+
+        // Event sequence numbers should increment
+        assert_eq!(result1.events[0].seq, 1);
+        assert_eq!(result2.events[0].seq, 2);
+    }
+
+    #[test]
+    fn test_failed_initialize_no_event() {
+        let dispatcher = DapDispatcher::new();
+
+        // Invalid arguments that cause parsing to fail
+        let request = Request {
+            seq: 1,
+            msg_type: "request".to_string(),
+            command: "initialize".to_string(),
+            arguments: Some(json!({
+                "adapterId": 123 // Should be string, not number
+            })),
+        };
+
+        let result = dispatcher.dispatch_with_events(&request);
+
+        // If initialization fails, no event should be emitted
+        if !result.response.success {
+            assert!(result.events.is_empty());
+        }
+    }
+}

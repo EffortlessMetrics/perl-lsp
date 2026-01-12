@@ -29,14 +29,14 @@ impl TypeDefinitionProvider {
         uri: &str,
         documents: &HashMap<String, String>,
     ) -> Option<Vec<LocationLink>> {
+        // Get source text for position conversion
+        let source_text = documents.get(uri)?;
+
         // Find the node at the given position
-        let target_node = self.find_node_at_position(ast, line, character)?;
+        let target_node = self.find_node_at_position(ast, line, character, source_text)?;
 
         // Get the type name from the node
         let type_name = self.extract_type_name(&target_node)?;
-
-        // Get source text for position conversion
-        let source_text = documents.get(uri)?;
 
         // Find the package/class definition
         self.find_package_definition(ast, &type_name, uri, source_text)
@@ -45,29 +45,70 @@ impl TypeDefinitionProvider {
     /// Extract type name from a node
     fn extract_type_name(&self, node: &Node) -> Option<String> {
         match &node.kind {
+            // Variable declaration with type: my ClassName $var
+            NodeKind::VariableDeclaration { variable, attributes, .. } => {
+                // Check if there's a type attribute (Perl 5.20+ style)
+                // Attributes are Vec<String>
+                for attr in attributes {
+                    // Check if the attribute looks like a package name
+                    if attr.contains("::") || attr.chars().next().is_some_and(|c| c.is_uppercase())
+                    {
+                        // Type is specified as an attribute
+                        return Some(attr.clone());
+                    }
+                }
+                // For typed variables, the type might be in the variable node itself
+                if let NodeKind::Variable { name, .. } = &variable.kind {
+                    // Check if name contains a type prefix pattern
+                    if name.contains("::") {
+                        // Extract package name from qualified variable
+                        let parts: Vec<&str> = name.split("::").collect();
+                        if parts.len() >= 2 {
+                            return Some(parts[..parts.len() - 1].join("::"));
+                        }
+                    }
+                }
+                None
+            }
             // Method call: $obj->method
             NodeKind::MethodCall { object, .. } => {
                 // Try to infer the type of the object
                 self.infer_object_type(object)
             }
-            // Package method: Package::method or Package->method
-            NodeKind::Identifier { name } if name.contains("::") => {
-                let parts: Vec<&str> = name.split("::").collect();
-                if parts.len() >= 2 {
-                    // Get the package name (everything except the last part)
-                    Some(parts[..parts.len() - 1].join("::"))
-                } else {
-                    None
-                }
+            // Variable reference - look for its type
+            NodeKind::Variable { .. } => {
+                // Would need to track variable types through semantic analysis
+                // For now, return None and rely on context
+                None
             }
-            // Constructor: new Package or Package->new
+            // Package identifier or Package::method
+            NodeKind::Identifier { name } => {
+                if name.contains("::") {
+                    // Qualified name like Package::method
+                    let parts: Vec<&str> = name.split("::").collect();
+                    if parts.len() >= 2 {
+                        // Get the package name (everything except the last part)
+                        return Some(parts[..parts.len() - 1].join("::"));
+                    }
+                }
+                // Check if this identifier looks like a package name (starts with uppercase)
+                if name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                    // Likely a package/class name
+                    return Some(name.clone());
+                }
+                None
+            }
+            // Constructor: Package->new or new Package
             NodeKind::Binary { op, left, right } if op == "->" => {
+                // Handle Package->new pattern
                 if let NodeKind::Identifier { name: pkg } = &left.kind {
                     if let NodeKind::Identifier { name: method } = &right.kind {
                         if method == "new" {
                             return Some(pkg.clone());
                         }
                     }
+                    // Also handle Package->method where we want Package
+                    return Some(pkg.clone());
                 }
                 None
             }
@@ -78,8 +119,15 @@ impl TypeDefinitionProvider {
                     match &args[1].kind {
                         NodeKind::String { value, .. } => Some(value.clone()),
                         NodeKind::Identifier { name } => Some(name.clone()),
+                        NodeKind::Variable { name, .. } => {
+                            // Handle bless {}, $class where $class holds the package name
+                            Some(name.clone())
+                        }
                         _ => None,
                     }
+                } else if args.len() == 1 {
+                    // bless $ref (uses caller's package)
+                    None
                 } else {
                     None
                 }
@@ -90,6 +138,8 @@ impl TypeDefinitionProvider {
                 NodeKind::Identifier { name } => Some(name.clone()),
                 _ => None,
             },
+            // Expression statement - unwrap to inner expression
+            NodeKind::ExpressionStatement { expression } => self.extract_type_name(expression),
             _ => None,
         }
     }
@@ -176,12 +226,7 @@ impl TypeDefinitionProvider {
         F: FnMut(&Node),
     {
         match &node.kind {
-            NodeKind::Program { statements } => {
-                for stmt in statements {
-                    f(stmt);
-                }
-            }
-            NodeKind::Block { statements } => {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
                     f(stmt);
                 }
@@ -191,39 +236,111 @@ impl TypeDefinitionProvider {
                     f(b);
                 }
             }
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                f(variable);
+                if let Some(init) = initializer {
+                    f(init);
+                }
+            }
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                f(lhs);
+                f(rhs);
+            }
+            NodeKind::Binary { left, right, .. } => {
+                f(left);
+                f(right);
+            }
+            NodeKind::MethodCall { object, args, .. } => {
+                f(object);
+                for arg in args {
+                    f(arg);
+                }
+            }
+            NodeKind::FunctionCall { args, .. } => {
+                for arg in args {
+                    f(arg);
+                }
+            }
+            NodeKind::Subroutine { body, .. } => {
+                f(body);
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                f(expression);
+            }
+            NodeKind::If { condition, then_branch, else_branch, .. } => {
+                f(condition);
+                f(then_branch);
+                if let Some(else_b) = else_branch {
+                    f(else_b);
+                }
+            }
+            NodeKind::While { condition, body, .. } => {
+                f(condition);
+                f(body);
+            }
+            NodeKind::For { init, condition, update, body, .. } => {
+                if let Some(i) = init {
+                    f(i);
+                }
+                if let Some(c) = condition {
+                    f(c);
+                }
+                if let Some(upd) = update {
+                    f(upd);
+                }
+                f(body);
+            }
+            NodeKind::Foreach { variable, list, body } => {
+                f(variable);
+                f(list);
+                f(body);
+            }
             _ => {
-                // Most other nodes don't have children we need to traverse for packages
+                // Other node types don't have children we need to traverse
             }
         }
     }
 
     /// Find node at the given position
-    fn find_node_at_position(&self, node: &Node, _line: u32, _character: u32) -> Option<Node> {
-        // Simplified - would need proper offset calculation from line/column
-        // For now, just return the first matching node type
-        if matches!(
-            &node.kind,
-            NodeKind::Package { .. } | NodeKind::Identifier { .. } | NodeKind::FunctionCall { .. }
-        ) {
-            // Check children for more specific match
-            let mut result = None;
-            self.visit_children(node, |child| {
-                if result.is_none() {
-                    if let Some(found) = self.find_node_at_position(child, _line, _character) {
-                        result = Some(found);
-                    }
-                }
-            });
+    fn find_node_at_position(
+        &self,
+        node: &Node,
+        line: u32,
+        character: u32,
+        source_text: &str,
+    ) -> Option<Node> {
+        // Convert UTF-16 line/char to byte offset
+        let offset = crate::position::utf16_line_col_to_offset(source_text, line, character);
 
-            if result.is_some() {
-                return result;
-            }
+        // Find the most specific node at this offset
+        self.find_node_at_offset(node, offset)
+    }
 
-            // No child contains the position, return this node
-            return Some(node.clone());
+    /// Find the most specific node containing the given offset
+    fn find_node_at_offset(&self, node: &Node, offset: usize) -> Option<Node> {
+        // Check if offset is within this node's range
+        if offset < node.location.start || offset > node.location.end {
+            return None;
         }
 
-        None
+        // Check children first for more specific match
+        let mut best_match = None;
+        self.visit_children(node, |child| {
+            if let Some(found) = self.find_node_at_offset(child, offset) {
+                // Prefer the smallest (most specific) node
+                if best_match.is_none()
+                    || found.location.end - found.location.start
+                        < best_match
+                            .as_ref()
+                            .map_or(usize::MAX, |n: &Node| n.location.end - n.location.start)
+                {
+                    best_match = Some(found);
+                }
+            }
+        });
+
+        // If we found a child, return it; otherwise return this node
+        best_match.or_else(|| Some(node.clone()))
     }
 }
 
@@ -276,5 +393,65 @@ $obj->method();
 
         // Would need to traverse to find the right node
         // This is a simplified test
+    }
+
+    #[test]
+    fn test_full_type_definition_flow() {
+        let code = r#"
+package MyClass;
+
+sub new {
+    my $class = shift;
+    bless {}, $class;
+}
+
+package main;
+
+my $obj = MyClass->new();
+$obj->method();
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().expect("Failed to parse");
+
+        let provider = TypeDefinitionProvider::new();
+        let uri = "file:///test.pl";
+
+        let mut documents = std::collections::HashMap::new();
+        documents.insert(uri.to_string(), code.to_string());
+
+        // Line 10 (0-indexed: 10) is "my $obj = MyClass->new();"
+        // Character position 10 should be around "MyClass"
+        let line = 10;
+        let character = 10;
+
+        let locations = provider.find_type_definition(&ast, line, character, uri, &documents);
+
+        // Debug: print what we found
+        if let Some(ref locs) = locations {
+            eprintln!("Found {} locations", locs.len());
+            for loc in locs {
+                eprintln!("Location: {:?}", loc);
+            }
+        } else {
+            eprintln!("No locations found");
+
+            // Debug: try to find what node we're getting
+            let offset = crate::position::utf16_line_col_to_offset(code, line, character);
+            eprintln!("Offset: {}", offset);
+            if let Some(node) = provider.find_node_at_offset(&ast, offset) {
+                eprintln!("Node kind: {:?}", node.kind);
+                if let Some(type_name) = provider.extract_type_name(&node) {
+                    eprintln!("Extracted type name: {}", type_name);
+                } else {
+                    eprintln!("Could not extract type name from node");
+                }
+            } else {
+                eprintln!("Could not find node at offset");
+            }
+        }
+
+        assert!(locations.is_some(), "Should find type definition for MyClass->new()");
+        let locs = locations.unwrap();
+        assert_eq!(locs.len(), 1, "Should find exactly one definition");
     }
 }

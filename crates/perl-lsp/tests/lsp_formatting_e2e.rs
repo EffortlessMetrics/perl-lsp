@@ -219,3 +219,72 @@ fn formatting_with_custom_config() {
 
     client.shutdown();
 }
+
+#[test]
+
+fn ranges_formatting() {
+    // Skip test if perltidy is not available
+    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
+        eprintln!("Skipping test: perltidy not installed");
+        return;
+    }
+
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut client = LspClient::spawn(bin);
+    let uri = "file:///ranges.pl";
+
+    let source = r#"
+# First subroutine - format this
+sub first{my$a=1;return$a;}
+
+# Second subroutine - don't format this
+sub second{my$b=2;return$b;}
+
+# Third subroutine - format this too
+sub third{my$c=3;return$c;}
+"#;
+
+    client.did_open(uri, "perl", source);
+
+    // Request formatting for multiple ranges (first and third subroutines)
+    let response = client.request(
+        "textDocument/rangesFormatting",
+        json!({
+            "textDocument": {"uri": uri},
+            "ranges": [
+                {
+                    "start": {"line": 1, "character": 0},
+                    "end": {"line": 2, "character": 28}
+                },
+                {
+                    "start": {"line": 7, "character": 0},
+                    "end": {"line": 8, "character": 28}
+                }
+            ],
+            "options": {"tabSize": 4, "insertSpaces": true}
+        }),
+    );
+
+    if let Some(result) = response.get("result") {
+        if let Some(edits) = result.as_array() {
+            assert!(!edits.is_empty(), "Should return formatting edits for multiple ranges");
+
+            // Verify that we got edits (exact number depends on perltidy behavior)
+            let edit_count = edits.len();
+            eprintln!("Received {} edits for ranges formatting", edit_count);
+            assert!(edit_count > 0, "Should have at least one edit");
+
+            // Check that at least one edit contains formatted code
+            let has_formatted = edits.iter().any(|edit| {
+                if let Some(new_text) = edit["newText"].as_str() {
+                    new_text.contains("sub first") || new_text.contains("sub third")
+                } else {
+                    false
+                }
+            });
+            assert!(has_formatted, "Should contain formatted code for first or third subroutine");
+        }
+    }
+
+    client.shutdown();
+}

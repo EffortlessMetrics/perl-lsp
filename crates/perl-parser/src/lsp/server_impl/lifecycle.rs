@@ -72,6 +72,66 @@ impl LspServer {
                 .and_then(|b| b.as_bool())
                 .unwrap_or(false);
 
+            // Check if client supports markdown message content in diagnostics (LSP 3.18)
+            self.client_capabilities.markup_message_support = params
+                .get("capabilities")
+                .and_then(|c| c.get("textDocument"))
+                .and_then(|td| td.get("diagnostic"))
+                .and_then(|d| d.get("markupMessageSupport"))
+                .and_then(|b| b.as_bool())
+                .unwrap_or(false);
+
+            // Check if client supports refresh requests for various features
+            if let Some(caps) = params.get("capabilities") {
+                // workspace/codeLens/refresh
+                self.client_capabilities.code_lens_refresh_support = caps
+                    .pointer("/workspace/codeLens/refreshSupport")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                // workspace/semanticTokens/refresh
+                self.client_capabilities.semantic_tokens_refresh_support = caps
+                    .pointer("/workspace/semanticTokens/refreshSupport")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                // workspace/inlayHint/refresh
+                self.client_capabilities.inlay_hint_refresh_support = caps
+                    .pointer("/workspace/inlayHint/refreshSupport")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                // workspace/inlineValue/refresh
+                self.client_capabilities.inline_value_refresh_support = caps
+                    .pointer("/workspace/inlineValue/refreshSupport")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                // workspace/diagnostic/refresh
+                self.client_capabilities.diagnostic_refresh_support = caps
+                    .pointer("/workspace/diagnostic/refreshSupport")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                // workspace/foldingRange/refresh
+                self.client_capabilities.folding_range_refresh_support = caps
+                    .pointer("/workspace/foldingRange/refreshSupport")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                // window/showDocument
+                self.client_capabilities.show_document_support = caps
+                    .pointer("/window/showDocument/support")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                // window/workDoneProgress
+                self.client_capabilities.work_done_progress_support = caps
+                    .pointer("/window/workDoneProgress")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+            }
+
             // Check if client supports pull diagnostics
             let supports_pull = params
                 .get("capabilities")
@@ -214,6 +274,29 @@ impl LspServer {
             "willSave": true,
             "willSaveWaitUntil": false,
             "save": { "includeText": true }
+        });
+
+        // Add workspace capabilities for LSP 3.18 features
+        capabilities["workspace"] = json!({
+            "textDocumentContent": {
+                "schemes": ["perldoc"]
+            }
+        });
+
+        // Add notebook document sync capability (LSP 3.17)
+        capabilities["notebookDocumentSync"] = json!({
+            "notebookSelector": [
+                {
+                    "notebook": {
+                        "notebookType": "jupyter-notebook"
+                    },
+                    "cells": [
+                        {
+                            "language": "perl"
+                        }
+                    ]
+                }
+            ]
         });
 
         Ok(Some(json!({

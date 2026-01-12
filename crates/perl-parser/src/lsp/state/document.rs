@@ -177,4 +177,25 @@ pub struct ClientCapabilities {
     pub dynamic_registration_support: bool,
     /// Supports snippet syntax in completion items
     pub snippet_support: bool,
+    /// Supports markdown message content in diagnostics (LSP 3.18)
+    ///
+    /// When true, the server can provide rich markdown formatting in diagnostic
+    /// messages via the `data.messageMarkup` field in pull diagnostics responses.
+    pub markup_message_support: bool,
+    /// Supports workspace/codeLens/refresh request
+    pub code_lens_refresh_support: bool,
+    /// Supports workspace/semanticTokens/refresh request
+    pub semantic_tokens_refresh_support: bool,
+    /// Supports workspace/inlayHint/refresh request
+    pub inlay_hint_refresh_support: bool,
+    /// Supports workspace/inlineValue/refresh request
+    pub inline_value_refresh_support: bool,
+    /// Supports workspace/diagnostic/refresh request
+    pub diagnostic_refresh_support: bool,
+    /// Supports workspace/foldingRange/refresh request
+    pub folding_range_refresh_support: bool,
+    /// Supports window/showDocument request
+    pub show_document_support: bool,
+    /// Supports window/workDoneProgress/create request
+    pub work_done_progress_support: bool,
 }

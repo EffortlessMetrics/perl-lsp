@@ -11,6 +11,8 @@ This is the front door. If you want X, read Y.
 | Milestones         | [`MILESTONES.md`](MILESTONES.md)           | GitHub Milestones  |
 | Capability catalog | [`features.toml`](../features.toml)        | `just ci-gate`     |
 | CI lanes           | [`CI_TEST_LANES.md`](CI_TEST_LANES.md)     | `just ci-gate`     |
+| Local validation   | [`CI_LOCAL_VALIDATION.md`](CI_LOCAL_VALIDATION.md) | `just ci-gate` |
+| CI cost tracking   | [`CI_COST_TRACKING.md`](CI_COST_TRACKING.md) | Manual review      |
 | What went wrong    | [`LESSONS.md`](LESSONS.md)                 | Human review       |
 | What went right    | [`CASEBOOK.md`](CASEBOOK.md)               | Human review       |
 | PR archaeology     | [`forensics/INDEX.md`](forensics/INDEX.md) | Human review       |
@@ -68,7 +70,10 @@ bash scripts/ignored-test-count.sh
 - `ROADMAP.md` - Release plans and exit criteria
 - `MILESTONES.md` - GitHub milestone tracking and blockers
 - `COMMANDS_REFERENCE.md` - Build, test, and lint commands
+- `CI_LOCAL_VALIDATION.md` - Local-first CI validation workflow
 - `CI_TEST_LANES.md` - CI lane definitions
+- `CI_COST_TRACKING.md` - CI budget management and cost optimization
+- `CI.md` - GitHub Actions architecture
 
 ### Architecture and Design
 

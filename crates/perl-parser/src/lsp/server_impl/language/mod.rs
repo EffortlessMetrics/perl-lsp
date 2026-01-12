@@ -11,9 +11,12 @@
 //! - rename: Symbol renaming (single file and workspace)
 //! - hierarchy: Type hierarchy and call hierarchy
 //! - semantic_tokens: Semantic tokens for syntax highlighting
+//! - colors: Document color detection and presentation
+//! - virtual_content: Virtual document content for perldoc:// URIs
 //! - misc: Inlay hints, document links, code lens, and other features
 
 mod code_actions;
+mod colors;
 mod completion;
 mod formatting;
 mod hierarchy;
@@ -24,3 +27,4 @@ mod references;
 mod rename;
 mod semantic_tokens;
 mod symbols;
+mod virtual_content;

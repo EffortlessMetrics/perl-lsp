@@ -177,7 +177,14 @@ impl LspServer {
             "shutdown" => {
                 // Clear any pending cancelled requests on shutdown
                 self.cancelled.lock().clear();
+                self.shutdown_received = true;
                 Ok(Some(json!(null)))
+            }
+            "exit" => {
+                // LSP spec: exit with 0 if shutdown was called, 1 otherwise
+                let exit_code = if self.shutdown_received { 0 } else { 1 };
+                eprintln!("LSP server exiting with code {}", exit_code);
+                std::process::exit(exit_code);
             }
             "textDocument/didOpen" => match self.handle_did_open(request.params) {
                 Ok(_) => Ok(None),
@@ -211,9 +218,26 @@ impl LspServer {
                 Err(e) => Err(e),
             },
             "textDocument/willSaveWaitUntil" => self.handle_will_save_wait_until(request.params),
+            "notebookDocument/didOpen" => match self.handle_notebook_did_open(request.params) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            },
+            "notebookDocument/didChange" => match self.handle_notebook_did_change(request.params) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            },
+            "notebookDocument/didSave" => match self.handle_notebook_did_save(request.params) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            },
+            "notebookDocument/didClose" => match self.handle_notebook_did_close(request.params) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            },
             "textDocument/completion" => early_cancel_or!(self, id, "textDocument/completion", {
                 self.handle_completion_cancellable(request.params, id.as_ref())
             }),
+            "completionItem/resolve" => self.handle_completion_resolve(request.params),
             "textDocument/hover" => early_cancel_or!(self, id, "textDocument/hover", {
                 self.handle_hover_cancellable(request.params, id.as_ref())
             }),
@@ -292,8 +316,10 @@ impl LspServer {
                     self.handle_inlay_hints(request.params)
                 )
             }
+            "inlayHint/resolve" => self.handle_inlay_hint_resolve(request.params),
             // PR 8: Document links
             "textDocument/documentLink" => self.handle_document_links(request.params),
+            "documentLink/resolve" => self.handle_document_link_resolve(request.params),
             // PR 8: Selection ranges
             "textDocument/selectionRange" => self.handle_selection_range(request.params),
             // PR 9: On-type formatting
@@ -342,6 +368,7 @@ impl LspServer {
             }
             "textDocument/formatting" => self.handle_formatting(request.params),
             "textDocument/rangeFormatting" => self.handle_range_formatting(request.params),
+            "textDocument/rangesFormatting" => self.handle_ranges_formatting(request.params),
             "textDocument/prepareCallHierarchy" => {
                 self.handle_prepare_call_hierarchy(request.params)
             }
@@ -362,9 +389,18 @@ impl LspServer {
                 self.handle_did_change_configuration(request.params);
                 Ok(None) // Notification, no response
             }
+            "window/workDoneProgress/cancel" => {
+                self.handle_progress_cancel(request.params);
+                Ok(None) // Notification, no response
+            }
             "workspace/willRenameFiles" => self.handle_will_rename_files(request.params),
+            "workspace/didRenameFiles" => self.handle_did_rename_files(request.params),
+            "workspace/willDeleteFiles" => self.handle_will_delete_files(request.params),
             "workspace/didDeleteFiles" => self.handle_did_delete_files(request.params),
+            "workspace/willCreateFiles" => self.handle_will_create_files(request.params),
+            "workspace/didCreateFiles" => self.handle_did_create_files(request.params),
             "workspace/applyEdit" => self.handle_apply_edit(request.params),
+            "workspace/textDocumentContent" => self.handle_text_document_content(request.params),
             // Test-specific slow operation for cancellation testing
             // This is available in all builds but only used by tests
             "$/test/slowOperation" => {

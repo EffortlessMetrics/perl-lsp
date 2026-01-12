@@ -7,14 +7,20 @@ mod diagnostics;
 mod dispatch;
 mod language;
 mod lifecycle;
+mod notebook;
+mod refresh;
 /// Routing module for lifecycle-aware index access
 pub mod routing;
 mod text_sync;
+mod window;
 mod workspace;
 
 // Re-export protocol types for backward compatibility
 // Tests and external code import these from perl_parser::lsp_server::
 pub use crate::lsp::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
+
+// Re-export window types for public API
+pub use window::{MessageType, ShowDocumentOptions};
 
 use crate::{
     CodeActionKind as InternalCodeActionKind,
@@ -73,7 +79,7 @@ use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicU32, Ordering},
+    atomic::{AtomicBool, AtomicI64, AtomicU32, Ordering},
 };
 use std::time::{Duration, Instant};
 use url::Url;
@@ -123,6 +129,8 @@ pub struct LspServer {
     pub(crate) documents: Arc<Mutex<HashMap<String, DocumentState>>>,
     /// Whether the server is initialized
     initialized: bool,
+    /// Whether shutdown was received (for LSP-compliant exit handling)
+    shutdown_received: bool,
     /// Index coordinator for workspace-wide features with lifecycle management
     #[cfg(feature = "workspace")]
     pub(crate) index_coordinator: Option<Arc<IndexCoordinator>>,
@@ -131,7 +139,7 @@ pub struct LspServer {
     /// Symbol index for fast lookups
     symbol_index: Arc<Mutex<SymbolIndex>>,
     /// Server configuration
-    config: Arc<Mutex<ServerConfig>>,
+    pub(crate) config: Arc<Mutex<ServerConfig>>,
     /// Synchronized output writer for notifications
     output: Arc<Mutex<Box<dyn Write + Send>>>,
     /// Client capabilities
@@ -148,6 +156,14 @@ pub struct LspServer {
     client_supports_pull_diags: Arc<AtomicBool>,
     /// Workspace configuration for module resolution
     workspace_config: Arc<Mutex<WorkspaceConfig>>,
+    /// Atomic counter for generating unique request IDs
+    next_request_id: Arc<AtomicI64>,
+    /// Active progress tokens for work done progress tracking
+    progress_tokens: Arc<Mutex<HashSet<String>>>,
+    /// Refresh controller for debounced client refresh requests
+    refresh_controller: refresh::RefreshController,
+    /// Notebook document store (LSP 3.17)
+    pub(crate) notebook_store: notebook::NotebookStore,
 }
 
 // Note: DocumentState, ServerConfig, and normalize_package_separator are
@@ -173,6 +189,7 @@ impl LspServer {
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
+            shutdown_received: false,
             #[cfg(feature = "workspace")]
             index_coordinator,
             // Cache up to 100 ASTs with 5 minute TTL
@@ -187,6 +204,10 @@ impl LspServer {
             advertised_features: Mutex::new(default_features),
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
+            next_request_id: Arc::new(AtomicI64::new(1)),
+            progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            refresh_controller: refresh::RefreshController::new(),
+            notebook_store: notebook::NotebookStore::new(),
         }
     }
 
@@ -208,6 +229,7 @@ impl LspServer {
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
+            shutdown_received: false,
             #[cfg(feature = "workspace")]
             index_coordinator,
             ast_cache: Arc::new(AstCache::new(100, 300)),
@@ -221,6 +243,10 @@ impl LspServer {
             advertised_features: Mutex::new(default_features),
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
+            next_request_id: Arc::new(AtomicI64::new(1)),
+            progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            refresh_controller: refresh::RefreshController::new(),
+            notebook_store: notebook::NotebookStore::new(),
         }
     }
 
@@ -237,6 +263,40 @@ impl LspServer {
         let mut output = self.output.lock();
         write!(output, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)?;
         output.flush()
+    }
+
+    /// Show a message to the user via window/showMessage
+    ///
+    /// This sends a notification that clients typically display as a popup or notification.
+    ///
+    /// # Arguments
+    /// * `message_type` - Message severity: 1=Error, 2=Warning, 3=Info, 4=Log
+    /// * `message` - The message text to display
+    pub fn show_message(&self, message_type: u8, message: &str) -> io::Result<()> {
+        self.notify(
+            "window/showMessage",
+            json!({
+                "type": message_type,
+                "message": message
+            }),
+        )
+    }
+
+    /// Log a message to the client output via window/logMessage
+    ///
+    /// This sends a notification that clients typically write to their output/log panel.
+    ///
+    /// # Arguments
+    /// * `message_type` - Message severity: 1=Error, 2=Warning, 3=Info, 4=Log
+    /// * `message` - The message text to log
+    pub fn log_message(&self, message_type: u8, message: &str) -> io::Result<()> {
+        self.notify(
+            "window/logMessage",
+            json!({
+                "type": message_type,
+                "message": message
+            }),
+        )
     }
 
     /// Acquire a lock on the documents map
@@ -1190,6 +1250,67 @@ impl LspServer {
         self.handle_workspace_symbols_v2(params)
     }
 
+    /// Test-only entrypoint for LSP `textDocument/documentColor`.
+    ///
+    /// Exercises document color detection functionality in tests.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params with `textDocument.uri`.
+    ///
+    /// # Returns
+    /// - `Ok(Some(colors))`: Array of ColorInformation objects.
+    /// - `Ok(None)`: No colors found.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or document not found.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn test_handle_document_color(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_document_color(params)
+    }
+
+    /// Test-only entrypoint for LSP `textDocument/colorPresentation`.
+    ///
+    /// Exercises color presentation generation in tests.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params with `color` and `range`.
+    ///
+    /// # Returns
+    /// - `Ok(Some(presentations))`: Array of ColorPresentation objects.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn test_handle_color_presentation(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_color_presentation(params)
+    }
+
+    /// Test-only entrypoint for LSP `workspace/textDocumentContent`.
+    ///
+    /// Exercises virtual document content functionality in tests.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params with `uri` (e.g., "perldoc://Module::Name").
+    ///
+    /// # Returns
+    /// - `Ok(Some(content))`: Object with `text` field containing document content.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if URI scheme is unsupported or content not found.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn test_handle_text_document_content(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_text_document_content(params)
+    }
+
     // Note: handle_document_link is implemented in language/misc.rs
 
     /// Get text around an offset position
@@ -1217,6 +1338,90 @@ impl LspServer {
     pub(crate) fn iter_open_buffers(&self) -> Vec<(String, String)> {
         let docs = self.documents.lock();
         docs.iter().map(|(uri, doc)| (uri.clone(), doc.text.clone())).collect()
+    }
+
+    // =========================================================================
+    // Server→client refresh requests (LSP 3.16+)
+    // =========================================================================
+
+    /// Send a server→client request with no parameters (for refresh requests)
+    fn send_request(&self, method: &str, params: Value) -> io::Result<()> {
+        let request_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": method,
+            "params": params
+        });
+        let mut output = self.output.lock();
+        let msg = serde_json::to_string(&request).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to serialize request: {}", e),
+            )
+        })?;
+        write!(output, "Content-Length: {}\r\n\r\n{}", msg.len(), msg)?;
+        output.flush()
+    }
+
+    /// Request client to refresh code lenses (workspace/codeLens/refresh)
+    pub fn request_code_lens_refresh(&self) -> io::Result<()> {
+        if !self.client_capabilities.code_lens_refresh_support {
+            return Ok(());
+        }
+        self.send_request("workspace/codeLens/refresh", json!(null))?;
+        eprintln!("[perl-lsp] Requested code lens refresh");
+        Ok(())
+    }
+
+    /// Request client to refresh semantic tokens (workspace/semanticTokens/refresh)
+    pub fn request_semantic_tokens_refresh(&self) -> io::Result<()> {
+        if !self.client_capabilities.semantic_tokens_refresh_support {
+            return Ok(());
+        }
+        self.send_request("workspace/semanticTokens/refresh", json!(null))?;
+        eprintln!("[perl-lsp] Requested semantic tokens refresh");
+        Ok(())
+    }
+
+    /// Request client to refresh inlay hints (workspace/inlayHint/refresh)
+    pub fn request_inlay_hint_refresh(&self) -> io::Result<()> {
+        if !self.client_capabilities.inlay_hint_refresh_support {
+            return Ok(());
+        }
+        self.send_request("workspace/inlayHint/refresh", json!(null))?;
+        eprintln!("[perl-lsp] Requested inlay hint refresh");
+        Ok(())
+    }
+
+    /// Request client to refresh inline values (workspace/inlineValue/refresh)
+    pub fn request_inline_value_refresh(&self) -> io::Result<()> {
+        if !self.client_capabilities.inline_value_refresh_support {
+            return Ok(());
+        }
+        self.send_request("workspace/inlineValue/refresh", json!(null))?;
+        eprintln!("[perl-lsp] Requested inline value refresh");
+        Ok(())
+    }
+
+    /// Request client to refresh diagnostics (workspace/diagnostic/refresh)
+    pub fn request_diagnostic_refresh(&self) -> io::Result<()> {
+        if !self.client_capabilities.diagnostic_refresh_support {
+            return Ok(());
+        }
+        self.send_request("workspace/diagnostic/refresh", json!(null))?;
+        eprintln!("[perl-lsp] Requested diagnostic refresh");
+        Ok(())
+    }
+
+    /// Request client to refresh folding ranges (workspace/foldingRange/refresh)
+    pub fn request_folding_range_refresh(&self) -> io::Result<()> {
+        if !self.client_capabilities.folding_range_refresh_support {
+            return Ok(());
+        }
+        self.send_request("workspace/foldingRange/refresh", json!(null))?;
+        eprintln!("[perl-lsp] Requested folding range refresh");
+        Ok(())
     }
 }
 
