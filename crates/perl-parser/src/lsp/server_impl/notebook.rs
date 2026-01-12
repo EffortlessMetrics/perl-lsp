@@ -262,10 +262,8 @@ impl LspServer {
             .ok_or_else(|| invalid_params("Missing notebookDocument.cells"))?;
 
         // Extract notebook metadata (optional)
-        let metadata = params
-            .pointer("/notebookDocument/metadata")
-            .and_then(|v| v.as_object())
-            .cloned();
+        let metadata =
+            params.pointer("/notebookDocument/metadata").and_then(|v| v.as_object()).cloned();
 
         let mut cells = Vec::new();
         for cell in cells_array {
