@@ -350,6 +350,7 @@ impl LspServer {
             }
             "textDocument/formatting" => self.handle_formatting(request.params),
             "textDocument/rangeFormatting" => self.handle_range_formatting(request.params),
+            "textDocument/rangesFormatting" => self.handle_ranges_formatting(request.params),
             "textDocument/prepareCallHierarchy" => {
                 self.handle_prepare_call_hierarchy(request.params)
             }

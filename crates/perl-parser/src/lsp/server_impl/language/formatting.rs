@@ -5,7 +5,7 @@
 
 use super::super::*;
 use crate::formatting::CodeFormatter;
-use crate::lsp::protocol::{req_position, req_range, req_uri};
+use crate::lsp::protocol::{invalid_params, req_position, req_range, req_uri};
 
 impl LspServer {
     /// Handle textDocument/onTypeFormatting request
@@ -158,6 +158,127 @@ impl LspServer {
                         });
                     }
                 }
+            }
+        }
+
+        Ok(Some(json!([])))
+    }
+
+    /// Handle textDocument/rangesFormatting request (LSP 3.18)
+    pub(crate) fn handle_ranges_formatting(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            let uri = req_uri(&params)?;
+            let options: FormattingOptions = serde_json::from_value(params["options"].clone())
+                .unwrap_or(FormattingOptions {
+                    tab_size: 4,
+                    insert_spaces: true,
+                    trim_trailing_whitespace: None,
+                    insert_final_newline: None,
+                    trim_final_newlines: None,
+                });
+
+            // Parse ranges array
+            let ranges_array = params
+                .get("ranges")
+                .and_then(|r| r.as_array())
+                .ok_or_else(|| invalid_params("Missing required parameter: ranges"))?;
+
+            if ranges_array.is_empty() {
+                return Ok(Some(json!([])));
+            }
+
+            eprintln!("Formatting {} ranges in document: {}", ranges_array.len(), uri);
+
+            let documents = self.documents_guard();
+            if let Some(doc) = self.get_document(&documents, uri) {
+                let formatter = CodeFormatter::new();
+                let mut all_edits = Vec::new();
+
+                // Process each range
+                for (idx, range_val) in ranges_array.iter().enumerate() {
+                    let start_line_u64 = range_val
+                        .pointer("/start/line")
+                        .and_then(|v| v.as_u64())
+                        .ok_or_else(|| {
+                            invalid_params(&format!("Missing ranges[{}].start.line", idx))
+                        })?;
+                    let start_line = u32::try_from(start_line_u64).map_err(|_| {
+                        invalid_params(&format!("ranges[{}].start.line exceeds u32::MAX", idx))
+                    })?;
+
+                    let start_char_u64 = range_val
+                        .pointer("/start/character")
+                        .and_then(|v| v.as_u64())
+                        .ok_or_else(|| {
+                            invalid_params(&format!("Missing ranges[{}].start.character", idx))
+                        })?;
+                    let start_char = u32::try_from(start_char_u64).map_err(|_| {
+                        invalid_params(&format!("ranges[{}].start.character exceeds u32::MAX", idx))
+                    })?;
+
+                    let end_line_u64 = range_val
+                        .pointer("/end/line")
+                        .and_then(|v| v.as_u64())
+                        .ok_or_else(|| {
+                            invalid_params(&format!("Missing ranges[{}].end.line", idx))
+                        })?;
+                    let end_line = u32::try_from(end_line_u64).map_err(|_| {
+                        invalid_params(&format!("ranges[{}].end.line exceeds u32::MAX", idx))
+                    })?;
+
+                    let end_char_u64 = range_val
+                        .pointer("/end/character")
+                        .and_then(|v| v.as_u64())
+                        .ok_or_else(|| {
+                            invalid_params(&format!("Missing ranges[{}].end.character", idx))
+                        })?;
+                    let end_char = u32::try_from(end_char_u64).map_err(|_| {
+                        invalid_params(&format!("ranges[{}].end.character exceeds u32::MAX", idx))
+                    })?;
+
+                    let range = crate::formatting::Range {
+                        start: crate::formatting::Position { line: start_line, character: start_char },
+                        end: crate::formatting::Position { line: end_line, character: end_char },
+                    };
+
+                    match formatter.format_range(&doc.text, &range, &options) {
+                        Ok(edits) => {
+                            all_edits.extend(edits);
+                        }
+                        Err(e) => {
+                            eprintln!("Range formatting error for range {}: {}", idx, e);
+                            return Err(JsonRpcError {
+                                code: -32603,
+                                message: format!("Range formatting failed for range {}: {}", idx, e),
+                                data: None,
+                            });
+                        }
+                    }
+                }
+
+                let lsp_edits: Vec<Value> = all_edits
+                    .into_iter()
+                    .map(|edit| {
+                        json!({
+                            "range": {
+                                "start": {
+                                    "line": edit.range.start.line,
+                                    "character": edit.range.start.character,
+                                },
+                                "end": {
+                                    "line": edit.range.end.line,
+                                    "character": edit.range.end.character,
+                                },
+                            },
+                            "newText": edit.new_text,
+                        })
+                    })
+                    .collect();
+
+                return Ok(Some(json!(lsp_edits)));
             }
         }
 

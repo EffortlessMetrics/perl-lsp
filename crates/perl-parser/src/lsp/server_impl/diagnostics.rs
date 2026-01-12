@@ -7,6 +7,28 @@
 use super::*;
 
 impl LspServer {
+    /// Generate markdown-formatted diagnostic message (LSP 3.18)
+    ///
+    /// Creates a rich markdown representation of a diagnostic that includes
+    /// the error code (if available) and formatted message content. This is
+    /// used when the client supports `textDocument.diagnostic.markupMessageSupport`.
+    ///
+    /// # Arguments
+    ///
+    /// * `code` - Optional diagnostic code (e.g., "parse-error", "W001")
+    /// * `message` - The diagnostic message text
+    ///
+    /// # Returns
+    ///
+    /// A markdown-formatted string with the diagnostic information
+    fn generate_diagnostic_markdown(&self, code: Option<&str>, message: &str) -> String {
+        if let Some(c) = code {
+            format!("**{}**: {}", c, message)
+        } else {
+            message.to_string()
+        }
+    }
+
     /// Publish diagnostics for a document (push diagnostics)
     ///
     /// Computes and publishes diagnostics for a Perl document including syntax
@@ -209,7 +231,7 @@ impl LspServer {
                                 doc.line_starts.offset_to_position_rope(&doc.rope, d.range.0);
                             let end_pos =
                                 doc.line_starts.offset_to_position_rope(&doc.rope, d.range.1);
-                            json!({
+                            let mut diag = json!({
                                 "range": {
                                     "start": {
                                         "line": start_pos.0,
@@ -227,8 +249,24 @@ impl LspServer {
                                     InternalDiagnosticSeverity::Hint => 4,
                                 },
                                 "source": "perl-lsp",
-                                "message": d.message,
-                            })
+                                "message": d.message.clone(),
+                            });
+
+                            // Add markdown content if client supports it (LSP 3.18)
+                            if self.client_capabilities.markup_message_support {
+                                let markdown = self.generate_diagnostic_markdown(
+                                    d.code.as_deref(),
+                                    &d.message
+                                );
+                                diag["data"] = json!({
+                                    "messageMarkup": {
+                                        "kind": "markdown",
+                                        "value": markdown
+                                    }
+                                });
+                            }
+
+                            diag
                         })
                         .collect();
 

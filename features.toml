@@ -106,7 +106,16 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["tests/lsp_formatting_tests.rs"]
-description = "Range formatting"
+description = "Range formatting (single range)"
+
+[[feature]]
+id = "lsp.ranges_formatting"
+spec = "LSP 3.18"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_formatting_e2e.rs"]
+description = "Multi-range formatting (textDocument/rangesFormatting) (@proposed)"
 
 [[feature]]
 id = "lsp.on_type_formatting"
@@ -205,7 +214,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["tests/lsp_inline_completion_tests.rs"]
-description = "Inline AI-powered completions"
+description = "Inline AI-powered completions (@proposed)"
 
 [[feature]]
 id = "lsp.type_definition"
@@ -648,6 +657,15 @@ advertised = false
 tests = []
 description = "Request client to refresh pulled diagnostics"
 
+[[feature]]
+id = "lsp.folding_range_refresh"
+spec = "LSP 3.18"
+area = "workspace"
+maturity = "planned"
+advertised = false
+tests = []
+description = "Request client to refresh folding ranges (workspace/foldingRange/refresh, @proposed)"
+
 # Workspace Plumbing
 
 [[feature]]
@@ -751,7 +769,7 @@ area = "workspace"
 maturity = "planned"
 advertised = false
 tests = []
-description = "workspace/textDocumentContent request"
+description = "workspace/textDocumentContent request (@proposed)"
 
 [[feature]]
 id = "lsp.text_document_content_refresh"
@@ -760,7 +778,7 @@ area = "workspace"
 maturity = "planned"
 advertised = false
 tests = []
-description = "workspace/textDocumentContent/refresh request"
+description = "workspace/textDocumentContent/refresh request (@proposed)"
 
 # File Operations (method-level breakdown)
 

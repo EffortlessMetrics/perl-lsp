@@ -177,4 +177,9 @@ pub struct ClientCapabilities {
     pub dynamic_registration_support: bool,
     /// Supports snippet syntax in completion items
     pub snippet_support: bool,
+    /// Supports markdown message content in diagnostics (LSP 3.18)
+    ///
+    /// When true, the server can provide rich markdown formatting in diagnostic
+    /// messages via the `data.messageMarkup` field in pull diagnostics responses.
+    pub markup_message_support: bool,
 }

@@ -72,6 +72,15 @@ impl LspServer {
                 .and_then(|b| b.as_bool())
                 .unwrap_or(false);
 
+            // Check if client supports markdown message content in diagnostics (LSP 3.18)
+            self.client_capabilities.markup_message_support = params
+                .get("capabilities")
+                .and_then(|c| c.get("textDocument"))
+                .and_then(|td| td.get("diagnostic"))
+                .and_then(|d| d.get("markupMessageSupport"))
+                .and_then(|b| b.as_bool())
+                .unwrap_or(false);
+
             // Check if client supports pull diagnostics
             let supports_pull = params
                 .get("capabilities")
