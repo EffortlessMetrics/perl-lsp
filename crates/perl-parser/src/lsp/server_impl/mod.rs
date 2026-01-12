@@ -162,6 +162,8 @@ pub struct LspServer {
     progress_tokens: Arc<Mutex<HashSet<String>>>,
     /// Refresh controller for debounced client refresh requests
     refresh_controller: refresh::RefreshController,
+    /// Notebook document store (LSP 3.17)
+    pub(crate) notebook_store: notebook::NotebookStore,
 }
 
 // Note: DocumentState, ServerConfig, and normalize_package_separator are
@@ -205,6 +207,7 @@ impl LspServer {
             next_request_id: Arc::new(AtomicI64::new(1)),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
             refresh_controller: refresh::RefreshController::new(),
+            notebook_store: notebook::NotebookStore::new(),
         }
     }
 
@@ -243,6 +246,7 @@ impl LspServer {
             next_request_id: Arc::new(AtomicI64::new(1)),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
             refresh_controller: refresh::RefreshController::new(),
+            notebook_store: notebook::NotebookStore::new(),
         }
     }
 

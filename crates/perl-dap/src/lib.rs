@@ -105,7 +105,7 @@ pub use configuration::{
 
 // Re-export Phase 2 public types
 pub use breakpoints::{BreakpointRecord, BreakpointStore};
-pub use dispatcher::DapDispatcher;
+pub use dispatcher::{DapDispatcher, DispatchResult};
 pub use protocol::{
     Breakpoint, Capabilities, Event, InitializeRequestArguments, LaunchRequestArguments, Request,
     Response, SetBreakpointsArguments, SetBreakpointsResponseBody, Source, SourceBreakpoint,
