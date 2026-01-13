@@ -166,7 +166,14 @@ ci-policy:
     @./.ci/scripts/check-from-raw.sh
     @just status-check
     @just ci-docs-check
+    @just ci-doc-paths
     @echo "✅ Policy checks passed"
+
+# Check for machine-specific paths in documentation
+ci-doc-paths:
+    @echo "🔍 Checking documentation paths..."
+    @bash ci/check_doc_paths.sh docs
+    @echo "✅ Documentation paths check passed"
 
 # Update derived metrics in CURRENT_STATUS.md
 status-update:

@@ -107,7 +107,7 @@ Start with use_statement (no dependencies, well-tested)
 
 ```bash
 # Find existing parser tests for your node
-cd /home/steven/code/Rust/perl-lsp/review
+cd <repo>
 cargo test -p perl-parser -- use_statement --nocapture
 
 # Check tree-sitter grammar definition
@@ -529,7 +529,7 @@ nix flake check
 
 **Expected Output**:
 ```
-evaluating derivation 'git+file:///home/steven/code/Rust/perl-lsp#checks.x86_64-linux.default'
+evaluating derivation 'git+file://<repo>#checks.x86_64-linux.default'
 building '/nix/store/xxx-perl-lsp-check.drv'...
 ✓ Build successful
 ✓ Tests passed

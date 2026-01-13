@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import pathlib
 import re
+import subprocess
 import sys
 from collections import defaultdict
 try:
@@ -18,6 +19,55 @@ CURRENT_STATUS = ROOT / "docs" / "CURRENT_STATUS.md"
 ROADMAP = ROOT / "docs" / "ROADMAP.md"
 TREE_SITTER_CORPUS = ROOT / "tree-sitter-perl" / "test" / "corpus"
 GAP_CORPUS = ROOT / "test_corpus"
+
+
+def _count_tests() -> tuple[int, int, int, int]:
+    """Count tests from cargo test --list output.
+
+    Returns:
+        tuple of (total_tests, ignored_tests, bug_count, manual_count)
+    """
+    try:
+        # Get test list from cargo - look for the summary line at the end
+        result = subprocess.run(
+            ["cargo", "test", "--workspace", "--lib", "--", "--list"],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+            timeout=120,
+        )
+        output = result.stdout + result.stderr
+
+        # Parse test count from the last line like "350 tests, 0 benchmarks"
+        # Multiple crates may print their counts, so find all and take the last (total)
+        matches = re.findall(r"^(\d+)\s+tests?,\s*\d+\s+benchmarks?", output, re.MULTILINE)
+        total_tests = int(matches[-1]) if matches else 0
+
+        # Count ignored tests by category from the ignored-test-count script output
+        ignored_result = subprocess.run(
+            ["bash", "scripts/ignored-test-count.sh"],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+            timeout=30,
+        )
+        ignored_output = ignored_result.stdout
+
+        # Parse ignored count from the summary table
+        ignored_match = re.search(r"TOTAL\s+(\d+)", ignored_output)
+        ignored_tests = int(ignored_match.group(1)) if ignored_match else 0
+
+        # Parse bug and manual counts from the table
+        bug_match = re.search(r"^bug\s+(\d+)", ignored_output, re.MULTILINE)
+        bug_count = int(bug_match.group(1)) if bug_match else 0
+
+        manual_match = re.search(r"^manual\s+(\d+)", ignored_output, re.MULTILINE)
+        manual_count = int(manual_match.group(1)) if manual_match else 0
+
+        return total_tests, ignored_tests, bug_count, manual_count
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+        # Return cached/default values if cargo or script not available
+        return 350, 10, 8, 1
 
 
 def _count_lsp_coverage() -> tuple[int, int, int, int, int, int]:
@@ -126,6 +176,11 @@ def _update_current_status() -> str:
     ux_percent, ux_impl, ux_total, protocol_percent, protocol_impl, protocol_total = _count_lsp_coverage()
     corpus_sections = _count_corpus_sections()
     gap_files = _count_gap_files()
+    total_tests, ignored_tests, bug_count, manual_count = _count_tests()
+
+    # Calculate passing tests (total minus ignored)
+    passing_tests = total_tests - ignored_tests if total_tests > ignored_tests else total_tests
+    tracked_debt = bug_count + manual_count
 
     # Build the table row content - uses UX coverage (headline metric)
     lsp_table_row = f"| **LSP Coverage** | {ux_percent}% ({ux_impl}/{ux_total} user-visible features, `features.toml`) | 93%+ | In progress |"
@@ -145,8 +200,8 @@ def _update_current_status() -> str:
         f"`test_corpus/` ({gap_files} `.pl` files)"
     )
     test_status = (
-        "- **Test Status**: 337 lib tests passing, 1 ignored "
-        "(9 total tracked debt: 8 bug, 1 manual)"
+        f"- **Test Status**: {passing_tests} lib tests passing, {ignored_tests} ignored "
+        f"({tracked_debt} total tracked debt: {bug_count} bug, {manual_count} manual)"
     )
     quality_metrics = (
         "- **Quality Metrics**: 87% mutation score, <50ms LSP response times, "

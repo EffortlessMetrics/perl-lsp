@@ -3,7 +3,7 @@
 //! Detects color literals in Perl code (hex codes, ANSI escape sequences)
 //! and provides color presentation options for editors.
 
-use super::super::*;
+use super::super::{byte_to_utf16_col, *};
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -70,8 +70,9 @@ fn detect_hex_colors(text: &str) -> Vec<ColorInformation> {
                 let hex = &cap[1];
                 let color = parse_hex_color(hex);
 
-                let start_char = mat.start() as u32;
-                let end_char = mat.end() as u32;
+                // Convert byte offsets to UTF-16 positions (LSP requirement)
+                let start_char = byte_to_utf16_col(line, mat.start()) as u32;
+                let end_char = byte_to_utf16_col(line, mat.end()) as u32;
 
                 colors.push(ColorInformation {
                     range: ColorRange {
@@ -140,8 +141,9 @@ fn detect_ansi_colors(text: &str) -> Vec<ColorInformation> {
             if let Some(mat) = cap.get(0) {
                 let code = &cap[1];
                 if let Some(color) = parse_ansi_color(code) {
-                    let start_char = mat.start() as u32;
-                    let end_char = mat.end() as u32;
+                    // Convert byte offsets to UTF-16 positions (LSP requirement)
+                    let start_char = byte_to_utf16_col(line, mat.start()) as u32;
+                    let end_char = byte_to_utf16_col(line, mat.end()) as u32;
 
                     colors.push(ColorInformation {
                         range: ColorRange {
@@ -311,5 +313,38 @@ mod tests {
         assert!(labels.iter().any(|l| l.starts_with('#')));
         assert!(labels.iter().any(|l| l.starts_with("rgb(")));
         assert!(labels.iter().any(|l| l.starts_with("hsl(")));
+    }
+
+    #[test]
+    fn parser_detect_hex_colors_utf16_positions() {
+        // Test that color positions are in UTF-16 code units, not byte offsets
+        // Emoji 🎉 = 4 bytes, 2 UTF-16 code units
+        let text = "# 🎉 #FF0000";
+        let colors = detect_hex_colors(text);
+        assert_eq!(colors.len(), 1);
+
+        // Position should be UTF-16 based:
+        // "# " = 2 UTF-16 units
+        // "🎉" = 2 UTF-16 units (surrogate pair)
+        // " " = 1 UTF-16 unit
+        // Total before #: 5 UTF-16 units
+        assert_eq!(colors[0].range.start.character, 5);
+
+        // "#FF0000" = 7 UTF-16 units
+        // End position: 5 + 7 = 12 UTF-16 units
+        assert_eq!(colors[0].range.end.character, 12);
+    }
+
+    #[test]
+    fn parser_detect_ansi_colors_utf16_positions() {
+        // Test that ANSI color positions are in UTF-16 code units
+        // Chinese char 世 = 3 bytes, 1 UTF-16 code unit
+        let text = r"世界 \e[31m";
+        let colors = detect_ansi_colors(text);
+        assert_eq!(colors.len(), 1);
+
+        // "世界 " = 3 UTF-16 units (2 chars + 1 space)
+        // Color starts at position 3
+        assert_eq!(colors[0].range.start.character, 3);
     }
 }

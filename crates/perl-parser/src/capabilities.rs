@@ -338,7 +338,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     if build.inlay_hints {
         caps.inlay_hint_provider =
             Some(OneOf::Right(InlayHintServerCapabilities::Options(InlayHintOptions {
-                resolve_provider: Some(false),
+                resolve_provider: Some(true), // Resolver implemented in misc.rs:handle_inlay_hint_resolve
                 work_done_progress_options: WorkDoneProgressOptions::default(),
             })));
     }

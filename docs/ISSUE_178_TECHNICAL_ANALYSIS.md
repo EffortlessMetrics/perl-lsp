@@ -1,7 +1,7 @@
 # Issue #178: Technical Analysis - Eliminate Fragile unreachable!() Macros
 
 **Issue**: #178 (GitHub #204)
-**Specification**: `/home/steven/code/Rust/perl-lsp/review/docs/issue-178-spec.md`
+**Specification**: `docs/issue-178-spec.md`
 **Analysis Date**: 2025-10-02
 **Status**: Ready for Implementation
 **Flow**: generative → spec-analyzer → **FINALIZE → spec-finalizer**
@@ -1112,7 +1112,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 **Reference Files for Error Handling Patterns**:
 ```bash
 # Parser error handling examples
-find /home/steven/code/Rust/perl-lsp/review/crates/perl-parser/src/ -name "*.rs" | \
+find crates/perl-parser/src/ -name "*.rs" | \
   xargs grep -l "Result<.*String>"
 
 # Expected patterns:
@@ -1123,7 +1123,7 @@ find /home/steven/code/Rust/perl-lsp/review/crates/perl-parser/src/ -name "*.rs"
 **Incremental Parsing Patterns**:
 ```bash
 # Incremental parsing validation with error recovery
-find /home/steven/code/Rust/perl-lsp/review/crates/perl-parser/src/ -name "*.rs" | \
+find crates/perl-parser/src/ -name "*.rs" | \
   xargs grep -l "incremental"
 
 # Key reference: crates/perl-parser/src/incremental/mod.rs
@@ -1137,7 +1137,7 @@ find /home/steven/code/Rust/perl-lsp/review/crates/perl-parser/src/ -name "*.rs"
 **LSP Server Error Handling**:
 ```bash
 # LSP error response patterns
-find /home/steven/code/Rust/perl-lsp/review/crates/perl-lsp/src/ -name "*.rs" | \
+find crates/perl-lsp/src/ -name "*.rs" | \
   xargs grep -l "Result<.*LspError>"
 
 # Expected patterns:
@@ -1148,7 +1148,7 @@ find /home/steven/code/Rust/perl-lsp/review/crates/perl-lsp/src/ -name "*.rs" | 
 **Adaptive Threading Support**:
 ```bash
 # Threading configuration patterns
-grep -r "RUST_TEST_THREADS" /home/steven/code/Rust/perl-lsp/review/crates/
+grep -r "RUST_TEST_THREADS" crates/
 
 # Key references:
 # - Adaptive timeout scaling based on thread count
@@ -1160,7 +1160,7 @@ grep -r "RUST_TEST_THREADS" /home/steven/code/Rust/perl-lsp/review/crates/
 **Mutation Testing Examples**:
 ```bash
 # Existing mutation hardening tests
-find /home/steven/code/Rust/perl-lsp/review/crates/perl-parser/tests/ -name "*mutation*"
+find crates/perl-parser/tests/ -name "*mutation*"
 
 # Key examples:
 # - quote_parser_mutation_hardening.rs (string parsing mutation tests)
@@ -1171,7 +1171,7 @@ find /home/steven/code/Rust/perl-lsp/review/crates/perl-parser/tests/ -name "*mu
 **Property-Based Testing Patterns**:
 ```bash
 # Property-based testing infrastructure
-find /home/steven/code/Rust/perl-lsp/review/crates/perl-parser/tests/ -name "*.rs" | \
+find crates/perl-parser/tests/ -name "*.rs" | \
   xargs grep -l "proptest"
 
 # Key patterns:
@@ -1183,7 +1183,7 @@ find /home/steven/code/Rust/perl-lsp/review/crates/perl-parser/tests/ -name "*.r
 **LSP Behavioral Testing**:
 ```bash
 # LSP protocol compliance validation
-find /home/steven/code/Rust/perl-lsp/review/crates/perl-lsp/tests/ -name "*behavioral*"
+find crates/perl-lsp/tests/ -name "*behavioral*"
 
 # Key tests:
 # - lsp_behavioral_tests.rs (session continuity, graceful degradation)
@@ -1195,7 +1195,7 @@ find /home/steven/code/Rust/perl-lsp/review/crates/perl-lsp/tests/ -name "*behav
 **API Documentation Standards** (SPEC-149):
 ```bash
 # Documentation validation examples
-find /home/steven/code/Rust/perl-lsp/review/crates/perl-parser/tests/ -name "*missing_docs*"
+find crates/perl-parser/tests/ -name "*missing_docs*"
 
 # Key reference: missing_docs_ac_tests.rs
 # - Module-level documentation requirements
@@ -1285,7 +1285,7 @@ fn parse_variable_declaration(&mut self) -> Result<AstNode, String> {
 **Reason**: Specification analysis complete with comprehensive implementation approach
 
 **Artifacts for Finalizer**:
-1. **Technical Analysis Document**: `/home/steven/code/Rust/perl-lsp/review/docs/ISSUE_178_TECHNICAL_ANALYSIS.md`
+1. **Technical Analysis Document**: `docs/ISSUE_178_TECHNICAL_ANALYSIS.md`
 2. **Implementation Strategy**: Category-specific approaches (A, B, C) with code examples
 3. **Testing Strategy**: TDD framework with 30+ test specifications
 4. **Risk Assessment**: Technical risks with validation commands and mitigation strategies

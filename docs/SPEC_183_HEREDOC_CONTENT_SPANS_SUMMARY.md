@@ -233,9 +233,9 @@ RUST_TEST_THREADS=2 cargo test -p perl-parser
 
 ## References
 
-- [Full Specification](/home/steven/code/Rust/perl-lsp/review/docs/SPEC_183_HEREDOC_CONTENT_SPANS.md)
-- [Day 5 Summary](/home/steven/code/Rust/perl-lsp/review/DAY5_COMPLETION_SUMMARY.md)
-- [Heredoc Collector](/home/steven/code/Rust/perl-lsp/review/crates/perl-parser/src/heredoc_collector.rs)
+- [Full Specification](docs/SPEC_183_HEREDOC_CONTENT_SPANS.md)
+- [Day 5 Summary](DAY5_COMPLETION_SUMMARY.md)
+- [Heredoc Collector](crates/perl-parser/src/heredoc_collector.rs)
 
 ---
 

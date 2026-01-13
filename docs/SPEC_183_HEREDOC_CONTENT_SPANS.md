@@ -821,9 +821,9 @@ fn emit_heredoc_interpolation_tokens(&mut self, node: &Node) {
 ## References
 
 ### Related Specifications
-- [SPEC-183: Heredoc Declaration Parser](/home/steven/code/Rust/perl-lsp/review/docs/SPEC_183_HEREDOC_DECLARATION_PARSER.md)
-- [Heredoc Implementation Guide](/home/steven/code/Rust/perl-lsp/review/docs/HEREDOC_IMPLEMENTATION.md)
-- [Day 5 Completion Summary](/home/steven/code/Rust/perl-lsp/review/DAY5_COMPLETION_SUMMARY.md)
+- [SPEC-183: Heredoc Declaration Parser](docs/SPEC_183_HEREDOC_DECLARATION_PARSER.md)
+- [Heredoc Implementation Guide](docs/HEREDOC_IMPLEMENTATION.md)
+- [Day 5 Completion Summary](DAY5_COMPLETION_SUMMARY.md)
 
 ### LSP Specifications
 - [LSP Semantic Tokens](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens)
