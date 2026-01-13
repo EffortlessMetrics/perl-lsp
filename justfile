@@ -51,6 +51,7 @@ ci-gate:
     @just ci-policy
     @just ci-lsp-def
     @just ci-parser-features-check
+    @just ci-features-invariants
     @echo "✅ Merge gate passed!"
 
 # Full CI pipeline (~10-20 min) - RECOMMENDED for large changes
@@ -218,6 +219,11 @@ parser-audit:
 ci-parser-features-check:
     @echo "🔍 Checking parser features baseline..."
     @bash ci/check_parse_errors.sh
+
+# Check features.toml invariants (GA+advertised must have tests, no duplicates)
+ci-features-invariants:
+    @echo "🔍 Checking features.toml invariants..."
+    @python3 scripts/check_features_invariants.py
 
 # Update parser feature matrix document from audit report
 parser-matrix-update:

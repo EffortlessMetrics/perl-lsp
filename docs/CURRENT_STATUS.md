@@ -48,7 +48,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 ## What's True Right Now
 
 - **Parser**: Production-ready with ~100% Perl 5 syntax coverage, 1-150us parsing, 931ns incremental updates
-- **LSP Server**: 82% feature coverage, <50ms response times, semantic definition working
+- **LSP Server**: See computed coverage above, <50ms response times, semantic definition working
 - **Semantic Analyzer**: Phase 1 complete with 12/12 critical handlers, `textDocument/definition` integrated
 - **Test Infrastructure**: 337 lib tests passing, 4/4 LSP semantic def tests passing
 - **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation
@@ -95,7 +95,7 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 | Component | Status | Notes |
 |-----------|--------|-------|
 | perl-parser | Production | ~100% Perl 5, 87% mutation score |
-| perl-lsp | Production | 82% LSP 3.18 coverage |
+| perl-lsp | Production | LSP 3.18 coverage (see headline metric) |
 | perl-dap | Phase 1 | Bridge mode complete |
 | perl-lexer | Production | Context-aware, sub-microsecond |
 | perl-corpus | Production | 613 tree-sitter sections + 10 .pl files |
