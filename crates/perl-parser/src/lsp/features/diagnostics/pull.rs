@@ -8,7 +8,6 @@ use lsp_types::{
     DiagnosticSeverity as LspDiagnosticSeverity,
     DiagnosticTag as LspDiagnosticTag,
     DocumentDiagnosticReport,
-    DocumentDiagnosticReportKind,
     FullDocumentDiagnosticReport,
     Location,
     NumberOrString,
@@ -16,13 +15,17 @@ use lsp_types::{
     Range,
     RelatedFullDocumentDiagnosticReport,
     RelatedUnchangedDocumentDiagnosticReport,
+    UnchangedDocumentDiagnosticReport,
     Uri,
     WorkspaceDocumentDiagnosticReport,
     WorkspaceDiagnosticReport,
     WorkspaceDiagnosticReportPartialResult,
+    WorkspaceFullDocumentDiagnosticReport,
+    WorkspaceUnchangedDocumentDiagnosticReport,
 };
 
 use crate::error::ParseError;
+use crate::lsp::utils::uri::parse_uri;
 use crate::lsp::state::DocumentState;
 use crate::position::offset_to_utf16_line_col;
 use crate::util::code_slice;
@@ -71,8 +74,7 @@ impl PullDiagnosticsProvider {
         let prev_ids: HashMap<Uri, String> = previous_result_ids.into_iter().collect();
 
         for (uri_str, doc_state) in documents {
-            let uri =
-                Uri::parse(uri_str).unwrap_or_else(|_| Uri::from_file_path("/invalid").unwrap());
+            let uri = parse_uri(uri_str);
             let prev_id = prev_ids.get(&uri).cloned();
 
             let result_id = format!("{:x}", md5::compute(&doc_state.text));
@@ -83,11 +85,7 @@ impl PullDiagnosticsProvider {
                 self.build_full_report(result_id, diagnostics)
             };
 
-            items.push(WorkspaceDocumentDiagnosticReport {
-                uri,
-                version: Some(doc_state.version),
-                report,
-            });
+            items.push(self.to_workspace_report(uri, Some(doc_state.version), report));
         }
 
         WorkspaceDiagnosticReport { items }
@@ -105,17 +103,12 @@ impl PullDiagnosticsProvider {
             let mut items = Vec::new();
 
             for (uri_str, content) in chunk {
-                let uri = Uri::parse(uri_str)
-                    .unwrap_or_else(|_| Uri::from_file_path("/invalid").unwrap());
+                let uri = parse_uri(uri_str);
                 let result_id = format!("{:x}", md5::compute(content));
                 let diagnostics = self.collect_diagnostics_for_text(&uri, content);
                 let report = self.build_full_report(result_id, diagnostics);
 
-                items.push(WorkspaceDocumentDiagnosticReport {
-                    uri,
-                    version: None,
-                    report,
-                });
+                items.push(self.to_workspace_report(uri, None, report));
             }
 
             results.push(WorkspaceDiagnosticReportPartialResult { items });
@@ -166,8 +159,8 @@ impl PullDiagnosticsProvider {
 
     fn build_unchanged_report(&self, result_id: String) -> DocumentDiagnosticReport {
         DocumentDiagnosticReport::Unchanged(RelatedUnchangedDocumentDiagnosticReport {
-            kind: DocumentDiagnosticReportKind::Unchanged,
-            result_id,
+            related_documents: None,
+            unchanged_document_diagnostic_report: UnchangedDocumentDiagnosticReport { result_id },
         })
     }
 
@@ -179,11 +172,44 @@ impl PullDiagnosticsProvider {
         DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
             related_documents: None,
             full_document_diagnostic_report: FullDocumentDiagnosticReport {
-                kind: DocumentDiagnosticReportKind::Full,
                 result_id: Some(result_id),
                 items: diagnostics,
             },
         })
+    }
+
+    fn to_workspace_report(
+        &self,
+        uri: Uri,
+        version: Option<i32>,
+        report: DocumentDiagnosticReport,
+    ) -> WorkspaceDocumentDiagnosticReport {
+        let version = version.map(i64::from);
+
+        match report {
+            DocumentDiagnosticReport::Full(full) => {
+                let RelatedFullDocumentDiagnosticReport { full_document_diagnostic_report, .. } =
+                    full;
+                WorkspaceDocumentDiagnosticReport::Full(WorkspaceFullDocumentDiagnosticReport {
+                    uri,
+                    version,
+                    full_document_diagnostic_report,
+                })
+            }
+            DocumentDiagnosticReport::Unchanged(unchanged) => {
+                let RelatedUnchangedDocumentDiagnosticReport {
+                    unchanged_document_diagnostic_report,
+                    ..
+                } = unchanged;
+                WorkspaceDocumentDiagnosticReport::Unchanged(
+                    WorkspaceUnchangedDocumentDiagnosticReport {
+                        uri,
+                        version,
+                        unchanged_document_diagnostic_report,
+                    },
+                )
+            }
+        }
     }
 
     fn to_lsp_diagnostic(

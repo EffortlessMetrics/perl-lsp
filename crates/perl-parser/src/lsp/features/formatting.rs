@@ -51,8 +51,12 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
 use std::process::{Command, Stdio};
 
 /// Text edit for formatting
@@ -177,6 +181,7 @@ impl CodeFormatter {
     ///
     /// This function provides graceful degradation when perltidy is not available,
     /// ensuring Perl script development can continue with manual formatting.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn format_document(
         &self,
         content: &str,
@@ -206,6 +211,7 @@ impl CodeFormatter {
     }
 
     /// Format a specific range in the document
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn format_range(
         &self,
         content: &str,
@@ -246,6 +252,7 @@ impl CodeFormatter {
     }
 
     /// Find perltidy command in various locations
+    #[cfg(not(target_arch = "wasm32"))]
     fn find_perltidy_command(&self) -> String {
         // First try the PATH
         if self.command_exists("perltidy") {
@@ -279,6 +286,7 @@ impl CodeFormatter {
     }
 
     /// Check if a command exists
+    #[cfg(not(target_arch = "wasm32"))]
     fn command_exists(&self, cmd: &str) -> bool {
         Command::new("which")
             .arg(cmd)
@@ -288,6 +296,7 @@ impl CodeFormatter {
     }
 
     /// Find .perltidyrc file in the workspace
+    #[cfg(not(target_arch = "wasm32"))]
     fn find_perltidyrc(&self, starting_path: Option<&Path>) -> Option<PathBuf> {
         let start = starting_path.unwrap_or(Path::new("."));
         let mut current = start;
@@ -318,6 +327,7 @@ impl CodeFormatter {
     }
 
     /// Run perltidy on the given text
+    #[cfg(not(target_arch = "wasm32"))]
     fn run_perltidy(
         &self,
         content: &str,
@@ -327,6 +337,7 @@ impl CodeFormatter {
     }
 
     /// Run perltidy with optional config file
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn run_perltidy_with_config(
         &self,
         content: &str,
@@ -383,6 +394,43 @@ impl CodeFormatter {
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
+
+    /// Format the entire document (unsupported on wasm32).
+    #[cfg(target_arch = "wasm32")]
+    pub fn format_document(
+        &self,
+        _content: &str,
+        _options: &FormattingOptions,
+    ) -> Result<Vec<FormatTextEdit>, FormatError> {
+        Err(perltidy_unavailable())
+    }
+
+    /// Format a document range (unsupported on wasm32).
+    #[cfg(target_arch = "wasm32")]
+    pub fn format_range(
+        &self,
+        _content: &str,
+        _range: &Range,
+        _options: &FormattingOptions,
+    ) -> Result<Vec<FormatTextEdit>, FormatError> {
+        Err(perltidy_unavailable())
+    }
+
+    /// Run perltidy with optional config (unsupported on wasm32).
+    #[cfg(target_arch = "wasm32")]
+    pub fn run_perltidy_with_config(
+        &self,
+        _content: &str,
+        _options: &FormattingOptions,
+        _workspace_path: Option<&Path>,
+    ) -> Result<String, FormatError> {
+        Err(perltidy_unavailable())
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn perltidy_unavailable() -> FormatError {
+    FormatError::PerltidyNotFound("perltidy is not available on wasm32 targets".to_string())
 }
 
 /// Formatting error
@@ -409,7 +457,7 @@ impl Default for CodeFormatter {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
 

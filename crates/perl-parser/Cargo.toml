@@ -37,10 +37,13 @@ url = "2.5.7"
 rustc-hash = "2.1.1"
 md5 = "0.8.0"
 phf = { version = "0.13.1", features = ["macros"] }
-walkdir = "2.5.0"
 parking_lot = "0.12"
 # Core dependencies for position mapping (unconditional, all targets)
 ropey = "1.6.1"
+
+# Filesystem traversal is only available on non-wasm targets.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+walkdir = "2.5.0"
 
 # Unix-only dependency for signal handling
 [target.'cfg(unix)'.dependencies]

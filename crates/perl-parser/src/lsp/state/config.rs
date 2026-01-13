@@ -4,6 +4,7 @@
 //! test runner settings, and workspace module resolution configuration.
 
 use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
 
 /// Server configuration
@@ -198,6 +199,7 @@ impl WorkspaceConfig {
     /// Fetch @INC from perl interpreter
     ///
     /// Filters out "." for security (prevents current directory injection).
+    #[cfg(not(target_arch = "wasm32"))]
     fn fetch_perl_inc() -> Vec<PathBuf> {
         let output = Command::new("perl").args(["-e", "print join(\"\\n\", @INC)"]).output();
 
@@ -209,5 +211,10 @@ impl WorkspaceConfig {
                 .collect(),
             _ => Vec::new(),
         }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn fetch_perl_inc() -> Vec<PathBuf> {
+        Vec::new()
     }
 }

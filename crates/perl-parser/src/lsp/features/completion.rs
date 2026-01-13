@@ -76,6 +76,7 @@ use crate::ast::Node;
 use crate::symbol::{ScopeKind, SymbolExtractor, SymbolKind, SymbolTable};
 use crate::workspace_index::{SymbolKind as WsSymbolKind, WorkspaceIndex};
 use std::collections::HashSet;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
@@ -1350,6 +1351,7 @@ impl CompletionProvider {
     }
 
     /// Add file path completions with comprehensive security and performance safeguards
+    #[cfg(not(target_arch = "wasm32"))]
     #[allow(clippy::ptr_arg)] // needs Vec for push operations
     #[allow(dead_code)] // Backward compatibility wrapper, may be used by external code
     fn add_file_completions(
@@ -1360,7 +1362,21 @@ impl CompletionProvider {
         self.add_file_completions_with_cancellation(completions, context, &|| false);
     }
 
+    /// Add file path completions with comprehensive security and performance safeguards
+    #[cfg(target_arch = "wasm32")]
+    #[allow(clippy::ptr_arg)] // needs Vec for push operations
+    #[allow(dead_code)] // Backward compatibility wrapper, may be used by external code
+    fn add_file_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+    ) {
+        // File system traversal isn't available on wasm32 targets.
+        let _ = (completions, context);
+    }
+
     /// Add file path completions with cancellation support
+    #[cfg(not(target_arch = "wasm32"))]
     fn add_file_completions_with_cancellation(
         &self,
         completions: &mut Vec<CompletionItem>,
@@ -1475,7 +1491,20 @@ impl CompletionProvider {
         }
     }
 
+    /// Add file path completions with cancellation support
+    #[cfg(target_arch = "wasm32")]
+    fn add_file_completions_with_cancellation(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+        is_cancelled: &dyn Fn() -> bool,
+    ) {
+        // File system traversal isn't available on wasm32 targets.
+        let _ = (completions, context, is_cancelled);
+    }
+
     /// Sanitize and validate a file path for security
+    #[cfg(not(target_arch = "wasm32"))]
     fn sanitize_path(&self, path: &str) -> Option<String> {
         // Handle empty path (current directory completion)
         if path.is_empty() {
@@ -1508,6 +1537,7 @@ impl CompletionProvider {
     }
 
     /// Split path into directory and filename components safely
+    #[cfg(not(target_arch = "wasm32"))]
     fn split_path_components(&self, path: &str) -> (String, String) {
         match path.rsplit_once('/') {
             Some((dir, file)) if !dir.is_empty() => (dir.to_string(), file.to_string()),
@@ -1516,6 +1546,7 @@ impl CompletionProvider {
     }
 
     /// Resolve and validate a directory path for safe traversal
+    #[cfg(not(target_arch = "wasm32"))]
     fn resolve_safe_directory(&self, dir_part: &str) -> Option<PathBuf> {
         let path = Path::new(dir_part);
 
@@ -1543,6 +1574,7 @@ impl CompletionProvider {
     }
 
     /// Check if a directory entry should be filtered out for security
+    #[cfg(not(target_arch = "wasm32"))]
     fn is_hidden_or_forbidden(&self, entry: &walkdir::DirEntry) -> bool {
         let file_name = entry.file_name().to_string_lossy();
 
@@ -1571,6 +1603,7 @@ impl CompletionProvider {
     }
 
     /// Validate filename for safety
+    #[cfg(not(target_arch = "wasm32"))]
     fn is_safe_filename(&self, filename: &str) -> bool {
         // Basic safety checks
         if filename.is_empty() || filename.len() > 255 {
@@ -1601,6 +1634,7 @@ impl CompletionProvider {
     }
 
     /// Build the completion path string
+    #[cfg(not(target_arch = "wasm32"))]
     fn build_completion_path(&self, dir_part: &str, filename: &str, is_dir: bool) -> String {
         let mut path = if dir_part == "." {
             filename.to_string()
@@ -1617,6 +1651,7 @@ impl CompletionProvider {
     }
 
     /// Get metadata for file completion item
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_file_completion_metadata(&self, entry: &walkdir::DirEntry) -> (String, Option<String>) {
         let file_type = entry.file_type();
 
