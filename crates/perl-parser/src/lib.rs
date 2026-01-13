@@ -176,8 +176,7 @@ pub mod line_index;
 /// LSP linked editing provider for synchronized symbol renaming.
 pub mod linked_editing;
 /// Modular LSP server implementation (migration target)
-/// Note: LSP modules require filesystem access and are not available on wasm32.
-#[cfg(not(target_arch = "wasm32"))]
+/// Note: server/transport submodules are gated off on wasm32.
 pub mod lsp;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod lsp_document_link;

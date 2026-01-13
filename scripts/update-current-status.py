@@ -21,11 +21,12 @@ TREE_SITTER_CORPUS = ROOT / "tree-sitter-perl" / "test" / "corpus"
 GAP_CORPUS = ROOT / "test_corpus"
 
 
-def _count_tests() -> tuple[int, int, int, int]:
+def _count_tests() -> tuple[int | None, int | None, int | None, int | None]:
     """Count tests from cargo test --list output.
 
     Returns:
         tuple of (total_tests, ignored_tests, bug_count, manual_count)
+        Any value may be None if measurement failed.
     """
     try:
         # Get test list from cargo - look for the summary line at the end
@@ -41,7 +42,7 @@ def _count_tests() -> tuple[int, int, int, int]:
         # Parse test count from the last line like "350 tests, 0 benchmarks"
         # Multiple crates may print their counts, so find all and take the last (total)
         matches = re.findall(r"^(\d+)\s+tests?,\s*\d+\s+benchmarks?", output, re.MULTILINE)
-        total_tests = int(matches[-1]) if matches else 0
+        total_tests = int(matches[-1]) if matches else None
 
         # Count ignored tests by category from the ignored-test-count script output
         ignored_result = subprocess.run(
@@ -55,19 +56,19 @@ def _count_tests() -> tuple[int, int, int, int]:
 
         # Parse ignored count from the summary table
         ignored_match = re.search(r"TOTAL\s+(\d+)", ignored_output)
-        ignored_tests = int(ignored_match.group(1)) if ignored_match else 0
+        ignored_tests = int(ignored_match.group(1)) if ignored_match else None
 
         # Parse bug and manual counts from the table
         bug_match = re.search(r"^bug\s+(\d+)", ignored_output, re.MULTILINE)
-        bug_count = int(bug_match.group(1)) if bug_match else 0
+        bug_count = int(bug_match.group(1)) if bug_match else None
 
         manual_match = re.search(r"^manual\s+(\d+)", ignored_output, re.MULTILINE)
-        manual_count = int(manual_match.group(1)) if manual_match else 0
+        manual_count = int(manual_match.group(1)) if manual_match else None
 
         return total_tests, ignored_tests, bug_count, manual_count
     except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
-        # Return cached/default values if cargo or script not available
-        return 350, 10, 8, 1
+        # Return None for all values if measurement failed - never fake numbers
+        return None, None, None, None
 
 
 def _count_lsp_coverage() -> tuple[int, int, int, int, int, int]:
@@ -178,9 +179,24 @@ def _update_current_status() -> str:
     gap_files = _count_gap_files()
     total_tests, ignored_tests, bug_count, manual_count = _count_tests()
 
-    # Calculate passing tests (total minus ignored)
-    passing_tests = total_tests - ignored_tests if total_tests > ignored_tests else total_tests
-    tracked_debt = bug_count + manual_count
+    # Handle None values (measurement failed) - display UNVERIFIED instead of fake numbers
+    if total_tests is None or ignored_tests is None:
+        passing_tests_str = "UNVERIFIED"
+        ignored_tests_str = "UNVERIFIED"
+    else:
+        passing_tests = total_tests - ignored_tests if total_tests > ignored_tests else total_tests
+        passing_tests_str = str(passing_tests)
+        ignored_tests_str = str(ignored_tests)
+
+    if bug_count is None or manual_count is None:
+        tracked_debt_str = "UNVERIFIED"
+        bug_count_str = "UNVERIFIED"
+        manual_count_str = "UNVERIFIED"
+    else:
+        tracked_debt = bug_count + manual_count
+        tracked_debt_str = str(tracked_debt)
+        bug_count_str = str(bug_count)
+        manual_count_str = str(manual_count)
 
     # Build the table row content - uses UX coverage (headline metric)
     lsp_table_row = f"| **LSP Coverage** | {ux_percent}% ({ux_impl}/{ux_total} user-visible features, `features.toml`) | 93%+ | In progress |"
@@ -200,8 +216,8 @@ def _update_current_status() -> str:
         f"`test_corpus/` ({gap_files} `.pl` files)"
     )
     test_status = (
-        f"- **Test Status**: {passing_tests} lib tests passing, {ignored_tests} ignored "
-        f"({tracked_debt} total tracked debt: {bug_count} bug, {manual_count} manual)"
+        f"- **Test Status**: {passing_tests_str} lib tests passing, {ignored_tests_str} ignored "
+        f"({tracked_debt_str} total tracked debt: {bug_count_str} bug, {manual_count_str} manual)"
     )
     quality_metrics = (
         "- **Quality Metrics**: 87% mutation score, <50ms LSP response times, "
