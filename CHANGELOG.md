@@ -51,6 +51,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **AST Integration**: Features F1-F6 + edge cases fully validated
   - **Test Coverage**: 274 tests passing at repository level
 
+- **Enhanced Dual Indexing Strategy** - 98% Reference Coverage
+  - **Dual Storage Pattern**: Functions indexed under both qualified (`Package::function`) and bare (`function`) names
+  - **Dual Retrieval Pattern**: Searches both qualified and bare forms when resolving references
+  - **Automatic Deduplication**: Deduplication based on URI + Range to prevent duplicates
+  - **Performance Optimized**: Maintains search performance despite dual lookups through efficient indexing
+  - **Backward Compatible**: Existing code continues to work with enhanced indexing
+
+- **Enhanced Builtin Function Parsing** (PR #119, Issue #110)
+  - **Deterministic Empty Block Parsing**: Map, grep, and sort functions with {} blocks
+  - **Block Expression Handling**: Proper parsing of `{ $_ * 2 }` style blocks in builtin functions
+  - **Expression vs Statement Disambiguation**: Correctly distinguishes block expressions from hash literals
+  - **Edge Case Coverage**: Handles nested blocks, complex expressions, and mixed syntax
+  - **Test Coverage**: Comprehensive builtin function parsing tests with edge case validation
+
+- **Enhanced Substitution Operator Parsing** (PR #158)
+  - **Complete Pattern/Replacement/Modifier Support**: Full `s///` syntax coverage
+  - **All Delimiter Styles**: Balanced delimiters (`s{}{}`, `s[][]`, `s<>`) and alternative delimiters (`s///`, `s###`, `s|||`)
+  - **Single-Quote Substitution Delimiters**: Support for `s'pattern'replacement'` syntax
+  - **Modifier Support**: All standard Perl modifiers (i, g, s, m, x, e, etc.)
+  - **Edge Case Handling**: Complex patterns, escaped delimiters, and nested constructs
+
+- **Enhanced LSP Cancellation System** (PR #165, Issue #48)
+  - **Thread-Safe Infrastructure**: `PerlLspCancellationToken` with <100μs check latency and atomic operations
+  - **Global Registry**: `CancellationRegistry` for concurrent request coordination and provider cleanup context
+  - **JSON-RPC 2.0 Compliance**: Enhanced `$/cancelRequest` handling with LSP 3.17+ features and error response (-32800)
+  - **Parser Integration**: Incremental parsing cancellation preserving <1ms updates and workspace navigation capabilities
+  - **Performance Optimized**: <50ms end-to-end response time with <1MB memory overhead and thread safety validation
+  - **Test Coverage**: 31 test functions across 5 test files covering protocol, performance, parser, infrastructure, and E2E scenarios
+
+- **API Documentation Infrastructure** (PR #160, SPEC-149)
+  - **Missing Docs Enforcement**: `#![warn(missing_docs)]` enabled for perl-parser crate
+  - **12 Acceptance Criteria Validation**: Comprehensive quality gates and progress tracking
+  - **Property-Based Testing**: Fuzz testing with crash/panic detection and AST invariant validation
+  - **Mutation Hardening**: 7 mutation hardening test files achieving 60%+ mutation score improvement
+  - **Documentation Standards**: Comprehensive API Documentation Standards with LSP workflow integration requirements
+  - **CI Integration**: Automated documentation quality gates prevent regression
+
+- **Advanced Parser Robustness** (PR #160, SPEC-149)
+  - **Comprehensive Fuzz Testing**: 12 test suites with property-based testing, crash detection, and AST invariant validation
+  - **Mutation Testing Enhancement**: 7 mutation hardening test files achieving 60%+ mutation score improvement
+  - **Quote Parser Hardening**: Enhanced delimiter handling, boundary validation, and transliteration safety preservation
+  - **Production Quality Assurance**: Advanced edge case coverage and real-world scenario testing with systematic vulnerability elimination
+
 - **Test Infrastructure Improvements**
   - **Semantic Unit Tests**: Direct validation of `SemanticAnalyzer` core without LSP overhead
     - `test_analyzer_find_definition_scalar`: Direct analyzer testing
@@ -58,6 +101,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Dynamic Test Positions**: All tests calculate positions from code strings, eliminating brittleness
   - **Resource-Constrained Execution**: Commands optimized for limited CPU/RAM environments
   - **Clear Test Documentation**: Comprehensive command reference in CLAUDE.md and docs
+
+### Added - Debug Adapter Protocol (DAP) Support (Issue #207 - Phase 1)
+
+- **DAP Binary**: New `perl-dap` crate with standalone DAP server
+- **Phase 1 Bridge Mode**: Proxies to Perl::LanguageServer for immediate debugging capability
+- **Cross-Platform Support**: Windows, macOS, Linux, WSL with automatic path normalization
+- **Configuration Management**: Launch (start new process) and attach (connect to running process) modes
+- **Enterprise Security**: Path validation, process isolation, and safe defaults
+- **Performance**: <50ms breakpoint operations, <100ms step/continue, <200ms variable expansion
+- **Quality Assurance**: 71/71 tests passing with comprehensive mutation hardening
+- **Documentation**: New `crates/perl-dap/README.md` and enhanced `docs/DAP_USER_GUIDE.md`
 
 ### Changed - Project Status & Documentation
 
@@ -80,6 +134,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Milestone planning**: Added concrete v0.9.0 and v1.0.0 exit criteria
 - **Local-first workflow**: Emphasized `nix develop -c just ci-gate` as canonical gate
 
+### Performance Improvements (PR #140 - Revolutionary)
+
+- **LSP Behavioral Tests**: 1560s+ → 0.31s (**5000x faster**, Transformational)
+- **User Story Tests**: 1500s+ → 0.32s (**4700x faster**, Revolutionary)
+- **Individual Workspace Tests**: 60s+ → 0.26s (**230x faster**, Game-changing)
+- **Overall Test Suite**: 60s+ → <10s (**6x faster**, Production-ready)
+- **CI Reliability**: 100% pass rate (was ~55% due to timeouts)
+- **Adaptive Threading Configuration**: Multi-tier timeout scaling system
+  - LSP Harness Timeouts: 200-500ms based on thread count (High/Medium/Low contention)
+  - Comprehensive Test Timeouts: 15s for ≤2 threads, 10s for ≤4 threads, 7.5s for 5-8 threads
+  - Optimized Idle Detection: 1000ms → 200ms cycles (**5x improvement**)
+  - Intelligent Symbol Waiting: Exponential backoff with mock responses
+  - Enhanced Test Harness: Real JSON-RPC protocol with graceful CI degradation
+
+### Breaking Changes
+
+- **None**: MSRV 1.89, Edition 2024, additive guarantee maintained
+
+### Migration Guide
+
+- **No Migration Required**: v0.8.x users can upgrade seamlessly without code changes
+- **Enhanced Features**: All new features are additive and backward compatible
+- **API Stability**: Public API contracts remain stable per [docs/STABILITY.md](docs/STABILITY.md)
+
 ### Documentation
 
 - **CLAUDE.md**: Added semantic definition testing commands and updated status metrics
@@ -87,6 +165,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Path to v1.0**: Documented 3-band approach (prove semantic stack, reduce ignored tests, tag v0.9)
 - **Known Constraints**: Resource limits, CI billing, ignored test count (779 tests)
 - **Test Commands**: Resource-efficient semantic testing commands for constrained environments
+- **perl-dap README.md**: New comprehensive DAP server documentation
+- **DAP User Guide**: Enhanced Debug Adapter Protocol setup, configuration, and debugging workflows
+- **API Documentation Standards**: Comprehensive documentation enforcement and systematic resolution strategy (PR #160/SPEC-149)
+- **LSP Cancellation Architecture Guide**: Complete documentation suite including protocol, architecture, performance, integration, and test strategy guides
 
 ## [v0.8.8] - Current Release
 
