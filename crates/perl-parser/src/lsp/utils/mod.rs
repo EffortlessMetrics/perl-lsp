@@ -3,6 +3,8 @@
 //! Common text processing helpers used across the LSP implementation.
 //! Includes panic-free accessors for safe string processing.
 
+pub mod uri;
+
 use lsp_types::Position;
 
 // =============================================================================

@@ -73,6 +73,9 @@
 //! }
 //! ```
 
+pub mod pull;
+pub use pull::PullDiagnosticsProvider;
+
 use crate::ast::{Node, NodeKind};
 use crate::error::ParseError;
 use crate::error_classifier::ErrorClassifier;

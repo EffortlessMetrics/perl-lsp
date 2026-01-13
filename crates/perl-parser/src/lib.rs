@@ -129,6 +129,7 @@ pub mod debug_adapter;
 pub mod declaration;
 pub mod diagnostics;
 pub mod diagnostics_catalog;
+pub mod pull_diagnostics;
 pub mod document_highlight;
 /// LSP document links provider for file and URL navigation.
 pub mod document_links;

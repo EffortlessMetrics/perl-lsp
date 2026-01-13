@@ -582,7 +582,7 @@ impl LspServer {
     /// Convert offset to line/column position (UTF-16 aware, CRLF safe)
     #[allow(deprecated)]
     pub fn offset_to_position(&self, content: &str, offset: usize) -> (u32, u32) {
-        // Implementation moved to lsp/utils.rs
+        // Implementation moved to lsp/utils
         let p = offset_to_position(content, offset);
         (p.line, p.character)
     }
@@ -590,7 +590,7 @@ impl LspServer {
     /// Convert line/column position to offset (UTF-16 aware, CRLF safe)
     #[allow(deprecated)]
     pub fn position_to_offset(&self, content: &str, line: u32, character: u32) -> usize {
-        // Implementation moved to lsp/utils.rs
+        // Implementation moved to lsp/utils
         position_to_offset(content, line, character).unwrap_or(content.len())
     }
     // === END_TEST_ONLY_POSITION_HELPERS ===
