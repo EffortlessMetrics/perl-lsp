@@ -47,9 +47,9 @@ pub fn build_rename_edit(
 
     for loc in locs {
         let start_line = loc.range.start.line;
-        let start_char = loc.range.start.character;
+        let start_char = loc.range.start.column;
         let end_line = loc.range.end.line;
-        let end_char = loc.range.end.character;
+        let end_char = loc.range.end.column;
 
         // Compute replacement text based on symbol kind
         let replacement = match key.kind {

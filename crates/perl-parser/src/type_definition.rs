@@ -202,12 +202,12 @@ impl TypeDefinitionProvider {
                     origin_selection_range: None, // Could be filled with the reference range
                     target_uri: parse_uri(uri),
                     target_range: Range::new(
-                        Position::new(start_line, start_col),
-                        Position::new(end_line, end_col),
+                        lsp_types::Position::new(start_line, start_col),
+                        lsp_types::Position::new(end_line, end_col),
                     ),
                     target_selection_range: Range::new(
-                        Position::new(start_line, start_col),
-                        Position::new(end_line, end_col),
+                        lsp_types::Position::new(start_line, start_col),
+                        lsp_types::Position::new(end_line, end_col),
                     ),
                 });
             }

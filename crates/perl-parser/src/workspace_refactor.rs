@@ -297,11 +297,13 @@ impl WorkspaceRefactor {
 
                     let (start_line, start_col) = idx.offset_to_position(start);
                     let (end_line, end_col) = idx.offset_to_position(end);
+                    let start_byte = idx.position_to_offset(start_line, start_col).unwrap_or(0);
+                    let end_byte = idx.position_to_offset(end_line, end_col).unwrap_or(0);
                     locations.push(crate::workspace_index::Location {
                         uri: doc.uri.clone(),
-                        range: lsp_types::Range {
-                            start: lsp_types::Position { line: start_line, character: start_col },
-                            end: lsp_types::Position { line: end_line, character: end_col },
+                        range: crate::position::Range {
+                            start: crate::position::Position { byte: start_byte, line: start_line, column: start_col },
+                            end: crate::position::Position { byte: end_byte, line: end_line, column: end_col },
                         },
                     });
                     pos = end;
@@ -327,8 +329,8 @@ impl WorkspaceRefactor {
             if let Some(mut doc) = store.get(&loc.uri) {
                 if let (Some(start_off), Some(end_off)) = (
                     doc.line_index
-                        .position_to_offset(loc.range.start.line, loc.range.start.character),
-                    doc.line_index.position_to_offset(loc.range.end.line, loc.range.end.character),
+                            .position_to_offset(loc.range.start.line, loc.range.start.column),
+                    doc.line_index.position_to_offset(loc.range.end.line, loc.range.end.column),
                 ) {
                     let replacement = match kind {
                         SymKind::Var => {
@@ -580,21 +582,21 @@ impl WorkspaceRefactor {
             .ok_or_else(|| RefactorError::DocumentNotIndexed(from_file.display().to_string()))?;
         let mut idx = doc.line_index.clone();
         let start_off = idx
-            .position_to_offset(sym.range.start.line, sym.range.start.character)
+            .position_to_offset(sym.range.start.line, sym.range.start.column)
             .ok_or_else(|| RefactorError::InvalidPosition {
                 file: from_file.display().to_string(),
                 details: format!(
                     "Invalid start position for subroutine '{}' at line {}, column {}",
-                    sub_name, sym.range.start.line, sym.range.start.character
+                    sub_name, sym.range.start.line, sym.range.start.column
                 ),
             })?;
         let end_off = idx
-            .position_to_offset(sym.range.end.line, sym.range.end.character)
+            .position_to_offset(sym.range.end.line, sym.range.end.column)
             .ok_or_else(|| RefactorError::InvalidPosition {
                 file: from_file.display().to_string(),
                 details: format!(
                     "Invalid end position for subroutine '{}' at line {}, column {}",
-                    sub_name, sym.range.end.line, sym.range.end.character
+                    sub_name, sym.range.end.line, sym.range.end.column
                 ),
             })?;
         let sub_text = doc.text[start_off..end_off].to_string();

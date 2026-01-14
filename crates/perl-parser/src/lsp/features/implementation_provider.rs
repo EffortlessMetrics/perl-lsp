@@ -8,7 +8,8 @@ use crate::ast::{Node, NodeKind};
 use crate::type_hierarchy::TypeHierarchyProvider;
 use crate::uri::parse_uri;
 use crate::workspace_index::WorkspaceIndex;
-use lsp_types::{LocationLink, Position, Range};
+use lsp_types::LocationLink;
+use lsp_types::{Position as LspPosition, Range as LspRange};
 use std::collections::HashMap;
 
 /// Provider for finding implementations of types and interfaces in Perl code
@@ -128,11 +129,15 @@ impl ImplementationProvider {
                     if let Some(container) = &symbol.container_name {
                         if container.contains(base_package) {
                             let target_uri = parse_uri(&symbol.uri);
+                            // Convert internal Position to LSP Position (LSP uses 0-based, internal uses 1-based)
+                            let lsp_start = LspPosition::new(symbol.range.start.line - 1, symbol.range.start.column - 1);
+                            let lsp_end = LspPosition::new(symbol.range.end.line - 1, symbol.range.end.column - 1);
+                            
                             results.push(LocationLink {
                                 origin_selection_range: None,
                                 target_uri,
-                                target_range: symbol.range,
-                                target_selection_range: symbol.range,
+                                target_range: LspRange::new(lsp_start, lsp_end),
+                                target_selection_range: LspRange::new(lsp_start, lsp_end),
                             });
                         }
                     }
@@ -352,15 +357,15 @@ impl ImplementationProvider {
     }
 
     /// Convert node to LSP range
-    fn node_to_range(&self, node: &Node, source: &str) -> Range {
+    fn node_to_range(&self, node: &Node, source: &str) -> LspRange {
         let (start_line, start_col) =
             crate::position::offset_to_utf16_line_col(source, node.location.start);
         let (end_line, end_col) =
             crate::position::offset_to_utf16_line_col(source, node.location.end);
 
-        Range {
-            start: Position { line: start_line, character: start_col },
-            end: Position { line: end_line, character: end_col },
+        LspRange {
+            start: LspPosition::new(start_line, start_col),
+            end: LspPosition::new(end_line, end_col),
         }
     }
 

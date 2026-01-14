@@ -1,5 +1,6 @@
 use anyhow::Result;
-use lsp_types::{Diagnostic, TextDocumentContentChangeEvent};
+use lsp_types::Diagnostic;
+use lsp_types::TextDocumentContentChangeEvent;
 use ropey::Rope;
 use std::ops::Range;
 
