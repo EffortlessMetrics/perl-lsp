@@ -17,22 +17,25 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 #[test]
 fn completes_files_in_src_directory() {
-    let code = "\"src/com\"";
+    // Test with src/features/ path where completion.rs now lives
+    let code = "\"src/features/com\"";
     let mut parser = Parser::new(code);
     let ast = parser.parse().unwrap();
     let provider = CompletionProvider::new_with_index(&ast, None);
     let pos = code.find("com").unwrap() + "com".len();
     let completions = provider.get_completions(code, pos);
 
-    // Should find completion.rs file
+    // Should find completion.rs file in the features directory
     assert!(
         completions
             .iter()
-            .any(|c| c.label == "src/completion.rs" && c.kind == CompletionItemKind::File)
+            .any(|c| c.label == "src/features/completion.rs" && c.kind == CompletionItemKind::File),
+        "Expected to find src/features/completion.rs, got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
     );
 
     // Should provide proper file type information
-    let completion_file = completions.iter().find(|c| c.label == "src/completion.rs");
+    let completion_file = completions.iter().find(|c| c.label == "src/features/completion.rs");
     if let Some(comp) = completion_file {
         assert_eq!(comp.detail.as_ref().unwrap(), "Rust source file");
     }

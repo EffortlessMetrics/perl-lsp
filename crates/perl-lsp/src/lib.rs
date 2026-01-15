@@ -101,6 +101,7 @@ pub(crate) mod code_lens_provider {
 }
 
 pub(crate) mod diagnostics {
+    #[allow(unused_imports)]
     pub use crate::features::diagnostics::*;
 }
 
@@ -188,6 +189,7 @@ pub(crate) mod call_hierarchy_provider {
 
 // Parser module re-export for tests using crate::parser::Parser
 pub(crate) mod parser {
+    #[allow(unused_imports)]
     pub use perl_parser::parser::*;
 }
 
@@ -198,16 +200,19 @@ pub(crate) mod folding {
 
 // References re-export
 pub(crate) mod references {
+    #[allow(unused_imports)]
     pub use crate::features::references::*;
 }
 
 // Rename re-export
 pub(crate) mod rename {
+    #[allow(unused_imports)]
     pub use crate::features::rename::*;
 }
 
 // Signature help re-export
 pub(crate) mod signature_help {
+    #[allow(unused_imports)]
     pub use crate::features::signature_help::*;
 }
 

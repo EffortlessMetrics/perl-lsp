@@ -7,7 +7,7 @@
     "resolveProvider": true
   },
   "completionProvider": {
-    "resolveProvider": false,
+    "resolveProvider": true,
     "triggerCharacters": [
       "$",
       "@",
@@ -24,7 +24,7 @@
   "documentFormattingProvider": true,
   "documentHighlightProvider": true,
   "documentLinkProvider": {
-    "resolveProvider": false
+    "resolveProvider": true
   },
   "documentOnTypeFormattingProvider": {
     "firstTriggerCharacter": "}",

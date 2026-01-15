@@ -7,13 +7,18 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// A position in a source file with byte offset, line, and column
+///
+/// Note: The `column` field is serialized as `character` for LSP wire compatibility.
+/// Engine code should use `.column` while LSP JSON responses will have `character`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct Position {
     /// Byte offset in the source (0-based)
+    #[serde(skip_serializing)]
     pub byte: usize,
     /// Line number (1-based for user display)
     pub line: u32,
-    /// Column number (1-based for user display)
+    /// Column number (1-based for user display) - serializes as "character" for LSP compatibility
+    #[serde(rename = "character")]
     pub column: u32,
 }
 

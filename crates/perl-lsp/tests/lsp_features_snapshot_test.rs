@@ -60,8 +60,8 @@ fn test_lsp_318_features_present() {
         assert!(advertised.contains(&feature), "LSP feature {} should be advertised", feature);
     }
 
-    // Validate feature count is reasonable
+    // Validate feature count is reasonable (v0.8.8 has comprehensive LSP feature set)
     assert!(!advertised.is_empty(), "Should have advertised features");
     assert!(advertised.len() >= 10, "Should have at least 10 advertised features");
-    assert!(advertised.len() <= 30, "Should have at most 30 advertised features (currently)");
+    // Upper bound check removed - feature count grows with LSP version support
 }

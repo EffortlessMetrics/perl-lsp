@@ -56,7 +56,8 @@ fn full_capabilities_match_contract() {
 
     let dl = &caps["documentLinkProvider"];
     assert!(dl.is_object());
-    assert_eq!(dl["resolveProvider"], json!(false));
+    // Server now supports documentLink/resolve (v0.8.8)
+    assert_eq!(dl["resolveProvider"], json!(true));
 
     assert_eq!(caps["selectionRangeProvider"], json!(true));
     let ot = &caps["documentOnTypeFormattingProvider"];

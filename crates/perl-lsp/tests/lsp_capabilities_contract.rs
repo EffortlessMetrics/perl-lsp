@@ -127,10 +127,10 @@ fn test_unsupported_methods_return_error() {
     server.handle_request(initialized_request);
 
     // Test that truly unsupported methods return method_not_found error
-    // Updated for v0.8.6 - only test methods that truly return method_not_found
+    // Updated for v0.8.8 - color methods are now implemented, use fictional methods
     let unsupported_methods = [
-        "textDocument/colorPresentation", // Not implemented (color support)
-        "textDocument/documentColor",     // Not implemented (color support)
+        "textDocument/notARealMethod",       // Fictional - will never be implemented
+        "workspace/notImplementedFeature",   // Fictional - will never be implemented
     ];
 
     for method in &unsupported_methods {
