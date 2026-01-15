@@ -4,12 +4,12 @@
 //! - Subclasses that inherit from a base class
 //! - Overridden methods in derived classes
 
-use perl_parser::ast::{Node, NodeKind};
 use crate::type_hierarchy::TypeHierarchyProvider;
 use crate::util::uri::parse_uri;
-use perl_parser::workspace_index::WorkspaceIndex;
 use lsp_types::LocationLink;
 use lsp_types::{Position as LspPosition, Range as LspRange};
+use perl_parser::ast::{Node, NodeKind};
+use perl_parser::workspace_index::WorkspaceIndex;
 use std::collections::HashMap;
 
 /// Provider for finding implementations of types and interfaces in Perl code
@@ -130,9 +130,15 @@ impl ImplementationProvider {
                         if container.contains(base_package) {
                             let target_uri = parse_uri(&symbol.uri);
                             // Convert internal Position to LSP Position (LSP uses 0-based, internal uses 1-based)
-                            let lsp_start = LspPosition::new(symbol.range.start.line - 1, symbol.range.start.column - 1);
-                            let lsp_end = LspPosition::new(symbol.range.end.line - 1, symbol.range.end.column - 1);
-                            
+                            let lsp_start = LspPosition::new(
+                                symbol.range.start.line - 1,
+                                symbol.range.start.column - 1,
+                            );
+                            let lsp_end = LspPosition::new(
+                                symbol.range.end.line - 1,
+                                symbol.range.end.column - 1,
+                            );
+
                             results.push(LocationLink {
                                 origin_selection_range: None,
                                 target_uri,

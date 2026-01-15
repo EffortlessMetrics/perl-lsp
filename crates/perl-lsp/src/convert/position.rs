@@ -129,10 +129,7 @@ impl WireRange {
 
     /// Create a zero-width range at a position.
     pub fn empty(pos: WirePosition) -> Self {
-        WireRange {
-            start: pos,
-            end: pos,
-        }
+        WireRange { start: pos, end: pos }
     }
 
     /// Create a range covering the entire document.
@@ -182,46 +179,37 @@ impl WireLocation {
 
 impl From<WirePosition> for lsp_types::Position {
     fn from(p: WirePosition) -> Self {
-        lsp_types::Position {
-            line: p.line,
-            character: p.character,
-        }
+        lsp_types::Position { line: p.line, character: p.character }
     }
 }
 
 impl From<lsp_types::Position> for WirePosition {
     fn from(p: lsp_types::Position) -> Self {
-        WirePosition {
-            line: p.line,
-            character: p.character,
-        }
+        WirePosition { line: p.line, character: p.character }
     }
 }
 
 impl From<WireRange> for lsp_types::Range {
     fn from(r: WireRange) -> Self {
-        lsp_types::Range {
-            start: r.start.into(),
-            end: r.end.into(),
-        }
+        lsp_types::Range { start: r.start.into(), end: r.end.into() }
     }
 }
 
 impl From<lsp_types::Range> for WireRange {
     fn from(r: lsp_types::Range) -> Self {
-        WireRange {
-            start: r.start.into(),
-            end: r.end.into(),
-        }
+        WireRange { start: r.start.into(), end: r.end.into() }
     }
 }
 
 impl From<WireLocation> for lsp_types::Location {
     fn from(l: WireLocation) -> Self {
+        // SAFETY: "file:///unknown" is a valid URI constant, parse will not fail
+        #[allow(clippy::expect_used)]
+        static FALLBACK_URI: std::sync::LazyLock<lsp_types::Uri> =
+            std::sync::LazyLock::new(|| "file:///unknown".parse().expect("valid fallback URL"));
+
         lsp_types::Location {
-            uri: l.uri.parse().unwrap_or_else(|_| {
-                "file:///unknown".parse().expect("valid fallback URL")
-            }),
+            uri: l.uri.parse().unwrap_or_else(|_| FALLBACK_URI.clone()),
             range: l.range.into(),
         }
     }
@@ -277,8 +265,8 @@ mod tests {
     fn test_wire_range_from_engine() {
         let source = "hello\nworld";
         let engine_range = perl_parser::position::Range::new(
-            EnginePosition::new(0, 1, 1),  // start of "hello"
-            EnginePosition::new(5, 1, 6),  // end of "hello"
+            EnginePosition::new(0, 1, 1), // start of "hello"
+            EnginePosition::new(5, 1, 6), // end of "hello"
         );
 
         let wire = WireRange::from_engine(&engine_range, source);

@@ -1,7 +1,10 @@
 //! Tests for window/* and telemetry/event LSP features
 
 use parking_lot::Mutex;
-use perl_lsp::{LspServer, server::{MessageType, ShowDocumentOptions}};
+use perl_lsp::{
+    LspServer,
+    server::{MessageType, ShowDocumentOptions},
+};
 use serde_json::{Value, json};
 use std::io::Write;
 use std::sync::Arc;

@@ -68,8 +68,12 @@ impl LspServer {
                     let lsp_severity = violation.severity.to_diagnostic_severity();
                     let internal_severity = match lsp_severity {
                         lsp_types::DiagnosticSeverity::ERROR => InternalDiagnosticSeverity::Error,
-                        lsp_types::DiagnosticSeverity::WARNING => InternalDiagnosticSeverity::Warning,
-                        lsp_types::DiagnosticSeverity::INFORMATION => InternalDiagnosticSeverity::Information,
+                        lsp_types::DiagnosticSeverity::WARNING => {
+                            InternalDiagnosticSeverity::Warning
+                        }
+                        lsp_types::DiagnosticSeverity::INFORMATION => {
+                            InternalDiagnosticSeverity::Information
+                        }
                         lsp_types::DiagnosticSeverity::HINT => InternalDiagnosticSeverity::Hint,
                         _ => InternalDiagnosticSeverity::Hint, // fallback for unknown severities
                     };

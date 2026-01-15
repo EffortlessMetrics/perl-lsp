@@ -1,8 +1,8 @@
 //! Integration tests for LSP signature help functionality
 //! Tests the full LSP request/response flow for signature help
 
-use perl_parser::Parser;
 use perl_lsp::features::signature_help::SignatureHelpProvider;
+use perl_parser::Parser;
 use serde_json::json;
 
 #[test]

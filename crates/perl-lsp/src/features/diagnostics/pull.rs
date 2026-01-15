@@ -3,40 +3,25 @@
 use std::collections::HashMap;
 
 use lsp_types::{
-    Diagnostic as LspDiagnostic,
-    DiagnosticRelatedInformation,
-    DiagnosticSeverity as LspDiagnosticSeverity,
-    DiagnosticTag as LspDiagnosticTag,
-    DocumentDiagnosticReport,
-    FullDocumentDiagnosticReport,
-    Location,
-    NumberOrString,
-    Position,
-    Range,
-    RelatedFullDocumentDiagnosticReport,
-    RelatedUnchangedDocumentDiagnosticReport,
-    UnchangedDocumentDiagnosticReport,
-    Uri,
-    WorkspaceDocumentDiagnosticReport,
-    WorkspaceDiagnosticReport,
-    WorkspaceDiagnosticReportPartialResult,
-    WorkspaceFullDocumentDiagnosticReport,
-    WorkspaceUnchangedDocumentDiagnosticReport,
+    Diagnostic as LspDiagnostic, DiagnosticRelatedInformation,
+    DiagnosticSeverity as LspDiagnosticSeverity, DiagnosticTag as LspDiagnosticTag,
+    DocumentDiagnosticReport, FullDocumentDiagnosticReport, Location, NumberOrString, Position,
+    Range, RelatedFullDocumentDiagnosticReport, RelatedUnchangedDocumentDiagnosticReport,
+    UnchangedDocumentDiagnosticReport, Uri, WorkspaceDiagnosticReport,
+    WorkspaceDiagnosticReportPartialResult, WorkspaceDocumentDiagnosticReport,
+    WorkspaceFullDocumentDiagnosticReport, WorkspaceUnchangedDocumentDiagnosticReport,
 };
 
-use perl_parser::error::ParseError;
-use crate::util::uri::parse_uri;
 use crate::state::DocumentState;
+use crate::util::uri::parse_uri;
+use perl_parser::Parser;
+use perl_parser::error::ParseError;
 use perl_parser::position::offset_to_utf16_line_col;
 use perl_parser::util::code_slice;
-use perl_parser::Parser;
 
 use super::{
-    Diagnostic as InternalDiagnostic,
-    DiagnosticSeverity as InternalDiagnosticSeverity,
-    DiagnosticTag as InternalDiagnosticTag,
-    DiagnosticsProvider,
-    RelatedInformation,
+    Diagnostic as InternalDiagnostic, DiagnosticSeverity as InternalDiagnosticSeverity,
+    DiagnosticTag as InternalDiagnosticTag, DiagnosticsProvider, RelatedInformation,
 };
 
 /// Provider for pull-based diagnostics (LSP 3.17).
@@ -245,10 +230,9 @@ impl PullDiagnosticsProvider {
         error: &ParseError,
     ) -> LspDiagnostic {
         let (offset, message) = match error {
-            ParseError::UnexpectedToken { location, expected, found } => (
-                *location,
-                format!("Expected {expected}, found {found}"),
-            ),
+            ParseError::UnexpectedToken { location, expected, found } => {
+                (*location, format!("Expected {expected}, found {found}"))
+            }
             ParseError::SyntaxError { location, message } => (*location, message.clone()),
             ParseError::UnexpectedEof => (text.len(), "Unexpected end of input".to_string()),
             ParseError::LexerError { message } => (0, message.clone()),

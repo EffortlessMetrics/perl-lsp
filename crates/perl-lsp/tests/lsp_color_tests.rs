@@ -410,10 +410,8 @@ fn lsp_color_utf16_position_with_non_ascii_prefix() {
 
     // Verify that colors on line 0 and line 1 are found
     // (specific positions depend on implementation, but they should exist)
-    let lines: Vec<u64> = color_array
-        .iter()
-        .filter_map(|c| c["range"]["start"]["line"].as_u64())
-        .collect();
+    let lines: Vec<u64> =
+        color_array.iter().filter_map(|c| c["range"]["start"]["line"].as_u64()).collect();
 
     assert!(lines.contains(&0), "Should find color on line 0 (after Japanese + French text)");
     assert!(lines.contains(&1), "Should find color on line 1 (after 'café')");

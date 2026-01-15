@@ -1,7 +1,7 @@
 //! Tests for comprehensive built-in function signatures
 
-use perl_parser::Parser;
 use perl_lsp::features::signature_help::SignatureHelpProvider;
+use perl_parser::Parser;
 
 #[test]
 fn test_comprehensive_builtin_coverage() {

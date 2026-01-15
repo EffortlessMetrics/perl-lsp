@@ -136,8 +136,7 @@ fn test_workspace_symbol_deduplication() {
     // Convert to LSP symbols and check deduplication by position
     let mut seen = HashSet::new();
     for sym in &symbols {
-        let key =
-            (sym.uri.clone(), sym.range.start.line, sym.range.start.column, sym.name.clone());
+        let key = (sym.uri.clone(), sym.range.start.line, sym.range.start.column, sym.name.clone());
 
         // This would fail if we had true duplicates at the same position
         if seen.contains(&key) {

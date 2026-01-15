@@ -60,7 +60,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 - **LSP Coverage**: 100% user-visible feature coverage (53/53 trackable features from `features.toml`)
 - **Protocol Compliance**: 97% overall LSP protocol support (85/88 including plumbing)
 - **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
-- **Test Status**: 347 lib tests passing, 3 ignored (1 total tracked debt: 0 bug, 1 manual)
+- **Test Status**: 221 lib tests passing, 19 ignored (1 total tracked debt: 0 bug, 1 manual)
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
 - **Production Status**: LSP server production-ready (`just ci-gate` passing)
 

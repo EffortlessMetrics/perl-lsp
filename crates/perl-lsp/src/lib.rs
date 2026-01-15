@@ -34,19 +34,31 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 #![allow(missing_docs)] // Temporarily allow until migration is complete
+#![allow(
+    // Migrated from perl-parser - these patterns are acceptable in LSP runtime code
+    clippy::collapsible_match,
+    clippy::only_used_in_recursion,
+    clippy::while_let_loop,
+    clippy::needless_range_loop,
+    clippy::for_kv_map,
+    clippy::arc_with_non_send_sync,
+    clippy::mutable_key_type,
+    clippy::new_without_default,
+    clippy::if_same_then_else
+)]
 
 // Module declarations - migrated from perl-parser
-pub mod protocol;
-pub mod transport;
-pub mod state;
-pub mod runtime;
-pub mod features;
 pub mod convert;
-pub mod util;
-pub mod fallback;
-pub mod handlers;
 pub mod dispatch;
+pub mod fallback;
+pub mod features;
+pub mod handlers;
+pub mod protocol;
+pub mod runtime;
 pub mod server;
+pub mod state;
+pub mod transport;
+pub mod util;
 
 // Re-exports for key types
 pub use protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};

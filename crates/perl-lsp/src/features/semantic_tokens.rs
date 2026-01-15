@@ -85,8 +85,8 @@
 //! println!("Token type: {:?}", legend.token_types.get(custom_token[3] as usize));
 //! ```
 
-use perl_parser::ast::{Node, NodeKind};
 use perl_lexer::{PerlLexer, TokenType};
+use perl_parser::ast::{Node, NodeKind};
 use rustc_hash::FxHashMap;
 
 /// LSP semantic token encoding format for client transmission

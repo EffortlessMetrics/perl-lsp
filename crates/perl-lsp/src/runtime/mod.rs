@@ -41,9 +41,11 @@ use perl_parser::{
 use crate::features::{
     // code_actions.rs - original AST-based provider
     code_actions::{CodeActionKind as InternalCodeActionKind, CodeActionsProvider},
-    // code_actions_provider.rs - V2 diagnostic-based provider
-    code_actions_provider::{CodeActionKind as InternalCodeActionKindV2, CodeActionsProvider as CodeActionsProviderV2},
     code_actions_enhanced::EnhancedCodeActionsProvider,
+    // code_actions_provider.rs - V2 diagnostic-based provider
+    code_actions_provider::{
+        CodeActionKind as InternalCodeActionKindV2, CodeActionsProvider as CodeActionsProviderV2,
+    },
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
     diagnostics::{DiagnosticSeverity as InternalDiagnosticSeverity, DiagnosticsProvider},
     document_highlight::DocumentHighlightProvider,

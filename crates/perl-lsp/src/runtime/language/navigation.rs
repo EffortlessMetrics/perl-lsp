@@ -4,9 +4,9 @@
 //! and textDocument/implementation requests.
 
 use super::super::*;
-use perl_parser::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
 use crate::util::token_under_cursor;
+use perl_parser::cancellation::RequestCleanupGuard;
 use std::collections::HashMap;
 
 #[cfg(feature = "workspace")]

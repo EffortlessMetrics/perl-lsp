@@ -142,10 +142,7 @@ pub mod v0 {
                         line: sym.range.start.line,
                         character: sym.range.start.column,
                     },
-                    end: PositionDto {
-                        line: sym.range.end.line,
-                        character: sym.range.end.column,
-                    },
+                    end: PositionDto { line: sym.range.end.line, character: sym.range.end.column },
                 },
             },
         }

@@ -1,8 +1,8 @@
-use perl_parser::Parser;
-use perl_lsp::features::diagnostics::DiagnosticsProvider;
 use perl_lsp::features::code_actions_provider::{
     CodeActionKind as CodeActionKindV2, CodeActionsProvider as CodeActionsProviderV2,
 };
+use perl_lsp::features::diagnostics::DiagnosticsProvider;
+use perl_parser::Parser;
 
 #[test]
 fn test_undefined_variable_quick_fix() {

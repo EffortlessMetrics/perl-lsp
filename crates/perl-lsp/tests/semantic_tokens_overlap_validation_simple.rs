@@ -1,10 +1,10 @@
+use perl_lsp::features::semantic_tokens_provider::SemanticTokensProvider;
 /// Simplified semantic token overlap validation tests for LSP protocol compliance
 /// These tests target semantic token overlap detection and validation
 /// to ensure robust token generation and position validation.
 ///
 /// Labels: tests:semantic-tokens, tests:mutation-hardening
 use perl_parser::Parser;
-use perl_lsp::features::semantic_tokens_provider::SemanticTokensProvider;
 
 // Test basic semantic token generation without overlaps
 #[test]
@@ -187,8 +187,8 @@ fn test_semantic_token_performance_characteristics() {
     verify_no_semantic_token_overlaps(&tokens);
 
     // Memory usage should be reasonable
-    let total_token_size =
-        tokens.len() * std::mem::size_of::<perl_lsp::features::semantic_tokens_provider::SemanticToken>();
+    let total_token_size = tokens.len()
+        * std::mem::size_of::<perl_lsp::features::semantic_tokens_provider::SemanticToken>();
     assert!(total_token_size < 100_000, "Token memory usage should be reasonable");
 }
 

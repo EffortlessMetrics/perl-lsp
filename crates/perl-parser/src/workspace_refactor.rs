@@ -302,8 +302,16 @@ impl WorkspaceRefactor {
                     locations.push(crate::workspace_index::Location {
                         uri: doc.uri.clone(),
                         range: crate::position::Range {
-                            start: crate::position::Position { byte: start_byte, line: start_line, column: start_col },
-                            end: crate::position::Position { byte: end_byte, line: end_line, column: end_col },
+                            start: crate::position::Position {
+                                byte: start_byte,
+                                line: start_line,
+                                column: start_col,
+                            },
+                            end: crate::position::Position {
+                                byte: end_byte,
+                                line: end_line,
+                                column: end_col,
+                            },
                         },
                     });
                     pos = end;
@@ -328,8 +336,7 @@ impl WorkspaceRefactor {
             })?;
             if let Some(mut doc) = store.get(&loc.uri) {
                 if let (Some(start_off), Some(end_off)) = (
-                    doc.line_index
-                            .position_to_offset(loc.range.start.line, loc.range.start.column),
+                    doc.line_index.position_to_offset(loc.range.start.line, loc.range.start.column),
                     doc.line_index.position_to_offset(loc.range.end.line, loc.range.end.column),
                 ) {
                     let replacement = match kind {
@@ -590,14 +597,15 @@ impl WorkspaceRefactor {
                     sub_name, sym.range.start.line, sym.range.start.column
                 ),
             })?;
-        let end_off = idx
-            .position_to_offset(sym.range.end.line, sym.range.end.column)
-            .ok_or_else(|| RefactorError::InvalidPosition {
-                file: from_file.display().to_string(),
-                details: format!(
-                    "Invalid end position for subroutine '{}' at line {}, column {}",
-                    sub_name, sym.range.end.line, sym.range.end.column
-                ),
+        let end_off =
+            idx.position_to_offset(sym.range.end.line, sym.range.end.column).ok_or_else(|| {
+                RefactorError::InvalidPosition {
+                    file: from_file.display().to_string(),
+                    details: format!(
+                        "Invalid end position for subroutine '{}' at line {}, column {}",
+                        sub_name, sym.range.end.line, sym.range.end.column
+                    ),
+                }
             })?;
         let sub_text = doc.text[start_off..end_off].to_string();
 

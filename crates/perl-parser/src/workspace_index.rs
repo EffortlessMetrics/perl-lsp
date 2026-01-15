@@ -973,10 +973,7 @@ impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
                         line: sym.range.start.line,
                         character: sym.range.start.column,
                     },
-                    end: LspPosition {
-                        line: sym.range.end.line,
-                        character: sym.range.end.column,
-                    },
+                    end: LspPosition { line: sym.range.end.line, character: sym.range.end.column },
                 },
             },
             container_name: sym.container_name.clone(),
@@ -1868,16 +1865,8 @@ impl IndexVisitor {
             self.document.line_index.range(node.location.start, node.location.end);
         // Use byte offsets from node.location directly
         Range {
-            start: Position {
-                byte: node.location.start,
-                line: start_line,
-                column: start_col,
-            },
-            end: Position {
-                byte: node.location.end,
-                line: end_line,
-                column: end_col,
-            },
+            start: Position { byte: node.location.start, line: start_line, column: start_col },
+            end: Position { byte: node.location.end, line: end_line, column: end_col },
         }
     }
 }
@@ -1925,14 +1914,10 @@ pub mod lsp_adapter {
     /// ```
     pub fn to_lsp_location(ix: &IxLocation) -> Option<LspLocation> {
         parse_url(&ix.uri).map(|uri| {
-            let start = lsp_types::Position {
-                line: ix.range.start.line,
-                character: ix.range.start.column,
-            };
-            let end = lsp_types::Position {
-                line: ix.range.end.line,
-                character: ix.range.end.column,
-            };
+            let start =
+                lsp_types::Position { line: ix.range.start.line, character: ix.range.start.column };
+            let end =
+                lsp_types::Position { line: ix.range.end.line, character: ix.range.end.column };
             let range = lsp_types::Range { start, end };
             LspLocation { uri, range }
         })

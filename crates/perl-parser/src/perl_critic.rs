@@ -231,8 +231,8 @@ impl CriticAnalyzer {
             .iter()
             .map(|v| {
                 let lsp_range = lsp_types::Range::new(
-                    lsp_types::Position::new(v.range.start.line as u32, v.range.start.column as u32),
-                    lsp_types::Position::new(v.range.end.line as u32, v.range.end.column as u32),
+                    lsp_types::Position::new(v.range.start.line, v.range.start.column),
+                    lsp_types::Position::new(v.range.end.line, v.range.end.column),
                 );
                 lsp_types::Diagnostic {
                     range: lsp_range,

@@ -129,8 +129,8 @@ fn test_unsupported_methods_return_error() {
     // Test that truly unsupported methods return method_not_found error
     // Updated for v0.8.8 - color methods are now implemented, use fictional methods
     let unsupported_methods = [
-        "textDocument/notARealMethod",       // Fictional - will never be implemented
-        "workspace/notImplementedFeature",   // Fictional - will never be implemented
+        "textDocument/notARealMethod", // Fictional - will never be implemented
+        "workspace/notImplementedFeature", // Fictional - will never be implemented
     ];
 
     for method in &unsupported_methods {

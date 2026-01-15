@@ -180,10 +180,7 @@ impl CodeFormatter {
 
         // Return a single edit that replaces the entire document
         // Use whole_document to correctly compute UTF-16 end position
-        Ok(vec![FormatTextEdit {
-            range: WireRange::whole_document(content),
-            new_text: formatted,
-        }])
+        Ok(vec![FormatTextEdit { range: WireRange::whole_document(content), new_text: formatted }])
     }
 
     /// Format a specific range in the document
@@ -218,7 +215,8 @@ impl CodeFormatter {
         // Note: We always format whole lines, so start_char is 0 and
         // end_char is the UTF-16 length of the last line (not byte length!)
         let start_char = 0;
-        let end_char = crate::util::byte_to_utf16_col(lines[end_line], lines[end_line].len()) as u32;
+        let end_char =
+            crate::util::byte_to_utf16_col(lines[end_line], lines[end_line].len()) as u32;
 
         Ok(vec![FormatTextEdit {
             range: WireRange {

@@ -129,7 +129,6 @@ pub mod debug_adapter;
 pub mod declaration;
 pub mod diagnostics;
 pub mod diagnostics_catalog;
-pub mod pull_diagnostics;
 pub mod document_highlight;
 /// LSP document links provider for file and URL navigation.
 pub mod document_links;
@@ -205,6 +204,7 @@ pub mod position_mapper;
 #[doc(hidden)]
 pub mod positions;
 pub mod pragma_tracker;
+pub mod pull_diagnostics;
 /// Parser for Perl quote and quote-like operators.
 pub mod quote_parser;
 pub mod recovery_parser;

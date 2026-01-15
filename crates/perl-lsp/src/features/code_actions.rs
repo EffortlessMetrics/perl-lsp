@@ -47,9 +47,9 @@
 //! }
 //! ```
 
-use perl_parser::ast::{Node, NodeKind, SourceLocation};
 use crate::features::diagnostics::Diagnostic;
 use crate::features::rename::TextEdit;
+use perl_parser::ast::{Node, NodeKind, SourceLocation};
 
 /// A code action that can be applied to fix an issue
 ///
@@ -583,8 +583,8 @@ impl CodeActionsProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_parser::Parser;
     use crate::diagnostics::DiagnosticsProvider;
+    use perl_parser::Parser;
 
     #[test]
     fn test_undefined_variable_fix() {
