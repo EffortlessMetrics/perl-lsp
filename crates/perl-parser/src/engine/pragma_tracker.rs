@@ -165,12 +165,23 @@ impl PragmaTracker {
                     Self::build_ranges(stmt, current_state, ranges);
                 }
             }
-            _ => {
-                // Recursively process children for other node types
-                for child in node.children() {
-                    Self::build_ranges(child, current_state, ranges);
+            // For subroutines and other container nodes, recurse into their bodies
+            NodeKind::Subroutine { body, .. } => {
+                Self::build_ranges(body, current_state, ranges);
+            }
+            NodeKind::If { then_branch, else_branch, .. } => {
+                Self::build_ranges(then_branch, current_state, ranges);
+                if let Some(else_b) = else_branch {
+                    Self::build_ranges(else_b, current_state, ranges);
                 }
             }
+            NodeKind::While { body, .. }
+            | NodeKind::For { body, .. }
+            | NodeKind::Foreach { body, .. } => {
+                Self::build_ranges(body, current_state, ranges);
+            }
+            // Other node types don't contain use/no statements
+            _ => {}
         }
     }
 }

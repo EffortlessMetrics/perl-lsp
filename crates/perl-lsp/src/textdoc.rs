@@ -39,10 +39,10 @@ pub enum PosEnc {
     Utf8,
 }
 
-/// Convert LSP position to byte offset with UTF-16/UTF-8 encoding support
+/// Convert LSP position to char index with UTF-16/UTF-8 encoding support
 ///
 /// This function handles the conversion from LSP Position (line, character)
-/// to a byte offset in the Rope, accounting for UTF-16 vs UTF-8 encoding
+/// to a char index in the Rope, accounting for UTF-16 vs UTF-8 encoding
 /// differences. Unicode characters like emojis are handled correctly.
 ///
 /// # Arguments
@@ -51,11 +51,11 @@ pub enum PosEnc {
 /// * `enc` - Whether to interpret character positions as UTF-16 or UTF-8
 ///
 /// # Returns
-/// Byte offset clamped to valid rope boundaries
-pub fn lsp_pos_to_byte(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
+/// Char index clamped to valid rope boundaries
+pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
     // Handle edge case: if line is beyond document end, clamp to end
     if pos.line as usize >= rope.len_lines() {
-        return rope.len_bytes();
+        return rope.len_chars();
     }
 
     let line_char0 = rope.line_to_char(pos.line as usize);
@@ -83,7 +83,24 @@ pub fn lsp_pos_to_byte(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
     let clamped_col = col_chars.min(line_chars);
     let target_char = line_char0 + clamped_col;
 
-    rope.char_to_byte(target_char.min(rope.len_chars()))
+    target_char.min(rope.len_chars())
+}
+
+/// Convert LSP position to byte offset with UTF-16/UTF-8 encoding support
+///
+/// This function handles the conversion from LSP Position (line, character)
+/// to a byte offset in the Rope, accounting for UTF-16 vs UTF-8 encoding
+/// differences. Unicode characters like emojis are handled correctly.
+///
+/// # Arguments
+/// * `rope` - The rope containing the document text
+/// * `pos` - LSP position with 0-based line and character indices
+/// * `enc` - Whether to interpret character positions as UTF-16 or UTF-8
+///
+/// # Returns
+/// Byte offset clamped to valid rope boundaries
+pub fn lsp_pos_to_byte(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
+    rope.char_to_byte(lsp_pos_to_char(rope, pos, enc))
 }
 
 /// Convert byte offset to LSP position with UTF-16/UTF-8 encoding support
@@ -124,10 +141,29 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
     Position { line: line as u32, character }
 }
 
+/// Convert LSP range to char index pair
+///
+/// Converts both start and end positions of an LSP Range to char indices
+/// for rope operations. Ropey's `remove` and `insert` methods operate on
+/// char indices, not byte offsets.
+///
+/// # Arguments
+/// * `rope` - The rope containing the document text
+/// * `range` - LSP range with start and end positions
+/// * `enc` - Position encoding format
+///
+/// # Returns
+/// Tuple of (start_char, end_char) clamped to rope bounds
+pub fn range_to_chars(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize) {
+    let s = lsp_pos_to_char(rope, range.start, enc);
+    let e = lsp_pos_to_char(rope, range.end, enc);
+    (s.min(rope.len_chars()), e.min(rope.len_chars()))
+}
+
 /// Convert LSP range to byte offset pair
 ///
-/// Converts both start and end positions of an LSP Range to byte offsets
-/// for efficient rope operations.
+/// Converts both start and end positions of an LSP Range to byte offsets.
+/// Use `range_to_chars` for rope operations like `remove` and `insert`.
 ///
 /// # Arguments
 /// * `rope` - The rope containing the document text
@@ -158,11 +194,16 @@ pub fn range_to_bytes(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize)
 /// - Changes with ranges perform incremental edits at specified positions
 /// - All position calculations respect UTF-16/UTF-8 encoding differences
 /// - Invalid ranges are safely clamped to document boundaries
+///
+/// # Note
+/// Ropey's `remove` and `insert` operate on **char indices**, not byte offsets.
+/// This function correctly converts LSP positions to char indices for rope operations.
 pub fn apply_changes(doc: &mut Doc, changes: &[TextDocumentContentChangeEvent], enc: PosEnc) {
     for ch in changes {
         if let Some(r) = &ch.range {
-            let (s, e) = range_to_bytes(&doc.rope, r, enc);
-            if s <= doc.rope.len_bytes() && e <= doc.rope.len_bytes() && s <= e {
+            // IMPORTANT: Rope::remove and Rope::insert use char indices, not byte offsets
+            let (s, e) = range_to_chars(&doc.rope, r, enc);
+            if s <= e {
                 doc.rope.remove(s..e);
                 doc.rope.insert(s, &ch.text);
             }

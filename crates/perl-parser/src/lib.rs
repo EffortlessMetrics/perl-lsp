@@ -112,7 +112,6 @@ pub use engine::{error, parser, position};
 /// Legacy module aliases for IDE compatibility shims.
 pub use ide::{lsp, lsp_compat};
 
-pub use engine::parser::Parser;
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 #[allow(missing_docs)]
 pub use engine::ast;
@@ -123,6 +122,7 @@ pub use engine::ast_v2;
 pub use engine::edit;
 /// Heredoc content collector with FIFO ordering and indent stripping.
 pub use engine::heredoc_collector;
+pub use engine::parser::Parser;
 /// Parser context with error recovery support.
 pub use engine::parser_context;
 /// Pragma tracking for `use` and related directives.
@@ -135,10 +135,10 @@ pub use engine::util;
 pub use ide::call_hierarchy_provider;
 /// Enhanced LSP cancellation infrastructure.
 pub use ide::cancellation;
-/// Diagnostic catalog with stable codes for consistent error reporting.
-pub use ide::diagnostics_catalog;
 /// Debug Adapter Protocol (DAP) implementation for Perl debugging.
 pub use ide::debug_adapter;
+/// Diagnostic catalog with stable codes for consistent error reporting.
+pub use ide::diagnostics_catalog;
 #[cfg(not(target_arch = "wasm32"))]
 pub use ide::execute_command;
 
@@ -152,16 +152,19 @@ pub use position::position_mapper;
 #[doc(hidden)]
 pub use position::positions;
 
-#[cfg(feature = "incremental")]
-pub mod incremental;
 pub mod analysis;
 pub mod builtins;
+#[cfg(feature = "incremental")]
+pub mod incremental;
 pub mod refactor;
 pub mod tdd;
 pub mod tokens;
 pub mod tooling;
 pub mod workspace;
 
+/// Dead code detection for Perl workspaces.
+#[cfg(not(target_arch = "wasm32"))]
+pub use analysis::dead_code_detector;
 pub use analysis::declaration;
 #[cfg(not(target_arch = "wasm32"))]
 pub use analysis::index;
@@ -172,9 +175,6 @@ pub use analysis::semantic;
 pub use analysis::symbol;
 /// Type inference engine for Perl variable analysis.
 pub use analysis::type_inference;
-/// Dead code detection for Perl workspaces.
-#[cfg(not(target_arch = "wasm32"))]
-pub use analysis::dead_code_detector;
 pub use builtins::builtin_signatures;
 pub use builtins::builtin_signatures_phf;
 pub use ide::lsp_compat::capabilities;
@@ -189,12 +189,12 @@ pub use ide::lsp_compat::diagnostics;
 pub use ide::lsp_compat::document_highlight;
 /// LSP document links provider for file and URL navigation.
 pub use ide::lsp_compat::document_links;
-pub use ide::lsp_compat::implementation_provider;
 /// Deprecated LSP feature catalog shim (moved to `perl-lsp`).
 #[cfg(feature = "lsp-compat")]
 pub use ide::lsp_compat::features;
 pub use ide::lsp_compat::folding;
 pub use ide::lsp_compat::formatting;
+pub use ide::lsp_compat::implementation_provider;
 /// LSP inlay hints for inline type and parameter information.
 pub use ide::lsp_compat::inlay_hints;
 /// LSP inlay hints provider implementation.

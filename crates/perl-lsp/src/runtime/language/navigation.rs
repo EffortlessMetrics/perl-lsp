@@ -4,9 +4,9 @@
 //! and textDocument/implementation requests.
 
 use super::super::*;
+use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
 use crate::util::token_under_cursor;
-use crate::cancellation::RequestCleanupGuard;
 use std::collections::HashMap;
 
 #[cfg(feature = "workspace")]
@@ -641,20 +641,15 @@ impl LspServer {
                 let documents = self.documents_guard();
                 if let Some(doc) = documents.get(uri) {
                     let source_text = &doc.text;
-                    // Convert byte offsets to UTF-16 line/column
-                    let (start_line, start_col) =
-                        crate::position::offset_to_utf16_line_col(source_text, node.location.start);
-                    let (end_line, end_col) =
-                        crate::position::offset_to_utf16_line_col(source_text, node.location.end);
+                    // Convert byte offsets to wire range using conversion waist
+                    let wire_range = crate::convert::WireRange::from_byte_offsets(
+                        source_text,
+                        node.location.start,
+                        node.location.end,
+                    );
 
                     // Create typed Location
-                    results.push(Location {
-                        uri: parse_uri(uri),
-                        range: lsp_types::Range::new(
-                            lsp_types::Position::new(start_line, start_col),
-                            lsp_types::Position::new(end_line, end_col),
-                        ),
-                    });
+                    results.push(Location { uri: parse_uri(uri), range: wire_range.into() });
                 }
             }
         }

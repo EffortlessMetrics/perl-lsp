@@ -1662,8 +1662,10 @@ pub fn parse_fast() -> Result<Ast, Error> { todo!() }
 "#;
 
         let lines: Vec<&str> = incomplete_perf_content.lines().collect();
-        let incomplete =
-            doc_validation_helpers::find_incomplete_performance_docs("engine/parser/mod.rs", &lines);
+        let incomplete = doc_validation_helpers::find_incomplete_performance_docs(
+            "engine/parser/mod.rs",
+            &lines,
+        );
 
         assert!(!incomplete.is_empty(), "Should detect incomplete performance docs");
         assert!(

@@ -214,9 +214,7 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
                 caps.document_highlight_provider = Some(OneOf::Left(true));
             }
             "lsp.code_lens" => {
-                caps.code_lens_provider = Some(CodeLensOptions {
-                    resolve_provider: Some(true),
-                });
+                caps.code_lens_provider = Some(CodeLensOptions { resolve_provider: Some(true) });
             }
             "lsp.document_link" => {
                 caps.document_link_provider = Some(DocumentLinkOptions {
@@ -228,29 +226,27 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
                 caps.color_provider = Some(ColorProviderCapability::Simple(true));
             }
             "lsp.on_type_formatting" => {
-                caps.document_on_type_formatting_provider =
-                    Some(DocumentOnTypeFormattingOptions {
-                        first_trigger_character: ";".to_string(),
-                        more_trigger_character: Some(vec!["}".to_string()]),
-                    });
+                caps.document_on_type_formatting_provider = Some(DocumentOnTypeFormattingOptions {
+                    first_trigger_character: ";".to_string(),
+                    more_trigger_character: Some(vec!["}".to_string()]),
+                });
             }
             "lsp.selection_range" => {
-                caps.selection_range_provider = Some(SelectionRangeProviderCapability::Simple(true));
+                caps.selection_range_provider =
+                    Some(SelectionRangeProviderCapability::Simple(true));
             }
             "lsp.linked_editing_range" => {
                 caps.linked_editing_range_provider =
                     Some(LinkedEditingRangeServerCapabilities::Simple(true));
             }
             "lsp.call_hierarchy" => {
-                caps.call_hierarchy_provider =
-                    Some(CallHierarchyServerCapability::Simple(true));
+                caps.call_hierarchy_provider = Some(CallHierarchyServerCapability::Simple(true));
             }
             "lsp.moniker" => {
-                caps.moniker_provider = Some(OneOf::Right(MonikerServerCapabilities::Options(
-                    MonikerOptions {
+                caps.moniker_provider =
+                    Some(OneOf::Right(MonikerServerCapabilities::Options(MonikerOptions {
                         work_done_progress_options: WorkDoneProgressOptions::default(),
-                    },
-                )));
+                    })));
             }
             "lsp.inline_value" => {
                 caps.inline_value_provider = Some(OneOf::Right(
@@ -258,22 +254,20 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
                 ));
             }
             "lsp.inlay_hint" => {
-                caps.inlay_hint_provider = Some(OneOf::Right(
-                    InlayHintServerCapabilities::Options(InlayHintOptions {
+                caps.inlay_hint_provider =
+                    Some(OneOf::Right(InlayHintServerCapabilities::Options(InlayHintOptions {
                         resolve_provider: Some(true),
                         ..Default::default()
-                    }),
-                ));
+                    })));
             }
             "lsp.pull_diagnostics" => {
-                caps.diagnostic_provider = Some(DiagnosticServerCapabilities::Options(
-                    DiagnosticOptions {
+                caps.diagnostic_provider =
+                    Some(DiagnosticServerCapabilities::Options(DiagnosticOptions {
                         identifier: Some("perl-lsp".to_string()),
                         inter_file_dependencies: true,
                         workspace_diagnostics: true,
                         ..Default::default()
-                    },
-                ));
+                    }));
             }
             "lsp.workspace_symbol" => {
                 caps.workspace_symbol_provider = Some(OneOf::Left(true));

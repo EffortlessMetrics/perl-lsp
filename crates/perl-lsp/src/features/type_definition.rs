@@ -3,7 +3,8 @@
 //! This module provides go-to-type-definition functionality,
 //! finding the type/class definition for variables and references.
 
-use lsp_types::{LocationLink, Range};
+use crate::convert::{WirePosition, WireRange};
+use lsp_types::LocationLink;
 use perl_parser::ast::{Node, NodeKind};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -191,15 +192,13 @@ impl TypeDefinitionProvider {
     ) {
         match &node.kind {
             NodeKind::Package { name, .. } if name == package_name => {
-                // Convert byte offsets to UTF-16 line/column
-                let (start_line, start_col) = perl_parser::position::offset_to_utf16_line_col(
+                // Convert byte offsets to wire range using the conversion waist
+                let target_range: lsp_types::Range = WireRange::from_byte_offsets(
                     source_text,
                     node.location.start,
-                );
-                let (end_line, end_col) = perl_parser::position::offset_to_utf16_line_col(
-                    source_text,
                     node.location.end,
-                );
+                )
+                .into();
 
                 // Create typed LocationLink for better UI experience
                 // Parse URI - if invalid, skip this location
@@ -207,14 +206,8 @@ impl TypeDefinitionProvider {
                     locations.push(LocationLink {
                         origin_selection_range: None, // Could be filled with the reference range
                         target_uri,
-                        target_range: Range::new(
-                            lsp_types::Position::new(start_line, start_col),
-                            lsp_types::Position::new(end_line, end_col),
-                        ),
-                        target_selection_range: Range::new(
-                            lsp_types::Position::new(start_line, start_col),
-                            lsp_types::Position::new(end_line, end_col),
-                        ),
+                        target_range,
+                        target_selection_range: target_range,
                     });
                 }
             }
@@ -316,9 +309,8 @@ impl TypeDefinitionProvider {
         character: u32,
         source_text: &str,
     ) -> Option<Node> {
-        // Convert UTF-16 line/char to byte offset
-        let offset =
-            perl_parser::position::utf16_line_col_to_offset(source_text, line, character);
+        // Convert UTF-16 line/char to byte offset using wire conversion waist
+        let offset = WirePosition::new(line, character).to_byte_offset(source_text);
 
         // Find the most specific node at this offset
         self.find_node_at_offset(node, offset)
@@ -444,7 +436,8 @@ $obj->method();
             eprintln!("No locations found");
 
             // Debug: try to find what node we're getting
-            let offset = perl_parser::position::utf16_line_col_to_offset(code, line, character);
+            // Use wire conversion waist for offset calculation
+            let offset = WirePosition::new(line, character).to_byte_offset(code);
             eprintln!("Offset: {}", offset);
             if let Some(node) = provider.find_node_at_offset(&ast, offset) {
                 eprintln!("Node kind: {:?}", node.kind);
