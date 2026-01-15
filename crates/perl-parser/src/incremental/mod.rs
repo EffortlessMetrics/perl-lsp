@@ -8,6 +8,15 @@ use crate::ast::{Node, NodeKind, SourceLocation};
 use crate::parser::Parser;
 use perl_lexer::{LexerMode, PerlLexer, Token, TokenType};
 
+pub mod incremental_advanced_reuse;
+pub mod incremental_checkpoint;
+pub mod incremental_document;
+pub mod incremental_edit;
+pub mod incremental_handler_v2;
+pub mod incremental_integration;
+pub mod incremental_simple;
+pub mod incremental_v2;
+
 /// Stable restart points to avoid re-lexing the whole world
 #[derive(Clone, Copy, Debug)]
 pub struct LexCheckpoint {
