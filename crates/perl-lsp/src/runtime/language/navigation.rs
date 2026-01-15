@@ -469,7 +469,7 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        use perl_parser::type_definition::TypeDefinitionProvider;
+        use crate::features::type_definition::TypeDefinitionProvider;
 
         if let Some(params) = params {
             let uri = req_uri(&params)?;

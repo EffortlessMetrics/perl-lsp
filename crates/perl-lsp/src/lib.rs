@@ -60,6 +60,7 @@ pub mod execute_command;
 pub mod runtime;
 pub mod server;
 pub mod state;
+pub mod textdoc;
 pub mod transport;
 pub mod util;
 

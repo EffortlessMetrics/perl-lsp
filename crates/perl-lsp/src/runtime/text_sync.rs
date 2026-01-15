@@ -188,7 +188,7 @@ impl LspServer {
 
                 // Apply incremental changes with UTF-16 aware mapping
                 use lsp_types::TextDocumentContentChangeEvent;
-                use perl_parser::textdoc::{Doc, PosEnc, apply_changes};
+                use crate::textdoc::{Doc, PosEnc, apply_changes};
 
                 let mut doc = Doc { rope: doc_state.rope.clone(), version };
 
