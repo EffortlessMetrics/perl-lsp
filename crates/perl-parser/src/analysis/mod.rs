@@ -2,6 +2,7 @@
 
 /// Go-to-declaration support and parent map construction.
 pub mod declaration;
+#[cfg(not(target_arch = "wasm32"))]
 /// Lightweight workspace symbol index.
 pub mod index;
 /// Scope analysis for variable and subroutine resolution.

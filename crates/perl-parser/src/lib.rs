@@ -107,7 +107,12 @@
 pub mod engine;
 /// IDE integration helpers (LSP/DAP runtime support).
 pub mod ide;
-pub use parser::Parser;
+/// Legacy module aliases for moved engine components.
+pub use engine::{error, parser, position};
+/// Legacy module aliases for IDE compatibility shims.
+pub use ide::{lsp, lsp_compat};
+
+pub use engine::parser::Parser;
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 #[allow(missing_docs)]
 pub use engine::ast;
@@ -136,12 +141,6 @@ pub use ide::diagnostics_catalog;
 pub use ide::debug_adapter;
 #[cfg(not(target_arch = "wasm32"))]
 pub use ide::execute_command;
-pub mod error;
-/// Modular LSP server implementation (migration target)
-/// Note: server/transport submodules are gated off on wasm32.
-pub mod lsp;
-pub mod parser;
-pub mod position;
 
 /// Error classification and recovery strategies for parse failures.
 pub use error::classifier as error_classifier;
@@ -157,7 +156,6 @@ pub use position::positions;
 pub mod incremental;
 pub mod analysis;
 pub mod builtins;
-pub mod lsp_compat;
 pub mod refactor;
 pub mod tdd;
 pub mod tokens;
@@ -165,6 +163,7 @@ pub mod tooling;
 pub mod workspace;
 
 pub use analysis::declaration;
+#[cfg(not(target_arch = "wasm32"))]
 pub use analysis::index;
 /// Scope analysis for variable and subroutine resolution.
 #[allow(missing_docs)]
@@ -178,60 +177,60 @@ pub use analysis::type_inference;
 pub use analysis::dead_code_detector;
 pub use builtins::builtin_signatures;
 pub use builtins::builtin_signatures_phf;
-pub use lsp_compat::capabilities;
-pub use lsp_compat::code_actions;
-pub use lsp_compat::code_actions_enhanced;
-pub use lsp_compat::code_actions_pragmas;
+pub use ide::lsp_compat::capabilities;
+pub use ide::lsp_compat::code_actions;
+pub use ide::lsp_compat::code_actions_enhanced;
+pub use ide::lsp_compat::code_actions_pragmas;
 /// LSP code actions provider for automated refactoring and fixes.
-pub use lsp_compat::code_actions_provider;
-pub use lsp_compat::code_lens_provider;
-pub use lsp_compat::completion;
-pub use lsp_compat::diagnostics;
-pub use lsp_compat::document_highlight;
+pub use ide::lsp_compat::code_actions_provider;
+pub use ide::lsp_compat::code_lens_provider;
+pub use ide::lsp_compat::completion;
+pub use ide::lsp_compat::diagnostics;
+pub use ide::lsp_compat::document_highlight;
 /// LSP document links provider for file and URL navigation.
-pub use lsp_compat::document_links;
-pub use lsp_compat::implementation_provider;
+pub use ide::lsp_compat::document_links;
+pub use ide::lsp_compat::implementation_provider;
 /// Feature flags and capability management for LSP server functionality.
 #[cfg(feature = "lsp-compat")]
-pub use lsp_compat::features;
-pub use lsp_compat::folding;
-pub use lsp_compat::formatting;
+pub use ide::lsp_compat::features;
+pub use ide::lsp_compat::folding;
+pub use ide::lsp_compat::formatting;
 /// LSP inlay hints for inline type and parameter information.
-pub use lsp_compat::inlay_hints;
+pub use ide::lsp_compat::inlay_hints;
 /// LSP inlay hints provider implementation.
-pub use lsp_compat::inlay_hints_provider;
-pub use lsp_compat::inline_completions;
+pub use ide::lsp_compat::inlay_hints_provider;
+pub use ide::lsp_compat::inline_completions;
 /// LSP linked editing provider for synchronized symbol renaming.
-pub use lsp_compat::linked_editing;
+pub use ide::lsp_compat::linked_editing;
 #[cfg(not(target_arch = "wasm32"))]
-pub use lsp_compat::lsp_document_link;
+pub use ide::lsp_compat::lsp_document_link;
 #[cfg(not(target_arch = "wasm32"))]
-pub use lsp_compat::lsp_errors;
-pub use lsp_compat::lsp_on_type_formatting;
-pub use lsp_compat::lsp_selection_range;
+pub use ide::lsp_compat::lsp_errors;
+pub use ide::lsp_compat::lsp_on_type_formatting;
+pub use ide::lsp_compat::lsp_selection_range;
 #[cfg(not(target_arch = "wasm32"))]
-pub use lsp_compat::lsp_server;
-pub use lsp_compat::lsp_utils;
+pub use ide::lsp_compat::lsp_server;
+pub use ide::lsp_compat::lsp_utils;
 /// LSP on-type formatting provider for automatic code formatting.
-pub use lsp_compat::on_type_formatting;
-pub use lsp_compat::pull_diagnostics;
+pub use ide::lsp_compat::on_type_formatting;
+pub use ide::lsp_compat::pull_diagnostics;
 /// LSP references provider for symbol usage analysis.
-pub use lsp_compat::references;
-pub use lsp_compat::rename;
+pub use ide::lsp_compat::references;
+pub use ide::lsp_compat::rename;
 /// LSP selection range provider for smart text selection.
-pub use lsp_compat::selection_range;
+pub use ide::lsp_compat::selection_range;
 /// LSP semantic tokens provider for syntax highlighting.
-pub use lsp_compat::semantic_tokens;
-pub use lsp_compat::semantic_tokens_provider;
-pub use lsp_compat::signature_help;
+pub use ide::lsp_compat::semantic_tokens;
+pub use ide::lsp_compat::semantic_tokens_provider;
+pub use ide::lsp_compat::signature_help;
 #[cfg(feature = "lsp-compat")]
-pub use lsp_compat::textdoc;
+pub use ide::lsp_compat::textdoc;
 #[cfg(feature = "lsp-compat")]
-pub use lsp_compat::type_definition;
+pub use ide::lsp_compat::type_definition;
 /// LSP type hierarchy provider for inheritance navigation.
-pub use lsp_compat::type_hierarchy;
-pub use lsp_compat::uri;
-pub use lsp_compat::workspace_symbols;
+pub use ide::lsp_compat::type_hierarchy;
+pub use ide::lsp_compat::uri;
+pub use ide::lsp_compat::workspace_symbols;
 
 pub use refactor::import_optimizer;
 /// Code modernization utilities for Perl best practices.
@@ -257,6 +256,7 @@ pub use incremental::incremental_document;
 #[cfg(feature = "incremental")]
 pub use incremental::incremental_edit;
 #[cfg(feature = "incremental")]
+#[deprecated(note = "LSP server moved to perl-lsp; perl-parser no longer handles didChange")]
 pub use incremental::incremental_handler_v2;
 #[cfg(feature = "incremental")]
 pub use incremental::incremental_integration;

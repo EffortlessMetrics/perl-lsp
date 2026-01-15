@@ -623,11 +623,11 @@ mod missing_docs_tests {
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let function_critical_modules = [
             "engine/parser/mod.rs",
-            "lsp_compat/completion.rs",
-            "lsp_compat/diagnostics.rs",
-            "lsp_compat/formatting.rs",
+            "ide/lsp_compat/completion.rs",
+            "ide/lsp_compat/diagnostics.rs",
+            "ide/lsp_compat/formatting.rs",
             "workspace/workspace_index.rs",
-            "lsp_compat/semantic_tokens.rs",
+            "ide/lsp_compat/semantic_tokens.rs",
             "refactor/import_optimizer.rs",
         ];
 
@@ -917,14 +917,14 @@ mod missing_docs_tests {
             "engine/ast.rs",
             "engine/error/mod.rs",
             "tokens/token_stream.rs",
-            "lsp_compat/code_actions.rs",
-            "lsp_compat/completion.rs",
-            "lsp_compat/diagnostics.rs",
-            "lsp_compat/semantic_tokens.rs",
-            "lsp_compat/references.rs",
-            "lsp_compat/rename.rs",
+            "ide/lsp_compat/code_actions.rs",
+            "ide/lsp_compat/completion.rs",
+            "ide/lsp_compat/diagnostics.rs",
+            "ide/lsp_compat/semantic_tokens.rs",
+            "ide/lsp_compat/references.rs",
+            "ide/lsp_compat/rename.rs",
             "workspace/workspace_index.rs",
-            "lsp_compat/workspace_symbols.rs",
+            "ide/lsp_compat/workspace_symbols.rs",
             "analysis/symbol.rs",
             "refactor/import_optimizer.rs",
             "analysis/scope_analyzer.rs",
@@ -1045,10 +1045,10 @@ mod missing_docs_tests {
         // AC:AC6 - Verify complex APIs include usage examples
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let complex_api_modules = [
-            "lsp_compat/completion.rs",
-            "lsp_compat/diagnostics.rs",
-            "lsp_compat/code_actions.rs",
-            "lsp_compat/semantic_tokens.rs",
+            "ide/lsp_compat/completion.rs",
+            "ide/lsp_compat/diagnostics.rs",
+            "ide/lsp_compat/code_actions.rs",
+            "ide/lsp_compat/semantic_tokens.rs",
             "workspace/workspace_index.rs",
             "engine/parser/mod.rs",
             "refactor/import_optimizer.rs",
@@ -1110,7 +1110,7 @@ mod missing_docs_tests {
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let critical_modules = [
             "engine/parser/mod.rs",
-            "lsp_compat/completion.rs",
+            "ide/lsp_compat/completion.rs",
             "workspace/workspace_index.rs",
             "refactor/import_optimizer.rs",
             "tdd/test_generator.rs",
@@ -1286,12 +1286,12 @@ mod missing_docs_tests {
         // AC:AC9 - Verify related functions include cross-references using Rust documentation linking
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let cross_ref_modules = [
-            "lsp_compat/completion.rs",
+            "ide/lsp_compat/completion.rs",
             "workspace/workspace_index.rs",
             "analysis/symbol.rs",
-            "lsp_compat/semantic_tokens.rs",
-            "lsp_compat/diagnostics.rs",
-            "lsp_compat/code_actions.rs",
+            "ide/lsp_compat/semantic_tokens.rs",
+            "ide/lsp_compat/diagnostics.rs",
+            "ide/lsp_compat/code_actions.rs",
         ];
 
         let modules_without_cross_refs =
@@ -1357,8 +1357,8 @@ mod missing_docs_tests {
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let sample_modules = [
             "engine/parser/mod.rs",
-            "lsp_compat/completion.rs",
-            "lsp_compat/diagnostics.rs",
+            "ide/lsp_compat/completion.rs",
+            "ide/lsp_compat/diagnostics.rs",
             "workspace/workspace_index.rs",
         ];
 
@@ -1499,10 +1499,10 @@ mod missing_docs_tests {
         let core_modules = [
             "engine/parser/mod.rs",
             "engine/ast.rs",
-            "lsp_compat/completion.rs",
-            "lsp_compat/diagnostics.rs",
+            "ide/lsp_compat/completion.rs",
+            "ide/lsp_compat/diagnostics.rs",
             "workspace/workspace_index.rs",
-            "lsp_compat/semantic_tokens.rs",
+            "ide/lsp_compat/semantic_tokens.rs",
             "refactor/import_optimizer.rs",
         ];
 
@@ -2069,17 +2069,17 @@ pub fn bad_refs() {}
     fn test_lsp_provider_documentation_critical_paths() {
         // Test critical LSP provider modules with enhanced validation
         let lsp_critical_modules = [
-            "lsp_compat/completion.rs",
-            "lsp_compat/diagnostics.rs",
-            "lsp_compat/references.rs",
-            "lsp_compat/rename.rs",
-            "lsp_compat/code_actions.rs",
-            "lsp_compat/semantic_tokens.rs",
-            "lsp_compat/workspace_symbols.rs",
-            "lsp_compat/formatting.rs",
-            "lsp_compat/inlay_hints.rs",
+            "ide/lsp_compat/completion.rs",
+            "ide/lsp_compat/diagnostics.rs",
+            "ide/lsp_compat/references.rs",
+            "ide/lsp_compat/rename.rs",
+            "ide/lsp_compat/code_actions.rs",
+            "ide/lsp_compat/semantic_tokens.rs",
+            "ide/lsp_compat/workspace_symbols.rs",
+            "ide/lsp_compat/formatting.rs",
+            "ide/lsp_compat/inlay_hints.rs",
             "ide/call_hierarchy_provider.rs",
-            "lsp_compat/type_hierarchy.rs",
+            "ide/lsp_compat/type_hierarchy.rs",
         ];
 
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
@@ -2158,7 +2158,7 @@ pub fn bad_refs() {}
                         stack.push(path);
                     } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
                         if let Ok(relative) = path.strip_prefix(root) {
-                            files.push(relative.to_string_lossy().to_string());
+                            files.push(relative.to_string_lossy().replace('\\', "/"));
                         }
                     }
                 }

@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use anyhow::Result;
 use lsp_types::Diagnostic;
 use lsp_types::TextDocumentContentChangeEvent;

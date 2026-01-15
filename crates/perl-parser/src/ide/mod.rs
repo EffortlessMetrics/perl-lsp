@@ -12,6 +12,6 @@ pub mod debug_adapter;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod execute_command;
 /// LSP compatibility shims for legacy integrations.
-pub use crate::lsp_compat;
+pub mod lsp_compat;
 /// Deprecated in-crate LSP shim (use `perl_lsp` for runtime support).
-pub use crate::lsp;
+pub mod lsp;
