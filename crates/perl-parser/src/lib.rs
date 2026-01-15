@@ -110,64 +110,62 @@ pub use parser::Parser;
 /// Experimental second‑generation AST (work in progress).
 #[allow(missing_docs)]
 pub mod ast_v2;
-pub mod builtin_signatures;
-pub mod builtin_signatures_phf;
 /// LSP call hierarchy provider for function call navigation.
 pub mod call_hierarchy_provider;
 pub mod cancellation;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod dead_code_detector;
 pub mod debug_adapter;
-pub mod declaration;
 pub mod diagnostics_catalog;
 pub mod edit;
 pub mod error;
-/// Error classification and recovery strategies for parse failures.
-pub mod error_classifier;
-pub mod error_recovery;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod execute_command;
 /// Heredoc content collector with FIFO ordering and indent stripping.
 pub mod heredoc_collector;
-pub mod implementation_provider;
-pub mod index;
-pub mod line_index;
 /// Modular LSP server implementation (migration target)
 /// Note: server/transport submodules are gated off on wasm32.
 pub mod lsp;
 pub mod parser;
 pub mod parser_context;
-pub mod performance;
-pub mod perl_critic;
-pub mod perltidy;
 pub mod position;
-pub mod position_mapper;
-#[doc(hidden)]
-pub mod positions;
 pub mod pragma_tracker;
 /// Parser for Perl quote and quote-like operators.
 pub mod quote_parser;
-pub mod recovery_parser;
-/// Scope analysis for variable and subroutine resolution.
-#[allow(missing_docs)]
-pub mod scope_analyzer;
-pub mod semantic;
-pub mod symbol;
-pub mod token_stream;
-pub mod token_wrapper;
-pub mod trivia;
-pub mod trivia_parser;
-/// Type inference engine for Perl variable analysis.
-pub mod type_inference;
 pub mod util;
+
+/// Error classification and recovery strategies for parse failures.
+pub use error::classifier as error_classifier;
+pub use error::recovery as error_recovery;
+pub use error::recovery_parser;
+
+pub use position::line_index;
+pub use position::position_mapper;
+#[doc(hidden)]
+pub use position::positions;
 
 #[cfg(feature = "incremental")]
 pub mod incremental;
+pub mod analysis;
+pub mod builtins;
 pub mod lsp_compat;
 pub mod refactor;
 pub mod tdd;
+pub mod tokens;
+pub mod tooling;
 pub mod workspace;
 
+pub use analysis::declaration;
+pub use analysis::index;
+/// Scope analysis for variable and subroutine resolution.
+#[allow(missing_docs)]
+pub use analysis::scope_analyzer;
+pub use analysis::semantic;
+pub use analysis::symbol;
+/// Type inference engine for Perl variable analysis.
+pub use analysis::type_inference;
+pub use builtins::builtin_signatures;
+pub use builtins::builtin_signatures_phf;
 pub use lsp_compat::capabilities;
 pub use lsp_compat::code_actions;
 pub use lsp_compat::code_actions_enhanced;
@@ -180,6 +178,7 @@ pub use lsp_compat::diagnostics;
 pub use lsp_compat::document_highlight;
 /// LSP document links provider for file and URL navigation.
 pub use lsp_compat::document_links;
+pub use lsp_compat::implementation_provider;
 /// Feature flags and capability management for LSP server functionality.
 #[cfg(feature = "lsp-compat")]
 pub use lsp_compat::features;
@@ -229,6 +228,13 @@ pub use refactor::modernize;
 pub use refactor::modernize_refactored;
 /// Unified refactoring engine for comprehensive code transformations.
 pub use refactor::refactoring;
+pub use tokens::token_stream;
+pub use tokens::token_wrapper;
+pub use tokens::trivia;
+pub use tokens::trivia_parser;
+pub use tooling::performance;
+pub use tooling::perl_critic;
+pub use tooling::perltidy;
 
 #[cfg(feature = "incremental")]
 pub use incremental::incremental_advanced_reuse;

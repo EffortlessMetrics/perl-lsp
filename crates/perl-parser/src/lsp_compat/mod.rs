@@ -18,6 +18,7 @@ pub mod formatting;
 pub mod inlay_hints;
 pub mod inlay_hints_provider;
 pub mod inline_completions;
+pub mod implementation_provider;
 pub mod linked_editing;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod lsp_document_link;
