@@ -40,6 +40,10 @@ walkdir = "2.5.0"
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }
 
+[build-dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "0.9.8"
+
 [lints]
 workspace = true
 
@@ -78,3 +82,8 @@ proptest = "1.9.0"
 perl-corpus = { version = "0.8.8" }
 which = "8.0.0"
 parking_lot = "0.12.5"
+criterion = "0.8.1"
+
+[[bench]]
+name = "rope_performance_benchmark"
+harness = false

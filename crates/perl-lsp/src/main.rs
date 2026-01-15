@@ -54,7 +54,7 @@ fn main() {
                 process::exit(0);
             }
             "--features-json" => {
-                println!("{}", perl_parser::features::to_json());
+                println!("{}", perl_lsp::features::to_json());
                 process::exit(0);
             }
             "--help" | "-h" => {

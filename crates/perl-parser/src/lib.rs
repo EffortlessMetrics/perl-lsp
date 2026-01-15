@@ -190,7 +190,7 @@ pub use ide::lsp_compat::document_highlight;
 /// LSP document links provider for file and URL navigation.
 pub use ide::lsp_compat::document_links;
 pub use ide::lsp_compat::implementation_provider;
-/// Feature flags and capability management for LSP server functionality.
+/// Deprecated LSP feature catalog shim (moved to `perl-lsp`).
 #[cfg(feature = "lsp-compat")]
 pub use ide::lsp_compat::features;
 pub use ide::lsp_compat::folding;

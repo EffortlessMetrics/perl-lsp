@@ -91,10 +91,6 @@ semantic-phase2 = []  # Semantic analyzer Phase 2+ features
 parser-extras = []  # General aspirational parser tests
 crash-repros = []  # Enable crash reproducer tests (may hang - use with timeout)
 
-[build-dependencies]
-serde = { version = "1.0.228", features = ["derive"] }
-toml = "0.9.8"
-
 [dev-dependencies]
 assert_cmd = "2.1.2"
 insta = { version = "1.46.0", features = ["yaml"] }

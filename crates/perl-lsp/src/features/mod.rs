@@ -9,6 +9,7 @@ pub mod completion;
 pub mod diagnostics;
 pub mod document_highlight;
 pub mod document_links;
+pub mod feature_catalog;
 pub mod folding;
 pub mod formatting;
 pub mod implementation_provider;
@@ -20,6 +21,7 @@ pub mod linked_editing;
 pub mod lsp_document_link;
 pub mod lsp_on_type_formatting;
 pub mod lsp_selection_range;
+pub mod map;
 pub mod on_type_formatting;
 pub mod references;
 pub mod rename;
@@ -31,3 +33,7 @@ pub mod type_definition;
 pub mod type_hierarchy;
 pub mod workspace_rename;
 pub mod workspace_symbols;
+
+pub use feature_catalog::{
+    LSP_VERSION, VERSION, advertised_features, catalog, compliance_percent, has_feature, to_json,
+};
