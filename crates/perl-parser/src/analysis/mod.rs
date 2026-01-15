@@ -13,3 +13,6 @@ pub mod semantic;
 pub mod symbol;
 /// Type inference engine for Perl variable analysis.
 pub mod type_inference;
+/// Dead code detection for Perl workspaces.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod dead_code_detector;

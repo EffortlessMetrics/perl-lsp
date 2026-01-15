@@ -103,36 +103,45 @@
 //! }
 //! ```
 
+/// Parser engine components and supporting utilities.
+pub mod engine;
+/// IDE integration helpers (LSP/DAP runtime support).
+pub mod ide;
+pub use parser::Parser;
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 #[allow(missing_docs)]
-pub mod ast;
-pub use parser::Parser;
-/// Experimental second‑generation AST (work in progress).
+pub use engine::ast;
+/// Experimental second-generation AST (work in progress).
 #[allow(missing_docs)]
-pub mod ast_v2;
-/// LSP call hierarchy provider for function call navigation.
-pub mod call_hierarchy_provider;
-pub mod cancellation;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod dead_code_detector;
-pub mod debug_adapter;
-pub mod diagnostics_catalog;
-pub mod edit;
-pub mod error;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod execute_command;
+pub use engine::ast_v2;
+/// Edit tracking for incremental parsing.
+pub use engine::edit;
 /// Heredoc content collector with FIFO ordering and indent stripping.
-pub mod heredoc_collector;
+pub use engine::heredoc_collector;
+/// Parser context with error recovery support.
+pub use engine::parser_context;
+/// Pragma tracking for `use` and related directives.
+pub use engine::pragma_tracker;
+/// Parser for Perl quote and quote-like operators.
+pub use engine::quote_parser;
+/// Parser utilities and helpers.
+pub use engine::util;
+/// LSP call hierarchy provider for function call navigation.
+pub use ide::call_hierarchy_provider;
+/// Enhanced LSP cancellation infrastructure.
+pub use ide::cancellation;
+/// Diagnostic catalog with stable codes for consistent error reporting.
+pub use ide::diagnostics_catalog;
+/// Debug Adapter Protocol (DAP) implementation for Perl debugging.
+pub use ide::debug_adapter;
+#[cfg(not(target_arch = "wasm32"))]
+pub use ide::execute_command;
+pub mod error;
 /// Modular LSP server implementation (migration target)
 /// Note: server/transport submodules are gated off on wasm32.
 pub mod lsp;
 pub mod parser;
-pub mod parser_context;
 pub mod position;
-pub mod pragma_tracker;
-/// Parser for Perl quote and quote-like operators.
-pub mod quote_parser;
-pub mod util;
 
 /// Error classification and recovery strategies for parse failures.
 pub use error::classifier as error_classifier;
@@ -164,6 +173,9 @@ pub use analysis::semantic;
 pub use analysis::symbol;
 /// Type inference engine for Perl variable analysis.
 pub use analysis::type_inference;
+/// Dead code detection for Perl workspaces.
+#[cfg(not(target_arch = "wasm32"))]
+pub use analysis::dead_code_detector;
 pub use builtins::builtin_signatures;
 pub use builtins::builtin_signatures_phf;
 pub use lsp_compat::capabilities;
