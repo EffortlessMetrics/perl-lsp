@@ -44,6 +44,7 @@ pub enum NodeKind {
         /// Statements contained by the program/root node.
         statements: Vec<Node>,
     },
+    /// Block node containing a list of statements.
     Block {
         /// Statements inside a block.
         statements: Vec<Node>,
