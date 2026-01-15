@@ -5,7 +5,7 @@ mod support;
 #[serial_test::serial]
 fn test_goto_definition_across_files() {
     use lsp_types::Position;
-    use perl_parser::lsp_server::LspServer;
+    use perl_lsp::LspServer;
     use serde_json::json;
     use std::fs;
     use support::env_guard::EnvGuard;
@@ -94,7 +94,7 @@ fn test_goto_definition_across_files() {
 #[serial_test::serial]
 fn test_find_references_across_files() {
     use lsp_types::Position;
-    use perl_parser::lsp_server::LspServer;
+    use perl_lsp::LspServer;
     use serde_json::json;
     use std::fs;
     use support::env_guard::EnvGuard;
@@ -207,7 +207,7 @@ fn test_find_references_across_files() {
 #[serial_test::serial]
 fn test_workspace_symbol_completion() {
     use lsp_types::Position;
-    use perl_parser::lsp_server::LspServer;
+    use perl_lsp::LspServer;
     use serde_json::json;
     use std::fs;
     use support::env_guard::EnvGuard;

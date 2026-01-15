@@ -10,7 +10,7 @@ use perl_parser::Parser;
 /// Goal: Strategic test additions to achieve ≥80% mutation score improvement
 /// Labels: tests:hardening, mutation:critical, pr170:core
 use perl_parser::quote_parser::*;
-use perl_parser::semantic_tokens::{EncodedToken, collect_semantic_tokens};
+use perl_lsp::features::semantic_tokens::{EncodedToken, collect_semantic_tokens};
 
 /// Critical UTF-8 arithmetic boundary tests targeting position calculation mutations
 #[test]

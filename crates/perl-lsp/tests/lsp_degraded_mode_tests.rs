@@ -17,7 +17,7 @@
 
 #[cfg(feature = "workspace")]
 mod degraded_mode_tests {
-    use perl_parser::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
+    use perl_lsp::runtime::routing::{IndexAccessMode, route_index_access};
     use perl_parser::workspace_index::IndexCoordinator;
     use std::sync::Arc;
 
@@ -154,7 +154,7 @@ mod degraded_mode_tests {
 /// Tests without workspace feature (verify graceful degradation)
 #[cfg(not(feature = "workspace"))]
 mod no_workspace_tests {
-    use perl_parser::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
+    use perl_lsp::runtime::routing::{IndexAccessMode, route_index_access};
 
     #[test]
     fn test_routing_returns_none_without_workspace_feature() {
@@ -173,7 +173,7 @@ mod no_workspace_tests {
 /// by using the public `did_open` API.
 #[cfg(all(test, feature = "workspace"))]
 mod handler_integration_tests {
-    use perl_parser::lsp::LspServer;
+    use perl_lsp::LspServer;
     use serde_json::json;
 
     fn create_server_with_building_index() -> LspServer {

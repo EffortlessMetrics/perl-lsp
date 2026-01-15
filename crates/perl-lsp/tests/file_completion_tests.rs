@@ -8,7 +8,8 @@
 //! - File type recognition
 //! - Context awareness (no completions in comments, etc.)
 
-use perl_parser::{CompletionItemKind, CompletionProvider, Parser};
+use perl_lsp::features::completion::{CompletionItemKind, CompletionProvider};
+use perl_parser::Parser;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 

@@ -12,7 +12,7 @@
 
 #![cfg(feature = "lsp-extras")]
 
-use perl_parser::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::PathBuf;

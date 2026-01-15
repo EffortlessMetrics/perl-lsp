@@ -1,5 +1,5 @@
 use lsp_types::DocumentDiagnosticReport;
-use perl_parser::pull_diagnostics::PullDiagnosticsProvider;
+use perl_lsp::features::diagnostics::PullDiagnosticsProvider;
 
 #[test]
 fn pull_diagnostics_full_then_unchanged() {

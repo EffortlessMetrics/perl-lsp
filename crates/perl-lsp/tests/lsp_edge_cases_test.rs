@@ -2,7 +2,7 @@
 //!
 //! Tests scenarios that might break or behave unexpectedly
 
-use perl_parser::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 
 fn setup_server() -> LspServer {

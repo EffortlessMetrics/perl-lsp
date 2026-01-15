@@ -5,7 +5,7 @@
 #[cfg(test)]
 mod tests {
     use parking_lot::Mutex;
-    use perl_parser::lsp_server::LspServer;
+    use perl_lsp::LspServer;
     use serde_json::json;
     use std::io::{Cursor, Write};
     use std::sync::Arc;

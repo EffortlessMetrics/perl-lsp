@@ -5,7 +5,7 @@ mod support;
 mod tests {
     use crate::support::env_guard::EnvGuard;
     use lsp_types::Position;
-    use perl_parser::lsp_server::LspServer;
+    use perl_lsp::LspServer;
     use serde_json::json;
     use serial_test::serial;
     use std::sync::Arc;

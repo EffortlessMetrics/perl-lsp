@@ -4,7 +4,7 @@
 //! LSP 3.18 features for detecting and presenting color literals in Perl code.
 
 use parking_lot::Mutex;
-use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::sync::Arc;
 

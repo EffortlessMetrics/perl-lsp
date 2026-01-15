@@ -1,7 +1,7 @@
 //! Tests for window/* and telemetry/event LSP features
 
 use parking_lot::Mutex;
-use perl_parser::lsp_server::{LspServer, MessageType, ShowDocumentOptions};
+use perl_lsp::{LspServer, server::{MessageType, ShowDocumentOptions}};
 use serde_json::{Value, json};
 use std::io::Write;
 use std::sync::Arc;
@@ -78,7 +78,7 @@ fn lsp_window_show_message_request_format() {
         }
     });
 
-    let _ = server.handle_request(perl_parser::lsp_server::JsonRpcRequest {
+    let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
         method: "initialize".to_string(),
@@ -146,7 +146,7 @@ fn lsp_window_show_document_with_capability() {
         }
     });
 
-    let _ = server.handle_request(perl_parser::lsp_server::JsonRpcRequest {
+    let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
         method: "initialize".to_string(),
@@ -193,7 +193,7 @@ fn lsp_window_progress_lifecycle() {
         }
     });
 
-    let _ = server.handle_request(perl_parser::lsp_server::JsonRpcRequest {
+    let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
         method: "initialize".to_string(),
@@ -266,7 +266,7 @@ fn lsp_window_progress_duplicate_token_fails() {
         }
     });
 
-    let _ = server.handle_request(perl_parser::lsp_server::JsonRpcRequest {
+    let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
         method: "initialize".to_string(),
@@ -300,7 +300,7 @@ fn lsp_window_progress_cancel_handler() {
         }
     });
 
-    let _ = server.handle_request(perl_parser::lsp_server::JsonRpcRequest {
+    let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
         method: "initialize".to_string(),
@@ -308,7 +308,7 @@ fn lsp_window_progress_cancel_handler() {
     });
 
     // Send initialized notification
-    let _ = server.handle_request(perl_parser::lsp_server::JsonRpcRequest {
+    let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None,
         method: "initialized".to_string(),
@@ -321,7 +321,7 @@ fn lsp_window_progress_cancel_handler() {
     assert!(result.is_ok());
 
     // Send cancel notification
-    let cancel_response = server.handle_request(perl_parser::lsp_server::JsonRpcRequest {
+    let cancel_response = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None, // Notification
         method: "window/workDoneProgress/cancel".to_string(),
@@ -339,14 +339,14 @@ fn lsp_window_telemetry_respects_config() {
     let mut server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
 
     // Initialize server first
-    let _ = server.handle_request(perl_parser::lsp_server::JsonRpcRequest {
+    let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
         method: "initialize".to_string(),
         params: Some(json!({})),
     });
 
-    let _ = server.handle_request(perl_parser::lsp_server::JsonRpcRequest {
+    let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None,
         method: "initialized".to_string(),
@@ -371,7 +371,7 @@ fn lsp_window_telemetry_respects_config() {
     output.clear();
 
     // Enable telemetry via configuration using didChangeConfiguration
-    let config_response = server.handle_request(perl_parser::lsp_server::JsonRpcRequest {
+    let config_response = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None, // Notification
         method: "workspace/didChangeConfiguration".to_string(),
@@ -455,7 +455,7 @@ fn lsp_window_show_document_external_flag() {
         }
     });
 
-    let _ = server.handle_request(perl_parser::lsp_server::JsonRpcRequest {
+    let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
         method: "initialize".to_string(),

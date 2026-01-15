@@ -1,4 +1,5 @@
-use perl_parser::{CompletionItemKind, CompletionProvider, Parser};
+use perl_lsp::features::completion::{CompletionItemKind, CompletionProvider};
+use perl_parser::Parser;
 use serial_test::serial;
 use std::fs;
 #[cfg(unix)]

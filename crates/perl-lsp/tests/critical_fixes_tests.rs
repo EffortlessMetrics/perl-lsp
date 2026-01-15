@@ -137,7 +137,7 @@ fn test_workspace_symbol_deduplication() {
     let mut seen = HashSet::new();
     for sym in &symbols {
         let key =
-            (sym.uri.clone(), sym.range.start.line, sym.range.start.character, sym.name.clone());
+            (sym.uri.clone(), sym.range.start.line, sym.range.start.column, sym.name.clone());
 
         // This would fail if we had true duplicates at the same position
         if seen.contains(&key) {
@@ -203,5 +203,5 @@ fn test_utf16_position_encoding() {
     let symbol = &symbols[0];
 
     // The exact position depends on the parser, but it should be consistent
-    assert!(symbol.range.start.character < 100, "Position seems unreasonably large");
+    assert!(symbol.range.start.column < 100, "Position seems unreasonably large");
 }

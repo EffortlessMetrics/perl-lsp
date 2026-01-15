@@ -1,4 +1,4 @@
-use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 /// Test that ensures LSP capabilities match GA contract
@@ -134,7 +134,7 @@ fn test_unsupported_methods_return_error() {
     ];
 
     for method in &unsupported_methods {
-        let request = perl_parser::lsp_server::JsonRpcRequest {
+        let request = perl_lsp::JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
             id: Some(json!(1)),
             method: method.to_string(),

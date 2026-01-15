@@ -6,7 +6,8 @@
 #[path = "support/mod.rs"]
 mod support;
 
-use perl_parser::{JsonRpcRequest, LspServer, Parser};
+use perl_lsp::{JsonRpcRequest, LspServer};
+use perl_parser::Parser;
 use serde_json::{Value, json};
 use std::time::Duration;
 use support::test_helpers::{

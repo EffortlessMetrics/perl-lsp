@@ -9,7 +9,7 @@
 #[cfg(test)]
 #[cfg(feature = "utf16-complete")]
 mod utf16_round_trip_tests {
-    use perl_parser::lsp_server::LspServer;
+    use perl_lsp::LspServer;
 
     fn test_round_trip(server: &LspServer, text: &str, line: u32, character: u32) -> bool {
         // Convert position to offset

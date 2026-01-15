@@ -3,7 +3,7 @@
 //! These tests verify that the server correctly sends refresh requests to the
 //! client for various features (code lenses, semantic tokens, diagnostics, etc.)
 
-use perl_parser::lsp_server::LspServer;
+use perl_lsp::LspServer;
 
 /// Test that refresh requests succeed when client doesn't support them (no-op behavior)
 #[test]

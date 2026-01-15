@@ -1,5 +1,5 @@
 use parking_lot::Mutex;
-use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Cursor, Read, Write};
 use std::sync::Arc;
@@ -183,7 +183,7 @@ sub another {
         let key = (
             symbol.uri.clone(),
             symbol.range.start.line,
-            symbol.range.start.character,
+            symbol.range.start.column,
             symbol.name.clone(),
             symbol.kind,
         );

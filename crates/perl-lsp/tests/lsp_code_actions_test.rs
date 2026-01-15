@@ -1,8 +1,7 @@
-use perl_parser::{
-    DiagnosticsProvider, Parser,
-    code_actions_provider::{
-        CodeActionKind as CodeActionKindV2, CodeActionsProvider as CodeActionsProviderV2,
-    },
+use perl_parser::Parser;
+use perl_lsp::features::diagnostics::DiagnosticsProvider;
+use perl_lsp::features::code_actions_provider::{
+    CodeActionKind as CodeActionKindV2, CodeActionsProvider as CodeActionsProviderV2,
 };
 
 #[test]
@@ -118,9 +117,9 @@ fn test_parse_error_semicolon_fix() {
     });
 
     // Create diagnostic manually for missing semicolon
-    let diagnostic = perl_parser::Diagnostic {
+    let diagnostic = perl_lsp::features::diagnostics::Diagnostic {
         range: (13, 14),
-        severity: perl_parser::DiagnosticSeverity::Error,
+        severity: perl_lsp::features::diagnostics::DiagnosticSeverity::Error,
         code: Some("parse-error-missingsemicolon".to_string()),
         message: "Missing semicolon".to_string(),
         related_information: vec![],

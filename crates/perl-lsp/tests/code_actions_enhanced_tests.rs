@@ -1,5 +1,6 @@
-use perl_parser::code_actions_provider::CodeActionsProvider as CodeActionsProviderV2;
-use perl_parser::{DiagnosticsProvider, Parser};
+use perl_lsp::features::code_actions_provider::CodeActionsProvider as CodeActionsProviderV2;
+use perl_lsp::features::diagnostics::DiagnosticsProvider;
+use perl_parser::Parser;
 
 #[test]
 fn test_duplicate_parameter_code_actions() {

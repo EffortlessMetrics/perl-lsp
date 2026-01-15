@@ -3,7 +3,7 @@
 //! Tests the deferred resolution pattern where initial documentLink returns
 //! links with data fields, and documentLink/resolve fills in the target.
 
-use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 /// Test that documentLink/resolve returns target for deferred module links

@@ -44,7 +44,7 @@ my $π = 3.14159;  # Greek letter pi
 
         // Line 4 (0-indexed), "package " is 8 chars, starts at col 0
         assert_eq!(package.range.start.line, 4);
-        assert_eq!(package.range.start.character, 0);
+        assert_eq!(package.range.start.column, 0);
 
         let sub = symbols
             .iter()
@@ -53,7 +53,7 @@ my $π = 3.14159;  # Greek letter pi
 
         // Line 6, "sub " is 4 chars
         assert_eq!(sub.range.start.line, 6);
-        assert_eq!(sub.range.start.character, 0);
+        assert_eq!(sub.range.start.column, 0);
 
         let heart_var = symbols
             .iter()
@@ -62,7 +62,7 @@ my $π = 3.14159;  # Greek letter pi
 
         // Line 11, "my " is 3 chars
         assert_eq!(heart_var.range.start.line, 11);
-        assert_eq!(heart_var.range.start.character, 3);
+        assert_eq!(heart_var.range.start.column, 3);
 
         let pi_var = symbols
             .iter()
@@ -71,7 +71,7 @@ my $π = 3.14159;  # Greek letter pi
 
         // Line 12
         assert_eq!(pi_var.range.start.line, 12);
-        assert_eq!(pi_var.range.start.character, 3);
+        assert_eq!(pi_var.range.start.column, 3);
     }
 
     #[test]
@@ -94,14 +94,14 @@ my $世 = 3;  # CJK at column 3, takes 1 UTF-16 unit
 
         // Check each variable's position
         let var_a = symbols.iter().find(|s| s.name == "$a").expect("Should find $a");
-        assert_eq!(var_a.range.start.character, 3); // "my " = 3 units
+        assert_eq!(var_a.range.start.column, 3); // "my " = 3 units
 
         let var_emoji =
             symbols.iter().find(|s| s.name == "$😀").expect("Should find emoji variable");
-        assert_eq!(var_emoji.range.start.character, 3); // "my " = 3 units
+        assert_eq!(var_emoji.range.start.column, 3); // "my " = 3 units
 
         let var_cjk = symbols.iter().find(|s| s.name == "$世").expect("Should find CJK variable");
-        assert_eq!(var_cjk.range.start.character, 3); // "my " = 3 units
+        assert_eq!(var_cjk.range.start.column, 3); // "my " = 3 units
     }
 
     #[test]

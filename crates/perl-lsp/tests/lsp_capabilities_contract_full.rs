@@ -1,7 +1,7 @@
 #![allow(clippy::collapsible_if)]
 #![allow(unused_imports)]
 
-use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]

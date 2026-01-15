@@ -3,7 +3,8 @@
 /// to ensure robust token generation and position validation.
 ///
 /// Labels: tests:semantic-tokens, tests:mutation-hardening
-use perl_parser::{Parser, semantic_tokens_provider::SemanticTokensProvider};
+use perl_parser::Parser;
+use perl_lsp::features::semantic_tokens_provider::SemanticTokensProvider;
 
 // Test basic semantic token generation without overlaps
 #[test]
@@ -46,19 +47,19 @@ fn test_semantic_token_complex_code_generation() {
     let has_namespace = tokens.iter().any(|token| {
         matches!(
             token.token_type,
-            perl_parser::semantic_tokens_provider::SemanticTokenType::Namespace
+            perl_lsp::features::semantic_tokens_provider::SemanticTokenType::Namespace
         )
     });
     let has_function = tokens.iter().any(|token| {
         matches!(
             token.token_type,
-            perl_parser::semantic_tokens_provider::SemanticTokenType::Function
+            perl_lsp::features::semantic_tokens_provider::SemanticTokenType::Function
         )
     });
     let has_variable = tokens.iter().any(|token| {
         matches!(
             token.token_type,
-            perl_parser::semantic_tokens_provider::SemanticTokenType::Variable
+            perl_lsp::features::semantic_tokens_provider::SemanticTokenType::Variable
         )
     });
 
@@ -187,7 +188,7 @@ fn test_semantic_token_performance_characteristics() {
 
     // Memory usage should be reasonable
     let total_token_size =
-        tokens.len() * std::mem::size_of::<perl_parser::semantic_tokens_provider::SemanticToken>();
+        tokens.len() * std::mem::size_of::<perl_lsp::features::semantic_tokens_provider::SemanticToken>();
     assert!(total_token_size < 100_000, "Token memory usage should be reasonable");
 }
 
@@ -225,7 +226,7 @@ fn test_semantic_token_nested_structures() {
 
 // Helper function to verify no overlaps exist in semantic token list
 fn verify_no_semantic_token_overlaps(
-    tokens: &[perl_parser::semantic_tokens_provider::SemanticToken],
+    tokens: &[perl_lsp::features::semantic_tokens_provider::SemanticToken],
 ) {
     // Sort tokens by position for overlap checking
     let mut sorted_tokens: Vec<_> = tokens.iter().collect();

@@ -1,5 +1,5 @@
 //! Tests for LSP execute command functionality
-use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 fn setup_server() -> LspServer {

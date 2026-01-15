@@ -4,7 +4,7 @@
 //! for serving virtual documents like perldoc:// URIs.
 
 use parking_lot::Mutex;
-use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 use std::sync::Arc;
 

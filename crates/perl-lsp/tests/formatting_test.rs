@@ -1,6 +1,6 @@
 //! Integration tests for code formatting
 
-use perl_parser::{CodeFormatter, FormattingOptions};
+use perl_lsp::features::formatting::{CodeFormatter, FormattingOptions};
 
 #[test]
 fn test_basic_formatting() {
@@ -54,9 +54,9 @@ fn test_range_formatting() {
     let code = "my $x = 1;\nsub test{return$x;}\nmy $y = 2;";
 
     // Format only the middle line
-    let range = perl_parser::formatting::Range {
-        start: perl_parser::formatting::Position { line: 1, character: 0 },
-        end: perl_parser::formatting::Position { line: 1, character: 20 },
+    let range = perl_lsp::features::formatting::Range {
+        start: perl_lsp::features::formatting::Position { line: 1, character: 0 },
+        end: perl_lsp::features::formatting::Position { line: 1, character: 20 },
     };
 
     match formatter.format_range(code, &range, &options) {

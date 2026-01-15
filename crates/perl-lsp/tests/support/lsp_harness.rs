@@ -6,7 +6,7 @@
 #![allow(clippy::collapsible_if)]
 
 use parking_lot::Mutex;
-use perl_parser::lsp_server::LspServer;
+use perl_lsp::LspServer;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::fs;

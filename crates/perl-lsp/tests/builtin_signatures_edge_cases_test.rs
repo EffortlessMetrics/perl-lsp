@@ -3,7 +3,8 @@
 
 #![allow(clippy::collapsible_if)]
 
-use perl_parser::{Parser, SignatureHelpProvider};
+use perl_parser::Parser;
+use perl_lsp::features::signature_help::SignatureHelpProvider;
 
 #[test]
 fn test_signature_at_various_positions() {

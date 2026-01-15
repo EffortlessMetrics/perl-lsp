@@ -1,7 +1,7 @@
 //! Real tests for Document Lifecycle Events
 //! Tests didSave, willSave, and willSaveWaitUntil notifications
 
-use perl_parser::{JsonRpcRequest, JsonRpcResponse, LspServer};
+use perl_lsp::{JsonRpcRequest, JsonRpcResponse, LspServer};
 use serde_json::{Value, json};
 
 /// Helper to set up an initialized LSP server with a document

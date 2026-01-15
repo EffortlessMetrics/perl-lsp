@@ -1,4 +1,5 @@
-use perl_parser::{DiagnosticsProvider, Parser};
+use perl_lsp::features::diagnostics::DiagnosticsProvider;
+use perl_parser::Parser;
 
 #[test]
 fn test_duplicate_parameters() {

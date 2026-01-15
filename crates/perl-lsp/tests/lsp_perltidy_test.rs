@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 /// Test that pragma code actions are offered
