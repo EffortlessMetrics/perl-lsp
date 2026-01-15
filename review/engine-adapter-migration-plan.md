@@ -137,6 +137,28 @@ fn main() {
 
 ## Target Architecture
 
+### Existing Position/Range Types
+
+The codebase already has well-defined internal position types that should be used instead of creating new internal types:
+
+| Type | Location | Fields | Purpose |
+|------|----------|--------|---------|
+| `SourceLocation` | `ast.rs:1868` | `start: usize, end: usize` | Byte-based spans in AST |
+| `Position` | `position.rs:11` | `byte: usize, line: u32, column: u32` | Rich position with byte + line/column |
+| `Range` | `position.rs:64` | `start: Position, end: Position` | Range using rich positions |
+
+**Adapter Boundary Strategy**: Instead of creating `PositionInternal`/`RangeInternal` types, use type aliases at the adapter boundary:
+
+```rust
+// In perl-lsp adapter layer
+use crate::position::Range as ByteRange;  // Engine's internal type
+use lsp_types::Range as LspRange;         // LSP protocol type
+
+// Conversion functions in adapter
+fn to_lsp_range(range: ByteRange, mapper: &PositionMapper) -> LspRange { ... }
+fn from_lsp_range(range: LspRange, mapper: &PositionMapper) -> ByteRange { ... }
+```
+
 ### Engine (perl-parser) - Post-Migration
 
 The `perl-parser` crate should contain **only engine logic**:
@@ -235,9 +257,17 @@ pub fn format_document(&self, content: &str, options: &FormattingOptions) -> Res
 - `cargo check -p perl-parser --target wasm32-unknown-unknown`
 - Ensure no compilation errors or warnings
 
-### Phase 2: LSP Conversion Cleanup
+### Phase 2: Make `lsp-types` Optional in perl-parser
 
-**Goal:** Remove LSP-specific conversion methods from engine code to establish clean separation.
+**Goal:** Ensure perl-parser can compile without `lsp-types` dependency, gating all LSP-specific code behind the `lsp-compat` feature.
+
+> **Note:** The `lsp-types` dependency is already optional in `Cargo.toml`:
+> ```toml
+> lsp-types = { version = "0.97.0", optional = true }
+> # ...
+> lsp-compat = ["lsp-types"]  # LSP type compatibility shim for migration period
+> ```
+> However, many modules still unconditionally import and use `lsp_types`. Phase 2 gates these usages.
 
 **Modules affected:**
 - `src/lsp/features/` - Various `to_lsp_kind()`, `to_lsp_completion_kind()` methods
@@ -245,10 +275,11 @@ pub fn format_document(&self, content: &str, options: &FormattingOptions) -> Res
 - `src/lsp/protocol/` - Protocol type definitions
 
 **Implementation approach:**
-1. Create adapter-specific conversion modules in perl-lsp
-2. Move `to_lsp_kind()` and similar methods to perl-lsp
-3. Update engine code to use internal types, adapter converts to LSP types
-4. Remove LSP-specific conversion code from engine
+1. Audit all `use lsp_types::` statements in perl-parser
+2. Gate LSP type imports and conversions behind `#[cfg(feature = "lsp-compat")]`
+3. Create adapter-specific conversion modules in perl-lsp
+4. Move `to_lsp_kind()` and similar methods to perl-lsp
+5. Update engine code to use internal types, adapter converts to LSP types
 
 **Example pattern:**
 ```rust
@@ -261,34 +292,59 @@ pub fn to_lsp_completion_kind(kind: CompletionItemKind) -> lsp_types::Completion
     }
 }
 
-// In perl-parser (engine layer)
+// In perl-parser (engine layer) - returns internal type, no lsp_types dependency
 pub fn get_completion_kind(kind: CompletionItemKind) -> CompletionItemKind {
     // Return internal type directly
 }
+```
+
+**Validation:**
+```bash
+# Verify perl-parser compiles WITHOUT lsp-compat feature
+cargo check -p perl-parser --no-default-features
+cargo check -p perl-parser --no-default-features --target wasm32-unknown-unknown
 ```
 
 ### Phase 3: Runtime Migration
 
 **Goal:** Move server runtime logic from perl-parser to perl-lsp.
 
-**Modules to move:**
+**Directory mapping:**
 
-| Module | From | To | Rationale |
-|--------|------|-----|----------|
-| `server.rs` | `src/lsp/server.rs` | `perl-lsp/src/server.rs` |
-| `server_impl/mod.rs` | `src/lsp/server_impl/mod.rs` | `perl-lsp/src/server_impl/mod.rs` |
-| `server_impl/lifecycle.rs` | `src/lsp/server_impl/lifecycle.rs` | `perl-lsp/src/server_impl/lifecycle.rs` |
-| `server_impl/workspace.rs` | `src/lsp/server_impl/workspace.rs` | `perl-lsp/src/server_impl/workspace.rs` |
-| `server_impl/text_sync.rs` | `src/lsp/server_impl/text_sync.rs` | `perl-lsp/src/server_impl/text_sync.rs` |
-| `server_impl/window.rs` | `src/lsp/server_impl/window.rs` | `perl-lsp/src/server_impl/window.rs` |
-| `server_impl/refresh.rs` | `src/lsp/server_impl/refresh.rs` | `perl-lsp/src/server_impl/refresh.rs` |
-| `server_impl/notebook.rs` | `src/lsp/server_impl/notebook.rs` | `perl-lsp/src/server_impl/notebook.rs` |
-| `server_impl/routing.rs` | `src/lsp/server_impl/routing.rs` | `perl-lsp/src/server_impl/routing.rs` |
-| `server_impl/dispatch.rs` | `src/lsp/server_impl/dispatch.rs` | `perl-lsp/src/server_impl/dispatch.rs` |
-| `transport/` | `src/lsp/transport/` | `perl-lsp/src/transport/` |
-| `dispatch.rs` | `src/lsp/dispatch.rs` | `perl-lsp/src/dispatch.rs` |
-| `state/` | `src/lsp/state/` | `perl-lsp/src/state/` |
-| `fallback/` | `src/lsp/fallback/` | `perl-lsp/src/fallback/` |
+| Category | From (perl-parser) | To (perl-lsp) |
+|----------|-------------------|---------------|
+| Protocol | `perl-parser/src/lsp/protocol/**` | `perl-lsp/src/protocol/**` |
+| Transport | `perl-parser/src/lsp/transport/**` | `perl-lsp/src/transport/**` |
+| State | `perl-parser/src/lsp/state/**` | `perl-lsp/src/state/**` |
+| Runtime | `perl-parser/src/lsp/server_impl/**` | `perl-lsp/src/runtime/**` |
+
+**Files to move:**
+
+| Module | From | To |
+|--------|------|-----|
+| `server.rs` | `perl-parser/src/lsp/server.rs` | `perl-lsp/src/server.rs` |
+| `protocol/capabilities.rs` | `perl-parser/src/lsp/protocol/capabilities.rs` | `perl-lsp/src/protocol/capabilities.rs` |
+| `protocol/errors.rs` | `perl-parser/src/lsp/protocol/errors.rs` | `perl-lsp/src/protocol/errors.rs` |
+| `protocol/jsonrpc.rs` | `perl-parser/src/lsp/protocol/jsonrpc.rs` | `perl-lsp/src/protocol/jsonrpc.rs` |
+| `transport/mod.rs` | `perl-parser/src/lsp/transport/mod.rs` | `perl-lsp/src/transport/mod.rs` |
+| `transport/framing.rs` | `perl-parser/src/lsp/transport/framing.rs` | `perl-lsp/src/transport/framing.rs` |
+| `state/mod.rs` | `perl-parser/src/lsp/state/mod.rs` | `perl-lsp/src/state/mod.rs` |
+| `state/config.rs` | `perl-parser/src/lsp/state/config.rs` | `perl-lsp/src/state/config.rs` |
+| `state/document.rs` | `perl-parser/src/lsp/state/document.rs` | `perl-lsp/src/state/document.rs` |
+| `state/limits.rs` | `perl-parser/src/lsp/state/limits.rs` | `perl-lsp/src/state/limits.rs` |
+| `server_impl/mod.rs` | `perl-parser/src/lsp/server_impl/mod.rs` | `perl-lsp/src/runtime/mod.rs` |
+| `server_impl/lifecycle.rs` | `perl-parser/src/lsp/server_impl/lifecycle.rs` | `perl-lsp/src/runtime/lifecycle.rs` |
+| `server_impl/workspace.rs` | `perl-parser/src/lsp/server_impl/workspace.rs` | `perl-lsp/src/runtime/workspace.rs` |
+| `server_impl/text_sync.rs` | `perl-parser/src/lsp/server_impl/text_sync.rs` | `perl-lsp/src/runtime/text_sync.rs` |
+| `server_impl/window.rs` | `perl-parser/src/lsp/server_impl/window.rs` | `perl-lsp/src/runtime/window.rs` |
+| `server_impl/refresh.rs` | `perl-parser/src/lsp/server_impl/refresh.rs` | `perl-lsp/src/runtime/refresh.rs` |
+| `server_impl/notebook.rs` | `perl-parser/src/lsp/server_impl/notebook.rs` | `perl-lsp/src/runtime/notebook.rs` |
+| `server_impl/routing.rs` | `perl-parser/src/lsp/server_impl/routing.rs` | `perl-lsp/src/runtime/routing.rs` |
+| `server_impl/dispatch.rs` | `perl-parser/src/lsp/server_impl/dispatch.rs` | `perl-lsp/src/runtime/dispatch.rs` |
+| `server_impl/diagnostics.rs` | `perl-parser/src/lsp/server_impl/diagnostics.rs` | `perl-lsp/src/runtime/diagnostics.rs` |
+| `server_impl/language/**` | `perl-parser/src/lsp/server_impl/language/**` | `perl-lsp/src/runtime/language/**` |
+| `dispatch.rs` | `perl-parser/src/lsp/dispatch.rs` | `perl-lsp/src/dispatch.rs` |
+| `fallback/` | `perl-parser/src/lsp/fallback/` | `perl-lsp/src/fallback/` |
 
 **Implementation approach:**
 1. Create directory structure in perl-lsp mirroring server_impl
@@ -336,31 +392,42 @@ pub fn get_completion_kind(kind: CompletionItemKind) -> CompletionItemKind {
 3. Update feature providers to use adapter wrappers
 4. Maintain backward compatibility through re-exports
 
-### Phase 5: Deprecation and Compatibility Strategy
+### Phase 5: Delete `perl-parser/src/lsp/**`
 
-**Goal:** Maintain backward compatibility during migration and provide clear deprecation warnings.
+**Goal:** Remove all LSP-related code from perl-parser after migration is complete.
+
+**Prerequisites (must be satisfied before Phase 5):**
+- All runtime code successfully moved to perl-lsp (Phase 3)
+- All feature adapters moved to perl-lsp (Phase 4)
+- perl-lsp passes all tests independently
+- No external consumers depend on perl-parser's LSP exports
 
 **Strategy:**
-1. Use re-exports in perl-parser mod.rs to maintain old import paths
-2. Add deprecation warnings for moved APIs
-3. Document migration in CHANGELOG or migration guide
-4. Provide compatibility shim period if needed
+1. Remove `src/lsp/` directory from perl-parser
+2. Update perl-parser's `lib.rs` to remove LSP module exports
+3. Remove `lsp-compat` feature flag (no longer needed)
+4. Update perl-lsp to depend only on perl-parser's core engine APIs
+5. Update documentation to reflect new architecture
 
-**Example:**
+**Deprecation path (optional, before deletion):**
 ```rust
-// In perl-parser/src/lsp/mod.rs (post-migration)
-pub mod features;
-pub mod handlers;
-pub mod protocol;
-pub mod server; // Re-export from perl-lsp
-pub mod server_impl; // Keep for internal use, not re-exported
-pub mod state;
-pub mod transport;
-pub mod utils;
+// In perl-parser/src/lsp/mod.rs (temporary, if deprecation period needed)
+#[deprecated(since = "0.9.0", note = "Use perl-lsp crate directly")]
+pub use perl_lsp::server::LspServer;
 
-// Re-export for backward compatibility
-#[deprecated(since = "0.9.0", note = "Use perl-lsp::server instead")]
-pub use server::LspServer; // Still available but deprecated
+// After deprecation period, delete entire src/lsp/ directory
+```
+
+**Post-deletion validation:**
+```bash
+# Verify perl-parser compiles without LSP code
+cargo check -p perl-parser
+cargo check -p perl-parser --target wasm32-unknown-unknown
+cargo test -p perl-parser
+
+# Verify perl-lsp works independently
+cargo check -p perl-lsp
+cargo test -p perl-lsp
 ```
 
 ## wasm32 Gating Recommendations
@@ -443,67 +510,69 @@ cargo test --workspace
 
 ## File-by-File Migration Matrix
 
-| Current Path | Destination | Rationale |
-|-------------|-----------|----------|
-| `src/lsp/server.rs` | `perl-lsp/src/server.rs` | Server struct and main loop |
-| `src/lsp/server_impl/mod.rs` | `perl-lsp/src/server_impl/mod.rs` | Server implementation module |
-| `src/lsp/server_impl/lifecycle.rs` | `perl-lsp/src/server_impl/lifecycle.rs` | LSP initialization/shutdown |
-| `src/lsp/server_impl/workspace.rs` | `perl-lsp/src/server_impl/workspace.rs` | Workspace operations |
-| `src/lsp/server_impl/text_sync.rs` | `perl-lsp/src/server_impl/text_sync.rs` | Document synchronization |
-| `src/lsp/server_impl/window.rs` | `perl-lsp/src/server_impl/window.rs` | Window notifications |
-| `src/lsp/server_impl/refresh.rs` | `perl-lsp/src/server_impl/refresh.rs` | Refresh controller |
-| `src/lsp/server_impl/notebook.rs` | `perl-lsp/src/server_impl/notebook.rs` | Notebook support |
-| `src/lsp/server_impl/routing.rs` | `perl-lsp/src/server_impl/routing.rs` | Index routing |
-| `src/lsp/server_impl/dispatch.rs` | `perl-lsp/src/server_impl/dispatch.rs` | Request dispatch |
-| `src/lsp/transport/` | `perl-lsp/src/transport/` | Message framing and I/O |
-| `src/lsp/dispatch.rs` | `perl-lsp/src/dispatch.rs` | Dispatch logic |
-| `src/lsp/state/` | `perl-lsp/src/state/` | State management |
-| `src/lsp/fallback/` | `perl-lsp/src/fallback/` | Fallback implementations |
-| `src/lsp/protocol/` | `perl-lsp/src/protocol/` | Protocol types |
-| `src/lsp/handlers/` | `perl-lsp/src/handlers/` | Handler implementations |
-| `src/lsp/features/completion.rs` | `perl-lsp/src/features/completion.rs` | Adapter wrapper |
-| `src/lsp/features/code_actions.rs` | `perl-lsp/src/features/code_actions.rs` | Adapter wrapper |
-| `src/lsp/features/code_actions_pragmas.rs` | `perl-lsp/src/features/code_actions_pragmas.rs` | Adapter wrapper |
-| `src/lsp/features/code_actions_provider.rs` | `perl-lsp/src/features/code_actions_provider.rs` | Adapter wrapper |
-| `src/lsp/features/code_lens_provider.rs` | `perl-lsp/src/features/code_lens_provider.rs` | Adapter wrapper |
-| `src/lsp/features/implementation_provider.rs` | `perl-lsp/src/features/implementation_provider.rs` | Adapter wrapper |
-| `src/lsp/features/inlay_hints_provider.rs` | `perl-lsp/src/features/inlay_hints_provider.rs` | Adapter wrapper |
-| `src/lsp/features/inlay_hints.rs` | `perl-lsp/src/features/inlay_hints.rs` | Adapter wrapper |
-| `src/lsp/features/inline_completions.rs` | `perl-lsp/src/features/inline_completions.rs` | Adapter wrapper |
-| `src/lsp/features/lsp_document_link.rs` | `perl-lsp/src/features/lsp_document_link.rs` | Adapter wrapper |
-| `src/lsp/features/lsp_on_type_formatting.rs` | `perl-lsp/src/features/lsp_on_type_formatting.rs` | Adapter wrapper |
-| `src/lsp/features/linked_editing.rs` | `perl-lsp/src/features/linked_editing.rs` | Adapter wrapper |
-| `src/lsp/features/diagnostics/pull.rs` | `perl-lsp/src/features/diagnostics/pull.rs` | Adapter wrapper |
-| `src/lsp/features/document_highlight.rs` | `perl-lsp/src/features/document_highlight.rs` | Adapter wrapper |
-| `src/lsp/features/document_links.rs` | `perl-lsp/src/features/document_links.rs` | Adapter wrapper |
-| `src/lsp/features/folding.rs` | `perl-lsp/src/features/folding.rs` | Adapter wrapper |
-| `src/lsp/features/hover.rs` | `perl-lsp/src/features/hover.rs` | Adapter wrapper |
-| `src/lsp/features/references.rs` | `perl-lsp/src/features/references.rs` | Adapter wrapper |
-| `src/lsp/features/rename.rs` | `perl-lsp/src/features/rename.rs` | Adapter wrapper |
-| `src/lsp/features/selection_range.rs` | `perl-lsp/src/features/selection_range.rs` | Adapter wrapper |
-| `src/lsp/features/semantic_tokens.rs` | `perl-lsp/src/features/semantic_tokens.rs` | Adapter wrapper |
-| `src/lsp/features/signature_help.rs` | `perl-lsp/src/features/signature_help.rs` | Adapter wrapper |
-| `src/lsp/features/type_hierarchy.rs` | `perl-lsp/src/features/type_hierarchy.rs` | Adapter wrapper |
-| `src/lsp/features/workspace_symbols.rs` | `perl-lsp/src/features/workspace_symbols.rs` | Adapter wrapper |
-| `src/lsp/server_impl/language/` | `perl-lsp/src/server_impl/language/` | Adapter wrappers |
-| `src/lsp/server_impl/language/code_actions.rs` | `perl-lsp/src/server_impl/language/code_actions.rs` | Adapter wrapper |
-| `src/lsp/server_impl/language/colors.rs` | `perl-lsp/src/server_impl/language/colors.rs` | Adapter wrapper |
-| `src/lsp/server_impl/language/completion.rs` | `perl-lsp/src/server_impl/language/completion.rs` | Adapter wrapper |
-| `src/lsp/server_impl/language/formatting.rs` | `perl-lsp/src/server_impl/language/formatting.rs` | Adapter wrapper |
-| `src/lsp/server_impl/language/hierarchy.rs` | `perl-lsp/src/server_impl/language/hierarchy.rs` | Adapter wrapper |
-| `src/lsp/server_impl/language/hover.rs` | `perl-lsp/src/server_impl/language/hover.rs` | Adapter wrapper |
-| `src/lsp/server_impl/language/misc.rs` | `perl-lsp/src/server_impl/language/misc.rs` | Adapter wrapper |
-| `src/lsp/server_impl/language/navigation.rs` | `perl-lsp/src/server_impl/language/navigation.rs` | Adapter wrapper |
-| `src/lsp/server_impl/language/references.rs` | `perl-lsp/src/server_impl/language/references.rs` | Adapter wrapper |
-| `src/lsp/server_impl/language/rename.rs` | `perl-lsp/src/server_impl/language/rename.rs` | Adapter wrapper |
-| `src/lsp/server_impl/language/semantic_tokens.rs` | `perl-lsp/src/server_impl/language/semantic_tokens.rs` | Adapter wrapper |
-| `src/lsp/server_impl/language/virtual_content.rs` | `perl-lsp/src/server_impl/language/virtual_content.rs` | Adapter wrapper |
-| `src/lsp/utils/` | `perl-lsp/src/utils/` | Utility functions |
-| `src/lsp/state/config.rs` | `perl-lsp/src/state/config.rs` | Configuration management |
-| `src/lsp/state/document.rs` | `perl-lsp/src/state/document.rs` | Document state |
-| `src/lsp/state/limits.rs` | `perl-lsp/src/state/limits.rs` | Limits configuration |
-| `src/lsp/server_impl/diagnostics.rs` | `perl-lsp/src/server_impl/diagnostics.rs` | Diagnostics handler |
-| `src/lsp/fallback/text.rs` | `perl-lsp/src/fallback/text.rs` | Text-based fallbacks |
+> **Note:** This matrix aligns with the Phase 3 directory structure where `server_impl/` maps to `runtime/` in perl-lsp.
+
+| Current Path (perl-parser) | Destination (perl-lsp) | Rationale |
+|----------------------------|------------------------|----------|
+| `src/lsp/server.rs` | `src/server.rs` | Server struct and main loop |
+| `src/lsp/server_impl/mod.rs` | `src/runtime/mod.rs` | Runtime implementation module |
+| `src/lsp/server_impl/lifecycle.rs` | `src/runtime/lifecycle.rs` | LSP initialization/shutdown |
+| `src/lsp/server_impl/workspace.rs` | `src/runtime/workspace.rs` | Workspace operations |
+| `src/lsp/server_impl/text_sync.rs` | `src/runtime/text_sync.rs` | Document synchronization |
+| `src/lsp/server_impl/window.rs` | `src/runtime/window.rs` | Window notifications |
+| `src/lsp/server_impl/refresh.rs` | `src/runtime/refresh.rs` | Refresh controller |
+| `src/lsp/server_impl/notebook.rs` | `src/runtime/notebook.rs` | Notebook support |
+| `src/lsp/server_impl/routing.rs` | `src/runtime/routing.rs` | Index routing |
+| `src/lsp/server_impl/dispatch.rs` | `src/runtime/dispatch.rs` | Request dispatch |
+| `src/lsp/server_impl/diagnostics.rs` | `src/runtime/diagnostics.rs` | Diagnostics handler |
+| `src/lsp/server_impl/language/` | `src/runtime/language/` | Language feature handlers |
+| `src/lsp/server_impl/language/code_actions.rs` | `src/runtime/language/code_actions.rs` | Adapter wrapper |
+| `src/lsp/server_impl/language/colors.rs` | `src/runtime/language/colors.rs` | Adapter wrapper |
+| `src/lsp/server_impl/language/completion.rs` | `src/runtime/language/completion.rs` | Adapter wrapper |
+| `src/lsp/server_impl/language/formatting.rs` | `src/runtime/language/formatting.rs` | Adapter wrapper |
+| `src/lsp/server_impl/language/hierarchy.rs` | `src/runtime/language/hierarchy.rs` | Adapter wrapper |
+| `src/lsp/server_impl/language/hover.rs` | `src/runtime/language/hover.rs` | Adapter wrapper |
+| `src/lsp/server_impl/language/misc.rs` | `src/runtime/language/misc.rs` | Adapter wrapper |
+| `src/lsp/server_impl/language/navigation.rs` | `src/runtime/language/navigation.rs` | Adapter wrapper |
+| `src/lsp/server_impl/language/references.rs` | `src/runtime/language/references.rs` | Adapter wrapper |
+| `src/lsp/server_impl/language/rename.rs` | `src/runtime/language/rename.rs` | Adapter wrapper |
+| `src/lsp/server_impl/language/semantic_tokens.rs` | `src/runtime/language/semantic_tokens.rs` | Adapter wrapper |
+| `src/lsp/server_impl/language/virtual_content.rs` | `src/runtime/language/virtual_content.rs` | Adapter wrapper |
+| `src/lsp/transport/` | `src/transport/` | Message framing and I/O |
+| `src/lsp/dispatch.rs` | `src/dispatch.rs` | Dispatch logic |
+| `src/lsp/state/` | `src/state/` | State management |
+| `src/lsp/state/config.rs` | `src/state/config.rs` | Configuration management |
+| `src/lsp/state/document.rs` | `src/state/document.rs` | Document state |
+| `src/lsp/state/limits.rs` | `src/state/limits.rs` | Limits configuration |
+| `src/lsp/protocol/` | `src/protocol/` | Protocol types |
+| `src/lsp/handlers/` | `src/handlers/` | Handler implementations |
+| `src/lsp/fallback/` | `src/fallback/` | Fallback implementations |
+| `src/lsp/fallback/text.rs` | `src/fallback/text.rs` | Text-based fallbacks |
+| `src/lsp/utils/` | `src/utils/` | Utility functions |
+| `src/lsp/features/completion.rs` | `src/features/completion.rs` | Adapter wrapper |
+| `src/lsp/features/code_actions.rs` | `src/features/code_actions.rs` | Adapter wrapper |
+| `src/lsp/features/code_actions_pragmas.rs` | `src/features/code_actions_pragmas.rs` | Adapter wrapper |
+| `src/lsp/features/code_actions_provider.rs` | `src/features/code_actions_provider.rs` | Adapter wrapper |
+| `src/lsp/features/code_lens_provider.rs` | `src/features/code_lens_provider.rs` | Adapter wrapper |
+| `src/lsp/features/implementation_provider.rs` | `src/features/implementation_provider.rs` | Adapter wrapper |
+| `src/lsp/features/inlay_hints_provider.rs` | `src/features/inlay_hints_provider.rs` | Adapter wrapper |
+| `src/lsp/features/inlay_hints.rs` | `src/features/inlay_hints.rs` | Adapter wrapper |
+| `src/lsp/features/inline_completions.rs` | `src/features/inline_completions.rs` | Adapter wrapper |
+| `src/lsp/features/lsp_document_link.rs` | `src/features/lsp_document_link.rs` | Adapter wrapper |
+| `src/lsp/features/lsp_on_type_formatting.rs` | `src/features/lsp_on_type_formatting.rs` | Adapter wrapper |
+| `src/lsp/features/linked_editing.rs` | `src/features/linked_editing.rs` | Adapter wrapper |
+| `src/lsp/features/diagnostics/pull.rs` | `src/features/diagnostics/pull.rs` | Adapter wrapper |
+| `src/lsp/features/document_highlight.rs` | `src/features/document_highlight.rs` | Adapter wrapper |
+| `src/lsp/features/document_links.rs` | `src/features/document_links.rs` | Adapter wrapper |
+| `src/lsp/features/folding.rs` | `src/features/folding.rs` | Adapter wrapper |
+| `src/lsp/features/hover.rs` | `src/features/hover.rs` | Adapter wrapper |
+| `src/lsp/features/references.rs` | `src/features/references.rs` | Adapter wrapper |
+| `src/lsp/features/rename.rs` | `src/features/rename.rs` | Adapter wrapper |
+| `src/lsp/features/selection_range.rs` | `src/features/selection_range.rs` | Adapter wrapper |
+| `src/lsp/features/semantic_tokens.rs` | `src/features/semantic_tokens.rs` | Adapter wrapper |
+| `src/lsp/features/signature_help.rs` | `src/features/signature_help.rs` | Adapter wrapper |
+| `src/lsp/features/type_hierarchy.rs` | `src/features/type_hierarchy.rs` | Adapter wrapper |
+| `src/lsp/features/workspace_symbols.rs` | `src/features/workspace_symbols.rs` | Adapter wrapper |
 
 ## Risk Assessment
 
@@ -579,52 +648,52 @@ cargo check -p perl-parser --target wasm32-unknown-unknown
 ```mermaid
 graph TD
     Engine[perl-parser] --> Adapter[perl-lsp]
-    
+
     subgraph Engine_Components
         Parser[Parser]
         AST[AST]
         Index[WorkspaceIndex]
         Semantic[SemanticAnalyzer]
         Features[Features]
-        Types[InternalTypes]
+        Position[Position/Range types]
     end
-    
+
     subgraph Adapter_Components
         Server[Server]
-        Runtime[ServerImpl]
+        Runtime[Runtime]
         Protocol[Protocol]
         Transport[Transport]
         Dispatch[Dispatch]
         State[State]
         Handlers[Handlers]
-        Conversion[ConversionLayer]
+        Conversion[LspRange/ByteRange Conversion]
     end
-    
+
     Parser --> AST
     AST --> Index
     AST --> Semantic
     Index --> Features
-    Features --> Types
-    
+    Features --> Position
+
     Server --> Runtime
     Runtime --> Protocol
     Protocol --> Transport
     Transport --> Dispatch
     Dispatch --> Handlers
-    
-    Features --> ConversionLayer
-    ConversionLayer --> Handlers
+
+    Position --> Conversion
+    Conversion --> Handlers
 ```
 
 ## Timeline Estimates
 
 | Phase | Estimated Effort |
 |--------|-------------------|
-| Phase 1: wasm32 Gating | Low |
-| Phase 2: LSP Conversion Cleanup | Medium |
+| Phase 1: wasm32 Gating + Stubs | Low |
+| Phase 2: Make lsp-types Optional | Medium |
 | Phase 3: Runtime Migration | High |
 | Phase 4: Feature-by-Feature Split | High |
-| Phase 5: Deprecation and Compatibility | Low |
+| Phase 5: Delete perl-parser/src/lsp/** | Low |
 
 ## Notes
 

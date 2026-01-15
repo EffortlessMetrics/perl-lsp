@@ -31,7 +31,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 regex = "1.12.2"
 lazy_static = "1.5.0"
-lsp-types = "0.97.0"
+lsp-types = { version = "0.97.0", optional = true }
 tracing = "0.1.44"
 url = "2.5.8"
 rustc-hash = "2.1.1"
@@ -65,9 +65,10 @@ name = "perl-dap-internal"
 path = "src/bin/perl-dap.rs"
 
 [features]
-default = ["workspace"]  # Enable workspace indexing by default for cross-file features
+default = ["workspace", "lsp-compat"]  # Enable workspace indexing by default for cross-file features
 cli = []
 incremental = ["anyhow"]
+lsp-compat = ["lsp-types"]  # LSP type compatibility shim for migration period
 workspace = []  # Workspace-wide indexing for cross-file features
 test-compat = []  # Enables compatibility shim for old test API
 test-performance = []  # Performance optimizations for test environments
