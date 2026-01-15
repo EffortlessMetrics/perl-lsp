@@ -82,7 +82,7 @@ fn test_pragma_code_actions() {
 #[test]
 
 fn test_formatting_provider_capability() {
-    let has_perltidy = perl_parser::execute_command::command_exists("perltidy");
+    let has_perltidy = perl_lsp::execute_command::command_exists("perltidy");
 
     let mut srv = LspServer::new();
 

@@ -49,11 +49,14 @@
 
 // Module declarations - migrated from perl-parser
 pub mod convert;
+pub mod diagnostics_catalog;
 pub mod dispatch;
 pub mod fallback;
 pub mod features;
 pub mod handlers;
 pub mod protocol;
+pub mod cancellation;
+pub mod execute_command;
 pub mod runtime;
 pub mod server;
 pub mod state;
@@ -196,9 +199,7 @@ pub(crate) mod semantic_tokens {
     pub use crate::features::semantic_tokens::*;
 }
 
-pub(crate) mod call_hierarchy_provider {
-    pub use perl_parser::call_hierarchy_provider::*;
-}
+pub(crate) mod call_hierarchy_provider;
 
 // Parser module re-export for tests using crate::parser::Parser
 pub(crate) mod parser {

@@ -4,7 +4,7 @@
 
 use super::super::*;
 use crate::protocol::{req_position, req_uri};
-use perl_parser::cancellation::RequestCleanupGuard;
+use crate::cancellation::RequestCleanupGuard;
 
 impl LspServer {
     /// Handle textDocument/hover request for symbol information display

@@ -14,7 +14,7 @@
 //! rather than integration workflows to ensure mutants cannot survive by
 //! being masked by higher-level error handling.
 
-use perl_parser::cancellation::{
+use perl_lsp::cancellation::{
     CancellationMetrics, CancellationRegistry, GLOBAL_CANCELLATION_REGISTRY,
     PerlLspCancellationToken,
 };

@@ -1,14 +1,14 @@
 //! IDE integration helpers (LSP/DAP runtime support).
 
-/// LSP call hierarchy provider for function call navigation.
+/// Deprecated LSP call hierarchy provider shim (moved to `perl-lsp`).
 pub mod call_hierarchy_provider;
-/// Enhanced LSP cancellation infrastructure.
+/// Deprecated LSP cancellation infrastructure shim (moved to `perl-lsp`).
 pub mod cancellation;
-/// Diagnostic catalog with stable codes for consistent error reporting.
+/// Deprecated LSP diagnostics catalog shim (moved to `perl-lsp`).
 pub mod diagnostics_catalog;
 /// Debug Adapter Protocol (DAP) implementation for Perl debugging.
 pub mod debug_adapter;
-/// ExecuteCommand support for LSP and tooling integrations.
+/// Deprecated executeCommand shim for LSP/tooling integrations (moved to `perl-lsp`).
 #[cfg(not(target_arch = "wasm32"))]
 pub mod execute_command;
 /// LSP compatibility shims for legacy integrations.

@@ -13,10 +13,10 @@ use crate::{
     runtime::routing::{IndexAccessMode, route_index_access},
     state::{completion_cap, completion_deadline},
 };
-use perl_parser::{
-    cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, RequestCleanupGuard},
-    type_inference::TypeInferenceEngine,
+use crate::cancellation::{
+    GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, RequestCleanupGuard,
 };
+use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
 use std::sync::{Arc, OnceLock};
