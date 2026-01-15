@@ -50,6 +50,7 @@
 //! }
 //! ```
 
+use crate::convert::{WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
@@ -63,28 +64,10 @@ use std::process::{Command, Stdio};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormatTextEdit {
     /// The range to replace
-    pub range: Range,
+    pub range: WireRange,
     /// The new text
     #[serde(rename = "newText")]
     pub new_text: String,
-}
-
-/// A range in a text document
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Range {
-    /// Start position
-    pub start: Position,
-    /// End position
-    pub end: Position,
-}
-
-/// A position in a text document
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Position {
-    /// Line number (0-based)
-    pub line: u32,
-    /// Character offset (0-based)
-    pub character: u32,
 }
 
 /// Formatting options
@@ -202,9 +185,9 @@ impl CodeFormatter {
 
         // Return a single edit that replaces the entire document
         Ok(vec![FormatTextEdit {
-            range: Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: last_line, character: last_char },
+            range: WireRange {
+                start: WirePosition::new(0, 0),
+                end: WirePosition::new(last_line, last_char),
             },
             new_text: formatted,
         }])
@@ -215,7 +198,7 @@ impl CodeFormatter {
     pub fn format_range(
         &self,
         content: &str,
-        range: &Range,
+        range: &WireRange,
         options: &FormattingOptions,
     ) -> Result<Vec<FormatTextEdit>, FormatError> {
         // Extract the lines to format
@@ -243,9 +226,9 @@ impl CodeFormatter {
         let end_char = lines[end_line].len() as u32;
 
         Ok(vec![FormatTextEdit {
-            range: Range {
-                start: Position { line: start_line as u32, character: start_char },
-                end: Position { line: end_line as u32, character: end_char },
+            range: WireRange {
+                start: WirePosition::new(start_line as u32, start_char),
+                end: WirePosition::new(end_line as u32, end_char),
             },
             new_text: formatted,
         }])
@@ -410,7 +393,7 @@ impl CodeFormatter {
     pub fn format_range(
         &self,
         _content: &str,
-        _range: &Range,
+        _range: &WireRange,
         _options: &FormattingOptions,
     ) -> Result<Vec<FormatTextEdit>, FormatError> {
         Err(perltidy_unavailable())

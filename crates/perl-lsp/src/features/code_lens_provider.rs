@@ -2,6 +2,7 @@
 //!
 //! Provides inline actions like "Run Test", "X references" above code elements.
 
+use crate::convert::{WirePosition, WireRange};
 use perl_parser::ast::{Node, NodeKind};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -11,7 +12,7 @@ use serde_json::{Value, json};
 #[serde(rename_all = "camelCase")]
 pub struct CodeLens {
     /// The range to which this code lens applies
-    pub range: Range,
+    pub range: WireRange,
     /// The command this code lens represents
     #[serde(skip_serializing_if = "Option::is_none")]
     pub command: Option<Command>,
@@ -30,24 +31,6 @@ pub struct Command {
     /// Arguments to the command
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<Vec<Value>>,
-}
-
-/// LSP Range representing a text selection between two positions
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct Range {
-    /// Start position of the range (inclusive)
-    pub start: Position,
-    /// End position of the range (exclusive)
-    pub end: Position,
-}
-
-/// LSP Position representing a cursor position in a document
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct Position {
-    /// Zero-based line number
-    pub line: u32,
-    /// Zero-based character offset within the line
-    pub character: u32,
 }
 
 /// Code lens provider
@@ -138,13 +121,13 @@ impl CodeLensProvider {
 
     /// Add a "Run Test" code lens
     fn add_run_test_lens(&self, node: &Node, name: &str, lenses: &mut Vec<CodeLens>) {
-        let (start_line, start_col) = self.offset_to_line_col(node.location.start);
-        let (end_line, end_col) = self.offset_to_line_col(node.location.end);
+        let (start_line, start_char) = self.offset_to_wire_pos(node.location.start);
+        let (end_line, end_char) = self.offset_to_wire_pos(node.location.end);
 
         lenses.push(CodeLens {
-            range: Range {
-                start: Position { line: start_line as u32, character: start_col as u32 },
-                end: Position { line: end_line as u32, character: end_col as u32 },
+            range: WireRange {
+                start: WirePosition::new(start_line, start_char),
+                end: WirePosition::new(end_line, end_char),
             },
             command: Some(Command {
                 title: "▶ Run Test".to_string(),
@@ -157,13 +140,13 @@ impl CodeLensProvider {
 
     /// Add an "X references" code lens
     fn add_references_lens(&self, node: &Node, name: &str, lenses: &mut Vec<CodeLens>) {
-        let (start_line, start_col) = self.offset_to_line_col(node.location.start);
+        let (start_line, start_char) = self.offset_to_wire_pos(node.location.start);
 
         // Put the lens on the same line as the declaration
         lenses.push(CodeLens {
-            range: Range {
-                start: Position { line: start_line as u32, character: start_col as u32 },
-                end: Position { line: start_line as u32, character: start_col as u32 },
+            range: WireRange {
+                start: WirePosition::new(start_line, start_char),
+                end: WirePosition::new(start_line, start_char),
             },
             command: None, // Will be resolved later
             data: Some(json!({
@@ -183,28 +166,9 @@ impl CodeLensProvider {
         // Most nodes don't have generic children to visit
     }
 
-    /// Convert byte offset to line/column position
-    fn offset_to_line_col(&self, offset: usize) -> (usize, usize) {
-        let mut line = 0;
-        let mut col = 0;
-        let mut byte_pos = 0;
-
-        for ch in self.source.chars() {
-            if byte_pos >= offset {
-                break;
-            }
-
-            if ch == '\n' {
-                line += 1;
-                col = 0;
-            } else {
-                col += 1;
-            }
-
-            byte_pos += ch.len_utf8();
-        }
-
-        (line, col)
+    /// Convert byte offset to wire position (0-based line, UTF-16 character).
+    fn offset_to_wire_pos(&self, offset: usize) -> (u32, u32) {
+        perl_parser::position::offset_to_utf16_line_col(&self.source, offset)
     }
 }
 
@@ -243,9 +207,9 @@ pub fn resolve_code_lens(lens: CodeLens, reference_count: usize) -> CodeLens {
 pub fn get_shebang_lens(source: &str) -> Option<CodeLens> {
     if source.starts_with("#!") && source.contains("perl") {
         Some(CodeLens {
-            range: Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: 0, character: 0 },
+            range: WireRange {
+                start: WirePosition::new(0, 0),
+                end: WirePosition::new(0, 0),
             },
             command: Some(Command {
                 title: "▶ Run Script".to_string(),
@@ -322,9 +286,9 @@ sub test_another {
     #[test]
     fn test_resolve_code_lens() {
         let unresolved = CodeLens {
-            range: Range {
-                start: Position { line: 5, character: 0 },
-                end: Position { line: 5, character: 0 },
+            range: WireRange {
+                start: WirePosition::new(5, 0),
+                end: WirePosition::new(5, 0),
             },
             command: None,
             data: Some(json!({ "name": "foo", "kind": "subroutine" })),

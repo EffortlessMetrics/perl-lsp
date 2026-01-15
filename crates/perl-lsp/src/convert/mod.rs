@@ -15,9 +15,18 @@
 //!
 //! LSP uses UTF-16 code units for positions, while Rust strings use UTF-8.
 //! All conversions must properly handle multi-byte characters and surrogate pairs.
+//!
+//! # Wire Types
+//!
+//! The [`position`] module provides dedicated wire types (`WirePosition`, `WireRange`,
+//! `WireLocation`) that are the canonical types for LSP JSON serialization. These types:
+//!
+//! - Use 0-based line numbers (as required by LSP)
+//! - Use UTF-16 code units for character offsets
+//! - Convert through byte offsets for correctness
+//!
+//! Always use wire types when serializing to LSP JSON, not engine types.
 
-// TODO: Implement conversion functions
-// - Engine Position/Range → lsp_types::Position/Range
-// - Engine Symbol → lsp_types::SymbolInformation
-// - Engine Error → lsp_types::Diagnostic
-// - Engine Location → lsp_types::Location
+pub mod position;
+
+pub use position::{WireLocation, WirePosition, WireRange};

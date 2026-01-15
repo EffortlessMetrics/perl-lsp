@@ -3,6 +3,7 @@
 //! Provides fallback implementations for LSP features when full AST analysis
 //! is unavailable or fails.
 
+use crate::convert::{WirePosition, WireRange};
 use crate::util::byte_to_utf16_col;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -31,15 +32,15 @@ pub fn extract_text_based_code_lenses(
                 let name = pkg_name.as_str().to_string();
 
                 lenses.push(crate::code_lens_provider::CodeLens {
-                    range: crate::code_lens_provider::Range {
-                        start: crate::code_lens_provider::Position {
-                            line: line_num as u32,
-                            character: byte_to_utf16_col(line, pkg_name.start()) as u32,
-                        },
-                        end: crate::code_lens_provider::Position {
-                            line: line_num as u32,
-                            character: byte_to_utf16_col(line, pkg_name.end()) as u32,
-                        },
+                    range: WireRange {
+                        start: WirePosition::new(
+                            line_num as u32,
+                            byte_to_utf16_col(line, pkg_name.start()) as u32,
+                        ),
+                        end: WirePosition::new(
+                            line_num as u32,
+                            byte_to_utf16_col(line, pkg_name.end()) as u32,
+                        ),
                     },
                     command: None, // Will be resolved later
                     data: Some(json!({
@@ -58,15 +59,15 @@ pub fn extract_text_based_code_lenses(
                 let name = sub_name.as_str().to_string();
 
                 lenses.push(crate::code_lens_provider::CodeLens {
-                    range: crate::code_lens_provider::Range {
-                        start: crate::code_lens_provider::Position {
-                            line: line_num as u32,
-                            character: byte_to_utf16_col(line, sub_name.start()) as u32,
-                        },
-                        end: crate::code_lens_provider::Position {
-                            line: line_num as u32,
-                            character: byte_to_utf16_col(line, sub_name.end()) as u32,
-                        },
+                    range: WireRange {
+                        start: WirePosition::new(
+                            line_num as u32,
+                            byte_to_utf16_col(line, sub_name.start()) as u32,
+                        ),
+                        end: WirePosition::new(
+                            line_num as u32,
+                            byte_to_utf16_col(line, sub_name.end()) as u32,
+                        ),
                     },
                     command: None, // Will be resolved later
                     data: Some(json!({

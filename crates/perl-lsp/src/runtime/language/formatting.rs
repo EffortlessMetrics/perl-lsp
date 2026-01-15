@@ -4,6 +4,7 @@
 //! and textDocument/onTypeFormatting requests.
 
 use super::super::*;
+use crate::convert::{WirePosition, WireRange};
 use crate::features::formatting::CodeFormatter;
 use crate::protocol::{invalid_params, req_position, req_range, req_uri};
 
@@ -116,9 +117,9 @@ impl LspServer {
                     trim_final_newlines: None,
                 });
 
-            let range = crate::formatting::Range {
-                start: crate::formatting::Position { line: start_line, character: start_char },
-                end: crate::formatting::Position { line: end_line, character: end_char },
+            let range = WireRange {
+                start: WirePosition::new(start_line, start_char),
+                end: WirePosition::new(end_line, end_char),
             };
 
             eprintln!("Formatting range in document: {}", uri);
@@ -231,12 +232,9 @@ impl LspServer {
                         invalid_params(&format!("ranges[{}].end.character exceeds u32::MAX", idx))
                     })?;
 
-                    let range = crate::formatting::Range {
-                        start: crate::formatting::Position {
-                            line: start_line,
-                            character: start_char,
-                        },
-                        end: crate::formatting::Position { line: end_line, character: end_char },
+                    let range = WireRange {
+                        start: WirePosition::new(start_line, start_char),
+                        end: WirePosition::new(end_line, end_char),
                     };
 
                     match formatter.format_range(&doc.text, &range, &options) {
