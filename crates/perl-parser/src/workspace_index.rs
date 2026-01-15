@@ -1889,7 +1889,7 @@ impl Default for WorkspaceIndex {
 }
 
 /// LSP adapter for converting internal Location types to LSP types
-#[cfg(feature = "workspace")]
+#[cfg(all(feature = "workspace", feature = "lsp-compat"))]
 pub mod lsp_adapter {
     use super::Location as IxLocation;
     use lsp_types::Location as LspLocation;

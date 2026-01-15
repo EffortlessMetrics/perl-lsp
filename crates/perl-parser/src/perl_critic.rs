@@ -258,7 +258,7 @@ impl CriticAnalyzer {
                 policy: v.policy.clone(),
                 description: v.description.clone(),
                 severity: v.severity as u8,
-                line: v.range.start.line,
+                line: v.range.start.line as usize,
             })
             .collect()
     }

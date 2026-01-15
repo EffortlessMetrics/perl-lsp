@@ -142,6 +142,7 @@ pub mod error_recovery;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod execute_command;
 /// Feature flags and capability management for LSP server functionality.
+#[cfg(feature = "lsp-compat")]
 pub mod features;
 pub mod folding;
 pub mod formatting;
@@ -230,11 +231,13 @@ pub mod tdd_workflow;
 pub mod test_generator;
 /// Test execution and TDD support functionality.
 pub mod test_runner;
+#[cfg(feature = "lsp-compat")]
 pub mod textdoc;
 pub mod token_stream;
 pub mod token_wrapper;
 pub mod trivia;
 pub mod trivia_parser;
+#[cfg(feature = "lsp-compat")]
 pub mod type_definition;
 /// LSP type hierarchy provider for inheritance navigation.
 pub mod type_hierarchy;

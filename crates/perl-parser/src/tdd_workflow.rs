@@ -501,6 +501,7 @@ pub struct WorkflowStatus {
 }
 
 /// LSP integration for TDD workflow
+#[cfg(feature = "lsp-compat")]
 pub mod lsp_integration {
     use super::*;
     use lsp_types::{
