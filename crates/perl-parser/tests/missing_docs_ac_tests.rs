@@ -153,7 +153,7 @@ mod doc_validation_helpers {
         let performance_critical_modules = [
             "incremental/incremental_v2.rs",
             "workspace/workspace_index.rs",
-            "parser/mod.rs",
+            "engine/parser/mod.rs",
             "analysis/semantic.rs",
             "tokens/token_stream.rs",
             "refactor/import_optimizer.rs",
@@ -562,9 +562,9 @@ mod missing_docs_tests {
         // including PSTX pipeline role description
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let critical_modules = [
-            "parser/mod.rs",
+            "engine/parser/mod.rs",
             "engine/ast.rs",
-            "error/mod.rs",
+            "engine/error/mod.rs",
             "tokens/token_stream.rs",
             "analysis/semantic.rs",
             "analysis/symbol.rs",
@@ -622,7 +622,7 @@ mod missing_docs_tests {
         // with summary, parameters, return values, and error conditions
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let function_critical_modules = [
-            "parser/mod.rs",
+            "engine/parser/mod.rs",
             "lsp_compat/completion.rs",
             "lsp_compat/diagnostics.rs",
             "lsp_compat/formatting.rs",
@@ -801,7 +801,7 @@ mod missing_docs_tests {
         let performance_modules = [
             "incremental/incremental_v2.rs",
             "workspace/workspace_index.rs",
-            "parser/mod.rs",
+            "engine/parser/mod.rs",
             "analysis/semantic.rs",
             "tokens/token_stream.rs",
             "refactor/import_optimizer.rs",
@@ -913,9 +913,9 @@ mod missing_docs_tests {
         // with //! comments explaining purpose and PSTX architecture relationship
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let core_modules = [
-            "parser/mod.rs",
+            "engine/parser/mod.rs",
             "engine/ast.rs",
-            "error/mod.rs",
+            "engine/error/mod.rs",
             "tokens/token_stream.rs",
             "lsp_compat/code_actions.rs",
             "lsp_compat/completion.rs",
@@ -1050,7 +1050,7 @@ mod missing_docs_tests {
             "lsp_compat/code_actions.rs",
             "lsp_compat/semantic_tokens.rs",
             "workspace/workspace_index.rs",
-            "parser/mod.rs",
+            "engine/parser/mod.rs",
             "refactor/import_optimizer.rs",
             "tdd/test_generator.rs",
             "analysis/scope_analyzer.rs",
@@ -1109,7 +1109,7 @@ mod missing_docs_tests {
         // AC:AC7 - Verify doctests are present for critical functionality
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let critical_modules = [
-            "parser/mod.rs",
+            "engine/parser/mod.rs",
             "lsp_compat/completion.rs",
             "workspace/workspace_index.rs",
             "refactor/import_optimizer.rs",
@@ -1356,7 +1356,7 @@ mod missing_docs_tests {
         // AC:AC10 - Verify documentation follows Rust best practices with consistent style
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let sample_modules = [
-            "parser/mod.rs",
+            "engine/parser/mod.rs",
             "lsp_compat/completion.rs",
             "lsp_compat/diagnostics.rs",
             "workspace/workspace_index.rs",
@@ -1497,7 +1497,7 @@ mod missing_docs_tests {
         // This combines aspects of multiple ACs to ensure comprehensive coverage
         let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let core_modules = [
-            "parser/mod.rs",
+            "engine/parser/mod.rs",
             "engine/ast.rs",
             "lsp_compat/completion.rs",
             "lsp_compat/diagnostics.rs",
@@ -1663,7 +1663,7 @@ pub fn parse_fast() -> Result<Ast, Error> { todo!() }
 
         let lines: Vec<&str> = incomplete_perf_content.lines().collect();
         let incomplete =
-            doc_validation_helpers::find_incomplete_performance_docs("parser/mod.rs", &lines);
+            doc_validation_helpers::find_incomplete_performance_docs("engine/parser/mod.rs", &lines);
 
         assert!(!incomplete.is_empty(), "Should detect incomplete performance docs");
         assert!(
@@ -1966,7 +1966,7 @@ pub fn bad_refs() {}
         let test_cases = vec![
             PerformanceDocTestCase {
                 name: "Complete performance docs",
-                file_path: "parser/mod.rs",
+                file_path: "engine/parser/mod.rs",
                 content: r#"
 //! High-performance parser with O(n) time complexity
 //!
@@ -2184,9 +2184,9 @@ pub fn bad_refs() {}
         // Optimized file enumeration: only process critical files during fast execution
         let critical_files = vec![
             "lib.rs",
-            "parser/mod.rs",
+            "engine/parser/mod.rs",
             "engine/ast.rs",
-            "error/mod.rs",
+            "engine/error/mod.rs",
             "tokens/token_stream.rs",
         ];
 
