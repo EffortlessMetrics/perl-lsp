@@ -121,14 +121,10 @@ impl CodeLensProvider {
 
     /// Add a "Run Test" code lens
     fn add_run_test_lens(&self, node: &Node, name: &str, lenses: &mut Vec<CodeLens>) {
-        let (start_line, start_char) = self.offset_to_wire_pos(node.location.start);
-        let (end_line, end_char) = self.offset_to_wire_pos(node.location.end);
+        let range = WireRange::from_byte_offsets(&self.source, node.location.start, node.location.end);
 
         lenses.push(CodeLens {
-            range: WireRange {
-                start: WirePosition::new(start_line, start_char),
-                end: WirePosition::new(end_line, end_char),
-            },
+            range,
             command: Some(Command {
                 title: "▶ Run Test".to_string(),
                 command: "perl.runTest".to_string(),
@@ -140,14 +136,11 @@ impl CodeLensProvider {
 
     /// Add an "X references" code lens
     fn add_references_lens(&self, node: &Node, name: &str, lenses: &mut Vec<CodeLens>) {
-        let (start_line, start_char) = self.offset_to_wire_pos(node.location.start);
+        let start_pos = WirePosition::from_byte_offset(&self.source, node.location.start);
 
-        // Put the lens on the same line as the declaration
+        // Put the lens on the same line as the declaration (zero-width range)
         lenses.push(CodeLens {
-            range: WireRange {
-                start: WirePosition::new(start_line, start_char),
-                end: WirePosition::new(start_line, start_char),
-            },
+            range: WireRange::empty(start_pos),
             command: None, // Will be resolved later
             data: Some(json!({
                 "name": name,
@@ -164,11 +157,6 @@ impl CodeLensProvider {
     #[allow(clippy::ptr_arg)] // might need Vec in future for push operations
     fn visit_children(&self, _node: &Node, _lenses: &mut Vec<CodeLens>) {
         // Most nodes don't have generic children to visit
-    }
-
-    /// Convert byte offset to wire position (0-based line, UTF-16 character).
-    fn offset_to_wire_pos(&self, offset: usize) -> (u32, u32) {
-        perl_parser::position::offset_to_utf16_line_col(&self.source, offset)
     }
 }
 

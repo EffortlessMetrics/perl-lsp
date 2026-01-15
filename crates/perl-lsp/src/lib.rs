@@ -156,6 +156,7 @@ pub(crate) mod inline_completions {
 }
 
 pub(crate) mod formatting {
+    #[allow(unused_imports)]
     pub use crate::features::formatting::*;
 }
 

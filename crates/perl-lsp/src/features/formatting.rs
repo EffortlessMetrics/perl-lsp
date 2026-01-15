@@ -178,17 +178,10 @@ impl CodeFormatter {
             return Ok(vec![]);
         }
 
-        // Calculate the full document range
-        let lines: Vec<&str> = content.lines().collect();
-        let last_line = lines.len().saturating_sub(1) as u32;
-        let last_char = lines.last().map(|l| l.len()).unwrap_or(0) as u32;
-
         // Return a single edit that replaces the entire document
+        // Use whole_document to correctly compute UTF-16 end position
         Ok(vec![FormatTextEdit {
-            range: WireRange {
-                start: WirePosition::new(0, 0),
-                end: WirePosition::new(last_line, last_char),
-            },
+            range: WireRange::whole_document(content),
             new_text: formatted,
         }])
     }
@@ -222,8 +215,10 @@ impl CodeFormatter {
         }
 
         // Calculate the range to replace
-        let start_char = 0; // Always start at beginning of line
-        let end_char = lines[end_line].len() as u32;
+        // Note: We always format whole lines, so start_char is 0 and
+        // end_char is the UTF-16 length of the last line (not byte length!)
+        let start_char = 0;
+        let end_char = crate::util::byte_to_utf16_col(lines[end_line], lines[end_line].len()) as u32;
 
         Ok(vec![FormatTextEdit {
             range: WireRange {

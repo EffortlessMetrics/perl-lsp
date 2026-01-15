@@ -41,14 +41,37 @@ impl WirePosition {
         WirePosition { line, character }
     }
 
+    /// Convert from a byte offset in source text to a wire position.
+    ///
+    /// This is the primary constructor for converting engine coordinates (byte offsets)
+    /// to wire coordinates (UTF-16 line/character). All position conversions should
+    /// go through this method to ensure UTF-16 correctness.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - The source text (used to calculate line breaks and UTF-16 offsets)
+    /// * `byte_offset` - The byte offset within the source text
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let source = "hello\nworld";
+    /// let pos = WirePosition::from_byte_offset(source, 7); // 'o' in "world"
+    /// assert_eq!(pos.line, 1);
+    /// assert_eq!(pos.character, 1);
+    /// ```
+    pub fn from_byte_offset(source: &str, byte_offset: usize) -> Self {
+        let (line, character) =
+            perl_parser::position::offset_to_utf16_line_col(source, byte_offset);
+        WirePosition { line, character }
+    }
+
     /// Convert from engine position using byte offset and source text.
     ///
     /// The engine position's byte offset is used to compute the correct
     /// 0-based line and UTF-16 character offset.
     pub fn from_engine(pos: &perl_parser::position::Position, source: &str) -> Self {
-        let (line, character) =
-            perl_parser::position::offset_to_utf16_line_col(source, pos.byte);
-        WirePosition { line, character }
+        Self::from_byte_offset(source, pos.byte)
     }
 
     /// Convert this wire position to a byte offset in the source text.
@@ -72,12 +95,36 @@ impl WireRange {
         WireRange { start, end }
     }
 
+    /// Convert from byte offsets in source text to a wire range.
+    ///
+    /// This is the primary constructor for converting engine coordinates (byte offsets)
+    /// to wire coordinates (UTF-16 ranges). All range conversions should go through
+    /// this method to ensure UTF-16 correctness.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - The source text (used to calculate line breaks and UTF-16 offsets)
+    /// * `start_byte` - The start byte offset (inclusive)
+    /// * `end_byte` - The end byte offset (exclusive)
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let source = "hello\nworld";
+    /// let range = WireRange::from_byte_offsets(source, 0, 5); // "hello"
+    /// assert_eq!(range.start, WirePosition::new(0, 0));
+    /// assert_eq!(range.end, WirePosition::new(0, 5));
+    /// ```
+    pub fn from_byte_offsets(source: &str, start_byte: usize, end_byte: usize) -> Self {
+        WireRange {
+            start: WirePosition::from_byte_offset(source, start_byte),
+            end: WirePosition::from_byte_offset(source, end_byte),
+        }
+    }
+
     /// Convert from engine range using source text.
     pub fn from_engine(range: &perl_parser::position::Range, source: &str) -> Self {
-        WireRange {
-            start: WirePosition::from_engine(&range.start, source),
-            end: WirePosition::from_engine(&range.end, source),
-        }
+        Self::from_byte_offsets(source, range.start.byte, range.end.byte)
     }
 
     /// Create a zero-width range at a position.
@@ -85,6 +132,30 @@ impl WireRange {
         WireRange {
             start: pos,
             end: pos,
+        }
+    }
+
+    /// Create a range covering the entire document.
+    ///
+    /// This correctly computes the UTF-16 position of the end of the document,
+    /// handling multi-byte UTF-8 characters and surrogate pairs properly.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - The full source text
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let source = "hello\nworld";
+    /// let range = WireRange::whole_document(source);
+    /// assert_eq!(range.start, WirePosition::new(0, 0));
+    /// // End position is computed correctly via byte offset
+    /// ```
+    pub fn whole_document(source: &str) -> Self {
+        WireRange {
+            start: WirePosition::new(0, 0),
+            end: WirePosition::from_byte_offset(source, source.len()),
         }
     }
 }
@@ -228,5 +299,71 @@ mod tests {
 
         let back: WirePosition = lsp.into();
         assert_eq!(back, wire);
+    }
+
+    #[test]
+    fn test_wire_position_from_byte_offset_simple() {
+        let source = "hello\nworld";
+        let pos = WirePosition::from_byte_offset(source, 7); // 'o' in "world"
+
+        assert_eq!(pos.line, 1);
+        assert_eq!(pos.character, 1);
+    }
+
+    #[test]
+    fn test_wire_position_from_byte_offset_with_emoji() {
+        // "hi 😀x" - emoji is 4 bytes but 2 UTF-16 units, 'x' is at byte 7
+        let source = "hi \u{1F600}x";
+        let pos = WirePosition::from_byte_offset(source, 7); // 'x' after emoji
+
+        assert_eq!(pos.line, 0);
+        // "hi " = 3 UTF-16 units, emoji = 2 UTF-16 units, total = 5
+        assert_eq!(pos.character, 5);
+    }
+
+    #[test]
+    fn test_wire_range_from_byte_offsets() {
+        let source = "hello\nworld";
+        let range = WireRange::from_byte_offsets(source, 0, 5); // "hello"
+
+        assert_eq!(range.start.line, 0);
+        assert_eq!(range.start.character, 0);
+        assert_eq!(range.end.line, 0);
+        assert_eq!(range.end.character, 5);
+    }
+
+    #[test]
+    fn test_wire_range_whole_document_simple() {
+        let source = "hello\nworld";
+        let range = WireRange::whole_document(source);
+
+        assert_eq!(range.start.line, 0);
+        assert_eq!(range.start.character, 0);
+        assert_eq!(range.end.line, 1);
+        assert_eq!(range.end.character, 5);
+    }
+
+    #[test]
+    fn test_wire_range_whole_document_with_emoji() {
+        // Document ends with emoji - ensures UTF-16 is computed correctly
+        let source = "hello\n\u{1F600}";
+        let range = WireRange::whole_document(source);
+
+        assert_eq!(range.start.line, 0);
+        assert_eq!(range.start.character, 0);
+        assert_eq!(range.end.line, 1);
+        // Emoji is 2 UTF-16 code units (not 4 bytes)
+        assert_eq!(range.end.character, 2);
+    }
+
+    #[test]
+    fn test_wire_range_whole_document_empty() {
+        let source = "";
+        let range = WireRange::whole_document(source);
+
+        assert_eq!(range.start.line, 0);
+        assert_eq!(range.start.character, 0);
+        assert_eq!(range.end.line, 0);
+        assert_eq!(range.end.character, 0);
     }
 }
