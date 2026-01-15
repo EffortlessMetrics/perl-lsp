@@ -1,2 +1,16 @@
-//! Compatibility shim. Prefer `crate::lsp::features::semantic_tokens_provider`.
-pub use crate::lsp::features::semantic_tokens_provider::*;
+//! LSP feature module (deprecated)
+//!
+//! **DEPRECATED**: This module has moved to the `perl-lsp` crate.
+//!
+//! For backwards compatibility during the migration period, this module
+//! is kept as an empty stub. Migrate to `perl_lsp::features::semantic_tokens_provider`.
+//!
+//! # Migration
+//!
+//! ```ignore
+//! // Old:
+//! use perl_parser::semantic_tokens_provider;
+//!
+//! // New:
+//! use perl_lsp::features::semantic_tokens_provider;
+//! ```

@@ -4,9 +4,9 @@
 //! finding the type/class definition for variables and references.
 
 use crate::ast::{Node, NodeKind};
-use crate::uri::parse_uri;
-use lsp_types::{LocationLink, Position, Range};
+use lsp_types::{LocationLink, Range};
 use std::collections::HashMap;
+use std::str::FromStr;
 
 /// Provides go-to-type-definition functionality for Perl code.
 ///
@@ -198,18 +198,21 @@ impl TypeDefinitionProvider {
                     crate::position::offset_to_utf16_line_col(source_text, node.location.end);
 
                 // Create typed LocationLink for better UI experience
-                locations.push(LocationLink {
-                    origin_selection_range: None, // Could be filled with the reference range
-                    target_uri: parse_uri(uri),
-                    target_range: Range::new(
-                        lsp_types::Position::new(start_line, start_col),
-                        lsp_types::Position::new(end_line, end_col),
-                    ),
-                    target_selection_range: Range::new(
-                        lsp_types::Position::new(start_line, start_col),
-                        lsp_types::Position::new(end_line, end_col),
-                    ),
-                });
+                // Parse URI - if invalid, skip this location
+                if let Ok(target_uri) = lsp_types::Uri::from_str(uri) {
+                    locations.push(LocationLink {
+                        origin_selection_range: None, // Could be filled with the reference range
+                        target_uri,
+                        target_range: Range::new(
+                            lsp_types::Position::new(start_line, start_col),
+                            lsp_types::Position::new(end_line, end_col),
+                        ),
+                        target_selection_range: Range::new(
+                            lsp_types::Position::new(start_line, start_col),
+                            lsp_types::Position::new(end_line, end_col),
+                        ),
+                    });
+                }
             }
             _ => {}
         }

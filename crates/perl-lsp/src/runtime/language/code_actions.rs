@@ -4,7 +4,7 @@
 //! Provides quick fixes, refactoring actions, and source actions.
 
 use super::super::*;
-use crate::lsp::protocol::{req_range, req_uri};
+use crate::protocol::{req_range, req_uri};
 
 impl LspServer {
     /// Handle textDocument/codeAction request

@@ -4,7 +4,7 @@
 //! prepareCallHierarchy, callHierarchy/incomingCalls, and callHierarchy/outgoingCalls.
 
 use super::super::*;
-use crate::lsp::protocol::{req_position, req_uri};
+use crate::protocol::{req_position, req_uri};
 use std::sync::OnceLock;
 
 static SUB_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
@@ -390,7 +390,7 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         // Gate unadvertised feature
         if !self.advertised_features.lock().call_hierarchy {
-            return Err(crate::lsp_errors::method_not_advertised());
+            return Err(crate::protocol::method_not_advertised());
         }
 
         if let Some(params) = params {
@@ -477,7 +477,7 @@ impl LspServer {
         &self,
         json: &Value,
     ) -> Result<crate::call_hierarchy_provider::CallHierarchyItem, JsonRpcError> {
-        use crate::call_hierarchy_provider::{CallHierarchyItem, Position, Range};
+        use perl_parser::call_hierarchy_provider::{CallHierarchyItem, Position, Range};
 
         let name = json["name"].as_str().unwrap_or("").to_string();
         let kind = match json["kind"].as_u64().unwrap_or(12) {

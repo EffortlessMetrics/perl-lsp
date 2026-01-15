@@ -275,42 +275,40 @@ pub use symbol::{Symbol, SymbolExtractor, SymbolKind, SymbolReference, SymbolTab
 
 #[cfg(test)]
 mod workspace_index_utf16_test;
-pub use code_actions::{CodeAction, CodeActionEdit, CodeActionKind, CodeActionsProvider};
-pub use code_actions_enhanced::EnhancedCodeActionsProvider;
-pub use code_actions_provider::{
-    CodeAction as CodeActionV2, CodeActionKind as CodeActionKindV2,
-    CodeActionsProvider as CodeActionsProviderV2, TextEdit as TextEditV2,
-};
-pub use code_lens_provider::{CodeLens, CodeLensProvider, get_shebang_lens, resolve_code_lens};
-pub use completion::{CompletionContext, CompletionItem, CompletionItemKind, CompletionProvider};
-pub use diagnostics::{
-    Diagnostic, DiagnosticSeverity, DiagnosticTag, DiagnosticsProvider, RelatedInformation,
-};
-pub use document_links::compute_links;
-pub use folding::{FoldingRange, FoldingRangeExtractor, FoldingRangeKind};
-pub use formatting::{CodeFormatter, FormatTextEdit, FormattingOptions};
+
+// =============================================================================
+// LSP Feature Exports (DEPRECATED - migrated to perl-lsp crate)
+// =============================================================================
+// These exports are commented out during the migration period.
+// Use `perl_lsp` crate for LSP functionality instead.
+//
+// pub use code_actions::{CodeAction, CodeActionEdit, CodeActionKind, CodeActionsProvider};
+// pub use code_actions_enhanced::EnhancedCodeActionsProvider;
+// pub use code_actions_provider::{...};
+// pub use code_lens_provider::{CodeLens, CodeLensProvider, ...};
+// pub use completion::{CompletionContext, CompletionItem, CompletionItemKind, CompletionProvider};
+// pub use diagnostics::{Diagnostic, DiagnosticSeverity, DiagnosticTag, ...};
+// pub use document_links::compute_links;
+// pub use folding::{FoldingRange, FoldingRangeExtractor, FoldingRangeKind};
+// pub use formatting::{CodeFormatter, FormatTextEdit, FormattingOptions};
+// pub use inlay_hints::{parameter_hints, trivial_type_hints};
+// pub use lsp::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
+// pub use lsp_server::LspServer;
+// pub use on_type_formatting::compute_on_type_edit;
+// pub use rename::{RenameOptions, RenameProvider, RenameResult, TextEdit, apply_rename_edits};
+// pub use selection_range::{build_parent_map, selection_chain};
+// pub use semantic_tokens::{...};
+// pub use semantic_tokens_provider::{...};
+// pub use signature_help::{ParameterInfo, SignatureHelp, SignatureHelpProvider, SignatureInfo};
+// pub use workspace_symbols::{WorkspaceSymbol, WorkspaceSymbolsProvider};
+// =============================================================================
+
+// Engine exports (these stay in perl-parser)
 pub use import_optimizer::{
     DuplicateImport, ImportAnalysis, ImportEntry, ImportOptimizer, MissingImport,
     OrganizationSuggestion, SuggestionPriority, UnusedImport,
 };
-pub use inlay_hints::{parameter_hints, trivial_type_hints};
-// Export LSP types from the new modular structure (not available on wasm32)
-#[cfg(not(target_arch = "wasm32"))]
-pub use lsp::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
-#[cfg(not(target_arch = "wasm32"))]
-pub use lsp_server::LspServer;
-pub use on_type_formatting::compute_on_type_edit;
-pub use rename::{RenameOptions, RenameProvider, RenameResult, TextEdit, apply_rename_edits};
 pub use scope_analyzer::{IssueKind, ScopeAnalyzer, ScopeIssue};
-pub use selection_range::{build_parent_map, selection_chain};
-pub use semantic_tokens::{
-    EncodedToken, TokensLegend, collect_semantic_tokens, legend as semantic_legend,
-};
-pub use semantic_tokens_provider::{
-    SemanticToken as SemanticTokenV2, SemanticTokenModifier as SemanticTokenModifierV2,
-    SemanticTokenType as SemanticTokenTypeV2, SemanticTokensProvider, encode_semantic_tokens,
-};
-pub use signature_help::{ParameterInfo, SignatureHelp, SignatureHelpProvider, SignatureInfo};
 pub use test_generator::{
     CoverageReport, Priority, RefactoringCategory, RefactoringSuggester, RefactoringSuggestion,
     TestCase, TestFramework, TestGenerator, TestGeneratorOptions, TestResults, TestRunner,
@@ -319,7 +317,6 @@ pub use type_inference::{
     PerlType, ScalarType, TypeBasedCompletion, TypeConstraint, TypeEnvironment,
     TypeInferenceEngine, TypeLocation,
 };
-pub use workspace_symbols::{WorkspaceSymbol, WorkspaceSymbolsProvider};
 
 // TDD workflow and refactoring exports
 pub use refactoring::{

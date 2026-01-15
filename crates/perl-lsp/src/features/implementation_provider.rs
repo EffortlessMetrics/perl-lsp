@@ -4,10 +4,10 @@
 //! - Subclasses that inherit from a base class
 //! - Overridden methods in derived classes
 
-use crate::ast::{Node, NodeKind};
+use perl_parser::ast::{Node, NodeKind};
 use crate::type_hierarchy::TypeHierarchyProvider;
-use crate::uri::parse_uri;
-use crate::workspace_index::WorkspaceIndex;
+use crate::util::uri::parse_uri;
+use perl_parser::workspace_index::WorkspaceIndex;
 use lsp_types::LocationLink;
 use lsp_types::{Position as LspPosition, Range as LspRange};
 use std::collections::HashMap;

@@ -3,7 +3,7 @@
 //! Provides fallback implementations for LSP features when full AST analysis
 //! is unavailable or fails.
 
-use crate::lsp::utils::byte_to_utf16_col;
+use crate::util::byte_to_utf16_col;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde_json::json;

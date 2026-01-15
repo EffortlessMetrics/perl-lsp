@@ -1,2 +1,16 @@
-//! Compatibility shim. Prefer `crate::lsp::features::formatting`.
-pub use crate::lsp::features::formatting::*;
+//! LSP feature module (deprecated)
+//!
+//! **DEPRECATED**: This module has moved to the `perl-lsp` crate.
+//!
+//! For backwards compatibility during the migration period, this module
+//! is kept as an empty stub. Migrate to `perl_lsp::features::formatting`.
+//!
+//! # Migration
+//!
+//! ```ignore
+//! // Old:
+//! use perl_parser::formatting;
+//!
+//! // New:
+//! use perl_lsp::features::formatting;
+//! ```

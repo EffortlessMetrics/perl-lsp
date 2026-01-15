@@ -3,9 +3,9 @@
 //! Handles textDocument/documentSymbol and textDocument/foldingRange requests.
 
 use super::super::{byte_to_utf16_col, *};
-use crate::lsp::fallback::text::folding_ranges_from_text;
-use crate::lsp::protocol::req_uri;
-use crate::lsp::state::document_symbol_cap;
+use crate::fallback::text::folding_ranges_from_text;
+use crate::protocol::req_uri;
+use crate::state::document_symbol_cap;
 use std::sync::OnceLock;
 
 static SUB_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();

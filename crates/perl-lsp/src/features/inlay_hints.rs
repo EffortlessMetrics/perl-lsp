@@ -1,6 +1,6 @@
 // crates/perl-parser/src/inlay_hints.rs
-use crate::ast::{Node, NodeKind};
-use crate::positions::{Position, Range, pos_in_range};
+use perl_parser::ast::{Node, NodeKind};
+use perl_parser::positions::{Position, Range, pos_in_range};
 use serde_json::Value;
 use serde_json::json;
 

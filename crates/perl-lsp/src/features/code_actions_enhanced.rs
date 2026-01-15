@@ -2,9 +2,9 @@
 //!
 //! This module extends the base code actions with more sophisticated refactorings.
 
-use crate::ast::{Node, NodeKind, SourceLocation};
-use crate::code_actions::{CodeAction, CodeActionEdit, CodeActionKind};
-use crate::rename::TextEdit;
+use perl_parser::ast::{Node, NodeKind, SourceLocation};
+use crate::features::code_actions::{CodeAction, CodeActionEdit, CodeActionKind};
+use crate::features::rename::TextEdit;
 use std::collections::HashSet;
 
 /// Enhanced code actions provider with additional refactorings

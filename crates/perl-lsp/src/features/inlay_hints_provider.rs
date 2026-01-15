@@ -1,6 +1,6 @@
-use crate::ast::{Node, NodeKind};
-use crate::builtin_signatures_phf::get_param_names;
-use crate::positions::{Position as LspPosition, Range, pos_in_range};
+use perl_parser::ast::{Node, NodeKind};
+use perl_parser::builtin_signatures_phf::get_param_names;
+use perl_parser::positions::{Position as LspPosition, Range, pos_in_range};
 use serde_json::{Value, json};
 
 /// Inlay Hint types according to LSP spec

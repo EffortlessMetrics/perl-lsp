@@ -7,6 +7,9 @@ pub mod uri;
 
 use lsp_types::Position;
 
+// Re-export engine utilities
+pub use perl_parser::util::{code_slice, find_data_marker_byte_lexed};
+
 // =============================================================================
 // Panic-free character accessors (Issue #143)
 // =============================================================================

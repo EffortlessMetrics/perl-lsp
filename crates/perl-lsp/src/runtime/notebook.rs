@@ -15,7 +15,7 @@
 //! - [LSP 3.17 Notebook Spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#notebookDocument_synchronization)
 
 use super::*;
-use crate::lsp::protocol::invalid_params;
+use crate::protocol::invalid_params;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;

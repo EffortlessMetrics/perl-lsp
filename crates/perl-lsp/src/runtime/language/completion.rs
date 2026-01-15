@@ -7,13 +7,15 @@
 //! - Workspace-wide symbol completion
 //! - Cancellation support
 
-use crate::{
-    CompletionItemKind, CompletionProvider,
+use perl_parser::{
     cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, RequestCleanupGuard},
-    lsp::protocol::{JsonRpcError, REQUEST_CANCELLED, req_position, req_uri},
-    lsp::server_impl::routing::{IndexAccessMode, route_index_access},
-    lsp::state::{completion_cap, completion_deadline},
     type_inference::TypeInferenceEngine,
+};
+use crate::completion::{CompletionItemKind, CompletionProvider};
+use crate::{
+    protocol::{JsonRpcError, REQUEST_CANCELLED, req_position, req_uri},
+    runtime::routing::{IndexAccessMode, route_index_access},
+    state::{completion_cap, completion_deadline},
 };
 use regex::Regex;
 use serde_json::{Value, json};
@@ -36,7 +38,7 @@ fn get_snippet_simple_regex() -> Option<&'static Regex> {
 impl LspServer {
     /// Format type information concisely for completion detail
     pub(crate) fn format_type_for_detail(t: &crate::type_inference::PerlType) -> String {
-        use crate::type_inference::PerlType;
+        use perl_parser::type_inference::PerlType;
         match t {
             PerlType::Scalar(_) => "scalar".to_string(),
             PerlType::Array(_) => "array".to_string(),

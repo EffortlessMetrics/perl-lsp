@@ -1,5 +1,5 @@
 // crates/perl-parser/src/selection_range.rs
-use crate::ast::Node;
+use perl_parser::ast::Node;
 use rustc_hash::FxHashMap;
 use serde_json::{Value, json};
 

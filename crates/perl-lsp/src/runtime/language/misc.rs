@@ -12,8 +12,8 @@
 //! - Execute command
 
 use super::super::*;
-use crate::lsp::protocol::{invalid_params, req_position, req_uri};
-use crate::lsp::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
+use crate::protocol::{invalid_params, req_position, req_uri};
+use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
 use std::sync::OnceLock;
 use std::time::Instant;
 
@@ -32,7 +32,7 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        use crate::lsp::protocol::req_range;
+        use crate::protocol::req_range;
         let cap = inlay_hints_cap();
 
         if let Some(p) = params {
@@ -304,7 +304,7 @@ impl LspServer {
                 })?;
                 match crate::lsp_document_link::collect_document_links(&doc.text, &uri_parsed) {
                     Ok(links) => Ok(Some(serde_json::to_value(links).map_err(|e| {
-                        crate::lsp::protocol::internal_error(&format!(
+                        crate::protocol::internal_error(&format!(
                             "Failed to serialize document links: {}",
                             e
                         ))
@@ -370,7 +370,7 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         // Gate unadvertised feature
         if !self.advertised_features.lock().code_lens {
-            return Err(crate::lsp_errors::method_not_advertised());
+            return Err(crate::protocol::method_not_advertised());
         }
 
         let cap = code_lens_cap();
@@ -496,7 +496,7 @@ impl LspServer {
                 let provider = InlineCompletionProvider::new();
                 let completions = provider.get_inline_completions(&doc.text, line, character);
                 return Ok(Some(serde_json::to_value(completions).map_err(|e| {
-                    crate::lsp::protocol::internal_error(&format!(
+                    crate::protocol::internal_error(&format!(
                         "Failed to serialize inline completions: {}",
                         e
                     ))
@@ -514,7 +514,7 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        use crate::lsp::protocol::req_range;
+        use crate::protocol::req_range;
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let ((start_line, _start_char), (end_line, _end_char)) = req_range(&params)?;
@@ -725,7 +725,7 @@ impl LspServer {
     /// Searches `use` statements for the symbol name, handling both bare imports
     /// and `qw<...>` style import lists with all delimiter types.
     fn find_import_source(&self, ast: &crate::ast::Node, symbol_name: &str) -> Option<String> {
-        use crate::ast::NodeKind;
+        use perl_parser::ast::NodeKind;
 
         fn find(node: &crate::ast::Node, name: &str) -> Option<String> {
             match &node.kind {
@@ -763,7 +763,7 @@ impl LspServer {
 
     /// Check if a variable is declared with 'our' (package-scoped)
     fn is_our_variable(&self, ast: &crate::ast::Node, var_name: &str, sigil: Option<char>) -> bool {
-        use crate::ast::NodeKind;
+        use perl_parser::ast::NodeKind;
 
         fn check(node: &crate::ast::Node, name: &str, sigil: Option<char>) -> bool {
             match &node.kind {
@@ -820,7 +820,7 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         // Gate unadvertised feature
         if !self.advertised_features.lock().document_color {
-            return Err(crate::lsp_errors::method_not_advertised());
+            return Err(crate::protocol::method_not_advertised());
         }
 
         let params = params.ok_or_else(|| invalid_params("Missing params"))?;
@@ -871,7 +871,7 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         // Gate unadvertised feature
         if !self.advertised_features.lock().document_color {
-            return Err(crate::lsp_errors::method_not_advertised());
+            return Err(crate::protocol::method_not_advertised());
         }
 
         let params = params.ok_or_else(|| invalid_params("Missing params"))?;
@@ -908,7 +908,7 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         // Gate unadvertised feature
         if !self.advertised_features.lock().linked_editing {
-            return Err(crate::lsp_errors::method_not_advertised());
+            return Err(crate::protocol::method_not_advertised());
         }
 
         if let Some(params) = params {
@@ -920,7 +920,7 @@ impl LspServer {
                 let result =
                     crate::linked_editing::handle_linked_editing(&doc.text, line, character);
                 return Ok(Some(serde_json::to_value(result).map_err(|e| {
-                    crate::lsp::protocol::internal_error(&format!(
+                    crate::protocol::internal_error(&format!(
                         "Failed to serialize linked editing ranges: {}",
                         e
                     ))
@@ -1012,7 +1012,7 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        use crate::execute_command::ExecuteCommandProvider;
+        use perl_parser::execute_command::ExecuteCommandProvider;
 
         if let Some(params) = params {
             let command = params["command"]

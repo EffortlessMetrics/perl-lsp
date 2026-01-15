@@ -2,7 +2,7 @@
 //!
 //! Provides inline actions like "Run Test", "X references" above code elements.
 
-use crate::ast::{Node, NodeKind};
+use perl_parser::ast::{Node, NodeKind};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 

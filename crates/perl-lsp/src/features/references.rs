@@ -30,7 +30,7 @@
 //! }
 //! ```
 
-use crate::ast::{Node, NodeKind};
+use perl_parser::ast::{Node, NodeKind};
 
 /// Return (start_offset, end_offset) for same-file references
 pub fn find_references_single_file(ast: &Node, offset: usize) -> Option<Vec<(usize, usize)>> {

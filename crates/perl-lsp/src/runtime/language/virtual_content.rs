@@ -12,13 +12,13 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         let params = params.ok_or_else(|| JsonRpcError {
-            code: crate::lsp::protocol::INVALID_PARAMS,
+            code: crate::protocol::INVALID_PARAMS,
             message: "Missing params".to_string(),
             data: None,
         })?;
 
         let uri = params.get("uri").and_then(|u| u.as_str()).ok_or_else(|| JsonRpcError {
-            code: crate::lsp::protocol::INVALID_PARAMS,
+            code: crate::protocol::INVALID_PARAMS,
             message: "Missing or invalid URI".to_string(),
             data: None,
         })?;

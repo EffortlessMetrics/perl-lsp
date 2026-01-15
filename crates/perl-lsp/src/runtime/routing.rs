@@ -24,7 +24,7 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
+//! use crate::runtime::routing::{IndexAccessMode, route_index_access};
 //!
 //! // In a handler:
 //! let mode = route_index_access(self.coordinator());
@@ -46,7 +46,7 @@
 #![allow(unreachable_pub)]
 
 #[cfg(feature = "workspace")]
-use crate::workspace_index::{DegradationReason, IndexCoordinator, IndexState};
+use perl_parser::workspace_index::{DegradationReason, IndexCoordinator, IndexState};
 #[cfg(feature = "workspace")]
 use std::sync::Arc;
 

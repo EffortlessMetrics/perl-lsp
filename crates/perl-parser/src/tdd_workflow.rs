@@ -4,7 +4,9 @@
 //! automatic test generation, continuous testing, and refactoring suggestions.
 
 use crate::ast::Node;
-use crate::diagnostics::Diagnostic;
+
+// Re-use Diagnostic from tdd_basic to avoid duplication
+use crate::tdd_basic::{Diagnostic, DiagnosticSeverity};
 use crate::test_generator::{CoverageReport, TestResults, TestRunner};
 use crate::test_generator::{RefactoringSuggester, RefactoringSuggestion};
 use crate::test_generator::{TestCase, TestFramework, TestGenerator};
@@ -380,7 +382,7 @@ impl TddWorkflow {
                 if !line_cov.covered {
                     diagnostics.push(Diagnostic {
                         range: (line_cov.line, line_cov.line),
-                        severity: crate::diagnostics::DiagnosticSeverity::Warning,
+                        severity: DiagnosticSeverity::Warning,
                         code: Some("tdd.uncovered".to_string()),
                         message: "Line not covered by tests".to_string(),
                         related_information: vec![],

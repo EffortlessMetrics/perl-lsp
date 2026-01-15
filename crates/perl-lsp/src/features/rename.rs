@@ -78,9 +78,9 @@
 //! }
 //! ```
 
-use crate::SourceLocation;
-use crate::ast::Node;
-use crate::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
+use perl_parser::SourceLocation;
+use perl_parser::ast::Node;
+use perl_parser::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 
 /// A text edit to apply during rename
 #[derive(Debug, Clone, PartialEq, Eq)]

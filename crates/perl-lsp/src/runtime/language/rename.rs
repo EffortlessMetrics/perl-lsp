@@ -10,9 +10,9 @@
 //! - **Building/Degraded state**: Same-file rename only; logs "workspace rename unavailable while index building"
 
 use super::super::*;
-use crate::lsp::protocol::{invalid_params, req_position, req_uri};
+use crate::protocol::{invalid_params, req_position, req_uri};
 #[cfg(feature = "workspace")]
-use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{IndexAccessMode, route_index_access};
 
 impl LspServer {
     /// Handle textDocument/prepareRename request

@@ -71,10 +71,10 @@
 //! - **Cancellation aware**: Respects LSP cancellation for responsiveness
 //! - **Memory efficient**: Uses streaming iteration without loading all results
 
-use crate::SourceLocation;
-use crate::ast::Node;
-use crate::symbol::{ScopeKind, SymbolExtractor, SymbolKind, SymbolTable};
-use crate::workspace_index::{SymbolKind as WsSymbolKind, WorkspaceIndex};
+use perl_parser::SourceLocation;
+use perl_parser::ast::Node;
+use perl_parser::symbol::{ScopeKind, SymbolExtractor, SymbolKind, SymbolTable};
+use perl_parser::workspace_index::{SymbolKind as WsSymbolKind, WorkspaceIndex};
 use std::collections::HashSet;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::{Component, Path, PathBuf};

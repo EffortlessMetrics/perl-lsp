@@ -5,8 +5,8 @@
 //! Includes deadline enforcement to prevent blocking on large files.
 
 use super::super::*;
-use crate::lsp::protocol::req_uri;
-use crate::lsp::state::semantic_tokens_deadline;
+use crate::protocol::req_uri;
+use crate::state::semantic_tokens_deadline;
 use std::time::Instant;
 
 impl LspServer {
@@ -87,7 +87,7 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        use crate::lsp::protocol::req_range;
+        use crate::protocol::req_range;
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let ((start_line, _start_char), (end_line, _end_char)) = req_range(&params)?;

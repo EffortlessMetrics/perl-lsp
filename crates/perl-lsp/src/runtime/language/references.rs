@@ -9,14 +9,14 @@
 //! - **Building/Degraded state**: Same-file semantic analysis + open document scan
 
 use super::super::{byte_to_utf16_col, *};
-use crate::lsp::protocol::{req_position, req_uri};
-use crate::lsp::state::{reference_search_deadline, references_cap};
-use crate::lsp::utils::{is_word_boundary, token_under_cursor};
+use crate::protocol::{req_position, req_uri};
+use crate::state::{reference_search_deadline, references_cap};
+use crate::util::{is_word_boundary, token_under_cursor};
 use std::sync::OnceLock;
 use std::time::Instant;
 
 #[cfg(feature = "workspace")]
-use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{IndexAccessMode, route_index_access};
 
 static QUALIFIED_NAME_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 

@@ -4,8 +4,8 @@
 //! and textDocument/onTypeFormatting requests.
 
 use super::super::*;
-use crate::formatting::CodeFormatter;
-use crate::lsp::protocol::{invalid_params, req_position, req_range, req_uri};
+use crate::features::formatting::CodeFormatter;
+use crate::protocol::{invalid_params, req_position, req_range, req_uri};
 
 impl LspServer {
     /// Handle textDocument/onTypeFormatting request

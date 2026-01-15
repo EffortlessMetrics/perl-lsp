@@ -1,5 +1,5 @@
 // crates/perl-parser/src/linked_editing.rs
-use crate::position::{offset_to_utf16_line_col, utf16_line_col_to_offset};
+use perl_parser::position::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 use lsp_types::{LinkedEditingRanges, Position, Range};
 
 const OPEN: &[char] = &['(', '[', '{', '<', '\'', '"'];

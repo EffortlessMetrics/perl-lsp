@@ -4,13 +4,13 @@
 //! and textDocument/implementation requests.
 
 use super::super::*;
-use crate::cancellation::RequestCleanupGuard;
-use crate::lsp::protocol::{req_position, req_uri};
-use crate::lsp::utils::token_under_cursor;
+use perl_parser::cancellation::RequestCleanupGuard;
+use crate::protocol::{req_position, req_uri};
+use crate::util::token_under_cursor;
 use std::collections::HashMap;
 
 #[cfg(feature = "workspace")]
-use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{IndexAccessMode, route_index_access};
 #[cfg(feature = "workspace")]
 use std::sync::OnceLock;
 
@@ -469,7 +469,7 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        use crate::type_definition::TypeDefinitionProvider;
+        use perl_parser::type_definition::TypeDefinitionProvider;
 
         if let Some(params) = params {
             let uri = req_uri(&params)?;

@@ -76,12 +76,12 @@
 pub mod pull;
 pub use pull::PullDiagnosticsProvider;
 
-use crate::ast::{Node, NodeKind};
-use crate::error::ParseError;
-use crate::error_classifier::ErrorClassifier;
-use crate::pragma_tracker::PragmaTracker;
-use crate::scope_analyzer::{IssueKind, ScopeAnalyzer};
-use crate::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
+use perl_parser::ast::{Node, NodeKind};
+use perl_parser::error::ParseError;
+use perl_parser::error_classifier::ErrorClassifier;
+use perl_parser::pragma_tracker::PragmaTracker;
+use perl_parser::scope_analyzer::{IssueKind, ScopeAnalyzer};
+use perl_parser::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 
 /// Severity level for diagnostics
 ///

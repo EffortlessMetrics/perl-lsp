@@ -63,9 +63,19 @@ impl LspServer {
                 let built_in_analyzer = BuiltInAnalyzer::new();
                 let violations = built_in_analyzer.analyze(ast, &doc.text);
                 for violation in violations {
-                    diagnostics.push(crate::Diagnostic {
+                    use crate::features::diagnostics::Diagnostic as InternalDiagnostic;
+                    // Convert lsp_types::DiagnosticSeverity to internal DiagnosticSeverity
+                    let lsp_severity = violation.severity.to_diagnostic_severity();
+                    let internal_severity = match lsp_severity {
+                        lsp_types::DiagnosticSeverity::ERROR => InternalDiagnosticSeverity::Error,
+                        lsp_types::DiagnosticSeverity::WARNING => InternalDiagnosticSeverity::Warning,
+                        lsp_types::DiagnosticSeverity::INFORMATION => InternalDiagnosticSeverity::Information,
+                        lsp_types::DiagnosticSeverity::HINT => InternalDiagnosticSeverity::Hint,
+                        _ => InternalDiagnosticSeverity::Hint, // fallback for unknown severities
+                    };
+                    diagnostics.push(InternalDiagnostic {
                         range: (violation.range.start.byte, violation.range.end.byte),
-                        severity: violation.severity.to_diagnostic_severity(),
+                        severity: internal_severity,
                         code: Some(violation.policy),
                         message: violation.description,
                         related_information: Vec::new(),

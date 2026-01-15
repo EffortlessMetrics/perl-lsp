@@ -3,7 +3,7 @@
 //! This module provides semantic token information to enable richer
 //! syntax highlighting based on semantic understanding of the code.
 
-use crate::ast::{Node, NodeKind};
+use perl_parser::ast::{Node, NodeKind};
 use std::collections::HashMap;
 
 /// Token types supported by the semantic tokens provider

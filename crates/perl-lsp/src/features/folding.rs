@@ -3,7 +3,7 @@
 //! This module provides folding range extraction from the Perl AST,
 //! allowing editors to collapse/expand code sections.
 
-use crate::ast::{Node, NodeKind, SourceLocation};
+use perl_parser::ast::{Node, NodeKind, SourceLocation};
 use perl_lexer::{PerlLexer, TokenType};
 
 /// Extracts folding ranges from a Perl AST

@@ -47,9 +47,9 @@
 //! }
 //! ```
 
-use crate::ast::{Node, NodeKind, SourceLocation};
-use crate::diagnostics::Diagnostic;
-use crate::rename::TextEdit;
+use perl_parser::ast::{Node, NodeKind, SourceLocation};
+use crate::features::diagnostics::Diagnostic;
+use crate::features::rename::TextEdit;
 
 /// A code action that can be applied to fix an issue
 ///
@@ -583,7 +583,7 @@ impl CodeActionsProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Parser;
+    use perl_parser::Parser;
     use crate::diagnostics::DiagnosticsProvider;
 
     #[test]

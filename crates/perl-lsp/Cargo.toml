@@ -21,6 +21,7 @@ include = [
 
 [dependencies]
 perl-parser = { path = "../perl-parser", version = "0.8.8", features = ["test-performance"] }
+perl-lexer = { path = "../perl-lexer", version = "0.8.8" }
 lsp-types = "0.97.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -33,6 +34,8 @@ lazy_static = "1.5.0"
 md5 = "0.8.0"
 phf = { version = "0.13.1", features = ["macros"] }
 nix = { version = "0.30.1", features = ["signal"] }
+parking_lot = "0.12.5"
+walkdir = "2.5.0"
 
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }
@@ -43,6 +46,7 @@ workspace = true
 [features]
 default = ["workspace"]  # Enable workspace indexing by default for cross-file features
 workspace = []  # Workspace-wide indexing for cross-file features
+incremental = ["perl-parser/incremental"]  # Incremental parsing support
 test-compat = []  # Enables compatibility shim for old test API
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).

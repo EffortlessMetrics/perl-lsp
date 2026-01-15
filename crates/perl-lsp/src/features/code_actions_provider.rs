@@ -1,4 +1,4 @@
-use crate::diagnostics::Diagnostic;
+use crate::features::diagnostics::Diagnostic;
 
 /// Represents a code action (quick-fix) that can be applied to resolve a diagnostic
 ///
@@ -546,7 +546,7 @@ impl CodeActionsProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::DiagnosticSeverity;
+    use crate::diagnostics::DiagnosticSeverity;
 
     #[test]
     fn test_undefined_variable_fix() {

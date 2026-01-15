@@ -1413,6 +1413,7 @@ dependencies = [
  "nix",
  "parking_lot",
  "perl-corpus",
+ "perl-lexer",
  "perl-parser",
  "phf",
  "predicates",
@@ -1427,6 +1428,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "url",
+ "walkdir",
  "which",
 ]
 

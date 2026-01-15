@@ -10,8 +10,8 @@
 
 use super::*;
 #[cfg(feature = "workspace")]
-use crate::lsp::server_impl::routing::{IndexAccessMode, route_index_access};
-use crate::lsp::state::workspace_symbol_cap;
+use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::state::workspace_symbol_cap;
 
 impl LspServer {
     /// Handle workspace/symbol request (v2 implementation with lifecycle-aware dispatch)

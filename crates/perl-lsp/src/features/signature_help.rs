@@ -3,11 +3,11 @@
 //! This module provides parameter hints and documentation for functions
 //! as the user types function calls.
 
-use crate::ast::{Node, NodeKind};
-use crate::builtin_signatures::{
+use perl_parser::ast::{Node, NodeKind};
+use perl_parser::builtin_signatures::{
     BuiltinSignature as ImportedBuiltinSignature, create_builtin_signatures,
 };
-use crate::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
+use perl_parser::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use std::collections::HashMap;
 
 /// Information about a function parameter

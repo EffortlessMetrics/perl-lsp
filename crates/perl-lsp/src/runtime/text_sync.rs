@@ -3,9 +3,9 @@
 //! Handles didOpen, didChange, didClose, didSave notifications.
 
 use super::*;
-use crate::lsp::protocol::invalid_params;
+use crate::protocol::invalid_params;
 #[cfg(feature = "workspace")]
-use crate::workspace_index::IndexState;
+use perl_parser::workspace_index::IndexState;
 
 impl LspServer {
     /// Handle textDocument/didOpen notification
@@ -187,7 +187,7 @@ impl LspServer {
                 let target_version = version;
 
                 // Apply incremental changes with UTF-16 aware mapping
-                use crate::textdoc::{Doc, PosEnc, apply_changes};
+                use perl_parser::textdoc::{Doc, PosEnc, apply_changes};
                 use lsp_types::TextDocumentContentChangeEvent;
 
                 let mut doc = Doc { rope: doc_state.rope.clone(), version };

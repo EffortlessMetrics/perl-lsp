@@ -1,5 +1,5 @@
-use crate::ast::{Node, NodeKind};
-use crate::position_mapper::PositionMapper;
+use perl_parser::ast::{Node, NodeKind};
+use perl_parser::position_mapper::PositionMapper;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 

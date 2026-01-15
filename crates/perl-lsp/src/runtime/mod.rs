@@ -16,58 +16,63 @@ mod window;
 mod workspace;
 
 // Re-export protocol types for backward compatibility
-// Tests and external code import these from perl_parser::lsp_server::
-pub use crate::lsp::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
+// Tests and external code import these from perl_lsp::
+pub use crate::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 
 // Re-export window types for public API
 pub use window::{MessageType, ShowDocumentOptions};
 
-use crate::{
-    CodeActionKind as InternalCodeActionKind,
-    CodeActionKindV2 as InternalCodeActionKindV2,
-    CodeActionsProvider,
-    CodeActionsProviderV2,
-    DiagnosticSeverity as InternalDiagnosticSeverity,
-    DiagnosticsProvider,
+use perl_parser::{
     Parser,
     ast::{Node, NodeKind},
     call_hierarchy_provider::CallHierarchyProvider,
     cancellation::{
         GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, ProviderCleanupContext,
     },
+    declaration::ParentMap,
+    performance::{AstCache, SymbolIndex},
+    perl_critic::BuiltInAnalyzer,
+    positions::LineStartsCache,
+    tdd_basic::TestGenerator,
+    test_runner::{TestKind, TestRunner},
+};
+
+// Import LSP providers from features (these moved from perl-parser to perl-lsp)
+use crate::features::{
+    // code_actions.rs - original AST-based provider
+    code_actions::{CodeActionKind as InternalCodeActionKind, CodeActionsProvider},
+    // code_actions_provider.rs - V2 diagnostic-based provider
+    code_actions_provider::{CodeActionKind as InternalCodeActionKindV2, CodeActionsProvider as CodeActionsProviderV2},
     code_actions_enhanced::EnhancedCodeActionsProvider,
     code_lens_provider::{CodeLensProvider, get_shebang_lens, resolve_code_lens},
-    declaration::ParentMap,
+    diagnostics::{DiagnosticSeverity as InternalDiagnosticSeverity, DiagnosticsProvider},
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
     implementation_provider::ImplementationProvider,
+    semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
+    type_hierarchy::TypeHierarchyProvider,
+};
+
+use crate::{
     // Import fallback implementations
-    lsp::fallback::text::extract_text_based_code_lenses,
-    // Note: InlayHintConfig and InlayHintsProvider are used in language/misc.rs
+    fallback::text::extract_text_based_code_lenses,
     // Import from new modular lsp structure
     // Note: JsonRpcError, JsonRpcRequest, JsonRpcResponse are pub use'd above
-    lsp::protocol::{
+    protocol::{
         CONTENT_MODIFIED, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, REQUEST_CANCELLED,
         cancelled_response_with_method, document_not_found_error, enhanced_error,
         request_cancelled_error, server_cancelled_error,
     },
-    lsp::state::{
+    state::{
         ClientCapabilities, DocumentState, ServerConfig, WorkspaceConfig,
         normalize_package_separator,
     },
-    lsp::transport::{log_response, read_message, write_message},
+    transport::{log_response, read_message, write_message},
     // Import text processing helpers
-    lsp::utils::{
+    util::{
         byte_to_line_col, byte_to_utf16_col, extract_module_reference, get_text_around_offset,
         offset_to_position, position_to_offset,
     },
-    performance::{AstCache, SymbolIndex},
-    perl_critic::BuiltInAnalyzer,
-    positions::LineStartsCache,
-    semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
-    tdd_basic::TestGenerator,
-    test_runner::{TestKind, TestRunner},
-    type_hierarchy::TypeHierarchyProvider,
 };
 use lsp_types::Location;
 use md5;
@@ -84,14 +89,14 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use url::Url;
 
-use crate::uri::parse_uri;
+use crate::util::uri::parse_uri;
 #[cfg(feature = "workspace")]
-use crate::workspace_index::{
+use perl_parser::workspace_index::{
     IndexCoordinator, LspWorkspaceSymbol, WorkspaceIndex, uri_to_fs_path,
 };
 
 #[cfg(feature = "workspace")]
-use crate::lsp::fallback::text::extract_text_based_symbols;
+use crate::fallback::text::extract_text_based_symbols;
 
 /// Lightweight view of a document for scan-heavy operations
 ///
@@ -114,7 +119,7 @@ pub(crate) struct DocumentScanView {
     /// Document text content for text-based searches
     pub text: String,
     /// Optional AST reference (Arc clone) for AST-based operations
-    pub ast: Option<Arc<crate::ast::Node>>,
+    pub ast: Option<Arc<perl_parser::ast::Node>>,
 }
 
 // Note: FQN_RE regex moved to language/navigation.rs
@@ -151,7 +156,7 @@ pub struct LspServer {
     /// Root path for module resolution
     root_path: Arc<Mutex<Option<PathBuf>>>,
     /// Advertised server capabilities
-    advertised_features: Mutex<crate::capabilities::AdvertisedFeatures>,
+    advertised_features: Mutex<crate::protocol::capabilities::AdvertisedFeatures>,
     /// Client supports pull diagnostics
     client_supports_pull_diags: Arc<AtomicBool>,
     /// Workspace configuration for module resolution
@@ -179,9 +184,9 @@ impl LspServer {
 
         let default_features = {
             let flags = if cfg!(feature = "lsp-ga-lock") {
-                crate::capabilities::BuildFlags::ga_lock()
+                crate::protocol::capabilities::BuildFlags::ga_lock()
             } else {
-                crate::capabilities::BuildFlags::production()
+                crate::protocol::capabilities::BuildFlags::production()
             };
             flags.to_advertised_features()
         };
@@ -219,9 +224,9 @@ impl LspServer {
 
         let default_features = {
             let flags = if cfg!(feature = "lsp-ga-lock") {
-                crate::capabilities::BuildFlags::ga_lock()
+                crate::protocol::capabilities::BuildFlags::ga_lock()
             } else {
-                crate::capabilities::BuildFlags::production()
+                crate::protocol::capabilities::BuildFlags::production()
             };
             flags.to_advertised_features()
         };
@@ -722,7 +727,7 @@ impl LspServer {
     #[cfg(feature = "workspace")]
     fn extract_document_symbols(
         &self,
-        ast: &crate::ast::Node,
+        ast: &perl_parser::ast::Node,
         source: &str,
         uri: &str,
     ) -> Vec<LspWorkspaceSymbol> {
@@ -734,7 +739,7 @@ impl LspServer {
     #[cfg(not(feature = "workspace"))]
     fn extract_document_symbols(
         &self,
-        _ast: &crate::ast::Node,
+        _ast: &perl_parser::ast::Node,
         _source: &str,
         _uri: &str,
     ) -> Vec<serde_json::Value> {
@@ -745,13 +750,13 @@ impl LspServer {
     #[cfg(feature = "workspace")]
     fn extract_symbols_recursive(
         &self,
-        node: &crate::ast::Node,
+        node: &perl_parser::ast::Node,
         source: &str,
         uri: &str,
         container: Option<&str>,
         symbols: &mut Vec<LspWorkspaceSymbol>,
     ) {
-        use crate::ast::NodeKind;
+        use perl_parser::ast::NodeKind;
 
         match &node.kind {
             NodeKind::Subroutine { name, body, .. } => {
@@ -763,14 +768,14 @@ impl LspServer {
                     symbols.push(LspWorkspaceSymbol {
                         name: sub_name.clone(),
                         kind: 12, // Function
-                        location: crate::workspace_index::LspLocation {
+                        location: perl_parser::workspace_index::LspLocation {
                             uri: uri.to_string(),
-                            range: crate::workspace_index::LspRange {
-                                start: crate::workspace_index::LspPosition {
+                            range: perl_parser::workspace_index::LspRange {
+                                start: perl_parser::workspace_index::LspPosition {
                                     line: start_line,
                                     character: start_char,
                                 },
-                                end: crate::workspace_index::LspPosition {
+                                end: perl_parser::workspace_index::LspPosition {
                                     line: end_line,
                                     character: end_char,
                                 },
@@ -799,14 +804,14 @@ impl LspServer {
                 symbols.push(LspWorkspaceSymbol {
                     name: name.clone(),
                     kind: 2, // Module
-                    location: crate::workspace_index::LspLocation {
+                    location: perl_parser::workspace_index::LspLocation {
                         uri: uri.to_string(),
-                        range: crate::workspace_index::LspRange {
-                            start: crate::workspace_index::LspPosition {
+                        range: perl_parser::workspace_index::LspRange {
+                            start: perl_parser::workspace_index::LspPosition {
                                 line: start_line,
                                 character: start_char,
                             },
-                            end: crate::workspace_index::LspPosition {
+                            end: perl_parser::workspace_index::LspPosition {
                                 line: end_line,
                                 character: end_char,
                             },
@@ -850,13 +855,13 @@ impl LspServer {
     #[cfg(not(feature = "workspace"))]
     fn extract_simple_symbols(
         &self,
-        node: &crate::ast::Node,
+        node: &perl_parser::ast::Node,
         source: &str,
         uri: &str,
         query: &str,
         symbols: &mut Vec<serde_json::Value>,
     ) {
-        use crate::ast::NodeKind;
+        use perl_parser::ast::NodeKind;
 
         let query_lower = query.to_lowercase();
 
@@ -928,11 +933,11 @@ impl LspServer {
     #[allow(clippy::only_used_in_recursion)]
     fn count_references(
         &self,
-        node: &crate::ast::Node,
+        node: &perl_parser::ast::Node,
         symbol_name: &str,
         symbol_kind: &str,
     ) -> usize {
-        use crate::ast::NodeKind;
+        use perl_parser::ast::NodeKind;
 
         let mut count = 0;
 

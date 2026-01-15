@@ -85,7 +85,7 @@
 //! println!("Token type: {:?}", legend.token_types.get(custom_token[3] as usize));
 //! ```
 
-use crate::ast::{Node, NodeKind};
+use perl_parser::ast::{Node, NodeKind};
 use perl_lexer::{PerlLexer, TokenType};
 use rustc_hash::FxHashMap;
 

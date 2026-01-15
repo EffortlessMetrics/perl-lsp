@@ -232,9 +232,9 @@ impl LspServer {
 
         // Build capabilities using catalog-driven approach
         let mut build_flags = if cfg!(feature = "lsp-ga-lock") {
-            crate::capabilities::BuildFlags::ga_lock()
+            crate::protocol::capabilities::BuildFlags::ga_lock()
         } else {
-            crate::capabilities::BuildFlags::production()
+            crate::protocol::capabilities::BuildFlags::production()
         };
 
         // Set formatting flags based on perltidy availability
@@ -248,9 +248,9 @@ impl LspServer {
         *self.advertised_features.lock() = features.clone();
 
         // Generate capabilities from build flags
-        let server_caps = crate::capabilities::capabilities_for(build_flags);
+        let server_caps = crate::protocol::capabilities::capabilities_for(build_flags);
         let mut capabilities = serde_json::to_value(&server_caps).map_err(|e| {
-            crate::lsp::protocol::internal_error(&format!(
+            crate::protocol::internal_error(&format!(
                 "Failed to serialize server capabilities: {}",
                 e
             ))

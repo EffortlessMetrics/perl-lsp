@@ -9,10 +9,10 @@
 //! now serves as a compatibility shim that re-exports from here.
 
 // Re-export LspServer from the implementation module
-pub use super::server_impl::LspServer;
+pub use super::runtime::LspServer;
 
 // Re-export protocol types for convenience
 pub use super::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 
 // Re-export window types for public API
-pub use super::server_impl::{MessageType, ShowDocumentOptions};
+pub use super::runtime::{MessageType, ShowDocumentOptions};
