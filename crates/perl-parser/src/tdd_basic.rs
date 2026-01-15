@@ -3,7 +3,31 @@
 //! Simplified TDD implementation focused on core red-green-refactor cycle
 
 use crate::ast::{Node, NodeKind};
-use crate::diagnostics::Diagnostic;
+
+// Internal diagnostic type for TDD workflow (not dependent on lsp_types)
+#[derive(Debug, Clone)]
+pub struct Diagnostic {
+    /// Byte offset range (start line, end line) - 0-indexed
+    pub range: (usize, usize),
+    /// Severity level
+    pub severity: DiagnosticSeverity,
+    /// Optional diagnostic code
+    pub code: Option<String>,
+    /// Human-readable message
+    pub message: String,
+    /// Related diagnostic information
+    pub related_information: Vec<String>,
+    /// Diagnostic tags
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiagnosticSeverity {
+    Error,
+    Warning,
+    Information,
+    Hint,
+}
 
 /// Basic test generator
 pub struct TestGenerator {
@@ -402,7 +426,7 @@ impl TddWorkflow {
             .iter()
             .map(|&line| Diagnostic {
                 range: (line, line),
-                severity: crate::diagnostics::DiagnosticSeverity::Warning,
+                severity: DiagnosticSeverity::Warning,
                 code: Some("tdd.uncovered".to_string()),
                 message: "Line not covered by tests".to_string(),
                 related_information: vec![],

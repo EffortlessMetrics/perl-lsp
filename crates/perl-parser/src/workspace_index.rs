@@ -59,7 +59,7 @@
 use crate::Parser;
 use crate::ast::{Node, NodeKind};
 use crate::document_store::{Document, DocumentStore};
-use lsp_types::{Position, Range};
+use crate::position::{Position, Range};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -971,12 +971,9 @@ impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
                 range: LspRange {
                     start: LspPosition {
                         line: sym.range.start.line,
-                        character: sym.range.start.character,
+                        character: sym.range.start.column,
                     },
-                    end: LspPosition {
-                        line: sym.range.end.line,
-                        character: sym.range.end.character,
-                    },
+                    end: LspPosition { line: sym.range.end.line, character: sym.range.end.column },
                 },
             },
             container_name: sym.container_name.clone(),
@@ -1371,9 +1368,9 @@ impl WorkspaceIndex {
             seen.insert((
                 loc.uri.clone(),
                 loc.range.start.line,
-                loc.range.start.character,
+                loc.range.start.column,
                 loc.range.end.line,
-                loc.range.end.character,
+                loc.range.end.column,
             ))
         });
 
@@ -1866,9 +1863,10 @@ impl IndexVisitor {
         // LineIndex.range returns line numbers and UTF-16 code unit columns
         let ((start_line, start_col), (end_line, end_col)) =
             self.document.line_index.range(node.location.start, node.location.end);
+        // Use byte offsets from node.location directly
         Range {
-            start: Position { line: start_line, character: start_col },
-            end: Position { line: end_line, character: end_col },
+            start: Position { byte: node.location.start, line: start_line, column: start_col },
+            end: Position { byte: node.location.end, line: end_line, column: end_col },
         }
     }
 }
@@ -1880,7 +1878,7 @@ impl Default for WorkspaceIndex {
 }
 
 /// LSP adapter for converting internal Location types to LSP types
-#[cfg(feature = "workspace")]
+#[cfg(all(feature = "workspace", feature = "lsp-compat"))]
 pub mod lsp_adapter {
     use super::Location as IxLocation;
     use lsp_types::Location as LspLocation;
@@ -1915,7 +1913,14 @@ pub mod lsp_adapter {
     /// assert!(lsp_loc.is_some());
     /// ```
     pub fn to_lsp_location(ix: &IxLocation) -> Option<LspLocation> {
-        parse_url(&ix.uri).map(|uri| LspLocation { uri, range: ix.range })
+        parse_url(&ix.uri).map(|uri| {
+            let start =
+                lsp_types::Position { line: ix.range.start.line, character: ix.range.start.column };
+            let end =
+                lsp_types::Position { line: ix.range.end.line, character: ix.range.end.column };
+            let range = lsp_types::Range { start, end };
+            LspLocation { uri, range }
+        })
     }
 
     /// Convert multiple workspace index locations to LSP Locations for batch operations

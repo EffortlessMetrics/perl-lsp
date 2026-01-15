@@ -9,8 +9,8 @@
 //! Also tests legacy rootPath handling and configuration management.
 
 use parking_lot::Mutex;
-use perl_parser::lsp::state::WorkspaceConfig;
-use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
+use perl_lsp::state::WorkspaceConfig;
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::io::Write;
 use std::sync::Arc;

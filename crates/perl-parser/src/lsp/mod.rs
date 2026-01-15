@@ -1,33 +1,26 @@
-//! LSP Server implementation modules
+//! LSP compatibility module (deprecated)
 //!
-//! This module provides a modular Language Server Protocol implementation
-//! organized into coherent subsystems:
+//! **NOTE**: The LSP implementation has moved to the `perl-lsp` crate.
+//! This module exists only for backwards compatibility and will be removed
+//! in a future release.
 //!
-//! - **protocol**: JSON-RPC message types and error handling
-//! - **transport**: Message framing and I/O
-//! - **state**: Document and server state management
-//! - **dispatch**: Placeholder (real dispatch in `server_impl/dispatch.rs`)
-//! - **handlers**: LSP method implementations
-//! - **features**: LSP feature providers (completion, code actions, etc.)
-//! - **fallback**: Text-based fallback implementations
-//! - **server_impl**: Core LspServer implementation and dispatch logic
-//! - **server**: Public server interface (re-exports from server_impl)
+//! ## Migration
+//!
+//! If you were using `perl_parser::lsp::*`, migrate to `perl_lsp::*`:
+//!
+//! ```ignore
+//! // Old (deprecated):
+//! use perl_parser::lsp::LspServer;
+//!
+//! // New:
+//! use perl_lsp::LspServer;
+//! ```
+//!
+//! The `perl-parser` crate is now the engine-only library for parsing Perl code.
+//! The `perl-lsp` crate is the LSP runtime that uses `perl-parser` as its engine.
 
-pub mod dispatch;
-pub mod fallback;
-pub mod features;
-pub mod handlers;
-pub mod protocol;
-pub mod state;
-pub mod utils;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod server;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod server_impl;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod transport;
-
-// Re-export primary types for backward compatibility
-pub use protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
-#[cfg(not(target_arch = "wasm32"))]
-pub use server::LspServer;
+// This module is intentionally empty.
+// The LSP implementation has been moved to the perl-lsp crate.
+//
+// For backwards compatibility during the migration period, this module
+// is kept as a stub behind the `lsp-compat` feature flag.

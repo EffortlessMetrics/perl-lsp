@@ -2,7 +2,7 @@
 //!
 //! Tests all 114 built-in function signatures to ensure they work correctly
 
-use perl_parser::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 
 /// Helper to create and initialize a test server

@@ -260,6 +260,59 @@ Each exhibit shows:
 
 ---
 
+### Exhibit 6: Parser/LSP Modularization + wasm/pull diagnostics stabilization (PR #294)
+
+**What it proves:** Large-scale structural refactors can land safely when paired with shims, strict gating, and regression tests that lock client-visible behavior.
+
+**Review map:**
+- `crates/perl-parser/src/parser/*` (parser monolith split)
+- `crates/perl-parser/src/lsp/features/*` (feature regrouping)
+- wasm gating + stubs (`formatting`, `completion`, `config`, walkdir target dep)
+- pull diagnostics wiring + caching behavior (`pull.rs`, new pull tests)
+
+**Proof bundle:**
+- `cargo check -p perl-parser --target wasm32-unknown-unknown`: passes
+- `cargo test -p perl-parser --test pull_diagnostics_tests`: Full → Unchanged invariant
+- `cargo test -p perl-parser`: full host test suite
+
+**Scar story:**
+- **Wrong:** wasm surface drift (FS/process APIs) + pull diagnostics API mismatch (lsp-types 0.97) + missing Full→Unchanged invariant
+- **How caught:** wasm32 compilation failures exposed process/FS dependencies; diagnostics tests exposed API drift
+- **Fix:** explicit wasm stubs/target deps + API-aligned report construction + Full→Unchanged regression test
+- **Prevention:** test locks flicker behavior; hard boundary for wasm-only functionality
+
+**Quality deltas:**
+
+| Surface | Delta | Notes |
+|---------|-------|-------|
+| Maintainability | +2 | Modular parser + LSP feature tree |
+| Correctness | +1 | Diagnostics behavior regression test; wiring fixes |
+| Governance | +1 | Shims + gating playbook |
+| Reproducibility | +1 | Explicit wasm + targeted test commands |
+
+**Factory delta:**
+- wasm32 compilation now validated in gate
+- `lsp-types` made optional via `lsp-compat` feature flag
+- Pull diagnostics Full→Unchanged invariant locked by regression test
+- walkdir moved to target-specific dependency
+
+**Budget:**
+
+| Metric | Value | Provenance |
+|--------|-------|------------|
+| DevLT | 90–130m | estimated; github_only; medium; 5 decisions, 3 friction (wasm debugging) |
+| CI | ~15m | estimated; local gate |
+| LLM | ~10 units | estimated; 5 iterations |
+
+**Exhibit score:** 4.8/5 (Clarity: 5, Scope: 5, Evidence: 5, Tests: 4, Efficiency: 5)
+
+**Related commits:**
+- `f751c622` - Refactor Parser & LSP Architecture + Add Workspace Features (#294)
+- `7834d191` - LSP server capabilities and utilities
+- `cfa64c5c` - wasm32 target support
+
+---
+
 ## What These Exhibits Demonstrate
 
 ### AI-Native Development Patterns
@@ -279,8 +332,9 @@ Each exhibit shows:
 | #251-253 Harness | +2 | +2 | +1 | +1 | +6 |
 | #259 Name Span | +1 | +1 | 0 | 0 | +2 |
 | #225/226/229 Statement Tracker | +2 | +1 | +1 | +1 | +5 |
+| #294 Parser/LSP Modularization | +2 | +1 | +1 | +1 | +5 |
 
-**Aggregate quality delta**: +22 across 5 exhibits
+**Aggregate quality delta**: +27 across 6 exhibits
 
 ### Combined Budget (with Provenance)
 
@@ -291,8 +345,9 @@ Each exhibit shows:
 | #251-253 Harness | 90–130m | ~15m | ~10 | 365 tests unignored |
 | #259 Name Span | 45–75m | ~8m | ~4 | 11 span tests, LSP 3.17 |
 | #225/226/229 Statement Tracker | 60–90m | ~10m | ~8 | 28 tests, F1-F6 fixtures |
+| #294 Parser/LSP Modularization | 90–130m | ~15m | ~10 | wasm32 gate, lsp-compat feature |
 
-**Total DevLT**: 315–475m (estimated; github_only; medium confidence)
+**Total DevLT**: 405–605m (estimated; github_only; medium confidence)
 
 **Coverage**: All estimates are `github_only` (no agent logs available for retrospective analysis).
 

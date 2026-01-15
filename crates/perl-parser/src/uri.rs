@@ -1,14 +1,20 @@
-//! URI utilities for LSP
+//! LSP module (deprecated)
+//!
+//! **DEPRECATED**: This module has moved to the `perl-lsp` crate.
+//!
+//! For backwards compatibility during the migration period, this module
+//! is kept as an empty stub. Migrate to `perl_lsp::utils::uri`.
+//!
+//! # Migration
+//!
+//! ```ignore
+//! // Old:
+//! use perl_parser::uri;
+//!
+//! // New:
+//! use perl_lsp::utils::uri;
+//! ```
 
-use lsp_types::Uri;
-
-/// Helper function to parse a URI string into an lsp_types::Uri
-/// Falls back to a valid URI if parsing fails
-pub fn parse_uri(s: &str) -> Uri {
-    s.parse::<Uri>().unwrap_or_else(|_| {
-        // This is a guaranteed valid URI as a fallback
-        "file:///invalid".parse::<Uri>().unwrap_or_else(|_| {
-            panic!("hardcoded fallback URI is invalid - this is a bug in the LSP URI parser")
-        })
-    })
-}
+// This module intentionally has no contents.
+// All functionality has moved to the perl-lsp crate.
+// Direct re-export is not possible due to circular dependency.

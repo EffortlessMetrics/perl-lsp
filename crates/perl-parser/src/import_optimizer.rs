@@ -38,7 +38,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use crate::code_actions_provider::TextEdit;
+/// TextEdit for import optimization (local type for byte-offset ranges)
+///
+/// This is separate from LSP types which use line/character positions.
+/// Used internally for applying import optimization edits to source text.
+#[derive(Debug, Clone)]
+pub struct TextEdit {
+    /// Byte offset range (start, end) in the source text
+    pub range: (usize, usize),
+    /// Replacement text
+    pub new_text: String,
+}
 
 /// Result of import analysis containing all detected issues and suggestions
 #[derive(Debug, Serialize, Deserialize)]

@@ -17,7 +17,8 @@
 //!   --version    Show version information
 //!   --help       Show this help message
 
-use perl_parser::LspServer;
+// Import from the local perl_lsp crate (runtime moved from perl-parser)
+use perl_lsp::LspServer;
 use std::env;
 use std::process;
 

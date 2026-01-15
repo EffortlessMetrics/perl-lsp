@@ -178,7 +178,6 @@ impl<'a> Parser<'a> {
     pub fn parse(&mut self) -> ParseResult<Node> {
         self.parse_program()
     }
-
 }
 
 include!("helpers.rs");

@@ -22,7 +22,7 @@ mod degraded_mode_tests {
     //! 6. textDocument/documentSymbol
 
     use crate::support::env_guard::EnvGuard;
-    use perl_parser::lsp_server::LspServer;
+    use perl_lsp::LspServer;
     use serde_json::json;
     use serial_test::serial;
     use std::sync::Arc;
@@ -295,7 +295,7 @@ mod caps_enforcement_tests {
     //! Tests that verify results never exceed configured caps.
 
     use crate::support::env_guard::EnvGuard;
-    use perl_parser::lsp_server::LspServer;
+    use perl_lsp::LspServer;
     use serde_json::json;
     use serial_test::serial;
     use std::sync::Arc;
@@ -440,7 +440,7 @@ mod deadline_enforcement_tests {
     //! Tests that verify deadline enforcement returns partial results, not errors.
 
     use crate::support::env_guard::EnvGuard;
-    use perl_parser::lsp_server::LspServer;
+    use perl_lsp::LspServer;
     use serde_json::json;
     use serial_test::serial;
     use std::sync::Arc;
@@ -573,7 +573,7 @@ mod windows_uri_path_tests {
     //! 3. Drive letter handling (C: vs c:)
 
     use crate::support::env_guard::EnvGuard;
-    use perl_parser::lsp_server::LspServer;
+    use perl_lsp::LspServer;
     use perl_parser::workspace_index::{fs_path_to_uri, uri_to_fs_path};
     use serde_json::json;
     use serial_test::serial;

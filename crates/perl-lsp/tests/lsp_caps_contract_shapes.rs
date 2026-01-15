@@ -1,4 +1,4 @@
-use perl_parser::capabilities::{BuildFlags, capabilities_for};
+use perl_lsp::protocol::capabilities::{BuildFlags, capabilities_for};
 use serde_json::json;
 
 /// Contract test ensuring all advertised capabilities have the correct shape per LSP 3.18 spec

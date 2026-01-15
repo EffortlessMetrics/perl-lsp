@@ -1,2 +1,16 @@
-//! Compatibility shim. Prefer `crate::lsp::features::inlay_hints_provider`.
-pub use crate::lsp::features::inlay_hints_provider::*;
+//! LSP feature module (deprecated)
+//!
+//! **DEPRECATED**: This module has moved to the `perl-lsp` crate.
+//!
+//! For backwards compatibility during the migration period, this module
+//! is kept as an empty stub. Migrate to `perl_lsp::features::inlay_hints_provider`.
+//!
+//! # Migration
+//!
+//! ```ignore
+//! // Old:
+//! use perl_parser::inlay_hints_provider;
+//!
+//! // New:
+//! use perl_lsp::features::inlay_hints_provider;
+//! ```

@@ -1,4 +1,4 @@
-use perl_parser::lsp_server::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 /// Test that ensures LSP capabilities match GA contract
@@ -127,14 +127,14 @@ fn test_unsupported_methods_return_error() {
     server.handle_request(initialized_request);
 
     // Test that truly unsupported methods return method_not_found error
-    // Updated for v0.8.6 - only test methods that truly return method_not_found
+    // Updated for v0.8.8 - color methods are now implemented, use fictional methods
     let unsupported_methods = [
-        "textDocument/colorPresentation", // Not implemented (color support)
-        "textDocument/documentColor",     // Not implemented (color support)
+        "textDocument/notARealMethod", // Fictional - will never be implemented
+        "workspace/notImplementedFeature", // Fictional - will never be implemented
     ];
 
     for method in &unsupported_methods {
-        let request = perl_parser::lsp_server::JsonRpcRequest {
+        let request = perl_lsp::JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
             id: Some(json!(1)),
             method: method.to_string(),

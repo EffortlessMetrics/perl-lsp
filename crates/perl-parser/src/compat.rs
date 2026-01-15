@@ -30,7 +30,6 @@
 #[cfg(any(test, feature = "test-compat"))]
 pub mod v0 {
     use crate::*;
-    use serde_json::Value;
 
     // ============= Core Parser Compatibility =============
 
@@ -141,59 +140,12 @@ pub mod v0 {
                 range: RangeDto {
                     start: PositionDto {
                         line: sym.range.start.line,
-                        character: sym.range.start.character,
+                        character: sym.range.start.column,
                     },
-                    end: PositionDto {
-                        line: sym.range.end.line,
-                        character: sym.range.end.character,
-                    },
+                    end: PositionDto { line: sym.range.end.line, character: sym.range.end.column },
                 },
             },
         }
-    }
-
-    // ============= LSP Server Compatibility =============
-
-    /// Helper to handle execute command requests
-    #[deprecated(since = "0.7.5", note = "Use LspServer::handle_request directly")]
-    #[inline]
-    pub fn execute_lsp_command(
-        server: &mut LspServer,
-        command: &str,
-        args: Vec<Value>,
-    ) -> Option<Value> {
-        let request = JsonRpcRequest {
-            _jsonrpc: "2.0".to_string(),
-            id: Some(serde_json::json!(1)),
-            method: "workspace/executeCommand".to_string(),
-            params: Some(serde_json::json!({
-                "command": command,
-                "arguments": args
-            })),
-        };
-
-        server.handle_request(request).and_then(|response| response.result)
-    }
-
-    /// Helper for sending notifications
-    /// Note: The notify method is now private, tests should use handle_request for notifications
-    #[deprecated(since = "0.7.5", note = "Use handle_request with notification format")]
-    #[inline]
-    pub fn send_notification(
-        _server: &LspServer,
-        method: &str,
-        params: Value,
-    ) -> Result<(), String> {
-        // Create a notification-style request (no id field)
-        let _notification = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params
-        });
-
-        // Since notify is private, we can't actually send it
-        // Tests should be updated to use the proper API
-        Ok(())
     }
 
     // ============= Re-exports for Module Paths =============
@@ -212,10 +164,7 @@ pub mod v0 {
         pub use crate::workspace_index::*;
     }
 
-    /// Legacy re-export of [`crate::lsp_server`] for old import paths.
-    ///
-    /// Tests that imported `v0::lsp::*` should migrate to `use crate::lsp_server::*;`.
-    pub mod lsp {
-        pub use crate::lsp_server::*;
-    }
+    // Note: LSP server compatibility functions have been removed.
+    // LspServer and JsonRpcRequest are now in the perl-lsp crate.
+    // Tests using these types should be in perl-lsp/tests/.
 }

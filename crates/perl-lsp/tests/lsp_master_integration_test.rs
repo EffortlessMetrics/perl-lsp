@@ -2,7 +2,7 @@
 //!
 //! This test ensures all LSP components work together seamlessly
 
-use perl_parser::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 /// Master test that validates the entire LSP lifecycle

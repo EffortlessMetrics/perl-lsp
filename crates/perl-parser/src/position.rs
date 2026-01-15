@@ -2,11 +2,30 @@
 //!
 //! This module provides position and range types that track byte offsets,
 //! lines, and columns for efficient incremental parsing and error reporting.
+//!
+//! # Wire Types vs Engine Types
+//!
+//! This module defines **engine types** used internally for parsing and AST tracking.
+//! For LSP wire protocol serialization, use `perl_lsp::convert::{WirePosition, WireRange}`.
+//!
+//! Engine Position uses 1-based line/column for human-readable display.
+//! Wire Position uses 0-based line/character (UTF-16) per LSP protocol.
+//!
+//! **Important**: This type serializes as `{byte, line, column}` (engine semantics),
+//! NOT as `{line, character}` (LSP semantics). For LSP responses, always convert
+//! to WirePosition.
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// A position in a source file with byte offset, line, and column
+///
+/// This is an **engine type** for internal parsing use. It tracks byte offsets
+/// and 1-based line/column for human-friendly display.
+///
+/// **Note**: This type serializes as `{byte, line, column}` (engine semantics).
+/// For LSP JSON serialization, convert to `perl_lsp::convert::WirePosition` which uses
+/// 0-based line numbers and UTF-16 character offsets with the `character` field name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct Position {
     /// Byte offset in the source (0-based)
@@ -60,6 +79,8 @@ impl fmt::Display for Position {
 }
 
 /// A range in a source file defined by start and end positions
+///
+/// This is an **engine type**. For LSP wire protocol, use `perl_lsp::convert::WireRange`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Range {
     /// Start position (inclusive)

@@ -41,12 +41,19 @@ impl Severity {
     }
 
     /// Converts this severity to a `DiagnosticSeverity` for LSP reporting.
-    pub fn to_diagnostic_severity(&self) -> crate::diagnostics::DiagnosticSeverity {
+    #[cfg(feature = "lsp-compat")]
+    pub fn to_diagnostic_severity(&self) -> lsp_types::DiagnosticSeverity {
         match self {
-            Self::Brutal | Self::Cruel => crate::diagnostics::DiagnosticSeverity::Error,
-            Self::Harsh => crate::diagnostics::DiagnosticSeverity::Warning,
-            Self::Stern | Self::Gentle => crate::diagnostics::DiagnosticSeverity::Information,
+            Self::Brutal | Self::Cruel => lsp_types::DiagnosticSeverity::ERROR,
+            Self::Harsh => lsp_types::DiagnosticSeverity::WARNING,
+            Self::Stern | Self::Gentle => lsp_types::DiagnosticSeverity::INFORMATION,
         }
+    }
+
+    /// Converts this severity to a numeric severity level (for non-LSP contexts).
+    #[cfg(not(feature = "lsp-compat"))]
+    pub fn to_severity_level(&self) -> u8 {
+        *self as u8
     }
 }
 
@@ -218,19 +225,63 @@ impl CriticAnalyzer {
     }
 
     /// Convert violations to diagnostics
-    pub fn to_diagnostics(&self, violations: &[Violation]) -> Vec<crate::diagnostics::Diagnostic> {
+    #[cfg(feature = "lsp-compat")]
+    pub fn to_diagnostics(&self, violations: &[Violation]) -> Vec<lsp_types::Diagnostic> {
         violations
             .iter()
-            .map(|v| crate::diagnostics::Diagnostic {
-                range: (v.range.start.byte, v.range.end.byte),
-                severity: v.severity.to_diagnostic_severity(),
-                code: Some(v.policy.clone()),
-                message: v.description.clone(),
-                related_information: vec![],
-                tags: vec![],
+            .map(|v| {
+                let lsp_range = lsp_types::Range::new(
+                    lsp_types::Position::new(v.range.start.line, v.range.start.column),
+                    lsp_types::Position::new(v.range.end.line, v.range.end.column),
+                );
+                lsp_types::Diagnostic {
+                    range: lsp_range,
+                    severity: Some(v.severity.to_diagnostic_severity()),
+                    code: Some(lsp_types::NumberOrString::String(v.policy.clone())),
+                    source: Some("perlcritic".to_string()),
+                    message: v.description.clone(),
+                    related_information: None,
+                    tags: None,
+                    code_description: None,
+                    data: None,
+                }
             })
             .collect()
     }
+
+    /// Convert violations to violation summaries (for non-LSP contexts)
+    #[cfg(not(feature = "lsp-compat"))]
+    pub fn to_violation_summaries(&self, violations: &[Violation]) -> Vec<ViolationSummary> {
+        violations
+            .iter()
+            .map(|v| ViolationSummary {
+                policy: v.policy.clone(),
+                description: v.description.clone(),
+                severity: v.severity as u8,
+                line: v.range.start.line as usize,
+            })
+            .collect()
+    }
+}
+
+/// Violation summary for non-LSP contexts
+#[cfg(not(feature = "lsp-compat"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViolationSummary {
+    /// Policy name
+    pub policy: String,
+    /// Description
+    pub description: String,
+    /// Severity level (1-5)
+    pub severity: u8,
+    /// Line number
+    pub line: usize,
+}
+
+#[cfg(feature = "lsp-compat")]
+impl CriticAnalyzer {
+    /// Dummy impl to close the bracket
+    fn _dummy(&self) {}
 
     /// Get quick fix for a violation
     pub fn get_quick_fix(&self, violation: &Violation, _content: &str) -> Option<QuickFix> {

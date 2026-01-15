@@ -15,10 +15,11 @@ A high-performance Perl parser with full Language Server Protocol support.
 
 ## Binaries
 
-This crate provides two binaries:
+This crate provides:
 
-- `perl-lsp`: Full-featured Language Server for Perl
-- `perl-dap`: Debug Adapter for Perl debugging
+- `perl-parse`: CLI parser tool (requires `cli` feature)
+
+For the full-featured Language Server, see the [`perl-lsp`](../perl-lsp) crate.
 
 ## Usage
 
@@ -36,9 +37,11 @@ println!("{}", ast.to_sexp());
 
 ### As a Language Server
 
+The LSP server is provided by the `perl-lsp` crate:
+
 ```bash
 # Install
-cargo install perl-parser
+cargo install perl-lsp
 
 # Run
 perl-lsp --stdio
