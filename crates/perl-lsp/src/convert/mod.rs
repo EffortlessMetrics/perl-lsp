@@ -18,8 +18,8 @@
 //!
 //! # Wire Types
 //!
-//! The [`position`] module provides dedicated wire types (`WirePosition`, `WireRange`,
-//! `WireLocation`) that are the canonical types for LSP JSON serialization. These types:
+//! Wire types (`WirePosition`, `WireRange`, `WireLocation`) are the canonical types
+//! for LSP JSON serialization. These types:
 //!
 //! - Use 0-based line numbers (as required by LSP)
 //! - Use UTF-16 code units for character offsets
@@ -27,6 +27,5 @@
 //!
 //! Always use wire types when serializing to LSP JSON, not engine types.
 
-pub mod position;
-
-pub use position::{WireLocation, WirePosition, WireRange};
+// Re-export wire types from perl-position-tracking (canonical implementation)
+pub use perl_position_tracking::{WireLocation, WirePosition, WireRange};

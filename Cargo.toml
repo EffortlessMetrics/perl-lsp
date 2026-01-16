@@ -3,6 +3,14 @@ resolver = "2"
 members = [
     "crates/perl-lexer",
     "crates/perl-parser",
+    "crates/perl-parser-core",
+    "crates/perl-semantic-analyzer",
+    "crates/perl-workspace-index",
+    "crates/perl-refactoring",
+    "crates/perl-incremental-parsing",
+    "crates/perl-tdd-support",
+    "crates/perl-lsp-providers",
+    "crates/perl-position-tracking",
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
@@ -24,6 +32,14 @@ rust-version = "1.89"
 [workspace.dependencies]
 perl-lexer = { path = "crates/perl-lexer" }
 perl-parser = { path = "crates/perl-parser" }
+perl-parser-core = { path = "crates/perl-parser-core" }
+perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer" }
+perl-workspace-index = { path = "crates/perl-workspace-index" }
+perl-refactoring = { path = "crates/perl-refactoring" }
+perl-incremental-parsing = { path = "crates/perl-incremental-parsing" }
+perl-tdd-support = { path = "crates/perl-tdd-support" }
+perl-lsp-providers = { path = "crates/perl-lsp-providers" }
+perl-position-tracking = { path = "crates/perl-position-tracking" }
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust"] }
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c" }
 tree-sitter = "0.26.3"

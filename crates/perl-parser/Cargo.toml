@@ -26,6 +26,14 @@ doctest = false
 
 [dependencies]
 perl-lexer = { path = "../perl-lexer" }
+perl-parser-core = { path = "../perl-parser-core" }
+perl-semantic-analyzer = { path = "../perl-semantic-analyzer" }
+perl-workspace-index = { path = "../perl-workspace-index" }
+perl-refactoring = { path = "../perl-refactoring" }
+perl-incremental-parsing = { path = "../perl-incremental-parsing", optional = true }
+perl-tdd-support = { path = "../perl-tdd-support" }
+perl-lsp-providers = { path = "../perl-lsp-providers", default-features = false }
+perl-dap = { path = "../perl-dap" }
 thiserror = "2.0.17"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -67,9 +75,14 @@ path = "src/bin/perl-dap.rs"
 [features]
 default = ["workspace", "lsp-compat"]  # Enable workspace indexing by default for cross-file features
 cli = []
-incremental = ["anyhow"]
-lsp-compat = ["lsp-types"]  # LSP type compatibility shim for migration period
-workspace = []  # Workspace-wide indexing for cross-file features
+incremental = ["anyhow", "perl-incremental-parsing"]
+lsp-compat = [
+  "lsp-types",
+  "perl-lsp-providers/lsp-compat",
+  "perl-workspace-index/lsp-compat",
+  "perl-tdd-support/lsp-compat",
+]  # LSP type compatibility shim for migration period
+workspace = ["perl-workspace-index/workspace"]  # Workspace-wide indexing for cross-file features
 test-compat = []  # Enables compatibility shim for old test API
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
@@ -83,8 +96,8 @@ package-qualified = []  # Package-qualified subroutine resolution
 error-classifier-v2 = []  # Next generation error classification
 lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
 expose_lsp_test_api = []  # Expose test helpers for integration tests
-workspace_refactor = []  # Workspace-wide refactoring capabilities
-modernize = []  # Code modernization transformations
+workspace_refactor = ["perl-refactoring/workspace_refactor"]  # Workspace-wide refactoring capabilities
+modernize = ["perl-refactoring/modernize"]  # Code modernization transformations
 substitution-advanced = []  # Advanced substitution operator parsing
 utf16-complete = []  # Complete UTF-16 round-trip support
 semantic-phase2 = []  # Semantic analyzer Phase 2+ features
@@ -93,7 +106,7 @@ crash-repros = []  # Enable crash reproducer tests (may hang - use with timeout)
 
 [dev-dependencies]
 assert_cmd = "2.1.2"
-insta = { version = "1.46.0", features = ["yaml"] }
+insta = { version = "1.46.1", features = ["yaml"] }
 criterion = "0.8.1"
 parking_lot = "0.12.5"
 predicates = "3.1.3"

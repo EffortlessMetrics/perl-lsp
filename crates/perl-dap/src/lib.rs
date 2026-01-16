@@ -78,6 +78,8 @@
 // Phase 1 modules (AC1-AC4) - IMPLEMENTED
 pub mod bridge_adapter;
 pub mod configuration;
+/// Debug Adapter Protocol (DAP) implementation for Perl debugging.
+pub mod debug_adapter;
 pub mod platform;
 
 // Phase 2 modules (AC5-AC12) - IN PROGRESS
@@ -102,6 +104,7 @@ pub use configuration::{
     AttachConfiguration, LaunchConfiguration, create_attach_json_snippet,
     create_launch_json_snippet,
 };
+pub use debug_adapter::{DapMessage, DebugAdapter};
 
 // Re-export Phase 2 public types
 pub use breakpoints::{BreakpointRecord, BreakpointStore};

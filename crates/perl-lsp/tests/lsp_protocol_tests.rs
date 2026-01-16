@@ -200,7 +200,7 @@ sub another {
 
 #[test]
 fn test_workspace_symbol_response_format() {
-    use perl_parser::workspace_index::WorkspaceIndex;
+    use perl_parser::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex};
     use url::Url;
 
     let index = WorkspaceIndex::new();
@@ -222,17 +222,21 @@ sub test_function {
 
     // Verify each symbol has the required LSP fields
     for symbol in symbols {
-        // Check that serialization works
-        let json = serde_json::to_value(&symbol).unwrap();
+        // Convert to LSP wire format for serialization testing
+        let lsp_symbol: LspWorkspaceSymbol = (&symbol).into();
+        let json = serde_json::to_value(&lsp_symbol).unwrap();
 
         // Verify required LSP fields are present
         assert!(json.get("name").is_some(), "Symbol missing 'name' field");
         assert!(json.get("kind").is_some(), "Symbol missing 'kind' field");
-        assert!(json.get("uri").is_some(), "Symbol missing 'uri' field");
-        assert!(json.get("range").is_some(), "Symbol missing 'range' field");
+
+        // Location should contain uri and range
+        let location = json.get("location").expect("Symbol missing 'location' field");
+        assert!(location.get("uri").is_some(), "Location missing 'uri' field");
+        assert!(location.get("range").is_some(), "Location missing 'range' field");
 
         // Verify range structure
-        let range = json.get("range").unwrap();
+        let range = location.get("range").unwrap();
         assert!(range.get("start").is_some(), "Range missing 'start' field");
         assert!(range.get("end").is_some(), "Range missing 'end' field");
 

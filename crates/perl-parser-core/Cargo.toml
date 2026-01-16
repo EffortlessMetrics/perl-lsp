@@ -1,0 +1,35 @@
+[package]
+name = "perl-parser-core"
+version = "0.8.8"
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Tree-sitter Perl Contributors"]
+description = "Core parser engine for perl-parser"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+documentation = "https://docs.rs/perl-parser-core"
+keywords = ["perl", "parser", "tree-sitter", "ast"]
+categories = ["parsing", "development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "LICENSE*"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-lexer = { path = "../perl-lexer" }
+thiserror = "2.0.17"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+phf = { version = "0.13.1", features = ["macros"] }
+ropey = "1.6.1"
+
+[features]
+default = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }

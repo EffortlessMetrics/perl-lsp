@@ -525,6 +525,77 @@ mod missing_docs_tests {
     use super::*;
     use doc_validation_helpers::*;
     use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+
+    #[derive(Clone)]
+    struct SourceRoot {
+        name: &'static str,
+        path: PathBuf,
+    }
+
+    #[derive(Clone)]
+    struct SourceFile {
+        display_path: String,
+        full_path: PathBuf,
+    }
+
+    fn workspace_root() -> PathBuf {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        manifest_dir
+            .parent()
+            .and_then(|parent| parent.parent())
+            .unwrap_or(manifest_dir)
+            .to_path_buf()
+    }
+
+    fn source_roots() -> Vec<SourceRoot> {
+        let root = workspace_root();
+        vec![
+            SourceRoot { name: "perl-parser-core", path: root.join("crates/perl-parser-core/src") },
+            SourceRoot {
+                name: "perl-semantic-analyzer",
+                path: root.join("crates/perl-semantic-analyzer/src"),
+            },
+            SourceRoot {
+                name: "perl-workspace-index",
+                path: root.join("crates/perl-workspace-index/src"),
+            },
+            SourceRoot { name: "perl-refactoring", path: root.join("crates/perl-refactoring/src") },
+            SourceRoot {
+                name: "perl-incremental-parsing",
+                path: root.join("crates/perl-incremental-parsing/src"),
+            },
+            SourceRoot { name: "perl-tdd-support", path: root.join("crates/perl-tdd-support/src") },
+            SourceRoot {
+                name: "perl-lsp-providers",
+                path: root.join("crates/perl-lsp-providers/src"),
+            },
+        ]
+    }
+
+    fn find_source_files(rel_path: &str, roots: &[SourceRoot]) -> Vec<SourceFile> {
+        let mut files = Vec::new();
+        for root in roots {
+            let full_path = root.path.join(rel_path);
+            if full_path.is_file() {
+                files.push(SourceFile {
+                    display_path: format!("{}/{}", root.name, rel_path),
+                    full_path,
+                });
+            }
+        }
+        files
+    }
+
+    fn read_source_files(rel_path: &str, roots: &[SourceRoot]) -> Vec<(String, String)> {
+        let mut results = Vec::new();
+        for file in find_source_files(rel_path, roots) {
+            if let Ok(content) = fs::read_to_string(&file.full_path) {
+                results.push((file.display_path, content));
+            }
+        }
+        results
+    }
 
     #[test]
     fn test_missing_docs_warning_compilation() {
@@ -560,7 +631,7 @@ mod missing_docs_tests {
     fn test_public_structs_documentation_presence() {
         // AC:AC2 - Verify all public structs/enums have comprehensive documentation
         // including PSTX pipeline role description
-        let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+        let roots = source_roots();
         let critical_modules = [
             "engine/parser/mod.rs",
             "engine/ast.rs",
@@ -573,15 +644,26 @@ mod missing_docs_tests {
 
         let mut all_missing_docs = Vec::new();
         let mut all_missing_pipeline_integration = Vec::new();
+        let mut missing_modules = Vec::new();
 
         for module in &critical_modules {
-            let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path) {
-                let analysis = analyze_file_documentation(module, &content);
+            let files = read_source_files(module, &roots);
+            if files.is_empty() {
+                missing_modules.push(module.to_string());
+                continue;
+            }
+            for (display_path, content) in files {
+                let analysis = analyze_file_documentation(&display_path, &content);
                 all_missing_docs.extend(analysis.public_items_without_docs);
                 all_missing_pipeline_integration.extend(analysis.missing_pipeline_integration);
             }
         }
+
+        assert!(
+            missing_modules.is_empty(),
+            "AC2 NOT IMPLEMENTED: Missing source modules: {:?}",
+            missing_modules
+        );
 
         if !all_missing_docs.is_empty() || !all_missing_pipeline_integration.is_empty() {
             build_ac2_error_message(&all_missing_docs, &all_missing_pipeline_integration);
@@ -620,7 +702,7 @@ mod missing_docs_tests {
     fn test_public_functions_documentation_presence() {
         // AC:AC3 - Verify all public functions have comprehensive documentation
         // with summary, parameters, return values, and error conditions
-        let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+        let roots = source_roots();
         let function_critical_modules = [
             "engine/parser/mod.rs",
             "ide/lsp_compat/completion.rs",
@@ -631,13 +713,18 @@ mod missing_docs_tests {
             "refactor/import_optimizer.rs",
         ];
 
-        let (missing_docs, incomplete_docs) =
-            analyze_function_documentation(&function_critical_modules, src_dir);
+        let (missing_docs, incomplete_docs, missing_modules) =
+            analyze_function_documentation(&function_critical_modules, &roots);
 
         if !missing_docs.is_empty() || !incomplete_docs.is_empty() {
             build_ac3_error_message(&missing_docs, &incomplete_docs);
         }
 
+        assert!(
+            missing_modules.is_empty(),
+            "AC3 NOT IMPLEMENTED: Missing source modules: {:?}",
+            missing_modules
+        );
         assert!(missing_docs.is_empty(), "All public functions should have documentation");
         assert!(
             incomplete_docs.is_empty(),
@@ -648,21 +735,26 @@ mod missing_docs_tests {
     /// Analyzes function documentation across multiple modules
     fn analyze_function_documentation(
         modules: &[&str],
-        src_dir: &str,
-    ) -> (Vec<String>, Vec<String>) {
+        roots: &[SourceRoot],
+    ) -> (Vec<String>, Vec<String>, Vec<String>) {
         let mut missing_function_docs = Vec::new();
         let mut incomplete_function_docs = Vec::new();
+        let mut missing_modules = Vec::new();
 
         for module in modules {
-            let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path) {
-                let (missing, incomplete) = analyze_functions_in_file(module, &content);
+            let files = read_source_files(module, roots);
+            if files.is_empty() {
+                missing_modules.push(module.to_string());
+                continue;
+            }
+            for (display_path, content) in files {
+                let (missing, incomplete) = analyze_functions_in_file(&display_path, &content);
                 missing_function_docs.extend(missing);
                 incomplete_function_docs.extend(incomplete);
             }
         }
 
-        (missing_function_docs, incomplete_function_docs)
+        (missing_function_docs, incomplete_function_docs, missing_modules)
     }
 
     /// Analyzes function documentation within a single file
@@ -797,7 +889,7 @@ mod missing_docs_tests {
     #[test]
     fn test_performance_documentation_presence() {
         // AC:AC4 - Verify performance-critical APIs document memory usage and 50GB PST processing
-        let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+        let roots = source_roots();
         let performance_modules = [
             "incremental/incremental_v2.rs",
             "workspace/workspace_index.rs",
@@ -809,13 +901,18 @@ mod missing_docs_tests {
             "tooling/performance.rs",
         ];
 
-        let missing_performance_docs =
-            analyze_performance_documentation(&performance_modules, src_dir);
+        let (missing_performance_docs, missing_modules) =
+            analyze_performance_documentation(&performance_modules, &roots);
 
         if !missing_performance_docs.is_empty() {
             build_ac4_error_message(&missing_performance_docs);
         }
 
+        assert!(
+            missing_modules.is_empty(),
+            "AC4 NOT IMPLEMENTED: Missing source modules: {:?}",
+            missing_modules
+        );
         assert!(
             missing_performance_docs.is_empty(),
             "Performance-critical APIs should have comprehensive performance documentation"
@@ -823,19 +920,29 @@ mod missing_docs_tests {
     }
 
     /// Analyzes performance documentation across modules
-    fn analyze_performance_documentation(modules: &[&str], src_dir: &str) -> Vec<String> {
+    fn analyze_performance_documentation(
+        modules: &[&str],
+        roots: &[SourceRoot],
+    ) -> (Vec<String>, Vec<String>) {
         let mut missing_docs = Vec::new();
+        let mut missing_modules = Vec::new();
 
         for module in modules {
-            let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path)
-                && let Some(missing_info) = check_performance_doc_completeness(module, &content)
-            {
-                missing_docs.push(missing_info);
+            let files = read_source_files(module, roots);
+            if files.is_empty() {
+                missing_modules.push(module.to_string());
+                continue;
+            }
+            for (display_path, content) in files {
+                if let Some(missing_info) =
+                    check_performance_doc_completeness(&display_path, &content)
+                {
+                    missing_docs.push(missing_info);
+                }
             }
         }
 
-        missing_docs
+        (missing_docs, missing_modules)
     }
 
     /// Checks if a module has complete performance documentation
@@ -911,7 +1018,7 @@ mod missing_docs_tests {
     fn test_module_level_documentation_presence() {
         // AC:AC5 - Verify each module has comprehensive module-level documentation
         // with //! comments explaining purpose and PSTX architecture relationship
-        let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+        let roots = source_roots();
         let core_modules = [
             "engine/parser/mod.rs",
             "engine/ast.rs",
@@ -931,37 +1038,51 @@ mod missing_docs_tests {
             "tdd/test_generator.rs",
         ];
 
-        let (missing_docs, incomplete_docs) = analyze_module_documentation(&core_modules, src_dir);
+        let (missing_docs, incomplete_docs, missing_modules) =
+            analyze_module_documentation(&core_modules, &roots);
 
         if !missing_docs.is_empty() || !incomplete_docs.is_empty() {
             build_ac5_error_message(&missing_docs, &incomplete_docs);
         }
 
+        assert!(
+            missing_modules.is_empty(),
+            "AC5 NOT IMPLEMENTED: Missing source modules: {:?}",
+            missing_modules
+        );
         assert!(missing_docs.is_empty(), "All modules should have //! documentation");
         assert!(incomplete_docs.is_empty(), "All modules should have comprehensive documentation");
     }
 
     /// Analyzes module-level documentation across multiple modules
-    fn analyze_module_documentation(modules: &[&str], src_dir: &str) -> (Vec<String>, Vec<String>) {
+    fn analyze_module_documentation(
+        modules: &[&str],
+        roots: &[SourceRoot],
+    ) -> (Vec<String>, Vec<String>, Vec<String>) {
         let mut missing_module_docs = Vec::new();
         let mut incomplete_module_docs = Vec::new();
+        let mut missing_modules = Vec::new();
 
         for module in modules {
-            let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path) {
-                let analysis = analyze_file_documentation(module, &content);
+            let files = read_source_files(module, roots);
+            if files.is_empty() {
+                missing_modules.push(module.to_string());
+                continue;
+            }
+            for (display_path, content) in files {
+                let analysis = analyze_file_documentation(&display_path, &content);
 
                 if !analysis.has_module_docs {
-                    missing_module_docs.push(module.to_string());
+                    missing_module_docs.push(display_path);
                 } else if let Some(incomplete_info) =
-                    check_module_doc_completeness(module, &content)
+                    check_module_doc_completeness(&display_path, &content)
                 {
                     incomplete_module_docs.push(incomplete_info);
                 }
             }
         }
 
-        (missing_module_docs, incomplete_module_docs)
+        (missing_module_docs, incomplete_module_docs, missing_modules)
     }
 
     /// Checks if module documentation is comprehensive
@@ -1043,7 +1164,7 @@ mod missing_docs_tests {
     #[test]
     fn test_usage_examples_in_complex_apis() {
         // AC:AC6 - Verify complex APIs include usage examples
-        let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+        let roots = source_roots();
         let complex_api_modules = [
             "ide/lsp_compat/completion.rs",
             "ide/lsp_compat/diagnostics.rs",
@@ -1056,29 +1177,43 @@ mod missing_docs_tests {
             "analysis/scope_analyzer.rs",
         ];
 
-        let modules_without_examples = find_modules_missing_examples(&complex_api_modules, src_dir);
+        let (modules_without_examples, missing_modules) =
+            find_modules_missing_examples(&complex_api_modules, &roots);
 
         if !modules_without_examples.is_empty() {
             build_ac6_error_message(&modules_without_examples);
         }
 
+        assert!(
+            missing_modules.is_empty(),
+            "AC6 NOT IMPLEMENTED: Missing source modules: {:?}",
+            missing_modules
+        );
         assert!(modules_without_examples.is_empty(), "Complex APIs should include usage examples");
     }
 
     /// Finds modules that are missing usage examples
-    fn find_modules_missing_examples(modules: &[&str], src_dir: &str) -> Vec<String> {
+    fn find_modules_missing_examples(
+        modules: &[&str],
+        roots: &[SourceRoot],
+    ) -> (Vec<String>, Vec<String>) {
         let mut missing_examples = Vec::new();
+        let mut missing_modules = Vec::new();
 
         for module in modules {
-            let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path)
-                && !has_usage_examples(&content)
-            {
-                missing_examples.push(module.to_string());
+            let files = read_source_files(module, roots);
+            if files.is_empty() {
+                missing_modules.push(module.to_string());
+                continue;
+            }
+            for (display_path, content) in files {
+                if !has_usage_examples(&content) {
+                    missing_examples.push(display_path);
+                }
             }
         }
 
-        missing_examples
+        (missing_examples, missing_modules)
     }
 
     /// Checks if content has usage examples
@@ -1107,7 +1242,7 @@ mod missing_docs_tests {
     #[test]
     fn test_doctests_presence_and_execution() {
         // AC:AC7 - Verify doctests are present for critical functionality
-        let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+        let roots = source_roots();
         let critical_modules = [
             "engine/parser/mod.rs",
             "ide/lsp_compat/completion.rs",
@@ -1116,12 +1251,18 @@ mod missing_docs_tests {
             "tdd/test_generator.rs",
         ];
 
-        let modules_without_doctests = find_modules_missing_doctests(&critical_modules, src_dir);
+        let (modules_without_doctests, missing_modules) =
+            find_modules_missing_doctests(&critical_modules, &roots);
 
         if !modules_without_doctests.is_empty() {
             build_ac7_error_message(&modules_without_doctests);
         }
 
+        assert!(
+            missing_modules.is_empty(),
+            "AC7 NOT IMPLEMENTED: Missing source modules: {:?}",
+            missing_modules
+        );
         assert!(
             modules_without_doctests.is_empty(),
             "Critical modules should include working doctests"
@@ -1129,19 +1270,27 @@ mod missing_docs_tests {
     }
 
     /// Finds modules that are missing doctests
-    fn find_modules_missing_doctests(modules: &[&str], src_dir: &str) -> Vec<String> {
+    fn find_modules_missing_doctests(
+        modules: &[&str],
+        roots: &[SourceRoot],
+    ) -> (Vec<String>, Vec<String>) {
         let mut missing_doctests = Vec::new();
+        let mut missing_modules = Vec::new();
 
         for module in modules {
-            let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path)
-                && !has_valid_doctests(&content)
-            {
-                missing_doctests.push(module.to_string());
+            let files = read_source_files(module, roots);
+            if files.is_empty() {
+                missing_modules.push(module.to_string());
+                continue;
+            }
+            for (display_path, content) in files {
+                if !has_valid_doctests(&content) {
+                    missing_doctests.push(display_path);
+                }
             }
         }
 
-        missing_doctests
+        (missing_doctests, missing_modules)
     }
 
     /// Checks if content has valid doctests
@@ -1168,16 +1317,25 @@ mod missing_docs_tests {
     #[test]
     fn test_error_types_documentation() {
         // AC:AC8 - Verify error types are documented with email processing workflow context
-        let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
-        let error_files = ["error.rs", "lsp_errors.rs", "diagnostics.rs"];
+        let roots = source_roots();
+        let error_files = [
+            "engine/error/mod.rs",
+            "ide/lsp_compat/lsp_errors.rs",
+            "ide/lsp_compat/diagnostics.rs",
+        ];
 
-        let (undocumented_errors, missing_workflow_context) =
-            analyze_error_documentation(&error_files, src_dir);
+        let (undocumented_errors, missing_workflow_context, missing_modules) =
+            analyze_error_documentation(&error_files, &roots);
 
         if !undocumented_errors.is_empty() || !missing_workflow_context.is_empty() {
             build_ac8_error_message(&undocumented_errors, &missing_workflow_context);
         }
 
+        assert!(
+            missing_modules.is_empty(),
+            "AC8 NOT IMPLEMENTED: Missing source modules: {:?}",
+            missing_modules
+        );
         assert!(undocumented_errors.is_empty(), "All error types should be documented");
         assert!(missing_workflow_context.is_empty(), "All errors should include workflow context");
     }
@@ -1185,21 +1343,26 @@ mod missing_docs_tests {
     /// Analyzes error documentation across error-related files
     fn analyze_error_documentation(
         error_files: &[&str],
-        src_dir: &str,
-    ) -> (Vec<String>, Vec<String>) {
+        roots: &[SourceRoot],
+    ) -> (Vec<String>, Vec<String>, Vec<String>) {
         let mut undocumented_errors = Vec::new();
         let mut missing_workflow_context = Vec::new();
+        let mut missing_modules = Vec::new();
 
         for error_file in error_files {
-            let error_path = format!("{}/{}", src_dir, error_file);
-            if let Ok(content) = fs::read_to_string(&error_path) {
-                let (undoc, missing_context) = analyze_errors_in_file(error_file, &content);
+            let files = read_source_files(error_file, roots);
+            if files.is_empty() {
+                missing_modules.push(error_file.to_string());
+                continue;
+            }
+            for (display_path, content) in files {
+                let (undoc, missing_context) = analyze_errors_in_file(&display_path, &content);
                 undocumented_errors.extend(undoc);
                 missing_workflow_context.extend(missing_context);
             }
         }
 
-        (undocumented_errors, missing_workflow_context)
+        (undocumented_errors, missing_workflow_context, missing_modules)
     }
 
     /// Analyzes error documentation within a single file
@@ -1284,7 +1447,7 @@ mod missing_docs_tests {
     #[test]
     fn test_cross_references_between_functions() {
         // AC:AC9 - Verify related functions include cross-references using Rust documentation linking
-        let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+        let roots = source_roots();
         let cross_ref_modules = [
             "ide/lsp_compat/completion.rs",
             "workspace/workspace_index.rs",
@@ -1294,13 +1457,18 @@ mod missing_docs_tests {
             "ide/lsp_compat/code_actions.rs",
         ];
 
-        let modules_without_cross_refs =
-            find_modules_missing_cross_references(&cross_ref_modules, src_dir);
+        let (modules_without_cross_refs, missing_modules) =
+            find_modules_missing_cross_references(&cross_ref_modules, &roots);
 
         if !modules_without_cross_refs.is_empty() {
             build_ac9_error_message(&modules_without_cross_refs);
         }
 
+        assert!(
+            missing_modules.is_empty(),
+            "AC9 NOT IMPLEMENTED: Missing source modules: {:?}",
+            missing_modules
+        );
         assert!(
             modules_without_cross_refs.is_empty(),
             "Modules should include cross-references between related functions"
@@ -1308,19 +1476,27 @@ mod missing_docs_tests {
     }
 
     /// Finds modules that are missing cross-references
-    fn find_modules_missing_cross_references(modules: &[&str], src_dir: &str) -> Vec<String> {
+    fn find_modules_missing_cross_references(
+        modules: &[&str],
+        roots: &[SourceRoot],
+    ) -> (Vec<String>, Vec<String>) {
         let mut missing_cross_refs = Vec::new();
+        let mut missing_modules = Vec::new();
 
         for module in modules {
-            let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path)
-                && !has_cross_references(&content)
-            {
-                missing_cross_refs.push(module.to_string());
+            let files = read_source_files(module, roots);
+            if files.is_empty() {
+                missing_modules.push(module.to_string());
+                continue;
+            }
+            for (display_path, content) in files {
+                if !has_cross_references(&content) {
+                    missing_cross_refs.push(display_path);
+                }
             }
         }
 
-        missing_cross_refs
+        (missing_cross_refs, missing_modules)
     }
 
     /// Checks if content has cross-references
@@ -1354,7 +1530,7 @@ mod missing_docs_tests {
     #[test]
     fn test_rust_documentation_best_practices() {
         // AC:AC10 - Verify documentation follows Rust best practices with consistent style
-        let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+        let roots = source_roots();
         let sample_modules = [
             "engine/parser/mod.rs",
             "ide/lsp_compat/completion.rs",
@@ -1362,28 +1538,42 @@ mod missing_docs_tests {
             "workspace/workspace_index.rs",
         ];
 
-        let style_violations = find_documentation_style_violations(&sample_modules, src_dir);
+        let (style_violations, missing_modules) =
+            find_documentation_style_violations(&sample_modules, &roots);
 
         if !style_violations.is_empty() {
             build_ac10_error_message(&style_violations);
         }
 
+        assert!(
+            missing_modules.is_empty(),
+            "AC10 NOT IMPLEMENTED: Missing source modules: {:?}",
+            missing_modules
+        );
         assert!(style_violations.is_empty(), "Documentation should follow Rust best practices");
     }
 
     /// Finds documentation style violations across modules
-    fn find_documentation_style_violations(modules: &[&str], src_dir: &str) -> Vec<String> {
+    fn find_documentation_style_violations(
+        modules: &[&str],
+        roots: &[SourceRoot],
+    ) -> (Vec<String>, Vec<String>) {
         let mut all_violations = Vec::new();
+        let mut missing_modules = Vec::new();
 
         for module in modules {
-            let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path) {
-                let analysis = analyze_file_documentation(module, &content);
+            let files = read_source_files(module, roots);
+            if files.is_empty() {
+                missing_modules.push(module.to_string());
+                continue;
+            }
+            for (display_path, content) in files {
+                let analysis = analyze_file_documentation(&display_path, &content);
                 all_violations.extend(analysis.style_violations);
             }
         }
 
-        all_violations
+        (all_violations, missing_modules)
     }
 
     /// Builds a comprehensive error message for AC10 failures
@@ -1495,7 +1685,7 @@ mod missing_docs_tests {
     fn test_comprehensive_pstx_pipeline_documentation() {
         // Integration test ensuring all PSTX pipeline stages are documented
         // This combines aspects of multiple ACs to ensure comprehensive coverage
-        let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+        let roots = source_roots();
         let core_modules = [
             "engine/parser/mod.rs",
             "engine/ast.rs",
@@ -1506,7 +1696,7 @@ mod missing_docs_tests {
             "refactor/import_optimizer.rs",
         ];
 
-        let pipeline_coverage = analyze_pipeline_coverage(&core_modules, src_dir);
+        let pipeline_coverage = analyze_pipeline_coverage_multi(&core_modules, &roots);
         let (total_coverage, expected_minimum) = calculate_coverage_metrics(&pipeline_coverage);
 
         if total_coverage < expected_minimum {
@@ -1521,6 +1711,31 @@ mod missing_docs_tests {
             total_coverage >= expected_minimum,
             "PSTX pipeline stages should be comprehensively documented across core modules"
         );
+    }
+
+    fn analyze_pipeline_coverage_multi(
+        module_paths: &[&str],
+        roots: &[SourceRoot],
+    ) -> HashMap<String, usize> {
+        let pipeline_stages = ["Extract", "Normalize", "Thread", "Render", "Index"];
+        let mut coverage = HashMap::new();
+
+        for stage in &pipeline_stages {
+            coverage.insert(stage.to_string(), 0);
+        }
+
+        for module in module_paths {
+            for (_, content) in read_source_files(module, roots) {
+                let content_lower = content.to_lowercase();
+                for stage in &pipeline_stages {
+                    if content_lower.contains(&stage.to_lowercase()) {
+                        *coverage.get_mut(*stage).unwrap() += 1;
+                    }
+                }
+            }
+        }
+
+        coverage
     }
 
     /// Calculates coverage metrics for pipeline documentation
@@ -2084,13 +2299,19 @@ pub fn bad_refs() {}
             "ide/lsp_compat/type_hierarchy.rs",
         ];
 
-        let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+        let roots = source_roots();
         let mut critical_issues = Vec::new();
+        let mut missing_modules = Vec::new();
 
         for module in &lsp_critical_modules {
-            let module_path = format!("{}/{}", src_dir, module);
-            if let Ok(content) = fs::read_to_string(&module_path) {
-                let analysis = doc_validation_helpers::analyze_file_documentation(module, &content);
+            let files = read_source_files(module, &roots);
+            if files.is_empty() {
+                missing_modules.push(module.to_string());
+                continue;
+            }
+            for (display_path, content) in files {
+                let analysis =
+                    doc_validation_helpers::analyze_file_documentation(&display_path, &content);
 
                 // Enhanced validation for LSP providers
                 let mut module_issues = Vec::new();
@@ -2122,7 +2343,7 @@ pub fn bad_refs() {}
                 if total_enhanced_violations > 0 || !module_issues.is_empty() {
                     critical_issues.push(format!(
                         "{}: {} violations, {} LSP-specific issues: {:?}",
-                        module,
+                        display_path,
                         total_enhanced_violations,
                         module_issues.len(),
                         module_issues
@@ -2130,6 +2351,12 @@ pub fn bad_refs() {}
                 }
             }
         }
+
+        assert!(
+            missing_modules.is_empty(),
+            "LSP documentation modules missing from source roots: {:?}",
+            missing_modules
+        );
 
         // More discriminating assertion - fail if any critical LSP modules have issues
         if !critical_issues.is_empty() {
@@ -2148,7 +2375,7 @@ pub fn bad_refs() {}
     // Regression Test for Documentation Quality Metrics
     // ============================================================================
 
-    fn collect_rs_files(root: &std::path::Path) -> Vec<String> {
+    fn collect_rs_files(root: &std::path::Path, prefix: &str) -> Vec<SourceFile> {
         let mut files = Vec::new();
         let mut stack = vec![root.to_path_buf()];
 
@@ -2160,14 +2387,18 @@ pub fn bad_refs() {}
                         stack.push(path);
                     } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
                         if let Ok(relative) = path.strip_prefix(root) {
-                            files.push(relative.to_string_lossy().replace('\\', "/"));
+                            let rel = relative.to_string_lossy().replace('\\', "/");
+                            files.push(SourceFile {
+                                display_path: format!("{}/{}", prefix, rel),
+                                full_path: path,
+                            });
                         }
                     }
                 }
             }
         }
 
-        files.sort();
+        files.sort_by(|a, b| a.display_path.cmp(&b.display_path));
         files
     }
 
@@ -2181,7 +2412,7 @@ pub fn bad_refs() {}
         }
 
         // Track documentation quality metrics to prevent regression
-        let src_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+        let roots = source_roots();
 
         // Optimized file enumeration: only process critical files during fast execution
         let critical_files = vec![
@@ -2192,20 +2423,21 @@ pub fn bad_refs() {}
             "tokens/token_stream.rs",
         ];
 
-        let all_rust_files = if std::env::var("PERL_FAST_DOC_CHECK").is_ok() {
-            critical_files.into_iter().map(|s| s.to_string()).collect()
+        let all_rust_files: Vec<SourceFile> = if std::env::var("PERL_FAST_DOC_CHECK").is_ok() {
+            critical_files.into_iter().flat_map(|path| find_source_files(path, &roots)).collect()
         } else {
-            collect_rs_files(std::path::Path::new(src_dir))
+            roots.iter().flat_map(|root| collect_rs_files(&root.path, root.name)).collect()
         };
 
         let mut quality_metrics = HashMap::new();
         let mut total_violations = 0;
 
-        for file_name in &all_rust_files {
-            let file_path = format!("{}/{}", src_dir, file_name);
-            if let Ok(content) = fs::read_to_string(&file_path) {
-                let analysis =
-                    doc_validation_helpers::analyze_file_documentation(file_name, &content);
+        for file in &all_rust_files {
+            if let Ok(content) = fs::read_to_string(&file.full_path) {
+                let analysis = doc_validation_helpers::analyze_file_documentation(
+                    &file.display_path,
+                    &content,
+                );
 
                 let file_violations = analysis.malformed_doctests.len()
                     + analysis.empty_doc_strings.len()
@@ -2214,7 +2446,7 @@ pub fn bad_refs() {}
                     + analysis.missing_error_recovery_docs.len();
 
                 total_violations += file_violations;
-                quality_metrics.insert(file_name.clone(), file_violations);
+                quality_metrics.insert(file.display_path.clone(), file_violations);
             }
         }
 

@@ -3,7 +3,7 @@
 //! This binary provides debugging support for Perl programs through the
 //! Debug Adapter Protocol, enabling debugging in VSCode and other DAP-compatible editors.
 
-use perl_parser::debug_adapter::DebugAdapter;
+use perl_dap::DebugAdapter;
 use std::io;
 
 fn main() -> io::Result<()> {
