@@ -947,12 +947,11 @@ sub run {
     ctx.open_document("file:///workspace/lib/Project/Main.pm", main_module);
 
     // Test cross-file navigation
-    let _defs = ctx.get_definition("file:///workspace/app.pl", 4, 20);
-    // Note: Cross-file method resolution is not yet fully implemented
-    // For now, just verify the request doesn't error
-    // TODO: Fix cross-file method resolution to properly handle Project::Main->new()
-    // Once implemented, this should find the definition of "new" in Project::Main
-    // assert!(!_defs.is_empty(), "Definition lookup should find target");
+    // Target Project::Main->new() at line 6, col 25 (the "n" in "new")
+    let defs = ctx.get_definition("file:///workspace/app.pl", 6, 25);
+    // Note: Cross-file method resolution is now implemented
+    // This should find the definition of "new" in Project::Main
+    assert!(!defs.is_empty(), "Definition lookup should find target");
 
     // Test project-wide refactoring
     let rename_result = ctx.rename("file:///workspace/lib/Project/Main.pm", 6, 4, "initialize");
