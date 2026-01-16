@@ -24,7 +24,7 @@
 //!
 //! # Related Modules
 //!
-//! See also [`crate::diagnostics`] for issue detection and [`crate::import_optimizer`]
+//! This module integrates with diagnostics and import optimization modules
 //! for import-related code actions.
 //!
 //! # Usage Examples

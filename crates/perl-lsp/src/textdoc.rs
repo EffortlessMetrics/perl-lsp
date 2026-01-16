@@ -62,16 +62,32 @@ pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
     let line_slice = rope.line(pos.line as usize);
 
     let col_chars = match enc {
-        PosEnc::Utf8 => pos.character as usize,
+        PosEnc::Utf8 => {
+            // UTF-8: pos.character is byte offset within line
+            let mut char_idx = 0usize;
+            let mut bytes = 0u32;
+            for ch in line_slice.chars() {
+                let next = bytes + ch.len_utf8() as u32;
+                if next > pos.character {
+                    break; // clamp before splitting multi-byte char
+                }
+                bytes = next;
+                char_idx += 1;
+            }
+            char_idx
+        }
         PosEnc::Utf16 => {
+            // UTF-16: pos.character is UTF-16 code unit offset
+            // Must clamp BEFORE splitting surrogate pair (2-unit chars like emoji)
             let mut char_idx = 0usize;
             let mut utf16_units = 0u32;
 
             for ch in line_slice.chars() {
-                if utf16_units >= pos.character {
-                    break;
+                let next = utf16_units + ch.len_utf16() as u32;
+                if next > pos.character {
+                    break; // clamp before splitting surrogate pair
                 }
-                utf16_units += ch.len_utf16() as u32;
+                utf16_units = next;
                 char_idx += 1;
             }
             char_idx
@@ -124,17 +140,15 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
     let col_chars = char_idx - line_char0;
 
     let character = match enc {
-        PosEnc::Utf8 => col_chars as u32,
-        PosEnc::Utf16 => {
+        PosEnc::Utf8 => {
+            // UTF-8: return byte count from start of line
             let line_slice = rope.line(line);
-            let mut cu = 0u32;
-            for (i, ch) in line_slice.chars().enumerate() {
-                if i >= col_chars {
-                    break;
-                }
-                cu += ch.len_utf16() as u32;
-            }
-            cu
+            line_slice.chars().take(col_chars).map(|c| c.len_utf8() as u32).sum()
+        }
+        PosEnc::Utf16 => {
+            // UTF-16: return UTF-16 code unit count from start of line
+            let line_slice = rope.line(line);
+            line_slice.chars().take(col_chars).map(|c| c.len_utf16() as u32).sum()
         }
     };
 
@@ -214,4 +228,87 @@ pub fn apply_changes(doc: &mut Doc, changes: &[TextDocumentContentChangeEvent], 
     }
 }
 
-// Make PosEnc Clone
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression test: delete emoji via LSP range should work correctly.
+    /// This catches both the "rope uses chars" bug and UTF-16 boundary handling.
+    #[test]
+    fn test_delete_emoji_via_lsp_range() {
+        // "hi 😀x\n" - emoji is 4 bytes, 2 UTF-16 units
+        let mut doc = Doc { rope: Rope::from_str("hi \u{1F600}x\n"), version: 1 };
+
+        // Delete the emoji: positions are in UTF-16 code units
+        // "hi " = 3 chars/units, emoji = 2 units, so emoji is at [3, 5)
+        let change = TextDocumentContentChangeEvent {
+            range: Some(Range {
+                start: Position { line: 0, character: 3 },
+                end: Position { line: 0, character: 5 },
+            }),
+            range_length: None,
+            text: String::new(),
+        };
+
+        apply_changes(&mut doc, &[change], PosEnc::Utf16);
+
+        assert_eq!(doc.rope.to_string(), "hi x\n", "Emoji should be deleted correctly");
+    }
+
+    /// Test that position inside surrogate pair clamps correctly (before, not after).
+    #[test]
+    fn test_position_inside_surrogate_clamps_before() {
+        let rope = Rope::from_str("hi \u{1F600}x");
+
+        // Position 4 is "inside" the emoji (which spans [3, 5) in UTF-16)
+        let pos = Position { line: 0, character: 4 };
+        let char_idx = lsp_pos_to_char(&rope, pos, PosEnc::Utf16);
+
+        // Should clamp to char index 3 (start of emoji), not 4 (after emoji)
+        assert_eq!(char_idx, 3, "Position inside surrogate should clamp to start of char");
+    }
+
+    /// Test UTF-8 encoding handles multi-byte chars correctly.
+    #[test]
+    fn test_utf8_position_multi_byte() {
+        let rope = Rope::from_str("hi \u{1F600}x");
+
+        // In UTF-8, emoji is 4 bytes, so 'x' is at byte offset 7
+        // "hi " = 3 bytes, emoji = 4 bytes, 'x' = byte 7
+        let pos = Position { line: 0, character: 7 };
+        let char_idx = lsp_pos_to_char(&rope, pos, PosEnc::Utf8);
+
+        // Should be char index 4 (0='h', 1='i', 2=' ', 3=emoji, 4='x')
+        assert_eq!(char_idx, 4, "UTF-8 byte offset should map to correct char");
+    }
+
+    /// Test byte_to_lsp_pos returns correct UTF-16 character count.
+    #[test]
+    fn test_byte_to_lsp_pos_utf16_emoji() {
+        let rope = Rope::from_str("hi \u{1F600}x");
+
+        // 'x' is at byte 7, char index 4
+        let pos = byte_to_lsp_pos(&rope, 7, PosEnc::Utf16);
+
+        // "hi " = 3 UTF-16 units, emoji = 2 UTF-16 units, so 'x' is at character 5
+        assert_eq!(pos.line, 0);
+        assert_eq!(pos.character, 5, "UTF-16 character should account for emoji surrogate pair");
+    }
+
+    /// Test roundtrip: byte -> lsp position -> byte
+    #[test]
+    fn test_roundtrip_with_emoji() {
+        let rope = Rope::from_str("hi \u{1F600}x\nworld");
+
+        // Test 'x' position (byte 7)
+        let pos = byte_to_lsp_pos(&rope, 7, PosEnc::Utf16);
+        let back = lsp_pos_to_byte(&rope, pos, PosEnc::Utf16);
+        assert_eq!(back, 7, "Roundtrip should preserve byte offset");
+
+        // Test 'w' position (byte 9, line 1)
+        let pos2 = byte_to_lsp_pos(&rope, 9, PosEnc::Utf16);
+        assert_eq!(pos2.line, 1);
+        let back2 = lsp_pos_to_byte(&rope, pos2, PosEnc::Utf16);
+        assert_eq!(back2, 9, "Roundtrip on second line should work");
+    }
+}

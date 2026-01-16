@@ -113,10 +113,8 @@ pub use engine::{error, parser, position};
 pub use ide::{lsp, lsp_compat};
 
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
-#[allow(missing_docs)]
 pub use engine::ast;
 /// Experimental second-generation AST (work in progress).
-#[allow(missing_docs)]
 pub use engine::ast_v2;
 /// Edit tracking for incremental parsing.
 pub use engine::edit;
@@ -169,7 +167,6 @@ pub use analysis::declaration;
 #[cfg(not(target_arch = "wasm32"))]
 pub use analysis::index;
 /// Scope analysis for variable and subroutine resolution.
-#[allow(missing_docs)]
 pub use analysis::scope_analyzer;
 pub use analysis::semantic;
 pub use analysis::symbol;
@@ -265,7 +262,6 @@ pub use incremental::incremental_simple;
 #[cfg(feature = "incremental")]
 pub use incremental::incremental_v2;
 
-#[allow(missing_docs)]
 pub use tdd::tdd_basic;
 /// TDD workflow integration for Test-Driven Development support.
 pub use tdd::tdd_workflow;

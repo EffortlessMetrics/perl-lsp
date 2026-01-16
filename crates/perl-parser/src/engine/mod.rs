@@ -3,6 +3,7 @@
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 pub mod ast;
 /// Experimental second-generation AST (work in progress).
+#[allow(missing_docs)]
 pub mod ast_v2;
 /// Edit tracking for incremental parsing.
 pub mod edit;
