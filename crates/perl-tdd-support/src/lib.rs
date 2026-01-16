@@ -40,9 +40,9 @@
     clippy::uninlined_format_args
 )]
 
-pub use perl_parser_core::{Parser, ast, position};
 pub use perl_parser_core::{Node, NodeKind, SourceLocation};
 pub use perl_parser_core::{ParseError, ParseResult, error, parser};
+pub use perl_parser_core::{Parser, ast, position};
 
 /// Test-driven development helpers and generators.
 pub mod tdd;

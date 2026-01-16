@@ -21,6 +21,7 @@ include = [
 
 [dependencies]
 perl-parser = { path = "../perl-parser", version = "0.8.8", features = ["test-performance"] }
+perl-lsp-providers = { path = "../perl-lsp-providers", version = "0.8.8", features = ["lsp-compat"] }
 perl-lexer = { path = "../perl-lexer", version = "0.8.8" }
 lsp-types = "0.97.0"
 serde = { version = "1.0.228", features = ["derive"] }

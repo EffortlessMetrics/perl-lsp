@@ -300,7 +300,6 @@ pub use semantic::{
 };
 pub use symbol::{Symbol, SymbolExtractor, SymbolKind, SymbolReference, SymbolTable};
 
-
 // =============================================================================
 // LSP Feature Exports (DEPRECATED - migrated to perl-lsp crate)
 // =============================================================================

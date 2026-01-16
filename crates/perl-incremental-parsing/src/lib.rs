@@ -40,8 +40,8 @@
     clippy::uninlined_format_args
 )]
 
-pub use perl_parser_core::{Parser, ast, edit, error, parser, position};
 pub use perl_parser_core::{Node, NodeKind, SourceLocation};
+pub use perl_parser_core::{Parser, ast, edit, error, parser, position};
 
 /// Incremental parsing implementation and helpers.
 pub mod incremental;

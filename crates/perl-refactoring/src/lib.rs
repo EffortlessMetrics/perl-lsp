@@ -40,9 +40,9 @@
     clippy::uninlined_format_args
 )]
 
-pub use perl_parser_core::{Parser, ast, position};
 pub use perl_parser_core::{Node, NodeKind, SourceLocation};
 pub use perl_parser_core::{ParseError, ParseResult, error};
+pub use perl_parser_core::{Parser, ast, position};
 pub use perl_workspace_index::{document_store, workspace_index, workspace_rename};
 
 /// Refactoring and modernization helpers.

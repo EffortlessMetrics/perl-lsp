@@ -419,10 +419,7 @@ impl IncrementalParserV2 {
         }
 
         if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!(
-                "DEBUG is_simple_value_edit: checking {} edits",
-                self.pending_edits.len()
-            );
+            println!("DEBUG is_simple_value_edit: checking {} edits", self.pending_edits.len());
         }
 
         // Track cumulative shift so we can map each edit back to the

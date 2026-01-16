@@ -1,16 +1,27 @@
-//! LSP feature module (deprecated)
+//! Pull-based diagnostics infrastructure (LSP server specific)
 //!
-//! **DEPRECATED**: This module has moved to the `perl-lsp` crate.
+//! **NOTE**: Pull diagnostics remain in the `perl-lsp` crate.
 //!
-//! For backwards compatibility during the migration period, this module
-//! is kept as an empty stub. Migrate to `perl_lsp::features::pull_diagnostics`.
+//! This module is LSP server infrastructure that depends on `DocumentState`
+//! and other LSP server components. The core `DiagnosticsProvider` has been
+//! moved to `perl_lsp_providers::ide::lsp_compat::diagnostics`.
+//!
+//! # Architecture
+//!
+//! - **Core diagnostics**: `perl_lsp_providers::ide::lsp_compat::diagnostics`
+//!   - Pure diagnostic analysis and provider logic
+//!   - No LSP server dependencies
+//!
+//! - **Pull diagnostics**: `perl_lsp::features::diagnostics::pull`
+//!   - LSP server infrastructure for pull-based diagnostics
+//!   - Depends on DocumentState and LSP server types
 //!
 //! # Migration
 //!
 //! ```ignore
-//! // Old:
-//! use perl_parser::pull_diagnostics;
+//! // For core diagnostics:
+//! use perl_lsp_providers::ide::lsp_compat::diagnostics::DiagnosticsProvider;
 //!
-//! // New:
-//! use perl_lsp::features::pull_diagnostics;
+//! // For pull diagnostics infrastructure:
+//! use perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider;
 //! ```

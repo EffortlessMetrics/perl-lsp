@@ -40,8 +40,8 @@
     clippy::uninlined_format_args
 )]
 
-pub use perl_parser_core::{Parser, ast, position};
 pub use perl_parser_core::{Node, NodeKind, SourceLocation};
+pub use perl_parser_core::{Parser, ast, position};
 
 /// IDE integration helpers (LSP/DAP runtime support).
 pub mod ide;

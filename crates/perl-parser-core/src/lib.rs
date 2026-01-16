@@ -43,15 +43,13 @@
     clippy::uninlined_format_args
 )]
 
-/// Parser engine components and supporting utilities.
-pub mod engine;
 /// Builtin function signatures and metadata.
 pub mod builtins;
+/// Parser engine components and supporting utilities.
+pub mod engine;
 /// Token stream and trivia utilities for the parser.
 pub mod tokens;
 
-/// Legacy module aliases for moved engine components.
-pub use engine::{error, parser, position};
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 pub use engine::ast;
 /// Experimental second-generation AST (work in progress).
@@ -68,6 +66,8 @@ pub use engine::pragma_tracker;
 pub use engine::quote_parser;
 /// Parser utilities and helpers.
 pub use engine::util;
+/// Legacy module aliases for moved engine components.
+pub use engine::{error, parser, position};
 
 /// Parser entrypoint for Perl source.
 pub use engine::parser::Parser;

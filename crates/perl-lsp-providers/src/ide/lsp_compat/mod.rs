@@ -41,6 +41,7 @@ pub mod signature_help;
 pub mod textdoc;
 #[cfg(feature = "lsp-compat")]
 pub mod type_definition;
+/// Type hierarchy provider for Perl class inheritance.
 pub mod type_hierarchy;
 pub mod uri;
 pub mod workspace_symbols;

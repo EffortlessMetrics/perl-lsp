@@ -26,10 +26,15 @@ perl-semantic-analyzer = { path = "../perl-semantic-analyzer" }
 perl-workspace-index = { path = "../perl-workspace-index" }
 perl-refactoring = { path = "../perl-refactoring" }
 perl-incremental-parsing = { path = "../perl-incremental-parsing" }
+perl-lexer = { path = "../perl-lexer" }
+rustc-hash = "2.1.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 regex = "1.12.2"
 lsp-types = { version = "0.97.0", optional = true }
+url = "2.5.4"
+md5 = "0.8.0"
+walkdir = "2.5.0"
 
 # Unix-only dependency for signal handling in debug adapter
 [target.'cfg(unix)'.dependencies]

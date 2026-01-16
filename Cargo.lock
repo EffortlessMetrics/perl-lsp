@@ -1428,6 +1428,7 @@ dependencies = [
  "parking_lot",
  "perl-corpus",
  "perl-lexer",
+ "perl-lsp-providers",
  "perl-parser",
  "phf",
  "predicates",
@@ -1452,15 +1453,20 @@ name = "perl-lsp-providers"
 version = "0.8.8"
 dependencies = [
  "lsp-types",
+ "md5",
  "nix",
  "perl-incremental-parsing",
+ "perl-lexer",
  "perl-parser-core",
  "perl-refactoring",
  "perl-semantic-analyzer",
  "perl-workspace-index",
  "regex",
+ "rustc-hash",
  "serde",
  "serde_json",
+ "url",
+ "walkdir",
 ]
 
 [[package]]
@@ -1524,6 +1530,7 @@ dependencies = [
  "perl-workspace-index",
  "regex",
  "serde",
+ "tempfile",
 ]
 
 [[package]]

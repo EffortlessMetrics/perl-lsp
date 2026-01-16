@@ -556,14 +556,20 @@ mod missing_docs_tests {
                 name: "perl-semantic-analyzer",
                 path: root.join("crates/perl-semantic-analyzer/src"),
             },
-            SourceRoot { name: "perl-workspace-index", path: root.join("crates/perl-workspace-index/src") },
+            SourceRoot {
+                name: "perl-workspace-index",
+                path: root.join("crates/perl-workspace-index/src"),
+            },
             SourceRoot { name: "perl-refactoring", path: root.join("crates/perl-refactoring/src") },
             SourceRoot {
                 name: "perl-incremental-parsing",
                 path: root.join("crates/perl-incremental-parsing/src"),
             },
             SourceRoot { name: "perl-tdd-support", path: root.join("crates/perl-tdd-support/src") },
-            SourceRoot { name: "perl-lsp-providers", path: root.join("crates/perl-lsp-providers/src") },
+            SourceRoot {
+                name: "perl-lsp-providers",
+                path: root.join("crates/perl-lsp-providers/src"),
+            },
         ]
     }
 
@@ -2418,15 +2424,9 @@ pub fn bad_refs() {}
         ];
 
         let all_rust_files: Vec<SourceFile> = if std::env::var("PERL_FAST_DOC_CHECK").is_ok() {
-            critical_files
-                .into_iter()
-                .flat_map(|path| find_source_files(path, &roots))
-                .collect()
+            critical_files.into_iter().flat_map(|path| find_source_files(path, &roots)).collect()
         } else {
-            roots
-                .iter()
-                .flat_map(|root| collect_rs_files(&root.path, root.name))
-                .collect()
+            roots.iter().flat_map(|root| collect_rs_files(&root.path, root.name)).collect()
         };
 
         let mut quality_metrics = HashMap::new();
@@ -2434,8 +2434,10 @@ pub fn bad_refs() {}
 
         for file in &all_rust_files {
             if let Ok(content) = fs::read_to_string(&file.full_path) {
-                let analysis =
-                    doc_validation_helpers::analyze_file_documentation(&file.display_path, &content);
+                let analysis = doc_validation_helpers::analyze_file_documentation(
+                    &file.display_path,
+                    &content,
+                );
 
                 let file_violations = analysis.malformed_doctests.len()
                     + analysis.empty_doc_strings.len()

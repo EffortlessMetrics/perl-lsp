@@ -19,6 +19,7 @@ use perl_parser::error::ParseError;
 use perl_parser::position::offset_to_utf16_line_col;
 use perl_parser::util::code_slice;
 
+// Import core diagnostics types from perl-lsp-providers (via parent module re-export)
 use super::{
     Diagnostic as InternalDiagnostic, DiagnosticSeverity as InternalDiagnosticSeverity,
     DiagnosticTag as InternalDiagnosticTag, DiagnosticsProvider, RelatedInformation,

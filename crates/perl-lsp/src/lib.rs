@@ -109,6 +109,7 @@ pub(crate) mod ast {
 
 /// Feature re-exports for old intra-crate paths
 pub(crate) mod code_actions_enhanced {
+    #[allow(unused_imports)]
     pub use crate::features::code_actions_enhanced::*;
 }
 
