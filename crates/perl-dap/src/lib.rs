@@ -136,6 +136,8 @@ pub struct DapConfig {
 pub struct DapServer {
     /// Server configuration
     pub config: DapConfig,
+    /// The underlying debug adapter
+    adapter: DebugAdapter,
 }
 
 impl DapServer {
@@ -149,6 +151,16 @@ impl DapServer {
     ///
     /// Currently always succeeds. Phase 2 will add validation and initialization errors.
     pub fn new(config: DapConfig) -> anyhow::Result<Self> {
-        Ok(Self { config })
+        Ok(Self {
+            config,
+            adapter: DebugAdapter::new(),
+        })
+    }
+
+    /// Run the DAP server
+    ///
+    /// This method starts the stdio transport loop and blocks until the session ends.
+    pub fn run(&mut self) -> anyhow::Result<()> {
+        self.adapter.run().map_err(|e| anyhow::anyhow!(e))
     }
 }
