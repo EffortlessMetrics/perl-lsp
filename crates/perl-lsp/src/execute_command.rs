@@ -894,13 +894,7 @@ pub fn command_exists(command: &str) -> bool {
 /// - Execution time: <1ms (static list generation)
 /// - Memory usage: <1KB for command list
 pub fn get_supported_commands() -> Vec<String> {
-    vec![
-        "perl.runTests".to_string(),
-        "perl.runFile".to_string(),
-        "perl.runTestSub".to_string(),
-        "perl.debugTests".to_string(),
-        "perl.runCritic".to_string(),
-    ]
+    crate::protocol::capabilities::get_supported_commands()
 }
 
 #[cfg(test)]
