@@ -192,9 +192,20 @@ impl LspServer {
 
                 let mut doc = Doc { rope: doc_state.rope.clone(), version };
 
-                // Convert JSON changes to proper LSP types
-                let lsp_changes: Vec<TextDocumentContentChangeEvent> =
-                    changes.iter().filter_map(|c| serde_json::from_value(c.clone()).ok()).collect();
+                // Convert JSON changes to proper LSP types with robust error handling
+                let mut lsp_changes = Vec::new();
+                for (i, c) in changes.iter().enumerate() {
+                    match serde_json::from_value::<TextDocumentContentChangeEvent>(c.clone()) {
+                        Ok(change) => lsp_changes.push(change),
+                        Err(e) => {
+                            eprintln!("ERROR: Failed to deserialize change {} for {}: {}", i, uri, e);
+                            eprintln!("Change JSON: {:?}", c);
+                            // We continue to try to parse other changes, but the document will likely be corrupt
+                            // Ideally, we should request a full sync, but LSP doesn't have a mechanism for server to request that.
+                            // Logging the error is critical for diagnosing why the state became inconsistent.
+                        }
+                    }
+                }
 
                 // Apply changes with UTF-16 encoding (as advertised in initialize)
                 apply_changes(&mut doc, &lsp_changes, PosEnc::Utf16);

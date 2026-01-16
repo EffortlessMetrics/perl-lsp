@@ -679,21 +679,9 @@ fn test_diagnostic_recovery() {
     assert!(response["result"].is_array());
     let symbols = response["result"].as_array().unwrap();
 
-    // The test is flaky because incremental document updates might not be working correctly
-    // For now, just check that the server responds properly (no crash) rather than exact symbol count
-    // TODO: Fix the underlying issue with incremental document state tracking
-    if symbols.len() != 3 {
-        eprintln!(
-            "WARN: Expected 3 symbols but got {}. This indicates an issue with incremental document updates.",
-            symbols.len()
-        );
-        // For now, just verify the server didn't crash and can respond
-        // Verify the server didn't crash and can respond (symbols vector is valid)
-        shutdown_and_exit(&mut server);
-        return; // Skip the exact assertion for now
-    }
+    // Verify symbols count
+    assert_eq!(symbols.len(), 3, "Expected 3 symbols but got {}. This indicates an issue with incremental document updates.", symbols.len());
 
-    assert_eq!(symbols.len(), 3); // Should have all three variables
     shutdown_and_exit(&mut server);
 }
 
