@@ -14,13 +14,19 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
         let next = acc + line.len();
         if offset < next {
             let rel = offset - acc;
-            if rel == 0 { return (line_idx as u32, 0); }
-            if rel >= line.len() { return (line_idx as u32, line.encode_utf16().count() as u32); }
+            if rel == 0 {
+                return (line_idx as u32, 0);
+            }
+            if rel >= line.len() {
+                return (line_idx as u32, line.encode_utf16().count() as u32);
+            }
             if line.is_char_boundary(rel) {
                 return (line_idx as u32, line[..rel].encode_utf16().count() as u32);
             }
             let mut cs = rel;
-            while cs > 0 && !line.is_char_boundary(cs) { cs -= 1; }
+            while cs > 0 && !line.is_char_boundary(cs) {
+                cs -= 1;
+            }
             return (line_idx as u32, line[..cs].encode_utf16().count() as u32 + 1);
         }
         acc = next;
@@ -32,13 +38,21 @@ pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
     let mut offset = 0;
     for (curr, lt) in text.split_inclusive('\n').enumerate() {
         if curr as u32 == line {
-            if col == 0 { return offset; }
+            if col == 0 {
+                return offset;
+            }
             let mut up = 0u32;
             for (bi, ch) in lt.char_indices() {
-                if up == col { return offset + bi; }
-                if up < col && col < up + ch.len_utf16() as u32 { return offset + bi; }
+                if up == col {
+                    return offset + bi;
+                }
+                if up < col && col < up + ch.len_utf16() as u32 {
+                    return offset + bi;
+                }
                 up += ch.len_utf16() as u32;
-                if up > col { return offset + bi; }
+                if up > col {
+                    return offset + bi;
+                }
             }
             let lcl = if lt.ends_with('\n') { lt.len() - 1 } else { lt.len() };
             return offset + lcl.min(text.len() - offset);

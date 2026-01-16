@@ -47,7 +47,6 @@ pub use perl_parser_core::{Parser, ast, position};
 /// Test-driven development helpers and generators.
 pub mod tdd;
 
-#[allow(missing_docs)]
 pub use tdd::tdd_basic;
 pub use tdd::tdd_workflow;
 pub use tdd::test_generator;

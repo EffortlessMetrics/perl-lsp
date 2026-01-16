@@ -465,7 +465,7 @@ impl AdvancedReuseAnalyzer {
                     self.calculate_structural_similarity(&old_info.node, &new_info.node);
                 if similarity >= config.min_confidence * 0.8 {
                     // Slightly lower threshold for aggressive matching
-                    if best_match.is_none() || similarity > best_match.as_ref().unwrap().1 {
+                    if best_match.as_ref().is_none_or(|&(_, s)| similarity > s) {
                         best_match = Some((*new_pos, similarity));
                     }
                 }

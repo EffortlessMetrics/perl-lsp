@@ -200,7 +200,7 @@ sub another {
 
 #[test]
 fn test_workspace_symbol_response_format() {
-    use perl_parser::workspace_index::{WorkspaceIndex, LspWorkspaceSymbol};
+    use perl_parser::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex};
     use url::Url;
 
     let index = WorkspaceIndex::new();
@@ -229,7 +229,7 @@ sub test_function {
         // Verify required LSP fields are present
         assert!(json.get("name").is_some(), "Symbol missing 'name' field");
         assert!(json.get("kind").is_some(), "Symbol missing 'kind' field");
-        
+
         // Location should contain uri and range
         let location = json.get("location").expect("Symbol missing 'location' field");
         assert!(location.get("uri").is_some(), "Location missing 'uri' field");

@@ -206,9 +206,9 @@ impl CheckpointedIncrementalParser {
         }
 
         // Cache all tokens
-        if !tokens.is_empty() {
-            let start = tokens.first().unwrap().start;
-            let end = tokens.last().unwrap().end;
+        if let (Some(first), Some(last)) = (tokens.first(), tokens.last()) {
+            let start = first.start;
+            let end = last.end;
             self.token_cache.cache_tokens(start, end, tokens);
         }
 
@@ -288,9 +288,9 @@ impl CheckpointedIncrementalParser {
         }
 
         // Cache the new tokens
-        if !tokens.is_empty() {
-            let start = tokens.first().unwrap().start;
-            let end = tokens.last().unwrap().end;
+        if let (Some(first), Some(last)) = (tokens.first(), tokens.last()) {
+            let start = first.start;
+            let end = last.end;
             self.token_cache.cache_tokens(start, end, tokens);
         }
 

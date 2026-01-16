@@ -385,7 +385,8 @@ impl IncrementalDocument {
         }
 
         // Update metrics based on reused nodes
-        self.metrics.nodes_reparsed = self.count_nodes(&root) - self.metrics.nodes_reused;
+        self.metrics.nodes_reparsed =
+            self.count_nodes(&root).saturating_sub(self.metrics.nodes_reused);
 
         Ok(root)
     }
@@ -510,6 +511,62 @@ impl IncrementalDocument {
             NodeKind::Binary { left, right, .. } => {
                 self.cache_node(left);
                 self.cache_node(right);
+            }
+            NodeKind::Subroutine { body, .. } => {
+                self.cache_node(body);
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                self.cache_node(expression);
+            }
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                self.cache_node(condition);
+                self.cache_node(then_branch);
+                for (cond, branch) in elsif_branches {
+                    self.cache_node(cond);
+                    self.cache_node(branch);
+                }
+                if let Some(else_b) = else_branch {
+                    self.cache_node(else_b);
+                }
+            }
+            NodeKind::While { condition, body, .. } => {
+                self.cache_node(condition);
+                self.cache_node(body);
+            }
+            NodeKind::For { init, condition, update, body, .. } => {
+                if let Some(i) = init {
+                    self.cache_node(i);
+                }
+                if let Some(c) = condition {
+                    self.cache_node(c);
+                }
+                if let Some(u) = update {
+                    self.cache_node(u);
+                }
+                self.cache_node(body);
+            }
+            NodeKind::Foreach { variable, list, body } => {
+                self.cache_node(variable);
+                self.cache_node(list);
+                self.cache_node(body);
+            }
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                self.cache_node(variable);
+                if let Some(init) = initializer {
+                    self.cache_node(init);
+                }
+            }
+            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+                for var in variables {
+                    self.cache_node(var);
+                }
+                if let Some(init) = initializer {
+                    self.cache_node(init);
+                }
+            }
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                self.cache_node(lhs);
+                self.cache_node(rhs);
             }
             _ => {}
         }

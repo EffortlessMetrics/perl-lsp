@@ -664,73 +664,67 @@ impl DebugAdapter {
                         let mut context_updated = false;
 
                         // Try main context pattern
-                        if let Some(re) = context_re() {
-                            if let Some(caps) = re.captures(&text) {
-                                if let Some(func) = caps.name("func") {
-                                    current_func = func.as_str().to_string();
-                                    context_updated = true;
-                                }
-                                if let Some(file) = caps.name("file").or_else(|| caps.name("file2"))
-                                {
-                                    current_file = file.as_str().to_string();
-                                    context_updated = true;
-                                }
-                                if let Some(line_num) =
-                                    caps.name("line").or_else(|| caps.name("line2"))
-                                {
-                                    current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
-                                    context_updated = true;
-                                }
+                        if let Some(re) = context_re()
+                            && let Some(caps) = re.captures(&text)
+                        {
+                            if let Some(func) = caps.name("func") {
+                                current_func = func.as_str().to_string();
+                                context_updated = true;
+                            }
+                            if let Some(file) = caps.name("file").or_else(|| caps.name("file2")) {
+                                current_file = file.as_str().to_string();
+                                context_updated = true;
+                            }
+                            if let Some(line_num) = caps.name("line").or_else(|| caps.name("line2"))
+                            {
+                                current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
+                                context_updated = true;
                             }
                         }
 
                         // Try stack frame pattern as fallback
-                        if !context_updated {
-                            if let Some(re) = stack_frame_re() {
-                                if let Some(caps) = re.captures(&text) {
-                                    if let Some(func) = caps.name("func") {
-                                        current_func = func.as_str().to_string();
-                                    }
-                                    if let Some(file) = caps.name("file") {
-                                        current_file = file.as_str().to_string();
-                                    }
-                                    if let Some(line_num) = caps.name("line") {
-                                        current_line =
-                                            line_num.as_str().parse::<i32>().unwrap_or(0);
-                                    }
-                                    context_updated = true;
-                                }
+                        if !context_updated
+                            && let Some(re) = stack_frame_re()
+                            && let Some(caps) = re.captures(&text)
+                        {
+                            if let Some(func) = caps.name("func") {
+                                current_func = func.as_str().to_string();
                             }
+                            if let Some(file) = caps.name("file") {
+                                current_file = file.as_str().to_string();
+                            }
+                            if let Some(line_num) = caps.name("line") {
+                                current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
+                            }
+                            context_updated = true;
                         }
 
                         // Check for errors that might provide location info
-                        if !context_updated {
-                            if let Some(re) = error_re() {
-                                if let Some(caps) = re.captures(&text) {
-                                    if let Some(file) = caps.name("file") {
-                                        current_file = file.as_str().to_string();
-                                    }
-                                    if let Some(line_num) = caps.name("line") {
-                                        current_line =
-                                            line_num.as_str().parse::<i32>().unwrap_or(0);
-                                    }
-                                    context_updated = true;
+                        if !context_updated
+                            && let Some(re) = error_re()
+                            && let Some(caps) = re.captures(&text)
+                        {
+                            if let Some(file) = caps.name("file") {
+                                current_file = file.as_str().to_string();
+                            }
+                            if let Some(line_num) = caps.name("line") {
+                                current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
+                            }
+                            context_updated = true;
 
-                                    // Send error event to client
-                                    if let Some(ref sender) = sender {
-                                        if let Ok(mut seq_lock) = seq.lock() {
-                                            *seq_lock += 1;
-                                            let _ = sender.send(DapMessage::Event {
-                                                seq: *seq_lock,
-                                                event: "output".to_string(),
-                                                body: Some(json!({
-                                                    "category": "stderr",
-                                                    "output": format!("Error: {}\n", text)
-                                                })),
-                                            });
-                                        }
-                                    }
-                                }
+                            // Send error event to client
+                            if let Some(ref sender) = sender
+                                && let Ok(mut seq_lock) = seq.lock()
+                            {
+                                *seq_lock += 1;
+                                let _ = sender.send(DapMessage::Event {
+                                    seq: *seq_lock,
+                                    event: "output".to_string(),
+                                    body: Some(json!({
+                                        "category": "stderr",
+                                        "output": format!("Error: {}\n", text)
+                                    })),
+                                });
                             }
                         }
 
@@ -901,11 +895,11 @@ impl DebugAdapter {
         _arguments: Option<Value>,
     ) -> DapMessage {
         // Terminate the debug session
-        if let Ok(mut guard) = self.session.lock() {
-            if let Some(mut session) = guard.take() {
-                let _ = session.process.kill();
-                session.state = DebugState::Terminated;
-            }
+        if let Ok(mut guard) = self.session.lock()
+            && let Some(mut session) = guard.take()
+        {
+            let _ = session.process.kill();
+            session.state = DebugState::Terminated;
         }
 
         // Send terminated event
@@ -955,14 +949,14 @@ impl DebugAdapter {
             let mut has_session = false;
 
             // First, clear existing breakpoints for this file
-            if let Ok(mut guard) = self.session.lock() {
-                if let Some(ref mut session) = *guard {
-                    has_session = true;
-                    if let Some(stdin) = session.process.stdin.as_mut() {
-                        // Clear breakpoints in file (Perl debugger 'B' command)
-                        let _ = stdin.write_all(b"B\n");
-                        let _ = stdin.flush();
-                    }
+            if let Ok(mut guard) = self.session.lock()
+                && let Some(ref mut session) = *guard
+            {
+                has_session = true;
+                if let Some(stdin) = session.process.stdin.as_mut() {
+                    // Clear breakpoints in file (Perl debugger 'B' command)
+                    let _ = stdin.write_all(b"B\n");
+                    let _ = stdin.flush();
                 }
             }
 
@@ -989,16 +983,15 @@ impl DebugAdapter {
 
                 if let Some(ref mut session) =
                     *lock_or_recover(&self.session, "debug_adapter.session")
+                    && let Some(stdin) = session.process.stdin.as_mut()
                 {
-                    if let Some(stdin) = session.process.stdin.as_mut() {
-                        let cmd = if let Some(cond) = condition {
-                            format!("b {} {}\n", line, cond)
-                        } else {
-                            format!("b {}\n", line)
-                        };
+                    let cmd = if let Some(cond) = condition {
+                        format!("b {} {}\n", line, cond)
+                    } else {
+                        format!("b {}\n", line)
+                    };
 
-                        success = stdin.write_all(cmd.as_bytes()).is_ok() && stdin.flush().is_ok();
-                    }
+                    success = stdin.write_all(cmd.as_bytes()).is_ok() && stdin.flush().is_ok();
                 }
 
                 let breakpoint = Breakpoint {
@@ -1048,12 +1041,12 @@ impl DebugAdapter {
     /// Handle configurationDone request
     fn handle_configuration_done(&self, seq: i64, request_seq: i64) -> DapMessage {
         // Send initial command to get the debugger started
-        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-            if let Some(stdin) = session.process.stdin.as_mut() {
-                // Send initial 'l' command to list current location
-                let _ = stdin.write_all(b"l\n");
-                let _ = stdin.flush();
-            }
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            && let Some(stdin) = session.process.stdin.as_mut()
+        {
+            // Send initial 'l' command to list current location
+            let _ = stdin.write_all(b"l\n");
+            let _ = stdin.flush();
         }
 
         DapMessage::Response {
@@ -1170,11 +1163,10 @@ impl DebugAdapter {
                         // Frame 1 local variables - send command to get them
                         if let Some(ref mut session) =
                             *lock_or_recover(&self.session, "debug_adapter.session")
+                            && let Some(stdin) = session.process.stdin.as_mut()
                         {
-                            if let Some(stdin) = session.process.stdin.as_mut() {
-                                let _ = stdin.write_all(b"V\n"); // Show local variables
-                                let _ = stdin.flush();
-                            }
+                            let _ = stdin.write_all(b"V\n"); // Show local variables
+                            let _ = stdin.flush();
                         }
 
                         // Return placeholder variables for now
@@ -1250,12 +1242,12 @@ impl DebugAdapter {
 
     /// Handle continue request
     fn handle_continue(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-            if let Some(stdin) = session.process.stdin.as_mut() {
-                let _ = stdin.write_all(b"c\n");
-                let _ = stdin.flush();
-                session.state = DebugState::Running;
-            }
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            && let Some(stdin) = session.process.stdin.as_mut()
+        {
+            let _ = stdin.write_all(b"c\n");
+            let _ = stdin.flush();
+            session.state = DebugState::Running;
         }
 
         DapMessage::Response {
@@ -1272,12 +1264,12 @@ impl DebugAdapter {
 
     /// Handle next request
     fn handle_next(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-            if let Some(stdin) = session.process.stdin.as_mut() {
-                let _ = stdin.write_all(b"n\n");
-                let _ = stdin.flush();
-                session.state = DebugState::Running;
-            }
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            && let Some(stdin) = session.process.stdin.as_mut()
+        {
+            let _ = stdin.write_all(b"n\n");
+            let _ = stdin.flush();
+            session.state = DebugState::Running;
         }
 
         DapMessage::Response {
@@ -1292,12 +1284,12 @@ impl DebugAdapter {
 
     /// Handle stepIn request
     fn handle_step_in(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-            if let Some(stdin) = session.process.stdin.as_mut() {
-                let _ = stdin.write_all(b"s\n");
-                let _ = stdin.flush();
-                session.state = DebugState::Running;
-            }
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            && let Some(stdin) = session.process.stdin.as_mut()
+        {
+            let _ = stdin.write_all(b"s\n");
+            let _ = stdin.flush();
+            session.state = DebugState::Running;
         }
 
         DapMessage::Response {
@@ -1312,12 +1304,12 @@ impl DebugAdapter {
 
     /// Handle stepOut request
     fn handle_step_out(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-            if let Some(stdin) = session.process.stdin.as_mut() {
-                let _ = stdin.write_all(b"r\n");
-                let _ = stdin.flush();
-                session.state = DebugState::Running;
-            }
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            && let Some(stdin) = session.process.stdin.as_mut()
+        {
+            let _ = stdin.write_all(b"r\n");
+            let _ = stdin.flush();
+            session.state = DebugState::Running;
         }
 
         DapMessage::Response {
