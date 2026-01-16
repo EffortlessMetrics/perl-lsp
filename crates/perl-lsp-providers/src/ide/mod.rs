@@ -1,11 +1,11 @@
 //! IDE integration helpers (LSP/DAP runtime support).
+//!
+//! Note: Debug Adapter Protocol (DAP) implementation has been moved to the `perl-dap` crate.
 
 /// Deprecated LSP call hierarchy provider shim (moved to `perl-lsp`).
 pub mod call_hierarchy_provider;
-/// Deprecated LSP cancellation infrastructure shim (moved to `perl-lsp`).
+/// Deprecated LSP cancellation mod shim (moved to `perl-lsp`).
 pub mod cancellation;
-/// Debug Adapter Protocol (DAP) implementation for Perl debugging.
-pub mod debug_adapter;
 /// Deprecated LSP diagnostics catalog shim (moved to `perl-lsp`).
 pub mod diagnostics_catalog;
 /// Deprecated executeCommand shim for LSP/tooling integrations (moved to `perl-lsp`).

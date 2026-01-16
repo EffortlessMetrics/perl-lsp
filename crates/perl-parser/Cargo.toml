@@ -33,6 +33,7 @@ perl-refactoring = { path = "../perl-refactoring" }
 perl-incremental-parsing = { path = "../perl-incremental-parsing", optional = true }
 perl-tdd-support = { path = "../perl-tdd-support" }
 perl-lsp-providers = { path = "../perl-lsp-providers", default-features = false }
+perl-dap = { path = "../perl-dap" }
 thiserror = "2.0.17"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -105,7 +106,7 @@ crash-repros = []  # Enable crash reproducer tests (may hang - use with timeout)
 
 [dev-dependencies]
 assert_cmd = "2.1.2"
-insta = { version = "1.46.0", features = ["yaml"] }
+insta = { version = "1.46.1", features = ["yaml"] }
 criterion = "0.8.1"
 parking_lot = "0.12.5"
 predicates = "3.1.3"

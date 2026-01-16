@@ -20,22 +20,22 @@ name = "perl_dap"
 path = "src/lib.rs"
 
 [dependencies]
-# Core parser integration
-perl-parser = { path = "../perl-parser" }
-
 # LSP types reuse (Position, Range, Location, etc.)
 lsp-types = "0.97.0"
 
 # JSON serialization
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.148"
+serde_json = "1.0.149"
 
 # Error handling
 anyhow = "1.0.100"
 thiserror = "2.0.17"
 
+# Regex for parsing debugger output
+regex = "1.12.2"
+
 # Async runtime
-tokio = { version = "1.48.0", features = ["full"] }
+tokio = { version = "1.49.0", features = ["full"] }
 
 # Logging
 tracing = "0.1.44"

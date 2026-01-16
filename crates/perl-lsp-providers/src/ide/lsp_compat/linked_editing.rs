@@ -1,4 +1,8 @@
-// crates/perl-lsp-providers/src/ide/lsp_compat/linked_editing.rs
+//! Linked editing ranges for bracket pairs in Perl code.
+//!
+//! Provides support for simultaneous editing of matching brackets, quotes,
+//! and other paired delimiters.
+
 use lsp_types::{LinkedEditingRanges, Position, Range};
 use perl_parser_core::position::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 

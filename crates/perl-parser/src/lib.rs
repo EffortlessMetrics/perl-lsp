@@ -133,8 +133,6 @@ pub use engine::util;
 pub use ide::call_hierarchy_provider;
 /// Enhanced LSP cancellation infrastructure.
 pub use ide::cancellation;
-/// Debug Adapter Protocol (DAP) implementation for Perl debugging.
-pub use ide::debug_adapter;
 /// Diagnostic catalog with stable codes for consistent error reporting.
 pub use ide::diagnostics_catalog;
 #[cfg(not(target_arch = "wasm32"))]

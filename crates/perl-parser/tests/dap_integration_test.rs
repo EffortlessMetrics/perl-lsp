@@ -1,4 +1,4 @@
-use perl_parser::debug_adapter::{DapMessage, DebugAdapter};
+use perl_dap::{DapMessage, DebugAdapter};
 use serde_json::json;
 use std::fs::write;
 use std::sync::mpsc::channel;
