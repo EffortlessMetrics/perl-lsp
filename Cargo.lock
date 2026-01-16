@@ -1430,6 +1430,7 @@ dependencies = [
  "perl-lexer",
  "perl-lsp-providers",
  "perl-parser",
+ "perl-position-tracking",
  "phf",
  "predicates",
  "pretty_assertions",
