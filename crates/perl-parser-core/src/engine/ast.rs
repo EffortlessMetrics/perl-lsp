@@ -904,7 +904,7 @@ impl Node {
     ///
     /// This enables depth-first traversal for read-only operations like AST analysis.
     /// The closure receives an immutable reference to each child node.
-    pub fn for_each_child<F: FnMut(&Node)>(&self, mut f: F) {
+    pub fn for_each_child<'a, F: FnMut(&'a Node)>(&'a self, mut f: F) {
         match &self.kind {
             // Root program node
             NodeKind::Program { statements } => {
@@ -1121,6 +1121,13 @@ impl Node {
             | NodeKind::Error { .. }
             | NodeKind::UnknownRest => {}
         }
+    }
+
+    /// Collect direct child nodes into a vector for convenience APIs.
+    pub fn children(&self) -> Vec<&Node> {
+        let mut children = Vec::new();
+        self.for_each_child(|child| children.push(child));
+        children
     }
 }
 

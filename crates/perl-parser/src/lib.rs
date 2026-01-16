@@ -300,8 +300,6 @@ pub use semantic::{
 };
 pub use symbol::{Symbol, SymbolExtractor, SymbolKind, SymbolReference, SymbolTable};
 
-#[cfg(test)]
-mod workspace_index_utf16_test;
 
 // =============================================================================
 // LSP Feature Exports (DEPRECATED - migrated to perl-lsp crate)

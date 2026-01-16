@@ -135,6 +135,21 @@ impl EditSet {
         Some(range)
     }
 
+    /// Returns the number of edits in the set.
+    pub fn len(&self) -> usize {
+        self.edits.len()
+    }
+
+    /// Returns true if the edit set is empty.
+    pub fn is_empty(&self) -> bool {
+        self.edits.is_empty()
+    }
+
+    /// Provides read-only access to the underlying edits.
+    pub fn edits(&self) -> &[Edit] {
+        &self.edits
+    }
+
     /// Check if a range is affected by any edit
     pub fn affects_range(&self, range: &Range) -> bool {
         self.edits.iter().any(|edit| edit.overlaps_range(range))

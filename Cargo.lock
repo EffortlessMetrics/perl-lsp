@@ -1389,6 +1389,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-incremental-parsing"
+version = "0.8.8"
+dependencies = [
+ "anyhow",
+ "lsp-types",
+ "perl-lexer",
+ "perl-parser-core",
+ "ropey",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "perl-lexer"
 version = "0.8.8"
 dependencies = [
@@ -1435,6 +1448,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-providers"
+version = "0.8.8"
+dependencies = [
+ "lsp-types",
+ "nix",
+ "perl-incremental-parsing",
+ "perl-parser-core",
+ "perl-refactoring",
+ "perl-semantic-analyzer",
+ "perl-workspace-index",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "perl-parser"
 version = "0.8.8"
 dependencies = [
@@ -1448,7 +1477,14 @@ dependencies = [
  "nix",
  "parking_lot",
  "perl-corpus",
+ "perl-incremental-parsing",
  "perl-lexer",
+ "perl-lsp-providers",
+ "perl-parser-core",
+ "perl-refactoring",
+ "perl-semantic-analyzer",
+ "perl-tdd-support",
+ "perl-workspace-index",
  "phf",
  "predicates",
  "pretty_assertions",
@@ -1466,6 +1502,62 @@ dependencies = [
  "url",
  "walkdir",
  "which",
+]
+
+[[package]]
+name = "perl-parser-core"
+version = "0.8.8"
+dependencies = [
+ "perl-lexer",
+ "phf",
+ "ropey",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "perl-refactoring"
+version = "0.8.8"
+dependencies = [
+ "perl-parser-core",
+ "perl-workspace-index",
+ "regex",
+ "serde",
+]
+
+[[package]]
+name = "perl-semantic-analyzer"
+version = "0.8.8"
+dependencies = [
+ "perl-parser-core",
+ "perl-workspace-index",
+ "regex",
+ "rustc-hash",
+ "serde",
+]
+
+[[package]]
+name = "perl-tdd-support"
+version = "0.8.8"
+dependencies = [
+ "lsp-types",
+ "perl-parser-core",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
+name = "perl-workspace-index"
+version = "0.8.8"
+dependencies = [
+ "lsp-types",
+ "parking_lot",
+ "perl-parser-core",
+ "regex",
+ "serde",
+ "url",
 ]
 
 [[package]]

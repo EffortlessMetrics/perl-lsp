@@ -1,0 +1,43 @@
+[package]
+name = "perl-lsp-providers"
+version = "0.8.8"
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Tree-sitter Perl Contributors"]
+description = "LSP provider glue and tooling integrations for Perl"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+documentation = "https://docs.rs/perl-lsp-providers"
+keywords = ["perl", "lsp", "ide", "tooling"]
+categories = ["development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "LICENSE*"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-parser-core = { path = "../perl-parser-core" }
+perl-semantic-analyzer = { path = "../perl-semantic-analyzer" }
+perl-workspace-index = { path = "../perl-workspace-index" }
+perl-refactoring = { path = "../perl-refactoring" }
+perl-incremental-parsing = { path = "../perl-incremental-parsing" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+regex = "1.12.2"
+lsp-types = { version = "0.97.0", optional = true }
+
+# Unix-only dependency for signal handling in debug adapter
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.30.1", features = ["signal"] }
+
+[features]
+default = ["lsp-compat"]
+lsp-compat = ["lsp-types"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }

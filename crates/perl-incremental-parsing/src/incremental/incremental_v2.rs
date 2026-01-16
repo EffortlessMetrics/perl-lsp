@@ -257,7 +257,7 @@ impl IncrementalParserV2 {
 
         // Try incremental parsing if we have a previous tree and edits
         if let Some(ref last_tree) = self.last_tree {
-            if !self.pending_edits.edits.is_empty() {
+            if !self.pending_edits.is_empty() {
                 let last_tree_clone = last_tree.clone();
                 // Check if we can do incremental parsing
                 if let Some(new_tree) = self.try_incremental_parse(source, &last_tree_clone) {
@@ -286,7 +286,7 @@ impl IncrementalParserV2 {
             // Check if this was a fallback due to too many edits, invalid conditions, or empty source
             // In such cases, we should report 0 reused nodes as it's truly a full reparse
             let should_skip_reuse = source.is_empty()
-                || self.pending_edits.edits.len() > 10
+                || self.pending_edits.len() > 10
                 || self.last_tree.as_ref().map_or(true, |tree| !self.is_simple_value_edit(tree));
 
             if should_skip_reuse {
@@ -408,11 +408,11 @@ impl IncrementalParserV2 {
 
     fn is_simple_value_edit(&self, tree: &IncrementalTree) -> bool {
         // Don't attempt incremental parsing for too many edits at once
-        if self.pending_edits.edits.len() > 10 {
+        if self.pending_edits.len() > 10 {
             if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
                 println!(
                     "DEBUG is_simple_value_edit: too many edits: {}",
-                    self.pending_edits.edits.len()
+                    self.pending_edits.len()
                 );
             }
             return false;
@@ -421,7 +421,7 @@ impl IncrementalParserV2 {
         if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
             println!(
                 "DEBUG is_simple_value_edit: checking {} edits",
-                self.pending_edits.edits.len()
+                self.pending_edits.len()
             );
         }
 
@@ -429,7 +429,7 @@ impl IncrementalParserV2 {
         // coordinates in the original source code represented by `tree`.
         let mut cumulative_shift: isize = 0;
 
-        for (i, edit) in self.pending_edits.edits.iter().enumerate() {
+        for (i, edit) in self.pending_edits.edits().iter().enumerate() {
             let original_start = (edit.start_byte as isize - cumulative_shift) as usize;
             let original_end = (edit.old_end_byte as isize - cumulative_shift) as usize;
 
@@ -541,7 +541,7 @@ impl IncrementalParserV2 {
 
     /// Check if all edits only affect whitespace or comments
     fn is_whitespace_or_comment_edit(&self, tree: &IncrementalTree) -> bool {
-        for edit in &self.pending_edits.edits {
+        for edit in self.pending_edits.edits() {
             // For whitespace/comment edits, we need to check if the edit
             // only affects areas that don't change the AST structure
             let start = edit.start_byte;
@@ -619,7 +619,7 @@ impl IncrementalParserV2 {
 
     /// Calculate the total byte shift from all edits
     fn calculate_total_shift(&self) -> isize {
-        self.pending_edits.edits.iter().map(|edit| edit.byte_shift()).sum()
+        self.pending_edits.edits().iter().map(|edit| edit.byte_shift()).sum()
     }
 
     fn incremental_parse_simple(
@@ -1046,7 +1046,7 @@ impl IncrementalParserV2 {
     /// splitting characters across edit boundaries.
     fn calculate_shift_at(&self, position: usize) -> isize {
         let mut shift = 0;
-        for (i, edit) in self.pending_edits.edits.iter().enumerate() {
+        for (i, edit) in self.pending_edits.edits().iter().enumerate() {
             let original_old_end = (edit.old_end_byte as isize - shift) as usize;
 
             if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
@@ -1183,7 +1183,7 @@ impl IncrementalParserV2 {
         // edits that fall within the node's original range.
         let mut delta = 0;
         let mut shift = 0;
-        for edit in &self.pending_edits.edits {
+        for edit in self.pending_edits.edits() {
             let start = (edit.start_byte as isize - shift) as usize;
             let end = (edit.old_end_byte as isize - shift) as usize;
             if start >= node.location.start && end <= node.location.end {

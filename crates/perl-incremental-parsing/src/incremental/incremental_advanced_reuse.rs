@@ -288,7 +288,7 @@ impl AdvancedReuseAnalyzer {
 
     /// Identify nodes affected by edits
     fn identify_affected_nodes(&mut self, tree: &Node, edits: &EditSet) {
-        for edit in &edits.edits {
+        for edit in edits.edits() {
             self.mark_affected_nodes_in_range(tree, edit.start_byte, edit.old_end_byte);
         }
     }

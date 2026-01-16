@@ -54,7 +54,7 @@ impl SimpleIncrementalParser {
         }
 
         // If we have edits and a previous tree, try incremental parsing
-        if !self.pending_edits.edits.is_empty() && self.last_tree.is_some() {
+        if !self.pending_edits.is_empty() && self.last_tree.is_some() {
             // Check if any edit affects the structure
             let structural_change = {
                 let last_tree = self.last_tree.as_ref().unwrap();
@@ -88,7 +88,7 @@ impl SimpleIncrementalParser {
 
     fn has_structural_change(&self, tree: &Node) -> bool {
         // Check if any edit affects control flow or declarations
-        for edit in &self.pending_edits.edits {
+        for edit in self.pending_edits.edits() {
             let range = Range::new(edit.start_position, edit.old_end_position);
 
             // Find nodes affected by this edit
