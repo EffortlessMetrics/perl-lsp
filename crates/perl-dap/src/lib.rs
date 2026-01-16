@@ -136,6 +136,8 @@ pub struct DapConfig {
 pub struct DapServer {
     /// Server configuration
     pub config: DapConfig,
+    /// The debug adapter implementation
+    adapter: DebugAdapter,
 }
 
 impl DapServer {
@@ -149,6 +151,13 @@ impl DapServer {
     ///
     /// Currently always succeeds. Phase 2 will add validation and initialization errors.
     pub fn new(config: DapConfig) -> anyhow::Result<Self> {
-        Ok(Self { config })
+        let adapter = DebugAdapter::new();
+        // Future: configure adapter based on config
+        Ok(Self { config, adapter })
+    }
+
+    /// Run the DAP server (stdio transport)
+    pub fn run(&mut self) -> std::io::Result<()> {
+        self.adapter.run()
     }
 }
