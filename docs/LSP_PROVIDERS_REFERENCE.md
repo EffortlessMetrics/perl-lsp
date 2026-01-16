@@ -1122,7 +1122,8 @@ Package::Name::method()
 ### Example Usage
 
 ```rust
-use perl_parser::{Parser, type_definition::TypeDefinitionProvider};
+use perl_parser::Parser;
+use perl_lsp::features::type_definition::TypeDefinitionProvider;
 use std::collections::HashMap;
 
 let source = r#"

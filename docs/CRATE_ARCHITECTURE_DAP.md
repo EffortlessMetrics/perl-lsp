@@ -787,7 +787,7 @@ impl VariableRenderer {
 fn ensure_utf16_boundary(s: &str, _rope: &Rope) -> String {
     // Reuse perl-parser UTF-16 boundary validation (PR #153)
     // This is a simplified example; actual implementation would use
-    // perl_parser::textdoc::ensure_utf16_boundary
+    // perl_lsp::textdoc::ensure_utf16_boundary
 
     s.to_string() // Placeholder
 }
@@ -1355,7 +1355,7 @@ fn main() {
 **Integration Example**:
 ```rust
 // Both crates can reuse common protocol handling
-use perl_parser::textdoc::{lsp_pos_to_byte, byte_to_lsp_pos, PosEnc};
+use perl_lsp::textdoc::{lsp_pos_to_byte, byte_to_lsp_pos, PosEnc};
 
 // LSP server uses this for textDocument/* requests
 let byte_offset = lsp_pos_to_byte(rope, lsp_position, PosEnc::Utf16)?;

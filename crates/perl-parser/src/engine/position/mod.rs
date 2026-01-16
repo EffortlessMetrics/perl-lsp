@@ -144,6 +144,11 @@ impl Range {
     }
 }
 
+pub mod line_index;
+pub mod position_mapper;
+#[doc(hidden)]
+pub mod positions;
+
 impl fmt::Display for Range {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}-{}", self.start, self.end)

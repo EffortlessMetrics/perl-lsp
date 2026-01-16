@@ -174,10 +174,10 @@ fn package_vscode_extension(release_dir: &Path) -> Result<()> {
     for entry in fs::read_dir("vscode-extension")? {
         let entry = entry?;
         let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) == Some("vsix") {
-            if let Some(file_name) = path.file_name() {
-                fs::rename(&path, release_dir.join(file_name))?;
-            }
+        if path.extension().and_then(|s| s.to_str()) == Some("vsix")
+            && let Some(file_name) = path.file_name()
+        {
+            fs::rename(&path, release_dir.join(file_name))?;
         }
     }
 

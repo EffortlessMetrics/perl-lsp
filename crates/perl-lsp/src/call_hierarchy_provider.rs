@@ -1,5 +1,5 @@
-use crate::ast::{Node, NodeKind};
-use crate::position_mapper::PositionMapper;
+use perl_parser::ast::{Node, NodeKind};
+use perl_parser::position_mapper::{Position as ParserPosition, PositionMapper};
 use serde_json::{Value, json};
 
 /// Call hierarchy item representing a function or method in Perl code
@@ -62,7 +62,7 @@ impl CallHierarchyProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// use perl_parser::call_hierarchy_provider::CallHierarchyProvider;
+    /// use perl_lsp::call_hierarchy_provider::CallHierarchyProvider;
     ///
     /// let source = "sub hello { print 'world'; }";
     /// let uri = "file:///path/to/file.pl";
@@ -490,7 +490,7 @@ impl CallHierarchyProvider {
 
     /// Convert line/character position to byte offset using PositionMapper for UTF-16 compliance
     fn position_to_offset(&self, line: u32, character: u32) -> usize {
-        let pos = crate::position_mapper::Position { line, character };
+        let pos = ParserPosition { line, character };
         self.position_mapper.lsp_pos_to_byte(pos).unwrap_or(self.source.len())
     }
 

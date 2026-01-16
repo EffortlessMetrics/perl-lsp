@@ -25,16 +25,17 @@ pub use window::{MessageType, ShowDocumentOptions};
 use perl_parser::{
     Parser,
     ast::{Node, NodeKind},
-    call_hierarchy_provider::CallHierarchyProvider,
-    cancellation::{
-        GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, ProviderCleanupContext,
-    },
     declaration::ParentMap,
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
     positions::LineStartsCache,
     tdd_basic::TestGenerator,
     test_runner::{TestKind, TestRunner},
+};
+
+use crate::call_hierarchy_provider::CallHierarchyProvider;
+use crate::cancellation::{
+    GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, ProviderCleanupContext,
 };
 
 // Import LSP providers from features (these moved from perl-parser to perl-lsp)

@@ -428,7 +428,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     #[cfg(not(target_arch = "wasm32"))]
     if build.execute_command {
         // Only advertise commands that are actually implemented and tested
-        let commands = perl_parser::execute_command::get_supported_commands();
+        let commands = crate::execute_command::get_supported_commands();
         caps.execute_command_provider = Some(ExecuteCommandOptions {
             commands,
             work_done_progress_options: WorkDoneProgressOptions::default(),

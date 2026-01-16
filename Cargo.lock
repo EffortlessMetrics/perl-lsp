@@ -1406,6 +1406,7 @@ version = "0.8.8"
 dependencies = [
  "anyhow",
  "assert_cmd",
+ "criterion",
  "insta",
  "lazy_static",
  "lsp-types",
@@ -1427,6 +1428,7 @@ dependencies = [
  "serial_test",
  "tempfile",
  "thiserror",
+ "toml",
  "url",
  "walkdir",
  "which",
@@ -1460,7 +1462,6 @@ dependencies = [
  "serial_test",
  "tempfile",
  "thiserror",
- "toml",
  "tracing",
  "url",
  "walkdir",

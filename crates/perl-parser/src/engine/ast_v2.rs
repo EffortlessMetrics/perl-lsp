@@ -32,82 +32,129 @@ impl Node {
     }
 }
 
-/// Node kinds - same as original but can be extended
+/// The kinds of AST nodes used by the parser.
+///
+/// Each variant represents a specific syntactic construct in the Perl source
+/// and carries the child nodes or data needed to represent that construct.
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
     // Program structure
+    /// Top-level program containing a list of statements.
     Program {
+        /// Statements contained by the program/root node.
         statements: Vec<Node>,
     },
+    /// Block node containing a list of statements.
     Block {
+        /// Statements inside a block.
         statements: Vec<Node>,
     },
 
     // Declarations
+    /// A single variable declaration (`my`, `our`, `local`, `state`, ...).
     VariableDeclaration {
+        /// The declarator keyword (e.g. `my`, `our`).
         declarator: String, // my, our, local, state
+        /// The variable node being declared.
         variable: Box<Node>,
+        /// Any attributes attached to the declaration.
         attributes: Vec<String>,
+        /// Optional initializer expression.
         initializer: Option<Box<Node>>,
     },
 
+    /// A list-style variable declaration (e.g. `my ($a, $b) = ...`).
     VariableListDeclaration {
+        /// The declarator keyword.
         declarator: String,
+        /// Variables declared in the list.
         variables: Vec<Node>,
+        /// Any attributes attached to the declaration.
         attributes: Vec<String>,
+        /// Optional initializer for the list.
         initializer: Option<Box<Node>>,
     },
 
     // Variables
+    /// A variable usage with sigil and name (e.g. `$foo`, `@arr`).
     Variable {
-        sigil: String, // $, @, %, *, &
+        /// The sigil character (e.g. `$`, `@`, `%`).
+        sigil: String, // $, @, %, *
+        /// The identifier/name of the variable.
         name: String,
     },
 
     // Error recovery nodes
+    /// An error/recovery node produced during parsing.
     Error {
+        /// Human readable error message.
         message: String,
+        /// Tokens or node kinds that were expected at this location.
         expected: Vec<String>,
+        /// Optional partially parsed node for recovery contexts.
         partial: Option<Box<Node>>,
     },
 
+    /// Placeholder for a missing expression during error recovery.
     MissingExpression,
+    /// Placeholder for a missing statement during error recovery.
     MissingStatement,
+    /// Placeholder for a missing identifier during error recovery.
     MissingIdentifier,
+    /// Placeholder for a missing block during error recovery.
     MissingBlock,
 
     // Include all other variants from original AST...
     // (Abbreviated for example - would include all original variants)
 
     // Expressions
+    /// A binary expression (e.g. `a + b`).
     Binary {
+        /// The operator token as text.
         op: String,
+        /// Left-hand side expression.
         left: Box<Node>,
+        /// Right-hand side expression.
         right: Box<Node>,
     },
 
+    /// A unary expression (e.g. `-x`, `!flag`).
     Unary {
+        /// The operator token.
         op: String,
+        /// The operand expression.
         operand: Box<Node>,
     },
 
     // Control flow
+    /// An `if` control-flow construct, including `elsif` and `else` branches.
     If {
+        /// The conditional expression.
         condition: Box<Node>,
+        /// The then-branch block node.
         then_branch: Box<Node>,
+        /// Zero or more `elsif` branches represented as (condition, block).
         elsif_branches: Vec<(Node, Node)>,
+        /// Optional else branch.
         else_branch: Option<Box<Node>>,
     },
 
     // Literals
+    /// Numeric literal node.
     Number {
+        /// The literal text of the number.
         value: String,
     },
+    /// String literal node; may be interpolated.
     String {
+        /// The string contents.
         value: String,
+        /// Whether the string contains interpolation.
         interpolated: bool,
     },
+    /// An identifier token.
     Identifier {
+        /// The identifier text.
         name: String,
     },
     // Other essential variants...
@@ -158,16 +205,22 @@ impl NodeKind {
     }
 }
 
-/// Node ID generator for unique identifiers
+/// Generator for producing unique `NodeId` values used across the AST.
+///
+/// This utility ensures each constructed `Node` receives a distinct identifier
+/// which is useful for incremental parsing, diffing and node references.
 pub struct NodeIdGenerator {
+    /// The next identifier to hand out.
     next_id: NodeId,
 }
 
 impl NodeIdGenerator {
+    /// Create a new `NodeIdGenerator` starting at zero.
     pub fn new() -> Self {
         NodeIdGenerator { next_id: 0 }
     }
 
+    /// Return the next unique `NodeId` and advance the generator.
     pub fn next_id(&mut self) -> NodeId {
         let id = self.next_id;
         self.next_id += 1;

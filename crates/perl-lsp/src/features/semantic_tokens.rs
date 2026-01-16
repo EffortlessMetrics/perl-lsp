@@ -14,8 +14,7 @@
 //!
 //! # Related Modules
 //!
-//! See also [`crate::workspace_index`] for symbol indexing, [`crate::semantic`] for
-//! semantic analysis, and [`crate::completion`] for code completion integration.
+//! This module integrates with symbol indexing, semantic analysis, and code completion.
 //!
 //! # Performance Characteristics
 //!

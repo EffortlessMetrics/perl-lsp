@@ -7,16 +7,16 @@
 //! - Workspace-wide symbol completion
 //! - Cancellation support
 
+use crate::cancellation::{
+    GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, RequestCleanupGuard,
+};
 use crate::completion::{CompletionItemKind, CompletionProvider};
 use crate::{
     protocol::{JsonRpcError, REQUEST_CANCELLED, req_position, req_uri},
     runtime::routing::{IndexAccessMode, route_index_access},
     state::{completion_cap, completion_deadline},
 };
-use perl_parser::{
-    cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, RequestCleanupGuard},
-    type_inference::TypeInferenceEngine,
-};
+use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
 use std::sync::{Arc, OnceLock};

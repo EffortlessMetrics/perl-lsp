@@ -133,9 +133,7 @@ fn extract_snippet(source: &str, line_number: usize) -> String {
 
     let line = lines[line_idx];
     // Truncate long lines
-    let truncated = if line.len() > 80 { format!("{}...", &line[..77]) } else { line.to_string() };
-
-    truncated
+    if line.len() > 80 { format!("{}...", &line[..77]) } else { line.to_string() }
 }
 
 /// Parse found/expected tokens from error message

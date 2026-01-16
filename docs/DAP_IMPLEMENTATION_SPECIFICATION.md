@@ -778,7 +778,7 @@ impl StackTraceProvider {
 **Integration Pattern**:
 ```rust
 // crates/perl-dap/src/protocol.rs
-use perl_parser::textdoc::{lsp_pos_to_byte, byte_to_lsp_pos, PosEnc};
+use perl_lsp::textdoc::{lsp_pos_to_byte, byte_to_lsp_pos, PosEnc};
 
 pub fn dap_breakpoint_to_byte_offset(
     rope: &Rope,
@@ -1378,7 +1378,7 @@ pub async fn evaluate_expression(
 **Implementation**:
 ```rust
 // crates/perl-dap/src/variables.rs
-use perl_parser::textdoc::ensure_utf16_boundary;
+use perl_lsp::textdoc::ensure_utf16_boundary;
 
 pub fn render_variable_value(value: &str, rope: &Rope) -> String {
     if value.len() > 1024 {

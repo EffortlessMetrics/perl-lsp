@@ -1012,7 +1012,7 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        use perl_parser::execute_command::ExecuteCommandProvider;
+        use crate::execute_command::ExecuteCommandProvider;
 
         if let Some(params) = params {
             let command = params["command"]

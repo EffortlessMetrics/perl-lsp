@@ -1435,6 +1435,7 @@ pub enum NodeKind {
     },
 
     // Functions
+    /// Subroutine declaration (function) including name, prototype, signature and body.
     Subroutine {
         /// Name of the subroutine
         ///
@@ -1457,9 +1458,13 @@ pub enum NodeKind {
         /// - Essential for precise editor interactions
         name_span: Option<SourceLocation>,
 
+        /// Optional prototype node (e.g. `($;@)`).
         prototype: Option<Box<Node>>,
+        /// Optional signature node (Perl 5.20+ feature).
         signature: Option<Box<Node>>,
+        /// Attributes attached to the subroutine (`:lvalue`, etc.).
         attributes: Vec<String>,
+        /// The body block of the subroutine.
         body: Box<Node>,
     },
 
@@ -1592,6 +1597,7 @@ pub enum NodeKind {
     },
 
     // Package system
+    /// Package declaration (e.g. `package Foo;`) and optional inline block form.
     Package {
         /// Name of the package
         ///
@@ -1614,6 +1620,7 @@ pub enum NodeKind {
         /// - Essential for precise editor interactions
         name_span: SourceLocation,
 
+        /// Optional inline block for `package Foo { ... }` declarations.
         block: Option<Box<Node>>,
     },
 

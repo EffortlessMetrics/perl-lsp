@@ -477,7 +477,7 @@ impl LspServer {
         &self,
         json: &Value,
     ) -> Result<crate::call_hierarchy_provider::CallHierarchyItem, JsonRpcError> {
-        use perl_parser::call_hierarchy_provider::{CallHierarchyItem, Position, Range};
+        use crate::call_hierarchy_provider::{CallHierarchyItem, Position, Range};
 
         let name = json["name"].as_str().unwrap_or("").to_string();
         let kind = match json["kind"].as_u64().unwrap_or(12) {

@@ -529,7 +529,7 @@ fn ensure_utf16_safe_truncation(s: &str, max_bytes: usize) -> &str {
 }
 
 // Reuse existing position mapper for breakpoint positions
-use perl_parser::textdoc::{lsp_pos_to_byte, byte_to_lsp_pos, PosEnc};
+use perl_lsp::textdoc::{lsp_pos_to_byte, byte_to_lsp_pos, PosEnc};
 
 pub fn dap_position_to_byte(rope: &Rope, line: u32, column: u32) -> Result<usize> {
     let pos = Position { line, character: column };

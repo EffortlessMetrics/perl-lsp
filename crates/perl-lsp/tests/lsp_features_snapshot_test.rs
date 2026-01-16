@@ -1,6 +1,6 @@
 use insta::assert_yaml_snapshot;
-use perl_parser::features::map::feature_ids_from_caps;
-use perl_parser::features::{advertised_features, compliance_percent};
+use perl_lsp::features::map::feature_ids_from_caps;
+use perl_lsp::features::{advertised_features, compliance_percent};
 use serde_json::json;
 
 mod support;

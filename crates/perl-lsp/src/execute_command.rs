@@ -23,7 +23,7 @@
 //! ## Supported Commands
 //!
 //! ```no_run
-//! use perl_parser::execute_command::{ExecuteCommandProvider, get_supported_commands};
+//! use perl_lsp::execute_command::{ExecuteCommandProvider, get_supported_commands};
 //! use serde_json::Value;
 //!
 //! let provider = ExecuteCommandProvider::new();
@@ -71,7 +71,7 @@
 //! # Examples
 //!
 //! ```no_run
-//! use perl_parser::execute_command::{ExecuteCommandProvider, command_exists};
+//! use perl_lsp::execute_command::{ExecuteCommandProvider, command_exists};
 //! use serde_json::Value;
 //!
 //! // Create provider with workspace security
@@ -153,7 +153,7 @@ fn mock_status(code: i32) -> std::process::ExitStatus {
 /// # Examples
 ///
 /// ```no_run
-/// use perl_parser::execute_command::PerlCommand;
+/// use perl_lsp::execute_command::PerlCommand;
 /// use serde_json;
 ///
 /// // Deserialize command from LSP request
@@ -207,7 +207,7 @@ pub enum PerlCommand {
 /// # Examples
 ///
 /// ```
-/// use perl_parser::execute_command::CommandResult;
+/// use perl_lsp::execute_command::CommandResult;
 ///
 /// let result = CommandResult {
 ///     success: true,
@@ -241,7 +241,7 @@ pub struct CommandResult {
 /// # Examples
 ///
 /// ```no_run
-/// use perl_parser::execute_command::ExecuteCommandProvider;
+/// use perl_lsp::execute_command::ExecuteCommandProvider;
 /// use serde_json::Value;
 ///
 /// let provider = ExecuteCommandProvider::new();
@@ -277,7 +277,7 @@ impl ExecuteCommandProvider {
     /// # Examples
     ///
     /// ```
-    /// use perl_parser::execute_command::ExecuteCommandProvider;
+    /// use perl_lsp::execute_command::ExecuteCommandProvider;
     ///
     /// let provider = ExecuteCommandProvider::new();
     /// ```
@@ -297,7 +297,7 @@ impl ExecuteCommandProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// use perl_parser::execute_command::ExecuteCommandProvider;
+    /// use perl_lsp::execute_command::ExecuteCommandProvider;
     /// use std::path::PathBuf;
     ///
     /// let provider = ExecuteCommandProvider::with_workspace_root(
@@ -333,7 +333,7 @@ impl ExecuteCommandProvider {
     /// # Examples
     ///
     /// ```no_run
-    /// use perl_parser::execute_command::ExecuteCommandProvider;
+    /// use perl_lsp::execute_command::ExecuteCommandProvider;
     /// use serde_json::Value;
     ///
     /// let provider = ExecuteCommandProvider::new();
@@ -592,7 +592,7 @@ impl ExecuteCommandProvider {
             .map_err(|e| format!("Failed to read file: {}", e))?;
 
         let mut all_violations = Vec::new();
-        let code_text = crate::util::code_slice(&content);
+        let code_text = perl_parser::util::code_slice(&content);
         let mut parser = Parser::new(code_text);
 
         let _ast = match parser.parse() {
@@ -804,7 +804,7 @@ impl ExecuteCommandProvider {
     /// Create a syntax error violation from parse error
     fn create_syntax_error_violation(
         &self,
-        error: &crate::ParseError,
+        error: &perl_parser::ParseError,
         _content: &str,
         file_path: &Path,
     ) -> crate::perl_critic::Violation {
@@ -851,7 +851,7 @@ impl ExecuteCommandProvider {
 /// # Examples
 ///
 /// ```no_run
-/// use perl_parser::execute_command::command_exists;
+/// use perl_lsp::execute_command::command_exists;
 ///
 /// if command_exists("perlcritic") {
 ///     println!("perlcritic is available");
@@ -882,7 +882,7 @@ pub fn command_exists(command: &str) -> bool {
 /// # Examples
 ///
 /// ```
-/// use perl_parser::execute_command::get_supported_commands;
+/// use perl_lsp::execute_command::get_supported_commands;
 ///
 /// let commands = get_supported_commands();
 /// assert!(commands.contains(&"perl.runCritic".to_string()));
@@ -1703,7 +1703,7 @@ print "Value: $variable\n";
 /// # Examples
 ///
 /// ```no_run
-/// use perl_parser::execute_command::CommandExecutor;
+/// use perl_lsp::execute_command::CommandExecutor;
 /// use serde_json::Value;
 ///
 /// let executor = CommandExecutor::new();

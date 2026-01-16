@@ -229,6 +229,10 @@ pub enum ParseError {
     },
 }
 
+pub mod classifier;
+pub mod recovery;
+pub mod recovery_parser;
+
 impl ParseError {
     /// Create a new syntax error for Perl parsing workflow failures
     ///

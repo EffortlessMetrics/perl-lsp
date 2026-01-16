@@ -103,153 +103,177 @@
 //! }
 //! ```
 
+/// Parser engine components and supporting utilities.
+pub mod engine;
+/// IDE integration helpers (LSP/DAP runtime support).
+pub mod ide;
+/// Legacy module aliases for moved engine components.
+pub use engine::{error, parser, position};
+/// Legacy module aliases for IDE compatibility shims.
+pub use ide::{lsp, lsp_compat};
+
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
-#[allow(missing_docs)]
-pub mod ast;
-pub use parser::Parser;
-/// Experimental second‑generation AST (work in progress).
-#[allow(missing_docs)]
-pub mod ast_v2;
-pub mod builtin_signatures;
-pub mod builtin_signatures_phf;
-/// LSP call hierarchy provider for function call navigation.
-pub mod call_hierarchy_provider;
-pub mod cancellation;
-pub mod capabilities;
-pub mod code_actions;
-pub mod code_actions_enhanced;
-pub mod code_actions_pragmas;
-/// LSP code actions provider for automated refactoring and fixes.
-pub mod code_actions_provider;
-pub mod code_lens_provider;
-pub mod completion;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod dead_code_detector;
-pub mod debug_adapter;
-pub mod declaration;
-pub mod diagnostics;
-pub mod diagnostics_catalog;
-pub mod document_highlight;
-/// LSP document links provider for file and URL navigation.
-pub mod document_links;
-pub mod document_store;
-pub mod edit;
-pub mod error;
-/// Error classification and recovery strategies for parse failures.
-pub mod error_classifier;
-pub mod error_recovery;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod execute_command;
-/// Feature flags and capability management for LSP server functionality.
-#[cfg(feature = "lsp-compat")]
-pub mod features;
-pub mod folding;
-pub mod formatting;
+pub use engine::ast;
+/// Experimental second-generation AST (work in progress).
+pub use engine::ast_v2;
+/// Edit tracking for incremental parsing.
+pub use engine::edit;
 /// Heredoc content collector with FIFO ordering and indent stripping.
-pub mod heredoc_collector;
-pub mod implementation_provider;
-pub mod import_optimizer;
+pub use engine::heredoc_collector;
+pub use engine::parser::Parser;
+/// Parser context with error recovery support.
+pub use engine::parser_context;
+/// Pragma tracking for `use` and related directives.
+pub use engine::pragma_tracker;
+/// Parser for Perl quote and quote-like operators.
+pub use engine::quote_parser;
+/// Parser utilities and helpers.
+pub use engine::util;
+/// LSP call hierarchy provider for function call navigation.
+pub use ide::call_hierarchy_provider;
+/// Enhanced LSP cancellation infrastructure.
+pub use ide::cancellation;
+/// Debug Adapter Protocol (DAP) implementation for Perl debugging.
+pub use ide::debug_adapter;
+/// Diagnostic catalog with stable codes for consistent error reporting.
+pub use ide::diagnostics_catalog;
+#[cfg(not(target_arch = "wasm32"))]
+pub use ide::execute_command;
+
+/// Error classification and recovery strategies for parse failures.
+pub use error::classifier as error_classifier;
+pub use error::recovery as error_recovery;
+pub use error::recovery_parser;
+
+pub use position::line_index;
+pub use position::position_mapper;
+#[doc(hidden)]
+pub use position::positions;
+
+pub mod analysis;
+pub mod builtins;
 #[cfg(feature = "incremental")]
 pub mod incremental;
-#[cfg(feature = "incremental")]
-pub mod incremental_advanced_reuse;
-#[cfg(feature = "incremental")]
-pub mod incremental_checkpoint;
-#[cfg(feature = "incremental")]
-pub mod incremental_document;
-#[cfg(feature = "incremental")]
-pub mod incremental_edit;
-#[cfg(feature = "incremental")]
-pub mod incremental_handler_v2;
-#[cfg(feature = "incremental")]
-pub mod incremental_integration;
-#[cfg(feature = "incremental")]
-pub mod incremental_simple;
-#[cfg(feature = "incremental")]
-pub mod incremental_v2;
-pub mod index;
-/// LSP inlay hints for inline type and parameter information.
-pub mod inlay_hints;
-/// LSP inlay hints provider implementation.
-pub mod inlay_hints_provider;
-pub mod inline_completions;
-pub mod line_index;
-/// LSP linked editing provider for synchronized symbol renaming.
-pub mod linked_editing;
-/// Modular LSP server implementation (migration target)
-/// Note: server/transport submodules are gated off on wasm32.
-pub mod lsp;
+pub mod refactor;
+pub mod tdd;
+pub mod tokens;
+pub mod tooling;
+pub mod workspace;
+
+/// Dead code detection for Perl workspaces.
 #[cfg(not(target_arch = "wasm32"))]
-pub mod lsp_document_link;
+pub use analysis::dead_code_detector;
+pub use analysis::declaration;
 #[cfg(not(target_arch = "wasm32"))]
-pub mod lsp_errors;
-pub mod lsp_on_type_formatting;
-pub mod lsp_selection_range;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod lsp_server;
-pub mod lsp_utils;
-/// Code modernization utilities for Perl best practices.
-pub mod modernize;
-/// Enhanced code modernization with refactoring capabilities.
-pub mod modernize_refactored;
-/// LSP on-type formatting provider for automatic code formatting.
-pub mod on_type_formatting;
-pub mod parser;
-pub mod parser_context;
-pub mod performance;
-pub mod perl_critic;
-pub mod perltidy;
-pub mod position;
-pub mod position_mapper;
-#[doc(hidden)]
-pub mod positions;
-pub mod pragma_tracker;
-pub mod pull_diagnostics;
-/// Parser for Perl quote and quote-like operators.
-pub mod quote_parser;
-pub mod recovery_parser;
-/// Unified refactoring engine for comprehensive code transformations.
-pub mod refactoring;
-/// LSP references provider for symbol usage analysis.
-pub mod references;
-pub mod rename;
+pub use analysis::index;
 /// Scope analysis for variable and subroutine resolution.
-#[allow(missing_docs)]
-pub mod scope_analyzer;
-/// LSP selection range provider for smart text selection.
-pub mod selection_range;
-pub mod semantic;
-/// LSP semantic tokens provider for syntax highlighting.
-pub mod semantic_tokens;
-pub mod semantic_tokens_provider;
-pub mod signature_help;
-pub mod symbol;
-#[allow(missing_docs)]
-pub mod tdd_basic;
-/// TDD workflow integration for Test-Driven Development support.
-pub mod tdd_workflow;
-pub mod test_generator;
-/// Test execution and TDD support functionality.
-pub mod test_runner;
-#[cfg(feature = "lsp-compat")]
-pub mod textdoc;
-pub mod token_stream;
-pub mod token_wrapper;
-pub mod trivia;
-pub mod trivia_parser;
-#[cfg(feature = "lsp-compat")]
-pub mod type_definition;
-/// LSP type hierarchy provider for inheritance navigation.
-pub mod type_hierarchy;
+pub use analysis::scope_analyzer;
+pub use analysis::semantic;
+pub use analysis::symbol;
 /// Type inference engine for Perl variable analysis.
-pub mod type_inference;
-pub mod uri;
-pub mod util;
-pub mod workspace_index;
+pub use analysis::type_inference;
+pub use builtins::builtin_signatures;
+pub use builtins::builtin_signatures_phf;
+pub use ide::lsp_compat::capabilities;
+pub use ide::lsp_compat::code_actions;
+pub use ide::lsp_compat::code_actions_enhanced;
+pub use ide::lsp_compat::code_actions_pragmas;
+/// LSP code actions provider for automated refactoring and fixes.
+pub use ide::lsp_compat::code_actions_provider;
+pub use ide::lsp_compat::code_lens_provider;
+pub use ide::lsp_compat::completion;
+pub use ide::lsp_compat::diagnostics;
+pub use ide::lsp_compat::document_highlight;
+/// LSP document links provider for file and URL navigation.
+pub use ide::lsp_compat::document_links;
+/// Deprecated LSP feature catalog shim (moved to `perl-lsp`).
+#[cfg(feature = "lsp-compat")]
+pub use ide::lsp_compat::features;
+pub use ide::lsp_compat::folding;
+pub use ide::lsp_compat::formatting;
+pub use ide::lsp_compat::implementation_provider;
+/// LSP inlay hints for inline type and parameter information.
+pub use ide::lsp_compat::inlay_hints;
+/// LSP inlay hints provider implementation.
+pub use ide::lsp_compat::inlay_hints_provider;
+pub use ide::lsp_compat::inline_completions;
+/// LSP linked editing provider for synchronized symbol renaming.
+pub use ide::lsp_compat::linked_editing;
 #[cfg(not(target_arch = "wasm32"))]
-pub mod workspace_refactor;
-pub mod workspace_rename;
-pub mod workspace_symbols;
+pub use ide::lsp_compat::lsp_document_link;
+#[cfg(not(target_arch = "wasm32"))]
+pub use ide::lsp_compat::lsp_errors;
+pub use ide::lsp_compat::lsp_on_type_formatting;
+pub use ide::lsp_compat::lsp_selection_range;
+#[cfg(not(target_arch = "wasm32"))]
+pub use ide::lsp_compat::lsp_server;
+pub use ide::lsp_compat::lsp_utils;
+/// LSP on-type formatting provider for automatic code formatting.
+pub use ide::lsp_compat::on_type_formatting;
+pub use ide::lsp_compat::pull_diagnostics;
+/// LSP references provider for symbol usage analysis.
+pub use ide::lsp_compat::references;
+pub use ide::lsp_compat::rename;
+/// LSP selection range provider for smart text selection.
+pub use ide::lsp_compat::selection_range;
+/// LSP semantic tokens provider for syntax highlighting.
+pub use ide::lsp_compat::semantic_tokens;
+pub use ide::lsp_compat::semantic_tokens_provider;
+pub use ide::lsp_compat::signature_help;
+#[cfg(feature = "lsp-compat")]
+pub use ide::lsp_compat::textdoc;
+#[cfg(feature = "lsp-compat")]
+pub use ide::lsp_compat::type_definition;
+/// LSP type hierarchy provider for inheritance navigation.
+pub use ide::lsp_compat::type_hierarchy;
+pub use ide::lsp_compat::uri;
+pub use ide::lsp_compat::workspace_symbols;
+
+pub use refactor::import_optimizer;
+/// Code modernization utilities for Perl best practices.
+pub use refactor::modernize;
+/// Enhanced code modernization with refactoring capabilities.
+pub use refactor::modernize_refactored;
+/// Unified refactoring engine for comprehensive code transformations.
+pub use refactor::refactoring;
+pub use tokens::token_stream;
+pub use tokens::token_wrapper;
+pub use tokens::trivia;
+pub use tokens::trivia_parser;
+pub use tooling::performance;
+pub use tooling::perl_critic;
+pub use tooling::perltidy;
+
+#[cfg(feature = "incremental")]
+pub use incremental::incremental_advanced_reuse;
+#[cfg(feature = "incremental")]
+pub use incremental::incremental_checkpoint;
+#[cfg(feature = "incremental")]
+pub use incremental::incremental_document;
+#[cfg(feature = "incremental")]
+pub use incremental::incremental_edit;
+#[cfg(feature = "incremental")]
+#[deprecated(note = "LSP server moved to perl-lsp; perl-parser no longer handles didChange")]
+pub use incremental::incremental_handler_v2;
+#[cfg(feature = "incremental")]
+pub use incremental::incremental_integration;
+#[cfg(feature = "incremental")]
+pub use incremental::incremental_simple;
+#[cfg(feature = "incremental")]
+pub use incremental::incremental_v2;
+
+pub use tdd::tdd_basic;
+/// TDD workflow integration for Test-Driven Development support.
+pub use tdd::tdd_workflow;
+pub use tdd::test_generator;
+/// Test execution and TDD support functionality.
+pub use tdd::test_runner;
+
+pub use workspace::document_store;
+pub use workspace::workspace_index;
+#[cfg(not(target_arch = "wasm32"))]
+pub use workspace::workspace_refactor;
+pub use workspace::workspace_rename;
 
 // Compatibility module for tests using old API
 #[cfg(any(test, feature = "test-compat"))]

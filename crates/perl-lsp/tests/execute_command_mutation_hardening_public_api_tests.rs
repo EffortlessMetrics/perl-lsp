@@ -18,7 +18,7 @@
 //! - Specific response structure validation
 //! - Cross-command behavior verification
 
-use perl_parser::execute_command::{ExecuteCommandProvider, get_supported_commands};
+use perl_lsp::execute_command::{ExecuteCommandProvider, get_supported_commands};
 use serde_json::Value;
 use std::fs;
 
