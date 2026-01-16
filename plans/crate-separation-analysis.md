@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-The Perl LSP project currently has **six published crates** with a monolithic `perl-parser` crate that contains multiple distinct subsystems. This analysis identifies **8 high-priority** and **6 medium-priority** extractable components that could benefit from being separate crates.
+The Perl LSP project currently has **six published crates** with a monolithic `perl-parser` crate that contains multiple distinct subsystems. This analysis identifies **8 extractable components**: **5 high-priority** and **3 medium-priority** candidates for separation.
 
 **Key Findings**:
 - `perl-parser` is a monolithic crate containing parser, LSP providers, semantic analysis, workspace indexing, refactoring, incremental parsing, and TDD support
@@ -585,4 +585,4 @@ The Perl LSP project has a solid foundation with good separation at the binary l
 4. **Create shared utilities crate** - Eliminates duplication across perl-lsp and perl-dap
 5. **Use phased migration** - Gradual migration reduces risk and allows testing
 
-The proposed structure would result in **11 total crates** (6 existing + 5 new), with clear boundaries and responsibilities for each crate.
+Phase 1 (the 5 high-priority extractions) yields **~11 crates**. Phase 2 adds `perl-position-tracking` and `perl-common` (bringing the steady-state to **~13 crates**), with an optional `perl-tdd-support` extraction.
