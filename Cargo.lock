@@ -1574,6 +1574,7 @@ dependencies = [
  "lsp-types",
  "parking_lot",
  "perl-parser-core",
+ "perl-position-tracking",
  "regex",
  "serde",
  "url",
