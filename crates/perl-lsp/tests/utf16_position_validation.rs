@@ -167,10 +167,10 @@ fn validate_position_conversion_performance() {
 
     // Test multiple conversions to ensure consistent performance
     let test_positions = vec![
-        Position::new(100, 20),
-        Position::new(500, 35),
+        Position::new(100, 10),
+        Position::new(500, 20),
         Position::new(750, 10),
-        Position::new(900, 45),
+        Position::new(900, 25),
     ];
 
     for pos in &test_positions {
