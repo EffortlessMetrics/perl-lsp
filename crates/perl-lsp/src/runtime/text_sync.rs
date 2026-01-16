@@ -5,7 +5,7 @@
 use super::*;
 use crate::protocol::invalid_params;
 #[cfg(feature = "workspace")]
-use perl_parser::workspace_index::IndexState;
+use perl_workspace_index::workspace_index::IndexState;
 
 impl LspServer {
     /// Handle textDocument/didOpen notification

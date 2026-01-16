@@ -20,9 +20,15 @@ include = [
 ]
 
 [dependencies]
-perl-parser = { path = "../perl-parser", version = "0.8.8", features = ["test-performance"] }
+# Direct dependencies on specific crates (not through facade)
+perl-parser-core = { path = "../perl-parser-core", version = "0.8.8" }
+perl-semantic-analyzer = { path = "../perl-semantic-analyzer", version = "0.8.8" }
+perl-workspace-index = { path = "../perl-workspace-index", version = "0.8.8", features = ["lsp-compat", "workspace"] }
 perl-lsp-providers = { path = "../perl-lsp-providers", version = "0.8.8", features = ["lsp-compat"] }
+perl-tdd-support = { path = "../perl-tdd-support", version = "0.8.8" }
 perl-lexer = { path = "../perl-lexer", version = "0.8.8" }
+perl-position-tracking = { path = "../perl-position-tracking", version = "0.8.8", features = ["lsp-compat"] }
+perl-incremental-parsing = { path = "../perl-incremental-parsing", version = "0.8.8", optional = true }
 lsp-types = "0.97.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -51,7 +57,7 @@ workspace = true
 [features]
 default = ["workspace"]  # Enable workspace indexing by default for cross-file features
 workspace = []  # Workspace-wide indexing for cross-file features
-incremental = ["perl-parser/incremental"]  # Incremental parsing support
+incremental = ["perl-incremental-parsing"]  # Incremental parsing support
 test-compat = []  # Enables compatibility shim for old test API
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
@@ -65,12 +71,12 @@ qw-variants = []  # Support for all qw delimiter variants
 package-qualified = []  # Package-qualified subroutine resolution
 error-classifier-v2 = []  # Next generation error classification
 lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
-expose_lsp_test_api = ["perl-parser/expose_lsp_test_api"]  # Expose test helpers for integration tests
+expose_lsp_test_api = []  # Expose test helpers for integration tests
 lsp-extras = []  # Quarantined tests for unimplemented/aspirational LSP features
 strict-jsonrpc = []  # Strict JSON-RPC 2.0 protocol validation tests
 dap-phase1 = []  # DAP Phase 1: Bridge to Perl::LanguageServer (AC1-AC4)
 dap-phase3 = []  # DAP Phase 3: Non-regression tests (AC17)
-utf16-complete = ["perl-parser/utf16-complete"]  # Complete UTF-16 round-trip support
+utf16-complete = []  # Complete UTF-16 round-trip support
 
 [dev-dependencies]
 assert_cmd = "2.1.2"

@@ -1,5 +1,5 @@
-use perl_parser::ast::{Node, NodeKind};
-use perl_parser::position_mapper::{Position as ParserPosition, PositionMapper};
+use perl_parser_core::ast::{Node, NodeKind};
+use perl_parser_core::position_mapper::{Position as ParserPosition, PositionMapper};
 use serde_json::{Value, json};
 
 /// Call hierarchy item representing a function or method in Perl code

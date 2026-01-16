@@ -196,6 +196,7 @@ pub use ide::lsp_compat::inlay_hints;
 pub use ide::lsp_compat::inlay_hints_provider;
 pub use ide::lsp_compat::inline_completions;
 /// LSP linked editing provider for synchronized symbol renaming.
+#[cfg(feature = "lsp-compat")]
 pub use ide::lsp_compat::linked_editing;
 #[cfg(not(target_arch = "wasm32"))]
 pub use ide::lsp_compat::lsp_document_link;

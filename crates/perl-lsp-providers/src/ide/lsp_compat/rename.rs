@@ -78,7 +78,7 @@
 //! }
 //! ```
 
-use perl_parser_core::{SourceLocation, Node};
+use perl_parser_core::{Node, SourceLocation};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 
 /// A text edit to apply during rename

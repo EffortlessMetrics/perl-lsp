@@ -420,7 +420,9 @@ impl CodeActionsProvider {
 
         // Use the enhanced provider for better refactorings
         let enhanced_provider =
-            crate::ide::lsp_compat::code_actions_enhanced::EnhancedCodeActionsProvider::new(self.source.clone());
+            crate::ide::lsp_compat::code_actions_enhanced::EnhancedCodeActionsProvider::new(
+                self.source.clone(),
+            );
         actions.extend(enhanced_provider.get_enhanced_refactoring_actions(ast, range));
 
         // Keep basic refactorings as fallback

@@ -2,7 +2,7 @@
 //!
 //! Provides cross-file renaming functionality using the workspace index.
 
-use perl_parser::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
+use perl_workspace_index::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 

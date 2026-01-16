@@ -54,7 +54,6 @@ pub use analysis::dead_code_detector;
 pub use analysis::declaration;
 #[cfg(not(target_arch = "wasm32"))]
 pub use analysis::index;
-#[allow(missing_docs)]
 pub use analysis::scope_analyzer;
 pub use analysis::semantic;
 pub use analysis::symbol;

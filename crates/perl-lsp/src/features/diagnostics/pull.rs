@@ -14,10 +14,10 @@ use lsp_types::{
 
 use crate::state::DocumentState;
 use crate::util::uri::parse_uri;
-use perl_parser::Parser;
-use perl_parser::error::ParseError;
-use perl_parser::position::offset_to_utf16_line_col;
-use perl_parser::util::code_slice;
+use perl_parser_core::Parser;
+use perl_parser_core::error::ParseError;
+use perl_parser_core::position::offset_to_utf16_line_col;
+use perl_parser_core::util::code_slice;
 
 // Import core diagnostics types from perl-lsp-providers (via parent module re-export)
 use super::{

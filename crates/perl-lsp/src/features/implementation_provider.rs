@@ -8,8 +8,8 @@ use crate::type_hierarchy::TypeHierarchyProvider;
 use crate::util::uri::parse_uri;
 use lsp_types::LocationLink;
 use lsp_types::{Position as LspPosition, Range as LspRange};
-use perl_parser::ast::{Node, NodeKind};
-use perl_parser::workspace_index::WorkspaceIndex;
+use perl_parser_core::ast::{Node, NodeKind};
+use perl_workspace_index::workspace_index::WorkspaceIndex;
 use std::collections::HashMap;
 
 /// Provider for finding implementations of types and interfaces in Perl code
