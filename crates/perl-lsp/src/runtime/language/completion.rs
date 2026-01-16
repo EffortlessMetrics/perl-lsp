@@ -16,7 +16,7 @@ use crate::{
     runtime::routing::{IndexAccessMode, route_index_access},
     state::{completion_cap, completion_deadline},
 };
-use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
+use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
 use std::sync::{Arc, OnceLock};
@@ -38,7 +38,7 @@ fn get_snippet_simple_regex() -> Option<&'static Regex> {
 impl LspServer {
     /// Format type information concisely for completion detail
     pub(crate) fn format_type_for_detail(t: &crate::type_inference::PerlType) -> String {
-        use perl_semantic_analyzer::type_inference::PerlType;
+        use perl_parser::type_inference::PerlType;
         match t {
             PerlType::Scalar(_) => "scalar".to_string(),
             PerlType::Array(_) => "array".to_string(),

@@ -206,8 +206,10 @@ impl CheckpointedIncrementalParser {
         }
 
         // Cache all tokens
-        if let (Some(first), Some(last)) = (tokens.first(), tokens.last()) {
-            self.token_cache.cache_tokens(first.start, last.end, tokens);
+        if !tokens.is_empty() {
+            let start = tokens.first().unwrap().start;
+            let end = tokens.last().unwrap().end;
+            self.token_cache.cache_tokens(start, end, tokens);
         }
 
         // Parse using regular parser
@@ -286,8 +288,10 @@ impl CheckpointedIncrementalParser {
         }
 
         // Cache the new tokens
-        if let (Some(first), Some(last)) = (tokens.first(), tokens.last()) {
-            self.token_cache.cache_tokens(first.start, last.end, tokens);
+        if !tokens.is_empty() {
+            let start = tokens.first().unwrap().start;
+            let end = tokens.last().unwrap().end;
+            self.token_cache.cache_tokens(start, end, tokens);
         }
 
         // Parse with the mixed token stream

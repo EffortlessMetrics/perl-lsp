@@ -22,18 +22,13 @@ pub use crate::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 // Re-export window types for public API
 pub use window::{MessageType, ShowDocumentOptions};
 
-use perl_lsp_providers::tooling::{
-    performance::{AstCache, SymbolIndex},
-    perl_critic::BuiltInAnalyzer,
-};
-use perl_parser_core::{
+use perl_parser::{
     Parser,
     ast::{Node, NodeKind},
+    declaration::ParentMap,
+    performance::{AstCache, SymbolIndex},
+    perl_critic::BuiltInAnalyzer,
     positions::LineStartsCache,
-};
-use perl_semantic_analyzer::declaration::ParentMap;
-// TDD support is re-exported via perl-parser
-use crate::parser::{
     tdd_basic::TestGenerator,
     test_runner::{TestKind, TestRunner},
 };
@@ -99,7 +94,7 @@ use url::Url;
 
 use crate::util::uri::parse_uri;
 #[cfg(feature = "workspace")]
-use perl_workspace_index::workspace_index::{
+use perl_parser::workspace_index::{
     IndexCoordinator, LspWorkspaceSymbol, WorkspaceIndex, uri_to_fs_path,
 };
 
@@ -127,7 +122,7 @@ pub(crate) struct DocumentScanView {
     /// Document text content for text-based searches
     pub text: String,
     /// Optional AST reference (Arc clone) for AST-based operations
-    pub ast: Option<Arc<perl_parser_core::ast::Node>>,
+    pub ast: Option<Arc<perl_parser::ast::Node>>,
 }
 
 // Note: FQN_RE regex moved to language/navigation.rs
@@ -735,7 +730,7 @@ impl LspServer {
     #[cfg(feature = "workspace")]
     fn extract_document_symbols(
         &self,
-        ast: &perl_parser_core::ast::Node,
+        ast: &perl_parser::ast::Node,
         source: &str,
         uri: &str,
     ) -> Vec<LspWorkspaceSymbol> {
@@ -747,7 +742,7 @@ impl LspServer {
     #[cfg(not(feature = "workspace"))]
     fn extract_document_symbols(
         &self,
-        _ast: &perl_parser_core::ast::Node,
+        _ast: &perl_parser::ast::Node,
         _source: &str,
         _uri: &str,
     ) -> Vec<serde_json::Value> {
@@ -758,13 +753,13 @@ impl LspServer {
     #[cfg(feature = "workspace")]
     fn extract_symbols_recursive(
         &self,
-        node: &perl_parser_core::ast::Node,
+        node: &perl_parser::ast::Node,
         source: &str,
         uri: &str,
         container: Option<&str>,
         symbols: &mut Vec<LspWorkspaceSymbol>,
     ) {
-        use perl_parser_core::ast::NodeKind;
+        use perl_parser::ast::NodeKind;
 
         match &node.kind {
             NodeKind::Subroutine { name, body, .. } => {
@@ -776,14 +771,14 @@ impl LspServer {
                     symbols.push(LspWorkspaceSymbol {
                         name: sub_name.clone(),
                         kind: 12, // Function
-                        location: perl_workspace_index::workspace_index::LspLocation {
+                        location: perl_parser::workspace_index::LspLocation {
                             uri: uri.to_string(),
-                            range: perl_workspace_index::workspace_index::LspRange {
-                                start: perl_workspace_index::workspace_index::LspPosition {
+                            range: perl_parser::workspace_index::LspRange {
+                                start: perl_parser::workspace_index::LspPosition {
                                     line: start_line,
                                     character: start_char,
                                 },
-                                end: perl_workspace_index::workspace_index::LspPosition {
+                                end: perl_parser::workspace_index::LspPosition {
                                     line: end_line,
                                     character: end_char,
                                 },
@@ -812,14 +807,14 @@ impl LspServer {
                 symbols.push(LspWorkspaceSymbol {
                     name: name.clone(),
                     kind: 2, // Module
-                    location: perl_workspace_index::workspace_index::LspLocation {
+                    location: perl_parser::workspace_index::LspLocation {
                         uri: uri.to_string(),
-                        range: perl_workspace_index::workspace_index::LspRange {
-                            start: perl_workspace_index::workspace_index::LspPosition {
+                        range: perl_parser::workspace_index::LspRange {
+                            start: perl_parser::workspace_index::LspPosition {
                                 line: start_line,
                                 character: start_char,
                             },
-                            end: perl_workspace_index::workspace_index::LspPosition {
+                            end: perl_parser::workspace_index::LspPosition {
                                 line: end_line,
                                 character: end_char,
                             },
@@ -863,13 +858,13 @@ impl LspServer {
     #[cfg(not(feature = "workspace"))]
     fn extract_simple_symbols(
         &self,
-        node: &perl_parser_core::ast::Node,
+        node: &perl_parser::ast::Node,
         source: &str,
         uri: &str,
         query: &str,
         symbols: &mut Vec<serde_json::Value>,
     ) {
-        use perl_parser_core::ast::NodeKind;
+        use perl_parser::ast::NodeKind;
 
         let query_lower = query.to_lowercase();
 
@@ -941,11 +936,11 @@ impl LspServer {
     #[allow(clippy::only_used_in_recursion)]
     fn count_references(
         &self,
-        node: &perl_parser_core::ast::Node,
+        node: &perl_parser::ast::Node,
         symbol_name: &str,
         symbol_kind: &str,
     ) -> usize {
-        use perl_parser_core::ast::NodeKind;
+        use perl_parser::ast::NodeKind;
 
         let mut count = 0;
 

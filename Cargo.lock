@@ -1427,14 +1427,9 @@ dependencies = [
  "nix",
  "parking_lot",
  "perl-corpus",
- "perl-incremental-parsing",
  "perl-lexer",
  "perl-lsp-providers",
- "perl-parser-core",
- "perl-position-tracking",
- "perl-semantic-analyzer",
- "perl-tdd-support",
- "perl-workspace-index",
+ "perl-parser",
  "phf",
  "predicates",
  "pretty_assertions",
@@ -1459,6 +1454,7 @@ version = "0.8.8"
 dependencies = [
  "lsp-types",
  "md5",
+ "nix",
  "perl-incremental-parsing",
  "perl-lexer",
  "perl-parser-core",
@@ -1520,7 +1516,6 @@ name = "perl-parser-core"
 version = "0.8.8"
 dependencies = [
  "perl-lexer",
- "perl-position-tracking",
  "phf",
  "ropey",
  "serde",

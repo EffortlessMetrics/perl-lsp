@@ -75,40 +75,36 @@ pub use server::LspServer;
 // pieces while we incrementally update paths to `perl_parser::...`
 
 /// Parser re-export for migrated code
-pub(crate) use perl_parser_core::Parser;
+pub(crate) use perl_parser::Parser;
 
 /// Position utilities re-export
 pub(crate) mod position {
-    pub use perl_parser_core::position::*;
+    pub use perl_parser::position::*;
 }
 
 /// Positions module re-export (LSP-style line/character based)
 pub(crate) mod positions {
-    pub use perl_parser_core::positions::*;
+    pub use perl_parser::positions::*;
 }
 
 /// Declaration types re-export
 pub(crate) mod declaration {
-    pub use perl_semantic_analyzer::declaration::*;
+    pub use perl_parser::declaration::*;
 }
 
 /// Workspace index re-export
 pub(crate) mod workspace_index {
-    pub use perl_workspace_index::workspace_index::*;
-
-    // lsp_adapter is only available with workspace and lsp-compat features
-    #[cfg(feature = "workspace")]
-    pub use perl_workspace_index::workspace_index::lsp_adapter;
+    pub use perl_parser::workspace_index::*;
 }
 
 /// Symbol types re-export
 pub(crate) mod symbol {
-    pub use perl_semantic_analyzer::symbol::*;
+    pub use perl_parser::symbol::*;
 }
 
 /// AST types re-export
 pub(crate) mod ast {
-    pub use perl_parser_core::ast::*;
+    pub use perl_parser::ast::*;
 }
 
 /// Feature re-exports for old intra-crate paths
@@ -153,15 +149,15 @@ pub(crate) mod code_actions_pragmas {
 
 // Engine re-exports for runtime
 pub(crate) mod perl_critic {
-    pub use perl_lsp_providers::tooling::perl_critic::*;
+    pub use perl_parser::perl_critic::*;
 }
 
 pub(crate) mod semantic {
-    pub use perl_semantic_analyzer::semantic::*;
+    pub use perl_parser::semantic::*;
 }
 
 pub(crate) mod error {
-    pub use perl_parser_core::error::*;
+    pub use perl_parser::error::*;
 }
 
 pub(crate) mod completion {
@@ -186,15 +182,15 @@ pub(crate) mod type_hierarchy {
 }
 
 // Re-export SourceLocation at crate root for convenience
-pub(crate) use perl_parser_core::ast::SourceLocation;
+pub(crate) use perl_parser::ast::SourceLocation;
 
 // Engine modules needed by runtime
 pub(crate) mod type_inference {
-    pub use perl_semantic_analyzer::type_inference::*;
+    pub use perl_parser::type_inference::*;
 }
 
 pub(crate) mod builtin_signatures {
-    pub use perl_parser_core::builtin_signatures::*;
+    pub use perl_parser::builtin_signatures::*;
 }
 
 pub(crate) mod workspace_rename {
@@ -210,9 +206,7 @@ pub(crate) mod call_hierarchy_provider;
 // Parser module re-export for tests using crate::parser::Parser
 pub(crate) mod parser {
     #[allow(unused_imports)]
-    pub use perl_parser_core::parser::*;
-    // TDD support re-exports (previously from perl-parser)
-    pub use perl_tdd_support::{tdd_basic, test_runner};
+    pub use perl_parser::parser::*;
 }
 
 // Folding re-export

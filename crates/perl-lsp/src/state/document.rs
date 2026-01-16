@@ -3,8 +3,8 @@
 //! Manages document content with Rope-based storage for efficient
 //! incremental updates and UTF-16 position mapping.
 
-use perl_parser_core::positions::LineStartsCache;
-use perl_semantic_analyzer::declaration::ParentMap;
+use perl_parser::declaration::ParentMap;
+use perl_parser::positions::LineStartsCache;
 use std::borrow::Cow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -42,10 +42,10 @@ pub struct DocumentState {
     ///
     /// Rebuilt when document content changes, providing fast access to
     /// structured representation for LSP features like hover and completion.
-    pub ast: Option<Arc<perl_parser_core::ast::Node>>,
+    pub ast: Option<Arc<perl_parser::ast::Node>>,
 
     /// Parse errors from last AST generation attempt
-    pub parse_errors: Vec<perl_parser_core::error::ParseError>,
+    pub parse_errors: Vec<perl_parser::error::ParseError>,
 
     /// Parent map for O(1) scope traversal during semantic analysis
     ///

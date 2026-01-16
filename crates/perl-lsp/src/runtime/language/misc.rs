@@ -725,7 +725,7 @@ impl LspServer {
     /// Searches `use` statements for the symbol name, handling both bare imports
     /// and `qw<...>` style import lists with all delimiter types.
     fn find_import_source(&self, ast: &crate::ast::Node, symbol_name: &str) -> Option<String> {
-        use perl_parser_core::ast::NodeKind;
+        use perl_parser::ast::NodeKind;
 
         fn find(node: &crate::ast::Node, name: &str) -> Option<String> {
             match &node.kind {
@@ -763,7 +763,7 @@ impl LspServer {
 
     /// Check if a variable is declared with 'our' (package-scoped)
     fn is_our_variable(&self, ast: &crate::ast::Node, var_name: &str, sigil: Option<char>) -> bool {
-        use perl_parser_core::ast::NodeKind;
+        use perl_parser::ast::NodeKind;
 
         fn check(node: &crate::ast::Node, name: &str, sigil: Option<char>) -> bool {
             match &node.kind {

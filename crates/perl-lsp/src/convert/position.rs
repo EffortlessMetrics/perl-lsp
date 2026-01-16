@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 /// LSP wire position - 0-based line and UTF-16 character offset.
 ///
 /// This is the canonical type for positions in LSP JSON responses.
-/// Use this instead of `perl_parser_core::position::Position` when serializing to JSON.
+/// Use this instead of `perl_parser::position::Position` when serializing to JSON.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct WirePosition {
     /// 0-based line number
@@ -62,7 +62,7 @@ impl WirePosition {
     /// ```
     pub fn from_byte_offset(source: &str, byte_offset: usize) -> Self {
         let (line, character) =
-            perl_parser_core::position::offset_to_utf16_line_col(source, byte_offset);
+            perl_parser::position::offset_to_utf16_line_col(source, byte_offset);
         WirePosition { line, character }
     }
 
@@ -70,13 +70,13 @@ impl WirePosition {
     ///
     /// The engine position's byte offset is used to compute the correct
     /// 0-based line and UTF-16 character offset.
-    pub fn from_engine(pos: &perl_parser_core::position::Position, source: &str) -> Self {
+    pub fn from_engine(pos: &perl_parser::position::Position, source: &str) -> Self {
         Self::from_byte_offset(source, pos.byte)
     }
 
     /// Convert this wire position to a byte offset in the source text.
     pub fn to_byte_offset(&self, source: &str) -> usize {
-        perl_parser_core::position::utf16_line_col_to_offset(source, self.line, self.character)
+        perl_parser::position::utf16_line_col_to_offset(source, self.line, self.character)
     }
 }
 
@@ -123,7 +123,7 @@ impl WireRange {
     }
 
     /// Convert from engine range using source text.
-    pub fn from_engine(range: &perl_parser_core::position::Range, source: &str) -> Self {
+    pub fn from_engine(range: &perl_parser::position::Range, source: &str) -> Self {
         Self::from_byte_offsets(source, range.start.byte, range.end.byte)
     }
 
@@ -222,7 +222,7 @@ impl From<WireLocation> for lsp_types::Location {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_parser_core::position::Position as EnginePosition;
+    use perl_parser::position::Position as EnginePosition;
 
     #[test]
     fn test_wire_position_from_engine_simple() {
@@ -264,7 +264,7 @@ mod tests {
     #[test]
     fn test_wire_range_from_engine() {
         let source = "hello\nworld";
-        let engine_range = perl_parser_core::position::Range::new(
+        let engine_range = perl_parser::position::Range::new(
             EnginePosition::new(0, 1, 1), // start of "hello"
             EnginePosition::new(5, 1, 6), // end of "hello"
         );

@@ -592,7 +592,7 @@ impl ExecuteCommandProvider {
             .map_err(|e| format!("Failed to read file: {}", e))?;
 
         let mut all_violations = Vec::new();
-        let code_text = perl_parser_core::util::code_slice(&content);
+        let code_text = perl_parser::util::code_slice(&content);
         let mut parser = Parser::new(code_text);
 
         let _ast = match parser.parse() {
@@ -804,7 +804,7 @@ impl ExecuteCommandProvider {
     /// Create a syntax error violation from parse error
     fn create_syntax_error_violation(
         &self,
-        error: &perl_parser_core::error::ParseError,
+        error: &perl_parser::ParseError,
         _content: &str,
         file_path: &Path,
     ) -> crate::perl_critic::Violation {

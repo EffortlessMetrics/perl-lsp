@@ -181,7 +181,11 @@ impl TypeDefinitionProvider {
         let mut locations = Vec::new();
         self.find_package_in_node(ast, package_name, uri, source_text, &mut locations);
 
-        if !locations.is_empty() { Some(locations) } else { None }
+        if !locations.is_empty() {
+            Some(locations)
+        } else {
+            None
+        }
     }
 
     /// Recursively find package definitions

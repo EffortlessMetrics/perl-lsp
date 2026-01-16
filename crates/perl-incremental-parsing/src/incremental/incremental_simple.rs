@@ -54,22 +54,23 @@ impl SimpleIncrementalParser {
         }
 
         // If we have edits and a previous tree, try incremental parsing
-        if let Some(ref last_tree) = self.last_tree {
-            if !self.pending_edits.is_empty() {
-                // Check if any edit affects the structure
-                let structural_change = self.has_structural_change(last_tree);
+        if !self.pending_edits.is_empty() && self.last_tree.is_some() {
+            // Check if any edit affects the structure
+            let structural_change = {
+                let last_tree = self.last_tree.as_ref().unwrap();
+                self.has_structural_change(last_tree)
+            };
 
-                if !structural_change {
-                    // No structural change - we can reuse most of the tree
-                    let last_tree = last_tree.clone();
-                    let new_tree = self.incremental_parse(source, &last_tree)?;
+            if !structural_change {
+                // No structural change - we can reuse most of the tree
+                let last_tree = self.last_tree.as_ref().unwrap().clone();
+                let new_tree = self.incremental_parse(source, &last_tree)?;
 
-                    self.last_tree = Some(new_tree.clone());
-                    self.last_source = Some(source.to_string());
-                    self.pending_edits = EditSet::new();
+                self.last_tree = Some(new_tree.clone());
+                self.last_source = Some(source.to_string());
+                self.pending_edits = EditSet::new();
 
-                    return Ok(new_tree);
-                }
+                return Ok(new_tree);
             }
         }
 

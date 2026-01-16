@@ -36,10 +36,12 @@ url = "2.5.4"
 md5 = "0.8.0"
 walkdir = "2.5.0"
 
-# nix removed - providers should be pure (no signal handling)
+# Unix-only dependency for signal handling in debug adapter
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.30.1", features = ["signal"] }
 
 [features]
-default = []  # Library crates should have minimal defaults; consumers opt-in
+default = ["lsp-compat"]
 lsp-compat = ["lsp-types"]
 
 [lints.rust]

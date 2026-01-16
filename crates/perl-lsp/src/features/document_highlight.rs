@@ -3,7 +3,7 @@
 //! Highlights all occurrences of a symbol when cursor is positioned on it.
 //! Distinguishes between read and write access.
 
-use perl_parser_core::ast::{Node, NodeKind, SourceLocation};
+use perl_parser::ast::{Node, NodeKind, SourceLocation};
 
 /// Types of symbol highlights
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

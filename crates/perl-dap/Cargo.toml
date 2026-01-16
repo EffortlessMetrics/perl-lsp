@@ -113,9 +113,6 @@ name = "dap_packaging_tests"
 path = "tests/dap_packaging_tests.rs"
 # AC19: Binary packaging and cross-platform distribution
 
-[lints]
-workspace = true
-
 [[bench]]
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"

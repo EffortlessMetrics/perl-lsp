@@ -287,7 +287,7 @@ impl IncrementalParserV2 {
             // In such cases, we should report 0 reused nodes as it's truly a full reparse
             let should_skip_reuse = source.is_empty()
                 || self.pending_edits.len() > 10
-                || self.last_tree.as_ref().is_none_or(|tree| !self.is_simple_value_edit(tree));
+                || self.last_tree.as_ref().map_or(true, |tree| !self.is_simple_value_edit(tree));
 
             if should_skip_reuse {
                 // Full fallback - no actual reuse
@@ -1152,7 +1152,7 @@ impl IncrementalParserV2 {
 
     /// Check if the last parse used advanced reuse analysis
     pub fn used_advanced_reuse(&self) -> bool {
-        self.last_reuse_analysis.as_ref().is_some_and(|analysis| analysis.reuse_percentage > 0.0)
+        self.last_reuse_analysis.as_ref().map_or(false, |analysis| analysis.reuse_percentage > 0.0)
     }
 
     /// Get detailed reuse efficiency report

@@ -757,7 +757,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Pre-existing failure: symbol priority classification needs investigation"]
     fn test_symbol_priority_classification() -> ParseResult<()> {
         let source = r#"
             package TestPkg;
