@@ -1372,6 +1372,7 @@ name = "perl-dap"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "criterion",
  "lsp-types",
  "nix",
