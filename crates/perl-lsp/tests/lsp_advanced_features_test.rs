@@ -137,7 +137,7 @@ impl AdvancedTestContext {
     }
 
     fn execute_command(&mut self, command: &str, args: Vec<Value>) -> Option<Value> {
-        debug_assert!(
+        assert!(
             self.initialized,
             "AdvancedTestContext must be initialized before execute_command()"
         );
