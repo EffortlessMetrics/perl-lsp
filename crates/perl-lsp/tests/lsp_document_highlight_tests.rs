@@ -496,7 +496,7 @@ my $result = process();
 
         if let Some(line_num) = line {
             assert!(
-                line_num >= 4 && line_num <= 6,
+                (4..=6).contains(&line_num),
                 "Highlight for $inner should be within function scope (lines 4-6), found line {}",
                 line_num
             );

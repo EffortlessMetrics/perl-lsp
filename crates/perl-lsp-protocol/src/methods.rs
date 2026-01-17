@@ -530,7 +530,7 @@ mod tests {
     #[test]
     fn test_constants_are_unique() {
         // Verify no duplicate values (except intentional aliases like TYPE_HIERARCHY_PREPARE)
-        let all_methods = vec![
+        let all_methods = [
             INITIALIZE,
             SHUTDOWN,
             TEXT_DOCUMENT_HOVER,

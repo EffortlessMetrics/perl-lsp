@@ -84,11 +84,8 @@ fn test_unused_parameter_code_actions() {
     assert!(unused_actions.iter().any(|a| a.title.contains("comment")));
 }
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[cfg_attr(
-    not(feature = "lsp-extras"),
-    ignore = "FEATURE: bareword detection not yet emitting unquoted-bareword diagnostic"
-)]
 fn test_bareword_code_actions() {
     let source = r#"use strict;
 print FOO;"#;
@@ -139,11 +136,8 @@ sub test($x, $y, $x, $unused) {
     assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("unused-parameter")));
 }
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[cfg_attr(
-    not(feature = "lsp-extras"),
-    ignore = "FEATURE: bareword detection not yet emitting unquoted-bareword diagnostic"
-)]
 fn test_bareword_filehandle_suggestion() {
     let source = r#"use strict;
 print LOGFILE "Starting process";"#;

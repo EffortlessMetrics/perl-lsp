@@ -24,7 +24,7 @@ now_iso() {
 time_cmd() {
   local name="$1"
   shift
-  echo "==> $name"
+  echo "==> $name" >&2
   "$python_bin" - "$name" "$@" <<'PY'
 import json
 import os
@@ -36,7 +36,13 @@ name = sys.argv[1]
 cmd = sys.argv[2:]
 
 start = time.perf_counter()
-proc = subprocess.run(cmd, cwd=os.environ.get("ROOT"), text=True)
+proc = subprocess.run(
+    cmd,
+    cwd=os.environ.get("ROOT"),
+    text=True,
+    stdout=sys.stderr,
+    stderr=sys.stderr,
+)
 end = time.perf_counter()
 
 sys.stdout.write(json.dumps({"name": name, "seconds": round(end - start, 3), "returncode": proc.returncode}) + "\n")

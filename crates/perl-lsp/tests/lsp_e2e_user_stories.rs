@@ -1044,11 +1044,8 @@ sub fetch_all {
 // As a code reviewer, I want to understand code changes and their impact,
 // so I can provide meaningful feedback on pull requests.
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[cfg_attr(
-    not(feature = "lsp-extras"),
-    ignore = "INFRA: call hierarchy at call sites needs investigation - prepareCallHierarchy may need to return the called function"
-)]
 fn test_user_story_code_review_workflow() {
     let mut server = create_test_server();
     initialize_server(&mut server);

@@ -74,11 +74,8 @@ sub helper($x, $y, $z) {
     assert!(unused_warnings[0].message.contains("$z"));
 }
 
+#[cfg(feature = "lsp-extras")]
 #[test]
-#[cfg_attr(
-    not(feature = "lsp-extras"),
-    ignore = "FEATURE: bareword detection not yet emitting unquoted-bareword diagnostic"
-)]
 fn test_bareword_under_strict() {
     let source = r#"
 use strict;

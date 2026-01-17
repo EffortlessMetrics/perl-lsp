@@ -2386,14 +2386,14 @@ pub fn bad_refs() {}
                     let path = entry.path();
                     if path.is_dir() {
                         stack.push(path);
-                    } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
-                        if let Ok(relative) = path.strip_prefix(root) {
-                            let rel = relative.to_string_lossy().replace('\\', "/");
-                            files.push(SourceFile {
-                                display_path: format!("{}/{}", prefix, rel),
-                                full_path: path,
-                            });
-                        }
+                    } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs")
+                        && let Ok(relative) = path.strip_prefix(root)
+                    {
+                        let rel = relative.to_string_lossy().replace('\\', "/");
+                        files.push(SourceFile {
+                            display_path: format!("{}/{}", prefix, rel),
+                            full_path: path,
+                        });
                     }
                 }
             }
