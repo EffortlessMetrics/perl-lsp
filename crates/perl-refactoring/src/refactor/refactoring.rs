@@ -509,7 +509,12 @@ impl RefactoringEngine {
         // Generate Code
         let extracted_code = &source_code[start_offset..end_offset];
 
-        let mut new_sub = format!("\nsub {} {{\n", method_name);
+        let mut new_sub = format!(
+            "\n# Extracted from lines {}-{}\nsub {} {{\n",
+            start_position.0 + 1,
+            end_position.0 + 1,
+            method_name
+        );
 
         // Handle inputs
         if !analysis.inputs.is_empty() {
@@ -859,6 +864,105 @@ fn visit_node(
                 &mut inner_scope,
                 declared_in_range,
             );
+        }
+        NodeKind::Foreach {
+            variable,
+            list,
+            body,
+        } => {
+            // Visit list with outer scope
+            visit_node(
+                list,
+                start,
+                end,
+                inputs,
+                outputs,
+                declared_in_scope,
+                declared_in_range,
+            );
+
+            // Create inner scope for variable and body
+            let mut inner_scope = declared_in_scope.clone();
+            visit_node(
+                variable,
+                start,
+                end,
+                inputs,
+                outputs,
+                &mut inner_scope,
+                declared_in_range,
+            );
+            visit_node(
+                body,
+                start,
+                end,
+                inputs,
+                outputs,
+                &mut inner_scope,
+                declared_in_range,
+            );
+        }
+        NodeKind::For {
+            init,
+            condition,
+            update,
+            body,
+            continue_block,
+        } => {
+            let mut inner_scope = declared_in_scope.clone();
+            if let Some(n) = init {
+                visit_node(
+                    n,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    &mut inner_scope,
+                    declared_in_range,
+                );
+            }
+            if let Some(n) = condition {
+                visit_node(
+                    n,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    &mut inner_scope,
+                    declared_in_range,
+                );
+            }
+            if let Some(n) = update {
+                visit_node(
+                    n,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    &mut inner_scope,
+                    declared_in_range,
+                );
+            }
+            visit_node(
+                body,
+                start,
+                end,
+                inputs,
+                outputs,
+                &mut inner_scope,
+                declared_in_range,
+            );
+            if let Some(n) = continue_block {
+                visit_node(
+                    n,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    &mut inner_scope,
+                    declared_in_range,
+                );
+            }
         }
         _ => {
             for child in node.children() {
