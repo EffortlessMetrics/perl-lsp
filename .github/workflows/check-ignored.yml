@@ -18,7 +18,7 @@ on:
 
 # Cancel in-flight runs on new triggers (saves minutes)
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: check-ignored-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
