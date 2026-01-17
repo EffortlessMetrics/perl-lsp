@@ -1,5 +1,5 @@
 
-use perl_parser::{Parser, ast::Node};
+use perl_parser::Parser;
 use perl_semantic_analyzer::analysis::scope_analyzer::{ScopeAnalyzer, IssueKind};
 use perl_semantic_analyzer::pragma_tracker::PragmaState;
 

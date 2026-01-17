@@ -1,5 +1,5 @@
 
-use perl_parser::{Parser, ast::Node};
+use perl_parser::Parser;
 use perl_semantic_analyzer::analysis::type_inference::{TypeInferenceEngine, PerlType, ScalarType};
 
 fn infer(code: &str) -> TypeInferenceEngine {
