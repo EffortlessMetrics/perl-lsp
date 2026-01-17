@@ -30,6 +30,9 @@
 //! - import_optimizer: Import statement optimization and cleanup
 
 use crate::error::{ParseError, ParseResult};
+use perl_parser_core::{Node, NodeKind, Parser};
+use perl_parser_core::position::line_index::LineIndex;
+use std::collections::HashSet;
 // Import existing modules conditionally
 use crate::import_optimizer::ImportOptimizer;
 #[cfg(feature = "modernize")]
@@ -455,18 +458,105 @@ impl RefactoringEngine {
 
     fn perform_extract_method(
         &mut self,
-        _method_name: &str,
-        _start_position: (usize, usize),
-        _end_position: (usize, usize),
-        _files: &[PathBuf],
+        method_name: &str,
+        start_position: (usize, usize),
+        end_position: (usize, usize),
+        files: &[PathBuf],
     ) -> ParseResult<RefactoringResult> {
-        // TODO: Implement method extraction
+        let file_path = if let Some(f) = files.first() {
+            f
+        } else {
+            return Err(ParseError::SyntaxError {
+                message: "No file specified for extraction".to_string(),
+                location: 0,
+            });
+        };
+
+        let source_code = std::fs::read_to_string(file_path).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to read file: {}", e),
+            location: 0,
+        })?;
+
+        // Calculate offsets
+        let mut line_index = LineIndex::new(source_code.clone());
+        let start_offset = line_index
+            .position_to_offset(start_position.0 as u32, start_position.1 as u32)
+            .ok_or_else(|| ParseError::SyntaxError {
+                message: "Invalid start position".to_string(),
+                location: 0,
+            })?;
+        let end_offset = line_index
+            .position_to_offset(end_position.0 as u32, end_position.1 as u32)
+            .ok_or_else(|| ParseError::SyntaxError {
+                message: "Invalid end position".to_string(),
+                location: 0,
+            })?;
+
+        if start_offset >= end_offset {
+            return Err(ParseError::SyntaxError {
+                message: "Start position must be before end position".to_string(),
+                location: 0,
+            });
+        }
+
+        // Parse
+        let mut parser = Parser::new(&source_code);
+        let ast = parser.parse()?;
+
+        // Analyze variables
+        let analysis = analyze_extraction(&ast, start_offset, end_offset);
+
+        // Generate Code
+        let extracted_code = &source_code[start_offset..end_offset];
+
+        let mut new_sub = format!("\nsub {} {{\n", method_name);
+
+        // Handle inputs
+        if !analysis.inputs.is_empty() {
+            new_sub.push_str(&format!("    my ({}) = @_;\n", analysis.inputs.join(", ")));
+        }
+
+        // Body
+        new_sub.push_str("    ");
+        new_sub.push_str(extracted_code.trim());
+        new_sub.push('\n');
+
+        // Handle outputs
+        if !analysis.outputs.is_empty() {
+            new_sub.push_str(&format!("    return ({});\n", analysis.outputs.join(", ")));
+        }
+        new_sub.push_str("}\n");
+
+        // Generate Call
+        let inputs_str = analysis.inputs.join(", ");
+        let mut call = format!("{}({})", method_name, inputs_str);
+
+        if !analysis.outputs.is_empty() {
+            let outputs_str = analysis.outputs.join(", ");
+            call = format!("({}) = {}", outputs_str, call);
+        }
+        call.push(';');
+
+        // Apply changes
+        let mut new_source = String::new();
+        new_source.push_str(&source_code[..start_offset]);
+        new_source.push_str(&call);
+        new_source.push_str(&source_code[end_offset..]);
+        new_source.push_str(&new_sub);
+
+        if !self.config.safe_mode {
+            std::fs::write(file_path, new_source).map_err(|e| ParseError::SyntaxError {
+                message: format!("Failed to write file: {}", e),
+                location: 0,
+            })?;
+        }
+
         Ok(RefactoringResult {
-            success: false,
-            files_modified: 0,
-            changes_made: 0,
+            success: true,
+            files_modified: 1,
+            changes_made: 2, // call + sub
             warnings: vec![],
-            errors: vec!["Extract method not yet implemented".to_string()],
+            errors: vec![],
             operation_id: None,
         })
     }
@@ -629,6 +719,171 @@ mod temp_stubs {
     }
 }
 
+struct ExtractionAnalysis {
+    inputs: Vec<String>,
+    outputs: Vec<String>,
+}
+
+fn analyze_extraction(ast: &Node, start: usize, end: usize) -> ExtractionAnalysis {
+    let mut inputs = HashSet::new();
+    let mut outputs = HashSet::new();
+    let mut declared_in_scope = HashSet::new();
+    let mut declared_in_range = HashSet::new();
+
+    visit_node(
+        ast,
+        start,
+        end,
+        &mut inputs,
+        &mut outputs,
+        &mut declared_in_scope,
+        &mut declared_in_range,
+    );
+
+    let mut inputs_vec: Vec<_> = inputs.into_iter().collect();
+    inputs_vec.sort();
+    let mut outputs_vec: Vec<_> = outputs.into_iter().collect();
+    outputs_vec.sort();
+
+    ExtractionAnalysis {
+        inputs: inputs_vec,
+        outputs: outputs_vec,
+    }
+}
+
+fn visit_node(
+    node: &Node,
+    start: usize,
+    end: usize,
+    inputs: &mut HashSet<String>,
+    outputs: &mut HashSet<String>,
+    declared_in_scope: &mut HashSet<String>,
+    declared_in_range: &mut HashSet<String>,
+) {
+    let in_range = node.location.start >= start && node.location.end <= end;
+
+    match &node.kind {
+        NodeKind::VariableDeclaration {
+            declarator,
+            variable,
+            initializer,
+            ..
+        } => {
+            if declarator == "my" {
+                let name = extract_var_name(variable);
+                if in_range {
+                    declared_in_range.insert(name);
+                } else {
+                    declared_in_scope.insert(name);
+                }
+            }
+            if let Some(init) = initializer {
+                visit_node(
+                    init,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    declared_in_scope,
+                    declared_in_range,
+                );
+            }
+        }
+        NodeKind::VariableListDeclaration {
+            declarator,
+            variables,
+            initializer,
+            ..
+        } => {
+            if declarator == "my" {
+                for var in variables {
+                    let name = extract_var_name(var);
+                    if in_range {
+                        declared_in_range.insert(name);
+                    } else {
+                        declared_in_scope.insert(name);
+                    }
+                }
+            }
+            if let Some(init) = initializer {
+                visit_node(
+                    init,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    declared_in_scope,
+                    declared_in_range,
+                );
+            }
+        }
+        NodeKind::Variable { sigil, name } => {
+            let full_name = format!("{}{}", sigil, name);
+            if in_range {
+                // If not declared in range, check if declared in outer scope.
+                if !declared_in_range.contains(&full_name)
+                    && declared_in_scope.contains(&full_name)
+                {
+                    inputs.insert(full_name);
+                }
+            } else if node.location.start >= end {
+                // Usage after range
+                // If declared in range, it's an output.
+                if declared_in_range.contains(&full_name) {
+                    outputs.insert(full_name);
+                }
+            }
+        }
+        NodeKind::Block { statements } => {
+            let mut inner_scope = declared_in_scope.clone();
+            for stmt in statements {
+                visit_node(
+                    stmt,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    &mut inner_scope,
+                    declared_in_range,
+                );
+            }
+        }
+        NodeKind::Subroutine { body, .. } => {
+            let mut inner_scope = declared_in_scope.clone();
+            visit_node(
+                body,
+                start,
+                end,
+                inputs,
+                outputs,
+                &mut inner_scope,
+                declared_in_range,
+            );
+        }
+        _ => {
+            for child in node.children() {
+                visit_node(
+                    child,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    declared_in_scope,
+                    declared_in_range,
+                );
+            }
+        }
+    }
+}
+
+fn extract_var_name(node: &Node) -> String {
+    match &node.kind {
+        NodeKind::Variable { sigil, name } => format!("{}{}", sigil, name),
+        NodeKind::VariableWithAttributes { variable, .. } => extract_var_name(variable),
+        _ => String::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -656,5 +911,49 @@ mod tests {
         assert!(config.create_backups);
         assert_eq!(config.operation_timeout, 60);
         assert!(config.parallel_processing);
+    }
+
+    #[test]
+    fn test_extract_method_basic() {
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        let code = r#"
+sub test {
+    my $x = 1;
+    my $y = 2;
+    # Start extraction
+    print $x;
+    my $z = $x + $y;
+    print $z;
+    # End extraction
+    return $z;
+}
+"#;
+        write!(file, "{}", code).unwrap();
+        let path = file.path().to_path_buf();
+
+        let mut engine = RefactoringEngine::new().unwrap();
+        engine.config.safe_mode = false;
+
+        // Lines are 0-indexed.
+        // Line 5: "    print $x;\n"
+        // Line 8: "    # End extraction\n"
+        let result = engine
+            .perform_extract_method("extracted_sub", (5, 0), (8, 0), &[path.clone()])
+            .unwrap();
+
+        assert!(result.success);
+
+        let new_code = std::fs::read_to_string(&path).unwrap();
+        println!("New code:\n{}", new_code);
+
+        // Inputs: $x, $y (used in range, declared before)
+        // Outputs: $z (declared in range, used after)
+
+        assert!(new_code.contains("sub extracted_sub {"));
+        assert!(new_code.contains("my ($x, $y) = @_;"));
+        assert!(new_code.contains("return ($z);"));
+        // Call verification order depends on how we generate it
+        assert!(new_code.contains("($z) = extracted_sub($x, $y);"));
     }
 }
