@@ -236,7 +236,34 @@ impl TypeInferenceEngine {
 
     /// Infer types for an AST
     pub fn infer(&mut self, ast: &Node) -> Result<PerlType, Vec<TypeConstraint>> {
-        let ty = self.infer_node(ast, &mut self.global_env.clone())?;
+        // We need to use a temporary environment that has global_env as parent,
+        // or just use global_env directly if we want to persist top-level declarations?
+        // Usually top-level declarations should persist.
+        // But we can't borrow self.global_env mutably and also self methods easily if they need self.
+        // infer_node takes &mut self and &mut env.
+
+        // Let's create a temporary scope that is a child of the current global env,
+        // OR just use global_env if we want top-level effects (like subs) to be visible.
+        // But wait, `infer_node` modifies `env`. If we pass a clone, modifications are lost.
+        // We WANT modifications to persist for the duration of `infer` call, but do we want them in `self.global_env`?
+        // Yes, if we want to query them later via `get_subroutine`.
+
+        // However, `infer_node` calls `self.infer_node` recursively.
+        // Let's avoid cloning `global_env` inside `infer`.
+
+        // To satisfy borrow checker (if we pass &mut self.global_env to self.infer_node),
+        // we might have issues. `infer_node` takes `&mut self`.
+        // So `self` is borrowed mutably. We can't pass a reference to a field of `self`.
+
+        // Solution: Temporarily take `global_env` out of `self`, use it, then put it back?
+        // Or change `infer_node` signature?
+
+        // For now, let's just make `infer` work by swapping.
+        let mut env = std::mem::take(&mut self.global_env);
+        let result = self.infer_node(ast, &mut env);
+        self.global_env = env;
+
+        let ty = result?;
 
         // Check constraints
         if !self.constraints.is_empty() {
@@ -271,6 +298,11 @@ impl TypeInferenceEngine {
                     last_type = self.infer_node(stmt, env)?;
                 }
                 Ok(last_type)
+            }
+
+            // Handle expression statements by returning the type of the expression
+            NodeKind::ExpressionStatement { expression } => {
+                self.infer_node(expression, env)
             }
 
             NodeKind::Number { value } => {
@@ -455,6 +487,22 @@ impl TypeInferenceEngine {
                 let param_types = vec![Any];
 
                 // Infer return type from body
+                // In Perl, the return value is the value of the last statement
+                // or explicit return statement.
+                // Our `infer_node` for Block already returns the type of the last statement.
+                // We should also scan for `Return` nodes, but for now we just use the block result
+                // which handles the implicit return of the last statement.
+                // Note: explicit returns inside control flow (if/else) are tricky to unify without
+                // a full control flow graph, but `infer_node` recurses so it should pick up types.
+                // Wait, `infer_node` for `Program`/`Block` returns the type of the *last* statement.
+                // It does NOT unify types from intermediate `return` statements.
+
+                // For better accuracy, we should probably scan the body for `Return` nodes?
+                // But `infer_node(body)` calls `infer_node` recursively.
+                // If we want to support explicit returns not at the end, we need to handle `Return` node
+                // to return a special type or track returns in `TypeInferenceEngine`.
+
+                // For now, let's trust `infer_node(body)` to return the implicit return type of the block.
                 let return_type = self.infer_node(body, &mut sub_env)?;
 
                 let sub_type = Subroutine { params: param_types, returns: vec![return_type] };
@@ -749,6 +797,11 @@ impl TypeInferenceEngine {
     /// Gets the inferred type for a variable by name
     pub fn get_type_at(&self, name: &str) -> Option<PerlType> {
         self.global_env.get_variable(name).cloned()
+    }
+
+    /// Gets the inferred type signature for a subroutine
+    pub fn get_subroutine(&self, name: &str) -> Option<PerlType> {
+        self.global_env.get_subroutine(name).cloned()
     }
 
     /// Returns all type constraint violations as errors
