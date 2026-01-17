@@ -1076,6 +1076,47 @@ pub fn create_builtin_signatures() -> HashMap<&'static str, BuiltinSignature> {
         BuiltinSignature { signatures: vec!["format NAME ="], documentation: "Declares format" },
     );
 
+    // ===== File Test Operators =====
+    macro_rules! file_test {
+        ($op:literal) => {
+            signatures.insert(
+                $op,
+                BuiltinSignature {
+                    signatures: vec![concat!($op, " FILE"), $op],
+                    documentation: "File test operator",
+                },
+            );
+        };
+    }
+
+    file_test!("-e");
+    file_test!("-f");
+    file_test!("-d");
+    file_test!("-r");
+    file_test!("-w");
+    file_test!("-x");
+    file_test!("-o");
+    file_test!("-R");
+    file_test!("-W");
+    file_test!("-X");
+    file_test!("-O");
+    file_test!("-z");
+    file_test!("-s");
+    file_test!("-l");
+    file_test!("-p");
+    file_test!("-S");
+    file_test!("-b");
+    file_test!("-c");
+    file_test!("-t");
+    file_test!("-u");
+    file_test!("-g");
+    file_test!("-k");
+    file_test!("-T");
+    file_test!("-B");
+    file_test!("-M");
+    file_test!("-A");
+    file_test!("-C");
+
     // ===== Miscellaneous =====
     signatures.insert(
         "dump",

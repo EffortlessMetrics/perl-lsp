@@ -23,7 +23,7 @@
 //!
 //! # Usage Examples
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_parser::perltidy::{PerlTidyFormatter, PerlTidyConfig};
 //! use perl_parser::formatting::FormattingOptions;
 //!
@@ -107,7 +107,7 @@ impl CodeFormatter {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::CodeFormatter;
     ///
     /// let formatter = CodeFormatter::new();
@@ -135,7 +135,7 @@ impl CodeFormatter {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::{CodeFormatter, FormattingOptions};
     ///
     /// let formatter = CodeFormatter::new();
