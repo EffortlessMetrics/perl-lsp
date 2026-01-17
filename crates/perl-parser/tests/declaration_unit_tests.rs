@@ -108,7 +108,10 @@ Foo::bar();
 }
 
 #[test]
-#[ignore = "constant forms declaration detection needs improvement"]
+#[cfg_attr(
+    not(feature = "constant-advanced"),
+    ignore = "FEATURE: constant forms declaration detection needs improvement"
+)]
 fn test_constant_forms() {
     // Test: All three constant forms resolve correctly
     let content = r#"

@@ -45,7 +45,10 @@ mod declaration_micro_tests {
     // =========================================================================
 
     #[test]
-    #[ignore = "use constant qw() declaration detection needs improvement"]
+    #[cfg_attr(
+        not(feature = "constant-advanced"),
+        ignore = "FEATURE: use constant qw() declaration detection needs improvement"
+    )]
     fn test_multiple_qw_on_same_line() {
         let code = "use constant qw(FOO); use constant qw(BAR); print BAR;";
         let (provider, _map, _ast) = parse_and_get_provider(code);
@@ -73,7 +76,10 @@ mod declaration_micro_tests {
     }
 
     #[test]
-    #[ignore = "multiline qw() declaration detection needs improvement"]
+    #[cfg_attr(
+        not(feature = "constant-advanced"),
+        ignore = "FEATURE: multiline qw() declaration detection needs improvement"
+    )]
     fn test_multiline_qw() {
         let code = "use constant qw(\n    FOO\n    BAR\n); print FOO;";
         let (provider, _map, _ast) = parse_and_get_provider(code);
@@ -87,7 +93,10 @@ mod declaration_micro_tests {
     }
 
     #[test]
-    #[ignore = "use constant arrow form declaration detection needs improvement"]
+    #[cfg_attr(
+        not(feature = "constant-advanced"),
+        ignore = "FEATURE: use constant arrow form declaration detection needs improvement"
+    )]
     fn test_constant_single_arrow_form() {
         let code = "use constant FOO => 'value'; print FOO;";
         let (provider, _map, _ast) = parse_and_get_provider(code);

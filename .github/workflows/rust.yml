@@ -2,9 +2,6 @@ name: Rust CI
 
 on:
   workflow_dispatch: {}
-  schedule:
-    # Run nightly at 4 AM UTC
-    - cron: '0 4 * * *'
 
 # Cancel in-flight runs on new pushes (saves minutes)
 concurrency:

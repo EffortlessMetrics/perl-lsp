@@ -66,19 +66,24 @@ ci-gate:
     @just ci-features-invariants
     @echo "✅ Merge gate passed!"
 
+# Gate runner with receipt output (Issue #210)
+gates:
+    @echo "🧾 Running gate runner..."
+    @bash scripts/run-gates.sh
+
 # Full CI pipeline (~10-20 min) - RECOMMENDED for large changes
 ci-full:
     @echo "🚀 Running full CI pipeline..."
     @just ci-format
+    @just ci-docs-check
     @just ci-clippy
     @just ci-test-core
     @just ci-test-lsp
-    @just ci-docs || true
+    @just ci-docs
     @echo "✅ Full CI passed!"
 
-# Legacy alias (deprecated, use ci-full)
+# Local CI parity with .github/workflows/ci.yml
 ci-local:
-    @echo "⚠️  'ci-local' is deprecated, use 'ci-full' instead"
     @just ci-full
 
 # Format check (fast fail)

@@ -1045,7 +1045,10 @@ sub fetch_all {
 // so I can provide meaningful feedback on pull requests.
 
 #[test]
-#[ignore = "call hierarchy at call sites needs investigation - prepareCallHierarchy may need to return the called function"]
+#[cfg_attr(
+    not(feature = "lsp-extras"),
+    ignore = "INFRA: call hierarchy at call sites needs investigation - prepareCallHierarchy may need to return the called function"
+)]
 fn test_user_story_code_review_workflow() {
     let mut server = create_test_server();
     initialize_server(&mut server);
