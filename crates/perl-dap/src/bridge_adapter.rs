@@ -16,16 +16,19 @@
 //! ```no_run
 //! use perl_dap::BridgeAdapter;
 //!
-//! # fn main() -> anyhow::Result<()> {
+//! # #[tokio::main]
+//! # async fn main() -> anyhow::Result<()> {
 //! let mut adapter = BridgeAdapter::new();
-//! adapter.spawn_pls_dap()?;
-//! adapter.proxy_messages()?;
+//! adapter.spawn_pls_dap().await?;
+//! adapter.proxy_messages().await?;
 //! # Ok(())
 //! # }
 //! ```
 
 use anyhow::{Context, Result};
-use std::process::{Child, Command, Stdio};
+use std::process::Stdio;
+use tokio::io::AsyncWriteExt;
+use tokio::process::{Child, Command};
 
 /// Perl debugger flag to activate DAP protocol mode in Perl::LanguageServer
 const PLS_DAP_FLAG: &str = "-d:LanguageServer::DAP";
@@ -70,13 +73,14 @@ impl BridgeAdapter {
     /// ```no_run
     /// use perl_dap::BridgeAdapter;
     ///
-    /// # fn main() -> anyhow::Result<()> {
+    /// # #[tokio::main]
+    /// # async fn main() -> anyhow::Result<()> {
     /// let mut adapter = BridgeAdapter::new();
-    /// adapter.spawn_pls_dap()?;
+    /// adapter.spawn_pls_dap().await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn spawn_pls_dap(&mut self) -> Result<()> {
+    pub async fn spawn_pls_dap(&mut self) -> Result<()> {
         // Find perl binary using platform module
         let perl_path =
             crate::platform::resolve_perl_path().context("Failed to find perl binary on PATH")?;
@@ -110,22 +114,59 @@ impl BridgeAdapter {
     /// ```no_run
     /// use perl_dap::BridgeAdapter;
     ///
-    /// # fn main() -> anyhow::Result<()> {
+    /// # #[tokio::main]
+    /// # async fn main() -> anyhow::Result<()> {
     /// let mut adapter = BridgeAdapter::new();
-    /// adapter.spawn_pls_dap()?;
-    /// adapter.proxy_messages()?;
+    /// adapter.spawn_pls_dap().await?;
+    /// adapter.proxy_messages().await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn proxy_messages(&mut self) -> Result<()> {
+    pub async fn proxy_messages(&mut self) -> Result<()> {
         // Verify child process is running
         if self.child_process.is_none() {
             anyhow::bail!("Child process not spawned. Call spawn_pls_dap() first.");
         }
 
-        // TODO: Implement bidirectional message proxying
-        // This is a placeholder for Phase 1 - actual proxying will be implemented
-        // when needed for the full workflow tests
+        let child = self.child_process.as_mut().unwrap();
+
+        // Get handles to child stdin/stdout
+        let mut child_stdin = child
+            .stdin
+            .take()
+            .context("Failed to capture child stdin")?;
+        let mut child_stdout = child
+            .stdout
+            .take()
+            .context("Failed to capture child stdout")?;
+
+        // Get handles to current process stdin/stdout
+        let mut parent_stdin = tokio::io::stdin();
+        let mut parent_stdout = tokio::io::stdout();
+
+        // Create bidirectional copy tasks
+        // Task 1: Client (Parent Stdin) -> Server (Child Stdin)
+        let client_to_server = async move {
+            tokio::io::copy(&mut parent_stdin, &mut child_stdin).await
+                .context("Error copying from client to server")?;
+            Ok::<(), anyhow::Error>(())
+        };
+
+        // Task 2: Server (Child Stdout) -> Client (Parent Stdout)
+        let server_to_client = async move {
+            tokio::io::copy(&mut child_stdout, &mut parent_stdout).await
+                .context("Error copying from server to client")?;
+            parent_stdout.flush().await.context("Error flushing to client")?;
+            Ok::<(), anyhow::Error>(())
+        };
+
+        // Run both tasks concurrently and wait for either to finish
+        // If either stream closes or errors, we should shut down
+        tokio::select! {
+            res = client_to_server => res?,
+            res = server_to_client => res?,
+        }
+
         Ok(())
     }
 }
@@ -139,8 +180,12 @@ impl Default for BridgeAdapter {
 impl Drop for BridgeAdapter {
     fn drop(&mut self) {
         // Clean up child process on drop
+        // Note: In async code, drop is synchronous, so we can't await `child.kill()`
+        // But `start_kill` is non-blocking (available in newer tokio versions)
+        // or we can use the synchronous API if we held the std handle, but we don't.
+        // For tokio::process::Child, start_kill() starts the killing.
         if let Some(mut child) = self.child_process.take() {
-            let _ = child.kill();
+            let _ = child.start_kill();
         }
     }
 }
