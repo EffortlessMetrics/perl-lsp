@@ -7,10 +7,11 @@
 //! NOTE: These tests require the `unquoted-bareword` diagnostic feature which
 //! is not yet implemented. Tests are gated behind the `lsp-extras` feature.
 
+#![cfg(feature = "lsp-extras")]
+
 use perl_lsp::features::diagnostics::DiagnosticsProvider;
 use perl_parser::Parser;
 
-#[cfg(feature = "lsp-extras")]
 #[test]
 fn test_hash_key_vs_variable_bareword() {
     let source = r#"
@@ -33,7 +34,6 @@ print FOO;
     assert!(!bareword_errors[0].message.contains("key"));
 }
 
-#[cfg(feature = "lsp-extras")]
 #[test]
 fn test_hash_slice_bareword_keys() {
     let source = r#"
@@ -84,7 +84,6 @@ my @values = @h{$k1, $k2};
     assert_eq!(undeclared_errors.len(), 0);
 }
 
-#[cfg(feature = "lsp-extras")]
 #[test]
 fn test_hash_slice_mixed_elements() {
     let source = r#"
@@ -151,7 +150,6 @@ my @values = @h{ get_keys() };
     assert_eq!(bareword_errors.len(), 0);
 }
 
-#[cfg(feature = "lsp-extras")]
 #[test]
 fn test_deeply_nested_hash_structures() {
     let source = r#"
@@ -177,7 +175,6 @@ print INVALID;
     assert!(!bareword_errors[0].message.contains("level3"));
 }
 
-#[cfg(feature = "lsp-extras")]
 #[test]
 fn test_complex_hash_literal_with_nested_keys() {
     let source = r#"
@@ -210,7 +207,6 @@ print BAREWORD_WARNING;
     assert!(!bareword_errors[0].message.contains("simple_key"));
 }
 
-#[cfg(feature = "lsp-extras")]
 #[test]
 fn test_hash_slice_with_mixed_quote_styles() {
     let source = r#"
@@ -233,7 +229,6 @@ print SHOULD_WARN;
     assert!(bareword_errors[0].message.contains("SHOULD_WARN"));
 }
 
-#[cfg(feature = "lsp-extras")]
 #[test]
 fn test_hash_slice_performance_edge_case() {
     // Test the MAX_TRAVERSAL_DEPTH safety limit in deeply nested structures
@@ -258,7 +253,6 @@ print NORMAL_BAREWORD;
     assert!(bareword_errors[0].message.contains("NORMAL_BAREWORD"));
 }
 
-#[cfg(feature = "lsp-extras")]
 #[test]
 fn test_hash_keys_in_different_contexts() {
     let source = r#"
