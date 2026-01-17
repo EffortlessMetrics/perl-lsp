@@ -92,7 +92,7 @@ impl<'a> Parser<'a> {
 
                     expr = Node::new(
                         NodeKind::Binary {
-                            op: op_token.text.clone(),
+                            op: op_token.text,
                             left: Box::new(expr),
                             right: Box::new(right),
                         },
@@ -117,7 +117,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text.clone(),
+                    op: op_token.text,
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -137,7 +137,7 @@ impl<'a> Parser<'a> {
             let end = operand.location.end;
 
             return Ok(Node::new(
-                NodeKind::Unary { op: op_token.text.clone(), operand: Box::new(operand) },
+                NodeKind::Unary { op: op_token.text, operand: Box::new(operand) },
                 SourceLocation { start, end },
             ));
         }
@@ -248,7 +248,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text.clone(),
+                    op: op_token.text,
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -271,7 +271,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text.clone(),
+                    op: op_token.text,
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -294,7 +294,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text.clone(),
+                    op: op_token.text,
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -317,7 +317,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text.clone(),
+                    op: op_token.text,
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -340,7 +340,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text.clone(),
+                    op: op_token.text,
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -392,7 +392,7 @@ impl<'a> Parser<'a> {
 
                         expr = Node::new(
                             NodeKind::Binary {
-                                op: op_token.text.clone(),
+                                op: op_token.text,
                                 left: Box::new(expr),
                                 right: Box::new(right),
                             },
@@ -474,7 +474,7 @@ impl<'a> Parser<'a> {
                             // Normal binary operation
                             expr = Node::new(
                                 NodeKind::Binary {
-                                    op: op_token.text.clone(),
+                                    op: op_token.text,
                                     left: Box::new(expr),
                                     right: Box::new(right),
                                 },
@@ -485,7 +485,7 @@ impl<'a> Parser<'a> {
                         // Normal binary operation for == and !=
                         expr = Node::new(
                             NodeKind::Binary {
-                                op: op_token.text.clone(),
+                                op: op_token.text,
                                 left: Box::new(expr),
                                 right: Box::new(right),
                             },
@@ -519,7 +519,7 @@ impl<'a> Parser<'a> {
 
                     expr = Node::new(
                         NodeKind::Binary {
-                            op: op_token.text.clone(),
+                            op: op_token.text,
                             left: Box::new(expr),
                             right: Box::new(right),
                         },
@@ -567,7 +567,7 @@ impl<'a> Parser<'a> {
 
                     expr = Node::new(
                         NodeKind::Binary {
-                            op: op_token.text.clone(),
+                            op: op_token.text,
                             left: Box::new(expr),
                             right: Box::new(right),
                         },
@@ -595,7 +595,7 @@ impl<'a> Parser<'a> {
 
                     expr = Node::new(
                         NodeKind::Binary {
-                            op: op_token.text.clone(),
+                            op: op_token.text,
                             left: Box::new(expr),
                             right: Box::new(right),
                         },
@@ -623,7 +623,7 @@ impl<'a> Parser<'a> {
 
                     expr = Node::new(
                         NodeKind::Binary {
-                            op: op_token.text.clone(),
+                            op: op_token.text,
                             left: Box::new(expr),
                             right: Box::new(right),
                         },
@@ -649,7 +649,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text.clone(),
+                    op: op_token.text,
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
