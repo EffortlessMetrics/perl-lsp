@@ -92,21 +92,11 @@
 //! ```
 
 use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
+use crate::protocol::JsonRpcError;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-
-/// JSON-RPC error structure for LSP protocol compliance
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JsonRpcError {
-    /// Error code following JSON-RPC 2.0 specification
-    pub code: i32,
-    /// Human-readable error message
-    pub message: String,
-    /// Additional error data
-    pub data: Option<Value>,
-}
 
 // Cross-platform helpers for synthesizing `ExitStatus` in tests/mocks.
 #[cfg(any(test, doctest))]

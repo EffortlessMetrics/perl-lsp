@@ -492,6 +492,7 @@ mod doc_validation_helpers {
     }
 
     /// Analyzes PSTX pipeline stage coverage across modules
+    #[allow(dead_code)]
     pub fn analyze_pipeline_coverage(
         module_paths: &[&str],
         src_dir: &str,

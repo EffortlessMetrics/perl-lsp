@@ -1,5 +1,6 @@
 * text eol=lf
 
+# Tree-sitter generated/vendored code in root tree-sitter-perl directory
 src/*.json linguist-generated
 src/parser.c linguist-generated
 src/tree_sitter/* linguist-generated
@@ -9,6 +10,23 @@ binding.gyp linguist-generated
 setup.py linguist-generated
 Makefile linguist-generated
 Package.swift linguist-generated
+
+# Tree-sitter vendored code in crates/
+crates/tree-sitter-perl/** linguist-vendored
+crates/tree-sitter-perl-c/** linguist-vendored
+crates/tree-sitter-perl-rs/src/parser.c linguist-generated
+crates/tree-sitter-perl-rs/src/scanner.c linguist-vendored
+crates/tree-sitter-perl-rs/src/*.h linguist-vendored
+crates/tree-sitter-perl-rs/src/tree_sitter/** linguist-vendored
+crates/tree-sitter-perl-rs/src/*.json linguist-generated
+crates/tree-sitter-perl-rs/src/grammar.js linguist-vendored
+crates/tree-sitter-perl-rs/src/*.pest linguist-vendored
+
+# Legacy Pest parser vendored code in archive
+archive/legacy-crates/perl-parser-pest/src/parser.c linguist-generated
+archive/legacy-crates/perl-parser-pest/src/scanner.c linguist-vendored
+archive/legacy-crates/perl-parser-pest/src/*.h linguist-vendored
+archive/legacy-crates/perl-parser-pest/src/tree_sitter/** linguist-vendored
 
 # Binary files
 *.tar.gz binary

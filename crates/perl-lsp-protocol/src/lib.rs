@@ -9,6 +9,7 @@
 pub mod capabilities;
 mod errors;
 mod jsonrpc;
+pub mod methods;
 
 pub use errors::*;
 pub use jsonrpc::*;
