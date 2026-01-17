@@ -23,6 +23,7 @@ include = [
 perl-parser = { path = "../perl-parser", version = "0.8.8", features = ["test-performance"] }
 perl-lsp-providers = { path = "../perl-lsp-providers", version = "0.8.8", features = ["lsp-compat"] }
 perl-lsp-protocol = { path = "../perl-lsp-protocol", version = "0.8.8" }
+perl-lsp-transport = { path = "../perl-lsp-transport", version = "0.8.8" }
 perl-lexer = { path = "../perl-lexer", version = "0.8.8" }
 perl-position-tracking = { path = "../perl-position-tracking", version = "0.8.8", features = ["lsp-compat"] }
 lsp-types = "0.97.0"

@@ -421,6 +421,21 @@ pub const NOTEBOOK_DOCUMENT_DID_CLOSE: &str = "notebookDocument/didClose";
 // Window Features
 // ============================================================================
 
+/// Show message notification (server to client) - displays a message in the UI
+pub const WINDOW_SHOW_MESSAGE: &str = "window/showMessage";
+
+/// Log message notification (server to client) - logs a message to the output channel
+pub const WINDOW_LOG_MESSAGE: &str = "window/logMessage";
+
+/// Show message request (server to client) - displays a message with action buttons
+pub const WINDOW_SHOW_MESSAGE_REQUEST: &str = "window/showMessageRequest";
+
+/// Show document request (server to client) - opens a document in the editor
+pub const WINDOW_SHOW_DOCUMENT: &str = "window/showDocument";
+
+/// Work done progress create request (server to client) - creates a progress indicator
+pub const WINDOW_WORK_DONE_PROGRESS_CREATE: &str = "window/workDoneProgress/create";
+
 /// Work done progress cancel notification
 pub const WINDOW_WORK_DONE_PROGRESS_CANCEL: &str = "window/workDoneProgress/cancel";
 
@@ -430,6 +445,9 @@ pub const WINDOW_WORK_DONE_PROGRESS_CANCEL: &str = "window/workDoneProgress/canc
 
 /// Cancel request notification
 pub const CANCEL_REQUEST: &str = "$/cancelRequest";
+
+/// Progress notification (bidirectional) - reports work done progress updates
+pub const DOLLAR_PROGRESS: &str = "$/progress";
 
 /// Test slow operation (testing only)
 pub const TEST_SLOW_OPERATION: &str = "$/test/slowOperation";
@@ -479,7 +497,18 @@ mod tests {
     #[test]
     fn test_special_methods() {
         assert_eq!(CANCEL_REQUEST, "$/cancelRequest");
+        assert_eq!(DOLLAR_PROGRESS, "$/progress");
         assert_eq!(TEST_SLOW_OPERATION, "$/test/slowOperation");
+    }
+
+    #[test]
+    fn test_window_methods() {
+        assert_eq!(WINDOW_SHOW_MESSAGE, "window/showMessage");
+        assert_eq!(WINDOW_LOG_MESSAGE, "window/logMessage");
+        assert_eq!(WINDOW_SHOW_MESSAGE_REQUEST, "window/showMessageRequest");
+        assert_eq!(WINDOW_SHOW_DOCUMENT, "window/showDocument");
+        assert_eq!(WINDOW_WORK_DONE_PROGRESS_CREATE, "window/workDoneProgress/create");
+        assert_eq!(WINDOW_WORK_DONE_PROGRESS_CANCEL, "window/workDoneProgress/cancel");
     }
 
     #[test]

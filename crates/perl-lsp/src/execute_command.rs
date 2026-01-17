@@ -544,7 +544,7 @@ impl ExecuteCommandProvider {
             ..Default::default()
         };
 
-        let mut analyzer = CriticAnalyzer::new(config);
+        let mut analyzer = CriticAnalyzer::with_os_runtime(config);
 
         match analyzer.analyze_file(file_path) {
             Ok(violations) => {

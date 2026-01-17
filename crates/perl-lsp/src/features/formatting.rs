@@ -36,7 +36,7 @@
 //!     insert_final_newline: Some(true),
 //!     trim_final_newlines: Some(true),
 //! };
-//! let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default());
+//! let mut formatter = PerlTidyFormatter::with_os_runtime(PerlTidyConfig::default());
 //!
 //! match formatter.format(script) {
 //!     Ok(formatted_text) => {
