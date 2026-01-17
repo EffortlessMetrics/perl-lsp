@@ -2,6 +2,9 @@ name: docs-truth
 
 on:
   pull_request:
+    branches: [ main, master ]
+    types: [labeled]
+  workflow_dispatch: {}
 
 # Cancel in-flight runs on new pushes (saves minutes)
 concurrency:
@@ -11,8 +14,8 @@ concurrency:
 jobs:
   validate-docs:
     if: |
-      contains(github.event.pull_request.labels.*.name, 'ci:docs-truth') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/master')
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:docs-truth')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -115,7 +118,7 @@ jobs:
           fi
 
       - name: Snapshot guard
-        if: "!contains(join(github.event.pull_request.labels.*.name,' '),'snapshot-update')"
+        if: github.event_name == 'pull_request' && !contains(join(github.event.pull_request.labels.*.name, ' '), 'snapshot-update')
         run: |
           # Require 'snapshot-update' label to modify snapshot files
           CHANGED=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" 2>/dev/null \

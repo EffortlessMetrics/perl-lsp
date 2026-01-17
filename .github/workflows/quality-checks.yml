@@ -1,14 +1,10 @@
 name: Quality Checks
 
 on:
-  push:
-    branches: [ main, master ]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - '.claude/**'
+  workflow_dispatch: {}
   pull_request:
     branches: [ main, master ]
+    types: [labeled]
     paths-ignore:
       - 'docs/**'
       - '**/*.md'

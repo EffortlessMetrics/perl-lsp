@@ -1,8 +1,6 @@
 # tree-sitter-perl
 
 [![CI](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/ci.yml/badge.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/ci.yml)
-[![Tests](.github/badges/tests.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions)
-[![Coverage](.github/badges/coverage.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions)
 [![Benchmarks](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/benchmark.yml/badge.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/benchmark.yml)
 [![Crates.io](https://img.shields.io/crates/v/perl-parser.svg)](https://crates.io/crates/perl-parser)
 [![Documentation](https://docs.rs/perl-parser/badge.svg)](https://docs.rs/perl-parser)
