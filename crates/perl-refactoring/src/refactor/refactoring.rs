@@ -254,8 +254,11 @@ impl RefactoringEngine {
         }
 
         // Create backup if enabled
-        let backup_info =
-            if self.config.create_backups { Some(self.create_backup(&files)?) } else { None };
+        let backup_info = if self.config.create_backups {
+            Some(self.create_backup(&files, &operation_id)?)
+        } else {
+            None
+        };
 
         // Perform the operation
         let result = match operation_type.clone() {
@@ -373,11 +376,44 @@ impl RefactoringEngine {
         Ok(())
     }
 
-    fn create_backup(&self, _files: &[PathBuf]) -> ParseResult<BackupInfo> {
-        // TODO: Implement backup creation
+    fn create_backup(&self, files: &[PathBuf], operation_id: &str) -> ParseResult<BackupInfo> {
+        let mut backup_dir = std::env::temp_dir();
+        backup_dir.push("perl_refactor_backups");
+        backup_dir.push(operation_id);
+
+        if !backup_dir.exists() {
+            std::fs::create_dir_all(&backup_dir).map_err(|e| ParseError::SyntaxError {
+                message: format!("Failed to create backup directory: {}", e),
+                location: 0,
+            })?;
+        }
+
+        let mut file_mappings = HashMap::new();
+
+        for (i, file) in files.iter().enumerate() {
+            if file.exists() {
+                // Use index and extension to create a unique, safe filename
+                let extension = file.extension().and_then(|s| s.to_str()).unwrap_or("");
+                let backup_filename = if extension.is_empty() {
+                    format!("file_{}", i)
+                } else {
+                    format!("file_{}.{}", i, extension)
+                };
+
+                let backup_path = backup_dir.join(backup_filename);
+
+                std::fs::copy(file, &backup_path).map_err(|e| ParseError::SyntaxError {
+                    message: format!("Failed to create backup for {}: {}", file.display(), e),
+                    location: 0,
+                })?;
+
+                file_mappings.insert(file.clone(), backup_path);
+            }
+        }
+
         Ok(BackupInfo {
-            backup_dir: PathBuf::from("/tmp/perl_refactor_backups"),
-            file_mappings: HashMap::new(),
+            backup_dir,
+            file_mappings,
         })
     }
 
