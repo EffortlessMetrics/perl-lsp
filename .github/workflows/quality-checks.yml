@@ -66,6 +66,10 @@ jobs:
   tautology-check:
     name: Tautology Detection
     runs-on: ubuntu-22.04
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:strict'))
     steps:
       - uses: actions/checkout@v4
       

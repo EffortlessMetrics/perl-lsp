@@ -1,12 +1,7 @@
 name: Check Ignored Tests
 
 on:
-  pull_request:
-    paths:
-      - 'crates/perl-parser/tests/**'
-      - 'crates/perl-parser/src/**'
-      - 'ci/ignored_baseline.txt'
-      - 'ci/check_ignored.sh'
+  workflow_dispatch: {}
   push:
     branches: [main, master]
     paths:

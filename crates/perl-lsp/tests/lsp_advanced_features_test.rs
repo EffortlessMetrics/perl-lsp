@@ -137,6 +137,10 @@ impl AdvancedTestContext {
     }
 
     fn execute_command(&mut self, command: &str, args: Vec<Value>) -> Option<Value> {
+        debug_assert!(
+            self.initialized,
+            "AdvancedTestContext must be initialized before execute_command()"
+        );
         self.initialize_or_reuse();
         let request = JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
