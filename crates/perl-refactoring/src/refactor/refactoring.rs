@@ -1083,19 +1083,134 @@ impl RefactoringEngine {
 
     fn perform_inline(
         &mut self,
-        _symbol_name: &str,
+        symbol_name: &str,
         _all_occurrences: bool,
-        _files: &[PathBuf],
+        files: &[PathBuf],
     ) -> ParseResult<RefactoringResult> {
-        // TODO: Implement inlining
+        let mut files_modified = 0;
+        let mut changes_made = 0;
+        let mut warnings = Vec::new();
+        let mut success = false;
+
+        // Variable inlining
+        if symbol_name.starts_with('$')
+            || symbol_name.starts_with('@')
+            || symbol_name.starts_with('%')
+        {
+            #[cfg(feature = "workspace_refactor")]
+            {
+                let mut applied = false;
+                for file in files {
+                    // Try to find and inline variable in this file
+                    match self.workspace_refactor.inline_variable(symbol_name, file, (0, 0)) {
+                        Ok(refactor_result) => {
+                            let edits = refactor_result.file_edits;
+                            if !edits.is_empty() {
+                                let mod_count = self.apply_file_edits(&edits)?;
+                                files_modified += mod_count;
+                                changes_made += edits.iter().map(|e| e.edits.len()).sum::<usize>();
+                                applied = true;
+                                success = true;
+                                break; // Found definition and inlined
+                            }
+                        }
+                        Err(crate::workspace_refactor::RefactorError::SymbolNotFound {
+                            ..
+                        }) => continue,
+                        Err(e) => {
+                            warnings.push(format!("Error checking {}: {}", file.display(), e));
+                        }
+                    }
+                }
+
+                if !applied && warnings.is_empty() {
+                    warnings.push(format!(
+                        "Symbol '{}' definition not found in provided files",
+                        symbol_name
+                    ));
+                }
+            }
+            #[cfg(not(feature = "workspace_refactor"))]
+            {
+                warnings.push("Workspace refactoring feature is disabled".to_string());
+            }
+        } else {
+            warnings.push(format!(
+                "Inlining for symbol '{}' not implemented (only variables supported)",
+                symbol_name
+            ));
+        }
+
         Ok(RefactoringResult {
-            success: false,
-            files_modified: 0,
-            changes_made: 0,
-            warnings: vec![],
-            errors: vec!["Inline operation not yet implemented".to_string()],
+            success,
+            files_modified,
+            changes_made,
+            warnings,
+            errors: vec![],
             operation_id: None,
         })
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn apply_file_edits(
+        &self,
+        file_edits: &[crate::workspace_refactor::FileEdit],
+    ) -> ParseResult<usize> {
+        let mut files_modified = 0;
+
+        for file_edit in file_edits {
+            if !file_edit.file_path.exists() {
+                continue;
+            }
+
+            let content = std::fs::read_to_string(&file_edit.file_path).map_err(|e| {
+                ParseError::SyntaxError {
+                    message: format!(
+                        "Failed to read file {}: {}",
+                        file_edit.file_path.display(),
+                        e
+                    ),
+                    location: 0,
+                }
+            })?;
+
+            let mut edits = file_edit.edits.clone();
+            // Sort edits by start position in descending order to apply them safely
+            edits.sort_by(|a, b| b.start.cmp(&a.start));
+
+            let mut new_content = content.clone();
+            for edit in edits {
+                if edit.end > new_content.len() {
+                    return Err(ParseError::SyntaxError {
+                        message: format!(
+                            "Edit out of bounds for {}: range {}..{} in content len {}",
+                            file_edit.file_path.display(),
+                            edit.start,
+                            edit.end,
+                            new_content.len()
+                        ),
+                        location: 0,
+                    });
+                }
+                new_content.replace_range(edit.start..edit.end, &edit.new_text);
+            }
+
+            if new_content != content {
+                std::fs::write(&file_edit.file_path, new_content).map_err(|e| {
+                    ParseError::SyntaxError {
+                        message: format!(
+                            "Failed to write file {}: {}",
+                            file_edit.file_path.display(),
+                            e
+                        ),
+                        location: 0,
+                    }
+                })?;
+                files_modified += 1;
+            }
+        }
+
+        Ok(files_modified)
     }
 }
 
