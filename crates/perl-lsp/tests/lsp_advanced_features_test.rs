@@ -26,7 +26,13 @@ struct AdvancedTestContext {
 }
 
 impl AdvancedTestContext {
-    fn new() -> Self {
+    fn new_initialized() -> Self {
+        let mut ctx = Self::new_uninitialized();
+        ctx.initialize_or_reuse();
+        ctx
+    }
+
+    fn new_uninitialized() -> Self {
         let server = LspServer::new();
 
         let mut snippet_registry = HashMap::new();
@@ -54,19 +60,16 @@ impl AdvancedTestContext {
         );
         template_cache.insert("test".to_string(), "use Test::More;\ndone_testing();\n".to_string());
 
-        let mut ctx = Self {
+        Self {
             server,
             workspace_root: PathBuf::from("/workspace"),
             snippet_registry,
             template_cache,
             initialized: false,
-        };
-
-        ctx.ensure_initialized();
-        ctx
+        }
     }
 
-    fn ensure_initialized(&mut self) {
+    fn initialize_or_reuse(&mut self) {
         if self.initialized {
             return;
         }
@@ -134,7 +137,7 @@ impl AdvancedTestContext {
     }
 
     fn execute_command(&mut self, command: &str, args: Vec<Value>) -> Option<Value> {
-        self.ensure_initialized();
+        self.initialize_or_reuse();
         let request = JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
             id: Some(json!(1)),
@@ -207,7 +210,7 @@ impl AdvancedTestContext {
 
 #[test]
 fn test_snippet_completion() {
-    let ctx = AdvancedTestContext::new();
+    let ctx = AdvancedTestContext::new_initialized();
 
     // Test getting snippet completions
     let completions = ctx.get_snippet_completions("su");
@@ -225,7 +228,7 @@ fn test_snippet_completion() {
 
 #[test]
 fn test_custom_snippets() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Register custom snippet via command
     let _register_result = ctx.execute_command("perl.registerSnippet", vec![
@@ -246,7 +249,7 @@ fn test_custom_snippets() {
 
 #[test]
 fn test_create_module_from_template() {
-    let ctx = AdvancedTestContext::new();
+    let ctx = AdvancedTestContext::new_initialized();
 
     let mut params = HashMap::new();
     params.insert("MODULE_NAME".to_string(), "MyApp::Utils".to_string());
@@ -261,7 +264,7 @@ fn test_create_module_from_template() {
 
 #[test]
 fn test_create_test_from_template() {
-    let ctx = AdvancedTestContext::new();
+    let ctx = AdvancedTestContext::new_initialized();
 
     let mut params = HashMap::new();
     params.insert("MODULE_NAME".to_string(), "MyApp::Calculator".to_string());
@@ -277,7 +280,7 @@ fn test_create_test_from_template() {
 
 #[test]
 fn test_run_single_test() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Execute test run command
     let result = ctx.execute_command(
@@ -294,7 +297,7 @@ fn test_run_single_test() {
 
 #[test]
 fn test_run_test_suite() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Run all tests in directory
     let result = ctx.execute_command(
@@ -312,7 +315,7 @@ fn test_run_test_suite() {
 
 #[test]
 fn test_debug_test() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Start test in debug mode
     let result = ctx.execute_command(
@@ -334,7 +337,7 @@ fn test_debug_test() {
 
 #[test]
 fn test_generate_getters_setters() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Generate accessors for a class
     let result = ctx.execute_command(
@@ -352,7 +355,7 @@ fn test_generate_getters_setters() {
 
 #[test]
 fn test_generate_test_skeleton() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Generate test file for a module
     let result = ctx.execute_command(
@@ -372,7 +375,7 @@ fn test_generate_test_skeleton() {
 
 #[test]
 fn test_project_initialization() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Initialize new Perl project
     let result = ctx.execute_command(
@@ -392,7 +395,7 @@ fn test_project_initialization() {
 
 #[test]
 fn test_dependency_management() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Add CPAN dependency
     let add_result = ctx.execute_command(
@@ -420,7 +423,7 @@ fn test_dependency_management() {
 
 #[test]
 fn test_perltidy_integration() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Format with perltidy
     let result = ctx.execute_command(
@@ -437,7 +440,7 @@ fn test_perltidy_integration() {
 
 #[test]
 fn test_perlcritic_integration() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Run perlcritic analysis
     let result = ctx.execute_command(
@@ -457,7 +460,7 @@ fn test_perlcritic_integration() {
 
 #[test]
 fn test_generate_pod_documentation() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Generate POD from code
     let result = ctx.execute_command(
@@ -475,7 +478,7 @@ fn test_generate_pod_documentation() {
 
 #[test]
 fn test_extract_pod_to_markdown() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Convert POD to Markdown
     let result = ctx.execute_command(
@@ -494,7 +497,7 @@ fn test_extract_pod_to_markdown() {
 
 #[test]
 fn test_profile_execution() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Profile script execution
     let result = ctx.execute_command(
@@ -512,7 +515,7 @@ fn test_profile_execution() {
 
 #[test]
 fn test_analyze_profile_results() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Analyze profiling results
     let result = ctx.execute_command(
@@ -532,7 +535,7 @@ fn test_analyze_profile_results() {
 
 #[test]
 fn test_git_blame_integration() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Show git blame info inline
     let result = ctx.execute_command(
@@ -549,7 +552,7 @@ fn test_git_blame_integration() {
 
 #[test]
 fn test_commit_with_conventional_format() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Create conventional commit
     let result = ctx.execute_command(
@@ -571,7 +574,7 @@ fn test_commit_with_conventional_format() {
 
 #[test]
 fn test_sql_preview_in_dbi_code() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Preview SQL query results
     let result = ctx.execute_command(
@@ -589,7 +592,7 @@ fn test_sql_preview_in_dbi_code() {
 
 #[test]
 fn test_generate_dbi_code_from_schema() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Generate DBI code from database schema
     let result = ctx.execute_command(
@@ -609,7 +612,7 @@ fn test_generate_dbi_code_from_schema() {
 
 #[test]
 fn test_dockerfile_generation() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Generate Dockerfile for Perl app
     let result = ctx.execute_command(
@@ -628,7 +631,7 @@ fn test_dockerfile_generation() {
 
 #[test]
 fn test_kubernetes_manifest_generation() {
-    let mut ctx = AdvancedTestContext::new();
+    let mut ctx = AdvancedTestContext::new_initialized();
 
     // Generate K8s manifests
     let result = ctx.execute_command(
