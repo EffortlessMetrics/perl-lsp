@@ -2,20 +2,20 @@
 
 > **Analysis Date**: 2026-01-17
 > **Current Version**: v0.9.0 RC (2026-01-11)
-> **Current Completion**: ~90-95% overall (default suite; receipts pending, updated 2026-01-17)
+> **Current Completion (default lib test suite only; receipts pending)**: ~90-95% (updated 2026-01-17)
 
 ---
 
 ## Executive Summary
 
-The Perl LSP project is approximately **90-95% complete** toward full production readiness (updated 2026-01-17). The core parser and LSP infrastructure are solid, with remaining work concentrated in five key areas:
+The Perl LSP project is near production readiness for core parser + LSP infrastructure (default suite only; receipts pending, updated 2026-01-17). The remaining work is concentrated in six key areas:
 
 1. **CI/CD Infrastructure** - Critical blocker for merge gates and cost optimization
-2. **API Documentation** - Enforcement active in perl-parser; workspace scope pending receipts
+2. **Documentation Verification** - perl-parser scope reported complete; workspace receipts pending
 3. **Semantic Analyzer** - Phase 1 complete, Phases 2/3 needed
 4. **DAP (Debug Adapter Protocol)** - Phase 1 bridge complete, native implementation pending
 5. **Test Infrastructure** - Default suite stabilized; ignored/feature-gated tests tracked separately
-6. **LSP Features** - 91% functional, remaining features identified
+6. **LSP Features** - 53/53 cataloged; GA coverage pending capability-gated receipts
 
 **Critical Path**: CI Pipeline cleanup → Merge-blocking gates → Production hardening
 
@@ -30,7 +30,7 @@ For the Perl LSP project, "fully implemented" means:
 ### Core Components (Production-Ready)
 - **Parser**: ~100% Perl 5 syntax coverage, 4-19x faster than legacy, <1ms incremental parsing
 - **Lexer**: Context-aware, Unicode-safe, performance-optimized
-- **LSP Server**: User-visible feature coverage tracked in features.toml (53/53 cataloged); GA requires advertised + capability-gated tests
+- **LSP Server**: User-visible feature coverage tracked in features.toml (53/53 cataloged); GA coverage pending capability-gated receipts
 - **Workspace Indexing**: Dual indexing strategy with 98% reference coverage
 - **Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Security**: Enterprise-grade with path validation, UTF-16 boundary fixes
@@ -52,8 +52,8 @@ For the Perl LSP project, "fully implemented" means:
 
 ### Quality Metrics (Reported / Scoped)
 - 87% mutation score (perl-parser)
-- 530/530 lib tests passing (`cargo test --workspace --lib`; integration/ignored/feature-gated not included)
-- Zero clippy warnings (last reported run)
+- 530/530 lib tests reported passing (`cargo test --workspace --lib`; integration/ignored/feature-gated not included; receipts pending)
+- Zero clippy warnings (last reported run; receipts pending)
 - Consistent formatting
 - Successful release build (59.29s)
 
@@ -63,7 +63,7 @@ For the Perl LSP project, "fully implemented" means:
 - API documentation infrastructure complete with `#![warn(missing_docs)]` enforcement in perl-parser
 - 12 acceptance criteria validation framework operational
 - Comprehensive guides for LSP, DAP, architecture, security
-- **0 missing_docs warnings in perl-parser** (`cargo doc --no-deps -p perl-parser`, 2026-01-17); workspace-wide status pending receipts
+- **0 missing_docs warnings reported in perl-parser** (`cargo doc --no-deps -p perl-parser`, 2026-01-17; receipt pending); workspace-wide status pending receipts
 
 ### Engine/Adapter Boundary (Guardrails)
 - Core engine types remain protocol-agnostic; LSP conversions live in perl-lsp
@@ -112,7 +112,7 @@ For the Perl LSP project, "fully implemented" means:
 3. **Workspace Coverage Decision**: decide whether to extend enforcement beyond perl-parser and schedule remaining work
 4. **Gate Alignment**: remove temporary `-A missing_docs` allowances once scope is verified
 
-**Impact**: Affects developer experience, API discoverability, and trust in status metrics
+**Impact**: perl-parser documentation gap is reported resolved; remaining impact is reduced confidence until workspace scope is verified and receipts are published
 
 ---
 
@@ -191,7 +191,7 @@ For the Perl LSP project, "fully implemented" means:
 
 ### Gap 6: LSP Feature Completeness (P2-MEDIUM)
 
-**Current State**: 91% functional (53/53 user-visible features cataloged; GA coverage pending receipts and capability gating)
+**Current State**: 53/53 user-visible features cataloged; GA coverage pending capability-gated receipts
 
 **Gaps Identified** (from features.toml analysis):
 1. **Notebook Support** - 2 features at preview maturity
@@ -269,7 +269,8 @@ For the Perl LSP project, "fully implemented" means:
 **Goal**: Unblock critical paths and reduce technical debt
 
 **Tasks**:
-- [ ] Capture receipts for core test/doc commands; store under `review/receipts/YYYY-MM-DD/`
+- [ ] Run `just ci-gate` + `scripts/generate-receipts.sh`; publish artifacts under `review/receipts/YYYY-MM-DD/`
+- [ ] Docs verification (scope + receipts); decide workspace enforcement scope
 - [ ] Define GA/extras/stress test tiers and migrate ignored tests into feature-gated suites
 - [ ] Decide `Position` serialization boundary (engine vs adapter) and document policy
 - [ ] Re-home LSP examples/benches to `crates/perl-lsp/`; keep engine examples in `crates/perl-parser/`
@@ -323,7 +324,7 @@ For the Perl LSP project, "fully implemented" means:
 **Tasks**:
 - [ ] Create `.ci/gate-policy.yaml` configuration schema
 - [ ] Implement LSP scenario harness (`xtask lsp-gates`)
-- [ ] Build receipt generation system (`receipt.json`)
+- [ ] Wire existing receipt artifacts (`scripts/generate-receipts.sh`, `artifacts/state.json`) into gate outputs
 - [ ] Integrate GitHub Check Runs API
 - [ ] Create golden snapshot comparison infrastructure
 - [ ] Implement informational gate (soft enforcement)
@@ -343,53 +344,11 @@ For the Perl LSP project, "fully implemented" means:
 
 ---
 
-### Phase 3: API Documentation Resolution (P1-HIGH)
-
-**Goal**: Verify scope and close remaining missing_docs debt
-
-**Dependencies**: None (can proceed in parallel with Phase 1-2)
-
-**Status**: Reported complete for perl-parser; workspace verification pending (2026-01-17)
-
-**Reported Tasks (perl-parser scope)**:
-- [x] Phase 1: Core Parser Infrastructure
-  - Documented all public functions in core parser modules
-  - Added performance characteristics to performance-critical modules
-  - Documented error types with Perl parsing context
-  - Added module-level LSP workflow integration docs
-- [x] Phase 2: LSP Providers
-  - Documented all LSP provider implementations
-  - Added usage examples for complex APIs
-  - Documented provider-specific workflows
-- [x] Phase 3: Advanced Features
-  - Documented advanced features (semantic tokens, code actions)
-  - Added comprehensive examples for edge cases
-  - Documented refactoring workflows
-- [x] Phase 4: Supporting Infrastructure
-  - Documented testing infrastructure
-  - Documented build system and tooling
-  - Added architecture decision records
-- **Result**: 0 missing_docs warnings reported for perl-parser
-
-**Remaining Tasks**:
-- [ ] Capture receipts for `cargo doc --no-deps -p perl-parser` and acceptance criteria tests
-- [ ] Decide workspace enforcement scope and remove temporary `-A missing_docs` allowances when ready
-- [ ] Update status docs with scope and receipt-backed counts
-
-**Risk**: LOW - Well-defined process with clear acceptance criteria
-
-**Success Criteria**:
-- perl-parser `cargo doc --no-deps` receipt shows zero warnings
-- Acceptance criteria tests recorded with receipts
-- Workspace scope explicitly documented (and enforcement updated if expanded)
-
----
-
 ### Phase 4: Semantic Analyzer Phase 2 (P1-HIGH)
 
 **Goal**: Implement 43 additional NodeKind handlers for 100% coverage
 
-**Dependencies**: None (can proceed in parallel with Phase 1-3)
+**Dependencies**: None (can proceed in parallel with Phase 1-2)
 
 **Tasks**:
 - [ ] Implement expression wrapper handlers (8 NodeKinds)
@@ -605,16 +564,13 @@ For the Perl LSP project, "fully implemented" means:
 graph TD
     Phase0[Phase 0 Foundation] --> Phase1[Phase 1 CI Cleanup]
     Phase0 --> Phase2[Phase 2 Merge Gates]
-    Phase0 --> Phase3[Phase 3 API Docs Phase 1]
     Phase0 --> Phase4[Phase 4 Semantic Phase 2]
     Phase0 --> Phase8[Phase 8 Test Enhancement]
     
     Phase1 --> Phase2
-    Phase3 --> Phase5[Phase 5 Semantic Phase 3]
-    Phase4 --> Phase5
+    Phase4 --> Phase5[Phase 5 Semantic Phase 3]
     
-    Phase3 --> Phase6[Phase 6 DAP Phase 2]
-    Phase2 --> Phase6
+    Phase2 --> Phase6[Phase 6 DAP Phase 2]
     
     Phase6 --> Phase7[Phase 7 DAP Phase 3]
     Phase8 --> Phase7
@@ -628,13 +584,13 @@ graph TD
 ### Parallel Execution Opportunities
 
 **Can Execute in Parallel** (No Dependencies):
-- Phase 3 (API Docs Phase 1) + Phase 4 (Semantic Phase 2)
+- Phase 4 (Semantic Phase 2) + Phase 8 (Test Enhancement)
 - Phase 8 (Test Enhancement) + Phase 9 (Performance Benchmarking)
 - Phase 10 (Binary Distribution) + Phase 11 (Legacy Removal)
 
 **Must Execute Sequentially**:
 - Phase 1 → Phase 2 (CI cleanup enables merge gates)
-- Phase 3 → Phase 4 → Phase 5 (Semantic phases build on each other)
+- Phase 4 → Phase 5 (Semantic phases build on each other)
 - Phase 6 → Phase 7 (DAP phases build sequentially)
 
 ### Critical Path Analysis
@@ -643,15 +599,14 @@ graph TD
 1. Phase 0 (Foundation) - 1 day
 2. Phase 1 (CI Cleanup) - 3 weeks
 3. Phase 2 (Merge Gates) - 8 weeks (starts after Phase 1)
-4. Phase 3 (API Docs Phase 1) - 2 weeks (parallel with Phase 2)
-5. Phase 4 (Semantic Phase 2) - 2 weeks (after Phase 3)
-6. Phase 5 (Semantic Phase 3) - 2 weeks (after Phase 4)
-7. Phase 6 (DAP Phase 2) - 5 weeks (parallel with Phase 3-5)
-8. Phase 7 (DAP Phase 3) - 1 week (after Phase 6)
+4. Phase 4 (Semantic Phase 2) - 2 weeks (parallel with Phase 2)
+5. Phase 5 (Semantic Phase 3) - 2 weeks (after Phase 4)
+6. Phase 6 (DAP Phase 2) - 5 weeks (after Phase 2)
+7. Phase 7 (DAP Phase 3) - 1 week (after Phase 6)
 
-**Minimum Time to Production**: ~23 weeks (sequential critical path)
+**Minimum Time to Production**: ~21-22 weeks (sequential critical path)
 
-**Parallel Execution Potential**: With parallel execution, could reduce to ~18 weeks
+**Parallel Execution Potential**: With parallel execution, could reduce to ~16-18 weeks
 
 ---
 
@@ -679,11 +634,6 @@ graph TD
   - Gather feedback before hard enforcement
   - Provide clear documentation and support
   - Allow exceptions process for edge cases
-
-### Phase 3: API Documentation Phase 1
-- **Risk Level**: LOW
-- **Factors**: Well-defined process, clear acceptance criteria
-- **Mitigation**: None needed
 
 ### Phase 4: Semantic Analyzer Phase 2
 - **Risk Level**: MEDIUM
@@ -751,25 +701,23 @@ graph TD
 ### Optimistic Scenario (Parallel Execution)
 - Phase 0: 1 day
 - Phase 1: 3 weeks
-- Phase 2: 8 weeks (parallel with Phase 3)
-- Phase 3: 2 weeks (parallel with Phase 2)
-- Phase 4: 2 weeks (after Phase 3)
+- Phase 2: 8 weeks (parallel with Phase 4)
+- Phase 4: 2 weeks (parallel with Phase 2)
 - Phase 5: 2 weeks (after Phase 4)
-- Phase 6: 5 weeks (parallel with Phase 3-5)
+- Phase 6: 5 weeks (after Phase 2)
 - Phase 7: 1 week (after Phase 6)
 - Phase 8: 1 week (parallel with Phase 9)
 - Phase 9: 1 week (parallel with Phase 8)
 - Phase 10: 1 week (parallel with Phase 11)
 - Phase 11: 1 week (parallel with Phase 10)
 
-**Total: ~27 weeks**
+**Total: ~21-23 weeks**
 
 ### Conservative Scenario (Sequential Execution)
 - Phase 0: 1 day
 - Phase 1: 3 weeks
 - Phase 2: 8 weeks (after Phase 1)
-- Phase 3: 2 weeks (after Phase 2)
-- Phase 4: 2 weeks (after Phase 3)
+- Phase 4: 2 weeks (after Phase 2)
 - Phase 5: 2 weeks (after Phase 4)
 - Phase 6: 5 weeks (after Phase 5)
 - Phase 7: 1 week (after Phase 6)
@@ -778,27 +726,26 @@ graph TD
 - Phase 10: 1 week (after Phase 9)
 - Phase 11: 1 week (after Phase 10)
 
-**Total: ~27 weeks**
+**Total: ~25 weeks**
 
 ### Critical Path to Production Readiness
-- **Minimum**: 23 weeks (Phases 0-7 sequential)
-- **Recommended**: 18-20 weeks (with parallel execution where possible)
+- **Minimum**: ~21-22 weeks (Phases 0-7 sequential)
+- **Recommended**: ~16-18 weeks (with parallel execution where possible)
 
 ---
 
 ## Part 7: Recommendations
 
 ### Immediate Actions (Next 1-2 weeks)
-1. **Complete Phase 0** (Foundation) - Clear technical debt, close completed issues
+1. **Complete Phase 0** (Foundation) - Run receipts, enforce tiers, document boundary policy
 2. **Start Phase 1** (CI Cleanup) - Establish trusted baseline, enable cost savings
-3. **Start Phase 3** (API Docs Phase 1) - Begin systematic documentation resolution
+3. **Publish receipt-backed status update** - Add scope notes to CURRENT_STATUS.md
 4. **Complete Issue #198** - Fix bareword diagnostic emission
 
 ### Short-Term Priorities (Next 1-3 months)
 1. **Complete Phase 2** (Merge Gates) - Enable production quality enforcement
-2. **Complete Phase 3** (API Docs Phase 1) - Core parser documentation complete
-3. **Complete Phase 4** (Semantic Phase 2) - Advanced semantic features
-4. **Complete Phase 8** (Test Enhancement) - Achieve 99%+ stabilization
+2. **Complete Phase 4** (Semantic Phase 2) - Advanced semantic features
+3. **Complete Phase 8** (Test Enhancement) - Achieve 99%+ stabilization
 
 ### Medium-Term Goals (Next 3-6 months)
 1. **Complete Phase 5** (Semantic Phase 3) - Multi-file semantic analysis
@@ -825,7 +772,7 @@ graph TD
 
 ## Conclusion
 
-The Perl LSP project is in excellent shape with **90-95% overall completion** (updated 2026-01-17). The core parser, LSP infrastructure, and quality metrics are production-ready. The API documentation gap has been fully resolved (0 violations remaining). The remaining work is well-organized into 11 prioritized phases with clear dependencies, risks, and success criteria.
+The Perl LSP project is near production readiness for core parser + LSP infrastructure (default suite only; receipts pending, updated 2026-01-17). The remaining work is well-organized into prioritized phases with clear dependencies, risks, and success criteria. Documentation status is reported complete for perl-parser but still requires receipts and a workspace scope decision.
 
 **Key Strengths**:
 - Solid foundation with production-ready parser and LSP server
@@ -840,4 +787,4 @@ The Perl LSP project is in excellent shape with **90-95% overall completion** (u
 4. Test infrastructure stabilization
 5. Performance benchmarking and validation
 
-With disciplined execution of this plan, the project can achieve full production readiness in **12-20 weeks** depending on parallel execution strategy (reduced from 18-27 weeks due to documentation completion).
+With disciplined execution of this plan, the project can reach production readiness in **~21-25 weeks** depending on parallel execution and DAP scope.
