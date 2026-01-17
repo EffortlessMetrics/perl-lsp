@@ -172,7 +172,6 @@ pub use analysis::symbol;
 pub use analysis::type_inference;
 pub use builtins::builtin_signatures;
 pub use builtins::builtin_signatures_phf;
-pub use ide::lsp_compat::capabilities;
 pub use ide::lsp_compat::code_actions;
 pub use ide::lsp_compat::code_actions_enhanced;
 pub use ide::lsp_compat::code_actions_pragmas;
@@ -199,8 +198,6 @@ pub use ide::lsp_compat::inline_completions;
 pub use ide::lsp_compat::linked_editing;
 #[cfg(not(target_arch = "wasm32"))]
 pub use ide::lsp_compat::lsp_document_link;
-#[cfg(not(target_arch = "wasm32"))]
-pub use ide::lsp_compat::lsp_errors;
 pub use ide::lsp_compat::lsp_on_type_formatting;
 pub use ide::lsp_compat::lsp_selection_range;
 #[cfg(not(target_arch = "wasm32"))]

@@ -1485,8 +1485,8 @@ mod tests {
     #[test]
     fn test_debug_adapter_creation() {
         let adapter = DebugAdapter::new();
-        assert!(adapter.session.lock().ok().map_or(false, |guard| guard.is_none()));
-        assert!(adapter.breakpoints.lock().ok().map_or(false, |guard| guard.is_empty()));
+        assert!(adapter.session.lock().ok().is_some_and(|guard| guard.is_none()));
+        assert!(adapter.breakpoints.lock().ok().is_some_and(|guard| guard.is_empty()));
     }
 
     #[test]

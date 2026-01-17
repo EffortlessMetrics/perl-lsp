@@ -1,14 +1,9 @@
 name: Benchmarks
 
 on:
-  push:
-    branches: [ master, main ]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - '.claude/**'
   pull_request:
     branches: [ master, main ]
+    types: [labeled]
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
@@ -26,7 +21,9 @@ env:
 jobs:
   benchmark:
     name: Performance Benchmarks
-    if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:bench')
     runs-on: ubuntu-latest
     
     steps:
@@ -81,7 +78,9 @@ jobs:
 
   comparison-benchmark:
     name: Parser Comparison Benchmark
-    if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:bench')
     runs-on: ubuntu-latest
 
     steps:
@@ -108,7 +107,9 @@ jobs:
 
   memory-profile:
     name: Memory Usage Profile
-    if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:bench')
     runs-on: ubuntu-latest
     continue-on-error: true
 

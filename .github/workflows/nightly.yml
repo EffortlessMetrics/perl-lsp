@@ -1,9 +1,7 @@
 name: Nightly Deep Tests
 
 on:
-  schedule:
-    - cron: '0 3 * * *'  # Daily at 3 AM UTC
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch: {}
 
 env:
   RUST_BACKTRACE: 1

@@ -1428,7 +1428,9 @@ dependencies = [
  "parking_lot",
  "perl-corpus",
  "perl-lexer",
+ "perl-lsp-protocol",
  "perl-lsp-providers",
+ "perl-lsp-transport",
  "perl-parser",
  "perl-position-tracking",
  "phf",
@@ -1450,6 +1452,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-protocol"
+version = "0.8.8"
+dependencies = [
+ "lsp-types",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "perl-lsp-providers"
 version = "0.8.8"
 dependencies = [
@@ -1459,6 +1470,7 @@ dependencies = [
  "perl-incremental-parsing",
  "perl-lexer",
  "perl-parser-core",
+ "perl-position-tracking",
  "perl-refactoring",
  "perl-semantic-analyzer",
  "perl-workspace-index",
@@ -1468,6 +1480,14 @@ dependencies = [
  "serde_json",
  "url",
  "walkdir",
+]
+
+[[package]]
+name = "perl-lsp-transport"
+version = "0.8.8"
+dependencies = [
+ "perl-lsp-protocol",
+ "serde_json",
 ]
 
 [[package]]

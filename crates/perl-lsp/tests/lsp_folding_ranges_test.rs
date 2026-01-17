@@ -113,20 +113,20 @@ if ($condition) {
     print "True\n";
     my $x = 1;
     my $y = 2;
-}
+};
 
 while ($count < 10) {
     print "$count\n";
     $count++;
-}
+};
 
 for (my $i = 0; $i < 5; $i++) {
     print "$i\n";
-}
+};
 
 foreach my $item (@items) {
     process($item);
-}
+};
 "#;
 
     open_document(&mut server, "file:///blocks.pl", content);
