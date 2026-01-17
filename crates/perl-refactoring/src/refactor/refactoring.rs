@@ -38,8 +38,10 @@ use crate::modernize::PerlModernizer as ModernizeEngine;
 use crate::workspace_index::WorkspaceIndex;
 #[cfg(feature = "workspace_refactor")]
 use crate::workspace_refactor::WorkspaceRefactor;
+use perl_parser_core::{NodeKind, Parser, SourceLocation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Unified refactoring engine that coordinates all refactoring operations
@@ -473,17 +475,146 @@ impl RefactoringEngine {
 
     fn perform_move_code(
         &mut self,
-        _source_file: &Path,
-        _target_file: &Path,
-        _elements: &[String],
+        source_file: &Path,
+        target_file: &Path,
+        elements: &[String],
     ) -> ParseResult<RefactoringResult> {
-        // TODO: Implement code movement
+        // Validate that source and target are different files
+        let source_path = fs::canonicalize(source_file).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to resolve source path: {}", e),
+            location: 0,
+        })?;
+        let target_path = fs::canonicalize(target_file).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to resolve target path: {}", e),
+            location: 0,
+        })?;
+
+        if source_path == target_path {
+            return Err(ParseError::SyntaxError {
+                message: "Source and target files must be different".to_string(),
+                location: 0,
+            });
+        }
+
+        // Read files first to prevent partial failure/data loss
+        let source_content = fs::read_to_string(&source_path).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to read source file: {}", e),
+            location: 0,
+        })?;
+
+        let mut target_content =
+            fs::read_to_string(&target_path).map_err(|e| ParseError::SyntaxError {
+                message: format!("Failed to read target file: {}", e),
+                location: 0,
+            })?;
+
+        // Parse source file to find elements
+        let mut parser = Parser::new(&source_content);
+        let ast = parser.parse().map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to parse source file: {}", e),
+            location: 0,
+        })?;
+
+        // Store location AND content for each element
+        struct ElementToMove {
+            location: SourceLocation,
+            content: String,
+        }
+
+        let mut elements_to_move: Vec<ElementToMove> = Vec::new();
+        let mut warnings = Vec::new();
+
+        // Find elements in the AST
+        ast.for_each_child(|child| {
+            if let NodeKind::Subroutine { name, .. } = &child.kind {
+                if let Some(sub_name) = name {
+                    if elements.contains(sub_name) {
+                        elements_to_move.push(ElementToMove {
+                            location: child.location,
+                            content: source_content[child.location.start..child.location.end].to_string(),
+                        });
+                    }
+                }
+            }
+        });
+
+        if elements_to_move.is_empty() {
+            return Ok(RefactoringResult {
+                success: false,
+                files_modified: 0,
+                changes_made: 0,
+                warnings: vec!["No elements found to move".to_string()],
+                errors: vec![],
+                operation_id: None,
+            });
+        }
+
+        // Sort by start position descending for safe removal from source
+        elements_to_move.sort_by(|a, b| b.location.start.cmp(&a.location.start));
+
+        let mut modified_source = source_content.clone();
+
+        // Remove from source (in descending order)
+        for element in &elements_to_move {
+            let start = element.location.start;
+            let end = element.location.end;
+
+            // Check for trailing newline to remove
+            let remove_end = if end < modified_source.len() && modified_source.as_bytes()[end] == b'\n' {
+                end + 1
+            } else {
+                end
+            };
+
+            modified_source.replace_range(start..remove_end, "");
+        }
+
+        // Sort by start position ascending for correct append order
+        elements_to_move.sort_by(|a, b| a.location.start.cmp(&b.location.start));
+
+        // Construct moved content
+        let mut moved_content = String::new();
+        for element in &elements_to_move {
+            moved_content.push_str(&element.content);
+            moved_content.push('\n');
+        }
+
+        // Calculate insertion point in target
+        let insertion_index = if let Some(idx) = target_content.rfind("\n1;") {
+            idx + 1 // Insert after the newline, before 1;
+        } else if let Some(idx) = target_content.rfind("\nreturn 1;") {
+            idx + 1
+        } else {
+            target_content.len()
+        };
+
+        if insertion_index < target_content.len() {
+            target_content.insert_str(insertion_index, &format!("{}\n", moved_content));
+        } else {
+            target_content.push('\n');
+            target_content.push_str(&moved_content);
+        }
+
+        // Write files - Target first, then Source (safer)
+        fs::write(&target_path, target_content).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to write to target file: {}", e),
+            location: 0,
+        })?;
+
+        fs::write(&source_path, modified_source).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to write source file: {}", e),
+            location: 0,
+        })?;
+
+        // Add warning about missing dependency analysis
+        warnings.push("Warning: Imports and references were not updated. Please review the moved code for missing dependencies.".to_string());
+
         Ok(RefactoringResult {
-            success: false,
-            files_modified: 0,
-            changes_made: 0,
-            warnings: vec![],
-            errors: vec!["Move code not yet implemented".to_string()],
+            success: true,
+            files_modified: 2,
+            changes_made: elements_to_move.len(),
+            warnings,
+            errors: vec![],
             operation_id: None,
         })
     }
