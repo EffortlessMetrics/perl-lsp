@@ -10,16 +10,16 @@
 
 ## Executive Summary
 
-The Perl LSP project has achieved **90-95% completion** of its core goal (updated 2026-01-17): a production-ready Perl parser with full Language Server Protocol support. The project comprises six published crates forming a complete Perl development ecosystem with LSP, DAP, and comprehensive workspace refactoring capabilities.
+The Perl LSP project has achieved **90-95% completion** of its core goal (default suite; receipts pending, updated 2026-01-17): a production-ready Perl parser with full Language Server Protocol support. The project comprises six published crates forming a complete Perl development ecosystem with LSP, DAP, and comprehensive workspace refactoring capabilities.
 
 ### Current State Snapshot
 
 | Component | Completion | Status | Notes |
 |-----------|------------|--------|-------|
 | **Parser (perl-parser)** | ~95-100% | ✅ Production Ready | Native recursive descent parser, ~100% Perl 5 syntax coverage |
-| **LSP Server (perl-lsp)** | ~91% | ✅ Functional | 53/53 trackable features, comprehensive workspace support |
+| **LSP Server (perl-lsp)** | ~91% | ✅ Functional | 53/53 cataloged features in features.toml; GA depends on capability gating |
 | **DAP (perl-dap)** | Phase 1 Complete | ✅ Bridge Mode | Proxies to Perl::LanguageServer, native implementation pending |
-| **API Documentation** | Infrastructure Complete | ✅ 0 Violations | **Resolved** (2026-01-17) |
+| **API Documentation** | Infrastructure Complete | ⚠️ Scope-Limited | perl-parser reported 0 missing_docs; workspace receipts pending |
 | **Semantic Analyzer** | Phase 1 Complete | ⚠️ Phase 2/3 Pending | 12/12 critical node handlers done, advanced features remain |
 | **CI/CD Pipeline** | Functional | ⚠️ Cleanup Needed | $720/year savings opportunity identified |
 
@@ -35,11 +35,23 @@ The Perl LSP project has achieved **90-95% completion** of its core goal (update
 
 1. **CI Pipeline Cleanup** (Issue #211) - 3 weeks, $720/year savings
 2. **Merge-Blocking Gates** (Issue #210) - 8 weeks, blocked by #211
-3. **API Documentation Resolution** - ✅ **COMPLETE** (0 violations, resolved 2026-01-17)
+3. **Documentation Scope Verification** - perl-parser reported 0 missing_docs; workspace receipts pending
 4. **Semantic Analyzer Phase 2/3** - Closures, multi-file, imports
 5. **DAP Native Implementation** - 5-6 weeks for production-grade adapter
 
 ---
+
+## Architecture Constraints (Engine/Adapter)
+
+- Engine types remain protocol-agnostic; LSP conversions live in perl-lsp
+- B-pressure gates must pass for perl-parser (native + wasm)
+- Core serialization stays at the adapter boundary; if `Position` keeps serde mapping, document indexing rules and safe defaults
+
+## Test Policy & Gate Tiers
+
+- **GA suite**: default `cargo test`; merge-blocking; no `#[ignore]`
+- **Extras suite**: feature-gated; non-blocking; tracked debt
+- **Stress suite**: timeboxed and non-blocking
 
 ## Gap Analysis Summary
 
@@ -60,12 +72,12 @@ The Perl LSP project has achieved **90-95% completion** of its core goal (update
 
 | Gap | Severity | Impact | Effort | Priority |
 |-----|----------|--------|--------|----------|
-| **G3: Missing Documentation Warnings** | Medium | 0 violations (resolved 2026-01-17) | ✅ Complete | P1 |
-| **G4: Usage Examples & Doctests** | Medium | Poor developer experience | 4 weeks | P2 |
+| **G3: Missing Documentation Warnings** | Medium | perl-parser reported 0; workspace receipts pending | 1 week (verification) | P1 |
+| **G4: Usage Examples & Doctests** | Medium | Reported complete in perl-parser; verify scope | 1 week (verification) | P2 |
 
 **Details:**
-- **G3**: `#![warn(missing_docs)]` enforcement was active with 484 violations, now **fully resolved** (0 violations remaining as of 2026-01-17). Infrastructure complete, all phases executed successfully.
-- **G4**: Complex APIs now include usage examples, and doctests are consistently implemented. Phase 2 of documentation strategy complete.
+- **G3**: perl-parser reports zero missing_docs warnings; workspace enforcement and receipts pending.
+- **G4**: Usage examples and doctests reported complete in perl-parser; verify scope before claiming workspace-wide coverage.
 
 #### Area 3: Semantic Analysis (2 Gaps)
 
@@ -110,13 +122,15 @@ The Perl LSP project has achieved **90-95% completion** of its core goal (update
 graph TD
     P0[Phase 0: Foundation] --> P1[Phase 1: CI Cleanup]
     P1 --> P2[Phase 2: Merge Gates]
-    P2 --> P3[Phase 3: Docs Phase 1]
-    P3 --> P4[Phase 4: Semantic Phase 2]
+    P1 --> P3[Phase 3: Docs Phase 1 (Verify)]
+    P1 --> P4[Phase 4: Semantic Phase 2]
     P4 --> P5[Phase 5: Semantic Phase 3]
-    P5 --> P6[Phase 6: DAP Native]
-    P6 --> P7[Phase 7: Docs Phase 2]
-    P7 --> P8[Phase 8: Advanced LSP]
-    P8 --> P9[Phase 9: Integration Testing]
+    P1 --> P6[Phase 6: DAP Native]
+    P1 --> P7[Phase 7: Docs Phase 2 (Verify)]
+    P1 --> P8[Phase 8: Advanced LSP]
+    P5 --> P9[Phase 9: Integration Testing]
+    P6 --> P9
+    P8 --> P9
     P9 --> P10[Phase 10: Performance Validation]
     P10 --> P11[Phase 11: v1.0 Release]
 ```
@@ -129,7 +143,7 @@ graph TD
 - DAP Phase 1 bridge operational
 - Documentation enforcement infrastructure in place
 
-### Phase 1: CI Pipeline Cleanup (Weeks 1-3)
+### Phase 1: CI Pipeline Cleanup (3 weeks)
 **Dependencies:** None  
 **Priority:** P0-CRITICAL  
 **Effort:** 3 weeks
@@ -155,7 +169,7 @@ graph TD
 
 **Related Issues:** #211
 
-### Phase 2: Merge-Blocking Gates (Weeks 4-11)
+### Phase 2: Merge-Blocking Gates (8 weeks)
 **Dependencies:** Phase 1 complete  
 **Priority:** P0-CRITICAL  
 **Effort:** 8 weeks
@@ -186,23 +200,22 @@ graph TD
 
 **Related Issues:** #210
 
-### Phase 3: API Documentation Phase 1 ✅ **COMPLETE**
-**Status:** Completed 2026-01-17
-**Dependencies:** Phase 2 complete
+### Phase 3: API Documentation Phase 1 (Scope Verification)
+**Status:** Reported complete for perl-parser; workspace verification pending (2026-01-17)
+**Dependencies:** None (can proceed in parallel with Phase 1-2)
 **Priority:** P1-HIGH
-**Effort:** 8 weeks (completed)
+**Effort:** 1 week (verification)
 
 **Objectives:**
-- ✅ Resolve 484 missing documentation violations → 0 remaining
-- ✅ Focus on core parser infrastructure
-- ✅ Complete Phase 1 of documentation strategy
+- Verify receipts for perl-parser missing_docs and acceptance criteria tests
+- Decide workspace enforcement scope and update gates/status docs
 
-**Completed Target Areas:**
-1. ✅ **Public Functions**: All documented
-2. ✅ **Public Structs/Enums**: All documented
-3. ✅ **Performance-Critical Modules**: All documented with performance characteristics
-4. ✅ **Error Types**: All documented with Perl parsing context
-5. ✅ **Module-Level Documentation**: All documented with LSP workflow integration
+**Reported Target Areas (perl-parser scope):**
+1. ✅ **Public Functions**: Documented
+2. ✅ **Public Structs/Enums**: Documented
+3. ✅ **Performance-Critical Modules**: Documented with performance characteristics
+4. ✅ **Error Types**: Documented with Perl parsing context
+5. ✅ **Module-Level Documentation**: Documented with LSP workflow integration
 
 **Documentation Standards:**
 - All public APIs must have comprehensive documentation
@@ -210,16 +223,15 @@ graph TD
 - Error types must explain Perl parsing context and recovery strategies
 - Module documentation must describe LSP workflow integration
 
-**Success Criteria:** ✅ **ALL MET**
-- Zero `missing_docs` warnings for all targets ✅
-- All documentation passes `cargo doc --no-deps` ✅
-- Documentation coverage >95% for public APIs ✅
-- All examples compile and execute ✅
+**Success Criteria:**
+- perl-parser `cargo doc --no-deps` receipt shows zero warnings
+- Acceptance criteria tests recorded with receipts
+- Workspace scope explicitly documented (and enforcement updated if expanded)
 
 **Related Issues:** #160 (SPEC-149)
 
-### Phase 4: Semantic Analyzer Phase 2 (Weeks 20-23)
-**Dependencies:** Phase 3 complete  
+### Phase 4: Semantic Analyzer Phase 2 (4 weeks)
+**Dependencies:** None (can proceed in parallel with Phase 1-3)  
 **Priority:** P1-HIGH  
 **Effort:** 4 weeks
 
@@ -249,7 +261,7 @@ graph TD
 
 **Related Issues:** #188
 
-### Phase 5: Semantic Analyzer Phase 3 (Weeks 24-29)
+### Phase 5: Semantic Analyzer Phase 3 (6 weeks)
 **Dependencies:** Phase 4 complete  
 **Priority:** P1-HIGH  
 **Effort:** 6 weeks
@@ -282,8 +294,8 @@ graph TD
 
 **Related Issues:** #188
 
-### Phase 6: DAP Native Implementation (Weeks 30-35)
-**Dependencies:** Phase 5 complete  
+### Phase 6: DAP Native Implementation (5-6 weeks)
+**Dependencies:** None (can proceed in parallel with Phase 4-5)  
 **Priority:** P1-HIGH  
 **Effort:** 5-6 weeks
 
@@ -317,20 +329,19 @@ graph TD
 
 **Related Issues:** #207
 
-### Phase 7: API Documentation Phase 2 ✅ **COMPLETE**
-**Status:** Completed 2026-01-17
-**Dependencies:** Phase 6 complete
+### Phase 7: API Documentation Phase 2 (Scope Verification)
+**Status:** Reported complete for perl-parser; workspace verification pending (2026-01-17)
+**Dependencies:** None (can proceed in parallel with Phase 1-2)
 **Priority:** P2-MEDIUM
-**Effort:** 4 weeks (completed)
+**Effort:** 1 week (verification)
 
 **Objectives:**
-- ✅ Add usage examples to complex APIs
-- ✅ Implement doctests for key functions
-- ✅ Complete Phase 2 of documentation strategy
+- Verify usage examples and doctests coverage within scope
+- Update status docs and gates once receipts are captured
 
-**Completed Target Areas:**
-1. ✅ **Complex APIs**: Workspace refactoring, import optimization - all documented
-2. ✅ **Usage Examples**: Code snippets for common workflows - all implemented
+**Reported Target Areas (perl-parser scope):**
+1. ✅ **Complex APIs**: Workspace refactoring, import optimization - documented
+2. ✅ **Usage Examples**: Code snippets for common workflows - implemented
 
 **Documentation Standards:**
 - Complex APIs must have usage examples
@@ -338,16 +349,14 @@ graph TD
 - Examples should demonstrate real-world usage
 - Doctests must validate behavior
 
-**Success Criteria:** ✅ **ALL MET**
-- All complex APIs have usage examples ✅
-- Key functions have executable doctests ✅
-- All doctests pass ✅
-- Documentation quality score >90% ✅
+**Success Criteria:**
+- Doctest and example coverage verified with receipts
+- Workspace scope explicitly documented (and enforcement updated if expanded)
 
 **Related Issues:** #160 (SPEC-149)
 
-### Phase 8: Advanced LSP Features (Weeks 40-43)
-**Dependencies:** Phase 7 complete  
+### Phase 8: Advanced LSP Features (4 weeks)
+**Dependencies:** None (can proceed in parallel with Phase 4-7)  
 **Priority:** P2-MEDIUM  
 **Effort:** 4 weeks
 
@@ -380,7 +389,7 @@ graph TD
 - Zero performance regressions
 - Test coverage >85%
 
-### Phase 9: Integration Testing (Weeks 44-47)
+### Phase 9: Integration Testing (4 weeks)
 **Dependencies:** Phase 8 complete  
 **Priority:** P1-HIGH  
 **Effort:** 4 weeks
@@ -409,7 +418,7 @@ graph TD
 - Performance benchmarks met
 - Memory usage within acceptable limits
 
-### Phase 10: Performance Validation (Weeks 48-51)
+### Phase 10: Performance Validation (4 weeks)
 **Dependencies:** Phase 9 complete  
 **Priority:** P1-HIGH  
 **Effort:** 4 weeks
@@ -439,7 +448,7 @@ graph TD
 - Performance regression tests passing
 - Benchmark documentation updated
 
-### Phase 11: v1.0 Release Preparation (Weeks 52-54)
+### Phase 11: v1.0 Release Preparation (3 weeks)
 **Dependencies:** Phase 10 complete  
 **Priority:** P0-CRITICAL  
 **Effort:** 3 weeks
@@ -460,7 +469,7 @@ graph TD
 **Release Checklist:**
 - [ ] All tests passing
 - [ ] Zero clippy warnings
-- [ ] Zero documentation warnings
+- [ ] perl-parser missing_docs warnings at zero (workspace receipts pending)
 - [ ] Performance benchmarks met
 - [ ] Security audit passed
 - [ ] Release notes prepared
@@ -478,8 +487,10 @@ graph TD
 
 ## Timeline Options
 
+**Assumptions**: Documentation phases are in verification mode (perl-parser scope reported complete). Add ~12 weeks if full documentation phases reopen.
+
 ### Option 1: Sequential Execution (Conservative)
-**Total Duration:** ~46 weeks (~11.5 months) - **Reduced from 54 weeks** due to documentation completion
+**Total Duration:** ~42 weeks (~10.5 months)
 **Risk Profile:** Low
 **Resource Requirements:** 1-2 developers
 
@@ -500,7 +511,7 @@ graph TD
 - Projects with strict quality requirements
 
 ### Option 2: Parallel Execution (Aggressive)
-**Total Duration:** ~12 weeks (~3 months) - **Reduced from 18 weeks** due to documentation completion
+**Total Duration:** ~24 weeks (~6 months)
 **Risk Profile:** Medium-High
 **Resource Requirements:** 3-4 developers
 
@@ -508,13 +519,11 @@ graph TD
 
 | Phase | Parallel With | Notes |
 |-------|---------------|-------|
-| Phase 1 (CI Cleanup) | None | Foundation work, must be sequential |
-| Phase 2 (Merge Gates) | Phase 3 (Docs Phase 1) | Independent workstreams |
-| Phase 4 (Semantic Phase 2) | Phase 3 (Docs Phase 1) | Different code areas |
-| Phase 5 (Semantic Phase 3) | Phase 6 (DAP Native) | Independent workstreams |
-| Phase 7 (Docs Phase 2) | Phase 8 (Advanced LSP) | Independent workstreams |
-| Phase 9 (Integration) | None | Must be sequential after features |
-| Phase 10 (Performance) | None | Must be sequential after integration |
+| Phase 1 (CI Cleanup) | None | Foundation work |
+| Phase 2 (Merge Gates) | Phase 4 (Semantic Phase 2), Phase 6 (DAP Native), Phase 8 (Advanced LSP) | Parallel feature streams after Phase 1 |
+| Phase 5 (Semantic Phase 3) | Phase 6 (DAP Native) | Overlap as resources allow |
+| Phase 9 (Integration) | None | Sequential after features |
+| Phase 10 (Performance) | None | Sequential after integration |
 | Phase 11 (Release) | None | Final phase |
 
 **Advantages:**
@@ -535,7 +544,7 @@ graph TD
 - Organizations comfortable with managed risk
 
 ### Option 3: Hybrid Execution (Balanced)
-**Total Duration:** ~21 weeks (~5.25 months) - **Reduced from 27 weeks** due to documentation completion
+**Total Duration:** ~30 weeks (~7.5 months)
 **Risk Profile:** Medium
 **Resource Requirements:** 2-3 developers
 
@@ -544,13 +553,11 @@ graph TD
 | Phase | Parallel With | Notes |
 |-------|---------------|-------|
 | Phase 1 (CI Cleanup) | None | Foundation work |
-| Phase 2 (Merge Gates) | Phase 3 (Docs Phase 1) | Conservative parallelization |
-| Phase 4 (Semantic Phase 2) | None | Sequential after docs |
-| Phase 5 (Semantic Phase 3) | Phase 6 (DAP Native) | Moderate parallelization |
-| Phase 7 (Docs Phase 2) | None | Sequential after features |
-| Phase 8 (Advanced LSP) | None | Sequential after docs |
-| Phase 9 (Integration) | None | Must be sequential |
-| Phase 10 (Performance) | None | Must be sequential |
+| Phase 2 (Merge Gates) | Phase 4 (Semantic Phase 2) | Conservative parallelization |
+| Phase 5 (Semantic Phase 3) | Phase 6 (DAP Native) | Limited overlap |
+| Phase 8 (Advanced LSP) | None | Sequential after DAP |
+| Phase 9 (Integration) | None | Sequential after features |
+| Phase 10 (Performance) | None | Sequential after integration |
 | Phase 11 (Release) | None | Final phase |
 
 **Advantages:**
@@ -595,15 +602,17 @@ graph TD
 
 **Deliverable:** Gate Architecture Design Document
 
-#### 3. Documentation Baseline (Days 3-4)
-**Owner:** Documentation Lead  
+#### 3. Receipts & Metrics Capture (Days 3-4)
+**Owner:** Release Lead  
 **Action Items:**
-- [ ] Run `cargo doc --no-deps -p perl-parser 2>&1 | grep "missing documentation"`
-- [ ] Categorize violations by type (functions, structs, modules, etc.)
-- [ ] Prioritize violations for Phase 1 resolution
-- [ ] Create documentation resolution plan
+- [ ] Run runtime receipts (`cargo test -p perl-lsp`, `cargo test -p perl-lsp --all-targets`)
+- [ ] Run engine receipts (`cargo test -p perl-parser`, `cargo test -p perl-parser --test missing_docs_ac_tests`)
+- [ ] Run B-pressure receipts (`cargo check -p perl-parser --no-default-features --features workspace` and wasm target)
+- [ ] Run ignored suites (`cargo test -p perl-lsp -- --ignored`, `cargo test -p perl-parser -- --ignored`)
+- [ ] Run documentation receipts (`cargo doc --no-deps -p perl-parser`)
+- [ ] Store logs under `review/receipts/YYYY-MM-DD/`
 
-**Deliverable:** Documentation Violations Report with prioritization
+**Deliverable:** Receipt bundle with scope notes and counts
 
 #### 4. Semantic Analysis Planning (Days 4-5)
 **Owner:** Parser Lead  
@@ -627,10 +636,10 @@ graph TD
 - Configure branch protection rules
 - Update contributor documentation
 
-#### 3. Documentation Phase 1 Kickoff
-- Begin resolving high-priority documentation violations
-- Establish documentation quality metrics
-- Set up automated documentation checks
+#### 3. Documentation Scope Verification
+- Capture doc receipts for perl-parser and acceptance criteria tests
+- Decide whether to extend enforcement beyond perl-parser
+- Update gate tooling once scope is verified
 
 ---
 
@@ -641,7 +650,7 @@ graph TD
 | Risk | Probability | Impact | Severity | Mitigation Strategy |
 |------|-------------|--------|----------|---------------------|
 | **R1: CI Pipeline Changes Break Tests** | Medium | High | **High** | Comprehensive testing in staging environment |
-| **R2: Documentation Resolution Takes Longer** | High | Medium | **Medium** | Phased approach with weekly progress tracking |
+| **R2: Documentation Scope Verification Takes Longer** | High | Medium | **Medium** | Phased approach with weekly progress tracking |
 | **R3: Semantic Analysis Complexity Underestimated** | Medium | High | **High** | Incremental implementation with continuous validation |
 | **R4: DAP Native Implementation Challenges** | Medium | Medium | **Medium** | Leverage existing Phase 1 bridge as fallback |
 | **R5: Team Resource Constraints** | High | High | **High** | Prioritize critical path, defer non-essential features |
@@ -668,21 +677,21 @@ graph TD
 - Investigate root cause before reapplying changes
 - Involve team members for code review of CI changes
 
-#### R2: Documentation Resolution Takes Longer
+#### R2: Documentation Scope Verification Takes Longer
 **Probability:** High  
 **Impact:** Medium  
 **Severity:** Medium
 
 **Mitigation Strategy:**
-1. **Phased Approach:** Implement documentation in phases with clear priorities
+1. **Phased Approach:** Verify scope in phases with clear priorities
 2. **Weekly Tracking:** Track progress weekly against targets
-3. **Resource Allocation:** Allocate dedicated resources for documentation
+3. **Resource Allocation:** Allocate dedicated resources for verification
 4. **Automation:** Automate documentation validation and quality checks
 5. **Community Contribution:** Encourage community contributions for documentation
 
 **Contingency Plan:**
-- If falling behind, defer Phase 2 documentation to post-v1.0
-- Focus on Phase 1 critical documentation for v1.0 release
+- If scope expands, defer non-critical documentation to post-v1.0
+- Focus on core documentation required for v1.0 release
 - Continue documentation improvements in minor releases
 
 #### R3: Semantic Analysis Complexity Underestimated
@@ -798,8 +807,8 @@ graph TD
 | **Parser Coverage** | ~100% | ~95-100% | ✅ On Track |
 | **LSP Feature Completeness** | 100% | ~91% | ⚠️ In Progress |
 | **DAP Feature Completeness** | 100% | Phase 1 | ⚠️ In Progress |
-| **API Documentation Coverage** | 100% | 100% | ✅ **COMPLETE** (2026-01-17) |
-| **Test Pass Rate** | 100% | ~95%+ | ✅ On Track |
+| **API Documentation Coverage** | 100% | perl-parser reported 0 missing_docs | ⚠️ Verify scope |
+| **Test Pass Rate** | 100% | 530/530 lib tests (integration/ignored pending) | ⚠️ Verify scope |
 | **Performance Targets** | All Met | Most Met | ⚠️ In Progress |
 | **CI Execution Time** | <15 min | ~20 min | ⚠️ In Progress |
 | **CI Monthly Cost** | <$100 | ~$160 | ⚠️ In Progress |
@@ -813,12 +822,12 @@ graph TD
 - [ ] Fast integration tests pass (100%)
 
 **Pre-Release Gates:**
-- [x] All tests pass (100%) ✅ (530/530 tests passing)
+- [ ] Lib tests pass (530/530); integration/ignored/feature-gated pending receipts
 - [ ] Performance benchmarks met
-- [x] Zero documentation warnings ✅ (resolved 2026-01-17)
+- [ ] perl-parser missing_docs warnings at zero (workspace receipts pending)
 - [ ] Security audit passed
-- [x] Integration tests pass (100%) ✅
-- [x] Mutation testing score >85% ✅
+- [ ] Integration tests pass (pending receipts)
+- [ ] Mutation testing score >85% (perl-parser reported)
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Analysis Date**: 2026-01-17
 > **Current Version**: v0.9.0 RC (2026-01-11)
-> **Current Completion**: ~90-95% overall (updated 2026-01-17)
+> **Current Completion**: ~90-95% overall (default suite; receipts pending, updated 2026-01-17)
 
 ---
 
@@ -11,13 +11,15 @@
 The Perl LSP project is approximately **90-95% complete** toward full production readiness (updated 2026-01-17). The core parser and LSP infrastructure are solid, with remaining work concentrated in five key areas:
 
 1. **CI/CD Infrastructure** - Critical blocker for merge gates and cost optimization
-2. **API Documentation** - Infrastructure complete, content gaps remain
+2. **API Documentation** - Enforcement active in perl-parser; workspace scope pending receipts
 3. **Semantic Analyzer** - Phase 1 complete, Phases 2/3 needed
 4. **DAP (Debug Adapter Protocol)** - Phase 1 bridge complete, native implementation pending
-5. **Test Infrastructure** - 97%+ stabilized, minor gaps remain
+5. **Test Infrastructure** - Default suite stabilized; ignored/feature-gated tests tracked separately
 6. **LSP Features** - 91% functional, remaining features identified
 
 **Critical Path**: CI Pipeline cleanup → Merge-blocking gates → Production hardening
+
+**Status Confidence**: Metrics below are scoped to last reported runs; full test surface and workspace-wide doc hygiene require receipts (Phase 0).
 
 ---
 
@@ -28,13 +30,13 @@ For the Perl LSP project, "fully implemented" means:
 ### Core Components (Production-Ready)
 - **Parser**: ~100% Perl 5 syntax coverage, 4-19x faster than legacy, <1ms incremental parsing
 - **Lexer**: Context-aware, Unicode-safe, performance-optimized
-- **LSP Server**: 100% user-visible feature coverage (53/53 trackable features from features.toml)
+- **LSP Server**: User-visible feature coverage tracked in features.toml (53/53 cataloged); GA requires advertised + capability-gated tests
 - **Workspace Indexing**: Dual indexing strategy with 98% reference coverage
 - **Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Security**: Enterprise-grade with path validation, UTF-16 boundary fixes
 
 ### LSP Capabilities (GA-Level)
-- All 53 user-visible features at GA maturity level
+- All user-visible features with `advertised=true` and `counts_in_coverage=true` reach GA maturity with capability gating
 - 99% overall LSP protocol compliance (85/88 including plumbing)
 - Semantic-aware definition resolution integrated
 - Enhanced cross-file navigation with dual pattern matching
@@ -48,18 +50,31 @@ For the Perl LSP project, "fully implemented" means:
 - Cross-platform support (Windows, macOS, Linux, WSL)
 - Enterprise security with path validation and process isolation
 
-### Quality Metrics (Met)
-- 87% mutation score
-- 100% test pass rate (530/530 tests passing)
-- Zero clippy warnings
+### Quality Metrics (Reported / Scoped)
+- 87% mutation score (perl-parser)
+- 530/530 lib tests passing (`cargo test --workspace --lib`; integration/ignored/feature-gated not included)
+- Zero clippy warnings (last reported run)
 - Consistent formatting
 - Successful release build (59.29s)
 
+**Note**: Integration tests, examples, benches, and ignored/feature-gated suites require separate receipts (Phase 0).
+
 ### Documentation (Enterprise-Grade)
-- API documentation infrastructure complete with `#![warn(missing_docs)]` enforcement
+- API documentation infrastructure complete with `#![warn(missing_docs)]` enforcement in perl-parser
 - 12 acceptance criteria validation framework operational
 - Comprehensive guides for LSP, DAP, architecture, security
-- **0 documentation violations** (resolved as of 2026-01-17)
+- **0 missing_docs warnings in perl-parser** (`cargo doc --no-deps -p perl-parser`, 2026-01-17); workspace-wide status pending receipts
+
+### Engine/Adapter Boundary (Guardrails)
+- Core engine types remain protocol-agnostic; LSP conversions live in perl-lsp
+- B-pressure gates must pass for perl-parser (native + wasm targets)
+- Core serialization should stay at the adapter boundary; if `Position` retains serde mapping, document indexing rules and safe defaults
+
+### Test Policy & Gate Tiers
+- **GA suite**: default `cargo test`; merge-blocking; no `#[ignore]`
+- **Extras suite**: feature-gated; non-blocking; tracked debt
+- **Stress suite**: timeboxed and non-blocking
+- Ignored tests represent open gaps until re-homed or fixed
 
 ---
 
@@ -86,20 +101,18 @@ For the Perl LSP project, "fully implemented" means:
 
 ### Gap 2: API Documentation (P1-HIGH)
 
-**Current State**: **RESOLVED** (2026-01-17)
+**Current State**: Enforcement active in perl-parser; workspace-wide status pending receipts.
 
 **Issues**:
-- Issue #197: Add Missing Documentation ✅ **COMPLETE** (0 violations remaining)
+- Issue #197: Add Missing Documentation (perl-parser reported 0 missing_docs; workspace enforcement pending)
 
 **Gaps Identified**:
-1. **0 Missing Documentation Warnings**: All public APIs now have comprehensive docs
-2. **Phased Resolution Complete**: 4-phase approach successfully executed
-3. **Module Documentation**: All modules now include LSP workflow integration descriptions
-4. **Performance Documentation**: All performance-critical modules document parsing characteristics
-5. **Error Type Documentation**: All error types include Perl parsing context
-6. **Usage Examples**: Complex APIs now include practical examples
+1. **Scope Clarity**: perl-parser reports 0 missing_docs warnings; other crates not yet enforced
+2. **Receipts Needed**: capture doc receipts and acceptance criteria outputs for publication
+3. **Workspace Coverage Decision**: decide whether to extend enforcement beyond perl-parser and schedule remaining work
+4. **Gate Alignment**: remove temporary `-A missing_docs` allowances once scope is verified
 
-**Impact**: Affects developer experience, API discoverability, and onboarding
+**Impact**: Affects developer experience, API discoverability, and trust in status metrics
 
 ---
 
@@ -159,17 +172,18 @@ For the Perl LSP project, "fully implemented" means:
 
 ### Gap 5: Test Infrastructure (P2-MEDIUM)
 
-**Current State**: 97%+ stabilized (17 → 3 ignored tests remaining)
+**Current State**: Default suite stabilized; ignored tests and feature-gated suites remain.
 
 **Issues**:
-- Issue #198: Test Infrastructure Stabilization (97%+ complete)
+- Issue #198: Test Infrastructure Stabilization (default suite stabilized; ignored tests tracked debt)
 
 **Gaps Identified**:
-1. **3 Ignored Tests Remain**:
+1. **Ignore Policy Needed**: move feature gaps into feature-gated tiers; keep GA suite free of ignores
+2. **3 Ignored Tests Remain**:
    - 2 feature-gated tests (bareword detection)
    - 1 manual utility test (regenerate_snapshots)
-2. **LSP Test Resource Constraints**: Category C tests (high resource) need better hardware or CI
-3. **Test Infrastructure Monitoring**: No automated tracking of test health trends
+3. **LSP Test Resource Constraints**: Category C tests (high resource) need better hardware or CI
+4. **Test Infrastructure Monitoring**: No automated tracking of test health trends
 
 **Impact**: Reduces confidence in test coverage and increases risk of regressions
 
@@ -177,7 +191,7 @@ For the Perl LSP project, "fully implemented" means:
 
 ### Gap 6: LSP Feature Completeness (P2-MEDIUM)
 
-**Current State**: 91% functional (53/53 user-visible features at GA)
+**Current State**: 91% functional (53/53 user-visible features cataloged; GA coverage pending receipts and capability gating)
 
 **Gaps Identified** (from features.toml analysis):
 1. **Notebook Support** - 2 features at preview maturity
@@ -255,17 +269,22 @@ For the Perl LSP project, "fully implemented" means:
 **Goal**: Unblock critical paths and reduce technical debt
 
 **Tasks**:
-- [ ] Complete Issue #198: Fix 3 remaining ignored tests (1 hour)
+- [ ] Capture receipts for core test/doc commands; store under `review/receipts/YYYY-MM-DD/`
+- [ ] Define GA/extras/stress test tiers and migrate ignored tests into feature-gated suites
+- [ ] Decide `Position` serialization boundary (engine vs adapter) and document policy
+- [ ] Re-home LSP examples/benches to `crates/perl-lsp/`; keep engine examples in `crates/perl-parser/`
+- [ ] Complete Issue #198: Fix remaining ignored tests or move to feature-gated tiers (1 hour)
 - [ ] Close completed issues: #182, #203, #202, #194
-- [ ] Update CURRENT_STATUS.md with latest metrics
+- [ ] Update CURRENT_STATUS.md with receipt-backed metrics
 
 **Dependencies**: None
 **Risk**: LOW - Low-risk cleanup tasks
 
 **Success Criteria**:
-- Test infrastructure at 99%+ stabilized
+- Receipts captured for core test/doc runs with scope notes
+- GA test tier defined; ignored tests re-homed or fixed
 - All completed issues closed
-- Status documentation accurate
+- Status documentation updated with receipt-backed metrics
 
 ---
 
@@ -324,15 +343,15 @@ For the Perl LSP project, "fully implemented" means:
 
 ---
 
-### Phase 3: API Documentation Resolution (P1-HIGH) ✅ **COMPLETE**
+### Phase 3: API Documentation Resolution (P1-HIGH)
 
-**Goal**: Documentation violations resolved (0 remaining)
+**Goal**: Verify scope and close remaining missing_docs debt
 
 **Dependencies**: None (can proceed in parallel with Phase 1-2)
 
-**Status**: ✅ **COMPLETE** (2026-01-17)
+**Status**: Reported complete for perl-parser; workspace verification pending (2026-01-17)
 
-**Completed Tasks**:
+**Reported Tasks (perl-parser scope)**:
 - [x] Phase 1: Core Parser Infrastructure
   - Documented all public functions in core parser modules
   - Added performance characteristics to performance-critical modules
@@ -350,15 +369,19 @@ For the Perl LSP project, "fully implemented" means:
   - Documented testing infrastructure
   - Documented build system and tooling
   - Added architecture decision records
-- **Result**: 0 documentation violations remaining
+- **Result**: 0 missing_docs warnings reported for perl-parser
+
+**Remaining Tasks**:
+- [ ] Capture receipts for `cargo doc --no-deps -p perl-parser` and acceptance criteria tests
+- [ ] Decide workspace enforcement scope and remove temporary `-A missing_docs` allowances when ready
+- [ ] Update status docs with scope and receipt-backed counts
 
 **Risk**: LOW - Well-defined process with clear acceptance criteria
 
-**Success Criteria**: ✅ **ALL MET** (2026-01-17)
-- `cargo doc --no-deps -p perl-parser` generates zero warnings ✅
-- All 12 acceptance criteria tests passing ✅
-- Public API coverage >95% ✅
-- Module documentation complete for all crates ✅
+**Success Criteria**:
+- perl-parser `cargo doc --no-deps` receipt shows zero warnings
+- Acceptance criteria tests recorded with receipts
+- Workspace scope explicitly documented (and enforcement updated if expanded)
 
 ---
 
@@ -482,6 +505,8 @@ For the Perl LSP project, "fully implemented" means:
 **Dependencies**: None (can proceed in parallel with other phases)
 
 **Tasks**:
+- [ ] Formalize GA/extras/stress tiers in test docs and CI gates
+- [ ] Migrate remaining ignored tests into feature-gated suites or fix
 - [ ] Complete Issue #198: Fix bareword diagnostic emission (1 hour)
 - [ ] Enable Category C LSP tests on proper hardware or CI
 - [ ] Add automated test health trend tracking
@@ -491,7 +516,7 @@ For the Perl LSP project, "fully implemented" means:
 **Risk**: LOW - Well-understood issues with clear solutions
 
 **Success Criteria**:
-- Only 1 ignored test remaining (manual utility)
+- GA suite has zero ignored tests; extras/stress gated by features
 - Category C LSP tests enabled and passing
 - Test health dashboard operational
 - Quarterly audit process established
