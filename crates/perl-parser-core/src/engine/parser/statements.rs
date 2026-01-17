@@ -34,12 +34,12 @@ impl<'a> Parser<'a> {
         // Every new statement begins here
         self.at_stmt_start = true;
 
-        let token = self.tokens.peek()?.clone();
+        let kind = self.tokens.peek()?.kind;
 
         // Don't check for labels here - it breaks regular identifier parsing
         // Labels will be handled differently
 
-        let mut stmt = match token.kind {
+        let mut stmt = match kind {
             // Empty statement (lone semicolon) - just consume and return a no-op
             TokenKind::Semicolon => {
                 let pos = self.current_position();
@@ -122,8 +122,11 @@ impl<'a> Parser<'a> {
                 }
 
                 // Either build via indirect-object path or the normal expression path
-                if let TokenKind::Identifier = token.kind {
-                    if self.is_indirect_call_pattern(&token.text) {
+                if let TokenKind::Identifier = kind {
+                    // We need the text for the indirect call check
+                    // We must clone it because is_indirect_call_pattern takes &mut self
+                    let text = self.tokens.peek()?.text.clone();
+                    if self.is_indirect_call_pattern(&text) {
                         // Parse indirect call but DON'T return early - let it go through
                         // the same modifier/semicolon handling as other statements
                         self.parse_indirect_call()
@@ -332,7 +335,7 @@ impl<'a> Parser<'a> {
     /// Parse statement modifier (if, unless, while, until, for)
     fn parse_statement_modifier(&mut self, statement: Node) -> ParseResult<Node> {
         let modifier_token = self.consume_token()?;
-        let modifier = modifier_token.text.clone();
+        let modifier = modifier_token.text;
 
         // For 'for' and 'foreach', we parse a list expression
         let condition = if matches!(modifier_token.kind, TokenKind::For | TokenKind::Foreach) {
@@ -427,7 +430,7 @@ impl<'a> Parser<'a> {
 
         // Parse the label
         let label_token = self.expect(TokenKind::Identifier)?;
-        let label = label_token.text.clone();
+        let label = label_token.text;
 
         // Consume the colon
         self.expect(TokenKind::Colon)?;
