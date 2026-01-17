@@ -14,6 +14,18 @@ default:
 # The rust-toolchain.toml pins to 1.89.0, so standard commands use MSRV by default.
 # Use these recipes to explicitly verify MSRV compliance:
 
+# Phase 0: publish receipts to review/receipts/YYYY-MM-DD/
+receipts date='':
+    @d="{{date}}"; \
+    if [ -z "$$d" ]; then d="$$(date -u +%Y-%m-%d)"; fi; \
+    echo "Publishing receipts for $$d"; \
+    bash scripts/publish-receipts.sh "$$d"
+
+# Issue #211: measure CI lane runtimes locally (baseline before cleanup)
+ci-measure:
+    @echo "Measuring CI lane runtimes..."
+    @bash .ci/scripts/measure-ci-time.sh
+
 # Fast merge gate on MSRV (~2-5 min) - proves 1.89 compatibility
 ci-gate-msrv:
     @echo "🚪 Running fast merge gate on MSRV (Rust 1.89)..."
