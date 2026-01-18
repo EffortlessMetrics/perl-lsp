@@ -393,6 +393,30 @@ impl RefactoringEngine {
                 self.validate_perl_identifier(old_name, "old_name")?;
                 self.validate_perl_identifier(new_name, "new_name")?;
 
+                // old_name and new_name must be different
+                if old_name == new_name {
+                    return Err(ParseError::SyntaxError {
+                        message: format!(
+                            "SymbolRename: old_name and new_name must be different (got '{}')",
+                            old_name
+                        ),
+                        location: 0,
+                    });
+                }
+
+                // Sigil consistency: if old_name has a sigil, new_name must have the same sigil
+                let old_sigil = Self::extract_sigil(old_name);
+                let new_sigil = Self::extract_sigil(new_name);
+                if old_sigil != new_sigil {
+                    return Err(ParseError::SyntaxError {
+                        message: format!(
+                            "SymbolRename: sigil mismatch - old_name '{}' has sigil {:?}, new_name '{}' has sigil {:?}",
+                            old_name, old_sigil, new_name, new_sigil
+                        ),
+                        location: 0,
+                    });
+                }
+
                 // Validate scope-specific file requirements
                 match scope {
                     RefactoringScope::File(path) => {
@@ -538,9 +562,24 @@ impl RefactoringEngine {
         }
 
         // Handle qualified names (Package::name)
-        for part in bare_name.split("::") {
+        // Allow leading :: (for main package or absolute names), but reject:
+        // - trailing :: (like "Foo::")
+        // - double :: in the middle (like "Foo::::Bar")
+        let parts: Vec<&str> = bare_name.split("::").collect();
+        for (i, part) in parts.iter().enumerate() {
             if part.is_empty() {
-                continue; // Allow leading :: for main package
+                // Allow empty only at position 0 (leading ::)
+                if i == 0 {
+                    continue;
+                }
+                // Reject trailing :: or double ::
+                return Err(ParseError::SyntaxError {
+                    message: format!(
+                        "Invalid Perl identifier in {}: '{}' (contains empty segment - trailing or double ::)",
+                        param_name, name
+                    ),
+                    location: 0,
+                });
             }
             if !Self::is_valid_identifier_part(part) {
                 return Err(ParseError::SyntaxError {
@@ -590,6 +629,7 @@ impl RefactoringEngine {
     }
 
     /// Validates a qualified Perl name (Package::Subpackage::name).
+    /// Used for MoveCode elements - does not allow sigils, leading ::, trailing ::, or double ::.
     fn validate_perl_qualified_name(&self, name: &str) -> ParseResult<()> {
         if name.is_empty() {
             return Err(ParseError::SyntaxError {
@@ -598,11 +638,26 @@ impl RefactoringEngine {
             });
         }
 
+        // Reject sigils - qualified names are for packages/subs, not variables
+        if name.starts_with(['$', '@', '%', '&', '*']) {
+            return Err(ParseError::SyntaxError {
+                message: format!("Invalid qualified name: '{}' cannot start with a sigil", name),
+                location: 0,
+            });
+        }
+
         // Each segment must be a valid identifier
-        let mut has_valid_part = false;
-        for part in name.split("::") {
+        // Reject leading ::, trailing ::, or double ::
+        let parts: Vec<&str> = name.split("::").collect();
+        for (i, part) in parts.iter().enumerate() {
             if part.is_empty() {
-                continue; // Allow leading/trailing :: in some contexts
+                return Err(ParseError::SyntaxError {
+                    message: format!(
+                        "Invalid qualified name: '{}' (contains empty segment at position {})",
+                        name, i
+                    ),
+                    location: 0,
+                });
             }
             if !Self::is_valid_identifier_part(part) {
                 return Err(ParseError::SyntaxError {
@@ -613,14 +668,6 @@ impl RefactoringEngine {
                     location: 0,
                 });
             }
-            has_valid_part = true;
-        }
-
-        if !has_valid_part {
-            return Err(ParseError::SyntaxError {
-                message: format!("Qualified name '{}' has no valid segments", name),
-                location: 0,
-            });
         }
 
         Ok(())
@@ -635,6 +682,12 @@ impl RefactoringEngine {
             }
             _ => false,
         }
+    }
+
+    /// Extracts the sigil from a Perl identifier, if present.
+    fn extract_sigil(name: &str) -> Option<char> {
+        let first_char = name.chars().next()?;
+        if matches!(first_char, '$' | '@' | '%' | '&' | '*') { Some(first_char) } else { None }
     }
 
     fn validate_file_exists(&self, path: &Path) -> ParseResult<()> {
@@ -1723,6 +1776,110 @@ sub complex {
             assert!(result.is_err());
             let err_msg = format!("{:?}", result.unwrap_err());
             assert!(err_msg.contains("requires at least one pattern"));
+        }
+
+        // --- Sigil consistency tests ---
+
+        #[test]
+        fn test_symbol_rename_sigil_consistency_required() {
+            let engine = RefactoringEngine::new().unwrap();
+            // $foo -> @foo should fail (different sigils)
+            let op = RefactoringType::SymbolRename {
+                old_name: "$foo".to_string(),
+                new_name: "@foo".to_string(),
+                scope: RefactoringScope::Workspace,
+            };
+
+            let result = engine.validate_operation(&op, &[]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("sigil mismatch"));
+        }
+
+        #[test]
+        fn test_symbol_rename_sigil_consistency_no_sigil_to_sigil() {
+            let engine = RefactoringEngine::new().unwrap();
+            // bare name -> sigiled name should fail
+            let op = RefactoringType::SymbolRename {
+                old_name: "foo".to_string(),
+                new_name: "$foo".to_string(),
+                scope: RefactoringScope::Workspace,
+            };
+
+            let result = engine.validate_operation(&op, &[]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("sigil mismatch"));
+        }
+
+        #[test]
+        fn test_symbol_rename_same_name_rejected() {
+            let engine = RefactoringEngine::new().unwrap();
+            let op = RefactoringType::SymbolRename {
+                old_name: "$foo".to_string(),
+                new_name: "$foo".to_string(),
+                scope: RefactoringScope::Workspace,
+            };
+
+            let result = engine.validate_operation(&op, &[]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("must be different"));
+        }
+
+        // --- Double separator and trailing :: tests ---
+
+        #[test]
+        fn test_validate_identifier_double_separator_rejected() {
+            let engine = RefactoringEngine::new().unwrap();
+            // Double :: should be rejected
+            assert!(engine.validate_perl_identifier("Foo::::Bar", "test").is_err());
+            assert!(engine.validate_perl_identifier("$Foo::::Bar", "test").is_err());
+        }
+
+        #[test]
+        fn test_validate_identifier_trailing_separator_rejected() {
+            let engine = RefactoringEngine::new().unwrap();
+            // Trailing :: should be rejected
+            assert!(engine.validate_perl_identifier("Foo::", "test").is_err());
+            assert!(engine.validate_perl_identifier("$Foo::Bar::", "test").is_err());
+        }
+
+        #[test]
+        fn test_validate_identifier_leading_separator_allowed() {
+            let engine = RefactoringEngine::new().unwrap();
+            // Leading :: should be allowed (for main package/absolute names)
+            assert!(engine.validate_perl_identifier("::Foo", "test").is_ok());
+            assert!(engine.validate_perl_identifier("::Foo::Bar", "test").is_ok());
+            assert!(engine.validate_perl_identifier("$::Foo", "test").is_ok());
+        }
+
+        #[test]
+        fn test_validate_qualified_name_double_separator_rejected() {
+            let engine = RefactoringEngine::new().unwrap();
+            assert!(engine.validate_perl_qualified_name("Foo::::Bar").is_err());
+        }
+
+        #[test]
+        fn test_validate_qualified_name_trailing_separator_rejected() {
+            let engine = RefactoringEngine::new().unwrap();
+            assert!(engine.validate_perl_qualified_name("Foo::").is_err());
+            assert!(engine.validate_perl_qualified_name("Foo::Bar::").is_err());
+        }
+
+        #[test]
+        fn test_validate_qualified_name_leading_separator_rejected() {
+            let engine = RefactoringEngine::new().unwrap();
+            // For qualified names (MoveCode elements), leading :: is also rejected
+            assert!(engine.validate_perl_qualified_name("::Foo").is_err());
+        }
+
+        #[test]
+        fn test_validate_qualified_name_sigil_rejected() {
+            let engine = RefactoringEngine::new().unwrap();
+            // Qualified names (for MoveCode) should not have sigils
+            assert!(engine.validate_perl_qualified_name("$foo").is_err());
+            assert!(engine.validate_perl_qualified_name("@array").is_err());
         }
     }
 }
