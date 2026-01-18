@@ -372,11 +372,149 @@ impl RefactoringEngine {
 
     fn validate_operation(
         &self,
-        _operation_type: &RefactoringType,
-        _files: &[PathBuf],
+        operation_type: &RefactoringType,
+        files: &[PathBuf],
     ) -> ParseResult<()> {
-        // TODO: Implement validation logic
+        // 1. Validate file count
+        if files.len() > self.config.max_files_per_operation {
+            return Err(ParseError::SyntaxError {
+                message: format!(
+                    "Too many files selected for operation: {}. Maximum allowed: {}",
+                    files.len(),
+                    self.config.max_files_per_operation
+                ),
+                location: 0,
+            });
+        }
+
+        // 2. Validate files existence
+        // Note: For MoveCode, we validate source_file existence separately.
+        // For other operations, we generally expect files to exist.
+        // However, some operations might not strictly require all files to exist
+        // if they are being created, but the generic file list usually implies inputs.
+        for file in files {
+            if !file.exists() {
+                return Err(ParseError::SyntaxError {
+                    message: format!("File does not exist: {}", file.display()),
+                    location: 0,
+                });
+            }
+        }
+
+        // 3. Validate operation type specific parameters
+        match operation_type {
+            RefactoringType::SymbolRename {
+                old_name,
+                new_name,
+                ..
+            } => {
+                if old_name.is_empty() {
+                    return Err(ParseError::SyntaxError {
+                        message: "Original symbol name cannot be empty".to_string(),
+                        location: 0,
+                    });
+                }
+                if new_name.is_empty() {
+                    return Err(ParseError::SyntaxError {
+                        message: "New symbol name cannot be empty".to_string(),
+                        location: 0,
+                    });
+                }
+                if old_name == new_name {
+                    return Err(ParseError::SyntaxError {
+                        message: "New name is identical to original name".to_string(),
+                        location: 0,
+                    });
+                }
+                if !self.is_valid_identifier(new_name) {
+                    return Err(ParseError::SyntaxError {
+                        message: format!("Invalid identifier: {}", new_name),
+                        location: 0,
+                    });
+                }
+            }
+            RefactoringType::ExtractMethod {
+                method_name,
+                start_position,
+                end_position,
+            } => {
+                if method_name.is_empty() {
+                    return Err(ParseError::SyntaxError {
+                        message: "Method name cannot be empty".to_string(),
+                        location: 0,
+                    });
+                }
+                if !self.is_valid_identifier(method_name) {
+                    return Err(ParseError::SyntaxError {
+                        message: format!("Invalid method name: {}", method_name),
+                        location: 0,
+                    });
+                }
+                if start_position >= end_position {
+                    return Err(ParseError::SyntaxError {
+                        message: "Start position must be before end position".to_string(),
+                        location: 0,
+                    });
+                }
+            }
+            RefactoringType::MoveCode {
+                source_file,
+                target_file,
+                elements,
+            } => {
+                if !source_file.exists() {
+                    return Err(ParseError::SyntaxError {
+                        message: format!("Source file does not exist: {}", source_file.display()),
+                        location: 0,
+                    });
+                }
+                if source_file == target_file {
+                    return Err(ParseError::SyntaxError {
+                        message: "Source and target files cannot be the same".to_string(),
+                        location: 0,
+                    });
+                }
+                if elements.is_empty() {
+                    return Err(ParseError::SyntaxError {
+                        message: "No elements selected to move".to_string(),
+                        location: 0,
+                    });
+                }
+            }
+            RefactoringType::Modernize { patterns } => {
+                if patterns.is_empty() {
+                    return Err(ParseError::SyntaxError {
+                        message: "No modernization patterns selected".to_string(),
+                        location: 0,
+                    });
+                }
+            }
+            RefactoringType::OptimizeImports { .. } => {
+                // No specific validation needed for boolean flags
+            }
+            RefactoringType::Inline { symbol_name, .. } => {
+                if symbol_name.is_empty() {
+                    return Err(ParseError::SyntaxError {
+                        message: "Symbol name cannot be empty".to_string(),
+                        location: 0,
+                    });
+                }
+            }
+        }
+
         Ok(())
+    }
+
+    fn is_valid_identifier(&self, name: &str) -> bool {
+        // Basic Perl identifier check: [a-zA-Z_][a-zA-Z0-9_]*
+        // This is a simplified check, covering most common cases
+        let mut chars = name.chars();
+        match chars.next() {
+            Some(c) if c.is_ascii_alphabetic() || c == '_' => {
+                chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+            }
+            _ => false,
+        }
     }
 
     fn create_backup(&self, files: &[PathBuf], operation_id: &str) -> ParseResult<BackupInfo> {
@@ -1265,5 +1403,117 @@ sub complex {
         assert!(new_code.contains("($call_count, $sum) = do_math($sum, @items);"));
         // check indentation of call
         assert!(new_code.contains("    ($call_count, $sum) = do_math($sum, @items);"));
+    }
+
+    #[test]
+    fn test_validate_operation_symbol_rename() {
+        let engine = RefactoringEngine::new().unwrap();
+        let files = vec![];
+
+        // Valid rename
+        let op = RefactoringType::SymbolRename {
+            old_name: "old_var".to_string(),
+            new_name: "new_var".to_string(),
+            scope: RefactoringScope::Workspace,
+        };
+        assert!(engine.validate_operation(&op, &files).is_ok());
+
+        // Invalid: empty old name
+        let op = RefactoringType::SymbolRename {
+            old_name: "".to_string(),
+            new_name: "new_var".to_string(),
+            scope: RefactoringScope::Workspace,
+        };
+        assert!(engine.validate_operation(&op, &files).is_err());
+
+        // Invalid: empty new name
+        let op = RefactoringType::SymbolRename {
+            old_name: "old_var".to_string(),
+            new_name: "".to_string(),
+            scope: RefactoringScope::Workspace,
+        };
+        assert!(engine.validate_operation(&op, &files).is_err());
+
+        // Invalid: identical names
+        let op = RefactoringType::SymbolRename {
+            old_name: "var".to_string(),
+            new_name: "var".to_string(),
+            scope: RefactoringScope::Workspace,
+        };
+        assert!(engine.validate_operation(&op, &files).is_err());
+
+        // Invalid: invalid identifier
+        let op = RefactoringType::SymbolRename {
+            old_name: "old_var".to_string(),
+            new_name: "123var".to_string(),
+            scope: RefactoringScope::Workspace,
+        };
+        assert!(engine.validate_operation(&op, &files).is_err());
+    }
+
+    #[test]
+    fn test_validate_operation_extract_method() {
+        let engine = RefactoringEngine::new().unwrap();
+        let files = vec![];
+
+        // Valid
+        let op = RefactoringType::ExtractMethod {
+            method_name: "new_method".to_string(),
+            start_position: (1, 0),
+            end_position: (2, 0),
+        };
+        assert!(engine.validate_operation(&op, &files).is_ok());
+
+        // Invalid: start >= end
+        let op = RefactoringType::ExtractMethod {
+            method_name: "new_method".to_string(),
+            start_position: (2, 0),
+            end_position: (1, 0),
+        };
+        assert!(engine.validate_operation(&op, &files).is_err());
+
+        // Invalid: invalid method name
+        let op = RefactoringType::ExtractMethod {
+            method_name: "123method".to_string(),
+            start_position: (1, 0),
+            end_position: (2, 0),
+        };
+        assert!(engine.validate_operation(&op, &files).is_err());
+    }
+
+    #[test]
+    fn test_validate_operation_file_limit() {
+        let mut config = RefactoringConfig::default();
+        config.max_files_per_operation = 2;
+        let engine = RefactoringEngine::with_config(config).unwrap();
+
+        let temp_dir = std::env::temp_dir();
+        let file = temp_dir.join("test_validate_limit.pl");
+
+        // Create dummy file for existence check
+        if !file.exists() {
+            std::fs::File::create(&file).unwrap();
+        }
+
+        let files = vec![file.clone(), file.clone(), file.clone()];
+
+        let op = RefactoringType::SymbolRename {
+            old_name: "a".to_string(),
+            new_name: "b".to_string(),
+            scope: RefactoringScope::Workspace,
+        };
+
+        let result = engine.validate_operation(&op, &files);
+
+        // Clean up
+        let _ = std::fs::remove_file(&file);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        if let ParseError::SyntaxError { message, .. } = err {
+            assert!(message.contains("Too many files"));
+        } else {
+            panic!("Expected SyntaxError");
+        }
     }
 }
