@@ -129,11 +129,6 @@
           "default": false,
           "description": "Format document on save"
         },
-        "perl-lsp.downloadBaseUrl": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Internal base URL hosting perl-lsp archives and SHA256SUMS (bypasses GitHub releases). Example: `https://internal.example.com/perl-lsp`"
-        },
         "perl-lsp.enableRefactoring": {
           "type": "boolean",
           "default": true,
