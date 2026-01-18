@@ -56,12 +56,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Context-Aware Completions**: Improved completion triggering logic and relevance scoring
   - **Capabilities Resolver**: Modularized capability negotiation for better client compatibility
   - **UTF-16 Wire Types**: Strict compliance with LSP character encoding standards
+  - **Execute Command Support** (Issue #145, PR #170):
+    - Implemented `workspace/executeCommand` handler
+    - Added `perl.runCritic` command for on-demand linting via Perl::Critic
+    - **Dual Analyzer Strategy**: Integrated external perlcritic with built-in analyzer fallback
 
 - **Developer Experience & Forensics**
   - **PR Forensics System**: New telemetry infrastructure for tracking CI performance and build metrics
   - **Incremental Metrics**: Assertions to validate incremental parsing efficiency (node reuse rates)
   - **Local-First Guardrails**: Enforced `nix develop` gates to catch issues before CI
   - **Missing Docs Enforcement**: `#![warn(missing_docs)]` now validated in CI (Issue #197)
+  - **Documentation Truth System** (Oct 2025):
+    - Self-healing documentation system with receipts and renderers
+    - Automated verification of documentation against codebase reality
 
 ### Added - Core Features & Improvements
 
@@ -73,7 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **AST Integration**: Features F1-F6 + edge cases fully validated
   - **Test Coverage**: 274 tests passing at repository level
 
-- **Enhanced Dual Indexing Strategy** - 98% Reference Coverage
+- **Enhanced Dual Indexing Strategy** - 98% Reference Coverage (Sept 2025)
   - **Dual Storage Pattern**: Functions indexed under both qualified (`Package::function`) and bare (`function`) names
   - **Dual Retrieval Pattern**: Searches both qualified and bare forms when resolving references
   - **Automatic Deduplication**: Deduplication based on URI + Range to prevent duplicates
@@ -88,14 +95,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Test Coverage**: Comprehensive builtin function parsing tests with edge case validation
   - **Documentation**: New `docs/BUILTIN_FUNCTION_PARSING.md` guide
 
-- **Enhanced Substitution Operator Parsing** (PR #158)
+- **Enhanced Substitution Operator Parsing** (PR #158, Sept 2025)
   - **Complete Pattern/Replacement/Modifier Support**: Full `s///` syntax coverage
   - **All Delimiter Styles**: Balanced delimiters (`s{}{}`, `s[][]`, `s<>`) and alternative delimiters (`s///`, `s###`, `s|||`)
   - **Single-Quote Substitution Delimiters**: Support for `s'pattern'replacement'` syntax
   - **Modifier Support**: All standard Perl modifiers (i, g, s, m, x, e, etc.)
   - **Edge Case Handling**: Complex patterns, escaped delimiters, and nested constructs
 
-- **Enhanced LSP Cancellation System** (PR #165, Issue #48)
+- **Enhanced LSP Cancellation System** (PR #165, Issue #48, Sept 2025)
   - **Thread-Safe Infrastructure**: `PerlLspCancellationToken` with <100μs check latency and atomic operations
   - **Global Registry**: `CancellationRegistry` for concurrent request coordination and provider cleanup context
   - **JSON-RPC 2.0 Compliance**: Enhanced `$/cancelRequest` handling with LSP 3.17+ features and error response (-32800)
@@ -103,7 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Performance Optimized**: <50ms end-to-end response time with <1MB memory overhead and thread safety validation
   - **Test Coverage**: 31 test functions across 5 test files covering protocol, performance, parser, infrastructure, and E2E scenarios
 
-- **API Documentation Infrastructure** (PR #160, SPEC-149)
+- **API Documentation Infrastructure** (PR #160, SPEC-149, Sept 2025)
   - **Missing Docs Enforcement**: `#![warn(missing_docs)]` enabled for perl-parser crate
   - **12 Acceptance Criteria Validation**: Comprehensive quality gates and progress tracking
   - **Property-Based Testing**: Fuzz testing with crash/panic detection and AST invariant validation
@@ -111,11 +118,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Documentation Standards**: Comprehensive API Documentation Standards with LSP workflow integration requirements
   - **CI Integration**: Automated documentation quality gates prevent regression
 
-- **Advanced Parser Robustness** (PR #160, SPEC-149)
+- **Advanced Parser Robustness** (PR #160, SPEC-149, Oct 2025)
+  - **Panic-Safe Architecture**: Elimination of fragile `unreachable!()` macros in parser/lexer (Issue #178)
   - **Comprehensive Fuzz Testing**: 12 test suites with property-based testing, crash detection, and AST invariant validation
   - **Mutation Testing Enhancement**: 7 mutation hardening test files achieving 60%+ mutation score improvement
   - **Quote Parser Hardening**: Enhanced delimiter handling, boundary validation, and transliteration safety preservation
   - **Production Quality Assurance**: Advanced edge case coverage and real-world scenario testing with systematic vulnerability elimination
+
+- **Precision & Syntax Corrections** (Dec 2025 - Jan 2026)
+  - **Phase Block Navigation**: Added `name_span` support for precise LSP navigation in `BEGIN`/`CHECK`/`INIT` blocks (Dec 31)
+  - **Indirect Object Syntax**: Improved detection of indirect object method calls (e.g., `new ClassName`) (Dec 31)
+  - **Moniker QW Parsing**: Tightened parsing rules for `qw(...)` constructs to match perl 5.38 behavior (Dec 31)
+  - **Heredoc Edge Cases**: Fixed FIFO body handling and `<<~` indentation edge cases (Nov 2025)
 
 - **Test Infrastructure Improvements**
   - **Semantic Unit Tests**: Direct validation of `SemanticAnalyzer` core without LSP overhead
@@ -123,9 +137,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `test_semantic_model_definition_at`: SemanticModel API validation
   - **Dynamic Test Positions**: All tests calculate positions from code strings, eliminating brittleness
   - **Resource-Constrained Execution**: Commands optimized for limited CPU/RAM environments
+  - **Cross-Platform Stability**: Tightened `ExitStatus` helpers for consistent behavior on Windows/Linux (Nov 2025)
   - **Clear Test Documentation**: Comprehensive command reference in CLAUDE.md and docs
 
-### Added - Debug Adapter Protocol (DAP) Support (Issue #207 - Phase 1)
+### Added - Debug Adapter Protocol (DAP) Support (Issue #207 - Phase 1, Oct 2025)
 
 - **DAP Binary**: New `perl-dap` crate with standalone DAP server
 - **Phase 1 Bridge Mode**: Proxies to Perl::LanguageServer for immediate debugging capability
@@ -142,8 +157,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Panic Elimination**: Enforced default of `match` or `if let` over `.unwrap()` in production code
   - **Error Propagation**: Comprehensive `Result` types replacing panic-prone operations
   - **Stability Tests**: Verification that server remains stable under malformed input
+  - **Macro Safety**: Removed usage of `unreachable!()` in potential code paths in lexer and parser
 
-- **LSP Protocol Modularization** (#297, #309)
+- **LSP Protocol Modularization** (#297, #309, Dec 2025)
   - **Engine Separation**: Strict separation between core logic (Engine) and protocol handling (LSP)
   - **Handler Modularization**: Individual handlers moved to dedicated modules for maintainability
   - **Fallback/Support Isolation**: Clear boundaries for helper functions and fallback logic
@@ -174,7 +190,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Milestone planning**: Added concrete v0.9.0 and v1.0.0 exit criteria
 - **Local-first workflow**: Emphasized `nix develop -c just ci-gate` as canonical gate
 
-### Performance Improvements (PR #140 - Revolutionary)
+### Performance Improvements (PR #140 - Revolutionary, Sept 2025)
 
 - **LSP Behavioral Tests**: 1560s+ → 0.31s (**5000x faster**, Transformational)
 - **User Story Tests**: 1500s+ → 0.32s (**4700x faster**, Revolutionary)
@@ -190,7 +206,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
-- **None**: MSRV 1.89, Edition 2024, additive guarantee maintained
+- **Rust 2024 Edition**: Workspace upgraded to Rust 2024 (PR #175, Sept 2025)
+- **MSRV Update**: Minimum Supported Rust Version bumped to 1.89+
+- **Strict Error Handling**: APIs previously panicking now return `Result` (additive guarantee maintained otherwise)
 
 ## [v0.8.9] - 2025-09-09
 
