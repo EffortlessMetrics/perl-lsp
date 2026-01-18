@@ -96,14 +96,14 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 
 **Exit criteria**:
 - `nix develop -c just ci-gate` green on MSRV ✓
-- `bash scripts/ignored-test-count.sh` shows 9 tracked debt (8 bug, 1 manual) ✓
+- `bash scripts/ignored-test-count.sh` shows BUG=0, MANUAL≤1 ✓
 - Release notes generated ✓
 - Tag cut ✓
 
 **Metrics** (2026-01-18):
-- **LSP Coverage**: 59% (33/56 advertised GA from `features.toml`)
-- **Total GA Features**: 37 implemented (includes non-advertised protocol features)
-- **Test Count**: 337 lib tests passing, 1 ignored
+- **LSP Coverage**: 100% (53/53 advertised features from `features.toml`)
+- **Protocol Compliance**: 100% (88/88 including plumbing)
+- **Test Count**: 535 lib tests (discovered), 1 ignored (tracked debt: 0 bug, 1 manual)
 - **Parser Coverage**: ~100% Perl 5 syntax
 - **Semantic Analyzer**: Phase 1 complete (12/12 handlers)
 
@@ -123,21 +123,21 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
    - Public API documentation coverage to 95%+
    - Module-level documentation for all crates
 
-3. **LSP Coverage Growth**
-   - Target 65% → 70% advertised GA coverage
-   - Focus on high-value missing features (document_color, linked_editing_range)
-   - Resolve routes for inlay hints and document links
+3. **LSP Coverage Maintenance**
+   - Maintain 100% advertised GA coverage
+   - Focus on quality improvements for existing features
+   - Resolve routes for any remaining edge cases
 
 4. **Test Infrastructure**
-   - Reduce tracked debt from 9 → 5 (resolve 4 BUG-tagged issues)
+   - Maintain near-zero tracked debt (currently 1: 0 bug, 1 manual)
    - Add integration tests for deferred workspace features
    - Expand corpus coverage for edge cases
 
 **Exit criteria**:
 - Index state machine implemented with performance benchmarks
 - Documentation violations < 200
-- LSP coverage ≥ 70% (39/56 advertised GA)
-- Tracked test debt ≤ 5
+- LSP coverage maintained at 100%
+- Tracked test debt ≤ 2
 
 ---
 
@@ -240,9 +240,9 @@ The LSP compliance table is now auto-generated. Source of truth: `features.toml`
 <!-- END: COMPLIANCE_TABLE -->
 
 **v0.9.0 Metrics**:
-- **Advertised GA Coverage**: 59% (33/56 trackable features)
-- **Total GA Features**: 37 (includes protocol/internal features)
-- **Total Cataloged**: 87 features (including 31 planned)
+- **Advertised GA Coverage**: 100% (53/53 trackable features)
+- **Protocol Compliance**: 100% (88/88 including plumbing)
+- **Total Cataloged**: 89 features
 - **Recent Promotions**: 8 features promoted to GA in v0.9.0
 
 For live metrics, run `just status-check` or see [CURRENT_STATUS.md](CURRENT_STATUS.md).

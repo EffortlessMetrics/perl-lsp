@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+<!-- Next release changes go here -->
+
 ## [v0.9.0] - 2026-01-18
 
 > **Release checklist** (exit criteria for tagging):
@@ -209,6 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rust 2024 Edition**: Workspace upgraded to Rust 2024 (PR #175, Sept 2025)
 - **MSRV Update**: Minimum Supported Rust Version bumped to 1.89+
 - **Strict Error Handling**: APIs previously panicking now return `Result` (additive guarantee maintained otherwise)
+- **VS Code Extension**: Removed `perl-lsp.downloadBaseUrl` configuration setting (internal archive hosting no longer supported; use standard installation methods)
 
 ## [v0.8.9] - 2025-09-09
 

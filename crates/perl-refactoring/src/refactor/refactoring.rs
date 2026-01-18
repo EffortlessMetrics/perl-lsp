@@ -432,6 +432,17 @@ impl RefactoringEngine {
                                 location: 0,
                             });
                         }
+                        // Enforce max_files_per_operation on FileSet scope
+                        if paths.len() > self.config.max_files_per_operation {
+                            return Err(ParseError::SyntaxError {
+                                message: format!(
+                                    "FileSet scope exceeds maximum file limit: {} files provided, {} allowed",
+                                    paths.len(),
+                                    self.config.max_files_per_operation
+                                ),
+                                location: 0,
+                            });
+                        }
                         for path in paths {
                             self.validate_file_exists(path)?;
                         }
@@ -444,6 +455,18 @@ impl RefactoringEngine {
 
             RefactoringType::ExtractMethod { method_name, start_position, end_position } => {
                 self.validate_perl_subroutine_name(method_name)?;
+
+                // ExtractMethod generates `sub name {}`, so method_name must be a bare identifier
+                // (no leading '&' sigil, which would produce invalid Perl like `sub &foo {}`)
+                if method_name.starts_with('&') {
+                    return Err(ParseError::SyntaxError {
+                        message: format!(
+                            "ExtractMethod method_name must be a bare identifier (no leading '&'): got '{}'",
+                            method_name
+                        ),
+                        location: 0,
+                    });
+                }
 
                 // ExtractMethod requires exactly one file
                 if files.is_empty() {
@@ -474,6 +497,18 @@ impl RefactoringEngine {
 
             RefactoringType::MoveCode { source_file, target_file, elements } => {
                 self.validate_file_exists(source_file)?;
+
+                // Reject moving code to the same file
+                if source_file == target_file {
+                    return Err(ParseError::SyntaxError {
+                        message: format!(
+                            "MoveCode: source_file and target_file must be different (got '{}')",
+                            source_file.display()
+                        ),
+                        location: 0,
+                    });
+                }
+
                 // Target file may not exist yet (will be created)
                 if let Some(parent) = target_file.parent() {
                     if !parent.as_os_str().is_empty() && !parent.exists() {
@@ -674,11 +709,14 @@ impl RefactoringEngine {
     }
 
     /// Checks if a string is a valid Perl identifier component (no sigil, no ::).
+    ///
+    /// Perl allows Unicode identifiers (e.g., `$π`, `Müller::Util`), so we use
+    /// `is_alphabetic`/`is_alphanumeric` rather than ASCII-only checks.
     fn is_valid_identifier_part(s: &str) -> bool {
         let mut chars = s.chars();
         match chars.next() {
-            Some(c) if c.is_ascii_alphabetic() || c == '_' => {
-                chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+            Some(c) if c.is_alphabetic() || c == '_' => {
+                chars.all(|c| c.is_alphanumeric() || c == '_')
             }
             _ => false,
         }
@@ -1880,6 +1918,92 @@ sub complex {
             // Qualified names (for MoveCode) should not have sigils
             assert!(engine.validate_perl_qualified_name("$foo").is_err());
             assert!(engine.validate_perl_qualified_name("@array").is_err());
+        }
+
+        // --- Unicode identifier tests ---
+
+        #[test]
+        fn test_validate_identifier_unicode_allowed() {
+            let engine = RefactoringEngine::new().unwrap();
+            // Perl supports Unicode identifiers
+            assert!(engine.validate_perl_identifier("$π", "test").is_ok());
+            assert!(engine.validate_perl_identifier("$αβγ", "test").is_ok());
+            assert!(engine.validate_perl_identifier("日本語", "test").is_ok());
+        }
+
+        #[test]
+        fn test_validate_qualified_name_unicode_allowed() {
+            let engine = RefactoringEngine::new().unwrap();
+            // Unicode package names should be allowed
+            assert!(engine.validate_perl_qualified_name("Müller").is_ok());
+            assert!(engine.validate_perl_qualified_name("Müller::Util").is_ok());
+            assert!(engine.validate_perl_qualified_name("日本::パッケージ").is_ok());
+        }
+
+        // --- ExtractMethod '&' prefix tests ---
+
+        #[test]
+        fn test_extract_method_ampersand_prefix_rejected() {
+            let file = tempfile::NamedTempFile::new().unwrap();
+
+            let engine = RefactoringEngine::new().unwrap();
+            let op = RefactoringType::ExtractMethod {
+                method_name: "&foo".to_string(), // leading & should be rejected
+                start_position: (1, 0),
+                end_position: (5, 0),
+            };
+
+            let result = engine.validate_operation(&op, &[file.path().to_path_buf()]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("bare identifier"));
+            assert!(err_msg.contains("no leading '&'"));
+        }
+
+        // --- MoveCode same-file tests ---
+
+        #[test]
+        fn test_move_code_same_file_rejected() {
+            use std::io::Write;
+            let mut file = tempfile::NamedTempFile::new().unwrap();
+            write!(file, "# source").unwrap();
+
+            let engine = RefactoringEngine::new().unwrap();
+            let op = RefactoringType::MoveCode {
+                source_file: file.path().to_path_buf(),
+                target_file: file.path().to_path_buf(), // same as source
+                elements: vec!["some_sub".to_string()],
+            };
+
+            let result = engine.validate_operation(&op, &[]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("must be different"));
+        }
+
+        // --- FileSet scope max_files tests ---
+
+        #[test]
+        fn test_fileset_scope_max_files_limit() {
+            // Create temp files for the test
+            let files: Vec<_> = (0..5).map(|_| tempfile::NamedTempFile::new().unwrap()).collect();
+            let paths: Vec<_> = files.iter().map(|f| f.path().to_path_buf()).collect();
+
+            // Create engine with low max_files limit
+            let mut config = RefactoringConfig::default();
+            config.max_files_per_operation = 3;
+            let engine = RefactoringEngine::with_config(config).unwrap();
+
+            let op = RefactoringType::SymbolRename {
+                old_name: "old_sub".to_string(),
+                new_name: "new_sub".to_string(),
+                scope: RefactoringScope::FileSet(paths), // 5 files, but limit is 3
+            };
+
+            let result = engine.validate_operation(&op, &[]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("exceeds maximum file limit"));
         }
     }
 }
