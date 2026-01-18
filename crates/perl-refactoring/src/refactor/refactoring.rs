@@ -372,10 +372,300 @@ impl RefactoringEngine {
 
     fn validate_operation(
         &self,
-        _operation_type: &RefactoringType,
-        _files: &[PathBuf],
+        operation_type: &RefactoringType,
+        files: &[PathBuf],
     ) -> ParseResult<()> {
-        // TODO: Implement validation logic
+        // Check file count limit
+        if files.len() > self.config.max_files_per_operation {
+            return Err(ParseError::SyntaxError {
+                message: format!(
+                    "Operation exceeds maximum file limit: {} files provided, {} allowed",
+                    files.len(),
+                    self.config.max_files_per_operation
+                ),
+                location: 0,
+            });
+        }
+
+        // Operation-specific validation
+        match operation_type {
+            RefactoringType::SymbolRename { old_name, new_name, scope } => {
+                self.validate_perl_identifier(old_name, "old_name")?;
+                self.validate_perl_identifier(new_name, "new_name")?;
+
+                // Validate scope-specific file requirements
+                match scope {
+                    RefactoringScope::File(path) => {
+                        self.validate_file_exists(path)?;
+                    }
+                    RefactoringScope::Directory(path) => {
+                        self.validate_directory_exists(path)?;
+                    }
+                    RefactoringScope::FileSet(paths) => {
+                        if paths.is_empty() {
+                            return Err(ParseError::SyntaxError {
+                                message: "FileSet scope requires at least one file".to_string(),
+                                location: 0,
+                            });
+                        }
+                        for path in paths {
+                            self.validate_file_exists(path)?;
+                        }
+                    }
+                    RefactoringScope::Workspace => {
+                        // Workspace scope doesn't require specific files
+                    }
+                }
+            }
+
+            RefactoringType::ExtractMethod { method_name, start_position, end_position } => {
+                self.validate_perl_subroutine_name(method_name)?;
+
+                // ExtractMethod requires exactly one file
+                if files.is_empty() {
+                    return Err(ParseError::SyntaxError {
+                        message: "ExtractMethod requires a target file".to_string(),
+                        location: 0,
+                    });
+                }
+                if files.len() > 1 {
+                    return Err(ParseError::SyntaxError {
+                        message: "ExtractMethod operates on a single file".to_string(),
+                        location: 0,
+                    });
+                }
+                self.validate_file_exists(&files[0])?;
+
+                // Validate position ordering
+                if start_position >= end_position {
+                    return Err(ParseError::SyntaxError {
+                        message: format!(
+                            "Invalid extraction range: start {:?} must be before end {:?}",
+                            start_position, end_position
+                        ),
+                        location: 0,
+                    });
+                }
+            }
+
+            RefactoringType::MoveCode { source_file, target_file, elements } => {
+                self.validate_file_exists(source_file)?;
+                // Target file may not exist yet (will be created)
+                if let Some(parent) = target_file.parent() {
+                    if !parent.as_os_str().is_empty() && !parent.exists() {
+                        return Err(ParseError::SyntaxError {
+                            message: format!(
+                                "Target directory does not exist: {}",
+                                parent.display()
+                            ),
+                            location: 0,
+                        });
+                    }
+                }
+
+                if elements.is_empty() {
+                    return Err(ParseError::SyntaxError {
+                        message: "MoveCode requires at least one element to move".to_string(),
+                        location: 0,
+                    });
+                }
+
+                // Validate element names (subs or packages)
+                for element in elements {
+                    self.validate_perl_qualified_name(element)?;
+                }
+            }
+
+            RefactoringType::Modernize { patterns } => {
+                if patterns.is_empty() {
+                    return Err(ParseError::SyntaxError {
+                        message: "Modernize requires at least one pattern".to_string(),
+                        location: 0,
+                    });
+                }
+                // Modernize can work on explicit files or scan workspace
+                for file in files {
+                    self.validate_file_exists(file)?;
+                }
+            }
+
+            RefactoringType::OptimizeImports { .. } => {
+                // OptimizeImports can work on explicit files or scan workspace
+                for file in files {
+                    self.validate_file_exists(file)?;
+                }
+            }
+
+            RefactoringType::Inline { symbol_name, .. } => {
+                self.validate_perl_identifier(symbol_name, "symbol_name")?;
+
+                // Inline requires at least one file
+                if files.is_empty() {
+                    return Err(ParseError::SyntaxError {
+                        message: "Inline requires at least one target file".to_string(),
+                        location: 0,
+                    });
+                }
+                for file in files {
+                    self.validate_file_exists(file)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validates a Perl identifier (variable, subroutine, or package name).
+    ///
+    /// Perl identifiers can have sigils ($, @, %, &, *) and the name portion
+    /// must start with a letter or underscore, followed by alphanumerics/underscores.
+    fn validate_perl_identifier(&self, name: &str, param_name: &str) -> ParseResult<()> {
+        if name.is_empty() {
+            return Err(ParseError::SyntaxError {
+                message: format!("{} cannot be empty", param_name),
+                location: 0,
+            });
+        }
+
+        // Strip optional sigil
+        let bare_name = name.strip_prefix(['$', '@', '%', '&', '*']).unwrap_or(name);
+
+        if bare_name.is_empty() {
+            return Err(ParseError::SyntaxError {
+                message: format!("{} cannot be only a sigil", param_name),
+                location: 0,
+            });
+        }
+
+        // Handle qualified names (Package::name)
+        for part in bare_name.split("::") {
+            if part.is_empty() {
+                continue; // Allow leading :: for main package
+            }
+            if !Self::is_valid_identifier_part(part) {
+                return Err(ParseError::SyntaxError {
+                    message: format!(
+                        "Invalid Perl identifier in {}: '{}' (must start with letter/underscore)",
+                        param_name, name
+                    ),
+                    location: 0,
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validates a Perl subroutine name (no sigil allowed, but & is optional).
+    fn validate_perl_subroutine_name(&self, name: &str) -> ParseResult<()> {
+        if name.is_empty() {
+            return Err(ParseError::SyntaxError {
+                message: "Subroutine name cannot be empty".to_string(),
+                location: 0,
+            });
+        }
+
+        // Strip optional & sigil (only valid sigil for subs)
+        let bare_name = name.strip_prefix('&').unwrap_or(name);
+
+        // Reject other sigils
+        if bare_name.starts_with(['$', '@', '%', '*']) {
+            return Err(ParseError::SyntaxError {
+                message: format!("Invalid sigil for subroutine name: '{}'", name),
+                location: 0,
+            });
+        }
+
+        if !Self::is_valid_identifier_part(bare_name) {
+            return Err(ParseError::SyntaxError {
+                message: format!(
+                    "Invalid subroutine name: '{}' (must start with letter/underscore)",
+                    name
+                ),
+                location: 0,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Validates a qualified Perl name (Package::Subpackage::name).
+    fn validate_perl_qualified_name(&self, name: &str) -> ParseResult<()> {
+        if name.is_empty() {
+            return Err(ParseError::SyntaxError {
+                message: "Qualified name cannot be empty".to_string(),
+                location: 0,
+            });
+        }
+
+        // Each segment must be a valid identifier
+        let mut has_valid_part = false;
+        for part in name.split("::") {
+            if part.is_empty() {
+                continue; // Allow leading/trailing :: in some contexts
+            }
+            if !Self::is_valid_identifier_part(part) {
+                return Err(ParseError::SyntaxError {
+                    message: format!(
+                        "Invalid qualified name: '{}' contains invalid segment '{}'",
+                        name, part
+                    ),
+                    location: 0,
+                });
+            }
+            has_valid_part = true;
+        }
+
+        if !has_valid_part {
+            return Err(ParseError::SyntaxError {
+                message: format!("Qualified name '{}' has no valid segments", name),
+                location: 0,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Checks if a string is a valid Perl identifier component (no sigil, no ::).
+    fn is_valid_identifier_part(s: &str) -> bool {
+        let mut chars = s.chars();
+        match chars.next() {
+            Some(c) if c.is_ascii_alphabetic() || c == '_' => {
+                chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+            }
+            _ => false,
+        }
+    }
+
+    fn validate_file_exists(&self, path: &Path) -> ParseResult<()> {
+        if !path.exists() {
+            return Err(ParseError::SyntaxError {
+                message: format!("File does not exist: {}", path.display()),
+                location: 0,
+            });
+        }
+        if !path.is_file() {
+            return Err(ParseError::SyntaxError {
+                message: format!("Path is not a file: {}", path.display()),
+                location: 0,
+            });
+        }
+        Ok(())
+    }
+
+    fn validate_directory_exists(&self, path: &Path) -> ParseResult<()> {
+        if !path.exists() {
+            return Err(ParseError::SyntaxError {
+                message: format!("Directory does not exist: {}", path.display()),
+                location: 0,
+            });
+        }
+        if !path.is_dir() {
+            return Err(ParseError::SyntaxError {
+                message: format!("Path is not a directory: {}", path.display()),
+                location: 0,
+            });
+        }
         Ok(())
     }
 
@@ -1139,5 +1429,298 @@ sub complex {
         assert!(new_code.contains("($call_count, $sum) = do_math($sum, @items);"));
         // check indentation of call
         assert!(new_code.contains("    ($call_count, $sum) = do_math($sum, @items);"));
+    }
+
+    // ============================================================
+    // Validation tests for validate_operation
+    // ============================================================
+
+    mod validation_tests {
+        use super::*;
+
+        // --- Perl identifier validation tests ---
+
+        #[test]
+        fn test_validate_identifier_bare_name() {
+            let engine = RefactoringEngine::new().unwrap();
+            assert!(engine.validate_perl_identifier("foo", "test").is_ok());
+            assert!(engine.validate_perl_identifier("_private", "test").is_ok());
+            assert!(engine.validate_perl_identifier("CamelCase", "test").is_ok());
+            assert!(engine.validate_perl_identifier("name_with_123", "test").is_ok());
+        }
+
+        #[test]
+        fn test_validate_identifier_with_sigils() {
+            let engine = RefactoringEngine::new().unwrap();
+            // All valid Perl sigils should be accepted
+            assert!(engine.validate_perl_identifier("$scalar", "test").is_ok());
+            assert!(engine.validate_perl_identifier("@array", "test").is_ok());
+            assert!(engine.validate_perl_identifier("%hash", "test").is_ok());
+            assert!(engine.validate_perl_identifier("&sub", "test").is_ok());
+            assert!(engine.validate_perl_identifier("*glob", "test").is_ok());
+        }
+
+        #[test]
+        fn test_validate_identifier_qualified_names() {
+            let engine = RefactoringEngine::new().unwrap();
+            assert!(engine.validate_perl_identifier("Package::name", "test").is_ok());
+            assert!(engine.validate_perl_identifier("$Package::var", "test").is_ok());
+            assert!(engine.validate_perl_identifier("@Deep::Nested::array", "test").is_ok());
+            assert!(engine.validate_perl_identifier("::main_package", "test").is_ok());
+        }
+
+        #[test]
+        fn test_validate_identifier_empty_rejected() {
+            let engine = RefactoringEngine::new().unwrap();
+            assert!(engine.validate_perl_identifier("", "test").is_err());
+        }
+
+        #[test]
+        fn test_validate_identifier_sigil_only_rejected() {
+            let engine = RefactoringEngine::new().unwrap();
+            assert!(engine.validate_perl_identifier("$", "test").is_err());
+            assert!(engine.validate_perl_identifier("@", "test").is_err());
+            assert!(engine.validate_perl_identifier("%", "test").is_err());
+        }
+
+        #[test]
+        fn test_validate_identifier_invalid_start_char() {
+            let engine = RefactoringEngine::new().unwrap();
+            assert!(engine.validate_perl_identifier("123abc", "test").is_err());
+            assert!(engine.validate_perl_identifier("$123abc", "test").is_err());
+            assert!(engine.validate_perl_identifier("-invalid", "test").is_err());
+        }
+
+        // --- Subroutine name validation tests ---
+
+        #[test]
+        fn test_validate_subroutine_name_valid() {
+            let engine = RefactoringEngine::new().unwrap();
+            assert!(engine.validate_perl_subroutine_name("my_sub").is_ok());
+            assert!(engine.validate_perl_subroutine_name("_private_sub").is_ok());
+            assert!(engine.validate_perl_subroutine_name("&explicit_sub").is_ok());
+        }
+
+        #[test]
+        fn test_validate_subroutine_name_invalid_sigils() {
+            let engine = RefactoringEngine::new().unwrap();
+            // Subs cannot have $, @, %, * sigils
+            assert!(engine.validate_perl_subroutine_name("$not_a_sub").is_err());
+            assert!(engine.validate_perl_subroutine_name("@not_a_sub").is_err());
+            assert!(engine.validate_perl_subroutine_name("%not_a_sub").is_err());
+        }
+
+        #[test]
+        fn test_validate_subroutine_name_empty() {
+            let engine = RefactoringEngine::new().unwrap();
+            assert!(engine.validate_perl_subroutine_name("").is_err());
+        }
+
+        // --- Qualified name validation tests ---
+
+        #[test]
+        fn test_validate_qualified_name_valid() {
+            let engine = RefactoringEngine::new().unwrap();
+            assert!(engine.validate_perl_qualified_name("Package").is_ok());
+            assert!(engine.validate_perl_qualified_name("Package::Sub").is_ok());
+            assert!(engine.validate_perl_qualified_name("Deep::Nested::Name").is_ok());
+        }
+
+        #[test]
+        fn test_validate_qualified_name_empty_rejected() {
+            let engine = RefactoringEngine::new().unwrap();
+            assert!(engine.validate_perl_qualified_name("").is_err());
+            assert!(engine.validate_perl_qualified_name("::").is_err());
+        }
+
+        #[test]
+        fn test_validate_qualified_name_invalid_segment() {
+            let engine = RefactoringEngine::new().unwrap();
+            assert!(engine.validate_perl_qualified_name("Package::123invalid").is_err());
+        }
+
+        // --- File count limit validation tests ---
+
+        #[test]
+        fn test_validate_file_count_limit() {
+            let engine = RefactoringEngine::new().unwrap();
+            // Create more files than allowed
+            let files: Vec<PathBuf> =
+                (0..150).map(|i| PathBuf::from(format!("/fake/{}.pl", i))).collect();
+
+            let op = RefactoringType::OptimizeImports {
+                remove_unused: true,
+                sort_alphabetically: true,
+                group_by_type: false,
+            };
+
+            let result = engine.validate_operation(&op, &files);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("exceeds maximum file limit"));
+        }
+
+        // --- ExtractMethod validation tests ---
+
+        #[test]
+        fn test_extract_method_requires_file() {
+            let engine = RefactoringEngine::new().unwrap();
+            let op = RefactoringType::ExtractMethod {
+                method_name: "new_method".to_string(),
+                start_position: (1, 0),
+                end_position: (5, 0),
+            };
+
+            let result = engine.validate_operation(&op, &[]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("requires a target file"));
+        }
+
+        #[test]
+        fn test_extract_method_single_file_only() {
+            let file1 = tempfile::NamedTempFile::new().unwrap();
+            let file2 = tempfile::NamedTempFile::new().unwrap();
+
+            let engine = RefactoringEngine::new().unwrap();
+            let op = RefactoringType::ExtractMethod {
+                method_name: "new_method".to_string(),
+                start_position: (1, 0),
+                end_position: (5, 0),
+            };
+
+            let result = engine
+                .validate_operation(&op, &[file1.path().to_path_buf(), file2.path().to_path_buf()]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("operates on a single file"));
+        }
+
+        #[test]
+        fn test_extract_method_invalid_range() {
+            let file = tempfile::NamedTempFile::new().unwrap();
+
+            let engine = RefactoringEngine::new().unwrap();
+            let op = RefactoringType::ExtractMethod {
+                method_name: "new_method".to_string(),
+                start_position: (10, 0),
+                end_position: (5, 0), // end before start
+            };
+
+            let result = engine.validate_operation(&op, &[file.path().to_path_buf()]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("must be before end"));
+        }
+
+        #[test]
+        fn test_extract_method_invalid_subroutine_name() {
+            let file = tempfile::NamedTempFile::new().unwrap();
+
+            let engine = RefactoringEngine::new().unwrap();
+            let op = RefactoringType::ExtractMethod {
+                method_name: "$invalid".to_string(), // sigil not allowed for sub names
+                start_position: (1, 0),
+                end_position: (5, 0),
+            };
+
+            let result = engine.validate_operation(&op, &[file.path().to_path_buf()]);
+            assert!(result.is_err());
+        }
+
+        // --- MoveCode validation tests ---
+
+        #[test]
+        fn test_move_code_requires_elements() {
+            use std::io::Write;
+            let mut file = tempfile::NamedTempFile::new().unwrap();
+            write!(file, "# source").unwrap();
+
+            let engine = RefactoringEngine::new().unwrap();
+            let op = RefactoringType::MoveCode {
+                source_file: file.path().to_path_buf(),
+                target_file: PathBuf::from("target.pl"),
+                elements: vec![], // empty
+            };
+
+            let result = engine.validate_operation(&op, &[]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("requires at least one element"));
+        }
+
+        // --- SymbolRename validation tests ---
+
+        #[test]
+        fn test_symbol_rename_accepts_sigils() {
+            use std::io::Write;
+            let mut file = tempfile::NamedTempFile::new().unwrap();
+            write!(file, "my $old = 1;").unwrap();
+
+            let engine = RefactoringEngine::new().unwrap();
+            let op = RefactoringType::SymbolRename {
+                old_name: "$old_var".to_string(),
+                new_name: "$new_var".to_string(),
+                scope: RefactoringScope::File(file.path().to_path_buf()),
+            };
+
+            let result = engine.validate_operation(&op, &[]);
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn test_symbol_rename_workspace_scope_no_files_required() {
+            let engine = RefactoringEngine::new().unwrap();
+            let op = RefactoringType::SymbolRename {
+                old_name: "old_sub".to_string(),
+                new_name: "new_sub".to_string(),
+                scope: RefactoringScope::Workspace,
+            };
+
+            let result = engine.validate_operation(&op, &[]);
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn test_symbol_rename_fileset_requires_files() {
+            let engine = RefactoringEngine::new().unwrap();
+            let op = RefactoringType::SymbolRename {
+                old_name: "old_sub".to_string(),
+                new_name: "new_sub".to_string(),
+                scope: RefactoringScope::FileSet(vec![]), // empty
+            };
+
+            let result = engine.validate_operation(&op, &[]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("requires at least one file"));
+        }
+
+        // --- Inline validation tests ---
+
+        #[test]
+        fn test_inline_requires_files() {
+            let engine = RefactoringEngine::new().unwrap();
+            let op =
+                RefactoringType::Inline { symbol_name: "$var".to_string(), all_occurrences: true };
+
+            let result = engine.validate_operation(&op, &[]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("requires at least one target file"));
+        }
+
+        // --- Modernize validation tests ---
+
+        #[test]
+        fn test_modernize_requires_patterns() {
+            let engine = RefactoringEngine::new().unwrap();
+            let op = RefactoringType::Modernize { patterns: vec![] };
+
+            let result = engine.validate_operation(&op, &[]);
+            assert!(result.is_err());
+            let err_msg = format!("{:?}", result.unwrap_err());
+            assert!(err_msg.contains("requires at least one pattern"));
+        }
     }
 }
