@@ -21,6 +21,7 @@
 //! let mut adapter = BridgeAdapter::new();
 //! adapter.spawn_pls_dap().await?;
 //! adapter.proxy_messages().await?;
+//! adapter.shutdown().await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -81,6 +82,11 @@ impl BridgeAdapter {
     /// # }
     /// ```
     pub async fn spawn_pls_dap(&mut self) -> Result<()> {
+        // Ensure any existing process is cleaned up
+        if self.child_process.is_some() {
+            let _ = self.shutdown().await;
+        }
+
         // Find perl binary using platform module
         let perl_path =
             crate::platform::resolve_perl_path().context("Failed to find perl binary on PATH")?;
@@ -119,6 +125,7 @@ impl BridgeAdapter {
     /// let mut adapter = BridgeAdapter::new();
     /// adapter.spawn_pls_dap().await?;
     /// adapter.proxy_messages().await?;
+    /// adapter.shutdown().await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -144,29 +151,53 @@ impl BridgeAdapter {
         let mut parent_stdin = tokio::io::stdin();
         let mut parent_stdout = tokio::io::stdout();
 
+        // DAP uses Content-Length framing, so we can safely proxy raw bytes
+        // without message-level inspection. The protocol is self-framing.
+        // The proxying strategy uses bidirectional tokio::io::copy for maximum efficiency.
+
         // Create bidirectional copy tasks
         // Task 1: Client (Parent Stdin) -> Server (Child Stdin)
         let client_to_server = async move {
-            tokio::io::copy(&mut parent_stdin, &mut child_stdin).await
+            tokio::io::copy(&mut parent_stdin, &mut child_stdin)
+                .await
                 .context("Error copying from client to server")?;
+            // Shut down child_stdin to signal EOF to the server
+            let _ = child_stdin.shutdown().await;
             Ok::<(), anyhow::Error>(())
         };
 
         // Task 2: Server (Child Stdout) -> Client (Parent Stdout)
         let server_to_client = async move {
-            tokio::io::copy(&mut child_stdout, &mut parent_stdout).await
+            tokio::io::copy(&mut child_stdout, &mut parent_stdout)
+                .await
                 .context("Error copying from server to client")?;
-            parent_stdout.flush().await.context("Error flushing to client")?;
+            parent_stdout
+                .flush()
+                .await
+                .context("Error flushing to client")?;
             Ok::<(), anyhow::Error>(())
         };
 
-        // Run both tasks concurrently and wait for either to finish
-        // If either stream closes or errors, we should shut down
-        tokio::select! {
-            res = client_to_server => res?,
-            res = server_to_client => res?,
-        }
+        // Run both tasks concurrently and wait for both to finish.
+        // We use join instead of select to ensure graceful shutdown:
+        // if the client close its input, we want to continue proxying
+        // any remaining output from the server.
+        let (res1, res2) = tokio::join!(client_to_server, server_to_client);
+        res1?;
+        res2?;
 
+        Ok(())
+    }
+
+    /// Shutdown the bridge adapter and the Perl::LanguageServer process
+    ///
+    /// This method explicitly kills the child process and waits for it to exit.
+    /// It should be used for graceful cleanup in async contexts.
+    pub async fn shutdown(&mut self) -> Result<()> {
+        if let Some(mut child) = self.child_process.take() {
+            child.kill().await.context("Failed to kill Perl::LanguageServer process")?;
+            child.wait().await.context("Failed to wait for Perl::LanguageServer process")?;
+        }
         Ok(())
     }
 }
