@@ -99,6 +99,7 @@ mutation_*.txt
 # JSON artifacts
 *_EVIDENCE.json
 *_METADATA*.json
+corpus_audit_report.json
 
 # Misplaced test files
 test_behavior.rs

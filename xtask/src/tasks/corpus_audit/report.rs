@@ -124,16 +124,18 @@ fn byte_offset_to_line_col(source: &str, byte_offset: usize) -> (usize, usize) {
 
 /// Extract code snippet around a line (up to 2 lines context)
 fn extract_snippet(source: &str, line_number: usize) -> String {
-    let lines: Vec<&str> = source.lines().collect();
     let line_idx = line_number.saturating_sub(1); // Convert to 0-based
+    let line = match source.lines().nth(line_idx) {
+        Some(l) => l,
+        None => return String::new(),
+    };
 
-    if line_idx >= lines.len() {
-        return String::new();
+    // Truncate long lines to keep report manageable
+    if line.len() > 80 {
+        format!("{}...", &line[..77])
+    } else {
+        line.to_string()
     }
-
-    let line = lines[line_idx];
-    // Truncate long lines
-    if line.len() > 80 { format!("{}...", &line[..77]) } else { line.to_string() }
 }
 
 /// Parse found/expected tokens from error message
