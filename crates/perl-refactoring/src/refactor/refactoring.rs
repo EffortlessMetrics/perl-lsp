@@ -1322,7 +1322,7 @@ sub test {
         // Line 5: "    print $x;\n"
         // Line 8: "    # End extraction\n"
         let result = engine
-            .perform_extract_method("extracted_sub", (5, 0), (8, 0), &[path.clone()])
+            .perform_extract_method("extracted_sub", (5, 0), (8, 0), std::slice::from_ref(&path))
             .unwrap();
 
         assert!(result.success);
@@ -1369,8 +1369,9 @@ sub existing {
         // selection should include lines 8 and 9 (0-indexed)
         // Line 8: "    print $val;\n"
         // Line 9: "    my $new_val = $val * 2;\n"
-        let result =
-            engine.perform_extract_method("helper", (8, 0), (10, 0), &[path.clone()]).unwrap();
+        let result = engine
+            .perform_extract_method("helper", (8, 0), (10, 0), std::slice::from_ref(&path))
+            .unwrap();
 
         assert!(result.success);
 
@@ -1412,8 +1413,9 @@ sub complex {
 
         // Line 5: "    foreach my $item (@items) {"
         // Line 10: "    # end"
-        let result =
-            engine.perform_extract_method("do_math", (5, 0), (10, 0), &[path.clone()]).unwrap();
+        let result = engine
+            .perform_extract_method("do_math", (5, 0), (10, 0), std::slice::from_ref(&path))
+            .unwrap();
 
         assert!(result.success);
         let new_code = std::fs::read_to_string(&path).unwrap();
