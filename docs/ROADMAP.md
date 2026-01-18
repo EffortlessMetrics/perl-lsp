@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-01-11)**: v0.9.0 release candidate — semantic definition + production hardening complete.
+> **Status (2026-01-18)**: v0.9.0 release — semantic definition + production hardening complete.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -61,9 +61,9 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 
 ## Next Releases
 
-### v0.9.0: "Semantic-Ready" Milestone — Release Candidate
+### v0.9.0: "Semantic-Ready" Milestone — Release
 
-**Status**: Release Candidate (2026-01-11)
+**Status**: Released (2026-01-18)
 
 **Goal**: A release that external users can try without reading internal docs.
 
@@ -97,10 +97,10 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 **Exit criteria**:
 - `nix develop -c just ci-gate` green on MSRV ✓
 - `bash scripts/ignored-test-count.sh` shows 9 tracked debt (8 bug, 1 manual) ✓
-- Release notes generated ⏳
-- Tag cut ⏳
+- Release notes generated ✓
+- Tag cut ✓
 
-**Metrics** (2026-01-11):
+**Metrics** (2026-01-18):
 - **LSP Coverage**: 59% (33/56 advertised GA from `features.toml`)
 - **Total GA Features**: 37 implemented (includes non-advertised protocol features)
 - **Test Count**: 337 lib tests passing, 1 ignored

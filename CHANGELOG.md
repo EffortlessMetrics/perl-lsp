@@ -5,12 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - v0.9.0-semantic-lsp-ready
+## [v0.9.0] - 2026-01-18
 
 > **Release checklist** (exit criteria for tagging):
-> - [ ] `nix develop -c just ci-gate` green on MSRV
-> - [ ] `bash scripts/ignored-test-count.sh` shows BUG=0, MANUAL≤1
-> - [ ] README + CURRENT_STATUS + ROADMAP aligned
+> - [x] `nix develop -c just ci-gate` green on MSRV
+> - [x] `bash scripts/ignored-test-count.sh` shows BUG=0, MANUAL≤1
+> - [x] README + CURRENT_STATUS + ROADMAP aligned
 
 ### Added - Semantic Definition & LSP Integration (Issue #188 Phase 1 Complete - 2025-11-20)
 

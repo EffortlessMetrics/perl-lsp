@@ -132,5 +132,5 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-01-07*
+*Last Updated: 2026-01-18*
 *Canonical docs: [ROADMAP.md](ROADMAP.md), [features.toml](../features.toml)*

@@ -3,7 +3,7 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: 0.8.8 - Enhanced Builtin Function Parsing & Dual Function Call Indexing + PR #160 API Documentation Infrastructure & Parser Robustness (SPEC-149)
+**Latest Release**: v0.9.0 - Semantic Ready (Issue #188 Phase 1 Complete) + Production Hardening
 
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
