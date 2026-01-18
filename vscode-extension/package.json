@@ -94,11 +94,6 @@
           "default": true,
           "markdownDescription": "Automatically download `perl-lsp` binary if not found locally. Set to false for internal deployments using `serverPath`."
         },
-        "perl-lsp.downloadBaseUrl": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Base URL for internal binary hosting. When set, downloads from this location instead of GitHub releases. Should point to a directory containing release files."
-        },
         "perl-lsp.trace.server": {
           "type": "string",
           "enum": [
@@ -200,12 +195,17 @@
       "editor/context": [
         {
           "command": "perl-lsp.extractSubroutine",
-          "when": "resourceExtname == .pl || resourceExtname == .pm",
+          "when": "editorLangId == perl",
           "group": "1_modification"
         },
         {
           "command": "perl-lsp.extractVariable",
-          "when": "resourceExtname == .pl || resourceExtname == .pm",
+          "when": "editorLangId == perl",
+          "group": "1_modification"
+        },
+        {
+          "command": "perl-lsp.inlineVariable",
+          "when": "editorLangId == perl",
           "group": "1_modification"
         }
       ]
@@ -214,7 +214,7 @@
       {
         "command": "perl-lsp.organizeImports",
         "key": "shift+alt+o",
-        "when": "editorTextFocus && resourceExtname == .pl"
+        "when": "editorTextFocus && editorLangId == perl"
       }
     ],
     "snippets": [
