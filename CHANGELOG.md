@@ -43,6 +43,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Debug Logging**: Comprehensive response logging for troubleshooting (`SCALAR DEF RESPONSE`, etc.)
   - **CI Integration**: `just ci-lsp-def` target for automated validation
 
+### Added - Workspace Refactoring & Advanced LSP Features
+
+- **Advanced Refactoring Capabilities** (Issue #315, #298)
+  - **Extract Method Refactoring**: Automated extraction of selected code into new subroutines with parameter detection
+  - **Refactoring Rollback**: Transactional safety with `create_backup` infrastructure for atomic operations
+  - **Symbol Rename Validation**: Enhanced validation ensuring sigil consistency during rename operations
+  - **Refactoring Safety**: Comprehensive validation to prevent invalid code generation
+
+- **LSP 3.18 & Protocol Enhancements**
+  - **Inlay Hints**: New resolver for providing parameter names and type hints in the editor
+  - **Context-Aware Completions**: Improved completion triggering logic and relevance scoring
+  - **Capabilities Resolver**: Modularized capability negotiation for better client compatibility
+  - **UTF-16 Wire Types**: Strict compliance with LSP character encoding standards
+
+- **Developer Experience & Forensics**
+  - **PR Forensics System**: New telemetry infrastructure for tracking CI performance and build metrics
+  - **Incremental Metrics**: Assertions to validate incremental parsing efficiency (node reuse rates)
+  - **Local-First Guardrails**: Enforced `nix develop` gates to catch issues before CI
+  - **Missing Docs Enforcement**: `#![warn(missing_docs)]` now validated in CI (Issue #197)
+
+### Added - Core Features & Improvements
+
 - **Statement Tracker & Heredoc Support** - ✅ **100% COMPLETE (Issue #182)**
   - **HeredocContext**: Complete heredoc state tracking with delimiter management
   - **BlockBoundary & BlockType**: Comprehensive block nesting and boundary detection
@@ -112,6 +134,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Performance**: <50ms breakpoint operations, <100ms step/continue, <200ms variable expansion
 - **Quality Assurance**: 71/71 tests passing with comprehensive mutation hardening
 - **Documentation**: New `crates/perl-dap/README.md` and enhanced `docs/DAP_USER_GUIDE.md`
+
+### Changed - Architecture & Hardening
+
+- **Panic-Safe Architecture** (Issue #143, #292)
+  - **Panic Elimination**: Enforced default of `match` or `if let` over `.unwrap()` in production code
+  - **Error Propagation**: Comprehensive `Result` types replacing panic-prone operations
+  - **Stability Tests**: Verification that server remains stable under malformed input
+
+- **LSP Protocol Modularization** (#297, #309)
+  - **Engine Separation**: Strict separation between core logic (Engine) and protocol handling (LSP)
+  - **Handler Modularization**: Individual handlers moved to dedicated modules for maintainability
+  - **Fallback/Support Isolation**: Clear boundaries for helper functions and fallback logic
+
+- **Test Infrastructure Stability**
+  - **Broken Pipe Elimination**: 123+ tests unignored after fixing IO race conditions (Issue #251)
+  - **Test Harness Hardening**: Robust cleanup and process management for test servers
+  - **Metric Ratchets**: CI failure on performance regression
 
 ### Changed - Project Status & Documentation
 
