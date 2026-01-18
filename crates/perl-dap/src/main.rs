@@ -5,7 +5,8 @@
 
 use clap::Parser;
 use perl_dap::{DapConfig, DapServer};
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{EnvFilter, fmt};
+use std::io;
 
 #[derive(Parser, Debug)]
 #[command(name = "perl-dap", author, version, about, long_about = None)]
@@ -27,18 +28,24 @@ struct Args {
     log_level: String,
 }
 
+fn init_logging(log_level: &str) {
+    let filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new(log_level))
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    fmt()
+        .with_env_filter(filter)
+        .with_writer(io::stderr)
+        .init();
+}
+
 fn main() -> anyhow::Result<()> {
     // Parse command-line arguments (AC5)
     let args = Args::parse();
 
     // Initialize logging (AC5)
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new(&args.log_level)),
-        )
-        .with_writer(std::io::stderr)
-        .init();
+    init_logging(&args.log_level);
+    tracing::info!("perl-dap: Debug Adapter Protocol server initialized");
 
     // Determine mode
     let use_socket = args.socket;
@@ -49,18 +56,19 @@ fn main() -> anyhow::Result<()> {
     };
 
     let _server = DapServer::new(config)?;
+    // TODO: implement server.run() (AC5)
 
     if use_socket {
         tracing::info!("Starting DAP server on port {}", args.port);
-        // TODO: Implement socket transport (AC5)
-        println!("perl-dap: Debug Adapter Protocol server listening on port {} (placeholder)", args.port);
+        // Socket transport implementation is planned for Phase 2 (AC5)
+        anyhow::bail!("Socket transport mode is not yet implemented. Please use stdio mode.");
     } else {
         tracing::info!("Starting DAP server on stdio");
         // TODO: Run stdio transport (AC5)
-        println!("perl-dap: Debug Adapter Protocol server on stdio (placeholder)");
+        tracing::info!("perl-dap: Debug Adapter Protocol server on stdio (placeholder)");
     }
 
-    println!("Run tests with: cargo test -p perl-dap");
+    tracing::info!("Run tests with: cargo test -p perl-dap");
 
     Ok(())
 }
