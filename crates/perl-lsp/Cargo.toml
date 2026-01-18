@@ -22,8 +22,6 @@ include = [
 [dependencies]
 perl-parser = { path = "../perl-parser", version = "0.8.8", features = ["test-performance"] }
 perl-lsp-providers = { path = "../perl-lsp-providers", version = "0.8.8", features = ["lsp-compat"] }
-perl-lsp-protocol = { path = "../perl-lsp-protocol", version = "0.8.8" }
-perl-lsp-transport = { path = "../perl-lsp-transport", version = "0.8.8" }
 perl-lexer = { path = "../perl-lexer", version = "0.8.8" }
 perl-position-tracking = { path = "../perl-position-tracking", version = "0.8.8", features = ["lsp-compat"] }
 lsp-types = "0.97.0"
@@ -58,7 +56,7 @@ incremental = ["perl-parser/incremental"]  # Incremental parsing support
 test-compat = []  # Enables compatibility shim for old test API
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
-lsp-ga-lock = ["perl-lsp-protocol/lsp-ga-lock"]
+lsp-ga-lock = []
 experimental-features = []  # Experimental LSP features for testing
 stress-tests = []  # Enable stress tests that are too slow for CI
 

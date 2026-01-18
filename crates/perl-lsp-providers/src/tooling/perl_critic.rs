@@ -3,13 +3,12 @@
 //! This module provides integration with Perl::Critic for static code analysis
 //! and policy enforcement in Perl code.
 
-use super::subprocess_runtime::SubprocessRuntime;
 use crate::ast::Node;
 use crate::position::{Position, Range};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::process::Command;
 
 /// Severity levels for Perl::Critic violations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,21 +113,12 @@ pub struct CriticAnalyzer {
     config: CriticConfig,
     /// Cache of violations keyed by file path
     cache: HashMap<String, Vec<Violation>>,
-    /// Subprocess runtime for executing perlcritic
-    runtime: Arc<dyn SubprocessRuntime>,
 }
 
 impl CriticAnalyzer {
-    /// Creates a new analyzer with the given configuration and runtime.
-    pub fn new(config: CriticConfig, runtime: Arc<dyn SubprocessRuntime>) -> Self {
-        Self { config, cache: HashMap::new(), runtime }
-    }
-
-    /// Creates a new analyzer with the OS subprocess runtime (non-WASM only).
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn with_os_runtime(config: CriticConfig) -> Self {
-        use super::subprocess_runtime::OsSubprocessRuntime;
-        Self::new(config, Arc::new(OsSubprocessRuntime::new()))
+    /// Creates a new analyzer with the given configuration.
+    pub fn new(config: CriticConfig) -> Self {
+        Self { config, cache: HashMap::new() }
     }
 
     /// Run Perl::Critic on a file
@@ -140,44 +130,40 @@ impl CriticAnalyzer {
             return Ok(cached.clone());
         }
 
-        // Build argument list
-        let mut args: Vec<String> = Vec::new();
+        // Build perlcritic command
+        let mut cmd = Command::new("perlcritic");
 
         // Add severity
-        args.push(format!("--severity={}", self.config.severity));
+        cmd.arg(format!("--severity={}", self.config.severity));
 
         // Add profile if specified
         if let Some(ref profile) = self.config.profile {
-            args.push(format!("--profile={}", profile));
+            cmd.arg(format!("--profile={}", profile));
         }
 
         // Add theme if specified
         if let Some(ref theme) = self.config.theme {
-            args.push(format!("--theme={}", theme));
+            cmd.arg(format!("--theme={}", theme));
         }
 
         // Add includes
         for policy in &self.config.include {
-            args.push(format!("--include={}", policy));
+            cmd.arg(format!("--include={}", policy));
         }
 
         // Add excludes
         for policy in &self.config.exclude {
-            args.push(format!("--exclude={}", policy));
+            cmd.arg(format!("--exclude={}", policy));
         }
 
         // Use verbose format for parsing
-        args.push("--verbose=%f:%l:%c:%s:%p:%m\\n".to_string());
+        cmd.arg("--verbose=%f:%l:%c:%s:%p:%m\\n");
 
         // Add file path
-        args.push(path_str.clone());
+        cmd.arg(file_path);
 
-        // Convert to &str slice for the runtime
-        let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-
-        // Execute command via runtime
-        let output =
-            self.runtime.run_command("perlcritic", &args_refs, None).map_err(|e| e.message)?;
+        // Execute command
+        let output = cmd.output().map_err(|e| format!("Failed to run perlcritic: {}", e))?;
 
         // Parse output
         let violations = self.parse_output(&output.stdout, &path_str)?;
@@ -508,83 +494,5 @@ mod tests {
         // Test with strict/warnings
         let violations = analyzer.analyze(&ast, "use strict;\nuse warnings;\nprint 'hello';\n");
         assert_eq!(violations.len(), 0);
-    }
-
-    #[test]
-    fn test_analyzer_with_mock_runtime() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
-
-        let runtime = Arc::new(MockSubprocessRuntime::new());
-        // Mock perlcritic output format: file:line:column:severity:policy:message
-        // Note: The current parser uses splitn(6, ':') which doesn't handle policy names
-        // with '::' well - using a simple policy name for this test
-        let mock_output = b"test.pl:5:1:3:RequireStrict:Code does not use strict\n";
-        runtime.add_response(MockResponse::success(mock_output.to_vec()));
-
-        let config = CriticConfig::default();
-        let mut analyzer = CriticAnalyzer::new(config, runtime.clone());
-
-        let result = analyzer.analyze_file(Path::new("test.pl"));
-        assert!(result.is_ok());
-
-        let violations = result.unwrap();
-        assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].policy, "RequireStrict");
-        assert_eq!(violations[0].range.start.line, 4); // 0-indexed
-
-        let invocations = runtime.invocations();
-        assert_eq!(invocations.len(), 1);
-        assert_eq!(invocations[0].program, "perlcritic");
-        assert!(invocations[0].args.contains(&"--severity=3".to_string()));
-    }
-
-    #[test]
-    fn test_analyzer_caching() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
-
-        let runtime = Arc::new(MockSubprocessRuntime::new());
-        runtime.add_response(MockResponse::success(b"".to_vec()));
-
-        let config = CriticConfig::default();
-        let mut analyzer = CriticAnalyzer::new(config, runtime.clone());
-
-        // First call should invoke runtime
-        let result1 = analyzer.analyze_file(Path::new("test.pl"));
-        assert!(result1.is_ok());
-
-        // Second call should use cache
-        let result2 = analyzer.analyze_file(Path::new("test.pl"));
-        assert!(result2.is_ok());
-
-        // Only one invocation should have occurred
-        assert_eq!(runtime.invocations().len(), 1);
-    }
-
-    #[test]
-    fn test_analyzer_config_args() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
-
-        let runtime = Arc::new(MockSubprocessRuntime::new());
-        runtime.add_response(MockResponse::success(b"".to_vec()));
-
-        let config = CriticConfig {
-            severity: 1,
-            profile: Some("/path/to/.perlcriticrc".to_string()),
-            theme: Some("pbp".to_string()),
-            include: vec!["RequireUseStrict".to_string()],
-            exclude: vec!["ProhibitMagicNumbers".to_string()],
-            ..Default::default()
-        };
-        let mut analyzer = CriticAnalyzer::new(config, runtime.clone());
-
-        let _ = analyzer.analyze_file(Path::new("test.pl"));
-
-        let invocations = runtime.invocations();
-        assert_eq!(invocations.len(), 1);
-        assert!(invocations[0].args.contains(&"--severity=1".to_string()));
-        assert!(invocations[0].args.contains(&"--profile=/path/to/.perlcriticrc".to_string()));
-        assert!(invocations[0].args.contains(&"--theme=pbp".to_string()));
-        assert!(invocations[0].args.contains(&"--include=RequireUseStrict".to_string()));
-        assert!(invocations[0].args.contains(&"--exclude=ProhibitMagicNumbers".to_string()));
     }
 }

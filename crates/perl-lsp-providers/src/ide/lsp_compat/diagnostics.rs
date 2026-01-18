@@ -272,8 +272,15 @@ impl DiagnosticsProvider {
                 IssueKind::UnquotedBareword => "unquoted-bareword",
             };
 
+            // Calculate byte position for the line number
+            let line_start = source
+                .lines()
+                .take(issue.line.saturating_sub(1))
+                .map(|l| l.len() + 1)
+                .sum::<usize>();
+
             diagnostics.push(Diagnostic {
-                range: issue.range,
+                range: (line_start, line_start + issue.variable_name.len()),
                 severity,
                 code: Some(code.to_string()),
                 message: issue.description.clone(),

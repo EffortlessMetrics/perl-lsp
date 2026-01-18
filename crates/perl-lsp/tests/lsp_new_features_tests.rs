@@ -2,19 +2,7 @@
 use serde_json::json;
 
 mod common;
-use common::{initialize_lsp, send_notification, send_request, start_lsp_server, LspServer};
-
-fn resolve_link(server: &mut LspServer, link: &serde_json::Value) -> Option<serde_json::Value> {
-    let response = send_request(
-        server,
-        json!({
-            "jsonrpc": "2.0",
-            "method": "documentLink/resolve",
-            "params": link
-        }),
-    );
-    response.get("result").cloned()
-}
+use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
 
 /// Test document links for MetaCPAN
 /// NOTE: Feature incomplete - workspace_roots() returns empty, document links not fully working
@@ -60,11 +48,8 @@ require Module::Load;
     let links = response["result"].as_array().unwrap();
     assert!(links.len() >= 3, "Should have links for Data::Dumper, File::Path, and Module::Load");
 
-    let resolved_links: Vec<_> =
-        links.iter().filter_map(|link| resolve_link(&mut server, link)).collect();
-
     // Check Data::Dumper link
-    let dumper_link = resolved_links
+    let dumper_link = links
         .iter()
         .find(|l| l["target"].as_str().unwrap_or("").contains("Data::Dumper"))
         .expect("Should have Data::Dumper link");
@@ -112,18 +97,10 @@ do "config/settings.pl";
     );
 
     let links = response["result"].as_array().unwrap();
-    if links.is_empty() {
-        return;
-    }
-
-    let resolved_links: Vec<_> =
-        links.iter().filter_map(|link| resolve_link(&mut server, link)).collect();
-    if resolved_links.is_empty() {
-        return;
-    }
+    assert!(links.len() >= 2, "Should have links for lib/Utils.pm and config/settings.pl");
 
     // Check that links are file:// URIs
-    for link in resolved_links {
+    for link in links {
         let target = link["target"].as_str().unwrap_or("");
         assert!(target.starts_with("file://"), "Local file links should use file:// protocol");
     }

@@ -492,7 +492,6 @@ mod doc_validation_helpers {
     }
 
     /// Analyzes PSTX pipeline stage coverage across modules
-    #[allow(dead_code)]
     pub fn analyze_pipeline_coverage(
         module_paths: &[&str],
         src_dir: &str,
@@ -2386,14 +2385,14 @@ pub fn bad_refs() {}
                     let path = entry.path();
                     if path.is_dir() {
                         stack.push(path);
-                    } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs")
-                        && let Ok(relative) = path.strip_prefix(root)
-                    {
-                        let rel = relative.to_string_lossy().replace('\\', "/");
-                        files.push(SourceFile {
-                            display_path: format!("{}/{}", prefix, rel),
-                            full_path: path,
-                        });
+                    } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
+                        if let Ok(relative) = path.strip_prefix(root) {
+                            let rel = relative.to_string_lossy().replace('\\', "/");
+                            files.push(SourceFile {
+                                display_path: format!("{}/{}", prefix, rel),
+                                full_path: path,
+                            });
+                        }
                     }
                 }
             }

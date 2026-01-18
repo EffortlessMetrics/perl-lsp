@@ -73,7 +73,7 @@ fn lsp_virtual_perldoc_strict() {
     match result {
         Ok(content) => {
             let text = content["text"].as_str().expect("Should have text field");
-            assert!(!text.is_empty(), "Content should not be empty");
+            assert!(text.len() > 0, "Content should not be empty");
             // Verify it contains documentation-like content
             assert!(
                 text.to_lowercase().contains("strict") || text.to_lowercase().contains("pragma"),

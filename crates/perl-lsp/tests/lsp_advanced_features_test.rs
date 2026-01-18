@@ -3,8 +3,9 @@
 //! Tests for snippets, templates, test runner integration, and advanced IDE features
 //!
 //! NOTE: This test file is gated behind the `lsp-extras` feature because:
-//! 1. Many of these tests are for speculative/future features not yet implemented
-//! 2. The tests exercise mocked/stubbed behavior rather than full LSP harness coverage
+//! 1. The AdvancedTestContext doesn't properly initialize the LSP server
+//! 2. Many of these tests are for speculative/future features not yet implemented
+//! 3. The tests use a broken initialization pattern (init params are computed but discarded)
 //!
 //! To run these tests: `cargo test -p perl-lsp --features lsp-extras --test lsp_advanced_features_test`
 //! These tests should be rewritten with proper LspHarness before enabling in CI.
@@ -22,60 +23,14 @@ struct AdvancedTestContext {
     workspace_root: PathBuf,
     snippet_registry: HashMap<String, String>,
     template_cache: HashMap<String, String>,
-    initialized: bool,
 }
 
 impl AdvancedTestContext {
-    fn new_initialized() -> Self {
-        let mut ctx = Self::new_uninitialized();
-        ctx.initialize_or_reuse();
-        ctx
-    }
-
-    fn new_uninitialized() -> Self {
+    fn new() -> Self {
         let server = LspServer::new();
 
-        let mut snippet_registry = HashMap::new();
-        let mut template_cache = HashMap::new();
-
-        // Register common Perl snippets
-        snippet_registry.insert("sub".to_string(), 
-            "sub ${1:function_name} {\n    my (${2:\\$args}) = @_;\n    ${3:# code}\n    return ${4:\\$result};\n}".to_string());
-        snippet_registry.insert("class".to_string(),
-            "package ${1:ClassName};\nuse strict;\nuse warnings;\n\nsub new {\n    my (\\$class, %args) = @_;\n    return bless \\\\%args, \\$class;\n}\n\n${2:# methods}\n\n1;".to_string());
-        snippet_registry.insert("test".to_string(),
-            "use Test::More tests => ${1:1};\n\n${2:# test code}\n\nok(${3:1}, '${4:test description}');".to_string());
-
-        // Register project templates
-        // Templates would be loaded from files in real implementation
-        template_cache.insert(
-            "module".to_string(),
-            "package {{ MODULE_NAME }};
-1;"
-            .to_string(),
-        );
-        template_cache.insert(
-            "script".to_string(),
-            "#!/usr/bin/perl\nuse strict;\nuse warnings;\n".to_string(),
-        );
-        template_cache.insert("test".to_string(), "use Test::More;\ndone_testing();\n".to_string());
-
-        Self {
-            server,
-            workspace_root: PathBuf::from("/workspace"),
-            snippet_registry,
-            template_cache,
-            initialized: false,
-        }
-    }
-
-    fn initialize_or_reuse(&mut self) {
-        if self.initialized {
-            return;
-        }
-
-        // Initialize with advanced capabilities.
-        let init_params = json!({
+        // Initialize with advanced capabilities
+        let _init_params = json!({
             "processId": 1234,
             "rootUri": "file:///workspace",
             "capabilities": {
@@ -118,30 +73,42 @@ impl AdvancedTestContext {
             }
         });
 
-        let init_request = JsonRpcRequest {
-            _jsonrpc: "2.0".to_string(),
-            id: Some(json!(1)),
-            method: "initialize".to_string(),
-            params: Some(init_params),
-        };
-        self.server.handle_request(init_request);
+        // Server will be initialized when tests run
 
-        let initialized_notification = JsonRpcRequest {
-            _jsonrpc: "2.0".to_string(),
-            id: None,
-            method: "initialized".to_string(),
-            params: Some(json!({})),
-        };
-        self.server.handle_request(initialized_notification);
-        self.initialized = true;
+        let mut snippet_registry = HashMap::new();
+        let mut template_cache = HashMap::new();
+
+        // Register common Perl snippets
+        snippet_registry.insert("sub".to_string(),
+            "sub ${1:function_name} {\n    my (${2:\\$args}) = @_;\n    ${3:# code}\n    return ${4:\\$result};\n}".to_string());
+        snippet_registry.insert("class".to_string(),
+            "package ${1:ClassName};\nuse strict;\nuse warnings;\n\nsub new {\n    my (\\$class, %args) = @_;\n    return bless \\\\%args, \\$class;\n}\n\n${2:# methods}\n\n1;".to_string());
+        snippet_registry.insert("test".to_string(),
+            "use Test::More tests => ${1:1};\n\n${2:# test code}\n\nok(${3:1}, '${4:test description}');".to_string());
+
+        // Register project templates
+        // Templates would be loaded from files in real implementation
+        template_cache.insert(
+            "module".to_string(),
+            "package {{ MODULE_NAME }};
+1;"
+            .to_string(),
+        );
+        template_cache.insert(
+            "script".to_string(),
+            "#!/usr/bin/perl\nuse strict;\nuse warnings;\n".to_string(),
+        );
+        template_cache.insert("test".to_string(), "use Test::More;\ndone_testing();\n".to_string());
+
+        Self {
+            server,
+            workspace_root: PathBuf::from("/workspace"),
+            snippet_registry,
+            template_cache,
+        }
     }
 
     fn execute_command(&mut self, command: &str, args: Vec<Value>) -> Option<Value> {
-        assert!(
-            self.initialized,
-            "AdvancedTestContext must be initialized before execute_command()"
-        );
-        self.initialize_or_reuse();
         let request = JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
             id: Some(json!(1)),
@@ -152,21 +119,7 @@ impl AdvancedTestContext {
             })),
         };
 
-        self.server.handle_request(request).and_then(|response| {
-            if let Some(result) = response.result {
-                return Some(result);
-            }
-            // Treat error responses as completed replies for feature-stub tests.
-            response.error.map(|error| {
-                json!({
-                    "error": {
-                        "code": error.code,
-                        "message": error.message,
-                        "data": error.data,
-                    }
-                })
-            })
-        })
+        self.server.handle_request(request).and_then(|response| response.result)
     }
 
     fn get_snippet_completions(&self, trigger: &str) -> Vec<Value> {
@@ -214,7 +167,7 @@ impl AdvancedTestContext {
 
 #[test]
 fn test_snippet_completion() {
-    let ctx = AdvancedTestContext::new_initialized();
+    let ctx = AdvancedTestContext::new();
 
     // Test getting snippet completions
     let completions = ctx.get_snippet_completions("su");
@@ -232,7 +185,7 @@ fn test_snippet_completion() {
 
 #[test]
 fn test_custom_snippets() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Register custom snippet via command
     let _register_result = ctx.execute_command("perl.registerSnippet", vec![
@@ -253,7 +206,7 @@ fn test_custom_snippets() {
 
 #[test]
 fn test_create_module_from_template() {
-    let ctx = AdvancedTestContext::new_initialized();
+    let ctx = AdvancedTestContext::new();
 
     let mut params = HashMap::new();
     params.insert("MODULE_NAME".to_string(), "MyApp::Utils".to_string());
@@ -268,7 +221,7 @@ fn test_create_module_from_template() {
 
 #[test]
 fn test_create_test_from_template() {
-    let ctx = AdvancedTestContext::new_initialized();
+    let ctx = AdvancedTestContext::new();
 
     let mut params = HashMap::new();
     params.insert("MODULE_NAME".to_string(), "MyApp::Calculator".to_string());
@@ -284,7 +237,7 @@ fn test_create_test_from_template() {
 
 #[test]
 fn test_run_single_test() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Execute test run command
     let result = ctx.execute_command(
@@ -301,7 +254,7 @@ fn test_run_single_test() {
 
 #[test]
 fn test_run_test_suite() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Run all tests in directory
     let result = ctx.execute_command(
@@ -319,7 +272,7 @@ fn test_run_test_suite() {
 
 #[test]
 fn test_debug_test() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Start test in debug mode
     let result = ctx.execute_command(
@@ -341,7 +294,7 @@ fn test_debug_test() {
 
 #[test]
 fn test_generate_getters_setters() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Generate accessors for a class
     let result = ctx.execute_command(
@@ -359,7 +312,7 @@ fn test_generate_getters_setters() {
 
 #[test]
 fn test_generate_test_skeleton() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Generate test file for a module
     let result = ctx.execute_command(
@@ -379,7 +332,7 @@ fn test_generate_test_skeleton() {
 
 #[test]
 fn test_project_initialization() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Initialize new Perl project
     let result = ctx.execute_command(
@@ -399,7 +352,7 @@ fn test_project_initialization() {
 
 #[test]
 fn test_dependency_management() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Add CPAN dependency
     let add_result = ctx.execute_command(
@@ -427,7 +380,7 @@ fn test_dependency_management() {
 
 #[test]
 fn test_perltidy_integration() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Format with perltidy
     let result = ctx.execute_command(
@@ -444,7 +397,7 @@ fn test_perltidy_integration() {
 
 #[test]
 fn test_perlcritic_integration() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Run perlcritic analysis
     let result = ctx.execute_command(
@@ -464,7 +417,7 @@ fn test_perlcritic_integration() {
 
 #[test]
 fn test_generate_pod_documentation() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Generate POD from code
     let result = ctx.execute_command(
@@ -482,7 +435,7 @@ fn test_generate_pod_documentation() {
 
 #[test]
 fn test_extract_pod_to_markdown() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Convert POD to Markdown
     let result = ctx.execute_command(
@@ -501,7 +454,7 @@ fn test_extract_pod_to_markdown() {
 
 #[test]
 fn test_profile_execution() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Profile script execution
     let result = ctx.execute_command(
@@ -519,7 +472,7 @@ fn test_profile_execution() {
 
 #[test]
 fn test_analyze_profile_results() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Analyze profiling results
     let result = ctx.execute_command(
@@ -539,7 +492,7 @@ fn test_analyze_profile_results() {
 
 #[test]
 fn test_git_blame_integration() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Show git blame info inline
     let result = ctx.execute_command(
@@ -556,7 +509,7 @@ fn test_git_blame_integration() {
 
 #[test]
 fn test_commit_with_conventional_format() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Create conventional commit
     let result = ctx.execute_command(
@@ -578,7 +531,7 @@ fn test_commit_with_conventional_format() {
 
 #[test]
 fn test_sql_preview_in_dbi_code() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Preview SQL query results
     let result = ctx.execute_command(
@@ -596,7 +549,7 @@ fn test_sql_preview_in_dbi_code() {
 
 #[test]
 fn test_generate_dbi_code_from_schema() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Generate DBI code from database schema
     let result = ctx.execute_command(
@@ -616,7 +569,7 @@ fn test_generate_dbi_code_from_schema() {
 
 #[test]
 fn test_dockerfile_generation() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Generate Dockerfile for Perl app
     let result = ctx.execute_command(
@@ -635,7 +588,7 @@ fn test_dockerfile_generation() {
 
 #[test]
 fn test_kubernetes_manifest_generation() {
-    let mut ctx = AdvancedTestContext::new_initialized();
+    let mut ctx = AdvancedTestContext::new();
 
     // Generate K8s manifests
     let result = ctx.execute_command(

@@ -23,64 +23,44 @@ just ci-full  # ~10-20 min
 Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rename
 
 ### Metric Definitions
-
-**LSP Metrics** (computed from `features.toml` by `scripts/update-current-status.py`):
-
-| Metric | Formula | Meaning |
-| --- | --- | --- |
-| **LSP Coverage (user-visible)** | `implemented / trackable` where `counts_in_coverage != false` | Headline metric |
-| **Protocol Compliance** | `implemented / trackable` (all features) | Wire-level completeness |
-
-Key terms:
-
-- `implemented` (coverage): Features with `maturity in (ga, production)`
-- `trackable` (coverage): Features where `advertised = true`, `maturity != planned`, and `counts_in_coverage != false`
-- `implemented` (protocol): Features with `maturity in (ga, production, preview)`
-- `trackable` (protocol): Features where `maturity != planned` (excludes future work)
-- `counts_in_coverage = false`: Protocol plumbing (lifecycle, sync) that inflates coverage artificially
-
-**Other Metrics**:
-
-- **Corpus counts**: `tree-sitter-perl/test/corpus` sections + `test_corpus/*.pl` files (fixture counts)
+- **LSP Coverage (GA)**: `advertised_ga / trackable` from `features.toml` (excludes `planned`)
+- **Corpus counts**: `tree-sitter-perl/test/corpus` sections + `test_corpus/*.pl` files (fixture counts, not semantic coverage)
 - **Catalog source**: Root `features.toml` is canonical
-
-**Generated Sections**: Blocks between `<!-- BEGIN: X -->` and `<!-- END: X -->` are machine-updated by `just status-update`. Do not hand-edit.
 
 ---
 
 ## At a Glance
 
 | Metric | Value | Target | Status |
-| --- | --- | --- | --- |
-| **Tier A Tests** | 499 lib tests (discovered), 1 ignores (tracked) | 100% pass | PASS |
-| **Tracked Test Debt** | 1 (0 bug, 1 manual) | 0 | Near-zero |
+| ------ | ----- | ------ | ------ |
+| **Tier A Tests** | 337 passed, 1 ignored | 100% pass | PASS |
+| **Tracked Test Debt** | 9 (8 bug, 1 manual) | 0 | Near-zero |
 <!-- BEGIN: STATUS_METRICS_TABLE -->
-| **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 93%+ | In progress |
+| **LSP Coverage** | 100% (53/53 user-visible features, `features.toml`) | 93%+ | In progress |
 <!-- END: STATUS_METRICS_TABLE -->
 | **Parser Coverage** | ~100% | 100% | Complete |
 | **Semantic Analyzer** | Phase 1 (12/12 handlers) | Phase 3 | Core complete |
 | **Mutation Score** | 87% | 87%+ | Target met |
-| **Documentation** | perl-parser missing_docs = 0 (baseline 0) | 0 | Ratchet |
+| **Documentation** | 484 violations | 0 | 8-week plan |
 
 ---
 
 ## What's True Right Now
 
-- **Parser**: Production-ready Perl 5 syntax coverage, 1-150us parsing, 931ns incremental updates
-- **LSP Server**: Capability catalog is `features.toml`; Tier A gate is `just ci-gate`
+- **Parser**: Production-ready with <!-- BEGIN: Perl parser Coverage --><!-- BEGIN: Perl Parser Coverage --> Perl 5 syntax coverage, 1-150us parsing, 931ns incremental updates
+- **LSP Server**: <!-- BEGIN: LSP Coverage --><!-- BEGIN: LSP CoverageLSP Coverage --><!-- BEGIN: LSP Coverage --><!-- BEGIN: LSP CoverageLSP Coverage -->, <50ms response times, semantic definition working
 - **Semantic Analyzer**: Phase 1 complete with 12/12 critical handlers, `textDocument/definition` integrated
-- **Test Infrastructure**: Tier A suite is the only merge-blocking truth (see At a Glance + computed metrics)
+- **Test Infrastructure**: 337 lib tests passing, 4/4 LSP semantic def tests passing
 - **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation
 - **DAP Server**: Phase 1 bridge to Perl::LanguageServer complete (71/71 tests)
 
 ### Computed Metrics (auto-updated by `just status-update`)
 
 <!-- BEGIN: STATUS_METRICS_BULLETS -->
-- **LSP Coverage**: 100% user-visible feature coverage (53/53 advertised features from `features.toml`)
-- **Protocol Compliance**: 100% overall LSP protocol support (88/88 including plumbing)
+- **LSP Coverage**: 100% user-visible feature coverage (53/53 trackable features from `features.toml`)
+- **Protocol Compliance**: 97% overall LSP protocol support (85/88 including plumbing)
 - **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
-- **Test Status**: 499 lib tests (Tier A), 1 ignores tracked (1 total tracked debt: 0 bug, 1 manual)
-- **Docs (perl-parser)**: missing_docs warnings = 0 (baseline 0)
+- **Test Status**: 19 lib tests passing, 19 ignored (1 total tracked debt: 0 bug, 1 manual)
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
 - **Production Status**: LSP server production-ready (`just ci-gate` passing)
 
@@ -103,9 +83,9 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 
 ## Known Constraints
 
-- **Tracked test debt**: see `scripts/ignored-test-count.sh`; feature-gated ignores are by design
+- **9 tracked test debt**: 8 bug-related, 1 manual; feature-gated ignores are by design
 - **CI Pipeline (#211)**: Blocks merge-blocking gates (#210)
-- **Docs scope**: perl-parser missing_docs is ratcheted (see `ci/check_missing_docs.sh`); workspace-wide enforcement is a separate decision
+- **484 doc violations**: Infrastructure complete, content phase in progress
 - **Semantic Phase 2/3**: Advanced features deferred to post-v0.9
 
 ---
@@ -113,12 +93,12 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 ## Component Summary
 
 | Component | Status | Notes |
-| --- | --- | --- |
+|-----------|--------|-------|
 | perl-parser | Production | ~100% Perl 5, 87% mutation score |
-| perl-lsp | Production | Coverage tracked via `features.toml` |
+| perl-lsp | Production | <!-- BEGIN: LSP Coverage --><!-- BEGIN: LSP CoverageLSP Coverage --> LSP 3.18 coverage |
 | perl-dap | Phase 1 | Bridge mode complete |
 | perl-lexer | Production | Context-aware, sub-microsecond |
-| perl-corpus | Production | Corpus counts tracked in computed metrics |
+| perl-corpus | Production | 613 tree-sitter sections + 10 .pl files |
 
 ---
 

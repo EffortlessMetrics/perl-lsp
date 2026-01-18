@@ -1,22 +1,22 @@
-#![allow(dead_code)] // Some tests are feature-gated while being fixed
+#![allow(dead_code)] // Some tests are temporarily ignored while being fixed
 
 use serde_json::json;
 use std::time::Duration;
 
 mod common;
 use common::{
-    adaptive_timeout, initialize_lsp, read_response_timeout, send_notification, send_raw,
-    send_request, short_timeout, shutdown_and_exit, start_lsp_server,
+    adaptive_timeout, initialize_lsp, read_response, read_response_timeout, send_notification,
+    send_raw, send_request, short_timeout, shutdown_and_exit, start_lsp_server,
 };
-
-#[cfg(any(feature = "stress-tests", feature = "strict-jsonrpc"))]
-use common::read_response;
 
 /// Test suite for unhappy paths and error scenarios
 /// Ensures the LSP server handles errors gracefully
 
-#[cfg(feature = "strict-jsonrpc")]
 #[test]
+#[cfg_attr(
+    not(feature = "strict-jsonrpc"),
+    ignore = "PROTOCOL: Run with --features strict-jsonrpc"
+)]
 fn test_malformed_json_request() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -292,8 +292,11 @@ fn test_out_of_bounds_position() {
     shutdown_and_exit(&mut server);
 }
 
-#[cfg(feature = "stress-tests")]
 #[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Rapid concurrent edits test - requires proper shutdown handling for reliability"
+)]
 fn test_concurrent_document_edits() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -356,8 +359,11 @@ fn test_concurrent_document_edits() {
     assert!(response["result"].is_array());
 }
 
-#[cfg(feature = "stress-tests")]
 #[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Version mismatch edge case test - needs shutdown handling"
+)]
 fn test_version_mismatch() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -418,8 +424,11 @@ fn test_version_mismatch() {
     assert!(response["result"].is_array() || response["error"].is_object());
 }
 
-#[cfg(feature = "stress-tests")]
 #[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Invalid regex edge case - needs shutdown handling for CI reliability"
+)]
 fn test_invalid_regex_pattern() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -468,8 +477,11 @@ fn test_invalid_regex_pattern() {
     assert!(response.is_object());
 }
 
-#[cfg(feature = "stress-tests")]
 #[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Circular dependency stress test - needs proper shutdown"
+)]
 fn test_circular_module_dependency() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -533,8 +545,11 @@ fn test_circular_module_dependency() {
     assert!(response["result"].is_array());
 }
 
-#[cfg(feature = "stress-tests")]
 #[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Long line stress test (100K char line) - run with --ignored for stress testing"
+)]
 fn test_extremely_long_line() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -583,8 +598,11 @@ fn test_extremely_long_line() {
     assert!(response.is_object());
 }
 
-#[cfg(feature = "stress-tests")]
 #[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Deep nesting stress test (100 levels) - run with --ignored for stress testing"
+)]
 fn test_deeply_nested_structure() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -859,8 +877,11 @@ fn test_cancel_request() {
     shutdown_and_exit(&mut server);
 }
 
-#[cfg(feature = "strict-jsonrpc")]
 #[test]
+#[cfg_attr(
+    not(feature = "strict-jsonrpc"),
+    ignore = "PROTOCOL: Run with --features strict-jsonrpc"
+)]
 fn test_shutdown_without_exit() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -903,8 +924,11 @@ fn test_shutdown_without_exit() {
     assert!(response["error"].is_object());
 }
 
-#[cfg(feature = "strict-jsonrpc")]
 #[test]
+#[cfg_attr(
+    not(feature = "strict-jsonrpc"),
+    ignore = "PROTOCOL: Run with --features strict-jsonrpc"
+)]
 fn test_invalid_capability_request() {
     let mut server = start_lsp_server();
 
@@ -955,8 +979,11 @@ fn test_invalid_capability_request() {
     assert!(response.is_object());
 }
 
-#[cfg(feature = "stress-tests")]
 #[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Unicode edge case stress test - needs proper shutdown"
+)]
 fn test_unicode_unhappy_paths() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -1005,8 +1032,11 @@ fn test_unicode_unhappy_paths() {
     assert!(response["result"].is_array());
 }
 
-#[cfg(feature = "stress-tests")]
 #[test]
+#[cfg_attr(
+    not(feature = "stress-tests"),
+    ignore = "STRESS: Memory stress test (100 documents) - run with --ignored for stress testing"
+)]
 fn test_memory_stress() {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

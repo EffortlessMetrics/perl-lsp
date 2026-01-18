@@ -2,9 +2,7 @@ name: CI (Expensive)
 
 on:
   pull_request:
-    branches: [ main, master ]
-    types: [labeled]
-  workflow_dispatch: {}
+    types: [labeled, synchronize, reopened]
 
 # Cancel in-flight runs on new pushes (saves minutes)
 concurrency:
@@ -16,9 +14,7 @@ permissions:
 
 jobs:
   mutation:
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'ci:mutation')
+    if: contains(github.event.pull_request.labels.*.name, 'ci:mutation')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,9 +27,7 @@ jobs:
       - run: cargo mutants --timeout 60 --no-shuffle || true
 
   benches:
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'ci:bench')
+    if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

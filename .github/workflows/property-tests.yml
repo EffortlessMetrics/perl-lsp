@@ -4,7 +4,10 @@ on:
   workflow_dispatch: {}
   pull_request:
     branches: [ main, master ]
-    types: [labeled]
+    types: [labeled, synchronize, reopened]
+  schedule:
+    # Run nightly at 3 AM UTC
+    - cron: '0 3 * * *'
 
 # Cancel in-flight runs on new pushes (saves minutes)
 concurrency:
@@ -15,6 +18,7 @@ jobs:
   property-tests-standard:
     name: Property Tests (Standard)
     if: |
+      github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'ci:property')
     runs-on: ubuntu-latest
@@ -83,6 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only run extended tests on schedule, dispatch, or when ci:property label is present
     if: |
+      github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'ci:property')
     steps:
@@ -122,6 +127,7 @@ jobs:
   lexer-contract-tests:
     name: Lexer Contract Tests
     if: |
+      github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'ci:property')
     runs-on: ubuntu-latest
@@ -153,6 +159,7 @@ jobs:
   parser-integration-tests:
     name: Parser Integration Tests
     if: |
+      github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'ci:property')
     runs-on: ubuntu-latest

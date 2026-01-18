@@ -254,7 +254,7 @@ mod tests {
 
         assert_eq!(breakpoints.len(), 2);
         assert_eq!(breakpoints[0].line, 10);
-        assert!(breakpoints[0].verified);
+        assert_eq!(breakpoints[0].verified, true);
         assert_eq!(breakpoints[1].line, 25);
         assert_eq!(breakpoints[1].column, Some(5));
         assert!(breakpoints[1].verified);

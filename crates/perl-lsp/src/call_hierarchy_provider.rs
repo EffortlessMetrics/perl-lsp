@@ -61,7 +61,7 @@ impl CallHierarchyProvider {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```no_run
     /// use perl_lsp::call_hierarchy_provider::CallHierarchyProvider;
     ///
     /// let source = "sub hello { print 'world'; }";
@@ -117,47 +117,24 @@ impl CallHierarchyProvider {
             match &node.kind {
                 NodeKind::Subroutine { name, prototype: _, signature, name_span, .. } => {
                     if let Some(name_str) = name {
-                        if let Some(span) = name_span {
-                            if offset >= span.start && offset <= span.end {
-                                let range = self.node_to_range(node);
-                                let selection_range =
-                                    self.selection_range_from_name_span(name_span, &range);
+                        let range = self.node_to_range(node);
+                        let selection_range =
+                            self.selection_range_from_name_span(name_span, &range);
 
-                                let detail = if signature.is_some() {
-                                    Some("(signature)".to_string())
-                                } else {
-                                    None
-                                };
-
-                                return Some(CallHierarchyItem {
-                                    name: name_str.clone(),
-                                    kind: "function".to_string(),
-                                    uri: self.uri.clone(),
-                                    range,
-                                    selection_range,
-                                    detail,
-                                });
-                            }
+                        let detail = if signature.is_some() {
+                            Some("(signature)".to_string())
                         } else {
-                            let range = self.node_to_range(node);
-                            let selection_range =
-                                self.selection_range_from_name_span(name_span, &range);
+                            None
+                        };
 
-                            let detail = if signature.is_some() {
-                                Some("(signature)".to_string())
-                            } else {
-                                None
-                            };
-
-                            return Some(CallHierarchyItem {
-                                name: name_str.clone(),
-                                kind: "function".to_string(),
-                                uri: self.uri.clone(),
-                                range,
-                                selection_range,
-                                detail,
-                            });
-                        }
+                        return Some(CallHierarchyItem {
+                            name: name_str.clone(),
+                            kind: "function".to_string(),
+                            uri: self.uri.clone(),
+                            range,
+                            selection_range,
+                            detail,
+                        });
                     }
                 }
                 NodeKind::MethodCall { method, .. } => {
@@ -165,17 +142,6 @@ impl CallHierarchyProvider {
                     return Some(CallHierarchyItem {
                         name: method.clone(),
                         kind: "method".to_string(),
-                        uri: self.uri.clone(),
-                        range: range.clone(),
-                        selection_range: range,
-                        detail: None,
-                    });
-                }
-                NodeKind::FunctionCall { name, .. } => {
-                    let range = self.node_to_range(node);
-                    return Some(CallHierarchyItem {
-                        name: name.clone(),
-                        kind: "function".to_string(),
                         uri: self.uri.clone(),
                         range: range.clone(),
                         selection_range: range,

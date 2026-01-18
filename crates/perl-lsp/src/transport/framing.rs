@@ -3,7 +3,7 @@
 //! Implements Content-Length based message framing as specified in
 //! the LSP Base Protocol.
 
-use perl_lsp_protocol::{JsonRpcRequest, JsonRpcResponse};
+use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 
