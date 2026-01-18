@@ -40,6 +40,7 @@
 //! let mut adapter = BridgeAdapter::new();
 //! adapter.spawn_pls_dap().await?;
 //! adapter.proxy_messages().await?;
+//! adapter.shutdown().await?;
 //! # Ok(())
 //! # }
 //! ```
