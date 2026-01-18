@@ -53,8 +53,8 @@ fn test_classify_missing_semicolon() {
     assert_eq!(result, ParseErrorKind::MissingSemicolon);
 }
 
+#[cfg(feature = "error-classifier-v2")]
 #[test]
-#[cfg_attr(not(feature = "error-classifier-v2"), ignore = "Requires error-classifier-v2 feature")]
 fn test_classify_unclosed_parenthesis() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
@@ -67,8 +67,8 @@ fn test_classify_unclosed_parenthesis() {
     assert_eq!(result, ParseErrorKind::UnclosedParenthesis);
 }
 
+#[cfg(feature = "error-classifier-v2")]
 #[test]
-#[cfg_attr(not(feature = "error-classifier-v2"), ignore = "Requires error-classifier-v2 feature")]
 fn test_classify_unclosed_bracket() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
@@ -81,8 +81,8 @@ fn test_classify_unclosed_bracket() {
     assert_eq!(result, ParseErrorKind::UnclosedBracket);
 }
 
+#[cfg(feature = "error-classifier-v2")]
 #[test]
-#[cfg_attr(not(feature = "error-classifier-v2"), ignore = "Requires error-classifier-v2 feature")]
 fn test_classify_unclosed_brace() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
@@ -142,8 +142,8 @@ fn test_get_suggestion_unclosed_parenthesis() {
     assert_eq!(suggestion, Some("Add a closing parenthesis ')'".to_string()));
 }
 
+#[cfg(feature = "error-classifier-v2")]
 #[test]
-#[cfg_attr(not(feature = "error-classifier-v2"), ignore = "Requires error-classifier-v2 feature")]
 fn test_boundary_conditions() {
     let classifier = ErrorClassifier::new();
 
@@ -164,8 +164,8 @@ fn test_boundary_conditions() {
     assert_eq!(result, ParseErrorKind::InvalidSyntax);
 }
 
+#[cfg(feature = "error-classifier-v2")]
 #[test]
-#[cfg_attr(not(feature = "error-classifier-v2"), ignore = "Requires error-classifier-v2 feature")]
 fn test_heredoc_classification() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
@@ -178,8 +178,8 @@ fn test_heredoc_classification() {
     assert_eq!(result, ParseErrorKind::UnterminatedHeredoc);
 }
 
+#[cfg(feature = "error-classifier-v2")]
 #[test]
-#[cfg_attr(not(feature = "error-classifier-v2"), ignore = "Requires error-classifier-v2 feature")]
 fn test_classify_with_context() {
     let classifier = ErrorClassifier::new();
 

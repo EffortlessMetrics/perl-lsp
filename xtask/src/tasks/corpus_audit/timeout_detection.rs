@@ -65,24 +65,6 @@ pub fn categorize_error(message: &str, source: &str) -> ErrorCategory {
         return ErrorCategory::ModernFeature;
     }
 
-    // Check for regex issues
-    if msg_lower.contains("regex")
-        || msg_lower.contains("pattern")
-        || msg_lower.contains("substitution")
-        || src_lower.contains("qr/")
-        || src_lower.contains("qr{")
-        || src_lower.contains("qr#")
-        || src_lower.contains("=~")
-        || src_lower.contains("!~")
-        || src_lower.contains("s/")
-        || src_lower.contains("s{")
-        || src_lower.contains("s#")
-        || src_lower.contains("tr/")
-        || src_lower.contains("tr{")
-    {
-        return ErrorCategory::Regex;
-    }
-
     // Check for quote-like issues
     if msg_lower.contains("string")
         || msg_lower.contains("quote")
@@ -93,12 +75,21 @@ pub fn categorize_error(message: &str, source: &str) -> ErrorCategory {
         || src_lower.contains("qq{")
         || src_lower.contains("qw{")
         || src_lower.contains("qx{")
-        || src_lower.contains("q/")
-        || src_lower.contains("qq/")
-        || src_lower.contains("qw/")
-        || src_lower.contains("qx/")
     {
         return ErrorCategory::QuoteLike;
+    }
+
+    // Check for regex issues
+    if msg_lower.contains("regex")
+        || msg_lower.contains("pattern")
+        || msg_lower.contains("substitution")
+        || src_lower.contains("qr/")
+        || src_lower.contains("qr{")
+        || src_lower.contains("=~ /")
+        || src_lower.contains("!~ /")
+        || (src_lower.contains("s/") && src_lower.contains("//"))
+    {
+        return ErrorCategory::Regex;
     }
 
     // Check for control flow

@@ -1,11 +1,5 @@
-//! JSON-RPC protocol types, error handling, and capabilities
+//! JSON-RPC protocol types, error handling, and capabilities.
 //!
-//! This module contains the core JSON-RPC 2.0 message types used for
-//! LSP communication, along with standardized error codes and response builders.
+//! This module re-exports the protocol layer from the `perl-lsp-protocol` crate.
 
-pub mod capabilities;
-mod errors;
-mod jsonrpc;
-
-pub use errors::*;
-pub use jsonrpc::*;
+pub use perl_lsp_protocol::*;

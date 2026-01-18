@@ -3,7 +3,6 @@
 //! These modules remain in `perl-parser` to support legacy imports while the
 //! runtime LSP implementation lives in the `perl-lsp` crate.
 
-pub mod capabilities;
 pub mod code_actions;
 pub mod code_actions_enhanced;
 pub mod code_actions_pragmas;
@@ -22,8 +21,6 @@ pub mod inline_completions;
 pub mod linked_editing;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod lsp_document_link;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod lsp_errors;
 pub mod lsp_on_type_formatting;
 pub mod lsp_selection_range;
 #[cfg(not(target_arch = "wasm32"))]

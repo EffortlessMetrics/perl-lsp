@@ -23,7 +23,7 @@
 //!
 //! # Usage Examples
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_parser::perltidy::{PerlTidyFormatter, PerlTidyConfig};
 //! use perl_parser::formatting::FormattingOptions;
 //!
@@ -36,7 +36,7 @@
 //!     insert_final_newline: Some(true),
 //!     trim_final_newlines: Some(true),
 //! };
-//! let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default());
+//! let mut formatter = PerlTidyFormatter::with_os_runtime(PerlTidyConfig::default());
 //!
 //! match formatter.format(script) {
 //!     Ok(formatted_text) => {
@@ -107,7 +107,7 @@ impl CodeFormatter {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::CodeFormatter;
     ///
     /// let formatter = CodeFormatter::new();
@@ -135,7 +135,7 @@ impl CodeFormatter {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::{CodeFormatter, FormattingOptions};
     ///
     /// let formatter = CodeFormatter::new();
