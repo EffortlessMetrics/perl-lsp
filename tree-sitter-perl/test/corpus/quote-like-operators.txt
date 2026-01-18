@@ -17,16 +17,46 @@ qq/interpolated with $slash/;
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname))))))
 
 ==================
 Quote operators with paired delimiters
@@ -45,14 +75,38 @@ qq<interpolated $var angles>;
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname))))))
 
 ==================
 Regex quote operators
@@ -95,11 +149,30 @@ s/foo/bar/eeg;
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers))))
 
 ==================
 Command execution operators
@@ -118,14 +191,33 @@ qx(complex command with $interpolation);
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (command_string
+      (string_content)))
+  (expression_statement
+    (command_string
+      (string_content
+        (escape_sequence))))
+  (expression_statement
+    (command_string
+      (string_content)))
+  (expression_statement
+    (command_string
+      (string_content)))
+  (expression_statement
+    (command_string
+      (string_content)))
+  (expression_statement
+    (command_string
+      (string_content)))
+  (expression_statement
+    (command_string
+      (string_content)))
+  (expression_statement
+    (command_string
+      (string_content
+        (scalar
+          (varname))))))
 
 ==================
 Quote operators with whitespace
@@ -151,13 +243,33 @@ regex/x;
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (quoted_regexp
+      (regexp_content)
+      (quoted_regexp_modifiers)))
+  (expression_statement
+    (command_string
+      (string_content)))
+  (expression_statement
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (quoted_regexp
+      (regexp_content)
+      (quoted_regexp_modifiers))))
 
 ==================
 Quote word operators extended
@@ -183,13 +295,27 @@ qw{
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (quoted_word_list
+      (string_content)))
+  (expression_statement
+    (quoted_word_list
+      (string_content)))
+  (expression_statement
+    (quoted_word_list
+      (string_content)))
+  (expression_statement
+    (quoted_word_list
+      (string_content)))
+  (expression_statement
+    (quoted_word_list
+      (string_content)))
+  (expression_statement
+    (quoted_word_list
+      (string_content)))
+  (expression_statement
+    (quoted_word_list
+      (string_content))))
 
 ==================
 Translation operators
@@ -208,21 +334,81 @@ y#\n\r\t# #s;
 
 $count = tr/0-9//;
 $squeezed =~ tr/ //s;
+tr'abc'def';
+y'abc'def';
+tr'xyz'123'r;
 
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (transliteration_expression
+      (transliteration_content)
+      (replacement)))
+  (expression_statement
+    (transliteration_expression
+      (transliteration_content)
+      (replacement)))
+  (expression_statement
+    (transliteration_expression
+      (transliteration_content)
+      (replacement)))
+  (expression_statement
+    (transliteration_expression
+      (transliteration_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (transliteration_expression
+      (transliteration_content)
+      (replacement)))
+  (expression_statement
+    (transliteration_expression
+      (transliteration_content)
+      (replacement)))
+  (expression_statement
+    (transliteration_expression
+      (transliteration_content)
+      (replacement)
+      (transliteration_modifiers)))
+  (expression_statement
+    (transliteration_expression
+      (transliteration_content)
+      (replacement)
+      (transliteration_modifiers)))
+  (expression_statement
+    (transliteration_expression
+      (transliteration_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))
+      (transliteration_modifiers)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (transliteration_expression
+        (transliteration_content))))
+  (expression_statement
+    (binary_expression
+      (scalar
+        (varname))
+      (transliteration_expression
+        (transliteration_modifiers))))
+  (expression_statement
+    (transliteration_expression
+      (transliteration_content)
+      (replacement)))
+  (expression_statement
+    (transliteration_expression
+      (transliteration_content)
+      (replacement)))
+  (expression_statement
+    (transliteration_expression
+      (transliteration_content)
+      (replacement)
+      (transliteration_modifiers))))
 
 ==================
 Substitution with alternate delimiters
@@ -242,15 +428,50 @@ s<angle><replace>x;
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers))))
 
 ==================
 Substitution with modifier flags
@@ -265,11 +486,30 @@ s/foo/bar/eeg;
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers))))
 
 ==================
 Match with alternate delimiters
@@ -292,17 +532,48 @@ m<angle>x;
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)
+      (match_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)
+      (match_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)
+      (match_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)
+      (match_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)
+      (match_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)
+      (match_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)
+      (match_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)
+      (match_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)
+      (match_regexp_modifiers))))
 
 ==================
 Heredoc in command execution

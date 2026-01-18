@@ -1,0 +1,3428 @@
+  autoload-symbol-table:
+      1. ✓ [32mAUTOLOAD subroutine[0m[31m -- Warning: Slow parse rate (547.960 bytes/ms)[0m
+      2. ✓ [32mSymbol table manipulation[0m
+      3. ✓ [32mSymbol table deletion[0m
+      4. ✓ [32mDynamic symbol creation[0m
+      5. ✓ [32mSymbol inspection[0m
+      6. ✓ [32mImport/export manipulation[0m
+      7. ✓ [32mGlob slots access[0m
+      8. ✓ [32mMethod generation[0m
+      9. ✓ [32mNamespace manipulation[0m
+  autoquote:
+     10. ✓ [32mAUTOQUOTED => EXPR[0m
+     11. ✓ [32mquotelike followed by =>[0m
+     12. ✓ [32mhash autoquoting[0m
+     13. ✓ [32mhash autoquoting for quotelike[0m
+     14. ✓ [32mindirob autoquoting[0m
+     15. ✓ [32mautoquoting keywords[0m
+     16. ✓ [32mautoquoting postfix[0m
+     17. ✓ [32mautoquoting lowprec (list-expr)[0m
+     18. ✓ [32mautoquoting lowprec (ambiguous_func)[0m
+     19. ✓ [32mautoquoting else blocks[0m
+     20. ✓ [32munary minus autoquoting[0m
+     21. ✓ [32munary minus autoquoting does not override builtins[0m
+     22. ✓ [32mautoquote edge cases[0m
+  edge-cases:
+     23. ✓ [32mVery long identifiers[0m
+     24. ✓ [32mDeeply nested structures[0m
+     25. ✓ [32mMixed line endings[0m
+     26. ✓ [32mAmbiguous parsing situations[0m
+     27. ✓ [32mWhitespace sensitivity[0m
+     28. ✓ [32mSpecial parsing contexts[0m
+     29. ✗ [31mEmpty and minimal constructs[0m
+     30. ✓ [32mComments in unusual places[0m
+     31. ✓ [32mNumeric edge cases[0m
+  exception-handling:
+     32. ✓ [32mTry::Tiny patterns[0m
+     33. ✓ [32mNative eval error handling[0m
+     34. ✓ [32mDie with objects[0m
+     35. ✓ [32mException::Class usage[0m
+     36. ✓ [32mEval forms[0m
+     37. ✓ [32mCarp error reporting[0m
+     38. ✓ [32mError propagation[0m
+     39. ✓ [32mCustom error handling[0m
+     40. ✗ [31mTry::Catch alternative[0m
+     41. ✓ [32mScope::Guard for cleanup[0m
+  expressions:
+     42. ✓ [32mdo { STMT; }[0m
+     43. ✓ [32mdo FILENAME[0m
+     44. ✓ [32meval STRING[0m
+     45. ✓ [32meval BLOCK[0m
+     46. ✓ [32mAnonymous array[0m
+     47. ✓ [32mBlocks that look like hashes[0m
+     48. ✓ [32mAnonymous hash[0m[31m -- Warning: Slow parse rate (483.977 bytes/ms)[0m
+     49. ✓ [32mAssignment[0m
+     50. ✓ [32mAnonymous Slices[0m
+     51. ✓ [32mSlices[0m
+     52. ✓ [32mKeyval Slices[0m
+     53. ✓ [32mStub[0m
+     54. ✓ [32mScalar deref[0m
+     55. ✓ [32mArray deref[0m
+     56. ✓ [32mHash deref[0m
+     57. ✓ [32mAmper deref[0m
+     58. ✓ [32mGlob deref[0m
+     59. ✓ [32mrequire EXPR[0m
+     60. ✓ [32mLoopex[0m
+     61. ✓ [32mgoto[0m
+     62. ✓ [32mundef[0m
+     63. ✓ [32mlocal and dynamically[0m
+     64. ✓ [32mreturn[0m
+  file-io-system-advanced:
+     65. ✓ [32mThree-argument open variants[0m
+     66. ✓ [32mSocket operations[0m
+     67. ✓ [32mSystem I/O operations[0m
+     68. ✓ [32mFile locking[0m
+     69. ✓ [32mDirectory operations[0m
+     70. ✗ [31mFile test operators combinations[0m
+     71. ✓ [32mSelect and file handles[0m
+     72. ✓ [32mPipe operations[0m
+     73. ✓ [32mMemory mapped files[0m
+     74. ✓ [32mAdvanced file operations[0m
+  file-operations:
+     75. ✓ [32mFile opening modes[0m
+     76. ✓ [32mThree-argument open[0m
+     77. ✓ [32mFile test operators chaining[0m
+     78. ✓ [32mDirectory operations[0m
+     79. ✓ [32mFile globbing[0m
+     80. ✓ [32mFile handle operations[0m
+     81. ✓ [32mPath operations[0m
+     82. ✓ [32mSpecial file handles[0m
+  format-advanced:
+     83. ✗ [31mFormat with continuations[0m
+     84. ✗ [31mDynamic format names[0m
+     85. ✗ [31mComplex format expressions[0m
+     86. ✗ [31m   Name            Age    Score[0m
+     87. ✗ [31mNumeric format fields[0m
+     88. ✗ [31mFormat with special variables[0m
+     89. ✗ [31mFormat with filehandles[0m
+     90. ✗ [31mMultiline format fields[0m
+     91. ✗ [31mFormat with picture lines[0m
+     92. ✓ [32mFormat write and formline[0m
+  formats:
+     93. ✗ [31mBasic format declaration[0m
+     94. ✗ [31mFormat with top of page[0m
+     95. ✗ [31mFormat with multiline fields[0m
+     96. ✗ [31mFormat with numeric fields[0m
+     97. ✗ [31mFormat with expressions[0m
+     98. ✗ [31mFormat with special variables[0m
+     99. ✗ [31mFormat with filehandle[0m
+    100. ✗ [31mComplex format pictures[0m
+  functions:
+    101. ✓ [32mFunction call (0 args)[0m
+    102. ✓ [32mFunction call (1 arg)[0m
+    103. ✓ [32mFunction call (2 args)[0m
+    104. ✓ [32mMethod call (no parens)[0m
+    105. ✓ [32mMethod call (0 args)[0m
+    106. ✓ [32mMethod call (1 arg)[0m
+    107. ✓ [32mMethod call (2 args)[0m
+    108. ✓ [32mMethod call on class[0m
+    109. ✓ [32mFunc0 Ops[0m
+    110. ✓ [32mFunc1 Ops[0m
+    111. ✓ [32mFiletest operators[0m
+    112. ✓ [32mambiguous funcs[0m
+    113. ✓ [32mambiguous funcs with indirect objects[0m
+    114. ✓ [32mambiguous funcs - indirect object fakeouts[0m
+    115. ✓ [32mambiguous funcs - tricky block vs hashref[0m
+    116. ✓ [32mnon-ambiguous indirob handling (for builtins)[0m
+  heredocs:
+    117. ✓ [32mNon-quoted heredoc[0m
+    118. ✓ [32mQuoted heredocs[0m
+    119. ✓ [32mCommand heredocs[0m
+    120. ✓ [32mIndented heredocs[0m
+    121. ✓ [32mInsane heredocs[0m
+    122. ✓ [32mheredocs after a statement (gh#92)[0m
+    123. ✓ [32mweird heredoc interpolation (gh#133)[0m
+    124. ✓ [32mutf8 heredoc delims[0m
+  heredocs-advanced:
+    125. ✓ [32mMultiple heredocs on one line[0m
+    126. ✓ [32mHeredocs in list context[0m
+    127. ✓ [32mHeredocs with method calls[0m
+    128. ✓ [32mHeredocs in complex expressions[0m
+    129. ✗ [31mHeredocs with special delimiters[0m
+    130. ✓ [32mIndented heredocs (Perl 5.26+)[0m
+    131. ✓ [32mHeredocs with interpolation edge cases[0m
+    132. ✓ [32mCommand heredocs[0m
+    133. ✓ [32mNested heredoc-like structures[0m
+  indirect-core-overrides:
+    134. ✗ [31mIndirect object syntax[0m
+    135. ✓ [32mNo indirect pragma[0m
+    136. ✓ [32mCORE namespace overrides[0m
+    137. ✓ [32mPackage VERSION syntax[0m
+    138. ✓ [32m__SUB__ token[0m
+    139. ✓ [32mSort with custom comparators[0m
+    140. ✓ [32mSort pragmas[0m
+    141. ✓ [32mCORE with prototypes[0m
+    142. ✓ [32mVersion comparisons[0m
+    143. ✓ [32mUNIVERSAL methods[0m
+  interpolation:
+    144. ✓ [32mFancy indirob interpolation[0m
+    145. ✓ [32mArray element interpolation[0m
+    146. ✓ [32mHash element interpolation[0m
+    147. ✓ [32mMethod calls don't interpolate[0m
+    148. ✓ [32mSpace skips interpolation[0m
+    149. ✓ [32mSlice interpolation[0m
+    150. ✓ [32mPostfix star interpolation[0m
+    151. ✓ [32mPunctuation vars that interpolate[0m
+    152. ✓ [32mPunctuation vars that do not interpolate[0m
+    153. ✓ [32mbraced vars do not subscript[0m
+    154. ✓ [32mNested quotes! (#98)[0m
+  literals:
+    155. ✓ [32mintegers[0m
+    156. ✓ [32mfloats[0m
+    157. ✓ [32m'' strings[0m
+    158. ✓ [32mq() strings[0m
+    159. ✓ [32m"" strings[0m
+    160. ✓ [32m"" strings - no runaway barewords (fix when ambiguous funcs hit)[0m
+    161. ✓ [32mqq() strings[0m
+    162. ✓ [32mquotelike strings - tricky delimeters[0m
+    163. ✓ [32mInterpolation in "" strings[0m
+    164. ✓ [32mqw() lists[0m
+    165. ✓ [32m`` strings[0m
+    166. ✓ [32mqx() strings[0m
+  loader-forms:
+    167. ✓ [32mRequire forms[0m
+    168. ✓ [32mDo file forms[0m
+    169. ✓ [32mUse if conditional loading[0m
+    170. ✓ [32mEval require patterns[0m
+    171. ✓ [32mModule runtime loading[0m
+    172. ✓ [32mUse lib and INC manipulation[0m
+    173. ✓ [32mFindBin and relative paths[0m
+    174. ✓ [32mModule::Load patterns[0m
+    175. ✓ [32mParent and base loading[0m
+    176. ✓ [32mAutouse and autoload[0m
+  map-grep:
+    177. ✓ [32mmap - BLOCK form[0m
+    178. ✓ [32mmap - EXPR form[0m
+    179. ✓ [32mmap - goshdarn parens[0m
+    180. ✓ [32mmap - different LISTs[0m
+    181. ✓ [32msort - with and without a BLOCK[0m
+    182. ✓ [32msort SUBNAME[0m
+  modern-perl:
+    183. ✓ [32mSubroutine signatures (5.20+)[0m
+    184. ✓ [32mGiven/when statements (5.10+)[0m
+    185. ✓ [32mSmart matching (5.10+)[0m
+    186. ✓ [32mState variables (5.10+)[0m
+    187. ✗ [31mLexical subroutines (5.18+)[0m
+    188. ✓ [32misa operator (5.32+)[0m
+    189. ✓ [32mPostfix dereferencing (5.20+)[0m
+    190. ✓ [32mUnicode boundaries (5.14+)[0m
+    191. ✓ [32mPackage blocks (5.14+)[0m
+  module-import-patterns:
+    192. ✓ [32mExporter patterns[0m
+    193. ✓ [32mParent and base modules[0m
+    194. ✗ [31mVersion requirements[0m
+    195. ✓ [32mImport with parameters[0m
+    196. ✓ [32mSub::Exporter patterns[0m
+    197. ✓ [32mConditional imports[0m
+    198. ✓ [32mAliasing imports[0m
+    199. ✓ [32mModule loading patterns[0m
+    200. ✓ [32mImport levels and scopes[0m
+    201. ✓ [32mPragma imports[0m
+  object-oriented:
+    202. ✓ [32mSUPER method calls[0m
+    203. ✓ [32mUNIVERSAL methods[0m
+    204. ✓ [32mDESTROY and AUTOLOAD[0m
+    205. ✓ [32mTied variables[0m
+    206. ✓ [32mOperator overloading[0m
+    207. ✓ [32mBlessed references[0m
+    208. ✓ [32mMethod chaining[0m
+    209. ✓ [32mClass inheritance[0m
+  operators:
+    210. ✓ [32mEXPR or EXPR[0m
+    211. ✓ [32mEXPR and EXPR[0m
+    212. ✓ [32mxor and ^^[0m
+    213. ✓ [32mEXPR, EXPR[0m
+    214. ✓ [32mEXPR || EXPR[0m
+    215. ✓ [32mEXPR | EXPR[0m
+    216. ✓ [32mEXPR eq EXPR[0m
+    217. ✓ [32mEXPR eq EXPR - list/non assoc[0m
+    218. ✓ [32mEXPR < EXPR[0m
+    219. ✓ [32mEXPR < EXPR - list/non assoc[0m
+    220. ✓ [32m< and eq - list/non assoc corner cases[0m
+    221. ✓ [32mEXPR << EXPR[0m
+    222. ✓ [32mEXPR + EXPR[0m
+    223. ✓ [32mEXPR * EXPR[0m
+    224. ✓ [32mEXPR =~ EXPR[0m
+    225. ✓ [32mEXPR ** EXPR[0m
+    226. ✓ [32m(EXPR)[0m
+    227. ✓ [32m!EXPR[0m
+    228. ✓ [32mEXPR ? EXPR : EXPR[0m[31m -- Warning: Slow parse rate (342.987 bytes/ms)[0m
+    229. ✓ [32m++EXPR[0m
+    230. ✓ [32mEXPR++[0m
+    231. ✓ [32m\EXPR[0m
+    232. ✓ [32mEXPR &.= EXPR[0m
+    233. ✓ [32m~.EXPR[0m
+    234. ✓ [32mEXPR &. EXPR[0m
+    235. ✓ [32mrange ops[0m
+    236. ✓ [32mrange ops - nonassoc[0m
+    237. ✓ [32mdiamond operators[0m
+    238. ✓ [32mtransliteration[0m
+    239. ✓ [32mtransliteration - 3 part quotelike insanity[0m
+  overload-mro:
+    240. ✓ [32mBasic overload[0m
+    241. ✓ [32mOverload with method names[0m
+    242. ✓ [32mComparison overloads[0m
+    243. ✓ [32mAssignment overloads[0m
+    244. ✓ [32mDereference overloads[0m
+    245. ✓ [32mMRO C3[0m
+    246. ✓ [32mMRO method resolution[0m
+    247. ✓ [32mNext method[0m
+    248. ✓ [32mOverload constants[0m
+    249. ✓ [32mComplex overload scenarios[0m
+  pack-unpack:
+    250. ✓ [32mBasic pack templates[0m
+    251. ✓ [32mPack with counts and repeaters[0m
+    252. ✓ [32mComplex pack templates[0m
+    253. ✓ [32mUnpack templates[0m
+    254. ✓ [32mBinary and hex templates[0m
+    255. ✓ [32mFloat and double templates[0m
+    256. ✓ [32mPositioning and padding[0m
+    257. ✓ [32mNetwork order templates[0m
+    258. ✓ [32mString templates with counts[0m
+    259. ✓ [32mAdvanced pack unpack usage[0m
+  perl-5-36-features:
+    260. ✓ [32mClass declaration[0m
+    261. ✓ [32mDefer statement[0m
+    262. ✗ [31mTry catch finally[0m
+    263. ✓ [32mBuiltin functions[0m
+    264. ✗ [31mSignatures with types[0m
+    265. ✓ [32mField declarations with attributes[0m
+    266. ✓ [32mMulti-phase blocks[0m
+    267. ✓ [32mModern match operator[0m
+    268. ✓ [32mRoles and composition[0m
+    269. ✓ [32mAsync await syntax[0m
+  pod:
+    270. ✓ [32mPOD[0m
+    271. ✓ [32mnot confused by leading whitespace[0m
+    272. ✓ [32mPOD can appear anywhere within an expression[0m
+  prototypes-attributes-advanced:
+    273. ✓ [32mComplex prototypes[0m
+    274. ✓ [32mUnderscore prototype[0m
+    275. ✓ [32mAdvanced prototype combinations[0m
+    276. ✓ [32mAttributes basic[0m
+    277. ✓ [32mMulti-line and complex attributes[0m
+    278. ✓ [32mMethod attributes[0m
+    279. ✓ [32mLvalue attributes[0m
+    280. ✓ [32mCustom attribute handlers[0m
+    281. ✗ [31mField attributes[0m
+    282. ✓ [32mThread attributes[0m
+  quote-like-operators:
+    283. ✓ [32mQuote operators with symmetric delimiters[0m
+    284. ✓ [32mQuote operators with paired delimiters[0m
+    285. ✗ [31mRegex quote operators[0m
+    286. ✓ [32mSubstitution with modifier flags[0m
+    287. ✓ [32mCommand execution operators[0m
+    288. ✓ [32mQuote operators with whitespace[0m
+    289. ✓ [32mQuote word operators extended[0m
+    290. ✓ [32mTranslation operators[0m
+    291. ✓ [32mSubstitution with alternate delimiters[0m
+    292. ✓ [32mSubstitution with modifier flags[0m
+    293. ✓ [32mMatch with alternate delimiters[0m
+    294. ✗ [31mHeredoc in command execution[0m
+  regex-code-verbs:
+    295. ✓ [32mDynamic regex eval[0m
+    296. ✓ [32mAtomic groups[0m
+    297. ✓ [32mBranch reset groups[0m
+    298. ✓ [32mControl verb SKIP[0m
+    299. ✓ [32mControl verb FAIL[0m
+    300. ✓ [32mControl verb PRUNE[0m
+    301. ✓ [32mControl verb COMMIT[0m
+    302. ✓ [32mControl verb MARK[0m
+    303. ✓ [32mControl verb ACCEPT[0m
+    304. ✓ [32mControl verb THEN[0m
+    305. ✓ [32mMultiple control verbs[0m
+    306. ✓ [32mRe pragma with code blocks[0m
+  regex-features-advanced:
+    307. ✓ [32mEmbedded code in regex[0m
+    308. ✓ [32mRecursive patterns[0m
+    309. ✓ [32mNamed capture groups[0m
+    310. ✓ [32mConditional patterns[0m
+    311. ✓ [32mBacktracking control verbs[0m
+    312. ✓ [32mLookaround assertions advanced[0m
+    313. ✓ [32mBranch reset groups[0m
+    314. ✓ [32mPossessive quantifiers[0m
+    315. ✗ [31mExtended regex features[0m
+    316. ✓ [32mUnicode regex properties[0m
+    317. ✓ [32mKeep and substitution[0m
+  regexp:
+    318. ✓ [32mqr() strings[0m
+    319. ✓ [32mmodifiers whitespace[0m
+    320. ✓ [32mRegexp match[0m
+    321. ✓ [32mMatch w just solidus[0m
+    322. ✓ [32mjust solidus - DOR vs regex[0m
+    323. ✓ [32msubstitution[0m
+    324. ✓ [32mnon-interpolating vars[0m
+  regexp-advanced:
+    325. ✓ [32mCharacter classes[0m
+    326. ✓ [32mUnicode properties[0m
+    327. ✓ [32mNamed captures[0m
+    328. ✓ [32mNon-capturing groups[0m
+    329. ✓ [32mLookahead and lookbehind[0m
+    330. ✓ [32mRecursive patterns[0m
+    331. ✓ [32mConditional patterns[0m
+    332. ✓ [32mExtended regex with comments[0m
+    333. ✓ [32mComplex regex flags[0m
+    334. ✓ [32mSpecial regex variables[0m
+  signal-handling:
+    335. ✓ [32mBasic signal handlers[0m
+    336. ✓ [32mDIE and WARN handlers[0m
+    337. ✓ [32mSafe signal handling[0m
+    338. ✓ [32mSIGCHLD handling[0m
+    339. ✓ [32mSignal sets and masks[0m
+    340. ✓ [32mAlarm and timeout[0m
+    341. ✓ [32mSignal in fork[0m
+    342. ✓ [32mSignal handling in loops[0m
+    343. ✓ [32mDeferred signals[0m
+    344. ✓ [32mIPC signals[0m
+  simple:
+    345. ✓ [32mbasic comment[0m
+    346. ✓ [32mMultiple lines are a single comment group[0m
+    347. ✓ [32mdata section - basic[0m
+    348. ✓ [32mdata section - ctrl-d[0m
+    349. ✓ [32mdata section - ctrl-z[0m
+    350. ✓ [32mdata section anywhere[0m
+    351. ✓ [32mdata section, but not in strings[0m
+    352. ✓ [32mmaths! higher prec[0m
+    353. ✓ [32mmaths: same prec - left assoc[0m
+    354. ✓ [32munary prefixes![0m
+    355. ✓ [32myadayada operator[0m
+    356. ✓ [32municode whitespace[0m
+    357. ✓ [32mbooleans[0m
+  source-filters-encoding:
+    358. ✓ [32mSource filters[0m
+    359. ✓ [32mEncoding pragmas[0m
+    360. ✓ [32mEncoding directives[0m
+    361. ✓ [32mSource code with encoding[0m
+    362. ✓ [32mFilter::Util::Call usage[0m
+    363. ✓ [32mAcme::Bleach style filter[0m
+    364. ✗ [31mSwitch filter[0m
+    365. ✓ [32mSmart::Comments filter[0m
+    366. ✓ [32mInline::Files filter[0m
+    367. ✓ [32mEncoding layers on handles[0m
+  special-blocks-advanced:
+    368. ✓ [32mUNITCHECK blocks[0m
+    369. ✓ [32mCHECK blocks[0m
+    370. ✓ [32mINIT blocks[0m
+    371. ✓ [32mBlock execution order[0m
+    372. ✓ [32mNested special blocks[0m
+    373. ✓ [32mSpecial blocks in modules[0m
+    374. ✓ [32mSpecial blocks with require/use[0m
+    375. ✓ [32mDEMOLISH in Moo/Moose[0m
+    376. ✓ [32mSpecial blocks in eval[0m
+    377. ✓ [32mPhase-related variables[0m
+  special-variables:
+    378. ✓ [32mFormat variables[0m
+    379. ✓ [32mIO variables[0m
+    380. ✓ [32mProcess and system variables[0m
+    381. ✓ [32mError variables[0m
+    382. ✓ [32mSignal handling[0m
+    383. ✓ [32mSpecial arrays and hashes[0m
+    384. ✓ [32mSpecial filehandles[0m
+    385. ✗ [31mPerl version variables[0m
+    386. ✓ [32mMiscellaneous special variables[0m
+  statements:
+    387. ✓ [32muse VERSION;[0m
+    388. ✓ [32muse MODULE;[0m
+    389. ✓ [32mexpression as statement[0m
+    390. ✓ [32mpostfix if[0m
+    391. ✓ [32mpostfix unless[0m
+    392. ✓ [32mpostfix while[0m
+    393. ✓ [32mpostfix until[0m
+    394. ✓ [32mpostfix for[0m
+    395. ✓ [32mblock if[0m
+    396. ✓ [32mblock if/else[0m
+    397. ✓ [32mblock if/elsif[0m
+    398. ✓ [32mblock if/elsif/else[0m
+    399. ✓ [32mblock unless[0m
+    400. ✓ [32mblock while[0m
+    401. ✓ [32mblock until[0m
+    402. ✓ [32mfor (LIST) BLOCK[0m
+    403. ✓ [32mfor VAR (LIST) BLOCK[0m
+    404. ✓ [32mfor SCOPE VAR (LIST) BLOCK[0m
+    405. ✓ [32mfor my (VARS) (LIST) BLOCK[0m
+    406. ✓ [32mcontinue BLOCK[0m
+    407. ✓ [32mC-style for[0m
+    408. ✓ [32mtry / catch[0m
+    409. ✓ [32mExtended try / catch of Syntax::Keyword::Try[0m
+    410. ✓ [32mDefer[0m
+    411. ✓ [32mpackage;[0m
+    412. ✓ [32mLabels[0m
+    413. ✓ [32mphasers[0m
+    414. ✓ [32mbare blocks[0m
+    415. ✓ [32mClass syntax[0m
+    416. ✗ [31mnumeric identifier after my[0m
+  subroutines:
+    417. ✓ [32mSmall declaration[0m
+    418. ✓ [32mSmall anonymous[0m
+    419. ✓ [32mAttributes on named subs[0m
+    420. ✓ [32mAttributes on anonymous subs[0m
+    421. ✓ [32mAttributes with values[0m
+    422. ✓ [32mPrototypes[0m
+    423. ✓ [32mSignatures[0m
+    424. ✓ [32mAttribute plus signature[0m
+    425. ✓ [32mMethods[0m
+    426. ✓ [32mLexical named sub[0m
+    427. ✓ [32mFunkier Signatures[0m
+    428. ✓ [32mRecursive Signatures[0m
+    429. ✓ [32masync/await[0m
+    430. ✓ [32mextended sub/method[0m
+    431. ✓ [32mlexical method calls experimental Object::Pad syntax[0m
+  symbolic-references:
+    432. ✓ [32mBasic symbolic references[0m
+    433. ✓ [32mComplex symbolic references[0m
+    434. ✓ [32mMethod calls via symbolic refs[0m
+    435. ✓ [32mSymbolic refs with local[0m
+    436. ✓ [32mBuilding symbol tables[0m
+    437. ✓ [32mAccessing symbol table directly[0m
+    438. ✓ [32mSymbolic refs for data structures[0m
+    439. ✓ [32mGlob references vs symbolic refs[0m
+    440. ✓ [32mStrict refs violations[0m
+    441. ✓ [32mHard references vs symbolic[0m
+  tie-interface:
+    442. ✓ [32mBasic tie operations[0m
+    443. ✓ [32mTie with package methods[0m
+    444. ✓ [32mTie hash interface[0m
+    445. ✓ [32mTie array interface[0m
+    446. ✓ [32mTie handle interface[0m
+    447. ✓ [32mComplex tie usage[0m
+  try-catch-defer:
+    448. ✓ [32mCore try catch[0m
+    449. ✓ [32mTry catch finally[0m
+    450. ✓ [32mNested try catch[0m
+    451. ✗ [31mTry catch with return[0m
+    452. ✓ [32mDefer blocks[0m
+    453. ✓ [32mMultiple defer blocks[0m
+    454. ✓ [32mDefer in try catch[0m
+    455. ✓ [32mTry without catch[0m
+    456. ✓ [32mCatch with patterns[0m
+    457. ✓ [32mTry catch finally defer combo[0m
+  typeglob-slots:
+    458. ✓ [32mBasic typeglob slot access[0m
+    459. ✓ [32mTypeglob slot assignment[0m
+    460. ✓ [32mChecking slot existence[0m
+    461. ✓ [32mNAME and PACKAGE slots[0m
+    462. ✓ [32mIO slot operations[0m
+    463. ✓ [32mSelective glob copying[0m
+    464. ✓ [32mGlob slots in symbol table[0m
+    465. ✗ [31mFORMAT slot access[0m
+    466. ✓ [32mAdvanced glob slot manipulation[0m
+    467. ✓ [32mGlob slots with references[0m
+  typeglobs:
+    468. ✓ [32mBasic typeglob assignment[0m
+    469. ✓ [32mTypeglob slots[0m
+    470. ✓ [32mTypeglob references[0m
+    471. ✓ [32mSymbol table manipulation[0m
+    472. ✓ [32mLocal typeglobs[0m
+    473. ✓ [32mFilehandle typeglobs[0m
+    474. ✓ [32mAnonymous typeglobs[0m
+    475. ✓ [32mPackage qualified typeglobs[0m
+  unicode:
+    476. ✗ [31mUnicode identifiers[0m
+    477. ✗ [31mUnicode in strings[0m
+    478. ✓ [32mUnicode in regex[0m
+    479. ✓ [32mEncoding pragmas[0m
+    480. ✓ [32mUnicode normalization[0m
+    481. ✗ [31mUnicode properties in identifiers[0m
+    482. ✓ [32mUnicode case operations[0m
+  variables:
+    483. ✓ [32mbasic vars[0m
+    484. ✓ [32mvars in expressions[0m
+    485. ✓ [32mvariable declarations[0m
+    486. ✓ [32mvariable declarations including undef[0m
+    487. ✓ [32mvariable declarations with initialiser[0m
+    488. ✓ [32mvariable declarations with attributes[0m
+    489. ✓ [32marray elements[0m
+    490. ✓ [32mhash elements[0m
+    491. ✓ [32mcoderef calls[0m
+    492. ✓ [32mspecial vars[0m
+    493. ✓ [32mDouble dollar edge cases[0m[31m -- Warning: Slow parse rate (585.373 bytes/ms)[0m
+    494. ✓ [32mcrazy vars[0m
+    495. ✓ [32mhash parsing precedence[0m
+    496. ✓ [32municode vars![0m
+    497. ✓ [32mamper subs[0m
+    498. ✓ [32mglob access[0m
+  xs-inline-c:
+    499. ✗ [31mXS function declarations[0m
+    500. ✗ [31mXS with typemaps[0m
+    501. ✗ [31mXS macros and stack manipulation[0m
+    502. ✓ [32mInline::C basic[0m
+    503. ✓ [32mInline::C with Perl API[0m
+    504. ✗ [31mXS BOOT section[0m
+    505. ✓ [32mInline::CPP[0m
+    506. ✗ [31mXS with threads[0m
+    507. ✗ [31mXS constants and enums[0m
+    508. ✓ [32mPDL inline[0m
+
+44 failures:
+
+correct / [32mexpected[0m / [31munexpected[0m
+
+  1. Empty and minimal constructs:
+
+    (source_file
+[31m      (block_statement)
+[0m[31m      (block_statement)
+[0m[31m      (block_statement)
+[0m[32m      (empty_statement)
+[0m[32m      (empty_statement)
+[0m[32m      (empty_statement)
+[0m[32m      (empty_statement)
+[0m[32m      (empty_statement)
+[0m[32m      (empty_statement)
+[0m[32m      (block)
+[0m[32m      (block
+[0m[32m        (empty_statement))
+[0m[32m      (block
+[0m[32m        (empty_statement)
+[0m[32m        (empty_statement))
+[0m      (subroutine_declaration_statement
+[31m        (bareword)
+[0m[32m        (identifier)
+[0m        (block))
+      (subroutine_declaration_statement
+[31m        (bareword)
+[0m[31m        (block))
+[0m[32m        (identifier)
+[0m[32m        (block
+[0m[32m          (empty_statement)))
+[0m      (subroutine_declaration_statement
+[31m        (bareword)
+[0m[32m        (identifier)
+[0m[32m        (block
+[0m[32m          (empty_statement)
+[0m[32m          (empty_statement)
+[0m[32m          (empty_statement)))
+[0m[32m      (if_statement
+[0m[32m        (condition
+[0m[32m          (integer))
+[0m        (block))
+[31m      (conditional_statement
+[0m[31m        (number)
+[0m[32m      (while_statement
+[0m[32m        (condition
+[0m[32m          (integer))
+[0m        (block))
+[31m      (loop_statement
+[0m[31m        (number)
+[0m[32m      (for_statement
+[0m[32m        (c_style_for_loop
+[0m[32m          (empty_statement)
+[0m[32m          (empty_statement))
+[0m        (block))
+[31m      (cstyle_for_statement
+[0m[31m        (block))
+[0m[31m      (ERROR
+[0m[31m        (ERROR)
+[0m[31m        (binary_expression
+[0m[31m          (binary_expression
+[0m[31m            (anonymous_hash_expression)
+[0m[31m            (anonymous_hash_expression))
+[0m[31m          (anonymous_array_expression))))[0m
+[32m      (list_expression)
+[0m[32m      (anonymous_array_expression)
+[0m[32m      (anonymous_hash_expression)
+[0m[32m      (unary_expression
+[0m[32m        (unary_operator)
+[0m[32m        (anonymous_hash_expression))
+[0m[32m      (unary_expression
+[0m[32m        (unary_operator)
+[0m[32m        (anonymous_array_expression)))[0m
+
+
+  2. Try::Catch alternative:
+
+    (source_file
+[31m      (use_statement
+[0m[31m        (package))
+[0m[31m      (try_statement
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (function_call_expression
+[0m[31m              (function))))
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (scalar
+[0m[31m            (varname)))
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (function_call_expression
+[0m[31m              (function)
+[0m[31m              (scalar
+[0m[31m                (varname))))))
+[0m[31m      (ERROR
+[0m[31m        (function_call_expression
+[0m[31m          (function)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (indirect_object
+[0m[31m              (scalar
+[0m[31m                (varname)))
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (anonymous_hash_expression
+[0m[31m                (equality_expression
+[0m[31m                  (method_call_expression
+[0m[31m                    (scalar
+[0m[31m                      (varname))
+[0m[31m                    (method))
+[0m[31m                  (number)))))))
+[0m[31m      (block_statement
+[0m[31m        (expression_statement
+[0m[31m          (function_call_expression
+[0m[31m            (function)
+[0m[31m            (scalar
+[0m[31m              (varname)))))
+[0m[31m      (ERROR
+[0m[31m        (function_call_expression
+[0m[31m          (function)
+[0m[31m          (scalar
+[0m[31m            (varname))))
+[0m[31m      (block_statement
+[0m[31m        (expression_statement
+[0m[31m          (function_call_expression
+[0m[31m            (function)
+[0m[31m            (scalar
+[0m[31m              (varname)))))
+[0m[31m      (use_statement
+[0m[31m        (package))
+[0m[31m      (try_statement
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (function_call_expression
+[0m[31m              (function))))
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (scalar
+[0m[31m            (varname)))
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (function_call_expression
+[0m[31m              (function)
+[0m[31m              (scalar
+[0m[31m                (varname)))))))[0m
+[32m      (use_statement)
+[0m[32m      (try_catch_statement)
+[0m[32m      (use_statement)
+[0m[32m      (try_catch_statement))[0m
+
+
+  3. File test operators combinations:
+
+    (source_file
+[31m      (conditional_statement
+[0m[31m        (binary_expression
+[0m[31m          (func1op_call_expression
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (func1op_call_expression
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (binary_expression
+[0m[31m                (function_call_expression
+[0m[31m                  (function
+[0m[31m                    (varname)))
+[0m[31m                (ambiguous_function_call_expression
+[0m[31m                  (function)
+[0m[31m                  (ambiguous_function_call_expression
+[0m[31m                    (function)
+[0m[31m                    (binary_expression
+[0m[31m                      (function_call_expression
+[0m[31m                        (function
+[0m[31m                          (varname)))
+[0m[31m                      (ERROR)
+[0m[31m                      (ambiguous_function_call_expression
+[0m[31m                        (function)
+[0m[31m                        (bareword)))))))))
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content
+[0m[31m                  (escape_sequence)))))))
+[0m[31m      (conditional_statement
+[0m[31m        (binary_expression
+[0m[31m          (func1op_call_expression
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (func1op_call_expression
+[0m[31m            (bareword)))
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content
+[0m[31m                  (escape_sequence)))))))
+[0m[31m      (conditional_statement
+[0m[31m        (binary_expression
+[0m[31m          (func1op_call_expression
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (func1op_call_expression
+[0m[31m            (bareword)))
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content
+[0m[31m                  (escape_sequence)))))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (func1op_call_expression
+[0m[31m            (scalar
+[0m[31m              (varname)))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (func1op_call_expression
+[0m[31m            (bareword))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (func1op_call_expression
+[0m[31m            (bareword))))
+[0m[31m      (conditional_statement
+[0m[31m        (func1op_call_expression
+[0m[31m          (scalar
+[0m[31m            (varname)))
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content
+[0m[31m                  (escape_sequence))))))
+[0m[31m        (elsif
+[0m[31m          (func1op_call_expression
+[0m[31m            (bareword))
+[0m[31m          (block
+[0m[31m            (expression_statement
+[0m[31m              (ambiguous_function_call_expression
+[0m[31m                (function)
+[0m[31m                (interpolated_string_literal
+[0m[31m                  (string_content
+[0m[31m                    (escape_sequence)))))))))[0m
+[32m      (if_statement)
+[0m[32m      (if_statement)
+[0m[32m      (if_statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (if_statement))[0m
+
+
+  4. Format with continuations:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (assignment_expression
+[0m[31m            (bareword)
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (ERROR)
+[0m[31m              (binary_expression
+[0m[31m                (binary_expression
+[0m[31m                  (array
+[0m[31m                    (varname))
+[0m[31m                  (readline_expression
+[0m[31m                    (MISSING ">>")))
+[0m[31m                (ERROR)
+[0m[31m                (array
+[0m[31m                  (comment)
+[0m[31m                  (varname
+[0m[31m                    (scalar
+[0m[31m                      (varname))))))))
+[0m[31m        (scalar
+[0m[31m          (varname))
+[0m[31m        (binary_expression
+[0m[31m          (binary_expression
+[0m[31m            (binary_expression
+[0m[31m              (binary_expression
+[0m[31m                (binary_expression
+[0m[31m                  (binary_expression
+[0m[31m                    (binary_expression
+[0m[31m                      (scalar
+[0m[31m                        (varname))
+[0m[31m                      (ERROR)
+[0m[31m                      (readline_expression
+[0m[31m                        (MISSING ">>")))))))))))))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(ERROR)(scalar
+[0m[31m  (varname))(scalar
+[0m[31m  (varname))(scalar
+[0m[31m  (varname))(scalar
+[0m[31m  (varname))(scalar
+[0m[31m  (varname))(scalar
+[0m[31m  (varname))(scalar
+[0m[31m  (varname))[0m
+[32m      (format_declaration)
+[0m[32m      (format_declaration))[0m
+
+
+  5. Dynamic format names:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (bareword)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (assignment_expression
+[0m[31m              (binary_expression
+[0m[31m                (bareword)
+[0m[31m                (variable_declaration
+[0m[31m                  (scalar
+[0m[31m                    (varname))))
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content))))))
+[0m[31m      (expression_statement
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (list_expression
+[0m[31m            (assignment_expression
+[0m[31m              (bareword)
+[0m[31m              (binary_expression
+[0m[31m                (binary_expression
+[0m[31m                  (binary_expression
+[0m[31m                    (array
+[0m[31m                      (varname))
+[0m[31m                    (readline_expression
+[0m[31m                      (MISSING ">>")))
+[0m[31m                  (ERROR)
+[0m[31m                  (fileglob_expression
+[0m[31m                    (string_content)))
+[0m[31m                (ERROR)
+[0m[31m                (scalar
+[0m[31m                  (varname))))
+[0m[31m            (binary_expression
+[0m[31m              (scalar
+[0m[31m                (varname))
+[0m[31m              (eval_expression
+[0m[31m                (interpolated_string_literal
+[0m[31m                  (string_content
+[0m[31m                    (scalar
+[0m[31m                      (varname)))))))))
+[0m[31m      (expression_statement
+[0m[31m        (function_call_expression
+[0m[31m          (function)
+[0m[31m          (anonymous_slice_expression
+[0m[31m            (list_expression
+[0m[31m              (function_call_expression
+[0m[31m                (function)
+[0m[31m                (bareword))
+[0m[31m              (assignment_expression
+[0m[31m                (scalar
+[0m[31m                  (varname))
+[0m[31m                (interpolated_string_literal
+[0m[31m                  (string_content))))
+[0m[31m            (number)))))[0m
+[32m      (format_declaration)
+[0m[32m      (statement)
+[0m[32m      (format_declaration)
+[0m[32m      (eval_statement)
+[0m[32m      (statement))[0m
+
+
+  6. Complex format expressions:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (function)
+[0m[31m        (assignment_expression
+[0m[31m          (bareword)
+[0m[31m          (binary_expression
+[0m[31m            (binary_expression
+[0m[31m              (array
+[0m[31m                (varname))
+[0m[31m              (readline_expression
+[0m[31m                (MISSING ">>")))
+[0m[31m            (ERROR)
+[0m[31m            (array
+[0m[31m              (comment)
+[0m[31m              (varname
+[0m[31m                (scalar
+[0m[31m                  (varname))))))
+[0m[31m        (function_call_expression
+[0m[31m          (function)
+[0m[31m          (list_expression
+[0m[31m            (scalar
+[0m[31m              (varname))
+[0m[31m            (scalar
+[0m[31m              (varname))))
+[0m[31m        (ERROR
+[0m[31m          (function_call_expression
+[0m[31m            (function)
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (glob
+[0m[31m            (varname)))
+[0m[31m        (binary_expression
+[0m[31m          (binary_expression
+[0m[31m            (list_expression
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content))
+[0m[31m              (array
+[0m[31m                (varname)))
+[0m[31m            (ERROR)
+[0m[31m            (function_call_expression
+[0m[31m              (function)
+[0m[31m              (list_expression
+[0m[31m                (scalar
+[0m[31m                  (varname))
+[0m[31m                (number)
+[0m[31m                (number))))
+[0m[31m          (ERROR)
+[0m[31m          (binary_expression
+[0m[31m            (scalar
+[0m[31m              (varname))
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (assignment_expression
+[0m[31m                (bareword)
+[0m[31m                (binary_expression
+[0m[31m                  (binary_expression
+[0m[31m                    (binary_expression
+[0m[31m                      (binary_expression
+[0m[31m                        (array
+[0m[31m                          (varname))
+[0m[31m                        (array
+[0m[31m                          (varname)))
+[0m[31m                      (array
+[0m[31m                        (varname)))
+[0m[31m                    (array
+[0m[31m                      (comment)
+[0m[31m                      (varname
+[0m[31m                        (scalar
+[0m[31m                          (varname)))))
+[0m[31m                  (interpolated_string_literal
+[0m[31m                    (string_content)))))))
+[0m[31m        (binary_expression
+[0m[31m          (scalar
+[0m[31m            (varname))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content)))
+[0m[31m        (conditional_expression
+[0m[31m          (equality_expression
+[0m[31m            (scalar
+[0m[31m              (varname))
+[0m[31m            (interpolated_string_literal))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))
+[0m[31m          (scalar
+[0m[31m            (varname)))
+[0m[31m        (binary_expression
+[0m[31m          (scalar
+[0m[31m            (varname))
+[0m[31m          (number))
+[0m[31m        (binary_expression
+[0m[31m          (scalar
+[0m[31m            (varname))
+[0m[31m          (number))))[0m
+[32m      (format_declaration)
+[0m[32m      (format_declaration))[0m
+
+
+  7.    Name            Age    Score:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (function)
+[0m[31m        (bareword)
+[0m[31m        (binary_expression
+[0m[31m          (binary_expression
+[0m[31m            (array
+[0m[31m              (varname))
+[0m[31m            (readline_expression
+[0m[31m              (MISSING ">>")))
+[0m[31m          (readline_expression
+[0m[31m            (MISSING ">>")))))))(ERROR)(comment)(scalar
+[0m[31m  (varname))(scalar
+[0m[31m  (varname))(scalar
+[0m[31m  (varname))(scalar
+[0m[31m  (varname))(scalar
+[0m[31m  (varname))[0m
+[32m      (format_declaration)
+[0m[32m      (format_declaration)
+[0m[32m      (statement)
+[0m[32m      (statement))[0m
+
+
+  8. Numeric format fields:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (function)
+[0m[31m        (bareword)
+[0m[31m        (function)
+[0m[31m        (ERROR
+[0m[31m          (comment)
+[0m[31m          (scalar
+[0m[31m            (varname))
+[0m[31m          (comment)
+[0m[31m          (scalar
+[0m[31m            (varname))
+[0m[31m          (comment)
+[0m[31m          (scalar
+[0m[31m            (varname)))
+[0m[31m        (binary_expression
+[0m[31m          (array
+[0m[31m            (comment)
+[0m[31m            (varname
+[0m[31m              (scalar
+[0m[31m                (varname))))
+[0m[31m          (ERROR
+[0m[31m            (number))
+[0m[31m          (comment)
+[0m[31m          (ERROR
+[0m[31m            (function_call_expression
+[0m[31m              (function)
+[0m[31m              (list_expression
+[0m[31m                (interpolated_string_literal
+[0m[31m                  (string_content))
+[0m[31m                (scalar
+[0m[31m                  (varname)))))
+[0m[31m          (array
+[0m[31m            (varname)))
+[0m[31m        (ERROR)
+[0m[31m        (function_call_expression
+[0m[31m          (function)
+[0m[31m          (list_expression
+[0m[31m            (interpolated_string_literal
+[0m[31m              (string_content))
+[0m[31m            (scalar
+[0m[31m              (varname))))))[0m
+[32m      (format_declaration))[0m
+
+
+  9. Format with special variables:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (assignment_expression
+[0m[31m            (bareword)
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (ERROR)
+[0m[31m              (binary_expression
+[0m[31m                (array
+[0m[31m                  (comment)
+[0m[31m                  (varname))
+[0m[31m                (ERROR)
+[0m[31m                (scalar
+[0m[31m                  (varname))))))
+[0m[31m        (binary_expression
+[0m[31m          (binary_expression
+[0m[31m            (binary_expression
+[0m[31m              (binary_expression
+[0m[31m                (binary_expression
+[0m[31m                  (scalar
+[0m[31m                    (varname))
+[0m[31m                  (ERROR)
+[0m[31m                  (readline_expression
+[0m[31m                    (MISSING ">>")))
+[0m[31m                (readline_expression
+[0m[31m                  (MISSING ">>"))))))))))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(comment)(scalar
+[0m[31m  (varname))(scalar
+[0m[31m  (varname
+[0m[31m    (scalar
+[0m[31m      (varname))))(hash_element_expression
+[0m[31m  (container_variable
+[0m[31m    (varname))
+[0m[31m  (autoquoted_bareword))(escape_sequence)[0m
+[32m      (format_declaration)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement))[0m
+
+
+  10. Format with filehandles:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (list_expression
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (assignment_expression
+[0m[31m              (bareword)
+[0m[31m              (binary_expression
+[0m[31m                (binary_expression
+[0m[31m                  (binary_expression
+[0m[31m                    (binary_expression
+[0m[31m                      (binary_expression
+[0m[31m                        (binary_expression
+[0m[31m                          (binary_expression
+[0m[31m                            (binary_expression
+[0m[31m                              (binary_expression
+[0m[31m                                (binary_expression
+[0m[31m                                  (array
+[0m[31m                                    (varname))
+[0m[31m                                  (readline_expression
+[0m[31m                                    (MISSING ">>")))
+[0m[31m                                (readline_expression
+[0m[31m                                  (MISSING ">>"))))))))))))))))))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(ERROR)(binary_expression
+[0m[31m  (scalar
+[0m[31m    (varname))
+[0m[31m  (ambiguous_function_call_expression
+[0m[31m    (function)
+[0m[31m    (variable_declaration
+[0m[31m      (scalar
+[0m[31m        (varname)))))(string_literal
+[0m[31m  (string_content))(string_literal
+[0m[31m  (string_content))(expression_statement
+[0m[31m  (assignment_expression
+[0m[31m    (variable_declaration
+[0m[31m      (scalar
+[0m[31m        (varname)))
+[0m[31m    (function_call_expression
+[0m[31m      (function)
+[0m[31m      (scalar
+[0m[31m        (varname)))))(expression_statement
+[0m[31m  (assignment_expression
+[0m[31m    (scalar
+[0m[31m      (varname))
+[0m[31m    (interpolated_string_literal
+[0m[31m      (string_content))))(expression_statement
+[0m[31m  (func1op_call_expression))(expression_statement
+[0m[31m  (function_call_expression
+[0m[31m    (function)
+[0m[31m    (scalar
+[0m[31m      (varname))))(expression_statement
+[0m[31m  (func1op_call_expression
+[0m[31m    (scalar
+[0m[31m      (varname))))(expression_statement
+[0m[31m  (ambiguous_function_call_expression
+[0m[31m    (function)
+[0m[31m    (list_expression
+[0m[31m      (scalar
+[0m[31m        (varname))
+[0m[31m      (interpolated_string_literal
+[0m[31m        (string_content)))))(expression_statement
+[0m[31m  (ambiguous_function_call_expression
+[0m[31m    (function)
+[0m[31m    (list_expression
+[0m[31m      (scalar
+[0m[31m        (varname))
+[0m[31m      (interpolated_string_literal
+[0m[31m        (string_content)))))[0m
+[32m      (format_declaration)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement))[0m
+
+
+  11. Multiline format fields:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (function)
+[0m[31m        (bareword)
+[0m[31m        (bareword)
+[0m[31m        (ERROR)
+[0m[31m        (binary_expression
+[0m[31m          (binary_expression
+[0m[31m            (binary_expression
+[0m[31m              (binary_expression
+[0m[31m                (binary_expression
+[0m[31m                  (binary_expression
+[0m[31m                    (binary_expression
+[0m[31m                      (binary_expression
+[0m[31m                        (binary_expression
+[0m[31m                          (binary_expression
+[0m[31m                            (readline_expression
+[0m[31m                              (MISSING ">>"))
+[0m[31m                            (readline_expression
+[0m[31m                              (MISSING ">>"))))))))))))))))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(scalar
+[0m[31m  (varname))(ERROR)(scalar
+[0m[31m  (varname))(scalar
+[0m[31m  (varname))(escape_sequence)(array
+[0m[31m  (varname))[0m
+[32m      (format_declaration))[0m
+
+
+  12. Format with picture lines:
+
+[31m    (ERROR
+[0m[31m      (ambiguous_function_call_expression
+[0m[31m        (function)
+[0m[31m        (assignment_expression
+[0m[31m          (bareword)
+[0m[31m          (binary_expression
+[0m[31m            (binary_expression
+[0m[31m              (unary_expression
+[0m[31m                (preinc_expression
+[0m[31m                  (preinc_expression
+[0m[31m                    (preinc_expression
+[0m[31m                      (preinc_expression
+[0m[31m                        (preinc_expression
+[0m[31m                          (unary_expression
+[0m[31m                            (preinc_expression
+[0m[31m                              (preinc_expression
+[0m[31m                                (preinc_expression
+[0m[31m                                  (preinc_expression
+[0m[31m                                    (preinc_expression
+[0m[31m                                      (unary_expression
+[0m[31m                                        (preinc_expression
+[0m[31m                                          (preinc_expression
+[0m[31m                                            (preinc_expression
+[0m[31m                                              (preinc_expression
+[0m[31m                                                (preinc_expression
+[0m[31m                                                  (unary_expression
+[0m[31m                                                    (ERROR)
+[0m[31m                                                    (array
+[0m[31m                                                      (varname)))))))))))))))))))))
+[0m[31m              (ERROR)
+[0m[31m              (binary_expression
+[0m[31m                (array
+[0m[31m                  (varname))
+[0m[31m                (ERROR)
+[0m[31m                (array
+[0m[31m                  (varname))))
+[0m[31m            (ERROR)
+[0m[31m            (scalar
+[0m[31m              (varname)))))
+[0m[31m      (scalar
+[0m[31m        (varname))
+[0m[31m      (binary_expression
+[0m[31m        (binary_expression
+[0m[31m          (scalar
+[0m[31m            (varname))
+[0m[31m          (preinc_expression
+[0m[31m            (preinc_expression
+[0m[31m              (preinc_expression
+[0m[31m                (preinc_expression
+[0m[31m                  (preinc_expression
+[0m[31m                    (unary_expression
+[0m[31m                      (preinc_expression
+[0m[31m                        (preinc_expression
+[0m[31m                          (preinc_expression
+[0m[31m                            (preinc_expression
+[0m[31m                              (preinc_expression
+[0m[31m                                (unary_expression
+[0m[31m                                  (preinc_expression
+[0m[31m                                    (preinc_expression
+[0m[31m                                      (preinc_expression
+[0m[31m                                        (preinc_expression
+[0m[31m                                          (preinc_expression
+[0m[31m                                            (unary_expression
+[0m[31m                                              (ERROR)
+[0m[31m                                              (array
+[0m[31m                                                (varname)))))))))))))))))))))
+[0m[31m        (ERROR)
+[0m[31m        (array
+[0m[31m          (comment)
+[0m[31m          (varname
+[0m[31m            (scalar
+[0m[31m              (varname)))))
+[0m[31m      (scalar
+[0m[31m        (varname))
+[0m[31m      (scalar
+[0m[31m        (varname))
+[0m[31m      (ERROR)
+[0m[31m      (function)
+[0m[31m      (bareword)
+[0m[31m      (binary_expression
+[0m[31m        (unary_expression
+[0m[31m          (ERROR)
+[0m[31m          (unary_expression
+[0m[31m            (ERROR)
+[0m[31m            (array
+[0m[31m              (varname))))
+[0m[31m        (ERROR)
+[0m[31m        (scalar
+[0m[31m          (varname)))
+[0m[31m      (ERROR)
+[0m[31m      (binary_expression
+[0m[31m        (binary_expression
+[0m[31m          (unary_expression
+[0m[31m            (ERROR)
+[0m[31m            (array
+[0m[31m              (varname)))
+[0m[31m          (readline_expression
+[0m[31m            (MISSING ">>")))
+[0m[31m        (readline_expression
+[0m[31m          (MISSING ">>"))))))(ERROR)(scalar
+[0m[31m  (varname))[0m
+[32m    (source_file
+[0m[32m      (format_declaration)
+[0m[32m      (format_declaration))[0m
+
+
+  13. Basic format declaration:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (assignment_expression
+[0m[31m            (bareword)
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (ERROR)
+[0m[31m              (binary_expression
+[0m[31m                (binary_expression
+[0m[31m                  (array
+[0m[31m                    (varname))
+[0m[31m                  (readline_expression
+[0m[31m                    (MISSING ">>")))
+[0m[31m                (ERROR)
+[0m[31m                (array
+[0m[31m                  (comment)
+[0m[31m                  (varname
+[0m[31m                    (scalar
+[0m[31m                      (varname))))))))
+[0m[31m        (binary_expression
+[0m[31m          (binary_expression
+[0m[31m            (binary_expression
+[0m[31m              (binary_expression
+[0m[31m                (binary_expression
+[0m[31m                  (binary_expression
+[0m[31m                    (scalar
+[0m[31m                      (varname))
+[0m[31m                    (ERROR)
+[0m[31m                    (readline_expression
+[0m[31m                      (MISSING ">>"))))))))))))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(ERROR)(scalar
+[0m[31m  (varname))[0m
+[32m      (format_declaration
+[0m[32m        (identifier)
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable))
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable)))
+[0m[32m      (func0op_call_expression
+[0m[32m        (identifier)))[0m
+
+
+  14. Format with top of page:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (function)
+[0m[31m        (bareword)
+[0m[31m        (function)
+[0m[31m        (array
+[0m[31m          (comment)
+[0m[31m          (varname)))
+[0m[31m      (pod))[0m
+[32m      (format_declaration
+[0m[32m        (identifier)
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (special_scalar_variable))
+[0m[32m        (format_picture_line))
+[0m[32m      (format_declaration
+[0m[32m        (identifier)
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable))))[0m
+
+
+  15. Format with multiline fields:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (function)
+[0m[31m        (bareword)
+[0m[31m        (binary_expression
+[0m[31m          (binary_expression
+[0m[31m            (bareword)
+[0m[31m            (ERROR)
+[0m[31m            (binary_expression
+[0m[31m              (binary_expression
+[0m[31m                (binary_expression
+[0m[31m                  (binary_expression
+[0m[31m                    (binary_expression
+[0m[31m                      (binary_expression
+[0m[31m                        (binary_expression
+[0m[31m                          (readline_expression
+[0m[31m                            (MISSING ">>"))
+[0m[31m                          (readline_expression
+[0m[31m                            (MISSING ">>")))))))))))))))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(ERROR)(scalar
+[0m[31m  (varname))(binary_expression
+[0m[31m  (binary_expression
+[0m[31m    (binary_expression
+[0m[31m      (binary_expression
+[0m[31m        (binary_expression
+[0m[31m          (binary_expression
+[0m[31m            (binary_expression
+[0m[31m              (readline_expression
+[0m[31m                (MISSING ">>")))))))))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(ERROR)(scalar
+[0m[31m  (varname))(binary_expression
+[0m[31m  (binary_expression
+[0m[31m    (binary_expression
+[0m[31m      (binary_expression
+[0m[31m        (binary_expression
+[0m[31m          (binary_expression
+[0m[31m            (readline_expression
+[0m[31m              (MISSING ">>"))))))))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(readline_expression
+[0m[31m  (MISSING ">>"))(ERROR)(scalar
+[0m[31m  (varname))[0m
+[32m      (format_declaration
+[0m[32m        (identifier)
+[0m[32m        (format_picture_line)
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable))
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable))
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable))))[0m
+
+
+  16. Format with numeric fields:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (function)
+[0m[31m        (assignment_expression
+[0m[31m          (bareword)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (ERROR)
+[0m[31m            (array
+[0m[31m              (comment)
+[0m[31m              (varname
+[0m[31m                (scalar
+[0m[31m                  (varname))))))
+[0m[31m        (scalar
+[0m[31m          (varname))
+[0m[31m        (ERROR
+[0m[31m          (container_variable
+[0m[31m            (varname)))
+[0m[31m        (binary_expression
+[0m[31m          (array
+[0m[31m            (varname))
+[0m[31m          (ERROR)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (ERROR)
+[0m[31m            (binary_expression
+[0m[31m              (array
+[0m[31m                (varname))
+[0m[31m              (ERROR)
+[0m[31m              (scalar
+[0m[31m                (varname)))))
+[0m[31m        (scalar
+[0m[31m          (varname))))[0m
+[32m      (format_declaration
+[0m[32m        (identifier)
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable))
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable))))[0m
+
+
+  17. Format with expressions:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (assignment_expression
+[0m[31m            (bareword)
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (ERROR)
+[0m[31m              (binary_expression
+[0m[31m                (binary_expression
+[0m[31m                  (binary_expression
+[0m[31m                    (array
+[0m[31m                      (varname))
+[0m[31m                    (readline_expression
+[0m[31m                      (MISSING ">>")))
+[0m[31m                  (readline_expression
+[0m[31m                    (MISSING ">>")))))))))))(ERROR)(array
+[0m[31m  (comment)
+[0m[31m  (varname
+[0m[31m    (scalar
+[0m[31m      (varname))))(binary_expression
+[0m[31m  (binary_expression
+[0m[31m    (binary_expression
+[0m[31m      (binary_expression
+[0m[31m        (binary_expression
+[0m[31m          (func1op_call_expression
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (ERROR)
+[0m[31m          (readline_expression
+[0m[31m            (MISSING ">>")))))))(readline_expression
+[0m[31m  (MISSING ">>"))(ERROR)(array
+[0m[31m  (varname))(readline_expression
+[0m[31m  (MISSING ">>"))(ERROR)(func1op_call_expression
+[0m[31m  (func1op_call_expression))(scalar
+[0m[31m  (varname))[0m
+[32m      (format_declaration
+[0m[32m        (identifier)
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (function_call_expression
+[0m[32m            (identifier)
+[0m[32m            (arguments
+[0m[32m              (scalar_variable))))
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (function_call_expression
+[0m[32m            (identifier)
+[0m[32m            (arguments
+[0m[32m              (function_call_expression
+[0m[32m                (identifier))))
+[0m[32m          (comma)
+[0m[32m          (special_scalar_variable))))[0m
+
+
+  18. Format with special variables:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (list_expression
+[0m[31m            (assignment_expression
+[0m[31m              (bareword)
+[0m[31m              (ambiguous_function_call_expression
+[0m[31m                (function)
+[0m[31m                (ERROR)
+[0m[31m                (binary_expression
+[0m[31m                  (binary_expression
+[0m[31m                    (array
+[0m[31m                      (varname))
+[0m[31m                    (readline_expression
+[0m[31m                      (MISSING ">>")))
+[0m[31m                  (ERROR)
+[0m[31m                  (array
+[0m[31m                    (comment)
+[0m[31m                    (varname
+[0m[31m                      (scalar
+[0m[31m                        (varname)))))))
+[0m[31m            (scalar
+[0m[31m              (varname))
+[0m[31m            (assignment_expression
+[0m[31m              (binary_expression
+[0m[31m                (scalar
+[0m[31m                  (varname))
+[0m[31m                (scalar
+[0m[31m                  (varname)))
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content))))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (scalar
+[0m[31m            (varname))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content)))))[0m
+[32m      (format_declaration
+[0m[32m        (identifier)
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (special_scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (special_scalar_variable)))
+[0m[32m      (assignment_expression
+[0m[32m        (special_scalar_variable)
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (special_scalar_variable)
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content))))[0m
+
+
+  19. Format with filehandle:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (list_expression
+[0m[31m            (assignment_expression
+[0m[31m              (bareword)
+[0m[31m              (binary_expression
+[0m[31m                (binary_expression
+[0m[31m                  (binary_expression
+[0m[31m                    (array
+[0m[31m                      (varname))
+[0m[31m                    (readline_expression
+[0m[31m                      (MISSING ">>")))
+[0m[31m                  (ERROR)
+[0m[31m                  (array
+[0m[31m                    (varname)))
+[0m[31m                (ERROR)
+[0m[31m                (binary_expression
+[0m[31m                  (array
+[0m[31m                    (varname))
+[0m[31m                  (ERROR)
+[0m[31m                  (scalar
+[0m[31m                    (varname)))))
+[0m[31m            (scalar
+[0m[31m              (varname))
+[0m[31m            (binary_expression
+[0m[31m              (scalar
+[0m[31m                (varname))
+[0m[31m              (function_call_expression
+[0m[31m                (function)
+[0m[31m                (list_expression
+[0m[31m                  (bareword)
+[0m[31m                  (interpolated_string_literal
+[0m[31m                    (string_content))
+[0m[31m                  (interpolated_string_literal
+[0m[31m                    (string_content))))))))
+[0m[31m      (expression_statement
+[0m[31m        (function_call_expression
+[0m[31m          (function)
+[0m[32m      (format_declaration
+[0m[32m        (identifier)
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable)))
+[0m[32m      (function_call_expression
+[0m[32m        (identifier)
+[0m[32m        (arguments
+[0m[32m          (bareword)
+[0m[32m          (comma)
+[0m[32m          (string_literal
+[0m[32m            (string_content))
+[0m[32m          (comma)
+[0m[32m          (string_literal
+[0m[32m            (string_content))))
+[0m[32m      (function_call_expression
+[0m[32m        (identifier)
+[0m[32m        (arguments
+[0m          (bareword)))
+[31m      (expression_statement
+[0m[31m        (func1op_call_expression))
+[0m[31m      (expression_statement
+[0m[31m        (func1op_call_expression
+[0m[32m      (func0op_call_expression
+[0m[32m        (identifier))
+[0m[32m      (function_call_expression
+[0m[32m        (identifier)
+[0m[32m        (arguments
+[0m          (bareword))))
+
+
+  20. Complex format pictures:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (function)
+[0m[31m        (bareword)
+[0m[31m        (ERROR)
+[0m[31m        (scalar
+[0m[31m          (varname))
+[0m[31m        (comment)
+[0m[31m        (scalar
+[0m[31m          (varname))
+[0m[31m        (scalar
+[0m[31m          (varname))
+[0m[31m        (scalar
+[0m[31m          (varname))
+[0m[31m        (scalar
+[0m[31m          (varname))
+[0m[31m        (scalar
+[0m[31m          (varname))
+[0m[31m        (scalar
+[0m[31m          (varname))))[0m
+[32m      (format_declaration
+[0m[32m        (identifier)
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable))
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (string_literal
+[0m[32m            (string_content)))
+[0m[32m        (format_picture_line)
+[0m[32m        (format_variables
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable)
+[0m[32m          (comma)
+[0m[32m          (scalar_variable))))[0m
+
+
+  21. Heredocs with special delimiters:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (heredoc_token)))
+[0m[31m      (heredoc_content
+[0m[31m        (heredoc_end))
+[0m[31m      (expression_statement
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (ERROR
+[0m[31m            (UNEXPECTED '''))
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (ambiguous_function_call_expression
+[0m[31m                (function)
+[0m[31m                (loopex_expression
+[0m[31m                  (ambiguous_function_call_expression
+[0m[31m                    (function)
+[0m[31m                    (ambiguous_function_call_expression
+[0m[31m                      (function)
+[0m[31m                      (heredoc_token)))))))))
+[0m[31m      (heredoc_content
+[0m[31m        (scalar
+[0m[31m          (varname))
+[0m[31m        (heredoc_end)))[0m
+[32m      (func1op_call_expression
+[0m[32m        (identifier)
+[0m[32m        (heredoc
+[0m[32m          (heredoc_start_identifier)))
+[0m[32m      (heredoc_content)
+[0m[32m      (func1op_call_expression
+[0m[32m        (identifier)
+[0m[32m        (heredoc
+[0m[32m          (heredoc_start_identifier)))
+[0m[32m      (heredoc_content)
+[0m[32m      (func1op_call_expression
+[0m[32m        (identifier)
+[0m[32m        (heredoc
+[0m[32m          (heredoc_start_identifier)))
+[0m[32m      (heredoc_content))[0m
+
+
+  22. Indirect object syntax:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (list_expression
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (number)))
+[0m[31m          (number)))
+[0m[31m      (expression_statement
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (function_call_expression
+[0m[31m            (function)
+[0m[31m            (list_expression
+[0m[31m              (number)
+[0m[31m              (number)))))
+[0m[31m      (expression_statement
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (bareword)))
+[0m[31m      (expression_statement
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (interpolated_string_literal
+[0m[31m              (string_content
+[0m[31m                (escape_sequence))))))
+[0m[31m      (expression_statement
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (interpolated_string_literal
+[0m[31m              (string_content
+[0m[31m                (escape_sequence))))))
+[0m[31m      (expression_statement
+[0m[31m        (list_expression
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content
+[0m[31m                  (escape_sequence)))))
+[0m[31m          (scalar
+[0m[31m            (varname))))
+[0m[31m      (expression_statement
+[0m[31m        (func1op_call_expression
+[0m[31m          (bareword)))
+[0m[31m      (expression_statement
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (list_expression
+[0m[31m            (bareword)
+[0m[31m            (scalar
+[0m[31m              (varname)))))
+[0m[31m      (ERROR)
+[0m[31m      (expression_statement
+[0m[31m        (array
+[0m[31m          (varname)))
+[0m[31m      (expression_statement
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (string_literal
+[0m[31m              (string_content))))))[0m
+[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement))[0m
+
+
+  23. Lexical subroutines (5.18+):
+
+    (source_file
+      (use_statement
+[31m        (package)
+[0m[31m        (string_literal
+[0m[31m          (string_content)))
+[0m[32m        (identifier)
+[0m[32m        (arguments
+[0m[32m          (string_literal
+[0m[32m            (string_content))))
+[0m      (subroutine_declaration_statement
+[31m        (bareword)
+[0m[32m        (variable_declaration_type)
+[0m[32m        (identifier)
+[0m        (block
+[31m          (expression_statement
+[0m[31m            (return_expression
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content))))))
+[0m[31m      (ERROR)
+[0m[32m          (return_expression
+[0m[32m            (string_literal
+[0m[32m              (string_content)))))
+[0m      (subroutine_declaration_statement
+[31m        (bareword)
+[0m[32m        (variable_declaration_type)
+[0m[32m        (identifier)
+[0m        (block
+[31m          (expression_statement
+[0m[31m            (return_expression
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content))))))
+[0m[31m      (ERROR)
+[0m[32m          (return_expression
+[0m[32m            (string_literal
+[0m[32m              (string_content)))))
+[0m      (subroutine_declaration_statement
+[31m        (bareword)
+[0m[32m        (variable_declaration_type)
+[0m[32m        (identifier)
+[0m        (block
+[31m          (expression_statement
+[0m[31m            (assignment_expression
+[0m[31m              (variable_declaration
+[0m[31m                (scalar
+[0m[31m                  (varname)))
+[0m[31m              (number)))
+[0m[31m          (expression_statement
+[0m[31m            (return_expression
+[0m[31m              (preinc_expression
+[0m[31m                (scalar
+[0m[31m                  (varname)))))))
+[0m[31m      (block_statement
+[0m[32m          (assignment_expression
+[0m[32m            (variable_declaration
+[0m[32m              (variable_declaration_type)
+[0m[32m              (scalar_variable))
+[0m[32m            (assignment_operator)
+[0m[32m            (integer))
+[0m[32m          (return_expression
+[0m[32m            (prefix_expression
+[0m[32m              (prefix_operator)
+[0m[32m              (scalar_variable)))))
+[0m[32m      (block
+[0m        (subroutine_declaration_statement
+[31m          (bareword)
+[0m[32m          (variable_declaration_type)
+[0m[32m          (identifier)
+[0m          (block
+[31m            (expression_statement
+[0m[31m              (return_expression
+[0m[31m                (interpolated_string_literal
+[0m[31m                  (string_content))))))
+[0m[31m        (expression_statement
+[0m[31m          (function_call_expression
+[0m[31m            (function)))))[0m
+[32m            (return_expression
+[0m[32m              (string_literal
+[0m[32m                (string_content)))))
+[0m[32m        (function_call_expression
+[0m[32m          (identifier)
+[0m[32m          (arguments))))[0m
+
+
+  24. Version requirements:
+
+    (source_file
+[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (number))
+[0m[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (version))
+[0m[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (number)
+[0m[31m        (quoted_word_list
+[0m[31m          (string_content)))
+[0m[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (string_literal
+[0m[31m          (string_content)))
+[0m[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (number)
+[0m[31m        (stub_expression))
+[0m[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (ERROR
+[0m[31m          (string_literal
+[0m[31m            (string_content)))
+[0m[31m        (quoted_word_list
+[0m[31m          (string_content)))
+[0m[31m      (expression_statement
+[0m[31m        (require_expression
+[0m[31m          (bareword)))
+[0m[31m      (expression_statement
+[0m[31m        (require_expression
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (number))))
+[0m[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (number)
+[0m[31m        (list_expression
+[0m[31m          (quoted_word_list
+[0m[31m            (string_content))
+[0m[31m          (ERROR
+[0m[31m            (number))
+[0m[31m          (quoted_word_list
+[0m[31m            (string_content)))))[0m
+[32m      (use_statement)
+[0m[32m      (use_statement)
+[0m[32m      (use_statement)
+[0m[32m      (use_statement)
+[0m[32m      (use_statement)
+[0m[32m      (use_statement)
+[0m[32m      (require_statement)
+[0m[32m      (require_statement)
+[0m[32m      (use_statement))[0m
+
+
+  25. Try catch finally:
+
+    (source_file
+[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (string_literal
+[0m[31m          (string_content)))
+[0m[31m      (try_statement
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (function_call_expression
+[0m[31m              (function))))
+[0m[31m        (scalar
+[0m[31m          (varname))
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content
+[0m[31m                  (scalar
+[0m[31m                    (varname))))))
+[0m[31m          (expression_statement
+[0m[31m            (function_call_expression
+[0m[31m              (function))))
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (function_call_expression
+[0m[31m              (function)))))
+[0m[31m      (try_statement
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (assignment_expression
+[0m[31m              (scalar
+[0m[31m                (varname))
+[0m[31m              (function_call_expression
+[0m[31m                (function)))))
+[0m[31m        (scalar
+[0m[31m          (varname))
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (assignment_expression
+[0m[31m              (scalar
+[0m[31m                (varname))
+[0m[31m              (function_call_expression
+[0m[31m                (function))))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (indirect_object
+[0m[31m              (block
+[0m[31m                (expression_statement
+[0m[31m                  (function_call_expression
+[0m[31m                    (function)))))
+[0m[31m            (ERROR
+[0m[31m              (function_call_expression
+[0m[31m                (function)
+[0m[31m                (scalar
+[0m[31m                  (varname))))
+[0m[31m            (anonymous_hash_expression
+[0m[31m              (number))))))[0m
+[32m      (use_statement)
+[0m[32m      (try_catch_statement)
+[0m[32m      (try_catch_statement)
+[0m[32m      (statement
+[0m[32m        (assignment)))[0m
+
+
+  26. Signatures with types:
+
+    (source_file
+[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (string_literal
+[0m[31m          (string_content)))
+[0m[31m      (subroutine_declaration_statement
+[0m[31m        (bareword)
+[0m[31m        (signature
+[0m[31m          (ERROR)
+[0m[31m          (mandatory_parameter
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (ERROR)
+[0m[31m          (mandatory_parameter
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (ERROR)
+[0m[31m          (mandatory_parameter
+[0m[31m            (scalar
+[0m[31m              (varname))))
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (return_expression
+[0m[31m              (anonymous_hash_expression
+[0m[31m                (list_expression
+[0m[31m                  (autoquoted_bareword)
+[0m[31m                  (list_expression
+[0m[31m                    (scalar
+[0m[31m                      (varname))
+[0m[31m                    (autoquoted_bareword)
+[0m[31m                    (scalar
+[0m[31m                      (varname))
+[0m[31m                    (autoquoted_bareword)
+[0m[31m                    (scalar
+[0m[31m                      (varname)))))))))
+[0m[31m      (subroutine_declaration_statement
+[0m[31m        (bareword)
+[0m[31m        (signature
+[0m[31m          (ERROR)
+[0m[31m          (mandatory_parameter
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (ERROR)
+[0m[31m          (optional_parameter
+[0m[31m            (scalar
+[0m[31m              (varname))
+[0m[31m            (undef_expression)))
+[0m[31m        (block
+[0m[31m          (comment)))
+[0m[31m      (subroutine_declaration_statement
+[0m[31m        (bareword)
+[0m[31m        (signature
+[0m[31m          (ERROR)
+[0m[31m          (mandatory_parameter
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (slurpy_parameter
+[0m[31m            (array
+[0m[31m              (varname))))
+[0m[31m        (block
+[0m[31m          (comment)))
+[0m[31m      (method_declaration_statement
+[0m[31m        (bareword)
+[0m[31m        (signature
+[0m[31m          (ERROR)
+[0m[31m          (mandatory_parameter
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (ERROR))
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (assignment_expression
+[0m[31m              (hash_element_expression
+[0m[31m                (scalar
+[0m[31m                  (varname))
+[0m[31m                (autoquoted_bareword))
+[0m[31m              (binary_expression
+[0m[31m                (scalar
+[0m[31m                  (varname))
+[0m[31m                (number)))))))[0m
+[32m      (use_statement)
+[0m[32m      (subroutine_declaration)
+[0m[32m      (subroutine_declaration)
+[0m[32m      (subroutine_declaration)
+[0m[32m      (method_declaration))[0m
+
+
+  27. Field attributes:
+
+    (source_file
+[31m      (package_statement
+[0m[31m        (package))
+[0m[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (quoted_word_list
+[0m[31m          (string_content)))
+[0m[31m      (subroutine_declaration_statement
+[0m[31m        (bareword)
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (assignment_expression
+[0m[31m              (variable_declaration
+[0m[31m                (scalar
+[0m[31m                  (varname)))
+[0m[31m              (func1op_call_expression)))
+[0m[31m          (expression_statement
+[0m[31m            (assignment_expression
+[0m[31m              (variable_declaration
+[0m[31m                (scalar
+[0m[31m                  (varname)))
+[0m[31m              (function_call_expression
+[0m[31m                (function)
+[0m[31m                (scalar
+[0m[31m                  (varname)))))
+[0m[31m          (expression_statement
+[0m[31m            (return_expression
+[0m[31m              (scalar
+[0m[31m                (varname))))))
+[0m[31m      (package_statement
+[0m[31m        (package))
+[0m[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (string_literal
+[0m[31m          (string_content)))
+[0m[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (quoted_word_list
+[0m[31m          (string_content)))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (ERROR)
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (method_call_expression
+[0m[31m            (bareword)
+[0m[31m            (method))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (hash_element_expression
+[0m[31m            (scalar
+[0m[31m              (varname))
+[0m[31m            (autoquoted_bareword))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (hash_element_expression
+[0m[31m            (scalar
+[0m[31m              (varname))
+[0m[31m            (autoquoted_bareword))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content)))))[0m
+[32m      (package_declaration)
+[0m[32m      (use_statement)
+[0m[32m      (subroutine_declaration)
+[0m[32m      (package_declaration)
+[0m[32m      (use_statement)
+[0m[32m      (use_statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement))[0m
+
+
+  28. Regex quote operators:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (quoted_regexp
+[0m[31m          (regexp_content)))
+[0m[31m      (expression_statement
+[0m[31m        (quoted_regexp
+[0m[31m          (regexp_content)
+[0m[31m          (quoted_regexp_modifiers)))
+[0m[31m      (expression_statement
+[0m[31m        (quoted_regexp
+[0m[31m          (regexp_content)))
+[0m[31m      (ERROR)
+[0m[31m      (expression_statement
+[0m[31m        (quoted_regexp
+[0m[31m          (regexp_content)
+[0m[31m          (quoted_regexp_modifiers)))
+[0m[31m      (expression_statement
+[0m[31m        (quoted_regexp
+[0m[31m          (regexp_content)
+[0m[31m          (quoted_regexp_modifiers)))
+[0m[31m      (expression_statement
+[0m[31m        (quoted_regexp
+[0m[31m          (regexp_content)
+[0m[31m          (quoted_regexp_modifiers)))
+[0m[31m      (expression_statement
+[0m[31m        (quoted_regexp
+[0m[31m          (regexp_content)
+[0m[31m          (quoted_regexp_modifiers)))
+[0m[31m      (expression_statement
+[0m[31m        (quoted_regexp
+[0m[31m          (regexp_content)
+[0m[31m          (quoted_regexp_modifiers)))
+[0m[31m      (expression_statement
+[0m[31m        (quoted_regexp
+[0m[31m          (regexp_content)
+[0m[31m          (quoted_regexp_modifiers))))[0m
+[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement))[0m
+
+
+  29. Heredoc in command execution:
+
+    (source_file
+[31m      (ERROR
+[0m[31m        (variable_declaration
+[0m[31m          (scalar
+[0m[31m            (varname)))
+[0m[31m        (scalar
+[0m[31m          (varname))
+[0m[31m        (scalar
+[0m[31m          (varname))))[0m
+[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement))[0m
+
+
+  30. Extended regex features:
+
+    (source_file
+[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (string_literal
+[0m[31m          (string_content)))
+[0m[31m      (expression_statement
+[0m[31m        (match_regexp
+[0m[31m          (regexp_content
+[0m[31m            (scalar
+[0m[31m              (varname)))))
+[0m[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (string_literal
+[0m[31m          (string_content)))
+[0m[31m      (expression_statement
+[0m[31m        (match_regexp
+[0m[31m          (regexp_content)))
+[0m[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (string_literal
+[0m[31m          (string_content)))
+[0m[31m      (expression_statement
+[0m[31m        (match_regexp
+[0m[31m          (regexp_content
+[0m[31m            (escape_sequence)
+[0m[31m            (escape_sequence))))
+[0m[31m      (ERROR
+[0m[31m        (quoted_regexp
+[0m[31m          (regexp_content))
+[0m[31m        (ERROR)
+[0m[31m        (binary_expression
+[0m[31m          (readline_expression
+[0m[31m            (filehandle))
+[0m[31m          (ERROR)
+[0m[31m          (binary_expression
+[0m[31m            (match_regexp
+[0m[31m              (regexp_content))
+[0m[31m            (glob
+[0m[31m              (varname))))))[0m
+[32m      (use_statement)
+[0m[32m      (statement
+[0m[32m        (regex))
+[0m[32m      (use_statement)
+[0m[32m      (statement
+[0m[32m        (regex))
+[0m[32m      (use_statement)
+[0m[32m      (statement
+[0m[32m        (regex))
+[0m[32m      (statement
+[0m[32m        (regex)))[0m
+
+
+  31. Switch filter:
+
+    (source_file
+[31m      (use_statement
+[0m[31m        (package))
+[0m[31m      (ERROR
+[0m[31m        (function_call_expression
+[0m[31m          (function)
+[0m[31m          (scalar
+[0m[31m            (varname)))
+[0m[31m        (MISSING "if")
+[0m[31m        (function)
+[0m[31m        (ERROR
+[0m[31m          (number))
+[0m[31m        (indirect_object
+[0m[31m          (block
+[0m[31m            (expression_statement
+[0m[31m              (ambiguous_function_call_expression
+[0m[31m                (function)
+[0m[31m                (interpolated_string_literal
+[0m[31m                  (string_content))))))
+[0m[31m        (function)
+[0m[31m        (ERROR)
+[0m[31m        (escape_sequence)
+[0m[31m        (escape_sequence)
+[0m[31m        (escape_sequence)))[0m
+[32m      (use_statement)
+[0m[32m      (switch_statement))[0m
+
+
+  32. Perl version variables:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (scalar
+[0m[31m          (varname)))
+[0m[31m      (expression_statement
+[0m[31m        (scalar
+[0m[31m          (varname)))
+[0m[31m      (expression_statement
+[0m[31m        (scalar
+[0m[31m          (ERROR)
+[0m[31m          (varname)))
+[0m[31m      (expression_statement
+[0m[31m        (scalar
+[0m[31m          (varname)))
+[0m[31m      (expression_statement
+[0m[31m        (scalar
+[0m[31m          (varname)))
+[0m[31m      (expression_statement
+[0m[31m        (scalar
+[0m[31m          (varname)))
+[0m[31m      (expression_statement
+[0m[31m        (scalar
+[0m[31m          (varname)))
+[0m[31m      (expression_statement
+[0m[31m        (scalar
+[0m[31m          (varname)))
+[0m[31m      (expression_statement
+[0m[31m        (scalar
+[0m[31m          (varname)))
+[0m[31m      (expression_statement
+[0m[31m        (scalar
+[0m[31m          (varname))))[0m
+[32m      (special_scalar_variable)
+[0m[32m      (special_scalar_variable)
+[0m[32m      (special_scalar_variable)
+[0m[32m      (special_scalar_variable)
+[0m[32m      (special_scalar_variable)
+[0m[32m      (special_scalar_variable)
+[0m[32m      (special_scalar_variable)
+[0m[32m      (special_scalar_variable)
+[0m[32m      (special_scalar_variable)
+[0m[32m      (special_scalar_variable))[0m
+
+
+  33. numeric identifier after my:
+
+    (source_file
+      (expression_statement
+        (variable_declaration
+          variable: (scalar
+            (varname))))
+[31m      (ERROR)
+[0m      (expression_statement
+[31m        (number)))[0m
+[32m        (ERROR)))[0m
+
+
+  34. Try catch with return:
+
+    (source_file
+[31m      (use_statement
+[0m[31m        (package)
+[0m[31m        (string_literal
+[0m[31m          (string_content)))
+[0m[31m      (subroutine_declaration_statement
+[0m[31m        (bareword)
+[0m[31m        (block
+[0m[31m          (expression_statement
+[0m[31m            (assignment_expression
+[0m[31m              (variable_declaration
+[0m[31m                (scalar
+[0m[31m                  (varname))
+[0m[31m                (scalar
+[0m[31m                  (varname)))
+[0m[31m              (array
+[0m[31m                (varname))))
+[0m[31m          (try_statement
+[0m[31m            (block
+[0m[31m              (expression_statement
+[0m[31m                (return_expression
+[0m[31m                  (binary_expression
+[0m[31m                    (scalar
+[0m[31m                      (varname))
+[0m[31m                    (scalar
+[0m[31m                      (varname))))))
+[0m[31m            (scalar
+[0m[31m              (varname))
+[0m[31m            (block
+[0m[31m              (expression_statement
+[0m[31m                (ambiguous_function_call_expression
+[0m[31m                  (function)
+[0m[31m                  (interpolated_string_literal
+[0m[31m                    (string_content
+[0m[31m                      (scalar
+[0m[31m                        (varname))))))
+[0m[31m              (expression_statement
+[0m[31m                (return_expression
+[0m[31m                  (undef_expression)))))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (indirect_object
+[0m[31m              (block
+[0m[31m                (expression_statement
+[0m[31m                  (function_call_expression
+[0m[31m                    (function)))))
+[0m[31m            (ERROR
+[0m[31m              (function_call_expression
+[0m[31m                (function)
+[0m[31m                (scalar
+[0m[31m                  (varname))))
+[0m[31m            (return_expression
+[0m[31m              (scalar
+[0m[31m                (varname))))))
+[0m[31m      (ERROR))[0m
+[32m      (use_statement)
+[0m[32m      (subroutine_declaration)
+[0m[32m      (statement))[0m
+
+
+  35. FORMAT slot access:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (list_expression
+[0m[31m            (assignment_expression
+[0m[31m              (bareword)
+[0m[31m              (binary_expression
+[0m[31m                (binary_expression
+[0m[31m                  (binary_expression
+[0m[31m                    (array
+[0m[31m                      (varname))
+[0m[31m                    (readline_expression
+[0m[31m                      (MISSING ">>")))
+[0m[31m                  (ERROR)
+[0m[31m                  (array
+[0m[31m                    (varname)))
+[0m[31m                (ERROR)
+[0m[31m                (scalar
+[0m[31m                  (varname))))
+[0m[31m            (binary_expression
+[0m[31m              (scalar
+[0m[31m                (varname))
+[0m[31m              (ERROR
+[0m[31m                (function_call_expression
+[0m[31m                  (function)
+[0m[31m                  (glob_slot_expression
+[0m[31m                    (glob
+[0m[31m                      (varname))
+[0m[31m                    (autoquoted_bareword))))
+[0m[31m              (ambiguous_function_call_expression
+[0m[31m                (function)
+[0m[31m                (interpolated_string_literal
+[0m[31m                  (string_content
+[0m[31m                    (escape_sequence))))))))
+[0m[31m      (ERROR)
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (glob_slot_expression
+[0m[31m            (glob
+[0m[31m              (varname))
+[0m[31m            (autoquoted_bareword))
+[0m[31m          (glob_slot_expression
+[0m[31m            (glob
+[0m[31m              (varname))
+[0m[31m            (autoquoted_bareword))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (localization_expression
+[0m[31m            (glob
+[0m[31m              (varname)))
+[0m[31m          (glob
+[0m[31m            (varname))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (glob_slot_expression
+[0m[31m            (glob
+[0m[31m              (varname))
+[0m[31m            (autoquoted_bareword))
+[0m[31m          (glob_slot_expression
+[0m[31m            (glob
+[0m[31m              (varname))
+[0m[31m            (autoquoted_bareword)))))[0m
+[32m      (format_declaration)
+[0m[32m      (if_statement)
+[0m[32m      (statement)
+[0m[32m      (statement)
+[0m[32m      (statement))[0m
+
+
+  36. Unicode identifiers:
+
+    (source_file
+      (use_statement
+[31m        (package))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (number)))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (number)))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))))
+[0m[31m      (expression_statement
+[0m[32m        (identifier))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (float))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (float))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m        (variable_declaration
+[31m          (scalar
+[0m[31m            (ERROR
+[0m[31m              (UNEXPECTED 128042)
+[0m[31m              (UNEXPECTED '"'))
+[0m[31m            (varname))))
+[0m[31m      (ERROR
+[0m[31m        (UNEXPECTED '"')))))(subroutine_declaration_statement
+[0m[31m  (bareword)
+[0m[31m  (block
+[0m[31m    (expression_statement
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m      (assignment_expression
+        (variable_declaration
+[31m          (scalar
+[0m[31m            (varname)))
+[0m[31m        (number)))
+[0m[31m    (expression_statement
+[0m[31m      (postfix_for_expression
+[0m[31m        (assignment_expression
+[0m[31m          (scalar
+[0m[31m            (varname))
+[0m[31m          (scalar
+[0m[31m            (varname)))
+[0m[31m        (array
+[0m[31m          (varname))))
+[0m[31m    (expression_statement
+[0m[31m      (return_expression
+[0m[31m        (scalar
+[0m[31m          (varname))))))(package_statement
+[0m[31m  (package)
+[0m[31m  (ERROR))[0m
+[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (subroutine_declaration_statement
+[0m[32m        (identifier)
+[0m[32m        (block
+[0m[32m          (assignment_expression
+[0m[32m            (variable_declaration
+[0m[32m              (scalar_variable))
+[0m[32m            (assignment_operator)
+[0m[32m            (integer))
+[0m[32m          (postfix_expression
+[0m[32m            (augmented_assignment_expression
+[0m[32m              (scalar_variable)
+[0m[32m              (assignment_operator)
+[0m[32m              (special_scalar_variable))
+[0m[32m            (postfix_operator)
+[0m[32m            (special_array_variable))
+[0m[32m          (return_expression
+[0m[32m            (scalar_variable))))
+[0m[32m      (package_statement
+[0m[32m        (qualified_name)))[0m
+
+
+  37. Unicode in strings:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (ERROR
+[0m[31m            (interpolated_string_literal
+[0m[31m              (string_content)))
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (unary_expression
+[0m[31m              (interpolated_string_literal)))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content
+[0m[31m              (escape_sequence)
+[0m[31m              (escape_sequence)
+[0m[31m              (escape_sequence)))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content
+[0m[31m              (escape_sequence)))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content
+[0m[31m              (escape_sequence))))))[0m
+[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content))))[0m
+
+
+  38. Unicode properties in identifiers:
+
+    (source_file
+      (use_statement
+[31m        (package))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (ERROR
+[0m[31m            (UNEXPECTED 8320))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (ERROR
+[0m[31m            (UNEXPECTED 178))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (ERROR
+[0m[31m            (UNEXPECTED 8322))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (varname)))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (variable_declaration
+[0m[31m            (scalar
+[0m[31m              (ERROR
+[0m[31m                (UNEXPECTED 8747))
+[0m[31m              (varname)))
+[0m[31m          (interpolated_string_literal
+[0m[31m            (string_content))))
+[0m[31m      (ERROR
+[0m[31m        (UNEXPECTED 8730))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (number)
+[0m[31m          (number)))
+[0m[31m      (expression_statement
+[0m[32m        (identifier))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (assignment_expression
+[0m[32m        (variable_declaration
+[0m[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (float))
+[0m[32m      (assignment_expression
+[0m        (variable_declaration
+[31m          (scalar
+[0m[31m            (ERROR
+[0m[31m              (UNEXPECTED 8734)
+[0m[31m              (UNEXPECTED '"')
+[0m[31m              (quoted_regexp_modifiers))
+[0m[31m            (varname))))
+[0m[31m      (ERROR
+[0m[31m        (UNEXPECTED '"')))))(subroutine_declaration_statement
+[0m[31m  (bareword)
+[0m[31m  (block
+[0m[31m    (expression_statement
+[0m[31m      (return_expression
+[0m[31m        (interpolated_string_literal
+[0m[31m          (string_content))))))[0m
+[32m          (scalar_variable))
+[0m[32m        (assignment_operator)
+[0m[32m        (string_literal
+[0m[32m          (string_content)))
+[0m[32m      (subroutine_declaration_statement
+[0m[32m        (identifier)
+[0m[32m        (block
+[0m[32m          (return_expression
+[0m[32m            (string_literal
+[0m[32m              (string_content))))))[0m
+
+
+  39. XS function declarations:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (bareword)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (assignment_expression
+[0m[31m              (bareword)
+[0m[31m              (ambiguous_function_call_expression
+[0m[31m                (function)
+[0m[31m                (ambiguous_function_call_expression
+[0m[31m                  (function)
+[0m[31m                  (bareword)))))))
+[0m[31m      (ERROR
+[0m[31m        (ERROR
+[0m[31m          (function_call_expression
+[0m[31m            (function)
+[0m[31m            (interpolated_string_literal
+[0m[31m              (string_content
+[0m[31m                (escape_sequence)))))
+[0m[31m        (ambiguous_function_call_expression
+[0m[31m          (function)
+[0m[31m          (ERROR
+[0m[31m            (glob
+[0m[31m              (varname)))
+[0m[31m          (list_expression
+[0m[31m            (bareword)
+[0m[31m            (ERROR
+[0m[31m              (transliteration_expression
+[0m[31m                (transliteration_content)
+[0m[31m                (replacement))
+[0m[31m              (quoted_regexp_modifiers))
+[0m[31m            (transliteration_expression
+[0m[31m              (transliteration_content
+[0m[31m                (escape_sequence))
+[0m[31m              (replacement)))
+[0m[31m          (ERROR))))[0m
+[32m      (xs_module_declaration)
+[0m[32m      (xs_function)
+[0m[32m      (xs_function)
+[0m[32m      (xs_function))[0m
+
+
+  40. XS with typemaps:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (bareword)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (assignment_expression
+[0m[31m              (bareword)
+[0m[31m              (ambiguous_function_call_expression
+[0m[31m                (function)
+[0m[31m                (ambiguous_function_call_expression
+[0m[31m                  (function)
+[0m[31m                  (ERROR
+[0m[31m                    (heredoc_token))
+[0m[31m                  (heredoc_content
+[0m[31m                    (heredoc_end))
+[0m[31m                  (ambiguous_function_call_expression
+[0m[31m                    (function)
+[0m[31m                    (ERROR
+[0m[31m                      (glob
+[0m[31m                        (varname))
+[0m[31m                      (bareword))
+[0m[31m                    (ambiguous_function_call_expression
+[0m[31m                      (function)
+[0m[31m                      (assignment_expression
+[0m[31m                        (glob
+[0m[31m                          (ERROR)
+[0m[31m                          (varname))
+[0m[31m                        (ambiguous_function_call_expression
+[0m[31m                          (function)
+[0m[31m                          (function_call_expression
+[0m[31m                            (function))))))))))))
+[0m[31m      (statement_label
+[0m[31m        (identifier)
+[0m[31m        (expression_statement
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (ambiguous_function_call_expression
+[0m[31m              (function)
+[0m[31m              (ERROR
+[0m[31m                (function_call_expression
+[0m[31m                  (function)
+[0m[31m                  (bareword))
+[0m[31m                (quoted_regexp_modifiers))
+[0m[31m              (ambiguous_function_call_expression
+[0m[31m                (function)
+[0m[31m                (ambiguous_function_call_expression
+[0m[31m                  (function)
+[0m[31m                  (ERROR)
+[0m[31m                  (func1op_call_expression
+[0m[31m                    (bareword))))))))
+[0m[31m      (ERROR
+[0m[31m        (signature
+[0m[31m          (ERROR))
+[0m[31m        (MISSING "{")
+[0m[31m        (expression_statement
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (assignment_expression
+[0m[31m              (glob
+[0m[31m                (ERROR)
+[0m[31m                (varname))
+[0m[31m              (method_call_expression
+[0m[31m                (bareword)
+[0m[31m                (method)
+[0m[31m                (bareword)))))
+[0m[31m        (statement_label
+[0m[31m          (identifier)
+[0m[31m          (expression_statement
+[0m[31m            (bareword)))))[0m
+[32m      (xs_module_declaration)
+[0m[32m      (xs_typemap)
+[0m[32m      (xs_function)
+[0m[32m      (xs_function)
+[0m[32m      (xs_function))[0m
+
+
+  41. XS macros and stack manipulation:
+
+[31m    (ERROR
+[0m[31m      (function)
+[0m[31m      (ERROR)
+[0m[31m      (function)
+[0m[31m      (function)
+[0m[31m      (MISSING "{")
+[0m[31m      (identifier)
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (bareword)
+[0m[31m          (number)))
+[0m[31m      (function))[0m
+[32m    (source_file
+[0m[32m      (xs_function)
+[0m[32m      (xs_function)
+[0m[32m      (xs_function))[0m
+
+
+  42. XS BOOT section:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (bareword)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (assignment_expression
+[0m[31m              (bareword)
+[0m[31m              (ambiguous_function_call_expression
+[0m[31m                (function)
+[0m[31m                (ambiguous_function_call_expression
+[0m[31m                  (function)
+[0m[31m                  (ERROR
+[0m[31m                    (match_regexp
+[0m[31m                      (regexp_content)))
+[0m[31m                  (ambiguous_function_call_expression
+[0m[31m                    (function)
+[0m[31m                    (assignment_expression
+[0m[31m                      (glob
+[0m[31m                        (varname))
+[0m[31m                      (function_call_expression
+[0m[31m                        (function)
+[0m[31m                        (list_expression
+[0m[31m                          (interpolated_string_literal
+[0m[31m                            (string_content))
+[0m[31m                          (bareword)))))))))))
+[0m[31m      (expression_statement
+[0m[31m        (function_call_expression
+[0m[31m          (function)
+[0m[31m          (list_expression
+[0m[31m            (bareword)
+[0m[31m            (interpolated_string_literal
+[0m[31m              (string_content))
+[0m[31m            (function_call_expression
+[0m[31m              (function)
+[0m[31m              (list_expression
+[0m[31m                (interpolated_string_literal
+[0m[31m                  (string_content))
+[0m[31m                (number))))))
+[0m[31m      (expression_statement
+[0m[31m        (function_call_expression
+[0m[31m          (function)
+[0m[31m          (list_expression
+[0m[31m            (bareword)
+[0m[31m            (interpolated_string_literal
+[0m[31m              (string_content))
+[0m[31m            (function_call_expression
+[0m[31m              (function)
+[0m[31m              (number)))))
+[0m[31m      (expression_statement
+[0m[31m        (postfix_conditional_expression
+[0m[31m          (match_regexp
+[0m[31m            (regexp_content))
+[0m[31m          (MISSING "if")
+[0m[31m          (function_call_expression
+[0m[31m            (function)
+[0m[31m            (list_expression
+[0m[31m              (function_call_expression
+[0m[31m                (function)
+[0m[31m                (list_expression
+[0m[31m                  (interpolated_string_literal
+[0m[31m                    (string_content))
+[0m[31m                  (bareword)))
+[0m[31m              (bareword)
+[0m[31m              (bareword)
+[0m[31m              (bareword)
+[0m[31m              (number)))))
+[0m[31m      (statement_label
+[0m[31m        (identifier)
+[0m[31m        (ERROR
+[0m[31m          (function)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (function_call_expression
+[0m[31m              (function))))
+[0m[31m        (expression_statement
+[0m[31m          (match_regexp
+[0m[31m            (regexp_content)))))[0m
+[32m      (xs_module_declaration)
+[0m[32m      (xs_boot_section)
+[0m[32m      (xs_prototypes)
+[0m[32m      (xs_function))[0m
+
+
+  43. XS with threads:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (bareword)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (assignment_expression
+[0m[31m              (bareword)
+[0m[31m              (ambiguous_function_call_expression
+[0m[31m                (function)
+[0m[31m                (ambiguous_function_call_expression
+[0m[31m                  (function)
+[0m[31m                  (ERROR)
+[0m[31m                  (ambiguous_function_call_expression
+[0m[31m                    (function)
+[0m[31m                    (ambiguous_function_call_expression
+[0m[31m                      (function)
+[0m[31m                      (function_call_expression
+[0m[31m                        (function))))))))))
+[0m[31m      (ERROR)
+[0m[31m      (expression_statement
+[0m[31m        (function_call_expression
+[0m[31m          (function)
+[0m[31m          (binary_expression
+[0m[31m            (function_call_expression
+[0m[31m              (function
+[0m[31m                (varname)))
+[0m[31m            (bareword))))
+[0m[31m      (expression_statement
+[0m[31m        (binary_expression
+[0m[31m          (bareword)
+[0m[31m          (postinc_expression
+[0m[31m            (bareword))))
+[0m[31m      (expression_statement
+[0m[31m        (function_call_expression
+[0m[31m          (function)
+[0m[31m          (binary_expression
+[0m[31m            (function_call_expression
+[0m[31m              (function
+[0m[31m                (varname)))
+[0m[31m            (bareword))))
+[0m[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (func1op_call_expression
+[0m[31m            (function_call_expression
+[0m[31m              (function)))
+[0m[31m          (ERROR)
+[0m[31m          (binary_expression
+[0m[31m            (bareword)
+[0m[31m            (bareword))))
+[0m[31m      (statement_label
+[0m[31m        (identifier)
+[0m[31m        (expression_statement
+[0m[31m          (bareword))))[0m
+[32m      (xs_module_declaration)
+[0m[32m      (xs_prototypes)
+[0m[32m      (xs_function)
+[0m[32m      (xs_function))[0m
+
+
+  44. XS constants and enums:
+
+    (source_file
+[31m      (expression_statement
+[0m[31m        (assignment_expression
+[0m[31m          (bareword)
+[0m[31m          (ambiguous_function_call_expression
+[0m[31m            (function)
+[0m[31m            (assignment_expression
+[0m[31m              (bareword)
+[0m[31m              (ambiguous_function_call_expression
+[0m[31m                (function)
+[0m[31m                (ambiguous_function_call_expression
+[0m[31m                  (function)
+[0m[31m                  (ERROR)
+[0m[31m                  (ambiguous_function_call_expression
+[0m[31m                    (function)
+[0m[31m                    (binary_expression
+[0m[31m                      (autoquoted_bareword)
+[0m[31m                      (ambiguous_function_call_expression
+[0m[31m                        (function)
+[0m[31m                        (func1op_call_expression
+[0m[31m                          (ERROR
+[0m[31m                            (function_call_expression
+[0m[31m                              (function)
+[0m[31m                              (bareword))
+[0m[31m                            (quoted_regexp_modifiers))
+[0m[31m                          (ambiguous_function_call_expression
+[0m[31m                            (function)
+[0m[31m                            (ambiguous_function_call_expression
+[0m[31m                              (function)
+[0m[31m                              (ERROR)
+[0m[31m                              (assignment_expression
+[0m[31m                                (bareword)
+[0m[31m                                (number))))))))))))))
+[0m[31m      (ERROR
+[0m[31m        (function_call_expression
+[0m[31m          (function)
+[0m[31m          (glob
+[0m[31m            (varname)))
+[0m[31m        (MISSING "if")
+[0m[31m        (function)
+[0m[31m        (ERROR
+[0m[31m          (string_literal
+[0m[31m            (string_content))
+[0m[31m          (function_call_expression
+[0m[31m            (function)
+[0m[31m            (list_expression
+[0m[31m              (bareword)
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content)))))
+[0m[31m        (indirect_object
+[0m[31m          (block
+[0m[31m            (expression_statement
+[0m[31m              (assignment_expression
+[0m[31m                (bareword)
+[0m[31m                (number)))
+[0m[31m            (expression_statement
+[0m[31m              (func0op_call_expression))))
+[0m[31m        (function)
+[0m[31m        (ERROR
+[0m[31m          (string_literal
+[0m[31m            (string_content))
+[0m[31m          (function_call_expression
+[0m[31m            (function)
+[0m[31m            (list_expression
+[0m[31m              (bareword)
+[0m[31m              (interpolated_string_literal
+[0m[31m                (string_content)))))
+[0m[31m        (indirect_object
+[0m[31m          (block
+[0m[31m            (expression_statement
+[0m[31m              (assignment_expression
+[0m[31m                (bareword)
+[0m[31m                (number)))
+[0m[31m            (expression_statement
+[0m[31m              (func0op_call_expression))))
+[0m[31m        (function)
+[0m[31m        (ERROR)
+[0m[31m        (bareword)
+[0m[31m        (function)
+[0m[31m        (indirect_object
+[0m[31m          (block
+[0m[31m            (MISSING "{")))))))(expression_statement
+[0m[31m  (assignment_expression
+[0m[31m    (bareword)
+[0m[31m    (number)))(ambiguous_function_call_expression
+[0m[31m  (function)
+[0m[31m  (ERROR)
+[0m[31m  (bareword))[0m
+[32m      (xs_module_declaration)
+[0m[32m      (xs_include)
+[0m[32m      (xs_function))[0m
+

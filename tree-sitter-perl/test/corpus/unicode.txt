@@ -154,42 +154,46 @@ $text =~ /καφέ/i;
 ---
 
 (source_file
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (binary_expression
-    (scalar_variable)
-    (binary_operator)
-    (regex_substitution_expression
-      (regex
-        (regex_pattern)
-        (string_content)
-        (regex_flags))))
-  (binary_expression
-    (scalar_variable)
-    (binary_operator)
-    (regex_match_expression
-      (regex
-        (regex_pattern)
-        (regex_flags)))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (binary_expression
+      (scalar
+        (varname))
+      (substitution_regexp
+        (regexp_content)
+        (replacement)
+        (substitution_regexp_modifiers))))
+  (expression_statement
+    (binary_expression
+      (scalar
+        (varname))
+      (match_regexp
+        (regexp_content)
+        (match_regexp_modifiers)))))
 
 ==========================================
 Encoding pragmas
@@ -211,62 +215,56 @@ binmode(STDIN, ":encoding(UTF-8)");
 
 (source_file
   (use_statement
-    (identifier))
-  (no_statement
-    (identifier))
+    (package))
   (use_statement
-    (identifier)
-    (arguments
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
       (string_literal
         (string_content))))
   (use_statement
-    (identifier)
-    (arguments
+    (package)
+    (list_expression
+      (autoquoted_bareword)
       (string_literal
         (string_content))))
   (use_statement
-    (identifier)
-    (arguments
-      (bareword)
-      (fat_arrow_operator)
-      (string_literal
-        (string_content))))
-  (use_statement
-    (identifier)
-    (arguments
-      (bareword)
-      (fat_arrow_operator)
-      (string_literal
-        (string_content))))
-  (use_statement
-    (identifier)
-    (arguments
+    (package)
+    (list_expression
       (string_literal
         (string_content))
-      (comma)
       (string_literal
         (string_content))))
   (use_statement
-    (identifier)
-    (arguments
-      (bareword)
-      (fat_arrow_operator)
+    (package)
+    (list_expression
+      (autoquoted_bareword)
       (string_literal
         (string_content))))
-  (function_call_expression
-    (identifier)
-    (arguments
-      (typeglob_variable)
-      (comma)
-      (string_literal
-        (string_content))))
-  (function_call_expression
-    (identifier)
-    (arguments
-      (typeglob_variable)
-      (comma)
-      (string_literal
-        (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (bareword)
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (bareword)
+        (interpolated_string_literal
+          (string_content))))))
 
 ==========================================
 Unicode normalization
@@ -290,68 +288,77 @@ if (NFC($composed) eq NFC($decomposed)) {
 
 (source_file
   (use_statement
-    (qualified_name))
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (function_call_expression
-      (identifier)
-      (arguments
-        (scalar_variable))))
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (function_call_expression
-      (identifier)
-      (arguments
-        (scalar_variable))))
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (function_call_expression
-      (identifier)
-      (arguments
-        (scalar_variable))))
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (function_call_expression
-      (identifier)
-      (arguments
-        (scalar_variable))))
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (string_literal
-      (string_content)))
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (string_literal
-      (string_content)))
-  (if_statement
-    (condition
-      (binary_expression
-        (function_call_expression
-          (identifier)
-          (arguments
-            (scalar_variable)))
-        (binary_operator)
-        (function_call_expression
-          (identifier)
-          (arguments
-            (scalar_variable)))))
+    (package))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content
+          (escape_sequence)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content
+          (escape_sequence)
+          (escape_sequence)))))
+  (conditional_statement
+    (equality_expression
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname))))
     (block
-      (func1op_call_expression
-        (identifier)
-        (string_literal
-          (string_content))))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence))))))))
 
 ==========================================
 Unicode properties in identifiers
@@ -442,58 +449,52 @@ my $greek_upper = uc("αβγδ");
 
 (source_file
   (use_statement
-    (identifier))
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (function_call_expression
-      (identifier)
-      (arguments
-        (string_literal
+    (package))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (interpolated_string_literal
           (string_content)))))
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (function_call_expression
-      (identifier)
-      (arguments
-        (string_literal
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (interpolated_string_literal
           (string_content)))))
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (function_call_expression
-      (identifier)
-      (arguments
-        (string_literal
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (interpolated_string_literal
           (string_content)))))
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (function_call_expression
-      (identifier)
-      (arguments
-        (string_literal
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (interpolated_string_literal
           (string_content)))))
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (function_call_expression
-      (identifier)
-      (arguments
-        (string_literal
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (interpolated_string_literal
           (string_content)))))
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (function_call_expression
-      (identifier)
-      (arguments
-        (string_literal
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (interpolated_string_literal
           (string_content))))))
