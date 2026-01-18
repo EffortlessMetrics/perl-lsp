@@ -248,8 +248,7 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
         None => return (String::new(), String::new(), String::new()),
     };
     if delimiter.is_ascii_alphanumeric() || delimiter.is_whitespace() {
-        if let Some((pattern, replacement, modifiers_str)) =
-            split_on_last_paired_delimiter(content)
+        if let Some((pattern, replacement, modifiers_str)) = split_on_last_paired_delimiter(content)
         {
             let modifiers = extract_substitution_modifiers(&modifiers_str);
             return (pattern, replacement, modifiers);

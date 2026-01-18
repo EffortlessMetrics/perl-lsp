@@ -26,8 +26,8 @@ mod common;
 use common::*;
 
 use perl_lsp::cancellation::{
-    PerlLspCancellationToken, CancellationRegistry, CancellationMetrics,
-    ProviderCleanupContext, CancellationError
+    CancellationError, CancellationMetrics, CancellationRegistry, PerlLspCancellationToken,
+    ProviderCleanupContext,
 };
 
 /// Performance test fixture with comprehensive metrics collection
@@ -400,8 +400,11 @@ fn test_cancellation_check_latency_performance_ac12() {
         durations.push(duration);
 
         // Validate individual check latency against AC12 requirement
-        assert!(duration < Duration::from_micros(500),
-               "Individual cancellation check exceeded 500μs: {}μs", duration.as_micros());
+        assert!(
+            duration < Duration::from_micros(500),
+            "Individual cancellation check exceeded 500μs: {}μs",
+            duration.as_micros()
+        );
     }
 
     // Statistical analysis
@@ -414,17 +417,25 @@ fn test_cancellation_check_latency_performance_ac12() {
     let max = durations[iterations - 1];
 
     // AC:12 Requirements validation
-    assert!(average < Duration::from_micros(50),
-           "Average latency {}μs exceeds 50μs target", average.as_micros());
+    assert!(
+        average < Duration::from_micros(50),
+        "Average latency {}μs exceeds 50μs target",
+        average.as_micros()
+    );
 
-    assert!(p95 < Duration::from_micros(75),
-           "95th percentile {}μs exceeds 75μs", p95.as_micros());
+    assert!(p95 < Duration::from_micros(75), "95th percentile {}μs exceeds 75μs", p95.as_micros());
 
-    assert!(p99 < Duration::from_micros(100),
-           "99th percentile {}μs exceeds 100μs AC12 requirement", p99.as_micros());
+    assert!(
+        p99 < Duration::from_micros(100),
+        "99th percentile {}μs exceeds 100μs AC12 requirement",
+        p99.as_micros()
+    );
 
-    assert!(p99_9 < Duration::from_micros(150),
-           "99.9th percentile {}μs exceeds 150μs outlier tolerance", p99_9.as_micros());
+    assert!(
+        p99_9 < Duration::from_micros(150),
+        "99.9th percentile {}μs exceeds 150μs outlier tolerance",
+        p99_9.as_micros()
+    );
 
     // Performance metrics reporting
     println!("Cancellation Check Performance Metrics (AC12):");
@@ -438,9 +449,11 @@ fn test_cancellation_check_latency_performance_ac12() {
 
     // Regression detection
     let performance_regression = p99 > Duration::from_micros(100);
-    assert!(!performance_regression,
-           "Performance regression detected: 99th percentile {}μs > 100μs requirement",
-           p99.as_micros());
+    assert!(
+        !performance_regression,
+        "Performance regression detected: 99th percentile {}μs > 100μs requirement",
+        p99.as_micros()
+    );
 }
 
 /// Tests feature spec: LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md#threading-scenarios
@@ -484,11 +497,7 @@ fn test_cancellation_check_threading_performance_ac12() {
                         measurements.push(duration);
                     }
 
-                    ThreadPerformanceResult {
-                        thread_id,
-                        measurements,
-                        thread_count,
-                    }
+                    ThreadPerformanceResult { thread_id, measurements, thread_count }
                 })
             })
             .collect();
@@ -507,18 +516,26 @@ fn test_cancellation_check_threading_performance_ac12() {
 
         // Threading-specific performance requirements
         let max_acceptable_latency = match thread_count {
-            1 => Duration::from_micros(50),       // Single thread baseline
-            2 => Duration::from_micros(100),      // RUST_TEST_THREADS=2 (AC12)
-            3..=4 => Duration::from_micros(125),  // Light contention
-            _ => Duration::from_micros(150),      // High contention tolerance
+            1 => Duration::from_micros(50),      // Single thread baseline
+            2 => Duration::from_micros(100),     // RUST_TEST_THREADS=2 (AC12)
+            3..=4 => Duration::from_micros(125), // Light contention
+            _ => Duration::from_micros(150),     // High contention tolerance
         };
 
-        assert!(p99 <= max_acceptable_latency,
-               "Thread scenario {} threads: 99th percentile {}μs exceeds {}μs limit",
-               thread_count, p99.as_micros(), max_acceptable_latency.as_micros());
+        assert!(
+            p99 <= max_acceptable_latency,
+            "Thread scenario {} threads: 99th percentile {}μs exceeds {}μs limit",
+            thread_count,
+            p99.as_micros(),
+            max_acceptable_latency.as_micros()
+        );
 
-        println!("Threading Performance ({} threads): avg={}μs, p99={}μs",
-                thread_count, average.as_micros(), p99.as_micros());
+        println!(
+            "Threading Performance ({} threads): avg={}μs, p99={}μs",
+            thread_count,
+            average.as_micros(),
+            p99.as_micros()
+        );
     }
 
     // Test adaptive threading configuration compatibility
@@ -758,8 +775,11 @@ fn test_memory_overhead_validation_ac12() {
     let infrastructure_overhead = infrastructure_memory.saturating_sub(baseline_memory);
 
     // AC:12 Infrastructure overhead requirement (<1MB)
-    assert!(infrastructure_overhead < 1024 * 1024,
-           "Infrastructure overhead {} bytes exceeds 1MB limit", infrastructure_overhead);
+    assert!(
+        infrastructure_overhead < 1024 * 1024,
+        "Infrastructure overhead {} bytes exceeds 1MB limit",
+        infrastructure_overhead
+    );
 
     // Create multiple cancellation tokens to test scaling
     let token_count = 10_000;
@@ -767,12 +787,12 @@ fn test_memory_overhead_validation_ac12() {
 
     for i in 0..token_count {
         let (provider_type, params) = if i % 3 == 0 {
-             ("completion", Some(json!({"workspace_symbols": true, "cross_file": true})))
-         } else if i % 3 == 1 {
-             ("workspace_symbol", Some(json!({"indexing_active": false, "file_count": 0})))
-         } else {
-             ("generic", None)
-         };
+            ("completion", Some(json!({"workspace_symbols": true, "cross_file": true})))
+        } else if i % 3 == 1 {
+            ("workspace_symbol", Some(json!({"indexing_active": false, "file_count": 0})))
+        } else {
+            ("generic", None)
+        };
 
         let token = PerlLspCancellationToken::new(json!(i), provider_type.to_string());
         registry.register_token(token.clone()).expect("Failed to register token");
@@ -794,12 +814,18 @@ fn test_memory_overhead_validation_ac12() {
     let per_token_memory = tokens_overhead / token_count;
 
     // AC:12 Per-token memory requirement (<1KB per token)
-    assert!(per_token_memory < 1024,
-           "Per-token memory {} bytes exceeds 1KB limit", per_token_memory);
+    assert!(
+        per_token_memory < 1024,
+        "Per-token memory {} bytes exceeds 1KB limit",
+        per_token_memory
+    );
 
     // Total memory overhead should be reasonable
-    assert!(tokens_overhead < 10 * 1024 * 1024,
-           "10,000 tokens overhead {} bytes exceeds 10MB reasonable limit", tokens_overhead);
+    assert!(
+        tokens_overhead < 10 * 1024 * 1024,
+        "10,000 tokens overhead {} bytes exceeds 10MB reasonable limit",
+        tokens_overhead
+    );
 
     // Test memory cleanup effectiveness
     for (i, _) in tokens.iter().enumerate() {
@@ -825,13 +851,19 @@ fn test_memory_overhead_validation_ac12() {
 
     // Memory after cleanup should be close to infrastructure baseline
     // Allowing some margin for allocator fragmentation
-    assert!(memory_after_cleanup < infrastructure_overhead + (1024 * 1024),
-           "Memory after cleanup {} exceeds infrastructure baseline + 1MB", memory_after_cleanup);
+    assert!(
+        memory_after_cleanup < infrastructure_overhead + (1024 * 1024),
+        "Memory after cleanup {} exceeds infrastructure baseline + 1MB",
+        memory_after_cleanup
+    );
 
     // Memory leak detection
     let potential_leak = memory_after_cleanup.saturating_sub(infrastructure_overhead);
-    assert!(potential_leak < 500 * 1024,
-           "Potential memory leak detected: {} bytes retained after cleanup", potential_leak);
+    assert!(
+        potential_leak < 500 * 1024,
+        "Potential memory leak detected: {} bytes retained after cleanup",
+        potential_leak
+    );
 
     // Performance metrics reporting
     println!("Memory Overhead Analysis (AC12):");

@@ -268,10 +268,7 @@ impl LspServer {
                         .and_then(|d| d.get("uri"))
                         .and_then(|s| s.as_str())
                         .map(|s| s.to_string()),
-                    action
-                        .get("data")
-                        .and_then(|d| d.get("insertAt"))
-                        .and_then(|n| n.as_u64()),
+                    action.get("data").and_then(|d| d.get("insertAt")).and_then(|n| n.as_u64()),
                     action
                         .get("data")
                         .and_then(|d| d.get("text"))

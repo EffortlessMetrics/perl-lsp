@@ -2,7 +2,7 @@
 use serde_json::json;
 
 mod common;
-use common::{initialize_lsp, send_notification, send_request, start_lsp_server, LspServer};
+use common::{LspServer, initialize_lsp, send_notification, send_request, start_lsp_server};
 
 fn resolve_link(server: &mut LspServer, link: &serde_json::Value) -> Option<serde_json::Value> {
     let response = send_request(
