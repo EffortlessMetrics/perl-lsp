@@ -1,0 +1,19 @@
+   Compiling perl-parser-core v0.8.8 (/home/steven/code/Rust/perl-lsp/review/crates/perl-parser-core)
+   Compiling perl-workspace-index v0.8.8 (/home/steven/code/Rust/perl-lsp/review/crates/perl-workspace-index)
+   Compiling perl-refactoring v0.8.8 (/home/steven/code/Rust/perl-lsp/review/crates/perl-refactoring)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.37s
+     Running unittests src/lib.rs (target/debug/deps/perl_refactoring-332002e0ee3b913f)
+
+running 9 tests
+test refactor::refactoring::tests::test_config_defaults ... ok
+test refactor::refactoring::tests::test_operation_id_generation ... ok
+test refactor::refactoring::tests::test_refactoring_engine_creation ... ok
+test refactor::refactoring::tests::test_validate_operation_extract_method ... ok
+test refactor::refactoring::tests::test_validate_operation_symbol_rename ... ok
+test refactor::refactoring::tests::test_validate_operation_file_limit ... ok
+test refactor::refactoring::tests::test_extract_method_with_placement ... ok
+test refactor::refactoring::tests::test_extract_method_complex_vars ... ok
+test refactor::refactoring::tests::test_extract_method_basic ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 32 filtered out; finished in 0.00s
+
