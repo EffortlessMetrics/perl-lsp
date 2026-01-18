@@ -387,27 +387,14 @@ impl RefactoringEngine {
             });
         }
 
-        // 2. Validate files existence
-        // Note: For MoveCode, we validate source_file existence separately.
-        // For other operations, we generally expect files to exist.
-        // However, some operations might not strictly require all files to exist
-        // if they are being created, but the generic file list usually implies inputs.
-        for file in files {
-            if !file.exists() {
-                return Err(ParseError::SyntaxError {
-                    message: format!("File does not exist: {}", file.display()),
-                    location: 0,
-                });
-            }
-        }
-
-        // 3. Validate operation type specific parameters
+        // 2. Validate operation type specific parameters
         match operation_type {
             RefactoringType::SymbolRename {
                 old_name,
                 new_name,
                 ..
             } => {
+                self.validate_files_exist(files)?;
                 if old_name.is_empty() {
                     return Err(ParseError::SyntaxError {
                         message: "Original symbol name cannot be empty".to_string(),
@@ -438,6 +425,7 @@ impl RefactoringEngine {
                 start_position,
                 end_position,
             } => {
+                self.validate_files_exist(files)?;
                 if method_name.is_empty() {
                     return Err(ParseError::SyntaxError {
                         message: "Method name cannot be empty".to_string(),
@@ -450,6 +438,8 @@ impl RefactoringEngine {
                         location: 0,
                     });
                 }
+                // Compare (line, column) tuples - Rust uses lexicographical ordering
+                // which correctly validates that start is chronologically before end.
                 if start_position >= end_position {
                     return Err(ParseError::SyntaxError {
                         message: "Start position must be before end position".to_string(),
@@ -462,6 +452,8 @@ impl RefactoringEngine {
                 target_file,
                 elements,
             } => {
+                // For MoveCode, we only require the source file to exist.
+                // The target file might be created during the operation.
                 if !source_file.exists() {
                     return Err(ParseError::SyntaxError {
                         message: format!("Source file does not exist: {}", source_file.display()),
@@ -482,6 +474,7 @@ impl RefactoringEngine {
                 }
             }
             RefactoringType::Modernize { patterns } => {
+                self.validate_files_exist(files)?;
                 if patterns.is_empty() {
                     return Err(ParseError::SyntaxError {
                         message: "No modernization patterns selected".to_string(),
@@ -490,9 +483,10 @@ impl RefactoringEngine {
                 }
             }
             RefactoringType::OptimizeImports { .. } => {
-                // No specific validation needed for boolean flags
+                self.validate_files_exist(files)?;
             }
             RefactoringType::Inline { symbol_name, .. } => {
+                self.validate_files_exist(files)?;
                 if symbol_name.is_empty() {
                     return Err(ParseError::SyntaxError {
                         message: "Symbol name cannot be empty".to_string(),
@@ -505,16 +499,48 @@ impl RefactoringEngine {
         Ok(())
     }
 
-    fn is_valid_identifier(&self, name: &str) -> bool {
-        // Basic Perl identifier check: [a-zA-Z_][a-zA-Z0-9_]*
-        // This is a simplified check, covering most common cases
-        let mut chars = name.chars();
-        match chars.next() {
-            Some(c) if c.is_ascii_alphabetic() || c == '_' => {
-                chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+    fn validate_files_exist(&self, files: &[PathBuf]) -> ParseResult<()> {
+        for file in files {
+            if !file.exists() {
+                return Err(ParseError::SyntaxError {
+                    message: format!("File does not exist: {}", file.display()),
+                    location: 0,
+                });
             }
-            _ => false,
         }
+        Ok(())
+    }
+
+    fn is_valid_identifier(&self, name: &str) -> bool {
+        // Basic Perl identifier check supporting package-qualified names (::)
+        // TODO: Add support for Unicode identifiers when 'use utf8' is active (SPEC-149 compatibility)
+        if name.is_empty() {
+            return false;
+        }
+
+        let parts: Vec<&str> = name.split("::").collect();
+
+        for (i, part) in parts.iter().enumerate() {
+            // Allow empty first part (leading ::)
+            if part.is_empty() {
+                if i == 0 {
+                    continue;
+                }
+                // Disallow empty parts in middle (::::) or at end (foo::)
+                return false;
+            }
+
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(c) if c.is_ascii_alphabetic() || c == '_' => {
+                    if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                        return false;
+                    }
+                }
+                _ => return false,
+            }
+        }
+        true
     }
 
     fn create_backup(&self, files: &[PathBuf], operation_id: &str) -> ParseResult<BackupInfo> {
@@ -1418,6 +1444,22 @@ sub complex {
         };
         assert!(engine.validate_operation(&op, &files).is_ok());
 
+        // Valid: qualified name
+        let op = RefactoringType::SymbolRename {
+            old_name: "old_var".to_string(),
+            new_name: "My::Package::new_var".to_string(),
+            scope: RefactoringScope::Workspace,
+        };
+        assert!(engine.validate_operation(&op, &files).is_ok());
+
+        // Valid: absolute qualified name
+        let op = RefactoringType::SymbolRename {
+            old_name: "old_var".to_string(),
+            new_name: "::Global::Sub".to_string(),
+            scope: RefactoringScope::Workspace,
+        };
+        assert!(engine.validate_operation(&op, &files).is_ok());
+
         // Invalid: empty old name
         let op = RefactoringType::SymbolRename {
             old_name: "".to_string(),
@@ -1446,6 +1488,22 @@ sub complex {
         let op = RefactoringType::SymbolRename {
             old_name: "old_var".to_string(),
             new_name: "123var".to_string(),
+            scope: RefactoringScope::Workspace,
+        };
+        assert!(engine.validate_operation(&op, &files).is_err());
+
+        // Invalid: trailing ::
+        let op = RefactoringType::SymbolRename {
+            old_name: "old_var".to_string(),
+            new_name: "My::Package::".to_string(),
+            scope: RefactoringScope::Workspace,
+        };
+        assert!(engine.validate_operation(&op, &files).is_err());
+
+        // Invalid: double :: in middle
+        let op = RefactoringType::SymbolRename {
+            old_name: "old_var".to_string(),
+            new_name: "My::::Package".to_string(),
             scope: RefactoringScope::Workspace,
         };
         assert!(engine.validate_operation(&op, &files).is_err());
