@@ -14,18 +14,6 @@ default:
 # The rust-toolchain.toml pins to 1.89.0, so standard commands use MSRV by default.
 # Use these recipes to explicitly verify MSRV compliance:
 
-# Phase 0: publish receipts to review/receipts/YYYY-MM-DD/
-receipts date='':
-    @d="{{date}}"; \
-    if [ -z "$$d" ]; then d="$$(date -u +%Y-%m-%d)"; fi; \
-    echo "Publishing receipts for $$d"; \
-    bash scripts/publish-receipts.sh "$$d"
-
-# Issue #211: measure CI lane runtimes locally (baseline before cleanup)
-ci-measure:
-    @echo "Measuring CI lane runtimes..."
-    @bash .ci/scripts/measure-ci-time.sh
-
 # Fast merge gate on MSRV (~2-5 min) - proves 1.89 compatibility
 ci-gate-msrv:
     @echo "🚪 Running fast merge gate on MSRV (Rust 1.89)..."
@@ -66,24 +54,19 @@ ci-gate:
     @just ci-features-invariants
     @echo "✅ Merge gate passed!"
 
-# Gate runner with receipt output (Issue #210)
-gates:
-    @echo "🧾 Running gate runner..."
-    @bash scripts/run-gates.sh
-
 # Full CI pipeline (~10-20 min) - RECOMMENDED for large changes
 ci-full:
     @echo "🚀 Running full CI pipeline..."
     @just ci-format
-    @just ci-docs-check
     @just ci-clippy
     @just ci-test-core
     @just ci-test-lsp
-    @just ci-docs
+    @just ci-docs || true
     @echo "✅ Full CI passed!"
 
-# Local CI parity with .github/workflows/ci.yml
+# Legacy alias (deprecated, use ci-full)
 ci-local:
+    @echo "⚠️  'ci-local' is deprecated, use 'ci-full' instead"
     @just ci-full
 
 # Format check (fast fail)

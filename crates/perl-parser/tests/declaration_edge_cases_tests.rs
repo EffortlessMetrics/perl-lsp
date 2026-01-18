@@ -12,8 +12,8 @@ mod declaration_edge_cases_tests {
         DeclarationProvider::new(ast_arc, code.to_string(), "file:///test.pl".to_string())
     }
 
-    #[cfg(feature = "constant-advanced")]
     #[test]
+    #[cfg_attr(not(feature = "constant-advanced"), ignore = "Requires constant-advanced feature")]
     fn test_constant_with_strict_option() {
         let code = "use constant -strict, FOO => 42;\nmy $x = FOO;";
         let provider = parse_and_get_provider(code);
@@ -29,8 +29,8 @@ mod declaration_edge_cases_tests {
         }
     }
 
-    #[cfg(feature = "constant-advanced")]
     #[test]
+    #[cfg_attr(not(feature = "constant-advanced"), ignore = "Requires constant-advanced feature")]
     fn test_constant_with_multiple_options() {
         let code = "use constant -strict, -nonstrict, -force, FOO => 42;";
         let provider = parse_and_get_provider(code);
@@ -40,8 +40,8 @@ mod declaration_edge_cases_tests {
         assert!(text.contains("FOO"), "Should handle multiple options");
     }
 
-    #[cfg(feature = "qw-variants")]
     #[test]
+    #[cfg_attr(not(feature = "qw-variants"), ignore = "Requires qw-variants feature")]
     fn test_qw_with_symmetric_delimiters() {
         let code = r#"
 use constant qw|FOO BAR BAZ|;
@@ -74,8 +74,8 @@ my $x = FOO;
         assert!(!decls.is_empty(), "Should find FOO despite qwerty in comment");
     }
 
-    #[cfg(feature = "qw-variants")]
     #[test]
+    #[cfg_attr(not(feature = "qw-variants"), ignore = "Requires qw-variants feature")]
     fn test_multiple_qw_in_one_line() {
         let code = r#"
 use constant qw(FOO) => 1, qw(BAR BAZ) => 2;
@@ -91,8 +91,8 @@ my $x = BAR;
         let _ = decls;
     }
 
-    #[cfg(feature = "constant-advanced")]
     #[test]
+    #[cfg_attr(not(feature = "constant-advanced"), ignore = "Requires constant-advanced feature")]
     fn test_hash_with_unary_plus() {
         let code = r#"
 use constant +{ FOO => 1, BAR => 2 };
@@ -106,8 +106,8 @@ my $x = FOO;
         assert!(!decls.is_empty(), "Should find FOO with unary + before hash");
     }
 
-    #[cfg(feature = "constant-advanced")]
     #[test]
+    #[cfg_attr(not(feature = "constant-advanced"), ignore = "Requires constant-advanced feature")]
     fn test_multiple_hash_blocks() {
         let code = r#"
 use constant { 
@@ -151,8 +151,8 @@ my $x = BAR;
         assert!(!decls.is_empty(), "Should find Unicode constant name π");
     }
 
-    #[cfg(feature = "constant-advanced")]
     #[test]
+    #[cfg_attr(not(feature = "constant-advanced"), ignore = "Requires constant-advanced feature")]
     fn test_constant_comma_form() {
         // Perl also supports: use constant FOO, 42;
         let code = "use constant FOO, 42;\nmy $x = FOO;";
@@ -174,8 +174,8 @@ my $x = BAR;
         assert!(text.contains("qw"), "Should handle empty qw()");
     }
 
-    #[cfg(feature = "constant-advanced")]
     #[test]
+    #[cfg_attr(not(feature = "constant-advanced"), ignore = "Requires constant-advanced feature")]
     fn test_nested_braces_in_hash() {
         let code = r#"
 use constant {
@@ -193,8 +193,8 @@ my $x = BAR;
         let _ = decls;
     }
 
-    #[cfg(feature = "qw-variants")]
     #[test]
+    #[cfg_attr(not(feature = "qw-variants"), ignore = "Requires qw-variants feature")]
     fn test_qw_with_newlines() {
         let code = r#"
 use constant qw(

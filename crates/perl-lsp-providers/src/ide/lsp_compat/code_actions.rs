@@ -150,15 +150,12 @@ impl CodeActionsProvider {
                     "numeric-undef" => {
                         actions.extend(self.fix_numeric_undef(diagnostic));
                     }
-                    "unquoted-bareword" => {
-                        actions.extend(self.fix_bareword(diagnostic));
-                    }
                     _ => {}
                 }
             }
         }
 
-        // Get refactoring actions for selection
+        // Get refactoring actions for the selection
         actions.extend(self.get_refactoring_actions(ast, range));
 
         actions
@@ -417,72 +414,6 @@ impl CodeActionsProvider {
         actions
     }
 
-    /// Fix unquoted bareword by quoting or declaring as filehandle
-    ///
-    /// Provides three options for fixing bareword issues under strict mode:
-    /// 1. Quote with single quotes - wraps bareword in single quotes
-    /// 2. Quote with double quotes - wraps bareword in double quotes
-    /// 3. Declare as filehandle - for uppercase barewords, adds filehandle declaration
-    fn fix_bareword(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
-        let mut actions = Vec::new();
-
-        // Extract bareword text from the source at the diagnostic range
-        let bareword = &self.source[diagnostic.range.0..diagnostic.range.1];
-
-        // Check if bareword is all uppercase (filehandle convention)
-        let is_uppercase = bareword.chars().all(|c| c.is_ascii_uppercase() || c == '_');
-
-        // Action 1: Quote with single quotes
-        actions.push(CodeAction {
-            title: format!("Quote '{}' with single quotes", bareword),
-            kind: CodeActionKind::QuickFix,
-            diagnostics: vec!["unquoted-bareword".to_string()],
-            edit: CodeActionEdit {
-                changes: vec![TextEdit {
-                    location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
-                    new_text: format!("'{}'", bareword),
-                }],
-            },
-            is_preferred: true,
-        });
-
-        // Action 2: Quote with double quotes
-        actions.push(CodeAction {
-            title: format!("Quote '{}' with double quotes", bareword),
-            kind: CodeActionKind::QuickFix,
-            diagnostics: vec!["unquoted-bareword".to_string()],
-            edit: CodeActionEdit {
-                changes: vec![TextEdit {
-                    location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
-                    new_text: format!("\"{}\"", bareword),
-                }],
-            },
-            is_preferred: false,
-        });
-
-        // Action 3: Declare as filehandle (only for uppercase barewords)
-        if is_uppercase {
-            // Find the best position to insert a filehandle declaration
-            let insert_pos = self.find_declaration_position(diagnostic.range.0);
-            let indent = self.get_indent_at(insert_pos);
-
-            actions.push(CodeAction {
-                title: format!("Declare '{}' as filehandle", bareword),
-                kind: CodeActionKind::QuickFix,
-                diagnostics: vec!["unquoted-bareword".to_string()],
-                edit: CodeActionEdit {
-                    changes: vec![TextEdit {
-                        location: SourceLocation { start: insert_pos, end: insert_pos },
-                        new_text: format!("{}open my ${};\n", indent, bareword),
-                    }],
-                },
-                is_preferred: false,
-            });
-        }
-
-        actions
-    }
-
     /// Get refactoring actions for a selection
     fn get_refactoring_actions(&self, ast: &Node, range: (usize, usize)) -> Vec<CodeAction> {
         let mut actions = Vec::new();
@@ -648,22 +579,6 @@ impl CodeActionsProvider {
             return Some(node);
         }
         None
-    }
-
-    /// Get indentation at a position
-    fn get_indent_at(&self, pos: usize) -> String {
-        let line_start = self.source[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
-
-        let line = &self.source[line_start..];
-        let mut indent = String::new();
-        for ch in line.chars() {
-            if ch == ' ' || ch == '\t' {
-                indent.push(ch);
-            } else {
-                break;
-            }
-        }
-        indent
     }
 }
 

@@ -8,21 +8,17 @@ on:
       - 'ci/ignored_baseline.txt'
       - 'ci/check_ignored.sh'
   push:
-    branches: [ main, master ]
+    branches: [main, master]
     paths:
       - 'crates/perl-parser/tests/**'
       - 'crates/perl-parser/src/**'
       - 'ci/ignored_baseline.txt'
       - 'ci/check_ignored.sh'
-  workflow_dispatch: {}
 
-# Cancel in-flight runs on new triggers (saves minutes)
+# Cancel in-flight runs on new pushes (saves minutes)
 concurrency:
-  group: check-ignored-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-permissions:
-  contents: read
 
 jobs:
   check-ignored:
@@ -37,3 +33,16 @@ jobs:
       
       - name: Check ignored test count
         run: ./ci/check_ignored.sh
+
+      - name: Commit baseline if decreased
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet ci/ignored_baseline.txt; then
+            echo "No change to baseline"
+          else
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git add ci/ignored_baseline.txt
+            git commit -m "chore: update ignored test baseline (decreased)"
+            git push
+          fi

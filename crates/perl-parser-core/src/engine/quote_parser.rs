@@ -2,7 +2,6 @@
 ///
 /// This module provides consistent parsing for quote-like operators,
 /// properly extracting patterns, bodies, and modifiers.
-use std::borrow::Cow;
 ///
 /// Extract pattern and modifiers from a regex-like token (qr, m, or bare //)
 pub fn extract_regex_parts(text: &str) -> (String, String) {
@@ -247,61 +246,67 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
         Some(d) => d,
         None => return (String::new(), String::new(), String::new()),
     };
-    if delimiter.is_ascii_alphanumeric() || delimiter.is_whitespace() {
-        if let Some((pattern, replacement, modifiers_str)) =
-            split_on_last_paired_delimiter(content)
-        {
-            let modifiers = extract_substitution_modifiers(&modifiers_str);
-            return (pattern, replacement, modifiers);
-        }
-
-        return (String::new(), String::new(), String::new());
-    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
     // Parse first body (pattern)
-    let (mut pattern, rest1, pattern_closed) = if is_paired {
-        extract_substitution_pattern_with_replacement_hint(content, delimiter, closing)
-    } else {
-        extract_delimited_content_strict(content, delimiter, closing)
-    };
+    let (pattern, rest1) = extract_delimited_content(content, delimiter, closing);
 
     // Parse second body (replacement)
     // For paired delimiters, the replacement may use a different delimiter than the pattern
     // e.g., s[pattern]{replacement} is valid Perl
     let (replacement, modifiers_str) = if !is_paired && !rest1.is_empty() {
         // Non-paired delimiters: manually parse the replacement
-        let (body, rest) = extract_unpaired_body(rest1, closing);
-        (body, Cow::Borrowed(rest))
-    } else if !is_paired && !pattern_closed {
-        if let Some((fallback_pattern, fallback_replacement, fallback_modifiers)) =
-            split_unclosed_substitution_pattern(&pattern)
-        {
-            pattern = fallback_pattern;
-            (fallback_replacement, Cow::Owned(fallback_modifiers))
-        } else {
-            (String::new(), Cow::Borrowed(rest1))
+        let chars = rest1.char_indices();
+        let mut body = String::new();
+        let mut escaped = false;
+        let mut end_pos = rest1.len();
+
+        for (i, ch) in chars {
+            if escaped {
+                body.push(ch);
+                escaped = false;
+                continue;
+            }
+
+            match ch {
+                '\\' => {
+                    body.push(ch);
+                    escaped = true;
+                }
+                c if c == closing => {
+                    end_pos = i + ch.len_utf8();
+                    break;
+                }
+                _ => body.push(ch),
+            }
         }
+
+        (body, &rest1[end_pos..])
     } else if is_paired {
         let trimmed = rest1.trim_start();
         // For paired delimiters, check what delimiter the replacement uses
         // It may be the same as pattern or a different paired delimiter
         // e.g., s[pattern]{replacement} uses [] for pattern and {} for replacement
-        if let Some(rd) = starts_with_paired_delimiter(trimmed) {
-            let repl_closing = get_closing_delimiter(rd);
-            let (body, rest) = extract_delimited_content(trimmed, rd, repl_closing);
-            (body, Cow::Borrowed(rest))
+        if let Some(rd) = trimmed.chars().next() {
+            // Check if it's a valid paired opening delimiter
+            if rd == '{' || rd == '[' || rd == '(' || rd == '<' {
+                let repl_closing = get_closing_delimiter(rd);
+                extract_delimited_content(trimmed, rd, repl_closing)
+            } else {
+                // Not a valid paired delimiter - malformed, return empty replacement
+                (String::new(), trimmed)
+            }
         } else {
-            let (body, rest) = extract_unpaired_body(rest1, closing);
-            (body, Cow::Borrowed(rest))
+            // No more content - empty replacement
+            (String::new(), "")
         }
     } else {
-        (String::new(), Cow::Borrowed(rest1))
+        (String::new(), rest1)
     };
 
     // Extract and validate only valid substitution modifiers
-    let modifiers = extract_substitution_modifiers(modifiers_str.as_ref());
+    let modifiers = extract_substitution_modifiers(modifiers_str);
 
     (pattern, replacement, modifiers)
 }
@@ -402,18 +407,6 @@ fn get_closing_delimiter(open: char) -> char {
     }
 }
 
-fn is_paired_open(ch: char) -> bool {
-    matches!(ch, '{' | '[' | '(' | '<')
-}
-
-fn starts_with_paired_delimiter(text: &str) -> Option<char> {
-    let trimmed = text.trim_start();
-    match trimmed.chars().next() {
-        Some(ch) if is_paired_open(ch) => Some(ch),
-        _ => None,
-    }
-}
-
 /// Extract content between delimiters and return (content, rest)
 fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &str) {
     let mut chars = text.char_indices();
@@ -467,164 +460,6 @@ fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &s
     }
 
     (body, &text[end_pos..])
-}
-
-fn extract_unpaired_body(text: &str, closing: char) -> (String, &str) {
-    let mut body = String::new();
-    let mut escaped = false;
-    let mut end_pos = text.len();
-
-    for (i, ch) in text.char_indices() {
-        if escaped {
-            body.push(ch);
-            escaped = false;
-            continue;
-        }
-
-        match ch {
-            '\\' => {
-                body.push(ch);
-                escaped = true;
-            }
-            c if c == closing => {
-                end_pos = i + ch.len_utf8();
-                break;
-            }
-            _ => body.push(ch),
-        }
-    }
-
-    (body, &text[end_pos..])
-}
-
-fn extract_substitution_pattern_with_replacement_hint(
-    text: &str,
-    open: char,
-    close: char,
-) -> (String, &str, bool) {
-    let mut chars = text.char_indices();
-
-    // Skip opening delimiter
-    if let Some((_, c)) = chars.next() {
-        if c != open {
-            return (String::new(), text, false);
-        }
-    } else {
-        return (String::new(), "", false);
-    }
-
-    let mut body = String::new();
-    let mut depth = 1usize;
-    let mut escaped = false;
-    let mut first_close_pos: Option<usize> = None;
-    let mut first_body_len: usize = 0;
-
-    for (i, ch) in chars {
-        if escaped {
-            body.push(ch);
-            escaped = false;
-            continue;
-        }
-
-        match ch {
-            '\\' => {
-                body.push(ch);
-                escaped = true;
-            }
-            c if c == open => {
-                body.push(ch);
-                depth += 1;
-            }
-            c if c == close => {
-                if depth > 1 {
-                    depth -= 1;
-                    body.push(ch);
-                    continue;
-                }
-
-                let rest = &text[i + ch.len_utf8()..];
-                if first_close_pos.is_none() {
-                    first_close_pos = Some(i + ch.len_utf8());
-                    first_body_len = body.len();
-                }
-
-                if starts_with_paired_delimiter(rest).is_some() {
-                    return (body, rest, true);
-                }
-
-                body.push(ch);
-            }
-            _ => body.push(ch),
-        }
-    }
-
-    if let Some(pos) = first_close_pos {
-        body.truncate(first_body_len);
-        return (body, &text[pos..], true);
-    }
-
-    (body, "", false)
-}
-
-fn split_unclosed_substitution_pattern(pattern: &str) -> Option<(String, String, String)> {
-    let mut escaped = false;
-
-    for (idx, ch) in pattern.char_indices() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-
-        if ch == '\\' {
-            escaped = true;
-            continue;
-        }
-
-        if is_paired_open(ch) {
-            let closing = get_closing_delimiter(ch);
-            let (replacement, rest, found_closing) =
-                extract_delimited_content_strict(&pattern[idx..], ch, closing);
-            if found_closing {
-                let leading = pattern[..idx].to_string();
-                return Some((leading, replacement, rest.to_string()));
-            }
-        }
-    }
-
-    None
-}
-
-fn split_on_last_paired_delimiter(text: &str) -> Option<(String, String, String)> {
-    let mut escaped = false;
-    let mut candidates = Vec::new();
-
-    for (idx, ch) in text.char_indices() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-
-        if ch == '\\' {
-            escaped = true;
-            continue;
-        }
-
-        if is_paired_open(ch) {
-            candidates.push((idx, ch));
-        }
-    }
-
-    for (idx, ch) in candidates.into_iter().rev() {
-        let closing = get_closing_delimiter(ch);
-        let (replacement, rest, found_closing) =
-            extract_delimited_content_strict(&text[idx..], ch, closing);
-        if found_closing {
-            let leading = text[..idx].to_string();
-            return Some((leading, replacement, rest.to_string()));
-        }
-    }
-
-    None
 }
 
 /// Extract and validate substitution modifiers, returning only valid ones

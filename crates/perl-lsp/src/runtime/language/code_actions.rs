@@ -258,57 +258,6 @@ impl LspServer {
                 }));
             }
 
-            // Add missing pragma actions (use strict / use warnings) when applicable
-            let mut pragma_actions =
-                crate::code_actions_pragmas::missing_pragmas_actions(uri, &doc.text);
-            for action in &mut pragma_actions {
-                let data_info = (
-                    action
-                        .get("data")
-                        .and_then(|d| d.get("uri"))
-                        .and_then(|s| s.as_str())
-                        .map(|s| s.to_string()),
-                    action
-                        .get("data")
-                        .and_then(|d| d.get("insertAt"))
-                        .and_then(|n| n.as_u64()),
-                    action
-                        .get("data")
-                        .and_then(|d| d.get("text"))
-                        .and_then(|s| s.as_str())
-                        .map(|s| s.to_string()),
-                );
-
-                if let (Some(u), Some(off), Some(txt)) = data_info {
-                    if let Some(obj) = action.as_object_mut() {
-                        let edit_range = if off as usize >= doc.text.len() {
-                            let end = self.get_document_end_position(&doc.text);
-                            json!({"start": end.clone(), "end": end })
-                        } else {
-                            let (line, col) = self.offset_to_pos16(doc, off as usize);
-                            json!({
-                                "start": {"line": line, "character": col},
-                                "end": {"line": line, "character": col}
-                            })
-                        };
-
-                        obj.insert(
-                            "edit".into(),
-                            json!({
-                                "changes": {
-                                    u: [{
-                                        "range": edit_range,
-                                        "newText": txt
-                                    }]
-                                }
-                            }),
-                        );
-                        obj.remove("data");
-                    }
-                }
-            }
-            code_actions.extend(pragma_actions);
-
             Ok(Some(json!(code_actions)))
         } else {
             // No AST (parse error), but we can still offer some actions

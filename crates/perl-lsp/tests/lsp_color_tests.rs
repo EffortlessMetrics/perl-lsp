@@ -137,11 +137,11 @@ fn lsp_color_detect_ansi_colors() {
         .iter()
         .filter(|c| {
             let line = c["range"]["start"]["line"].as_u64().unwrap_or(0);
-            (5..=6).contains(&line)
+            line >= 5 && line <= 6
         })
         .collect();
 
-    assert!(!ansi_colors.is_empty(), "Should detect at least one ANSI color");
+    assert!(ansi_colors.len() >= 1, "Should detect at least one ANSI color");
 }
 
 #[test]
@@ -332,7 +332,7 @@ fn lsp_color_round_trip() {
         .unwrap();
 
         let pres_array = presentations.as_array().unwrap();
-        assert!(!pres_array.is_empty(), "Should have at least one presentation");
+        assert!(pres_array.len() > 0, "Should have at least one presentation");
     }
 }
 

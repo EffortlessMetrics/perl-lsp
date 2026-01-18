@@ -379,8 +379,6 @@ fn estimate_memory_usage() -> usize {
 #[test]
 fn test_cancellation_check_latency_performance_ac12() {
     // AC:12 - Cancellation check latency validation with statistical analysis
-    // Note: The timeout parameter from original TODO comments was intentionally removed 
-    // to maintain the <100μs check latency requirement using pure atomic operations.
     let token = Arc::new(PerlLspCancellationToken::new(
         json!("latency_performance_test"),
         "latency_performance_test".to_string(),
@@ -462,7 +460,6 @@ fn test_cancellation_check_threading_performance_ac12() {
         let thread_count = scenario.thread_count();
         let iterations_per_thread = 10_000;
 
-        // Note: timeout parameter intentionally excluded from token creation
         let token = Arc::new(PerlLspCancellationToken::new(
             json!(format!("threading_perf_{}", thread_count)),
             "threading_perf".to_string(),

@@ -4,7 +4,7 @@ on:
   workflow_dispatch: {}
   pull_request:
     branches: [ master, main ]
-    types: [labeled]
+    types: [labeled, synchronize, reopened]
 
 # Cancel in-flight runs on new pushes (saves minutes)
 concurrency:

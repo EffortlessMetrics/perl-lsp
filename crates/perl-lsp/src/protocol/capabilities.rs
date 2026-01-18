@@ -428,7 +428,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     #[cfg(not(target_arch = "wasm32"))]
     if build.execute_command {
         // Only advertise commands that are actually implemented and tested
-        let commands = get_supported_commands();
+        let commands = crate::execute_command::get_supported_commands();
         caps.execute_command_provider = Some(ExecuteCommandOptions {
             commands,
             work_done_progress_options: WorkDoneProgressOptions::default(),
@@ -516,20 +516,6 @@ pub fn capabilities_json(build: BuildFlags) -> Value {
     }
 
     json
-}
-
-/// Get the list of supported commands for the LSP executeCommand capability.
-///
-/// Returns all command identifiers that can be executed via the LSP executeCommand
-/// method. This list is used for capability registration and command validation.
-pub fn get_supported_commands() -> Vec<String> {
-    vec![
-        "perl.runTests".to_string(),
-        "perl.runFile".to_string(),
-        "perl.runTestSub".to_string(),
-        "perl.debugTests".to_string(),
-        "perl.runCritic".to_string(),
-    ]
 }
 
 /// Check if a capability is a boolean or object (for flexible assertions)

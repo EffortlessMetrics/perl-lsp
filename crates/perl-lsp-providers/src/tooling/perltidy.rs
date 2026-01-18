@@ -3,11 +3,11 @@
 //! This module provides integration with perltidy for automatic code formatting
 //! and beautification of Perl code.
 
-use super::subprocess_runtime::SubprocessRuntime;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::Path;
-use std::sync::Arc;
+use std::process::{Command, Stdio};
 
 /// Configuration for perltidy
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -172,21 +172,12 @@ pub struct PerlTidyFormatter {
     config: PerlTidyConfig,
     /// Cache mapping source code to formatted output.
     cache: HashMap<String, String>,
-    /// Subprocess runtime for executing perltidy
-    runtime: Arc<dyn SubprocessRuntime>,
 }
 
 impl PerlTidyFormatter {
-    /// Creates a new formatter with the given configuration and runtime.
-    pub fn new(config: PerlTidyConfig, runtime: Arc<dyn SubprocessRuntime>) -> Self {
-        Self { config, cache: HashMap::new(), runtime }
-    }
-
-    /// Creates a new formatter with the OS subprocess runtime (non-WASM only).
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn with_os_runtime(config: PerlTidyConfig) -> Self {
-        use super::subprocess_runtime::OsSubprocessRuntime;
-        Self::new(config, Arc::new(OsSubprocessRuntime::new()))
+    /// Creates a new formatter with the given configuration.
+    pub fn new(config: PerlTidyConfig) -> Self {
+        Self { config, cache: HashMap::new() }
     }
 
     /// Format Perl code
@@ -196,21 +187,37 @@ impl PerlTidyFormatter {
             return Ok(cached.clone());
         }
 
-        // Build argument list
-        let mut args: Vec<String> = self.config.to_args();
-        args.push("-st".to_string()); // Output to stdout
+        // Build perltidy command
+        let mut cmd = Command::new("perltidy");
 
-        // Convert to &str slice for the runtime
-        let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        // Add configuration arguments
+        for arg in self.config.to_args() {
+            cmd.arg(arg);
+        }
 
-        // Run perltidy via the runtime
-        let output = self
-            .runtime
-            .run_command("perltidy", &args_refs, Some(code.as_bytes()))
-            .map_err(|e| e.message)?;
+        // Use stdin/stdout
+        cmd.arg("-st") // Output to stdout
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
 
-        if !output.success() {
-            return Err(format!("Perltidy failed: {}", output.stderr_lossy()));
+        // Start the process
+        let mut child = cmd.spawn().map_err(|e| format!("Failed to start perltidy: {}", e))?;
+
+        // Write input
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(code.as_bytes())
+                .map_err(|e| format!("Failed to write to perltidy: {}", e))?;
+        }
+
+        // Wait for completion
+        let output =
+            child.wait_with_output().map_err(|e| format!("Failed to run perltidy: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Perltidy failed: {}", stderr));
         }
 
         let formatted = String::from_utf8(output.stdout)
@@ -224,19 +231,22 @@ impl PerlTidyFormatter {
 
     /// Format a file in place
     pub fn format_file(&self, file_path: &Path) -> Result<(), String> {
-        // Build argument list
-        let mut args: Vec<String> = self.config.to_args();
-        args.push(file_path.to_string_lossy().into_owned());
+        let mut cmd = Command::new("perltidy");
 
-        // Convert to &str slice for the runtime
-        let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        // Add configuration arguments
+        for arg in self.config.to_args() {
+            cmd.arg(arg);
+        }
 
-        // Run perltidy via the runtime
-        let output =
-            self.runtime.run_command("perltidy", &args_refs, None).map_err(|e| e.message)?;
+        // Add file path
+        cmd.arg(file_path);
 
-        if !output.success() {
-            return Err(format!("Perltidy failed: {}", output.stderr_lossy()));
+        // Run command
+        let output = cmd.output().map_err(|e| format!("Failed to run perltidy: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Perltidy failed: {}", stderr));
         }
 
         Ok(())
@@ -409,63 +419,5 @@ mod tests {
         let formatted = formatter.format(code);
 
         assert!(formatted.contains("    print")); // Should be indented
-    }
-
-    #[test]
-    fn test_formatter_with_mock_runtime() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
-
-        let runtime = Arc::new(MockSubprocessRuntime::new());
-        runtime.add_response(MockResponse::success(b"my $x = 1;\n".to_vec()));
-
-        let config = PerlTidyConfig::default();
-        let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
-
-        let result = formatter.format("my $x=1;");
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "my $x = 1;\n");
-
-        let invocations = runtime.invocations();
-        assert_eq!(invocations.len(), 1);
-        assert_eq!(invocations[0].program, "perltidy");
-        assert!(invocations[0].args.contains(&"-st".to_string()));
-    }
-
-    #[test]
-    fn test_formatter_caching() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
-
-        let runtime = Arc::new(MockSubprocessRuntime::new());
-        runtime.add_response(MockResponse::success(b"formatted\n".to_vec()));
-
-        let config = PerlTidyConfig::default();
-        let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
-
-        // First call should invoke runtime
-        let result1 = formatter.format("original");
-        assert!(result1.is_ok());
-
-        // Second call should use cache, not invoke runtime again
-        let result2 = formatter.format("original");
-        assert!(result2.is_ok());
-        assert_eq!(result1.unwrap(), result2.unwrap());
-
-        // Only one invocation should have occurred
-        assert_eq!(runtime.invocations().len(), 1);
-    }
-
-    #[test]
-    fn test_formatter_error_handling() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
-
-        let runtime = Arc::new(MockSubprocessRuntime::new());
-        runtime.add_response(MockResponse::failure(b"syntax error".to_vec(), 1));
-
-        let config = PerlTidyConfig::default();
-        let mut formatter = PerlTidyFormatter::new(config, runtime);
-
-        let result = formatter.format("invalid code");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("syntax error"));
     }
 }

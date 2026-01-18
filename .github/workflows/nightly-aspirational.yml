@@ -1,7 +1,9 @@
 name: Nightly - Aspirational Feature Matrix
 
 on:
-  workflow_dispatch: {}
+  schedule:
+    - cron: '17 3 * * *'   # daily at 03:17 UTC
+  workflow_dispatch: {}    # allow manual trigger
 
 jobs:
   aspirational:

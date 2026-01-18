@@ -86,8 +86,8 @@ mod tests {
         let uri = "perldoc://strict";
         let content = fetch_virtual_content(uri);
         // May be None if perldoc is not available
-        if let Some(content) = content {
-            assert!(!content.is_empty());
+        if content.is_some() {
+            assert!(content.unwrap().len() > 0);
         }
     }
 

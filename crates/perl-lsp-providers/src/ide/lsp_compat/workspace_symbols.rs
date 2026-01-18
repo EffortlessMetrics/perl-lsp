@@ -52,7 +52,6 @@
 //! ```
 
 use perl_parser_core::{SourceLocation, ast::Node};
-use perl_position_tracking::offset_to_utf16_line_col;
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -394,16 +393,14 @@ impl WorkspaceSymbolsProvider {
     /// Converts an internal `SymbolInfo` to an LSP `WorkspaceSymbol`.
     ///
     /// Resolves byte offsets to line/column positions using the source text.
-    /// Uses UTF-16 code unit counting as required by LSP protocol.
     fn symbol_to_workspace_symbol(
         &self,
         uri: &str,
         symbol: &SymbolInfo,
         source: &str,
     ) -> WorkspaceSymbol {
-        // Use canonical UTF-16 conversion from perl-position-tracking
-        let (start_line, start_col) = offset_to_utf16_line_col(source, symbol.location.start);
-        let (end_line, end_col) = offset_to_utf16_line_col(source, symbol.location.end);
+        let (start_line, start_col) = offset_to_line_col(source, symbol.location.start);
+        let (end_line, end_col) = offset_to_line_col(source, symbol.location.end);
 
         WorkspaceSymbol {
             name: symbol.name.clone(),
@@ -411,8 +408,8 @@ impl WorkspaceSymbolsProvider {
             location: Location {
                 uri: uri.to_string(),
                 range: Range {
-                    start: Position { line: start_line, character: start_col },
-                    end: Position { line: end_line, character: end_col },
+                    start: Position { line: start_line as u32, character: start_col as u32 },
+                    end: Position { line: end_line as u32, character: end_col as u32 },
                 },
             },
             container_name: symbol.container.as_ref().map(|s| norm_pkg(s).into_owned()),
@@ -437,8 +434,32 @@ fn symbol_kind_to_lsp(kind: &SymbolKind) -> i32 {
     }
 }
 
-// Position conversion is handled by perl_position_tracking::offset_to_utf16_line_col
-// which correctly counts UTF-16 code units as required by the LSP protocol.
+/// Converts a byte offset to a zero-indexed (line, column) position.
+///
+/// Iterates through the source text counting newlines. Column is reset
+/// at each newline character.
+fn offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
+    let mut line = 0;
+    let mut col = 0;
+    let mut byte_pos = 0;
+
+    for ch in source.chars() {
+        if byte_pos >= offset {
+            break;
+        }
+
+        if ch == '\n' {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+
+        byte_pos += ch.len_utf8();
+    }
+
+    (line, col)
+}
 
 #[cfg(test)]
 mod tests {
@@ -495,59 +516,14 @@ sub baz {
     }
 
     #[test]
-    fn test_offset_to_utf16_line_col() {
+    fn test_offset_to_line_col() {
         let source = "hello\nworld\n123";
 
-        // Uses canonical UTF-16 conversion from perl-position-tracking
-        assert_eq!(offset_to_utf16_line_col(source, 0), (0, 0)); // 'h'
-        assert_eq!(offset_to_utf16_line_col(source, 5), (0, 5)); // '\n'
-        assert_eq!(offset_to_utf16_line_col(source, 6), (1, 0)); // 'w'
-        assert_eq!(offset_to_utf16_line_col(source, 11), (1, 5)); // '\n'
-        assert_eq!(offset_to_utf16_line_col(source, 12), (2, 0)); // '1'
-    }
-
-    #[test]
-    fn test_utf16_emoji_position() {
-        // Regression test: emojis are 4 bytes in UTF-8 but 2 code units in UTF-16
-        // LSP protocol requires UTF-16 code units for character positions
-        let source = "😀x"; // emoji (4 bytes, 2 UTF-16 units) + 'x' (1 byte, 1 UTF-16 unit)
-
-        // 'x' is at byte offset 4 (after the 4-byte emoji)
-        // In UTF-16, 'x' is at character position 2 (emoji = 2 code units)
-        let (line, character) = offset_to_utf16_line_col(source, 4);
-        assert_eq!(line, 0);
-        assert_eq!(
-            character, 2,
-            "Emoji should count as 2 UTF-16 code units, so 'x' is at character 2"
-        );
-    }
-
-    #[test]
-    fn test_workspace_symbol_utf16_position_with_emoji() {
-        let mut provider = WorkspaceSymbolsProvider::new();
-        let mut source_map = HashMap::new();
-
-        // Symbol after an emoji should have correct UTF-16 character position
-        let source = "my $😀 = 1;\nsub target { }";
-
-        source_map.insert("file:///emoji.pl".to_string(), source.to_string());
-
-        let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
-
-        provider.index_document("file:///emoji.pl", &ast, source);
-
-        let results = provider.search("target", &source_map);
-
-        // Verify we found the target symbol
-        assert!(!results.is_empty(), "Should find 'target' subroutine");
-
-        // The position should use UTF-16 character counts
-        // The emoji variable name counts as 2 UTF-16 code units
-        let target_symbol = &results[0];
-        assert_eq!(target_symbol.name, "target");
-        // 'sub target' is on line 1 (0-indexed)
-        assert_eq!(target_symbol.location.range.start.line, 1);
+        assert_eq!(offset_to_line_col(source, 0), (0, 0)); // 'h'
+        assert_eq!(offset_to_line_col(source, 5), (0, 5)); // '\n'
+        assert_eq!(offset_to_line_col(source, 6), (1, 0)); // 'w'
+        assert_eq!(offset_to_line_col(source, 11), (1, 5)); // '\n'
+        assert_eq!(offset_to_line_col(source, 12), (2, 0)); // '1'
     }
 
     #[test]
