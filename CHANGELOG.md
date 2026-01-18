@@ -86,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Expression vs Statement Disambiguation**: Correctly distinguishes block expressions from hash literals
   - **Edge Case Coverage**: Handles nested blocks, complex expressions, and mixed syntax
   - **Test Coverage**: Comprehensive builtin function parsing tests with edge case validation
+  - **Documentation**: New `docs/BUILTIN_FUNCTION_PARSING.md` guide
 
 - **Enhanced Substitution Operator Parsing** (PR #158)
   - **Complete Pattern/Replacement/Modifier Support**: Full `s///` syntax coverage
@@ -191,39 +192,222 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **None**: MSRV 1.89, Edition 2024, additive guarantee maintained
 
-### Migration Guide
+## [v0.8.9] - 2025-09-09
 
-- **No Migration Required**: v0.8.x users can upgrade seamlessly without code changes
-- **Enhanced Features**: All new features are additive and backward compatible
-- **API Stability**: Public API contracts remain stable per [docs/STABILITY.md](docs/STABILITY.md)
+### Added
+- **Cross-File Navigation Enhancements**:
+  - Implemented workspace index using `Box<dyn WorkspaceIndex>`
+  - Added support for cross-file definitions without workspace index (fallback mechanism) (PR #125)
+  - Enhanced cross-referencing capabilities to find references across the entire workspace
+- **Import Optimization**:
+  - Added new `ImportOptimizer` module to detect and organize imports (PR #96)
+  - Implemented sorting and deduplication for `use` statements
+  - Added code actions to remove unused imports and add missing imports
+- **Builtin Function Parsing (PR #119)**:
+  - Enhanced parsing for builtin functions like `map`, `grep`, and `sort`
+  - Added support for empty blocks in builtin functions to fix parsing errors
+  - Improved handling of block expressions vs hash literals in builtin arguments
 
-### Documentation
+### Changed
+- **Documentation Updates**:
+  - Finalized comprehensive documentation updates with Diataxis framework
+  - Added `docs/IMPORT_OPTIMIZER_GUIDE.md`
+- **Performance**:
+  - Optimized workspace indexing for large codebases
 
-- **CLAUDE.md**: Added semantic definition testing commands and updated status metrics
-- **ROADMAP.md**: New "Current Phase: Validation & De-Risking" section with concrete path forward
-- **Path to v1.0**: Documented 3-band approach (prove semantic stack, reduce ignored tests, tag v0.9)
-- **Known Constraints**: Resource limits, CI billing, ignored test count (779 tests)
-- **Test Commands**: Resource-efficient semantic testing commands for constrained environments
-- **perl-dap README.md**: New comprehensive DAP server documentation
-- **DAP User Guide**: Enhanced Debug Adapter Protocol setup, configuration, and debugging workflows
-- **API Documentation Standards**: Comprehensive documentation enforcement and systematic resolution strategy (PR #160/SPEC-149)
-- **LSP Cancellation Architecture Guide**: Complete documentation suite including protocol, architecture, performance, integration, and test strategy guides
+## [v0.8.8] - 2025-09-03
 
-## [v0.8.8] - Current Release
+### Added
+- **Incremental Parsing V2 (PR #66)**:
+  - Enabled incremental node reuse for significantly faster re-parsing on edits
+  - Added `IncrementalParserV2` with advanced edit tracking and tree reuse strategies
+  - Added benchmarking for incremental parsing performance
+- **File Completion**:
+  - Implemented enterprise-grade file path completion with security safeguards (PR #58)
+  - Added support for relative and absolute paths in `require` and `use` statements
+- **Comment Documentation Extraction (PR #71)**:
+  - Enhanced extraction of documentation from comments preceding declarations
+  - Improved threading of documentation through the parser to the AST
+  - Updated Hover provider to display extracted documentation
 
-See [docs/archive/CHANGELOG.md](docs/archive/CHANGELOG.md) for complete v0.8.8 release notes.
+### Changed
+- **LSP Compliance**:
+  - Achieved high LSP compliance score with new feature additions
+  - Updated architectural documentation to reflect new incremental parsing strategy
 
-### Highlights
+## [v0.8.7] - 2025-09-01
 
-- Enhanced Builtin Function Parsing (PR #119, Issue #110)
-- API Documentation Infrastructure (PR #160, SPEC-149)
-- Advanced Parser Robustness (fuzz testing, mutation hardening)
-- DAP Support Phase 1 (Issue #207)
-- Revolutionary LSP Performance (PR #140: 5000x improvements)
+### Added
+- **Given/When/Default Support (PR #61)**:
+  - Added grammar rules and AST nodes for `given`, `when`, and `default` statements (Perl switch statements)
+  - Implemented tests for various switch statement scenarios
+- **Hash Key Context Detection (PR #68)**:
+  - Enhanced Scope Analyzer to detect when barewords are used as hash keys
+  - Improved robustness of variable resolution in hash subscript contexts
+
+## [v0.8.6] - 2025-08-30
+
+### Added
+- **Enhanced Substitution Parsing (PR #42)**:
+  - Support for complex heredoc delimiter expressions
+  - Improved regex and substitution parsing with better delimiter handling
+  - Fixed regression in S-expression formatting for substitutions
+- **Semantic Tokens**:
+  - Implemented thread-safe semantic token generation
+  - Added verification tests for semantic tokens
+
+## [v0.8.5] - 2025-08-24
+
+### Added
+- **LSP Type Hierarchy Support**:
+  - Implemented `textDocument/typeDefinition`
+  - Added Type Hierarchy provider
+- **Pull Diagnostics**:
+  - Added support for LSP 3.17 Pull Diagnostics model
+- **Symbol Resolution**:
+  - Implemented `textDocument/prepareRename` and `textDocument/rename`
+  - Added `workspace/symbol` resolution
+
+## [v0.8.4] - 2025-08-23: LSP Feature Complete
+
+### Added
+- **LSP 3.17 Features**:
+  - Inlay Hints provider
+  - Document Links provider
+  - Selection Ranges provider
+  - On-Type Formatting provider
+- **Code Actions**:
+  - Implemented robust Code Actions for refactoring and quick fixes
+  - Added Rename support
+
+### Changed
+- **Architecture**:
+  - Modularized LSP capabilities and handlers
+  - Enhanced contract-driven testing for LSP features
+
+## [v0.8.3] - 2025-08-22: GA Release
+
+### Added
+- **Perl::Critic Integration**:
+  - Integrated Perl::Critic for linting and diagnostics
+- **Property-Based Testing**:
+  - Introduced comprehensive property-based testing framework for parsing robustness
+- **Heredoc Improvements**:
+  - Robust handling of FIFO bodies and `<<~` indentation
+  - Fixed edge cases for heredoc delimiters
+- **Release Automation**:
+  - Added comprehensive release checklists and scripts
+
+## [v0.8.2] - 2025-08-12
+
+### Added
+- **Incremental Parsing Infrastructure**:
+  - Foundation work for incremental parsing
+  - Environment variable configuration for enabling incremental features
+- **Rust 2024 Compatibility**:
+  - Updates for Rust 2024 Edition compatibility, specifically `env` operations
+
+## [v0.8.0] - 2025-08-11
+
+### Added
+- **Distribution Infrastructure**:
+  - VS Code extension marketplace readiness
+  - Linux-specific installation steps (ripgrep, shellcheck)
+  - Auto-download capability for LSP binary
+
+### Changed
+- **Breaking Changes**:
+  - Refactored position helpers to be more robust, involving API changes in the parser crate.
+
+## [v0.7.5] - 2025-08-10
+
+### Added
+- **Declaration Provider**:
+  - Enhanced `DeclarationProvider` with `doc_version` awareness
+  - Added assertions for parent map integrity to ensure safe traversal
+- **Installer Improvements**:
+  - Robust installer with temp dir extraction and checksum support
+
+## [v0.7.4] - 2025-08-08
+
+### Added
+- **User Stories**:
+  - Added comprehensive user story tests for LSP functionality
+  - Achieved 100% user story coverage for key workflows
+- **Type Hierarchy**:
+  - Added Type Hierarchy provider and related functionality
+- **Document Highlight**:
+  - Implemented Document Highlight provider
+
+## [v0.7.0] - 2025-08-06
+
+### Added
+- **Incremental Parsing (v1)**:
+  - Initial support for incremental parsing
+- **Folding Ranges**:
+  - Implemented Folding Range provider
+- **Document Symbols**:
+  - Implemented Document Symbol provider
+- **Code Lens**:
+  - Added Code Lens provider for reference counts and implementations
+
+## [v0.6.0] - 2025-08-04
+
+### Added
+- **Debug Adapter Protocol (DAP)**:
+  - Initial implementation of Perl Debug Adapter Protocol support
+- **Performance**:
+  - AST caching and symbol indexing optimizations
+- **LSP Features**:
+  - Call Hierarchy support
+  - Inlay Hints support
+
+## [v0.5.0] - 2025-08-03
+
+### Added
+- **Visual Studio Code Extension**:
+  - Initial release of the "Perl Language Server" extension
+- **Formatting**:
+  - Code formatting support integrated with LSP
+- **Workspace Symbols**:
+  - Implemented Workspace Symbols provider
+
+## [v0.4.0] - 2025-07-25
+
+### Added
+- **v3 Parser Completion**:
+  - Achieved 100% edge case coverage for Perl 5 syntax
+- **Error Recovery**:
+  - Implemented robust error recovery strategies in the parser
+- **Streaming Parsing**:
+  - Added support for streaming parsing input
+
+## [v0.3.0] - 2025-07-22
+
+### Added
+- **Format Declarations**:
+  - Support for Perl `format` declarations
+- **Modern Perl Features**:
+  - Support for experimental class/method/field syntax
+- **Edge Cases**:
+  - Comprehensive coverage for tricky Perl syntax (globs, indirect objects)
+
+## [v0.2.0] - 2025-07-22
+
+### Added
+- **Labeled Statements**: Support for loop labels and labeled blocks
+- **Quote Operators**: Full support for `q`, `qq`, `qw`, `qr`, `qx` and `tr`/`y`
+- **Bitwise Operators**: Parsing support for bitwise string operators
+
+## [v0.1.0] - 2025-07-21
+
+### Added
+- **Pure Rust Parser**:
+  - Initial release of the standalone Pure Rust Perl Parser
+  - ~99.995% Syntax Coverage claimed
+- **Heredoc Recovery**:
+  - Dynamic heredoc recovery system
 
 ## Historical Releases
 
-For complete release history prior to v0.8.8, see:
-- [docs/archive/CHANGELOG.md](docs/archive/CHANGELOG.md) - Comprehensive historical changelog
-- [docs/archive/CHANGELOG_v0.8.4.md](docs/archive/CHANGELOG_v0.8.4.md) - v0.8.4 release notes
-- [docs/archive/CHANGELOG_v3_milestone.md](docs/archive/CHANGELOG_v3_milestone.md) - v3 parser milestone
+See [docs/archive/](docs/archive/) for older logs if available.
