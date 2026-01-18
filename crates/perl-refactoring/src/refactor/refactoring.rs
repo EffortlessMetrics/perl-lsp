@@ -30,8 +30,8 @@
 //! - import_optimizer: Import statement optimization and cleanup
 
 use crate::error::{ParseError, ParseResult};
-use perl_parser_core::{Node, NodeKind, Parser};
 use perl_parser_core::position::line_index::LineIndex;
+use perl_parser_core::{Node, NodeKind, Parser};
 use std::collections::HashSet;
 // Import existing modules conditionally
 use crate::import_optimizer::ImportOptimizer;
@@ -414,10 +414,7 @@ impl RefactoringEngine {
             }
         }
 
-        Ok(BackupInfo {
-            backup_dir,
-            file_mappings,
-        })
+        Ok(BackupInfo { backup_dir, file_mappings })
     }
 
     fn perform_symbol_rename(
@@ -472,9 +469,8 @@ impl RefactoringEngine {
             });
         };
 
-        let source_code = std::fs::read_to_string(file_path).map_err(|e| ParseError::SyntaxError {
-            message: format!("Failed to read file: {}", e),
-            location: 0,
+        let source_code = std::fs::read_to_string(file_path).map_err(|e| {
+            ParseError::SyntaxError { message: format!("Failed to read file: {}", e), location: 0 }
         })?;
 
         let line_ending = if source_code.contains("\r\n") { "\r\n" } else { "\n" };
@@ -523,7 +519,10 @@ impl RefactoringEngine {
 
         // Handle inputs
         if !analysis.inputs.is_empty() {
-            new_sub.push_str(&format!("    my ({}) = @_;\n", analysis.inputs.join(", ")).replace('\n', line_ending));
+            new_sub.push_str(
+                &format!("    my ({}) = @_;\n", analysis.inputs.join(", "))
+                    .replace('\n', line_ending),
+            );
         }
 
         // Body
@@ -533,7 +532,10 @@ impl RefactoringEngine {
 
         // Handle outputs
         if !analysis.outputs.is_empty() {
-            new_sub.push_str(&format!("    return ({});\n", analysis.outputs.join(", ")).replace('\n', line_ending));
+            new_sub.push_str(
+                &format!("    return ({});\n", analysis.outputs.join(", "))
+                    .replace('\n', line_ending),
+            );
         }
         new_sub.push_str("}\n".replace('\n', line_ending).as_str());
 
@@ -567,11 +569,8 @@ impl RefactoringEngine {
 
         // Apply changes
         let mut final_source = String::new();
-        let prefix_len = if source_code[..start_offset].ends_with(&indentation) {
-            indentation.len()
-        } else {
-            0
-        };
+        let prefix_len =
+            if source_code[..start_offset].ends_with(&indentation) { indentation.len() } else { 0 };
         final_source.push_str(&source_code[..start_offset - prefix_len]);
         final_source.push_str(&call_with_indent);
         final_source.push_str(&source_code[end_offset..]);
@@ -791,10 +790,7 @@ fn analyze_extraction(ast: &Node, start: usize, end: usize) -> ExtractionAnalysi
     let mut outputs_vec: Vec<_> = outputs.into_iter().collect();
     outputs_vec.sort();
 
-    ExtractionAnalysis {
-        inputs: inputs_vec,
-        outputs: outputs_vec,
-    }
+    ExtractionAnalysis { inputs: inputs_vec, outputs: outputs_vec }
 }
 
 fn visit_node(
@@ -809,12 +805,7 @@ fn visit_node(
     let in_range = node.location.start >= start && node.location.end <= end;
 
     match &node.kind {
-        NodeKind::VariableDeclaration {
-            declarator,
-            variable,
-            initializer,
-            ..
-        } => {
+        NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
             if declarator == "my" || declarator == "state" {
                 let name = extract_var_name(variable);
                 if in_range {
@@ -824,23 +815,10 @@ fn visit_node(
                 }
             }
             if let Some(init) = initializer {
-                visit_node(
-                    init,
-                    start,
-                    end,
-                    inputs,
-                    outputs,
-                    declared_in_scope,
-                    declared_in_range,
-                );
+                visit_node(init, start, end, inputs, outputs, declared_in_scope, declared_in_range);
             }
         }
-        NodeKind::VariableListDeclaration {
-            declarator,
-            variables,
-            initializer,
-            ..
-        } => {
+        NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
             if declarator == "my" || declarator == "state" {
                 for var in variables {
                     let name = extract_var_name(var);
@@ -901,45 +879,17 @@ fn visit_node(
         NodeKind::Block { statements } => {
             let mut inner_scope = declared_in_scope.clone();
             for stmt in statements {
-                visit_node(
-                    stmt,
-                    start,
-                    end,
-                    inputs,
-                    outputs,
-                    &mut inner_scope,
-                    declared_in_range,
-                );
+                visit_node(stmt, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
             }
         }
         NodeKind::Subroutine { signature, body, .. } => {
             let mut inner_scope = declared_in_scope.clone();
             if let Some(sig) = signature {
-                visit_node(
-                    sig,
-                    start,
-                    end,
-                    inputs,
-                    outputs,
-                    &mut inner_scope,
-                    declared_in_range,
-                );
+                visit_node(sig, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
             }
-            visit_node(
-                body,
-                start,
-                end,
-                inputs,
-                outputs,
-                &mut inner_scope,
-                declared_in_range,
-            );
+            visit_node(body, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
         }
-        NodeKind::Try {
-            body,
-            catch_blocks,
-            finally_block,
-        } => {
+        NodeKind::Try { body, catch_blocks, finally_block } => {
             visit_node(body, start, end, inputs, outputs, declared_in_scope, declared_in_range);
             for (var, catch_body) in catch_blocks {
                 let mut inner_scope = declared_in_scope.clone();
@@ -978,103 +928,29 @@ fn visit_node(
                 );
             }
         }
-        NodeKind::Foreach {
-            variable,
-            list,
-            body,
-        } => {
+        NodeKind::Foreach { variable, list, body } => {
             // Visit list with outer scope
-            visit_node(
-                list,
-                start,
-                end,
-                inputs,
-                outputs,
-                declared_in_scope,
-                declared_in_range,
-            );
+            visit_node(list, start, end, inputs, outputs, declared_in_scope, declared_in_range);
 
             // Create inner scope for variable and body
             let mut inner_scope = declared_in_scope.clone();
-            visit_node(
-                variable,
-                start,
-                end,
-                inputs,
-                outputs,
-                &mut inner_scope,
-                declared_in_range,
-            );
-            visit_node(
-                body,
-                start,
-                end,
-                inputs,
-                outputs,
-                &mut inner_scope,
-                declared_in_range,
-            );
+            visit_node(variable, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+            visit_node(body, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
         }
-        NodeKind::For {
-            init,
-            condition,
-            update,
-            body,
-            continue_block,
-        } => {
+        NodeKind::For { init, condition, update, body, continue_block } => {
             let mut inner_scope = declared_in_scope.clone();
             if let Some(n) = init {
-                visit_node(
-                    n,
-                    start,
-                    end,
-                    inputs,
-                    outputs,
-                    &mut inner_scope,
-                    declared_in_range,
-                );
+                visit_node(n, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
             }
             if let Some(n) = condition {
-                visit_node(
-                    n,
-                    start,
-                    end,
-                    inputs,
-                    outputs,
-                    &mut inner_scope,
-                    declared_in_range,
-                );
+                visit_node(n, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
             }
             if let Some(n) = update {
-                visit_node(
-                    n,
-                    start,
-                    end,
-                    inputs,
-                    outputs,
-                    &mut inner_scope,
-                    declared_in_range,
-                );
+                visit_node(n, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
             }
-            visit_node(
-                body,
-                start,
-                end,
-                inputs,
-                outputs,
-                &mut inner_scope,
-                declared_in_range,
-            );
+            visit_node(body, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
             if let Some(n) = continue_block {
-                visit_node(
-                    n,
-                    start,
-                    end,
-                    inputs,
-                    outputs,
-                    &mut inner_scope,
-                    declared_in_range,
-                );
+                visit_node(n, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
             }
         }
         _ => {
@@ -1203,9 +1079,8 @@ sub existing {
         // selection should include lines 8 and 9 (0-indexed)
         // Line 8: "    print $val;\n"
         // Line 9: "    my $new_val = $val * 2;\n"
-        let result = engine
-            .perform_extract_method("helper", (8, 0), (10, 0), &[path.clone()])
-            .unwrap();
+        let result =
+            engine.perform_extract_method("helper", (8, 0), (10, 0), &[path.clone()]).unwrap();
 
         assert!(result.success);
 
@@ -1247,9 +1122,8 @@ sub complex {
 
         // Line 5: "    foreach my $item (@items) {"
         // Line 10: "    # end"
-        let result = engine
-            .perform_extract_method("do_math", (5, 0), (10, 0), &[path.clone()])
-            .unwrap();
+        let result =
+            engine.perform_extract_method("do_math", (5, 0), (10, 0), &[path.clone()]).unwrap();
 
         assert!(result.success);
         let new_code = std::fs::read_to_string(&path).unwrap();

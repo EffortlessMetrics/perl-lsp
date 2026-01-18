@@ -25,12 +25,10 @@ use std::time::{Duration, Instant};
 mod common;
 use common::*;
 
-// Import expected performance types (will be implemented)
-// TODO: Uncomment when implementing performance infrastructure
-// use perl_parser::cancellation::{
-//     CancellationPerformanceMonitor, CancellationMetrics,
-//     MemoryPerformanceSpec, ThreadingPerformanceSpec
-// };
+use perl_lsp::cancellation::{
+    CancellationError, CancellationMetrics, CancellationRegistry, PerlLspCancellationToken,
+    ProviderCleanupContext,
+};
 
 /// Performance test fixture with comprehensive metrics collection
 struct PerformanceTestFixture {
@@ -380,13 +378,10 @@ fn estimate_memory_usage() -> usize {
 /// AC:12 - Cancellation check latency validation with statistical analysis
 #[test]
 fn test_cancellation_check_latency_performance_ac12() {
-    // This test will fail initially as cancellation token infrastructure doesn't exist
-    // TODO: Uncomment when implementing cancellation token performance infrastructure
-    /*
+    // AC:12 - Cancellation check latency validation with statistical analysis
     let token = Arc::new(PerlLspCancellationToken::new(
         json!("latency_performance_test"),
-        ProviderCleanupContext::Generic,
-        Some(Duration::from_micros(100)),
+        "latency_performance_test".to_string(),
     ));
 
     let iterations = 100_000; // Large sample size for statistical significance
@@ -405,8 +400,11 @@ fn test_cancellation_check_latency_performance_ac12() {
         durations.push(duration);
 
         // Validate individual check latency against AC12 requirement
-        assert!(duration < Duration::from_micros(500),
-               "Individual cancellation check exceeded 500μs: {}μs", duration.as_micros());
+        assert!(
+            duration < Duration::from_micros(500),
+            "Individual cancellation check exceeded 500μs: {}μs",
+            duration.as_micros()
+        );
     }
 
     // Statistical analysis
@@ -419,17 +417,25 @@ fn test_cancellation_check_latency_performance_ac12() {
     let max = durations[iterations - 1];
 
     // AC:12 Requirements validation
-    assert!(average < Duration::from_micros(50),
-           "Average latency {}μs exceeds 50μs target", average.as_micros());
+    assert!(
+        average < Duration::from_micros(50),
+        "Average latency {}μs exceeds 50μs target",
+        average.as_micros()
+    );
 
-    assert!(p95 < Duration::from_micros(75),
-           "95th percentile {}μs exceeds 75μs", p95.as_micros());
+    assert!(p95 < Duration::from_micros(75), "95th percentile {}μs exceeds 75μs", p95.as_micros());
 
-    assert!(p99 < Duration::from_micros(100),
-           "99th percentile {}μs exceeds 100μs AC12 requirement", p99.as_micros());
+    assert!(
+        p99 < Duration::from_micros(100),
+        "99th percentile {}μs exceeds 100μs AC12 requirement",
+        p99.as_micros()
+    );
 
-    assert!(p99_9 < Duration::from_micros(150),
-           "99.9th percentile {}μs exceeds 150μs outlier tolerance", p99_9.as_micros());
+    assert!(
+        p99_9 < Duration::from_micros(150),
+        "99.9th percentile {}μs exceeds 150μs outlier tolerance",
+        p99_9.as_micros()
+    );
 
     // Performance metrics reporting
     println!("Cancellation Check Performance Metrics (AC12):");
@@ -443,10 +449,11 @@ fn test_cancellation_check_latency_performance_ac12() {
 
     // Regression detection
     let performance_regression = p99 > Duration::from_micros(100);
-    assert!(!performance_regression,
-           "Performance regression detected: 99th percentile {}μs > 100μs requirement",
-           p99.as_micros());
-    */
+    assert!(
+        !performance_regression,
+        "Performance regression detected: 99th percentile {}μs > 100μs requirement",
+        p99.as_micros()
+    );
 }
 
 /// Tests feature spec: LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md#threading-scenarios
@@ -454,8 +461,6 @@ fn test_cancellation_check_latency_performance_ac12() {
 #[test]
 fn test_cancellation_check_threading_performance_ac12() {
     // Test cancellation performance under various threading scenarios
-    // TODO: Uncomment when implementing threading performance infrastructure
-    /*
     let threading_scenarios = vec![
         ThreadingScenario::SingleThread,
         ThreadingScenario::LowContention(2),
@@ -470,8 +475,7 @@ fn test_cancellation_check_threading_performance_ac12() {
 
         let token = Arc::new(PerlLspCancellationToken::new(
             json!(format!("threading_perf_{}", thread_count)),
-            ProviderCleanupContext::Generic,
-            Some(Duration::from_micros(100)),
+            "threading_perf".to_string(),
         ));
 
         let handles: Vec<_> = (0..thread_count)
@@ -493,11 +497,7 @@ fn test_cancellation_check_threading_performance_ac12() {
                         measurements.push(duration);
                     }
 
-                    ThreadPerformanceResult {
-                        thread_id,
-                        measurements,
-                        thread_count,
-                    }
+                    ThreadPerformanceResult { thread_id, measurements, thread_count }
                 })
             })
             .collect();
@@ -516,20 +516,27 @@ fn test_cancellation_check_threading_performance_ac12() {
 
         // Threading-specific performance requirements
         let max_acceptable_latency = match thread_count {
-            1 => Duration::from_micros(50),       // Single thread baseline
-            2 => Duration::from_micros(100),      // RUST_TEST_THREADS=2 (AC12)
-            3..=4 => Duration::from_micros(125),  // Light contention
-            _ => Duration::from_micros(150),      // High contention tolerance
+            1 => Duration::from_micros(50),      // Single thread baseline
+            2 => Duration::from_micros(100),     // RUST_TEST_THREADS=2 (AC12)
+            3..=4 => Duration::from_micros(125), // Light contention
+            _ => Duration::from_micros(150),     // High contention tolerance
         };
 
-        assert!(p99 <= max_acceptable_latency,
-               "Thread scenario {} threads: 99th percentile {}μs exceeds {}μs limit",
-               thread_count, p99.as_micros(), max_acceptable_latency.as_micros());
+        assert!(
+            p99 <= max_acceptable_latency,
+            "Thread scenario {} threads: 99th percentile {}μs exceeds {}μs limit",
+            thread_count,
+            p99.as_micros(),
+            max_acceptable_latency.as_micros()
+        );
 
-        println!("Threading Performance ({} threads): avg={}μs, p99={}μs",
-                thread_count, average.as_micros(), p99.as_micros());
+        println!(
+            "Threading Performance ({} threads): avg={}μs, p99={}μs",
+            thread_count,
+            average.as_micros(),
+            p99.as_micros()
+        );
     }
-    */
 
     // Test adaptive threading configuration compatibility
     let thread_count = max_concurrent_threads();
@@ -758,12 +765,9 @@ fn test_end_to_end_cancellation_response_time_ac12() {
 fn test_memory_overhead_validation_ac12() {
     let baseline_memory = estimate_memory_usage();
 
-    // Initialize cancellation infrastructure (will be implemented)
-    // TODO: Uncomment when implementing cancellation infrastructure
-    /*
-    let cancellation_system = CancellationSystem::new();
+    // Initialize cancellation infrastructure
     let registry = CancellationRegistry::new();
-    let performance_monitor = CancellationPerformanceMonitor::new();
+    let _performance_monitor = registry.metrics();
 
     // Measure memory after infrastructure initialization
     force_garbage_collection();
@@ -771,30 +775,33 @@ fn test_memory_overhead_validation_ac12() {
     let infrastructure_overhead = infrastructure_memory.saturating_sub(baseline_memory);
 
     // AC:12 Infrastructure overhead requirement (<1MB)
-    assert!(infrastructure_overhead < 1024 * 1024,
-           "Infrastructure overhead {} bytes exceeds 1MB limit", infrastructure_overhead);
+    assert!(
+        infrastructure_overhead < 1024 * 1024,
+        "Infrastructure overhead {} bytes exceeds 1MB limit",
+        infrastructure_overhead
+    );
 
     // Create multiple cancellation tokens to test scaling
     let token_count = 10_000;
     let mut tokens = Vec::with_capacity(token_count);
 
     for i in 0..token_count {
-        let token = registry.register_token(
-            json!(i),
-            if i % 3 == 0 {
-                ProviderCleanupContext::Completion {
-                    workspace_symbols: true,
-                    cross_file: true,
-                }
-            } else if i % 3 == 1 {
-                ProviderCleanupContext::WorkspaceSymbol {
-                    indexing_active: false,
-                    file_count: 0,
-                }
-            } else {
-                ProviderCleanupContext::Generic
-            },
-        );
+        let (provider_type, params) = if i % 3 == 0 {
+            ("completion", Some(json!({"workspace_symbols": true, "cross_file": true})))
+        } else if i % 3 == 1 {
+            ("workspace_symbol", Some(json!({"indexing_active": false, "file_count": 0})))
+        } else {
+            ("generic", None)
+        };
+
+        let token = PerlLspCancellationToken::new(json!(i), provider_type.to_string());
+        registry.register_token(token.clone()).expect("Failed to register token");
+
+        if let Some(p) = params {
+            let context = ProviderCleanupContext::new(provider_type.to_string(), Some(p));
+            registry.register_cleanup(&json!(i), context).expect("Failed to register cleanup");
+        }
+
         tokens.push(token);
     }
 
@@ -807,12 +814,18 @@ fn test_memory_overhead_validation_ac12() {
     let per_token_memory = tokens_overhead / token_count;
 
     // AC:12 Per-token memory requirement (<1KB per token)
-    assert!(per_token_memory < 1024,
-           "Per-token memory {} bytes exceeds 1KB limit", per_token_memory);
+    assert!(
+        per_token_memory < 1024,
+        "Per-token memory {} bytes exceeds 1KB limit",
+        per_token_memory
+    );
 
     // Total memory overhead should be reasonable
-    assert!(tokens_overhead < 10 * 1024 * 1024,
-           "10,000 tokens overhead {} bytes exceeds 10MB reasonable limit", tokens_overhead);
+    assert!(
+        tokens_overhead < 10 * 1024 * 1024,
+        "10,000 tokens overhead {} bytes exceeds 10MB reasonable limit",
+        tokens_overhead
+    );
 
     // Test memory cleanup effectiveness
     for (i, _) in tokens.iter().enumerate() {
@@ -822,20 +835,35 @@ fn test_memory_overhead_validation_ac12() {
     }
 
     drop(tokens);
-    registry.cleanup_completed_requests();
+    // registry automatically cleans up tokens when they are removed, but here we registered them.
+    // registry.cancel_request removes from cleanup contexts but not tokens map (wait, cancel_request does NOT remove from tokens map, remove_request does).
+    // The test logic in comments said registry.cleanup_completed_requests() which doesn't exist.
+    // CancellationRegistry::remove_request removes both.
+
+    // So let's iterate and remove all requests to simulate cleanup
+    for i in 0..token_count {
+        registry.remove_request(&json!(i));
+    }
 
     force_garbage_collection();
     let cleanup_memory = estimate_memory_usage();
     let memory_after_cleanup = cleanup_memory.saturating_sub(baseline_memory);
 
     // Memory after cleanup should be close to infrastructure baseline
-    assert!(memory_after_cleanup < infrastructure_overhead + (1024 * 1024),
-           "Memory after cleanup {} exceeds infrastructure baseline + 1MB", memory_after_cleanup);
+    // Allowing some margin for allocator fragmentation
+    assert!(
+        memory_after_cleanup < infrastructure_overhead + (1024 * 1024),
+        "Memory after cleanup {} exceeds infrastructure baseline + 1MB",
+        memory_after_cleanup
+    );
 
     // Memory leak detection
     let potential_leak = memory_after_cleanup.saturating_sub(infrastructure_overhead);
-    assert!(potential_leak < 500 * 1024,
-           "Potential memory leak detected: {} bytes retained after cleanup", potential_leak);
+    assert!(
+        potential_leak < 500 * 1024,
+        "Potential memory leak detected: {} bytes retained after cleanup",
+        potential_leak
+    );
 
     // Performance metrics reporting
     println!("Memory Overhead Analysis (AC12):");
@@ -845,16 +873,6 @@ fn test_memory_overhead_validation_ac12() {
     println!("  Total tokens overhead: {} KB", tokens_overhead / 1024);
     println!("  Memory after cleanup: {} KB", memory_after_cleanup / 1024);
     println!("  Potential leak: {} KB", potential_leak / 1024);
-    */
-
-    // Memory measurement without cancellation infrastructure
-    let current_memory = estimate_memory_usage();
-    let measured_overhead = current_memory.saturating_sub(baseline_memory);
-
-    println!("Memory Measurement (AC12 scaffolding):");
-    println!("  Baseline memory: {} KB", baseline_memory / 1024);
-    println!("  Current memory: {} KB", current_memory / 1024);
-    println!("  Measured overhead: {} KB", measured_overhead / 1024);
 }
 
 /// Force garbage collection for more accurate memory measurements
@@ -947,6 +965,8 @@ fn test_incremental_parsing_performance_preservation_ac12() {
     let mut cancellation_durations = Vec::new();
     for _iteration in 0..20 {
         // TODO: Uncomment when implementing cancellation-aware parser
+        // Note: IncrementalParserWithCancellation is not yet implemented.
+        // The following code is kept as reference for future implementation.
         /*
         let token = Arc::new(PerlLspCancellationToken::new(
             json!(format!("parsing_perf_{}", iteration)),
@@ -1116,18 +1136,3 @@ impl Drop for PerformanceTestFixture {
         shutdown_and_exit(&mut self.server);
     }
 }
-
-// Test scaffolding established for AC12 performance validation
-// All tests designed to:
-// 1. Compile successfully (TDD scaffolding requirement)
-// 2. Fail initially due to missing performance infrastructure
-// 3. Provide comprehensive quantitative validation patterns
-// 4. Include statistical analysis and regression detection
-// 5. Cover all AC12 performance requirements with measurable criteria
-
-// Implementation phase will add:
-// - Actual cancellation token infrastructure
-// - Real-time performance monitoring
-// - Memory profiling and leak detection
-// - Threading performance optimization
-// - Incremental parsing cancellation integration
