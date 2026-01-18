@@ -48,7 +48,7 @@ impl<'a> Parser<'a> {
             TokenKind::Number => {
                 let token = self.tokens.next()?;
                 Ok(Node::new(
-                    NodeKind::Number { value: token.text.clone() },
+                    NodeKind::Number { value: token.text },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -58,7 +58,7 @@ impl<'a> Parser<'a> {
                 // Check if it's a double-quoted string (interpolated)
                 let interpolated = token.text.starts_with('"');
                 Ok(Node::new(
-                    NodeKind::String { value: token.text.clone(), interpolated },
+                    NodeKind::String { value: token.text, interpolated },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -77,7 +77,7 @@ impl<'a> Parser<'a> {
                 // Quote operators produce strings
                 let interpolated = matches!(token.kind, TokenKind::QuoteDouble);
                 Ok(Node::new(
-                    NodeKind::String { value: token.text.clone(), interpolated },
+                    NodeKind::String { value: token.text, interpolated },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -124,7 +124,7 @@ impl<'a> Parser<'a> {
                 } else {
                     // Fallback - shouldn't happen with proper lexer
                     Ok(Node::new(
-                        NodeKind::String { value: token.text.clone(), interpolated: false },
+                        NodeKind::String { value: token.text, interpolated: false },
                         SourceLocation { start, end: token.end },
                     ))
                 }
@@ -134,7 +134,7 @@ impl<'a> Parser<'a> {
                 let token = self.tokens.next()?;
                 // qx/backticks - for now treat as a string
                 Ok(Node::new(
-                    NodeKind::String { value: token.text.clone(), interpolated: true },
+                    NodeKind::String { value: token.text, interpolated: true },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -489,7 +489,7 @@ impl<'a> Parser<'a> {
                     // It's used as an identifier
                     let token = self.tokens.next()?;
                     Ok(Node::new(
-                        NodeKind::Identifier { name: token.text.to_string() },
+                        NodeKind::Identifier { name: token.text },
                         SourceLocation { start: token.start, end: token.end },
                     ))
                 }
@@ -523,7 +523,7 @@ impl<'a> Parser<'a> {
                 // But NOT for statement modifiers like if, unless, while, etc.
                 let token = self.tokens.next()?;
                 Ok(Node::new(
-                    NodeKind::Identifier { name: token.text.to_string() },
+                    NodeKind::Identifier { name: token.text },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
