@@ -1074,6 +1074,14 @@ module.exports = grammar({
         $.escaped_delimiter,
       )
     ),
+
+    _noninterpolated_transliteration_content: $ => repeat1(
+      choice(
+        $._q_string_content,
+        $.escape_sequence,
+        $.escaped_delimiter,
+      )
+    ),
     _interpolation_fallbacks: $ => choice(
       seq('@', $._no_interp_whitespace_zw),
       // Most array punctuation vars do not interpolate
@@ -1236,9 +1244,9 @@ module.exports = grammar({
         ),
         seq(
           $._apostrophe,
-          optional(trContent($, $._noninterpolated_string_content)),
+          optional(trContent($, $._noninterpolated_transliteration_content)),
           $._quotelike_middle,
-          optional(replacement($, $._noninterpolated_string_content)),
+          optional(replacement($, $._noninterpolated_transliteration_content)),
         ),
       ),
       $._quotelike_end,
