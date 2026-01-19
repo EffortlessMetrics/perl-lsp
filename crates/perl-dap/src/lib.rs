@@ -158,6 +158,6 @@ impl DapServer {
     ///
     /// This method starts the stdio transport loop and blocks until the session ends.
     pub fn run(&mut self) -> anyhow::Result<()> {
-        self.adapter.run().map_err(|e| anyhow::anyhow!(e))
+        self.adapter.run().map_err(Into::into)
     }
 }
