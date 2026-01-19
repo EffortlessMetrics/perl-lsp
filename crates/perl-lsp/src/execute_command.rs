@@ -406,14 +406,24 @@ impl ExecuteCommandProvider {
     /// Run a specific test subroutine with enhanced error handling
     fn run_test_sub(&self, file_path: &str, sub_name: &str) -> Result<Value, String> {
         // Enhanced subroutine invocation with better error detection
-        let perl_code = format!(
-            "do '{}'; if (defined &{}) {{ {}() }} else {{ die 'Subroutine {} not found' }}",
-            file_path, sub_name, sub_name, sub_name
-        );
+        // Use @ARGV to safely pass file path and subroutine name preventing code injection
+        let perl_code = r#"
+            my ($file, $sub) = @ARGV;
+            do $file;
+            if (defined &$sub) {
+                no strict 'refs';
+                &$sub();
+            } else {
+                die "Subroutine $sub not found";
+            }
+        "#;
 
         let result = Command::new("perl")
             .arg("-e")
             .arg(perl_code)
+            .arg("--")
+            .arg(file_path)
+            .arg(sub_name)
             .output()
             .map_err(|e| format!("Failed to run test subroutine: {}", e))?;
 
@@ -423,6 +433,7 @@ impl ExecuteCommandProvider {
     /// Run a Perl file with standardized result formatting
     fn run_file(&self, file_path: &str) -> Result<Value, String> {
         let result = Command::new("perl")
+            .arg("--") // Safety against argument injection
             .arg(file_path)
             .output()
             .map_err(|e| format!("Failed to run file: {}", e))?;
