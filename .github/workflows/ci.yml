@@ -2,127 +2,81 @@ name: CI
 
 on:
   pull_request:
-    branches: [ master ]
-  push:
-    branches: [ ci-pilot/** ]
+    branches: [ main, master ]
+  workflow_dispatch: {}
 
 # Cancel in-flight runs on new pushes (saves minutes)
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
 jobs:
-  fmt:
+  ci-gate:
+    name: CI Gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with: { toolchain: 1.90.0, components: rustfmt }
-      - name: CI policy - enforce xtask arg barrier
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Match xtask invocations missing the ' -- ' separator
-          # Filter out: (1) this grep check itself, (2) comment lines
-          # Bad:  cargo run -p xtask --locked --ci
-          # Good: cargo run -p xtask --locked -- ci
-          if git grep -nE 'cargo run -p xtask --locked --[a-z]' .github/workflows \
-               | grep -v 'grep.*xtask' \
-               | grep -v '#.*Bad:' \
-               | tee /dev/stderr | grep -q .; then
-            echo "::error::xtask invocations must include a space after the arg barrier: use '... -- <subcommand> ...'."
-            exit 1
-          fi
-      - if: runner.os != 'Windows'
-        run: cargo fmt --all --check
-
-  docs-baseline:
-    runs-on: ubuntu-latest
-    needs: fmt
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with: { toolchain: 1.90.0 }
-      - name: Check missing_docs baseline (Issue #197)
-        run: bash ci/check_missing_docs.sh
-
-  clippy:
-    runs-on: ubuntu-latest
-    needs: fmt
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with: { toolchain: 1.90.0, components: clippy }
-      - run: cargo clippy --locked --workspace -- -D warnings -A missing_docs
-
-  test:
-    runs-on: ubuntu-latest
-    needs: clippy
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with: { toolchain: 1.90.0 }
+        with:
+          toolchain: 1.89.0
+          components: rustfmt, clippy
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
       - uses: Swatinem/rust-cache@v2
-        with: { cache-on-failure: true }
-      - name: Core tests (fast, neutral on 143/124/137; trap TERM/INT) with lock guard
+        with:
+          cache-on-failure: true
+      - name: Run ci-gate with receipts
+        run: just gates
+      - name: Upload gate receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-receipt
+          path: |
+            target/receipts/receipt.json
+            target/receipts/logs/*.log
+            target/receipts/artifacts/*
+          if-no-files-found: warn
+      - name: Gate summary
+        if: always()
         shell: bash
-        env:
-          RUST_BACKTRACE: full
-          CARGO_NET_RETRY: 4
-          CARGO_HTTP_MULTIPLEXING: "false"
         run: |
-          set -euo pipefail
-          # Neutralize runner preemption that sends SIGTERM to the shell.
-          trap 'echo "::warning::Runner interruption (SIGTERM/INT) — neutralizing"; exit 0' TERM INT
-          set +e
-          cargo test --locked --no-fail-fast -p perl-lexer -p perl-parser -- --nocapture 2>&1 | tee test_core.log
-          status=${PIPESTATUS[0]}
-          set -e
-          # Neutralize runner preemption
-          if [ "$status" -eq 143 ] || [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
-            echo "Runner interruption detected (status=${status}); treating as neutral."
-            exit 0
-          fi
-          # If and only if the lockfile staleness string is present, retry (offline first, then online)
-          if [ "$status" -eq 101 ] && grep -q "lock file .* needs to be updated but --locked was passed" test_core.log; then
-            echo "::warning:: Lock is stale; retrying (offline first, then online) ..."
-            if cargo --offline test --no-fail-fast -p perl-lexer -p perl-parser -- --nocapture; then
-              exit 0
-            fi
-            cargo test --locked --no-fail-fast -p perl-lexer -p perl-parser -- --nocapture
-            exit $?
-          fi
-          # Otherwise propagate the failure
-          exit "$status"
-      - name: LSP tests (bounded threads, neutral on 143/124/137; trap TERM/INT)
-        shell: bash
-        env:
-          RUST_BACKTRACE: full
-          CARGO_NET_RETRY: 4
-          CARGO_HTTP_MULTIPLEXING: "false"
-        run: |
-          set -euo pipefail
-          # Neutralize runner preemption that sends SIGTERM to the shell.
-          trap 'echo "::warning::Runner interruption (SIGTERM/INT) — neutralizing"; exit 0' TERM INT
-          set +e
-          RUST_TEST_THREADS=2 cargo test --locked --no-fail-fast -p perl-lsp -- --nocapture 2>&1 | tee test_lsp.log
-          status=${PIPESTATUS[0]}
-          set -e
-          if [ "$status" -eq 143 ] || [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
-            echo "Runner interruption detected (status=${status}); treating as neutral."
-            exit 0
-          fi
-          exit "$status"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-  docs:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with: { toolchain: 1.90.0 }
-      - name: Build docs (no deps)
-        run: cargo doc --locked -p perl-parser -p perl-lsp --no-deps
+          receipt_path = Path("target/receipts/receipt.json")
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+
+          if not summary_path:
+              raise SystemExit(0)
+
+          lines = ["### Gate Receipt", ""]
+          if not receipt_path.exists():
+              lines.append("Receipt not found.")
+              Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+              raise SystemExit(0)
+
+          data = json.loads(receipt_path.read_text(encoding="utf-8"))
+          lines.append(f"Generated: {data.get('generated_at', '')}")
+          lines.append(f"Commit: {data.get('commit', '')}")
+          lines.append("")
+          lines.append("| Gate | Status | Exit | Duration (s) |")
+          lines.append("| --- | --- | --- | --- |")
+          for gate in data.get("gates", []):
+              lines.append(
+                  f"| {gate.get('name', '')} | {gate.get('status', '')} | "
+                  f"{gate.get('exit_code', '')} | {gate.get('duration_seconds', '')} |"
+              )
+
+          Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY

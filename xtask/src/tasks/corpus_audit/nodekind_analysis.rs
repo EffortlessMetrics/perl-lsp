@@ -240,6 +240,6 @@ mod tests {
     fn test_extract_nodekinds_from_content() {
         let path = PathBuf::from("test.pl");
         let nodekinds = extract_nodekinds_from_content(&path);
-        assert!(nodekinds.len() > 0);
+        assert!(!nodekinds.is_empty());
     }
 }

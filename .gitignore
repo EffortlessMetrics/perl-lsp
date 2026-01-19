@@ -152,3 +152,4 @@ lsp_test/
 github_comment_*.md
 github_comments_*.md
 GITHUB_ISSUES_*.md
+temp_issue_work/

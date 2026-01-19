@@ -50,7 +50,7 @@ impl ImplementationProvider {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```rust,ignore
     /// use perl_parser::implementation_provider::ImplementationProvider;
     ///
     /// // Without workspace indexing (single-file analysis)

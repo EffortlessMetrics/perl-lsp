@@ -10,6 +10,8 @@ members = [
     "crates/perl-incremental-parsing",
     "crates/perl-tdd-support",
     "crates/perl-lsp-providers",
+    "crates/perl-lsp-protocol",
+    "crates/perl-lsp-transport",
     "crates/perl-position-tracking",
     "crates/perl-corpus",
     "crates/perl-lsp",
@@ -39,6 +41,8 @@ perl-refactoring = { path = "crates/perl-refactoring" }
 perl-incremental-parsing = { path = "crates/perl-incremental-parsing" }
 perl-tdd-support = { path = "crates/perl-tdd-support" }
 perl-lsp-providers = { path = "crates/perl-lsp-providers" }
+perl-lsp-protocol = { path = "crates/perl-lsp-protocol" }
+perl-lsp-transport = { path = "crates/perl-lsp-transport" }
 perl-position-tracking = { path = "crates/perl-position-tracking" }
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust"] }
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c" }

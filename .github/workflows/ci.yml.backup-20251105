@@ -1,12 +1,7 @@
 name: CI
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  schedule:
-    - cron: '0 0 * * 0' # Weekly on Sunday
+  workflow_dispatch: {}
 
 env:
   RUST_BACKTRACE: 1

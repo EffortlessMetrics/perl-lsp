@@ -353,11 +353,8 @@ fn test_enhanced_performance_validation() {
 
 // ======================== AC4: Enhanced Protocol Compliance ========================
 
+#[cfg(feature = "stress-tests")]
 #[test]
-#[cfg_attr(
-    not(feature = "stress-tests"),
-    ignore = "STRESS: executeCommand timing test - needs proper shutdown handling"
-)]
 // AC4:protocolCompliance - URI handling with comprehensive validation
 fn test_enhanced_uri_handling() {
     let (mut harness, workspace) = create_enhanced_execute_command_server();
@@ -411,11 +408,8 @@ fn test_enhanced_uri_handling() {
     }
 }
 
+#[cfg(feature = "stress-tests")]
 #[test]
-#[cfg_attr(
-    not(feature = "stress-tests"),
-    ignore = "STRESS: Concurrent executeCommand stress test - needs shutdown handling"
-)]
 // AC4:protocolCompliance - Concurrent request handling validation
 fn test_enhanced_concurrent_handling() {
     let (mut harness, workspace) = create_enhanced_execute_command_server();
@@ -460,11 +454,8 @@ fn test_enhanced_concurrent_handling() {
 
 // ======================== Revolutionary Performance Integration ========================
 
+#[cfg(feature = "stress-tests")]
 #[test]
-#[cfg_attr(
-    not(feature = "stress-tests"),
-    ignore = "STRESS: Performance integration test - needs proper shutdown"
-)]
 // AC5:performance - Thread-aware timeout scaling validation
 fn test_revolutionary_performance_integration() {
     let (mut harness, workspace) = create_enhanced_execute_command_server();

@@ -62,6 +62,7 @@ pub struct ScopeIssue {
     pub kind: IssueKind,
     pub variable_name: String,
     pub line: usize,
+    pub range: (usize, usize),
     pub description: String,
 }
 
@@ -211,6 +212,7 @@ impl ScopeAnalyzer {
                         kind: issue_kind,
                         variable_name: var_name.clone(),
                         line,
+                        range: (variable.location.start, variable.location.end),
                         description: match issue_kind {
                             IssueKind::VariableShadowing => {
                                 format!("Variable '{}' shadows a variable in outer scope", var_name)
@@ -237,6 +239,7 @@ impl ScopeAnalyzer {
                             kind: issue_kind,
                             variable_name: var_name.clone(),
                             line,
+                            range: (variable.location.start, variable.location.end),
                             description: match issue_kind {
                                 IssueKind::VariableShadowing => {
                                     format!(
@@ -324,6 +327,7 @@ impl ScopeAnalyzer {
                         kind: IssueKind::UndeclaredVariable,
                         variable_name: full_name.clone(),
                         line: self.get_line_from_node(node, code),
+                        range: (node.location.start, node.location.end),
                         description: format!("Variable '{}' is used but not declared", full_name),
                     });
                 }
@@ -339,6 +343,7 @@ impl ScopeAnalyzer {
                         kind: IssueKind::UnquotedBareword,
                         variable_name: name.clone(),
                         line: self.get_line_from_node(node, code),
+                        range: (node.location.start, node.location.end),
                         description: format!("Bareword '{}' not allowed under 'use strict'", name),
                     });
                 }
@@ -451,6 +456,7 @@ impl ScopeAnalyzer {
                                 kind: IssueKind::DuplicateParameter,
                                 variable_name: full_name.clone(),
                                 line: self.get_line_from_node(param, code),
+                                range: (param.location.start, param.location.end),
                                 description: format!(
                                     "Duplicate parameter '{}' in subroutine signature",
                                     full_name
@@ -464,6 +470,7 @@ impl ScopeAnalyzer {
                                 kind: IssueKind::ParameterShadowsGlobal,
                                 variable_name: full_name.clone(),
                                 line: self.get_line_from_node(param, code),
+                                range: (param.location.start, param.location.end),
                                 description: format!(
                                     "Parameter '{}' shadows a variable from outer scope",
                                     full_name
@@ -496,6 +503,7 @@ impl ScopeAnalyzer {
                                             kind: IssueKind::UnusedParameter,
                                             variable_name: full_name.clone(),
                                             line: self.get_line_from_node(param, code),
+                                            range: (param.location.start, param.location.end),
                                             description: format!(
                                                 "Parameter '{}' is declared but never used",
                                                 full_name
@@ -538,10 +546,13 @@ impl ScopeAnalyzer {
             if var_name.len() > 1 && var_name.chars().nth(1) == Some('_') {
                 continue;
             }
+            let start = offset.min(code.len());
+            let end = (start + var_name.len()).min(code.len());
             issues.push(ScopeIssue {
                 kind: IssueKind::UnusedVariable,
                 variable_name: var_name.clone(),
                 line: self.get_line_number(code, offset),
+                range: (start, end),
                 description: format!("Variable '{}' is declared but never used", var_name),
             });
         }
