@@ -52,7 +52,7 @@ Key terms:
 
 | Metric | Value | Target | Status |
 | --- | --- | --- | --- |
-| **Tier A Tests** | 502 lib tests (discovered), 1 ignores (tracked) | 100% pass | PASS |
+| **Tier A Tests** | 540 lib tests (discovered), 1 ignores (tracked) | 100% pass | PASS |
 | **Tracked Test Debt** | 1 (0 bug, 1 manual) | 0 | Near-zero |
 <!-- BEGIN: STATUS_METRICS_TABLE -->
 | **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 93%+ | In progress |
@@ -79,7 +79,7 @@ Key terms:
 - **LSP Coverage**: 100% user-visible feature coverage (53/53 advertised features from `features.toml`)
 - **Protocol Compliance**: 100% overall LSP protocol support (88/88 including plumbing)
 - **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
-- **Test Status**: 502 lib tests (Tier A), 1 ignores tracked (1 total tracked debt: 0 bug, 1 manual)
+- **Test Status**: 540 lib tests (Tier A), 1 ignores tracked (1 total tracked debt: 0 bug, 1 manual)
 - **Docs (perl-parser)**: missing_docs warnings = 0 (baseline 0)
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
 - **Production Status**: LSP server production-ready (`just ci-gate` passing)
@@ -132,5 +132,5 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-01-07*
+*Last Updated: 2026-01-18*
 *Canonical docs: [ROADMAP.md](ROADMAP.md), [features.toml](../features.toml)*

@@ -332,8 +332,8 @@ health:
     @echo "  pub struct: $(grep -r '^[[:space:]]*pub struct' crates/perl-parser/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
     @echo "  pub enum:   $(grep -r '^[[:space:]]*pub enum' crates/perl-parser/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
     @echo ""
-    @echo "🔧 LSP Server Size (lsp_server.rs monolith):"
-    @echo "  Lines:      $(wc -l < crates/perl-parser/src/lsp_server.rs 2>/dev/null || echo 'N/A')"
+    @echo "🔧 LSP Crate Size (crates/perl-lsp/src/):"
+    @echo "  Lines:      $(find crates/perl-lsp/src -name '*.rs' | xargs wc -l | tail -n 1 | awk '{print $1}' || echo 'N/A')"
     @echo ""
     @echo "💡 Run 'just health-detail' for file-by-file breakdown"
 
