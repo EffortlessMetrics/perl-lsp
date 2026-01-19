@@ -49,6 +49,33 @@ impl LspServer {
     /// This is a simplified implementation that sends the request but does not
     /// handle the response in a synchronous manner. A full implementation would
     /// require an async runtime or response handling mechanism.
+
+    /// Send a window/showMessage notification
+    ///
+    /// # Arguments
+    /// * `typ` - Message severity
+    /// * `message` - Message content
+    pub fn show_message(&self, typ: MessageType, message: &str) -> io::Result<()> {
+        let params = json!({
+            "type": typ as i32,
+            "message": message
+        });
+        self.notify("window/showMessage", params)
+    }
+
+    /// Send a window/logMessage notification
+    ///
+    /// # Arguments
+    /// * `typ` - Message severity
+    /// * `message` - Log content
+    pub fn log_message(&self, typ: MessageType, message: &str) -> io::Result<()> {
+        let params = json!({
+            "type": typ as i32,
+            "message": message
+        });
+        self.notify("window/logMessage", params)
+    }
+
     pub fn show_message_request(
         &self,
         message_type: MessageType,
