@@ -366,7 +366,7 @@ impl<'a> DeclarationProvider<'a> {
             // Split into package and function name
             let package = &func_name[..pos];
             let name = &func_name[pos + 2..];
-            (Some(package.to_string()), name)
+            (Some(package), name)
         } else {
             // No package qualifier, use current package context
             (self.find_current_package(node), func_name)
@@ -379,7 +379,7 @@ impl<'a> DeclarationProvider<'a> {
         // If we have a target package, find subs in that specific package
         if let Some(pkg_name) = target_package {
             if let Some(decl) =
-                declarations.iter().find(|d| self.find_current_package(d) == Some(pkg_name.clone()))
+                declarations.iter().find(|d| self.find_current_package(d) == Some(pkg_name))
             {
                 return Some(vec![self.create_location_link(
                     node,
@@ -412,7 +412,7 @@ impl<'a> DeclarationProvider<'a> {
         let package_name = match &object.kind {
             NodeKind::Identifier { name } if name.chars().next()?.is_uppercase() => {
                 // Likely a package name (e.g., Foo->method)
-                Some(name.clone())
+                Some(name.as_str())
             }
             _ => None,
         };
@@ -423,7 +423,7 @@ impl<'a> DeclarationProvider<'a> {
             self.collect_subroutine_declarations(&self.ast, method_name, &mut declarations);
 
             if let Some(decl) =
-                declarations.iter().find(|d| self.find_current_package(d) == Some(pkg.clone()))
+                declarations.iter().find(|d| self.find_current_package(d) == Some(pkg))
             {
                 return Some(vec![self.create_location_link(
                     node,
@@ -468,7 +468,7 @@ impl<'a> DeclarationProvider<'a> {
     }
 
     /// Find the current package context for a node
-    fn find_current_package(&self, node: &Node) -> Option<String> {
+    fn find_current_package<'b>(&'b self, node: &Node) -> Option<&'b str> {
         let mut current_ptr: *const Node = node as *const _;
 
         // Build temporary parent map if not provided (for testing)
@@ -494,7 +494,7 @@ impl<'a> DeclarationProvider<'a> {
                 }
 
                 if let NodeKind::Package { name, .. } = &child.kind {
-                    return Some(name.clone());
+                    return Some(name.as_str());
                 }
             }
 
