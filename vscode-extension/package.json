@@ -195,12 +195,17 @@
       "editor/context": [
         {
           "command": "perl-lsp.extractSubroutine",
-          "when": "resourceExtname == .pl || resourceExtname == .pm",
+          "when": "editorLangId == perl",
           "group": "1_modification"
         },
         {
           "command": "perl-lsp.extractVariable",
-          "when": "resourceExtname == .pl || resourceExtname == .pm",
+          "when": "editorLangId == perl",
+          "group": "1_modification"
+        },
+        {
+          "command": "perl-lsp.inlineVariable",
+          "when": "editorLangId == perl",
           "group": "1_modification"
         }
       ]
@@ -209,7 +214,7 @@
       {
         "command": "perl-lsp.organizeImports",
         "key": "shift+alt+o",
-        "when": "editorTextFocus && resourceExtname == .pl"
+        "when": "editorTextFocus && editorLangId == perl"
       }
     ],
     "snippets": [
