@@ -1,0 +1,110 @@
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
+use std::process::{Command, Stdio};
+use std::thread;
+
+#[test]
+fn test_socket_connection() {
+    // Determine the path to the perl-lsp binary
+    // Since we are running in a cargo test, we can use CARGO_BIN_EXE_perl-lsp if available,
+    // or assume it's in the target directory.
+    // assert_cmd provides env!("CARGO_BIN_EXE_perl-lsp") usually, but let's try to find it.
+
+    let bin_path = env!("CARGO_BIN_EXE_perl-lsp");
+
+    // Start the server in socket mode on a random port (port 0)
+    let mut child = Command::new(bin_path)
+        .arg("--socket")
+        .arg("--port")
+        .arg("0")
+        .stderr(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to start perl-lsp");
+
+    let stderr = child.stderr.take().expect("Failed to capture stderr");
+    let reader = BufReader::new(stderr);
+
+    // Read stderr to find the port
+    let mut lines = reader.lines();
+    let mut port = 0;
+    while let Some(line_res) = lines.next() {
+        let line = line_res.expect("Failed to read line from stderr");
+        println!("Server startup: {}", line); // Debug output
+        if line.contains("Perl LSP listening on") {
+            // Parse port from "Perl LSP listening on 127.0.0.1:12345"
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if let Some(addr) = parts.last() {
+                if let Some(port_str) = addr.split(':').last() {
+                    port = port_str.parse().expect("Failed to parse port");
+                    break;
+                }
+            }
+        }
+    }
+
+    assert_ne!(port, 0, "Failed to determine server port");
+
+    // Spawn thread to continue reading stderr
+    thread::spawn(move || {
+        for line in lines {
+            if let Ok(l) = line {
+                println!("SERVER LOG: {}", l);
+            }
+        }
+    });
+
+    // Connect to the server
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("Failed to connect to server");
+
+    // Send initialize request
+    let request = r#"{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"processId": null, "rootUri": null, "capabilities": {}}}"#;
+    let message = format!("Content-Length: {}\r\n\r\n{}", request.len(), request);
+    stream.write_all(message.as_bytes()).expect("Failed to write to socket");
+    stream.flush().expect("Failed to flush socket");
+
+    // Read response
+    let mut reader = BufReader::new(stream);
+
+    // Read headers
+    let mut content_length = 0;
+    loop {
+        let mut line = String::new();
+        reader.read_line(&mut line).expect("Failed to read header");
+        if line == "\r\n" {
+            break;
+        }
+        if line.starts_with("Content-Length: ") {
+            content_length = line.trim()["Content-Length: ".len()..].parse().expect("Failed to parse Content-Length");
+        }
+    }
+
+    assert!(content_length > 0, "Content-Length should be positive");
+
+    // Read body
+    let mut body = vec![0; content_length];
+    reader.read_exact(&mut body).expect("Failed to read body");
+    let response_str = String::from_utf8(body).expect("Failed to parse body as UTF-8");
+
+    // Validate response
+    assert!(response_str.contains("\"result\""), "Response should contain result");
+    assert!(response_str.contains("\"capabilities\""), "Response should contain capabilities");
+
+    // Send shutdown
+    let shutdown_request = r#"{"jsonrpc": "2.0", "id": 2, "method": "shutdown"}"#;
+    let message = format!("Content-Length: {}\r\n\r\n{}", shutdown_request.len(), shutdown_request);
+
+    // We need to write to the underlying stream again. Since reader consumed the stream, we can't use 'stream' if we moved it into BufReader.
+    // However, TcpStream can be cloned or we can use .get_mut().
+    // BufReader takes ownership or reference. new(stream) takes ownership.
+    // So we should have cloned the stream or used a reference?
+    // Let's re-connect or handle this better.
+    // Actually, BufReader::new(stream) consumes stream.
+    // We can use reader.get_mut() to get the stream back.
+
+    reader.get_mut().write_all(message.as_bytes()).expect("Failed to write shutdown");
+    reader.get_mut().flush().expect("Failed to flush shutdown");
+
+    // Cleanup
+    child.kill().expect("Failed to kill child process");
+}
