@@ -235,24 +235,44 @@ impl DebugAdapter {
     /// Run the debug adapter server
     pub fn run(&mut self) -> io::Result<()> {
         let stdin = io::stdin();
-        let stdout = io::stdout();
-        let mut stdout = stdout.lock();
+        // Create a shared stdout writer to prevent interleaving between the main loop
+        // and the event handler thread. This is critical for DAP protocol correctness:
+        // both response frames and event frames must be written atomically to avoid
+        // corrupting Content-Length framing.
+        let stdout_writer: Arc<Mutex<io::Stdout>> = Arc::new(Mutex::new(io::stdout()));
+        let event_stdout = Arc::clone(&stdout_writer);
 
         // Create channel for events
         let (tx, rx) = channel::<DapMessage>();
         self.event_sender = Some(tx.clone());
 
         // Start event handler thread with enhanced error handling
+        // Uses shared stdout writer to serialize output with main loop
         thread::spawn(move || {
             while let Ok(msg) = rx.recv() {
                 match serde_json::to_string(&msg) {
                     Ok(json) => {
                         let content_length = json.len();
-                        let output = format!("Content-Length: {}\r\n\r\n{}", content_length, json);
-                        print!("{}", output);
-                        if let Err(e) = io::stdout().flush() {
-                            eprintln!("Failed to flush stdout in event handler: {}", e);
-                            // Continue trying to process more events
+                        let frame = format!("Content-Length: {}\r\n\r\n{}", content_length, json);
+                        // Lock shared stdout for atomic frame write
+                        match event_stdout.lock() {
+                            Ok(mut stdout) => {
+                                if let Err(e) = stdout.write_all(frame.as_bytes()) {
+                                    eprintln!("Failed to write DAP frame in event handler: {}", e);
+                                }
+                                if let Err(e) = stdout.flush() {
+                                    eprintln!("Failed to flush stdout in event handler: {}", e);
+                                }
+                            }
+                            Err(poisoned) => {
+                                // Recover from poisoned mutex
+                                eprintln!(
+                                    "Warning: stdout mutex poisoned in event handler, recovering"
+                                );
+                                let mut stdout = poisoned.into_inner();
+                                let _ = stdout.write_all(frame.as_bytes());
+                                let _ = stdout.flush();
+                            }
                         }
                     }
                     Err(e) => {
@@ -302,11 +322,11 @@ impl DebugAdapter {
                             let response = self.handle_request(seq, &command, arguments);
                             if let Ok(json) = serde_json::to_string(&response) {
                                 let content_length = json.len();
-                                writeln!(
-                                    stdout,
-                                    "Content-Length: {}\r\n\r\n{}",
-                                    content_length, json
-                                )?;
+                                let frame =
+                                    format!("Content-Length: {}\r\n\r\n{}", content_length, json);
+                                // Lock shared stdout for atomic frame write
+                                let mut stdout = lock_or_recover(&stdout_writer, "response_writer");
+                                stdout.write_all(frame.as_bytes())?;
                                 stdout.flush()?;
                             }
                         }
