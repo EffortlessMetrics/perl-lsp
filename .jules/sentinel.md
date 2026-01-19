@@ -1,0 +1,4 @@
+## 2024-05-23 - Command Injection in `run_test_sub`
+**Vulnerability:** Arbitrary Perl code execution via command injection in `crates/perl-lsp/src/execute_command.rs`. The `run_test_sub` function interpolated user-provided file paths and subroutine names directly into a `-e` script string.
+**Learning:** Interpolating arguments into shell commands or script strings is dangerous even if not executing via a shell, because the interpreter (Perl) parses the string. `Command::arg()` protects against shell injection but not against code injection into the interpreter's script argument.
+**Prevention:** Pass arguments to the interpreter via `@ARGV` (or equivalent) instead of embedding them in the script string. Use `Command::arg()` for the script itself (if fixed) or use `-e` with code that reads from `@ARGV`.
