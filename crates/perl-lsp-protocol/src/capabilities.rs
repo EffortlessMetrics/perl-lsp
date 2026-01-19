@@ -323,8 +323,12 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     caps.document_symbol_provider = Some(OneOf::Left(true));
     caps.workspace_symbol_provider = Some(OneOf::Left(true));
 
-    caps.document_formatting_provider = Some(OneOf::Left(true));
-    caps.document_range_formatting_provider = Some(OneOf::Left(true));
+    if build.formatting {
+        caps.document_formatting_provider = Some(OneOf::Left(true));
+    }
+    if build.range_formatting {
+        caps.document_range_formatting_provider = Some(OneOf::Left(true));
+    }
 
     caps.signature_help_provider = Some(SignatureHelpOptions {
         trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
@@ -416,6 +420,9 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
         if build.source_organize_imports {
             kinds.push(CodeActionKind::SOURCE_ORGANIZE_IMPORTS);
         }
+
+        // UNBLOCKED by passing tests in lsp_code_actions_tests.rs
+        kinds.push(CodeActionKind::REFACTOR_EXTRACT);
 
         caps.code_action_provider =
             Some(CodeActionProviderCapability::Options(CodeActionOptions {
