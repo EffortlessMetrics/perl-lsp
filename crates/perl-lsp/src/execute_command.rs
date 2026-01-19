@@ -387,13 +387,13 @@ impl ExecuteCommandProvider {
         let (command_name, mut cmd) = if is_test_file && self.command_exists("prove") {
             ("prove", {
                 let mut cmd = Command::new("prove");
-                cmd.arg("-v").arg(file_path);
+                cmd.arg("-v").arg("--").arg(file_path);
                 cmd
             })
         } else {
             ("perl", {
                 let mut cmd = Command::new("perl");
-                cmd.arg(file_path);
+                cmd.arg("--").arg(file_path);
                 cmd
             })
         };
