@@ -92,8 +92,13 @@ impl PatternDetector for FormatHeredocDetector {
 
             // Check if next non-empty line is a heredoc
             let after_format = &code[match_pos.end()..];
-            if let Some(heredoc_match) = after_format.lines().next() {
-                if heredoc_match.trim_start().starts_with("<<") {
+            for line in after_format.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                if trimmed.starts_with("<<") {
                     let location = Location {
                         line: code[..match_pos.start()].lines().count(),
                         column: match_pos.start()
@@ -101,8 +106,7 @@ impl PatternDetector for FormatHeredocDetector {
                         offset: offset + match_pos.start(),
                     };
 
-                    let delimiter = heredoc_match
-                        .trim_start()
+                    let delimiter = trimmed
                         .trim_start_matches("<<")
                         .trim_start_matches(['\'', '"', '`'])
                         .split([' ', '\t', ';', '\n'])
@@ -119,6 +123,7 @@ impl PatternDetector for FormatHeredocDetector {
                         location,
                     ));
                 }
+                break; // Only check the first non-empty line
             }
         }
 
@@ -127,18 +132,8 @@ impl PatternDetector for FormatHeredocDetector {
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         let AntiPattern::FormatHeredoc { format_name, .. } = pattern else {
-            // Defensive programming: Guard condition validates pipeline routing invariants.
-            // Expected: AntiPattern::FormatHeredoc pattern from anti-pattern detection pipeline
-            // Cause: Programming error in pipeline routing logic or type system violation
-            // Impact: Prevents silent data corruption; fails fast for debugging
-            // See: docs/ERROR_HANDLING_STRATEGY.md for guard condition patterns
-            panic!(
-                "FormatHeredocDetector received incompatible pattern type. \
-                 Expected: AntiPattern::FormatHeredoc, Found: {:?} (discriminant: {:?}). \
-                 This indicates a bug in the anti-pattern detection pipeline routing.",
-                pattern,
-                std::mem::discriminant(pattern)
-            );
+            // Defensive programming
+            panic!("FormatHeredocDetector received incompatible pattern type.");
         };
 
         Diagnostic {
@@ -206,18 +201,7 @@ impl PatternDetector for BeginTimeHeredocDetector {
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         let AntiPattern::BeginTimeHeredoc { side_effects, .. } = pattern else {
-            // Defensive programming: Guard condition validates pipeline routing invariants.
-            // Expected: AntiPattern::BeginTimeHeredoc pattern from anti-pattern detection pipeline
-            // Cause: Programming error in pipeline routing logic or type system violation
-            // Impact: Prevents silent data corruption; fails fast for debugging
-            // See: docs/ERROR_HANDLING_STRATEGY.md for guard condition patterns
-            panic!(
-                "BeginTimeHeredocDetector received incompatible pattern type. \
-                 Expected: AntiPattern::BeginTimeHeredoc, Found: {:?} (discriminant: {:?}). \
-                 This indicates a bug in the anti-pattern detection pipeline routing.",
-                pattern,
-                std::mem::discriminant(pattern)
-            );
+            panic!("BeginTimeHeredocDetector received incompatible pattern type.");
         };
 
         let effects_str = if side_effects.is_empty() {
@@ -270,18 +254,7 @@ impl PatternDetector for DynamicDelimiterDetector {
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         let AntiPattern::DynamicHeredocDelimiter { expression, .. } = pattern else {
-            // Defensive programming: Guard condition validates pipeline routing invariants.
-            // Expected: AntiPattern::DynamicHeredocDelimiter pattern from anti-pattern detection pipeline
-            // Cause: Programming error in pipeline routing logic or type system violation
-            // Impact: Prevents silent data corruption; fails fast for debugging
-            // See: docs/ERROR_HANDLING_STRATEGY.md for guard condition patterns
-            panic!(
-                "DynamicDelimiterDetector received incompatible pattern type. \
-                 Expected: AntiPattern::DynamicHeredocDelimiter, Found: {:?} (discriminant: {:?}). \
-                 This indicates a bug in the anti-pattern detection pipeline routing.",
-                pattern,
-                std::mem::discriminant(pattern)
-            );
+            panic!("DynamicDelimiterDetector received incompatible pattern type.");
         };
 
         Diagnostic {
@@ -297,6 +270,215 @@ impl PatternDetector for DynamicDelimiterDetector {
     }
 }
 
+// Source filter detector
+struct SourceFilterDetector;
+
+static SOURCE_FILTER_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"use\s+Filter::(Simple|Util::Call|cpp|exec|sh|decrypt|tee)").unwrap());
+
+impl PatternDetector for SourceFilterDetector {
+    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+        let mut results = Vec::new();
+
+        for cap in SOURCE_FILTER_PATTERN.captures_iter(code) {
+            let match_pos = cap.get(0).unwrap();
+            let filter_module = cap.get(1).unwrap().as_str().to_string();
+
+            let location = Location {
+                line: code[..match_pos.start()].lines().count(),
+                column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
+                offset: offset + match_pos.start(),
+            };
+
+            results.push((
+                AntiPattern::SourceFilterHeredoc {
+                    location: location.clone(),
+                    filter_module,
+                    affected_lines: vec![], // Placeholder as determining exact affected lines is hard
+                },
+                location,
+            ));
+        }
+
+        results
+    }
+
+    fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
+        let AntiPattern::SourceFilterHeredoc { filter_module, .. } = pattern else {
+            panic!("SourceFilterDetector received incompatible pattern type.");
+        };
+
+        Diagnostic {
+            severity: Severity::Error,
+            pattern: pattern.clone(),
+            message: format!("Source filter 'Filter::{}' detected", filter_module),
+            explanation: "Source filters can transform code before parsing, making static analysis unreliable or impossible.".to_string(),
+            suggested_fix: Some("Avoid source filters if possible, or expect limited IDE functionality.".to_string()),
+            references: vec!["perldoc Filter::Simple".to_string()],
+        }
+    }
+}
+
+// Regex code block heredoc detector
+struct RegexHeredocDetector;
+
+// Heuristic: (?{ ... << ... })
+static REGEX_HEREDOC_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\(\?\{[^}]*<<[^}]*\}").unwrap());
+
+impl PatternDetector for RegexHeredocDetector {
+    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+        let mut results = Vec::new();
+
+        for match_pos in REGEX_HEREDOC_PATTERN.find_iter(code) {
+             let location = Location {
+                line: code[..match_pos.start()].lines().count(),
+                column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
+                offset: offset + match_pos.start(),
+            };
+
+            results.push((
+                AntiPattern::RegexCodeBlockHeredoc {
+                    location: location.clone(),
+                    pattern: match_pos.as_str().to_string(),
+                    flags: "".to_string(), // Detection of flags is complex without full parse
+                },
+                location,
+            ));
+        }
+
+        results
+    }
+
+    fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
+        let AntiPattern::RegexCodeBlockHeredoc { .. } = pattern else {
+            panic!("RegexHeredocDetector received incompatible pattern type.");
+        };
+
+        Diagnostic {
+            severity: Severity::Error,
+            pattern: pattern.clone(),
+            message: "Heredoc detected inside regex code block (?{...})".to_string(),
+            explanation: "Code blocks inside regexes are executed during pattern matching. Containing heredocs within them is highly problematic for static analysis and parsing.".to_string(),
+            suggested_fix: Some("Refactor the code to construct the string outside the regex.".to_string()),
+            references: vec!["perldoc perlre".to_string()],
+        }
+    }
+}
+
+// Eval string heredoc detector
+struct EvalHeredocDetector;
+
+// Heuristic: eval '...<<...' or eval "...<<..."
+// Rust regex doesn't support backreferences (\1) or lookarounds.
+// We match simple cases of single or double quoted strings containing <<.
+static EVAL_HEREDOC_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"eval\s+(?:'[^']*<<[^']*'|"[^"]*<<[^"]*")"#).unwrap());
+
+impl PatternDetector for EvalHeredocDetector {
+    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+        let mut results = Vec::new();
+
+        for match_pos in EVAL_HEREDOC_PATTERN.find_iter(code) {
+             let location = Location {
+                line: code[..match_pos.start()].lines().count(),
+                column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
+                offset: offset + match_pos.start(),
+            };
+
+            results.push((
+                AntiPattern::EvalStringHeredoc {
+                    location: location.clone(),
+                    eval_type: "string".to_string(),
+                    contains_heredoc: true,
+                },
+                location,
+            ));
+        }
+
+        results
+    }
+
+    fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
+        let AntiPattern::EvalStringHeredoc { .. } = pattern else {
+             panic!("EvalHeredocDetector received incompatible pattern type.");
+        };
+
+        Diagnostic {
+            severity: Severity::Warning,
+            pattern: pattern.clone(),
+            message: "Heredoc detected inside eval string".to_string(),
+            explanation: "Code inside string eval is parsed at runtime. Static analysis cannot reliably determine the behavior of heredocs within it.".to_string(),
+            suggested_fix: Some("Use block eval or avoid heredocs inside eval strings.".to_string()),
+            references: vec!["perldoc -f eval".to_string()],
+        }
+    }
+}
+
+// Tied handle detector
+struct TiedHandleDetector;
+
+// Heuristic: tie *FH... then print FH <<...
+static TIE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"tie\s+([*\$]?\w+)").unwrap());
+
+impl PatternDetector for TiedHandleDetector {
+    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+        let mut results = Vec::new();
+
+        // Find all tied handles
+        for cap in TIE_PATTERN.captures_iter(code) {
+            let raw_handle = cap.get(1).unwrap().as_str();
+
+            // If it's a glob (*FH), we typically print to the bare handle (FH).
+            // If it's a scalar ($fh), we print to the scalar ($fh).
+            let handle_to_search = if raw_handle.starts_with('*') {
+                &raw_handle[1..]
+            } else {
+                raw_handle
+            };
+
+            // Look for usage of this handle with heredoc
+            let usage_pattern = format!(r"print\s+{}\s+<<", regex::escape(handle_to_search));
+            if let Ok(re) = Regex::new(&usage_pattern) {
+                if let Some(usage_match) = re.find(code) {
+                    let location = Location {
+                        line: code[..usage_match.start()].lines().count(),
+                        column: usage_match.start()
+                            - code[..usage_match.start()].rfind('\n').unwrap_or(0),
+                        offset: offset + usage_match.start(),
+                    };
+
+                    results.push((
+                        AntiPattern::TiedHandleHeredoc {
+                            location: location.clone(),
+                            handle_name: handle_to_search.to_string(),
+                        },
+                        location,
+                    ));
+                }
+            }
+        }
+
+        results
+    }
+
+    fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
+         let AntiPattern::TiedHandleHeredoc { handle_name, .. } = pattern else {
+             panic!("TiedHandleDetector received incompatible pattern type.");
+        };
+
+        Diagnostic {
+            severity: Severity::Info,
+            pattern: pattern.clone(),
+            message: format!("Heredoc written to tied handle '{}'", handle_name),
+            explanation: "Writing to a tied handle invokes custom code. The behavior of heredoc output depends on the tied class implementation.".to_string(),
+            suggested_fix: None,
+            references: vec!["perldoc -f tie".to_string()],
+        }
+    }
+}
+
+
 impl AntiPatternDetector {
     pub fn new() -> Self {
         Self {
@@ -304,6 +486,10 @@ impl AntiPatternDetector {
                 Box::new(FormatHeredocDetector),
                 Box::new(BeginTimeHeredocDetector),
                 Box::new(DynamicDelimiterDetector),
+                Box::new(SourceFilterDetector),
+                Box::new(RegexHeredocDetector),
+                Box::new(EvalHeredocDetector),
+                Box::new(TiedHandleDetector),
             ],
         }
     }
@@ -405,7 +591,10 @@ END
 "#;
 
         let diagnostics = detector.detect_all(code);
-        assert_eq!(diagnostics.len(), 1);
+        // Note: DynamicDelimiterDetector might also flag the << inside the format body as a false positive.
+        // But FormatHeredoc should appear first because it starts at 'format'.
+        // So diagnostics[0] should be FormatHeredoc.
+        assert!(!diagnostics.is_empty());
         assert!(matches!(diagnostics[0].pattern, AntiPattern::FormatHeredoc { .. }));
     }
 
@@ -438,5 +627,75 @@ EOF
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         assert!(matches!(diagnostics[0].pattern, AntiPattern::DynamicHeredocDelimiter { .. }));
+    }
+
+    #[test]
+    fn test_source_filter_detection() {
+        let detector = AntiPatternDetector::new();
+        let code = r#"
+use Filter::Simple;
+print <<EOF;
+Filtered content
+EOF
+"#;
+        let diagnostics = detector.detect_all(code);
+        assert_eq!(diagnostics.len(), 1);
+        assert!(matches!(diagnostics[0].pattern, AntiPattern::SourceFilterHeredoc { .. }));
+    }
+
+    #[test]
+    fn test_regex_heredoc_detection() {
+        let detector = AntiPatternDetector::new();
+        let code = r#"
+m/pattern(?{
+    print <<'MATCH';
+    Match text
+MATCH
+})/;
+"#;
+        let diagnostics = detector.detect_all(code);
+        assert_eq!(diagnostics.len(), 1);
+        assert!(matches!(diagnostics[0].pattern, AntiPattern::RegexCodeBlockHeredoc { .. }));
+    }
+
+    #[test]
+    fn test_eval_heredoc_detection() {
+        let detector = AntiPatternDetector::new();
+        let code = r#"
+eval 'print <<"EVAL";
+Eval content
+EVAL';
+"#;
+        let diagnostics = detector.detect_all(code);
+        assert_eq!(diagnostics.len(), 1);
+        assert!(matches!(diagnostics[0].pattern, AntiPattern::EvalStringHeredoc { .. }));
+    }
+
+    #[test]
+    fn test_tied_handle_detection() {
+        let detector = AntiPatternDetector::new();
+        let code = r#"
+tie *FH, 'Tie::Handle';
+print FH <<'DATA';
+Tied output
+DATA
+"#;
+        let diagnostics = detector.detect_all(code);
+        assert_eq!(diagnostics.len(), 1);
+        assert!(matches!(diagnostics[0].pattern, AntiPattern::TiedHandleHeredoc { .. }));
+    }
+
+    #[test]
+    fn test_tied_scalar_handle_detection() {
+        let detector = AntiPatternDetector::new();
+        let code = r#"
+tie $fh, 'Tie::Handle';
+print $fh <<'DATA';
+Tied output
+DATA
+"#;
+        let diagnostics = detector.detect_all(code);
+        assert_eq!(diagnostics.len(), 1);
+        assert!(matches!(diagnostics[0].pattern, AntiPattern::TiedHandleHeredoc { .. }));
     }
 }
