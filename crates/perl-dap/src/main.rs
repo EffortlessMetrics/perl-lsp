@@ -6,10 +6,7 @@
 use perl_dap::{DapConfig, DapServer};
 
 fn main() -> anyhow::Result<()> {
-    // TODO: Initialize logging (AC5)
     // TODO: Parse command-line arguments (AC5)
-    // TODO: Create DAP server (AC5)
-    // TODO: Run stdio transport (AC5)
 
     let config = DapConfig { log_level: "info".to_string() };
 
