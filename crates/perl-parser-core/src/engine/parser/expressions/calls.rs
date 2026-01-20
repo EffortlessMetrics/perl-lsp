@@ -34,11 +34,13 @@ impl<'a> Parser<'a> {
         // Check if it's a known builtin
         if indirect_builtins.contains(&name) {
             // Peek at the token AFTER the function name (use peek_second since peek is the function name)
-            let (next_kind, next_text) = if let Ok(next) = self.tokens.peek_second() {
-                (next.kind, next.text.clone())
+            let next_token = if let Ok(next) = self.tokens.peek_second() {
+                next
             } else {
                 return false;
             };
+            let next_kind = next_token.kind;
+            let next_text = &next_token.text;
 
             // These tokens *cannot* start an indirect object
             match next_kind {
@@ -107,7 +109,7 @@ impl<'a> Parser<'a> {
     fn parse_indirect_call(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         let method_token = self.consume_token()?; // consume method name
-        let method = method_token.text.clone();
+        let method = method_token.text;
 
         // We're consuming the function name, no longer at statement start
         self.mark_not_stmt_start();

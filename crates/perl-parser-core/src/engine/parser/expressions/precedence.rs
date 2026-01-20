@@ -623,7 +623,7 @@ impl<'a> Parser<'a> {
 
                     expr = Node::new(
                         NodeKind::Binary {
-                            op: op_token.text.clone(),
+                            op: op_token.text,
                             left: Box::new(expr),
                             right: Box::new(right),
                         },

@@ -7,7 +7,7 @@ impl<'a> Parser<'a> {
             // Handle absolute path like ::Foo::Bar
             "::".to_string()
         } else {
-            start_token.text.clone()
+            start_token.text
         };
 
         // Keep consuming :: and identifiers
