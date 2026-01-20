@@ -1084,22 +1084,22 @@ impl RefactoringEngine {
     fn perform_inline(
         &mut self,
         symbol_name: &str,
-        _all_occurrences: bool,
+        _all_occurrences: bool, // TODO: Implement multi-file occurrence inlining
         files: &[PathBuf],
     ) -> ParseResult<RefactoringResult> {
-        let mut files_modified = 0;
-        let mut changes_made = 0;
         let mut warnings = Vec::new();
-        let mut success = false;
 
-        // Variable inlining
+        // Variable inlining - only supported for variables with sigils
         if symbol_name.starts_with('$')
             || symbol_name.starts_with('@')
             || symbol_name.starts_with('%')
         {
             #[cfg(feature = "workspace_refactor")]
             {
+                let mut files_modified = 0;
+                let mut changes_made = 0;
                 let mut applied = false;
+
                 for file in files {
                     // Try to find and inline variable in this file
                     match self.workspace_refactor.inline_variable(symbol_name, file, (0, 0)) {
@@ -1110,8 +1110,9 @@ impl RefactoringEngine {
                                 files_modified += mod_count;
                                 changes_made += edits.iter().map(|e| e.edits.len()).sum::<usize>();
                                 applied = true;
-                                success = true;
-                                break; // Found definition and inlined
+                                // Variable definition found and inlined - stop searching
+                                // Note: _all_occurrences is not yet implemented for cross-file inlining
+                                break;
                             }
                         }
                         Err(crate::workspace_refactor::RefactorError::SymbolNotFound {
@@ -1129,12 +1130,24 @@ impl RefactoringEngine {
                         symbol_name
                     ));
                 }
+
+                return Ok(RefactoringResult {
+                    success: applied,
+                    files_modified,
+                    changes_made,
+                    warnings,
+                    errors: vec![],
+                    operation_id: None,
+                });
             }
+
             #[cfg(not(feature = "workspace_refactor"))]
             {
+                let _ = files; // Acknowledge parameter when feature is disabled
                 warnings.push("Workspace refactoring feature is disabled".to_string());
             }
         } else {
+            let _ = files; // Acknowledge parameter for non-variable symbols
             warnings.push(format!(
                 "Inlining for symbol '{}' not implemented (only variables supported)",
                 symbol_name
@@ -1142,9 +1155,9 @@ impl RefactoringEngine {
         }
 
         Ok(RefactoringResult {
-            success,
-            files_modified,
-            changes_made,
+            success: false,
+            files_modified: 0,
+            changes_made: 0,
             warnings,
             errors: vec![],
             operation_id: None,
@@ -1174,10 +1187,12 @@ impl RefactoringEngine {
                 }
             })?;
 
+            // Clone and sort edits by start position in descending order to apply them safely
+            // (applying from end to start preserves earlier byte positions)
             let mut edits = file_edit.edits.clone();
-            // Sort edits by start position in descending order to apply them safely
             edits.sort_by(|a, b| b.start.cmp(&a.start));
 
+            // Clone content for comparison after modifications
             let mut new_content = content.clone();
             for edit in edits {
                 if edit.end > new_content.len() {
