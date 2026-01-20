@@ -131,11 +131,9 @@ impl BridgeAdapter {
     /// ```
     pub async fn proxy_messages(&mut self) -> Result<()> {
         // Verify child process is running
-        if self.child_process.is_none() {
+        let Some(child) = self.child_process.as_mut() else {
             anyhow::bail!("Child process not spawned. Call spawn_pls_dap() first.");
-        }
-
-        let child = self.child_process.as_mut().unwrap();
+        };
 
         // Get handles to child stdin/stdout
         let mut child_stdin = child.stdin.take().context("Failed to capture child stdin")?;
