@@ -55,6 +55,7 @@ pub enum IssueKind {
     ParameterShadowsGlobal,
     UnusedParameter,
     UnquotedBareword,
+    UninitializedVariable,
 }
 
 #[derive(Debug, Clone)]
@@ -72,6 +73,7 @@ struct Variable {
     line: usize,
     is_used: RefCell<bool>,
     is_our: bool,
+    is_initialized: RefCell<bool>,
 }
 
 #[derive(Debug)]
@@ -89,7 +91,13 @@ impl Scope {
         Self { variables: RefCell::new(HashMap::new()), parent: Some(parent) }
     }
 
-    fn declare_variable(&self, name: &str, line: usize, is_our: bool) -> Option<IssueKind> {
+    fn declare_variable(
+        &self,
+        name: &str,
+        line: usize,
+        is_our: bool,
+        is_initialized: bool,
+    ) -> Option<IssueKind> {
         // First check if already declared in this scope
         {
             let vars = self.variables.borrow();
@@ -114,6 +122,7 @@ impl Scope {
                 line,
                 is_used: RefCell::new(is_our), // 'our' variables are considered used
                 is_our,
+                is_initialized: RefCell::new(is_initialized),
             }),
         );
 
@@ -128,12 +137,18 @@ impl Scope {
             .or_else(|| self.parent.as_ref()?.lookup_variable(name))
     }
 
-    fn use_variable(&self, name: &str) -> bool {
+    fn use_variable(&self, name: &str) -> (bool, bool) {
         if let Some(var) = self.lookup_variable(name) {
             *var.is_used.borrow_mut() = true;
-            true
+            (true, *var.is_initialized.borrow())
         } else {
-            false
+            (false, false)
+        }
+    }
+
+    fn initialize_variable(&self, name: &str) {
+        if let Some(var) = self.lookup_variable(name) {
+            *var.is_initialized.borrow_mut() = true;
         }
     }
 
@@ -199,14 +214,26 @@ impl ScopeAnalyzer {
         let pragma_state = PragmaTracker::state_for_offset(pragma_map, node.location.start);
         let strict_mode = pragma_state.strict_subs;
         match &node.kind {
-            NodeKind::VariableDeclaration { declarator, variable, .. } => {
+            NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
                 let var_name = self.extract_variable_name(variable);
                 let line = self.get_line_from_node(variable, code);
                 let is_our = declarator == "our";
+                let is_initialized = initializer.is_some();
 
-                if let Some(issue_kind) =
-                    scope.declare_variable(&var_name, variable.location.start, is_our)
-                {
+                // If checking initializer first (e.g. my $x = $x), we need to analyze initializer in
+                // current scope BEFORE declaring the variable (standard Perl behavior)
+                // Actually Perl evaluates RHS before LHS assignment, so usages in initializer refer to OUTER scope.
+                // So we analyze initializer first.
+                if let Some(init) = initializer {
+                    self.analyze_node(init, scope, parent_map, issues, code, pragma_map);
+                }
+
+                if let Some(issue_kind) = scope.declare_variable(
+                    &var_name,
+                    variable.location.start,
+                    is_our,
+                    is_initialized,
+                ) {
                     issues.push(ScopeIssue {
                         kind: issue_kind,
                         variable_name: var_name.clone(),
@@ -225,15 +252,25 @@ impl ScopeAnalyzer {
                 }
             }
 
-            NodeKind::VariableListDeclaration { declarator, variables, .. } => {
+            NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
                 let is_our = declarator == "our";
+                let is_initialized = initializer.is_some();
+
+                // Analyze initializer first
+                if let Some(init) = initializer {
+                    self.analyze_node(init, scope, parent_map, issues, code, pragma_map);
+                }
+
                 for variable in variables {
                     let var_name = self.extract_variable_name(variable);
                     let line = self.get_line_from_node(variable, code);
 
-                    if let Some(issue_kind) =
-                        scope.declare_variable(&var_name, variable.location.start, is_our)
-                    {
+                    if let Some(issue_kind) = scope.declare_variable(
+                        &var_name,
+                        variable.location.start,
+                        is_our,
+                        is_initialized,
+                    ) {
                         issues.push(ScopeIssue {
                             kind: issue_kind,
                             variable_name: var_name.clone(),
@@ -273,7 +310,12 @@ impl ScopeAnalyzer {
                                         || var_name.starts_with('%'))
                                 {
                                     // Declare these variables as globals in the current scope
-                                    scope.declare_variable(var_name, node.location.start, true); // true = is_our (global)
+                                    scope.declare_variable(
+                                        var_name,
+                                        node.location.start,
+                                        true,
+                                        true,
+                                    ); // true = is_our (global), true = initialized (assumed)
                                 }
                             }
                         } else {
@@ -284,7 +326,7 @@ impl ScopeAnalyzer {
                                     || var_name.starts_with('@')
                                     || var_name.starts_with('%'))
                             {
-                                scope.declare_variable(var_name, node.location.start, true);
+                                scope.declare_variable(var_name, node.location.start, true, true);
                             }
                         }
                     }
@@ -304,7 +346,7 @@ impl ScopeAnalyzer {
                 }
 
                 // Try to use the variable
-                let mut variable_used = scope.use_variable(&full_name);
+                let (mut variable_used, mut is_initialized) = scope.use_variable(&full_name);
 
                 // If not found as simple variable, check if this is part of a hash/array access pattern
                 if !variable_used && sigil == "$" {
@@ -312,24 +354,58 @@ impl ScopeAnalyzer {
                     let hash_name = format!("%{}", name);
                     let array_name = format!("@{}", name);
 
-                    if scope.lookup_variable(&hash_name).is_some()
-                        || scope.lookup_variable(&array_name).is_some()
-                    {
-                        // This is likely part of a hash/array access pattern, don't flag as undefined
+                    let (hash_used, hash_init) = scope.use_variable(&hash_name);
+                    let (array_used, array_init) = scope.use_variable(&array_name);
+
+                    if hash_used || array_used {
                         variable_used = true;
+                        is_initialized = hash_init || array_init;
                     }
                 }
 
                 // Variable not found - check if we should report it
-                if !variable_used && strict_mode {
+                if !variable_used {
+                    if strict_mode {
+                        issues.push(ScopeIssue {
+                            kind: IssueKind::UndeclaredVariable,
+                            variable_name: full_name.clone(),
+                            line: self.get_line_from_node(node, code),
+                            range: (node.location.start, node.location.end),
+                            description: format!(
+                                "Variable '{}' is used but not declared",
+                                full_name
+                            ),
+                        });
+                    }
+                } else if !is_initialized {
+                    // Variable found but used before initialization
+                    // Note: This check is rudimentary and doesn't account for flow control
+                    // It only catches: my $x; print $x;
                     issues.push(ScopeIssue {
-                        kind: IssueKind::UndeclaredVariable,
+                        kind: IssueKind::UninitializedVariable,
                         variable_name: full_name.clone(),
                         line: self.get_line_from_node(node, code),
                         range: (node.location.start, node.location.end),
-                        description: format!("Variable '{}' is used but not declared", full_name),
+                        description: format!(
+                            "Variable '{}' is used before being initialized",
+                            full_name
+                        ),
                     });
                 }
+            }
+            NodeKind::Assignment { lhs, rhs, op: _ } => {
+                // Handle assignment: LHS variable becomes initialized
+                // First analyze RHS (usages)
+                self.analyze_node(rhs, scope, parent_map, issues, code, pragma_map);
+
+                // Then analyze LHS
+                // We need to recursively mark variables as initialized in the LHS structure
+                // This handles scalars ($x = 1) and lists (($x, $y) = (1, 2))
+                self.mark_initialized(lhs, scope);
+
+                // Recurse into LHS to trigger UndeclaredVariable checks
+                // Note: 'use_variable' marks as used, which is technically correct for assignment too (write usage)
+                self.analyze_node(lhs, scope, parent_map, issues, code, pragma_map);
             }
 
             NodeKind::Identifier { name } => {
@@ -496,7 +572,7 @@ impl ScopeAnalyzer {
                         }
 
                         // Declare the parameter in subroutine scope
-                        sub_scope.declare_variable(&full_name, param.location.start, false);
+                        sub_scope.declare_variable(&full_name, param.location.start, false, true); // Parameters are initialized
                         // Don't mark parameters as automatically used yet - track their actual usage
                     }
                 }
@@ -554,6 +630,27 @@ impl ScopeAnalyzer {
                     self.analyze_node(child, scope, ancestors, issues, code, pragma_map);
                 }
                 ancestors.pop();
+            }
+        }
+    }
+
+    /// Marks variables as initialized when they appear on the left-hand side of an assignment.
+    /// Handles scalar variables, list assignments like `($x, $y) = ...`, and nested structures.
+    fn mark_initialized(&self, node: &Node, scope: &Rc<Scope>) {
+        match &node.kind {
+            NodeKind::Variable { sigil, name } => {
+                let full_name = format!("{}{}", sigil, name);
+                // Skip package-qualified variables (e.g., $Foo::bar)
+                if !full_name.contains("::") {
+                    scope.initialize_variable(&full_name);
+                }
+            }
+            // For all other node types (parens, lists, etc.), recurse into children
+            // to find any nested variables that should be marked as initialized
+            _ => {
+                for child in node.children() {
+                    self.mark_initialized(child, scope);
+                }
             }
         }
     }
@@ -742,6 +839,9 @@ impl ScopeAnalyzer {
                 }
                 IssueKind::UnquotedBareword => {
                     format!("Quote bareword '{}' or declare as filehandle", issue.variable_name)
+                }
+                IssueKind::UninitializedVariable => {
+                    format!("Initialize '{}' before use", issue.variable_name)
                 }
             })
             .collect()
