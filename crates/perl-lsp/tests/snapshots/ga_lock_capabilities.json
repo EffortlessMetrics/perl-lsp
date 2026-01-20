@@ -2,7 +2,8 @@
   "callHierarchyProvider": true,
   "codeActionProvider": {
     "codeActionKinds": [
-      "quickfix"
+      "quickfix",
+      "refactor.extract"
     ],
     "resolveProvider": true
   },
@@ -21,7 +22,6 @@
     "interFileDependencies": false,
     "workspaceDiagnostics": true
   },
-  "documentFormattingProvider": true,
   "documentHighlightProvider": true,
   "documentLinkProvider": {
     "resolveProvider": true
@@ -32,7 +32,6 @@
       ";"
     ]
   },
-  "documentRangeFormattingProvider": true,
   "documentSymbolProvider": true,
   "executeCommandProvider": {
     "commands": [

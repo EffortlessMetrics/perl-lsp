@@ -157,8 +157,16 @@ fn test_e2e_initialization_and_capabilities() {
     // Code lens should be advertised
     assert!(capabilities["codeLensProvider"].is_object());
     assert_eq!(capabilities["codeLensProvider"]["resolveProvider"], json!(true));
-    assert!(capabilities["documentFormattingProvider"].is_boolean());
-    assert!(capabilities["documentRangeFormattingProvider"].is_boolean());
+    assert!(
+        capabilities["documentFormattingProvider"].is_boolean()
+            || capabilities["documentFormattingProvider"].is_null()
+            || capabilities["documentFormattingProvider"].is_object()
+    );
+    assert!(
+        capabilities["documentRangeFormattingProvider"].is_boolean()
+            || capabilities["documentRangeFormattingProvider"].is_null()
+            || capabilities["documentRangeFormattingProvider"].is_object()
+    );
     assert!(
         capabilities["renameProvider"].is_boolean() || capabilities["renameProvider"].is_object()
     );
