@@ -1,16 +1,23 @@
 # Perl Debugging Support
 
-The Perl Language Server now includes full debugging support through the Debug Adapter Protocol (DAP), enabling step-through debugging in VSCode and other DAP-compatible editors.
+Perl debugging is available via the `perl-dap` Debug Adapter Protocol (DAP) server. The current CLI uses the native adapter (direct `perl -d`) with basic stepping and breakpoints.
+
+## Current Status (Native Adapter)
+
+- **Launch debugging**: supported
+- **Attach to running process**: not implemented yet
+- **Variables/evaluate**: placeholder output (values are not parsed yet)
+- **BridgeAdapter**: library-only, not wired into the CLI
 
 ## Features
 
-### Core Debugging
-- **Breakpoints**: Set breakpoints in your Perl code
+### Core Debugging (Native Adapter)
+- **Breakpoints**: Set breakpoints in your Perl code (best-effort)
 - **Step Controls**: Step over, step into, step out
-- **Variable Inspection**: View local variables and their values
-- **Call Stack**: Navigate through the call stack
-- **Watch Expressions**: Evaluate Perl expressions during debugging
-- **Conditional Breakpoints**: Break only when conditions are met
+- **Call Stack**: Navigate through the call stack (best-effort)
+- **Variable Inspection**: Placeholder values in the Variables panel
+- **Evaluate**: Placeholder output in the Debug Console
+- **Conditional Breakpoints**: Best-effort conditions via Perl debugger
 
 ### Test Debugging
 - Debug individual test functions
@@ -23,7 +30,7 @@ The Perl Language Server now includes full debugging support through the Debug A
 ### 1. Install the Debug Adapter
 ```bash
 # Build and install the debug adapter
-cargo install --path crates/perl-parser --bin perl-dap
+cargo install --path crates/perl-dap
 ```
 
 ### 2. Configure VSCode
@@ -100,9 +107,8 @@ The Perl Language Server extension automatically detects and uses the debug adap
 - Use the Breakpoints panel to manage all breakpoints
 
 ### Variables
-- View local variables in the Variables panel
-- Hover over variables in the editor to see values
-- Add watch expressions in the Watch panel
+- Variables are currently placeholder values from the native adapter
+- Hover values and watch expressions are not parsed yet
 
 ## Configuration Options
 
@@ -116,6 +122,8 @@ The Perl Language Server extension automatically detects and uses the debug adap
 | `cwd` | string | Working directory | `${workspaceFolder}` |
 | `env` | object | Environment variables | `{}` |
 | `perlPath` | string | Path to Perl interpreter | `perl` |
+
+> Note: The native adapter supports `launch` only; `attach` is not implemented yet.
 
 ## Troubleshooting
 
@@ -164,7 +172,7 @@ cargo test -p example-crate-with-conflicts
 which perl-dap
 
 # Reinstall if needed
-cargo install --path crates/perl-parser --bin perl-dap --force
+cargo install --path crates/perl-dap --force
 ```
 
 ### Breakpoints not working
@@ -173,22 +181,24 @@ cargo install --path crates/perl-parser --bin perl-dap --force
 3. Verify Perl syntax is correct
 
 ### Variables not showing
-- Some optimized variables may not be visible
-- Use `my` declarations for better debugging experience
+- Variables/evaluate output is placeholder in the native adapter
+- Use `my` declarations for clearer variable names once parsing is added
 
 ## Architecture
 
 The debugging system consists of:
 
-1. **Debug Adapter (perl-dap)**: Rust implementation of DAP protocol
-2. **Perl Debugger Integration**: Interfaces with `perl -d`
-3. **VSCode Extension**: Provides UI integration
-4. **Test Integration**: Connects with Test Explorer
+1. **Debug Adapter (perl-dap)**: Native DAP adapter (default CLI)
+2. **BridgeAdapter**: Library-only proxy to Perl::LanguageServer (not wired into CLI)
+3. **Perl Debugger Integration**: Interfaces with `perl -d`
+4. **VSCode Extension**: Provides UI integration
+5. **Test Integration**: Connects with Test Explorer
 
 ## Limitations
 
 - Remote debugging not yet supported
 - Attach to process not implemented
+- Variables/evaluate output is placeholder (no parsed values yet)
 - Some Perl internals may not be inspectable
 
 ## Future Enhancements

@@ -4556,9 +4556,9 @@ print INVALID_BAREWORD;
 
 ## DAP Integration Architecture (*Diataxis: Explanation* - Debug Adapter Protocol support)
 
-### Phase 1 Bridge Implementation (Issue #207) ✅ **IMPLEMENTED**
+### Current Adapter Modes (Native CLI + BridgeAdapter)
 
-The Perl LSP ecosystem now includes comprehensive Debug Adapter Protocol (DAP) support through the `perl-dap` crate, enabling full debugging capabilities in VS Code and other DAP-compatible editors.
+The `perl-dap` crate ships a native adapter that talks directly to `perl -d` (default CLI path) and a BridgeAdapter library that can proxy to Perl::LanguageServer. The native adapter currently provides launch/step/breakpoints with best-effort stack frames; variables/evaluate are placeholders. The bridge adapter is not wired into the CLI yet.
 
 **Architecture Overview**:
 
@@ -4566,43 +4566,50 @@ The Perl LSP ecosystem now includes comprehensive Debug Adapter Protocol (DAP) s
 ┌─────────────────────────────────────────────────────────────┐
 │                    VS Code Extension                        │
 │  - DAP client (JSON-RPC 2.0 over stdio)                     │
-│  - Launch/attach configuration management                   │
+│  - Launch configuration management                          │
 └───────────────────────────┬─────────────────────────────────┘
                             │ DAP Protocol (stdio)
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│              perl-dap Bridge Adapter (Rust)                 │
+│                     perl-dap (Rust)                         │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │ BridgeAdapter (src/bridge_adapter.rs)                │  │
-│  │  - Spawn Perl::LanguageServer with -d flag           │  │
-│  │  - Bidirectional message proxying (stdio)            │  │
-│  │  - Process lifecycle management                      │  │
+│  │ DebugAdapter (src/debug_adapter.rs)                   │  │
+│  │  - Native adapter (default CLI)                       │  │
+│  │  - Drives perl -d directly                             │  │
 │  └───────────────────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │ Configuration (src/configuration.rs)                  │  │
-│  │  - LaunchConfiguration: Start new debug session      │  │
-│  │  - AttachConfiguration: Connect to running process   │  │
-│  │  - Path resolution and validation                    │  │
+│  │ BridgeAdapter (src/bridge_adapter.rs)                 │  │
+│  │  - Library-only proxy to Perl::LanguageServer         │  │
+│  │  - Not wired into the CLI yet                         │  │
 │  └───────────────────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │ Platform Layer (src/platform.rs)                      │  │
-│  │  - Cross-platform perl binary resolution             │  │
-│  │  - Path normalization (Windows/WSL/macOS/Linux)      │  │
-│  │  - PERL5LIB environment setup                        │  │
+│  │ Configuration + Platform (src/configuration.rs,       │  │
+│  │ src/platform.rs)                                      │  │
 │  └───────────────────────────────────────────────────────┘  │
 └───────────────────────────┬─────────────────────────────────┘
-                            │ JSON over stdio
+                            │ perl -d / Perl::LanguageServer
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│         Perl::LanguageServer DAP Implementation             │
-│  - Perl debugger integration (perl -d)                      │
-│  - Breakpoint management ($DB::single hooks)                │
-│  - Variable inspection (PadWalker for lexicals)             │
-│  - Stack trace generation (caller() introspection)          │
+│                      Perl Runtime                           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Components (*Diataxis: Reference* - DAP implementation modules)
+
+#### DebugAdapter (`src/debug_adapter.rs`)
+
+The native adapter used by the CLI (`perl-dap`) to drive `perl -d` directly:
+
+```rust
+use perl_dap::DebugAdapter;
+
+let mut adapter = DebugAdapter::new();
+adapter.run()?;
+```
+
+**Current scope**:
+- Launch + breakpoints + stepping (best-effort)
+- Stack/variables/evaluate are placeholders (no parsed output yet)
 
 #### BridgeAdapter (`src/bridge_adapter.rs`)
 

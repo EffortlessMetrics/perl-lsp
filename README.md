@@ -10,7 +10,7 @@ Six published crates forming a complete Perl development ecosystem:
 |-------|---------|
 | **perl-parser** | Native recursive descent parser with comprehensive Perl 5 syntax coverage |
 | **perl-lsp** | Standalone Language Server (LSP 3.18) for all major editors |
-| **perl-dap** | Debug Adapter Protocol support (bridge mode to Perl::LanguageServer) |
+| **perl-dap** | Debug Adapter Protocol support (native adapter CLI; BridgeAdapter library) |
 | **perl-lexer** | Context-aware tokenizer with Unicode support |
 | **perl-corpus** | Test corpus for parser validation |
 | **perl-parser-pest** | Legacy Pest-based parser (maintained) |
@@ -72,7 +72,7 @@ flowchart TD
 |-----------|--------|-------|
 | perl-parser | Production | Comprehensive Perl 5 parsing |
 | perl-lsp | Production (advertised subset) | See `features.toml` for GA features |
-| perl-dap | Experimental (bridge mode) | Bridges to Perl::LanguageServer |
+| perl-dap | Experimental (native adapter) | CLI uses native adapter; BridgeAdapter library available |
 | perl-parser-pest | Legacy | Kept out of default gate |
 
 ## Editor Setup

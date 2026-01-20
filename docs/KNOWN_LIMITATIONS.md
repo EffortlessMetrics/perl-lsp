@@ -138,9 +138,9 @@ The perl-lsp server has achieved **~91% functional LSP protocol coverage** with 
    - ✅ Unreachable code identification
 
 4. **Debug Adapter Protocol** (`perl-dap` crate - Issue #207)
-   - ✅ Phase 1 Bridge to Perl::LanguageServer - Full debugging capability
-   - ✅ Breakpoint management (<50ms operations)
-   - ✅ Step/continue commands (<100ms response)
+   - ⚠️ Native adapter CLI (launch + breakpoints/step); variables/evaluate are placeholders
+   - ⚠️ Attach to running process not implemented
+   - ✅ BridgeAdapter library available (Perl::LanguageServer proxy)
    - ✅ Cross-platform support (Windows, macOS, Linux, WSL)
    - ✅ 71/71 tests passing
 

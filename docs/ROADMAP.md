@@ -36,7 +36,7 @@ If a number is not backed by a receipt, it must be labeled **UNVERIFIED** or rem
 | **perl-lexer** | Production | `just ci-gate` | Tokenization stable |
 | **perl-corpus** | Production | `just ci-gate` | Regression corpus + mutation hardening inputs |
 | **perl-lsp** | Production (advertised subset) | capability snapshots + targeted tests | Advertise only what's tested; keep GA-lock stable |
-| **perl-dap** | Experimental (bridge mode) | manual smoke | Bridges to Perl::LanguageServer; not "full" native DAP |
+| **perl-dap** | Experimental (native adapter) | manual smoke | CLI uses native adapter; BridgeAdapter library available (Perl::LanguageServer) |
 | **perl-parser-pest** (v2) | Legacy | N/A | Optional crate; keep out of default gate |
 | **Semantic Analyzer** | Phase 1 Complete | `just ci-gate` | 12/12 handlers; lexical scoping + textDocument/definition |
 
@@ -54,7 +54,7 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 | **perl-lsp** | v0.8.8 | Production | LSP server (see `features.toml` for GA coverage) |
 | **perl-lexer** | v0.8.8 | Production | Context-aware tokenizer |
 | **perl-corpus** | v0.8.8 | Production | Test corpus (see `just status-check` for counts) |
-| **perl-dap** | v0.1.0 | Phase 1 | Debug Adapter Protocol (bridge mode) |
+| **perl-dap** | v0.1.0 | Phase 1 | Debug Adapter Protocol (native adapter CLI; BridgeAdapter library) |
 | **perl-parser-pest** | v0.8.8 | Legacy | Pest-based parser (maintained) |
 
 ---
@@ -71,7 +71,7 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 
 1. **Docs truth pass** ✓
    - README + CURRENT_STATUS + ROADMAP aligned on what's real vs aspirational
-   - DAP language corrected to "bridge mode"
+   - DAP language corrected to reflect native adapter vs BridgeAdapter
    - All claims linked to computed sources or receipts
    - CI cost tracking documentation added
 
@@ -133,6 +133,11 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
    - Add integration tests for deferred workspace features
    - Expand corpus coverage for edge cases
 
+5. **DAP Adapter Alignment**
+   - Document native adapter limits vs BridgeAdapter
+   - Implement attach support or wire BridgeAdapter into CLI
+   - Replace placeholder variables/evaluate with parsed output
+
 **Exit criteria**:
 - Index state machine implemented with performance benchmarks
 - Documentation violations < 200
@@ -146,7 +151,7 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 These items are explicitly deferred:
 - Full LSP 3.18 compliance (see CURRENT_STATUS.md for current coverage)
 - Semantic Analyzer Phase 2/3 (closures, multi-file resolution, imports)
-- Native DAP (currently bridge mode to Perl::LanguageServer)
+- Native DAP completeness (attach, variables/evaluate, safe eval; bridge wiring decision)
 - Benchmark result publication (framework exists, results not committed)
 - Package manager distribution (Homebrew, apt, etc.)
 

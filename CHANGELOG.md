@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 <!-- Next release changes go here -->
+### Documentation
+- Clarified perl-dap adapter modes (native CLI vs BridgeAdapter) and current DAP limits (launch-only, placeholder variables/evaluate, attach pending).
+- Updated roadmap entries to track DAP adapter wiring and variable/evaluate work.
 
 ## [v0.9.0] - 2026-01-18
 

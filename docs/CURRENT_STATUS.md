@@ -71,7 +71,7 @@ Key terms:
 - **Semantic Analyzer**: Phase 1 complete with 12/12 critical handlers, `textDocument/definition` integrated
 - **Test Infrastructure**: Tier A suite is the only merge-blocking truth (see At a Glance + computed metrics)
 - **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation
-- **DAP Server**: Phase 1 bridge to Perl::LanguageServer complete (71/71 tests)
+- **DAP Server**: Native adapter CLI (launch/step/breakpoints), BridgeAdapter library present; attach/variables/evaluate pending
 
 ### Computed Metrics (auto-updated by `just status-update`)
 
@@ -116,7 +116,7 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 | --- | --- | --- |
 | perl-parser | Production | ~100% Perl 5, 87% mutation score |
 | perl-lsp | Production | Coverage tracked via `features.toml` |
-| perl-dap | Phase 1 | Bridge mode complete |
+| perl-dap | Phase 1 | Native adapter CLI; BridgeAdapter library available |
 | perl-lexer | Production | Context-aware, sub-microsecond |
 | perl-corpus | Production | Corpus counts tracked in computed metrics |
 

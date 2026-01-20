@@ -7,9 +7,11 @@
 > - **Reference sections**: Configuration specifications and options
 > - **Explanation sections**: Understanding DAP architecture and design
 
-**Status**: Phase 1 Implementation (Bridge to Perl::LanguageServer)
+**Status**: Native adapter CLI (launch-only) + BridgeAdapter guide (Perl::LanguageServer)
 **Version**: 1.0.0
 **Date**: 2025-10-04
+
+**Note**: The `perl-dap` CLI runs the native adapter (launch-only) and does not require Perl::LanguageServer. The bridge adapter steps below apply only if you are running the BridgeAdapter library or Perl::LanguageServer DAP directly.
 
 ---
 
@@ -17,7 +19,7 @@
 
 - [Tutorial: Getting Started with Perl Debugging](#tutorial-getting-started-with-perl-debugging)
   - [Prerequisites](#prerequisites)
-  - [Step 1: Install Perl::LanguageServer](#step-1-install-perllanguageserver)
+  - [Step 1 (BridgeAdapter only): Install Perl::LanguageServer](#step-1-bridgeadapter-only-install-perllanguageserver)
   - [Step 2: Configure VS Code](#step-2-configure-vs-code)
   - [Step 3: Your First Debugging Session](#step-3-your-first-debugging-session)
 - [How-To: Common Debugging Scenarios](#how-to-common-debugging-scenarios)
@@ -31,7 +33,7 @@
   - [Attach Configuration](#attach-configuration)
   - [Advanced Settings](#advanced-settings)
 - [Explanation: DAP Architecture](#explanation-dap-architecture)
-  - [Phase 1 Bridge Implementation](#phase-1-bridge-implementation)
+  - [Adapter Modes (Native CLI + BridgeAdapter)](#adapter-modes-native-cli--bridgeadapter)
   - [Future Roadmap](#future-roadmap)
 - [Troubleshooting](#troubleshooting)
 
@@ -52,7 +54,9 @@ Before you begin debugging Perl code with VS Code, ensure you have:
 
 3. **Operating System**: Windows, macOS, Linux, or WSL
 
-### Step 1: Install Perl::LanguageServer
+4. **Perl::LanguageServer** (BridgeAdapter only): required for the bridge path
+
+### Step 1 (BridgeAdapter only): Install Perl::LanguageServer
 
 The DAP bridge requires the Perl::LanguageServer CPAN module for debugging functionality.
 
@@ -105,7 +109,7 @@ Create a launch configuration in your workspace to enable debugging.
 
 **Configuration Explained**:
 - `type`: Must be `"perl"` for Perl debugging
-- `request`: `"launch"` to start a new process, `"attach"` to connect to running process
+- `request`: `"launch"` to start a new process, `"attach"` to connect to running process (bridge only; native adapter does not support attach yet)
 - `name`: Display name in VS Code's debug dropdown
 - `program`: Path to the Perl script to debug (supports VS Code variables like `${file}`)
 - `args`: Command-line arguments to pass to your script
@@ -142,7 +146,7 @@ Let's debug a simple Perl script to verify everything works.
 
 4. **Observe the debugger**:
    - Execution pauses at line 8
-   - Variables panel shows `$name` and `$greeting` values
+   - Variables panel shows `$name` and `$greeting` values in BridgeAdapter mode (native adapter shows placeholders)
    - Call stack shows your script in the execution context
 
 5. **Step through code**:
@@ -152,9 +156,9 @@ Let's debug a simple Perl script to verify everything works.
    - **Continue** (`F5`): Resume execution until next breakpoint
 
 6. **Inspect variables**:
-   - Hover over variables to see values
-   - Use the Variables panel to explore data structures
-   - Use the Debug Console to evaluate Perl expressions
+   - Hover over variables to see values (placeholder output in native adapter)
+   - Use the Variables panel to explore data structures (placeholder output in native adapter)
+   - Use the Debug Console to evaluate Perl expressions (placeholder output in native adapter)
 
 7. **Stop debugging**: Press `Shift+F5` or click the red stop square in the debug toolbar.
 
@@ -185,6 +189,8 @@ Let's debug a simple Perl script to verify everything works.
 - Add `"args": ["--verbose", "--input=data.txt"]` for command-line arguments
 
 ### Attach to a Running Process
+
+**Note**: The `perl-dap` native adapter does not support attach yet. This section applies to the BridgeAdapter/Perl::LanguageServer path.
 
 **Use Case**: Connect to an already-running Perl script that was started with DAP support.
 
@@ -335,7 +341,7 @@ Launch configurations support VS Code variables for dynamic paths:
 
 ### Attach Configuration
 
-Complete schema for `"request": "attach"` configurations.
+Complete schema for `"request": "attach"` configurations (BridgeAdapter only; native adapter does not support attach yet).
 
 | Property | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
@@ -399,25 +405,27 @@ Arguments with spaces are automatically quoted platform-appropriately:
 
 ## Explanation: DAP Architecture
 
-### Phase 1 Bridge Implementation
+### Adapter Modes (Native CLI + BridgeAdapter)
 
-The current DAP implementation (Phase 1) uses a **bridge architecture** that proxies between VS Code and Perl::LanguageServer:
+The `perl-dap` CLI uses the native adapter to drive `perl -d` directly. A BridgeAdapter library is available to proxy between VS Code and Perl::LanguageServer, but it is not wired into the CLI yet.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    VS Code Extension                        │
 │  - DAP client (JSON-RPC 2.0 over stdio)                     │
-│  - Launch/attach configuration management                   │
+│  - Launch configuration management                          │
 └───────────────────────────┬─────────────────────────────────┘
                             │ DAP Protocol (stdio)
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│              perl-dap Bridge Adapter (Rust)                 │
+│                     perl-dap (Rust)                         │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │ Bridge Layer                                          │  │
-│  │  - Spawn Perl::LanguageServer with -d flag           │  │
-│  │  - Bidirectional message proxying                    │  │
-│  │  - Process lifecycle management                      │  │
+│  │ DebugAdapter (native, CLI default)                    │  │
+│  │  - Drives perl -d directly                             │  │
+│  └───────────────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ BridgeAdapter (library)                               │  │
+│  │  - Proxies to Perl::LanguageServer DAP                │  │
 │  └───────────────────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────────────────┐  │
 │  │ Platform Layer                                        │  │
@@ -426,38 +434,30 @@ The current DAP implementation (Phase 1) uses a **bridge architecture** that pro
 │  │  - Environment variable setup (PERL5LIB)             │  │
 │  └───────────────────────────────────────────────────────┘  │
 └───────────────────────────┬─────────────────────────────────┘
-                            │ JSON over stdio
+                            │ perl -d / Perl::LanguageServer
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│         Perl::LanguageServer DAP Implementation             │
-│  - Perl debugger integration (perl -d)                      │
-│  - Breakpoint management                                    │
-│  - Variable inspection                                      │
-│  - Stack trace generation                                   │
+│                      Perl Runtime                           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Key Design Decisions**:
+**BridgeAdapter Design Decisions**:
 
 1. **Immediate User Value**: Bridge to existing, mature Perl::LanguageServer DAP implementation
 2. **Minimal Dependencies**: No complex Perl debugger protocol parsing in Rust
 3. **Cross-Platform Foundation**: Platform abstraction layer ready for Phase 2 native implementation
 4. **Clean Separation**: Bridge adapter isolated in `perl-dap` crate for future replacement
 
-**Trade-offs**:
+**BridgeAdapter Trade-offs**:
 
 - ✅ **Pros**: Fast implementation, proven debugging backend, cross-platform compatibility
 - ⚠️ **Cons**: External dependency on Perl::LanguageServer CPAN module, additional process overhead
 
 ### Future Roadmap
 
-**Phase 2: Native Rust Adapter (Planned)**
+**Phase 2: Native Adapter Completion (Planned)**
 
-Future versions will replace the bridge with a native Rust DAP adapter:
-
-```
-VS Code ↔ perl-dap (Rust) ↔ Devel::TSPerlDAP (Perl shim) ↔ perl -d
-```
+The CLI already uses the native adapter; Phase 2 focuses on attach support, parsed variables/evaluate output, and hardened evaluation.
 
 **Planned Features**:
 - Direct DAP protocol implementation in Rust
@@ -473,13 +473,13 @@ VS Code ↔ perl-dap (Rust) ↔ Devel::TSPerlDAP (Perl shim) ↔ perl -d
 - Advanced DAP features (conditional breakpoints, logpoints, hit counts)
 - Editor integration (Neovim, Emacs, Helix)
 
-**Migration Path**: Phase 1 users will automatically upgrade when Phase 2/3 are released. No configuration changes required.
+**Migration Path**: BridgeAdapter users can keep their configuration if/when CLI wiring is added.
 
 ---
 
 ## Troubleshooting
 
-### Perl::LanguageServer Not Found
+### Perl::LanguageServer Not Found (BridgeAdapter only)
 
 **Symptom**: Error message "Failed to spawn Perl::LanguageServer DAP process" when starting debugger.
 
