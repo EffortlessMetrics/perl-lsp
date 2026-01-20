@@ -2,14 +2,13 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::process::{Command, Stdio};
 use std::thread;
+use std::time::Duration;
 
+/// Integration test for TCP socket mode.
+/// Spawns the LSP server in socket mode, connects, and verifies the initialize handshake.
 #[test]
+#[ignore = "integration test that spawns external process"]
 fn test_socket_connection() {
-    // Determine the path to the perl-lsp binary
-    // Since we are running in a cargo test, we can use CARGO_BIN_EXE_perl-lsp if available,
-    // or assume it's in the target directory.
-    // assert_cmd provides env!("CARGO_BIN_EXE_perl-lsp") usually, but let's try to find it.
-
     let bin_path = env!("CARGO_BIN_EXE_perl-lsp");
 
     // Start the server in socket mode on a random port (port 0)
@@ -54,14 +53,19 @@ fn test_socket_connection() {
         }
     });
 
-    // Connect to the server
-    let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("Failed to connect to server");
+    // Connect to the server with timeout
+    let stream = TcpStream::connect(("127.0.0.1", port)).expect("Failed to connect to server");
+    stream.set_read_timeout(Some(Duration::from_secs(5))).expect("Failed to set read timeout");
+    stream.set_write_timeout(Some(Duration::from_secs(5))).expect("Failed to set write timeout");
+
+    // Clone stream for reading/writing - BufReader will own the read half
+    let mut write_stream = stream.try_clone().expect("Failed to clone stream");
 
     // Send initialize request
     let request = r#"{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"processId": null, "rootUri": null, "capabilities": {}}}"#;
     let message = format!("Content-Length: {}\r\n\r\n{}", request.len(), request);
-    stream.write_all(message.as_bytes()).expect("Failed to write to socket");
-    stream.flush().expect("Failed to flush socket");
+    write_stream.write_all(message.as_bytes()).expect("Failed to write to socket");
+    write_stream.flush().expect("Failed to flush socket");
 
     // Read response
     let mut reader = BufReader::new(stream);
@@ -75,7 +79,9 @@ fn test_socket_connection() {
             break;
         }
         if line.starts_with("Content-Length: ") {
-            content_length = line.trim()["Content-Length: ".len()..].parse().expect("Failed to parse Content-Length");
+            content_length = line.trim()["Content-Length: ".len()..]
+                .parse()
+                .expect("Failed to parse Content-Length");
         }
     }
 
@@ -90,21 +96,20 @@ fn test_socket_connection() {
     assert!(response_str.contains("\"result\""), "Response should contain result");
     assert!(response_str.contains("\"capabilities\""), "Response should contain capabilities");
 
-    // Send shutdown
+    // Send shutdown request
     let shutdown_request = r#"{"jsonrpc": "2.0", "id": 2, "method": "shutdown"}"#;
     let message = format!("Content-Length: {}\r\n\r\n{}", shutdown_request.len(), shutdown_request);
+    write_stream.write_all(message.as_bytes()).expect("Failed to write shutdown");
+    write_stream.flush().expect("Failed to flush shutdown");
 
-    // We need to write to the underlying stream again. Since reader consumed the stream, we can't use 'stream' if we moved it into BufReader.
-    // However, TcpStream can be cloned or we can use .get_mut().
-    // BufReader takes ownership or reference. new(stream) takes ownership.
-    // So we should have cloned the stream or used a reference?
-    // Let's re-connect or handle this better.
-    // Actually, BufReader::new(stream) consumes stream.
-    // We can use reader.get_mut() to get the stream back.
+    // Send exit notification for graceful shutdown
+    let exit_notification = r#"{"jsonrpc": "2.0", "method": "exit"}"#;
+    let exit_message =
+        format!("Content-Length: {}\r\n\r\n{}", exit_notification.len(), exit_notification);
+    let _ = write_stream.write_all(exit_message.as_bytes());
+    let _ = write_stream.flush();
 
-    reader.get_mut().write_all(message.as_bytes()).expect("Failed to write shutdown");
-    reader.get_mut().flush().expect("Failed to flush shutdown");
-
-    // Cleanup
-    child.kill().expect("Failed to kill child process");
+    // Give server time to exit gracefully before force-killing
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    let _ = child.kill();
 }

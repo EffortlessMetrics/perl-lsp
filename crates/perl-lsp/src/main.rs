@@ -21,9 +21,9 @@
 use perl_lsp::LspServer;
 use std::env;
 use std::process;
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
-use std::sync::Arc;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -123,25 +123,20 @@ fn main() {
                                 };
                                 let reader = std_stream;
 
-                                // We need Arc<Mutex<Box<dyn Write + Send>>> for output
-                                // Note: we need to use the Mutex from parking_lot as expected by LspServer
-                                // Since we can't easily import parking_lot::Mutex directly if it's not re-exported,
-                                // we rely on the fact that LspServer expects a generic Mutex which is likely parking_lot.
-                                // Wait, LspServer definition uses parking_lot::Mutex explicitly.
-                                // We need to import parking_lot. Since we added it to dev-dependencies in Cargo.toml of perl-lsp?
-                                // No, I added it to dependencies implicitly via perl-lsp dependencies?
-                                // Actually, I should check if parking_lot is available.
-                                // It is in [dependencies] of perl-lsp Cargo.toml.
-
-                                let output = Arc::new(parking_lot::Mutex::new(Box::new(writer) as Box<dyn std::io::Write + Send>));
+                                // LspServer expects Arc<parking_lot::Mutex<Box<dyn Write + Send>>>
+                                let output = Arc::new(parking_lot::Mutex::new(
+                                    Box::new(writer) as Box<dyn std::io::Write + Send>
+                                ));
 
                                 tokio::task::spawn_blocking(move || {
                                     let mut server = LspServer::with_output(output);
                                     let mut buf_reader = std::io::BufReader::new(reader);
                                     if let Err(e) = server.serve(&mut buf_reader) {
-                                         eprintln!("Connection error: {}", e);
+                                        eprintln!("Connection error: {}", e);
                                     }
-                                }).await.expect("Task panic");
+                                })
+                                .await
+                                .expect("Task panic");
                             } else {
                                 eprintln!("Failed to convert stream to std");
                             }
