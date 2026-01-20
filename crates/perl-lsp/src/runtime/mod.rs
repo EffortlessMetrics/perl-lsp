@@ -83,7 +83,7 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io::{self, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
     Arc,
@@ -425,18 +425,20 @@ impl LspServer {
         self.coordinator().map(|c| Arc::clone(c.index()))
     }
 
-    /// Run the LSP server
+    /// Run the LSP server using stdio
     pub fn run(&mut self) -> io::Result<()> {
         let stdin = io::stdin();
-        let stdout = io::stdout();
         let mut reader = BufReader::new(stdin.lock());
-        let mut stdout = stdout.lock();
 
-        eprintln!("LSP server started");
+        eprintln!("LSP server started (stdio)");
+        self.serve(&mut reader)
+    }
 
+    /// Serve LSP requests from the given reader
+    pub fn serve<R: BufRead>(&mut self, reader: &mut R) -> io::Result<()> {
         loop {
             // Read LSP message using transport module
-            match read_message(&mut reader)? {
+            match read_message(reader)? {
                 Some(request) => {
                     eprintln!("Received request: {}", request.method);
 
@@ -444,12 +446,15 @@ impl LspServer {
                     if let Some(response) = self.handle_request(request) {
                         // Log and send response using transport module
                         log_response(&response);
-                        write_message(&mut stdout, &response)?;
+
+                        // Use self.output which is thread-safe and configured (stdio or socket)
+                        let mut output = self.output.lock();
+                        write_message(&mut *output, &response)?;
                     }
                 }
                 None => {
                     // EOF reached, exit cleanly
-                    eprintln!("LSP server: EOF on stdin, shutting down");
+                    eprintln!("LSP server: EOF, shutting down");
                     break;
                 }
             }

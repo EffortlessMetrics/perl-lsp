@@ -153,6 +153,9 @@ impl EdgeCaseHandler {
         let mut has_dynamic_delimiters = false;
         let mut has_begin_heredocs = false;
         let mut has_source_filters = false;
+        let mut has_regex_heredoc = false;
+        let mut has_eval_heredoc = false;
+        let mut has_tied_handle = false;
 
         for diag in diagnostics {
             match &diag.pattern {
@@ -164,6 +167,15 @@ impl EdgeCaseHandler {
                 }
                 crate::anti_pattern_detector::AntiPattern::SourceFilterHeredoc { .. } => {
                     has_source_filters = true;
+                }
+                crate::anti_pattern_detector::AntiPattern::RegexCodeBlockHeredoc { .. } => {
+                    has_regex_heredoc = true;
+                }
+                crate::anti_pattern_detector::AntiPattern::EvalStringHeredoc { .. } => {
+                    has_eval_heredoc = true;
+                }
+                crate::anti_pattern_detector::AntiPattern::TiedHandleHeredoc { .. } => {
+                    has_tied_handle = true;
                 }
                 _ => {}
             }
@@ -199,6 +211,24 @@ impl EdgeCaseHandler {
             actions.push(RecommendedAction::EnableFeature {
                 feature: "source-filter-simulation".to_string(),
                 risk_level: RiskLevel::High,
+            });
+        }
+
+        if has_regex_heredoc {
+            actions.push(RecommendedAction::ManualReview {
+                reason: "Heredoc in regex code block cannot be statically analyzed".to_string(),
+            });
+        }
+
+        if has_eval_heredoc {
+            actions.push(RecommendedAction::ManualReview {
+                reason: "Heredoc in eval string requires runtime evaluation".to_string(),
+            });
+        }
+
+        if has_tied_handle {
+            actions.push(RecommendedAction::ManualReview {
+                reason: "Heredoc written to tied handle has custom I/O behavior".to_string(),
             });
         }
     }

@@ -97,7 +97,7 @@
         "perl-lsp.downloadBaseUrl": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Base URL for internal binary hosting. When set, downloads from this location instead of GitHub releases. Should point to a directory containing release files."
+          "markdownDescription": "Internal base URL hosting perl-lsp archives and SHA256SUMS (bypasses GitHub releases). Example: `https://internal.example.com/perl-lsp/`"
         },
         "perl-lsp.trace.server": {
           "type": "string",
