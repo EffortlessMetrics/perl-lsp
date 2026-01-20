@@ -12,3 +12,11 @@
 **Prevention:**
 - Use `@ARGV` in the Perl script and pass user inputs as separate arguments to `perl`
 - Add `--` separator before file path arguments to prevent flag injection
+
+## 2026-02-18 - Path Traversal in LSP Execute Command
+
+**Vulnerability:** `perl.runFile`, `perl.runTests`, and `perl.runTestSub` accepted arbitrary file paths from the client without checking if they were within the workspace root.
+
+**Learning:** `ExecuteCommandProvider` had a `resolve_path_from_args` method that enforced workspace boundaries, but it was not being used by all command handlers. Some were using a simple `extract_file_path_argument` helper that lacked security checks.
+
+**Prevention:** Always use the secure path resolution method that enforces workspace boundaries (`resolve_path_from_args`). Remove insecure helper methods to prevent accidental usage.
