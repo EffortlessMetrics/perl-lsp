@@ -17,13 +17,50 @@ sub AUTOLOAD {
 ---
 
 (source_file
-  (subroutine_declaration
+  (subroutine_declaration_statement
+    (bareword)
     (block
-      (statement)
-      (statement)
-      (statement)
-      (if_statement)
-      (statement))))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (scalar
+            (varname))))
+      (expression_statement
+        (binary_expression
+          (scalar
+            (varname))
+          (substitution_regexp
+            (regexp_content))))
+      (conditional_statement
+        (equality_expression
+          (scalar
+            (varname))
+          (string_literal
+            (string_content)))
+        (block
+          (expression_statement
+            (return_expression
+              (method_call_expression
+                (scalar
+                  (varname))
+                (method)
+                (array
+                  (varname)))))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname)))))))))
 
 ==================
 Symbol table manipulation
@@ -40,13 +77,69 @@ Symbol table manipulation
 ---
 
 (source_file
-  (statement (glob_assignment))
-  (statement (glob_assignment))
-  (statement (glob_assignment))
-  (statement (glob_assignment))
-  (statement (glob_assignment))
-  (statement (glob_assignment))
-  (statement (glob_assignment)))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (refgen_expression
+        (function
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (refgen_expression
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (refgen_expression
+        (array
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (refgen_expression
+        (hash
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content))))))
+      (refgen_expression
+        (function
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (interpolated_string_literal
+                  (string_content)))))))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content)))))))))
 
 ==================
 Symbol table deletion
@@ -61,11 +154,31 @@ undef *foo;
 ---
 
 (source_file
-  (statement (delete_expression))
-  (statement (delete_expression))
-  (statement (delete_expression))
-  (statement (undef_expression))
-  (statement (undef_expression)))
+  (expression_statement
+    (func1op_call_expression
+      (hash_element_expression
+        (container_variable
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (func1op_call_expression
+      (hash_element_expression
+        (container_variable
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (func1op_call_expression
+      (scalar
+        (varname))))
+  (expression_statement
+    (undef_expression
+      (function_call_expression
+        (function
+          (varname)))))
+  (expression_statement
+    (undef_expression
+      (glob
+        (varname)))))
 
 ==================
 Dynamic symbol creation
@@ -91,13 +204,113 @@ ${$package . '::VAR'} = 42;
 ---
 
 (source_file
-  (statement (glob_assignment))
-  (statement (glob_assignment))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (scalar
+                (varname))))))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname))
+                  (escape_sequence)))))))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (string_literal
+                  (string_content)))))))
+      (refgen_expression
+        (scalar
+          (varname)))))
   (for_statement
-    (statement (glob_assignment)))
-  (statement (assignment))
-  (statement (assignment))
-  (statement (assignment)))
+    (scalar
+      (varname))
+    (quoted_word_list
+      (string_content))
+    (block
+      (expression_statement
+        (assignment_expression
+          (glob
+            (varname
+              (block
+                (expression_statement
+                  (scalar
+                    (varname))))))
+          (anonymous_subroutine_expression
+            (block
+              (expression_statement
+                (assignment_expression
+                  (variable_declaration
+                    (scalar
+                      (varname)))
+                  (func1op_call_expression)))
+              (expression_statement
+                (coderef_call_expression
+                  (hash_element_expression
+                    (scalar
+                      (varname))
+                    (interpolated_string_literal
+                      (string_content
+                        (scalar
+                          (varname)))))
+                  (array
+                    (varname))))))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (string_literal
+                  (string_content)))))))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (string_literal
+                  (string_content)))))))
+      (list_expression
+        (number)
+        (number)
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (hash
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (string_literal
+                  (string_content)))))))
+      (list_expression
+        (autoquoted_bareword)
+        (string_literal
+          (string_content))))))
 
 ==================
 Symbol inspection
@@ -121,13 +334,91 @@ UNIVERSAL::can($obj, 'method');
 ---
 
 (source_file
-  (if_statement)
-  (if_statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (conditional_statement
+    (func1op_call_expression
+      (function_call_expression
+        (function
+          (varname))))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (conditional_statement
+    (func1op_call_expression
+      (function_call_expression
+        (function
+          (varname
+            (block
+              (expression_statement
+                (binary_expression
+                  (scalar
+                    (varname))
+                  (string_literal
+                    (string_content)))))))))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence)))))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (func1op_call_expression
+        (hash
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (map_grep_expression
+        (block
+          (expression_statement
+            (func1op_call_expression
+              (function_call_expression
+                (function
+                  (varname
+                    (block
+                      (expression_statement
+                        (interpolated_string_literal
+                          (string_content
+                            (scalar
+                              (varname))))))))))))
+        (func1op_call_expression
+          (hash
+            (varname))))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method)
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (string_literal
+          (string_content))))))
 
 ==================
 Import/export manipulation
@@ -157,8 +448,118 @@ sub AUTOLOAD {
 ---
 
 (source_file
-  (subroutine_declaration)
-  (subroutine_declaration))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (for_statement
+        (scalar
+          (varname))
+        (array
+          (varname))
+        (block
+          (expression_statement
+            (assignment_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (binary_expression
+                        (binary_expression
+                          (scalar
+                            (varname))
+                          (string_literal
+                            (string_content)))
+                        (scalar
+                          (varname)))))))
+              (refgen_expression
+                (function
+                  (varname
+                    (block
+                      (expression_statement
+                        (scalar
+                          (varname)))))))))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (variable_declaration
+          (scalar
+            (varname))))
+      (expression_statement
+        (binary_expression
+          (assignment_expression
+            (variable_declaration
+              (scalar
+                (varname)))
+            (scalar
+              (varname)))
+          (substitution_regexp
+            (regexp_content))))
+      (use_statement
+        (package)
+        (string_literal
+          (string_content)))
+      (expression_statement
+        (assignment_expression
+          (glob
+            (varname
+              (block
+                (expression_statement
+                  (scalar
+                    (varname))))))
+          (anonymous_subroutine_expression
+            (block
+              (expression_statement
+                (ambiguous_function_call_expression
+                  (function)
+                  (interpolated_string_literal
+                    (string_content
+                      (scalar
+                        (varname))
+                      (escape_sequence)))))
+              (expression_statement
+                (postfix_conditional_expression
+                  (goto_expression
+                    (function_call_expression
+                      (function
+                        (varname
+                          (block
+                            (expression_statement
+                              (interpolated_string_literal
+                                (string_content
+                                  (scalar
+                                    (varname))))))))))
+                  (func1op_call_expression
+                    (function_call_expression
+                      (function
+                        (varname
+                          (block
+                            (expression_statement
+                              (interpolated_string_literal
+                                (string_content
+                                  (scalar
+                                    (varname))))))))))))))))
+      (expression_statement
+        (goto_expression
+          (function_call_expression
+            (function
+              (varname
+                (block
+                  (expression_statement
+                    (scalar
+                      (varname))))))))))))
 
 ==================
 Glob slots access
@@ -181,18 +582,78 @@ my $pkg = *foo{PACKAGE};
 ---
 
 (source_file
-  (statement (glob_slot))
-  (statement (glob_slot))
-  (statement (glob_slot))
-  (statement (glob_slot))
-  (statement (glob_slot))
-  (statement (glob_slot))
-  (statement (glob_slot))
-  (statement (glob_slot))
-  (statement (glob_slot))
-  (statement (assignment))
-  (statement (assignment))
-  (statement (assignment)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword)))))
 
 ==================
 Method generation
@@ -223,7 +684,110 @@ BEGIN {
 ---
 
 (source_file
-  (begin_block))
+  (phaser_statement
+    (block
+      (for_statement
+        (scalar
+          (varname))
+        (quoted_word_list
+          (string_content))
+        (block
+          (expression_statement
+            (assignment_expression
+              (variable_declaration
+                (scalar
+                  (varname)))
+              (scalar
+                (varname))))
+          (use_statement
+            (package)
+            (string_literal
+              (string_content)))
+          (expression_statement
+            (assignment_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (scalar
+                        (varname))))))
+              (anonymous_subroutine_expression
+                (block
+                  (expression_statement
+                    (assignment_expression
+                      (variable_declaration
+                        (scalar
+                          (varname)))
+                      (func1op_call_expression)))
+                  (expression_statement
+                    (postfix_conditional_expression
+                      (assignment_expression
+                        (hash_element_expression
+                          (scalar
+                            (varname))
+                          (scalar
+                            (varname)))
+                        (func1op_call_expression))
+                      (array
+                        (varname))))
+                  (expression_statement
+                    (return_expression
+                      (hash_element_expression
+                        (scalar
+                          (varname))
+                        (scalar
+                          (varname)))))))))
+          (expression_statement
+            (assignment_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (interpolated_string_literal
+                        (string_content
+                          (scalar
+                            (varname))))))))
+              (anonymous_subroutine_expression
+                (block
+                  (expression_statement
+                    (assignment_expression
+                      (variable_declaration
+                        (scalar
+                          (varname)))
+                      (func1op_call_expression)))
+                  (expression_statement
+                    (return_expression
+                      (hash_element_expression
+                        (scalar
+                          (varname))
+                        (scalar
+                          (varname)))))))))
+          (expression_statement
+            (assignment_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (interpolated_string_literal
+                        (string_content
+                          (scalar
+                            (varname))))))))
+              (anonymous_subroutine_expression
+                (block
+                  (expression_statement
+                    (assignment_expression
+                      (variable_declaration
+                        (scalar
+                          (varname)))
+                      (func1op_call_expression)))
+                  (expression_statement
+                    (assignment_expression
+                      (hash_element_expression
+                        (scalar
+                          (varname))
+                        (scalar
+                          (varname)))
+                      (func1op_call_expression))))))))))))
 
 ==================
 Namespace manipulation
@@ -252,11 +816,67 @@ local *CORE::GLOBAL::die = sub {
 ---
 
 (source_file
-  (package_declaration)
-  (subroutine_declaration)
-  (package_declaration)
-  (use_statement)
-  (statement)
-  (statement)
-  (block)
-  (statement))
+  (package_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (anonymous_hash_expression)
+            (func1op_call_expression))))))
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (refgen_expression
+        (function
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (anonymous_subroutine_expression
+        (block))))
+  (block_statement
+    (use_statement
+      (package)
+      (string_literal
+        (string_content)))
+    (expression_statement
+      (assignment_expression
+        (glob
+          (varname))
+        (anonymous_subroutine_expression
+          (block
+            (expression_statement
+              (string_literal
+                (string_content))))))))
+  (expression_statement
+    (assignment_expression
+      (localization_expression
+        (glob
+          (varname)))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (variable_declaration
+                (scalar
+                  (varname)))
+              (func1op_call_expression)))
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname)))))))))

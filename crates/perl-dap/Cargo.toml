@@ -29,7 +29,7 @@ serde_json = "1.0.149"
 
 # Error handling
 anyhow = "1.0.100"
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 
 # Regex for parsing debugger output
 regex = "1.12.2"
@@ -40,6 +40,9 @@ tokio = { version = "1.49.0", features = ["full"] }
 # Logging
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+
+# Command-line argument parsing
+clap = { version = "4.5.54", features = ["derive"] }
 
 # Rope for position mapping (reuse from perl-parser)
 ropey = "1.6.1"

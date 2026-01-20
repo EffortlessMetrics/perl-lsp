@@ -263,6 +263,26 @@ impl TestContext {
         let result = self.send_request("textDocument/formatting", Some(params));
         result.as_ref().and_then(|r| r.as_array()).cloned().unwrap_or_default()
     }
+
+    /// Wait for workspace indexing to complete by polling for symbols
+    ///
+    /// This ensures that the indexer has finished processing files before
+    /// verifying workspace-wide features. It addresses potential flakiness
+    /// in test environments where indexing might happen asynchronously.
+    fn wait_for_indexing(&mut self, query: &str) {
+        let max_retries = 20;
+        let delay = Duration::from_millis(100);
+
+        for _ in 0..max_retries {
+            let symbols = self.get_workspace_symbols(query);
+            if !symbols.is_empty() {
+                return;
+            }
+            thread::sleep(delay);
+        }
+        // If we timed out, proceed anyway - assertions will fail if symbols are still missing
+        // This allows tests to fail with a clear assertion message rather than a timeout panic
+    }
 }
 
 // ===================== User Story Tests =====================
@@ -947,23 +967,21 @@ sub run {
     ctx.open_document("file:///workspace/lib/Project/Main.pm", main_module);
 
     // Test cross-file navigation
-    let _defs = ctx.get_definition("file:///workspace/app.pl", 4, 20);
-    // Note: Cross-file method resolution is not yet fully implemented
-    // For now, just verify the request doesn't error
-    // TODO: Fix cross-file method resolution to properly handle Project::Main->new()
-    // Once implemented, this should find the definition of "new" in Project::Main
-    // assert!(!_defs.is_empty(), "Definition lookup should find target");
+    // Target Project::Main->new() at line 6, col 25 (the "n" in "new")
+    let defs = ctx.get_definition("file:///workspace/app.pl", 6, 25);
+    // Note: Cross-file method resolution is now implemented
+    // This should find the definition of "new" in Project::Main
+    assert!(!defs.is_empty(), "Definition lookup should find target");
 
     // Test project-wide refactoring
     let rename_result = ctx.rename("file:///workspace/lib/Project/Main.pm", 6, 4, "initialize");
     assert!(rename_result.is_some(), "Rename should return workspace edits");
 
     // Test workspace symbols
-    let _symbols = ctx.get_workspace_symbols("Project");
-    // Note: Workspace indexing may not be fully initialized in test environment
-    // Just verify the request doesn't error
-    // TODO: Fix workspace indexing in test environment
-    // assert!(!_symbols.is_empty(), "Should find project symbols");
+    // Wait for indexing to ensure robustness against async behavior
+    ctx.wait_for_indexing("Project");
+    let symbols = ctx.get_workspace_symbols("Project");
+    assert!(!symbols.is_empty(), "Should find project symbols");
 
     // Test formatting
     let _edits = ctx.format_document("file:///workspace/lib/Project/Main.pm");

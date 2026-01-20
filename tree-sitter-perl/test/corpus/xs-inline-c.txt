@@ -156,8 +156,20 @@ void greet(char *name) {
 ---
 
 (source_file
-  (use_statement)
-  (use_statement)
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (heredoc_token)))
+  (heredoc_content
+    (heredoc_end))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))))
+  (eof_marker)
   (data_section))
 
 ==================
@@ -195,7 +207,13 @@ END_C
 ---
 
 (source_file
-  (use_statement))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (heredoc_token)))
+  (heredoc_content
+    (heredoc_end)))
 
 ==================
 XS BOOT section
@@ -254,7 +272,13 @@ END_CPP
 ---
 
 (source_file
-  (use_statement))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (heredoc_token)))
+  (heredoc_content
+    (heredoc_end)))
 
 ==================
 XS with threads
@@ -353,5 +377,12 @@ END_PDLPP
 ---
 
 (source_file
-  (use_statement)
-  (use_statement))
+  (use_statement
+    (package))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (heredoc_token)))
+  (heredoc_content
+    (heredoc_end)))

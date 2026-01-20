@@ -685,7 +685,10 @@ impl SymbolExtractor {
                     attributes: vec![],
                 };
                 self.table.add_symbol(symbol);
+
+                self.table.push_scope(ScopeKind::Package, node.location);
                 self.visit_node(body);
+                self.table.pop_scope();
             }
 
             NodeKind::Method { name, signature: _, attributes: _, body } => {

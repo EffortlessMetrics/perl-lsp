@@ -16,19 +16,19 @@ DONE
 ---
 
 (source_file
-  (func1op_call_expression
-    (identifier)
-    (heredoc
-      (heredoc_start_identifier))
-    (comma)
-    (heredoc
-      (heredoc_start_identifier))
-    (comma)
-    (heredoc
-      (heredoc_start_identifier)))
-  (heredoc_content)
-  (heredoc_content)
-  (heredoc_content))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (heredoc_token)
+        (heredoc_token)
+        (heredoc_token))))
+  (heredoc_content
+    (scalar
+      (varname))
+    (scalar
+      (varname))
+    (heredoc_end)))
 
 ==========================================
 Heredocs in list context
@@ -45,20 +45,17 @@ END
 ---
 
 (source_file
-  (assignment_expression
-    (array_variable)
-    (assignment_operator)
-    (list_expression
-      (heredoc
-        (heredoc_start_identifier))
-      (comma)
-      (string_literal
-        (string_content))
-      (comma)
-      (heredoc
-        (heredoc_start_identifier))))
-  (heredoc_content)
-  (heredoc_content))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname))
+      (list_expression
+        (heredoc_token)
+        (interpolated_string_literal
+          (string_content))
+        (heredoc_token))))
+  (heredoc_content
+    (heredoc_end)))
 
 ==========================================
 Heredocs with method calls
@@ -77,28 +74,27 @@ DATA
 ---
 
 (source_file
-  (method_call_expression
-    (scalar_variable)
-    (arrow_operator)
-    (identifier)
-    (arguments
-      (heredoc
-        (heredoc_start_identifier))))
-  (heredoc_content)
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
+  (expression_statement
     (method_call_expression
+      (scalar
+        (varname))
+      (method)
+      (heredoc_token)))
+  (heredoc_content
+    (heredoc_end))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
       (method_call_expression
-        (scalar_variable)
-        (arrow_operator)
-        (identifier)
-        (arguments
-          (heredoc
-            (heredoc_start_identifier))))
-      (arrow_operator)
-      (identifier)))
-  (heredoc_content))
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)
+          (heredoc_token))
+        (method))))
+  (heredoc_content
+    (heredoc_end)))
 
 ==========================================
 Heredocs in complex expressions
@@ -119,37 +115,34 @@ END
 ---
 
 (source_file
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (binary_expression
-      (integer)
-      (binary_operator)
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
       (binary_expression
-        (heredoc
-          (heredoc_start_identifier))
-        (binary_operator)
-        (regex_substitution_expression
-          (regex
-            (regex_pattern)
-            (string_content)
-            (regex_flags))))))
-  (heredoc_content)
-  (if_statement
-    (condition
-      (binary_expression
-        (heredoc
-          (heredoc_start_identifier))
-        (binary_operator)
-        (heredoc
-          (heredoc_start_identifier))))
+        (number)
+        (binary_expression
+          (heredoc_token)
+          (substitution_regexp
+            (regexp_content
+              (escape_sequence))
+            (replacement)
+            (substitution_regexp_modifiers))))))
+  (heredoc_content
+    (heredoc_end))
+  (conditional_statement
+    (equality_expression
+      (heredoc_token)
+      (heredoc_token))
     (block
-      (func1op_call_expression
-        (identifier)
-        (string_literal
-          (string_content)))))
-  (heredoc_content)
-  (heredoc_content))
+      (heredoc_content
+        (heredoc_end))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence))))))))
 
 ==========================================
 Heredocs with special delimiters
@@ -209,21 +202,22 @@ $code = <<~'CODE';
 ---
 
 (source_file
-  (if_statement
-    (condition
-      (integer))
+  (conditional_statement
+    (number)
     (block
-      (func1op_call_expression
-        (identifier)
-        (heredoc
-          (heredoc_start_identifier)))
-      (heredoc_content)))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (heredoc
-      (heredoc_start_identifier)))
-  (heredoc_content))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (heredoc_token)))
+      (heredoc_content
+        (heredoc_end))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (heredoc_token)))
+  (heredoc_content
+    (heredoc_end)))
 
 ==========================================
 Heredocs with interpolation edge cases
@@ -239,11 +233,54 @@ EOF
 ---
 
 (source_file
-  (func1op_call_expression
-    (identifier)
-    (heredoc
-      (heredoc_start_identifier)))
-  (heredoc_content))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (heredoc_token)))
+  (heredoc_content
+    (array
+      (block
+        (expression_statement
+          (anonymous_array_expression
+            (map_grep_expression
+              (block
+                (expression_statement
+                  (binary_expression
+                    (scalar
+                      (varname))
+                    (number))))
+              (binary_expression
+                (number)
+                (number)))))))
+    (scalar
+      (block
+        (expression_statement
+          (refgen_expression
+            (hash_element_expression
+              (container_variable
+                (varname))
+              (autoquoted_bareword))))))
+    (array
+      (block
+        (expression_statement
+          (anonymous_array_expression
+            (do_expression
+              (block
+                (expression_statement
+                  (assignment_expression
+                    (localization_expression
+                      (scalar
+                        (varname)))
+                    (string_literal
+                      (string_content))))
+                (expression_statement
+                  (interpolated_string_literal
+                    (string_content
+                      (array
+                        (varname)))))))))))
+    (scalar
+      (varname))
+    (heredoc_end)))
 
 ==========================================
 Command heredocs
@@ -262,18 +299,19 @@ END
 ---
 
 (source_file
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (heredoc
-      (heredoc_start_identifier)))
-  (heredoc_content)
-  (func1op_call_expression
-    (identifier)
-    (arguments
-      (heredoc
-        (heredoc_start_identifier))))
-  (heredoc_content))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (command_heredoc_token)))
+  (heredoc_content
+    (heredoc_end))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (command_heredoc_token)))
+  (heredoc_content
+    (heredoc_end)))
 
 ==========================================
 Nested heredoc-like structures
@@ -291,14 +329,19 @@ $regex = qr/<<(\w+).*?\n\1/s;
 ---
 
 (source_file
-  (func1op_call_expression
-    (identifier)
-    (heredoc
-      (heredoc_start_identifier)))
-  (heredoc_content)
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (quoted_regex
-      (regex_pattern)
-      (regex_flags))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (heredoc_token)))
+  (heredoc_content
+    (heredoc_end))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (quoted_regexp
+        (regexp_content
+          (escape_sequence)
+          (escape_sequence)
+          (escape_sequence))
+        (quoted_regexp_modifiers)))))
