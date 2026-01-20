@@ -1,8 +1,10 @@
 //! Tests for LSP execute command functionality
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
+use std::fs;
+use tempfile::TempDir;
 
-fn setup_server() -> LspServer {
+fn setup_server(root_path: Option<String>) -> LspServer {
     let mut server = LspServer::new();
 
     // Initialize the server
@@ -11,7 +13,7 @@ fn setup_server() -> LspServer {
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
-            "rootPath": "/test",
+            "rootPath": root_path,
             "capabilities": {}
         })),
         id: Some(json!(1)),
@@ -32,9 +34,10 @@ fn setup_server() -> LspServer {
 }
 
 #[test]
-
 fn test_execute_command_run_file() {
-    let mut server = setup_server();
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let root_path = temp_dir.path().to_string_lossy().to_string();
+    let mut server = setup_server(Some(root_path.clone()));
 
     // Create a test file
     let test_content = r#"#!/usr/bin/perl
@@ -44,7 +47,11 @@ use warnings;
 print "Hello, World!\n";
 "#;
 
-    let uri = "file:///test.pl";
+    let file_path = temp_dir.path().join("test.pl");
+    fs::write(&file_path, test_content).expect("Failed to write test file");
+    let file_path_str = file_path.to_string_lossy().to_string();
+
+    let uri = format!("file://{}", file_path_str);
     let open_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/didOpen".to_string(),
@@ -68,7 +75,7 @@ print "Hello, World!\n";
         method: "workspace/executeCommand".to_string(),
         params: Some(json!({
             "command": "perl.runFile",
-            "arguments": ["/test.pl"]
+            "arguments": [file_path_str]
         })),
         id: Some(json!(2)),
     };
@@ -76,16 +83,18 @@ print "Hello, World!\n";
     let response = server.handle_request(execute_request).unwrap();
     let result = response.result.unwrap();
 
-    // Check that we got a response (even if the command might fail due to file not existing)
+    // Check that we got a response (even if the command might fail due to perl not installed/env issues)
     assert!(result.is_object());
     assert!(result.get("success").is_some());
-    assert!(result.get("output").is_some());
+    // output or error should be present
+    assert!(result.get("output").is_some() || result.get("error").is_some());
 }
 
 #[test]
-
 fn test_execute_command_run_tests() {
-    let mut server = setup_server();
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let root_path = temp_dir.path().to_string_lossy().to_string();
+    let mut server = setup_server(Some(root_path.clone()));
 
     // Create a test file with Test::More
     let test_content = r#"#!/usr/bin/perl
@@ -97,7 +106,11 @@ ok(1, "First test");
 is(1 + 1, 2, "Math works");
 "#;
 
-    let uri = "file:///test.t";
+    let file_path = temp_dir.path().join("test.t");
+    fs::write(&file_path, test_content).expect("Failed to write test file");
+    let file_path_str = file_path.to_string_lossy().to_string();
+
+    let uri = format!("file://{}", file_path_str);
     let open_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/didOpen".to_string(),
@@ -121,7 +134,7 @@ is(1 + 1, 2, "Math works");
         method: "workspace/executeCommand".to_string(),
         params: Some(json!({
             "command": "perl.runTests",
-            "arguments": ["/test.t"]
+            "arguments": [file_path_str]
         })),
         id: Some(json!(2)),
     };
@@ -143,9 +156,8 @@ is(1 + 1, 2, "Math works");
 }
 
 #[test]
-
 fn test_execute_command_unknown() {
-    let mut server = setup_server();
+    let mut server = setup_server(None);
 
     // Try an unknown command
     let execute_request = JsonRpcRequest {
@@ -164,14 +176,9 @@ fn test_execute_command_unknown() {
     assert!(response.is_some());
     let response = response.unwrap();
     assert!(response.error.is_some());
-
-    // The error is serialized to JSON so we need to check it differently
-    // For now, just verify we got an error
-    // The specific error code and message are implementation details
 }
 
 #[test]
-
 fn test_execute_command_capabilities() {
     let mut server = LspServer::new();
 
