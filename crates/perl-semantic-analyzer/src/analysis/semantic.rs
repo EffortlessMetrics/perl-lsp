@@ -507,14 +507,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Subroutine {
-                name,
-                prototype: _,
-                signature,
-                attributes,
-                body,
-                name_span: _,
-            } => {
+            NodeKind::Subroutine { name, prototype, signature, attributes, body, name_span: _ } => {
                 if let Some(sub_name) = name {
                     let token = SemanticToken {
                         location: node.location,
@@ -546,14 +539,51 @@ impl SemanticAnalyzer {
                 {
                     // Get the subroutine scope from the symbol table
                     let sub_scope = self.get_scope_for(node, ScopeKind::Subroutine);
+
+                    if let Some(proto) = prototype {
+                        self.analyze_node(proto, sub_scope);
+                    }
+                    if let Some(sig) = signature {
+                        self.analyze_node(sig, sub_scope);
+                    }
+
                     self.analyze_node(body, sub_scope);
                 }
+            }
+
+            NodeKind::Method { name, signature, attributes, body } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location, // Approximate, ideally name span
+                    token_type: SemanticTokenType::FunctionDeclaration,
+                    modifiers: vec![SemanticTokenModifier::Declaration],
+                });
+
+                // Add hover info
+                let hover = HoverInfo {
+                    signature: format!("method {}", name),
+                    documentation: self.extract_documentation(node.location.start),
+                    details: if attributes.is_empty() {
+                        vec![]
+                    } else {
+                        vec![format!("Attributes: {}", attributes.join(", "))]
+                    },
+                };
+                self.hover_info.insert(node.location, hover);
+
+                // Analyze body in new scope (assumed same as Subroutine scope kind for now)
+                let sub_scope = self.get_scope_for(node, ScopeKind::Subroutine);
+                if let Some(sig) = signature {
+                    self.analyze_node(sig, sub_scope);
+                }
+                self.analyze_node(body, sub_scope);
             }
 
             NodeKind::FunctionCall { name, args } => {
                 // Check if this is a built-in function
                 {
-                    let token_type = if is_builtin_function(name) {
+                    let token_type = if is_control_keyword(name) {
+                        SemanticTokenType::KeywordControl
+                    } else if is_builtin_function(name) {
                         SemanticTokenType::Function
                     } else {
                         // Check if it's a user-defined function
@@ -569,7 +599,7 @@ impl SemanticAnalyzer {
                     self.semantic_tokens.push(SemanticToken {
                         location: node.location,
                         token_type,
-                        modifiers: if is_builtin_function(name) {
+                        modifiers: if is_builtin_function(name) && !is_control_keyword(name) {
                             vec![SemanticTokenModifier::DefaultLibrary]
                         } else {
                             vec![]
@@ -894,6 +924,172 @@ impl SemanticAnalyzer {
                 }
             }
 
+            // Phase 2/3 Handlers
+            NodeKind::MethodCall { object, method, args } => {
+                self.analyze_node(object, scope_id);
+
+                if let Some(offset) =
+                    self.find_substring_in_source_after(node, method, object.location.end)
+                {
+                    self.semantic_tokens.push(SemanticToken {
+                        location: SourceLocation { start: offset, end: offset + method.len() },
+                        token_type: SemanticTokenType::Method,
+                        modifiers: vec![],
+                    });
+                }
+
+                for arg in args {
+                    self.analyze_node(arg, scope_id);
+                }
+            }
+
+            NodeKind::IndirectCall { method, object, args } => {
+                if let Some(offset) = self.find_method_name_in_source(node, method) {
+                    self.semantic_tokens.push(SemanticToken {
+                        location: SourceLocation { start: offset, end: offset + method.len() },
+                        token_type: SemanticTokenType::Method,
+                        modifiers: vec![],
+                    });
+                }
+                self.analyze_node(object, scope_id);
+                for arg in args {
+                    self.analyze_node(arg, scope_id);
+                }
+            }
+
+            NodeKind::Use { module, args } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 3,
+                    },
+                    token_type: SemanticTokenType::Keyword,
+                    modifiers: vec![],
+                });
+
+                let mut args_start = node.location.start + 3;
+                if let Some(offset) = self.find_substring_in_source(node, module) {
+                    self.semantic_tokens.push(SemanticToken {
+                        location: SourceLocation { start: offset, end: offset + module.len() },
+                        token_type: SemanticTokenType::Namespace,
+                        modifiers: vec![],
+                    });
+                    args_start = offset + module.len();
+                }
+
+                self.analyze_string_args(node, args, args_start);
+            }
+
+            NodeKind::No { module, args } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 2,
+                    },
+                    token_type: SemanticTokenType::Keyword,
+                    modifiers: vec![],
+                });
+
+                let mut args_start = node.location.start + 2;
+                if let Some(offset) = self.find_substring_in_source(node, module) {
+                    self.semantic_tokens.push(SemanticToken {
+                        location: SourceLocation { start: offset, end: offset + module.len() },
+                        token_type: SemanticTokenType::Namespace,
+                        modifiers: vec![],
+                    });
+                    args_start = offset + module.len();
+                }
+
+                self.analyze_string_args(node, args, args_start);
+            }
+
+            NodeKind::Given { expr, body } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 5,
+                    }, // given
+                    token_type: SemanticTokenType::KeywordControl,
+                    modifiers: vec![],
+                });
+                self.analyze_node(expr, scope_id);
+                self.analyze_node(body, scope_id);
+            }
+
+            NodeKind::When { condition, body } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 4,
+                    }, // when
+                    token_type: SemanticTokenType::KeywordControl,
+                    modifiers: vec![],
+                });
+                self.analyze_node(condition, scope_id);
+                self.analyze_node(body, scope_id);
+            }
+
+            NodeKind::Default { body } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 7,
+                    }, // default
+                    token_type: SemanticTokenType::KeywordControl,
+                    modifiers: vec![],
+                });
+                self.analyze_node(body, scope_id);
+            }
+
+            NodeKind::Return { value } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 6,
+                    }, // return
+                    token_type: SemanticTokenType::KeywordControl,
+                    modifiers: vec![],
+                });
+                if let Some(v) = value {
+                    self.analyze_node(v, scope_id);
+                }
+            }
+
+            NodeKind::Class { name, body } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 5,
+                    }, // class
+                    token_type: SemanticTokenType::Keyword,
+                    modifiers: vec![],
+                });
+
+                if let Some(offset) = self.find_substring_in_source(node, name) {
+                    self.semantic_tokens.push(SemanticToken {
+                        location: SourceLocation { start: offset, end: offset + name.len() },
+                        token_type: SemanticTokenType::Class,
+                        modifiers: vec![SemanticTokenModifier::Declaration],
+                    });
+                }
+
+                let class_scope = self.get_scope_for(node, ScopeKind::Package);
+                self.analyze_node(body, class_scope);
+            }
+
+            NodeKind::Signature { parameters } => {
+                for param in parameters {
+                    self.analyze_node(param, scope_id);
+                }
+            }
+
+            NodeKind::MandatoryParameter { variable }
+            | NodeKind::OptionalParameter { variable, .. }
+            | NodeKind::SlurpyParameter { variable }
+            | NodeKind::NamedParameter { variable } => {
+                self.analyze_node(variable, scope_id);
+            }
+
             _ => {
                 // Handle other node types as needed
             }
@@ -958,6 +1154,63 @@ impl SemanticAnalyzer {
     fn line_number(&self, offset: usize) -> usize {
         if self.source.is_empty() { 1 } else { self.source[..offset].lines().count() + 1 }
     }
+
+    /// Find substring in source within node's range
+    fn find_substring_in_source(&self, node: &Node, substring: &str) -> Option<usize> {
+        if self.source.len() < node.location.end {
+            return None;
+        }
+        let node_text = &self.source[node.location.start..node.location.end];
+        if let Some(pos) = node_text.find(substring) {
+            return Some(node.location.start + pos);
+        }
+        None
+    }
+
+    /// Find method name in source within node's range
+    fn find_method_name_in_source(&self, node: &Node, method_name: &str) -> Option<usize> {
+        self.find_substring_in_source(node, method_name)
+    }
+
+    /// Find substring in source within node's range, starting search after a specific absolute offset
+    fn find_substring_in_source_after(
+        &self,
+        node: &Node,
+        substring: &str,
+        after: usize,
+    ) -> Option<usize> {
+        if self.source.len() < node.location.end || after >= node.location.end {
+            return None;
+        }
+
+        let start_rel = after.saturating_sub(node.location.start);
+
+        let node_text = &self.source[node.location.start..node.location.end];
+        if start_rel >= node_text.len() {
+            return None;
+        }
+
+        let text_to_search = &node_text[start_rel..];
+        if let Some(pos) = text_to_search.find(substring) {
+            return Some(node.location.start + start_rel + pos);
+        }
+        None
+    }
+
+    /// Analyze string arguments for highlighting (e.g. in use/no statements)
+    fn analyze_string_args(&mut self, node: &Node, args: &[String], start_offset: usize) {
+        let mut current_offset = start_offset;
+        for arg in args {
+            if let Some(offset) = self.find_substring_in_source_after(node, arg, current_offset) {
+                self.semantic_tokens.push(SemanticToken {
+                    location: SourceLocation { start: offset, end: offset + arg.len() },
+                    token_type: SemanticTokenType::String,
+                    modifiers: vec![],
+                });
+                current_offset = offset + arg.len();
+            }
+        }
+    }
 }
 
 /// Documentation entry for a Perl built-in function.
@@ -973,6 +1226,10 @@ struct BuiltinDoc {
 /// Check if a function name is a Perl built-in.
 ///
 /// Returns `true` if the name matches a known Perl built-in function.
+fn is_control_keyword(name: &str) -> bool {
+    matches!(name, "next" | "last" | "redo" | "goto" | "return" | "exit" | "die")
+}
+
 fn is_builtin_function(name: &str) -> bool {
     matches!(
         name,

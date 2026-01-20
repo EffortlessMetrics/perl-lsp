@@ -2,15 +2,23 @@
 //!
 //! These tests verify that command injection vulnerabilities in run_test_sub,
 //! run_tests, and run_file have been properly mitigated.
+//!
+//! Note: With secure path resolution, malicious/non-existent paths are rejected
+//! early at the path validation stage (returning Err), preventing execution entirely.
 
 use perl_lsp::execute_command::ExecuteCommandProvider;
 use serde_json::Value;
+use std::fs;
+use tempfile::TempDir;
 
 /// Test that run_test_sub is protected against code injection via file_path.
 ///
 /// The vulnerable code previously constructed:
 /// `do '{}'; if (defined &{}) {{ {}() }} else {{ die 'Subroutine {} not found' }}`
 /// which allowed injection through the file_path parameter.
+///
+/// With secure path resolution, non-existent files are rejected before execution.
+/// The key security property is that the malicious code never reaches Perl.
 #[test]
 fn test_run_test_sub_file_path_injection() {
     let provider = ExecuteCommandProvider::new();
@@ -23,22 +31,22 @@ fn test_run_test_sub_file_path_injection() {
         vec![Value::String(malicious_file_path.to_string()), Value::String("somesub".to_string())],
     );
 
-    // Command should execute (Ok) but output must NOT contain injected code
-    assert!(result.is_ok(), "Command should not fail to spawn");
-    let val = result.unwrap();
-    let output = val["output"].as_str().unwrap_or("");
-    let error = val["error"].as_str().unwrap_or("");
+    // With secure path resolution, non-existent files are rejected early
+    // BEFORE any shell command or Perl code is executed
+    assert!(result.is_err(), "Malicious path should be rejected during path resolution");
+    let err = result.unwrap_err();
 
+    // The error should be about path resolution (file not found/canonicalize failure)
+    // NOT about Perl code execution or subroutine lookup
     assert!(
-        !output.contains("INJECTED_VIA_FILE"),
-        "Vulnerability: code injection via file_path succeeded! Output: {}",
-        output
+        err.contains("canonicalize") || err.contains("Failed to"),
+        "Error should be about path validation, not code execution: {}",
+        err
     );
-    assert!(
-        !error.contains("INJECTED_VIA_FILE"),
-        "Vulnerability: code injection via file_path succeeded! Error: {}",
-        error
-    );
+
+    // The path may be echoed in the error (this is fine - it's just a filename),
+    // but the key is that no Perl code was executed with this malicious string.
+    // The secure path resolution catches it at the Rust layer.
 }
 
 /// Test that run_test_sub is protected against code injection via sub_name.
@@ -95,6 +103,7 @@ fn test_run_test_sub_subname_injection() {
 /// Test that run_file is protected against argument injection via file_path.
 ///
 /// A file path starting with `-` could be interpreted as a flag without `--`.
+/// With secure path resolution, non-existent files are rejected before execution.
 #[test]
 fn test_run_file_argument_injection() {
     let provider = ExecuteCommandProvider::new();
@@ -106,21 +115,20 @@ fn test_run_file_argument_injection() {
     let result = provider
         .execute_command("perl.runFile", vec![Value::String(malicious_file_path.to_string())]);
 
-    // The command should fail gracefully (file doesn't exist or is treated as literal)
-    // but should NOT execute `-e` as a flag
-    assert!(result.is_ok(), "Command should not fail to spawn");
-    let val = result.unwrap();
+    // With secure path resolution, non-existent files are rejected early
+    assert!(result.is_err(), "Malicious path '-e' should be rejected during path resolution");
+    let err = result.unwrap_err();
 
-    // If `-e` was interpreted as a flag, perl would complain about missing argument
-    // or execute code. With `--`, it's treated as a filename.
-    let error = val["error"].as_str().unwrap_or("");
+    // The error should be about path validation
     assert!(
-        !error.contains("No code specified for -e"),
-        "Vulnerability: -e was interpreted as a flag, not a filename"
+        err.contains("canonicalize") || err.contains("not found"),
+        "Error should be about path validation: {}",
+        err
     );
 }
 
 /// Test that run_tests is protected against argument injection via file_path.
+/// With secure path resolution, non-existent files are rejected before execution.
 #[test]
 fn test_run_tests_argument_injection() {
     let provider = ExecuteCommandProvider::new();
@@ -131,23 +139,29 @@ fn test_run_tests_argument_injection() {
     let result = provider
         .execute_command("perl.runTests", vec![Value::String(malicious_file_path.to_string())]);
 
-    assert!(result.is_ok(), "Command should not fail to spawn");
-    let val = result.unwrap();
+    // With secure path resolution, non-existent files are rejected early
+    assert!(result.is_err(), "Malicious path '-e' should be rejected during path resolution");
+    let err = result.unwrap_err();
 
-    let error = val["error"].as_str().unwrap_or("");
+    // The error should be about path validation
     assert!(
-        !error.contains("No code specified for -e"),
-        "Vulnerability: -e was interpreted as a flag in run_tests"
+        err.contains("canonicalize") || err.contains("not found"),
+        "Error should be about path validation: {}",
+        err
     );
 }
 
-/// Test that file paths with shell metacharacters don't cause issues.
+/// Test that file paths with shell metacharacters are safely rejected.
+///
+/// With secure path resolution, files that don't exist are rejected before
+/// any shell command is executed, preventing shell metacharacter expansion.
 #[test]
 fn test_shell_metacharacter_safety() {
     let provider = ExecuteCommandProvider::new();
 
     // File paths with shell metacharacters that could cause issues
-    // if shell expansion occurred
+    // if shell expansion occurred. These non-existent paths should be
+    // rejected during path validation before any shell execution.
     let dangerous_paths = vec![
         "/tmp/test$(whoami).pl",
         "/tmp/test`id`.pl",
@@ -160,7 +174,37 @@ fn test_shell_metacharacter_safety() {
         let result =
             provider.execute_command("perl.runFile", vec![Value::String(path.to_string())]);
 
-        // Should execute without shell expansion
-        assert!(result.is_ok(), "Command should not fail for path: {}", path);
+        // Non-existent paths should be rejected during path resolution
+        assert!(result.is_err(), "Non-existent path should be rejected: {}", path);
+        let err = result.unwrap_err();
+
+        // Error should be about path validation, not shell execution
+        assert!(
+            err.contains("canonicalize") || err.contains("not found"),
+            "Error should be about path validation for {}: {}",
+            path,
+            err
+        );
     }
+}
+
+/// Test that valid files with safe paths execute correctly.
+#[test]
+fn test_valid_file_execution() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let file_path = temp_dir.path().join("test_valid.pl");
+    fs::write(&file_path, "print 'VALID_OUTPUT';").expect("Failed to write test file");
+
+    let provider = ExecuteCommandProvider::new();
+
+    let result = provider.execute_command(
+        "perl.runFile",
+        vec![Value::String(file_path.to_string_lossy().to_string())],
+    );
+
+    assert!(result.is_ok(), "Valid file should execute successfully");
+    let val = result.unwrap();
+    let output = val["output"].as_str().unwrap_or("");
+
+    assert!(output.contains("VALID_OUTPUT"), "Output should contain expected result: {}", output);
 }

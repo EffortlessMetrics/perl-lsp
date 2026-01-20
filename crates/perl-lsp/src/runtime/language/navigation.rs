@@ -18,11 +18,75 @@ use std::sync::OnceLock;
 static FQN_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 #[cfg(feature = "workspace")]
+static ARROW_METHOD_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+
+#[cfg(feature = "workspace")]
 fn get_fqn_regex() -> Option<&'static regex::Regex> {
     FQN_RE
         .get_or_init(|| regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)"))
         .as_ref()
         .ok()
+}
+
+#[cfg(feature = "workspace")]
+fn get_arrow_method_regex() -> Option<&'static regex::Regex> {
+    ARROW_METHOD_RE
+        .get_or_init(|| {
+            regex::Regex::new(
+                r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\s*->\s*([A-Za-z_][A-Za-z0-9_]*)",
+            )
+        })
+        .as_ref()
+        .ok()
+}
+
+/// Look up a symbol definition in the workspace index.
+///
+/// Tries two lookup strategies:
+/// 1. `find_def()` with a structured `SymbolKey`
+/// 2. `find_definition()` with a formatted `Package::name` string
+///
+/// Returns the LSP location if found, or `None` to fall through to same-file resolution.
+#[cfg(feature = "workspace")]
+fn lookup_workspace_definition(
+    coordinator: Option<&std::sync::Arc<crate::workspace_index::IndexCoordinator>>,
+    pkg: &str,
+    name: &str,
+) -> Option<Value> {
+    let access_mode = route_index_access(coordinator);
+    let IndexAccessMode::Full(coord) = access_mode else {
+        return None;
+    };
+
+    let key = crate::workspace_index::SymbolKey {
+        pkg: pkg.to_string().into(),
+        name: name.to_string().into(),
+        sigil: None,
+        kind: crate::workspace_index::SymKind::Sub,
+    };
+
+    let workspace_index = coord.index();
+
+    // Try structured key lookup first
+    if let Some(def_location) = workspace_index.find_def(&key) {
+        if let Some(lsp_location) =
+            crate::workspace_index::lsp_adapter::to_lsp_location(&def_location)
+        {
+            return Some(json!([lsp_location]));
+        }
+    }
+
+    // Fall back to string-based lookup
+    let symbol_name = format!("{}::{}", pkg, name);
+    if let Some(def_location) = workspace_index.find_definition(&symbol_name) {
+        if let Some(lsp_location) =
+            crate::workspace_index::lsp_adapter::to_lsp_location(&def_location)
+        {
+            return Some(json!([lsp_location]));
+        }
+    }
+
+    None
 }
 
 impl LspServer {
@@ -245,45 +309,44 @@ impl LspServer {
                                 if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
                                     let parts: Vec<&str> = m.as_str().split("::").collect();
                                     if parts.len() >= 2 {
-                                        let name = parts.last().copied().unwrap_or("").to_string();
+                                        let name = parts.last().copied().unwrap_or("");
                                         let pkg = parts[..parts.len() - 1].join("::");
-                                        let key = crate::workspace_index::SymbolKey {
-                                            pkg: pkg.clone().into(),
-                                            name: name.clone().into(),
-                                            sigil: None,
-                                            kind: crate::workspace_index::SymKind::Sub,
-                                        };
 
-                                        // Use routing policy for cross-file definition lookup
-                                        let access_mode = route_index_access(self.coordinator());
-                                        if let IndexAccessMode::Full(coordinator) = access_mode {
-                                            let workspace_index = coordinator.index();
-                                            if let Some(def_location) =
-                                                workspace_index.find_def(&key)
-                                            {
-                                                if let Some(lsp_location) =
-                                                crate::workspace_index::lsp_adapter::to_lsp_location(
-                                                    &def_location,
-                                                )
-                                            {
-                                                return Ok(Some(json!([lsp_location])));
-                                            }
-                                            }
-                                            let symbol_name = format!("{}::{}", pkg, name);
-                                            if let Some(def_location) =
-                                                workspace_index.find_definition(&symbol_name)
-                                            {
-                                                if let Some(lsp_location) =
-                                                crate::workspace_index::lsp_adapter::to_lsp_location(
-                                                    &def_location,
-                                                )
-                                            {
-                                                return Ok(Some(json!([lsp_location])));
-                                            }
-                                            }
+                                        if let Some(result) = lookup_workspace_definition(
+                                            self.coordinator(),
+                                            &pkg,
+                                            name,
+                                        ) {
+                                            return Ok(Some(result));
                                         }
                                         // Partial/None: fall through to same-file resolution
                                     }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Attempt to resolve Package->method calls
+                    if let Some(arrow_re) = get_arrow_method_regex() {
+                        for cap in arrow_re.captures_iter(&text_around) {
+                            if let (Some(package_match), Some(method_match)) =
+                                (cap.get(1), cap.get(2))
+                            {
+                                if cursor_in_text >= method_match.start()
+                                    && cursor_in_text <= method_match.end()
+                                {
+                                    let package_name = package_match.as_str();
+                                    let method_name = method_match.as_str();
+
+                                    if let Some(result) = lookup_workspace_definition(
+                                        self.coordinator(),
+                                        package_name,
+                                        method_name,
+                                    ) {
+                                        return Ok(Some(result));
+                                    }
+                                    // Partial/None: fall through to same-file resolution
                                     break;
                                 }
                             }
