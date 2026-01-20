@@ -331,7 +331,7 @@ impl PatternDetector for RegexHeredocDetector {
         let mut results = Vec::new();
 
         for match_pos in REGEX_HEREDOC_PATTERN.find_iter(code) {
-             let location = Location {
+            let location = Location {
                 line: code[..match_pos.start()].lines().count(),
                 column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
                 offset: offset + match_pos.start(),
@@ -380,7 +380,7 @@ impl PatternDetector for EvalHeredocDetector {
         let mut results = Vec::new();
 
         for match_pos in EVAL_HEREDOC_PATTERN.find_iter(code) {
-             let location = Location {
+            let location = Location {
                 line: code[..match_pos.start()].lines().count(),
                 column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
                 offset: offset + match_pos.start(),
@@ -401,7 +401,7 @@ impl PatternDetector for EvalHeredocDetector {
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
         let AntiPattern::EvalStringHeredoc { .. } = pattern else {
-             panic!("EvalHeredocDetector received incompatible pattern type.");
+            panic!("EvalHeredocDetector received incompatible pattern type.");
         };
 
         Diagnostic {
@@ -431,11 +431,8 @@ impl PatternDetector for TiedHandleDetector {
 
             // If it's a glob (*FH), we typically print to the bare handle (FH).
             // If it's a scalar ($fh), we print to the scalar ($fh).
-            let handle_to_search = if raw_handle.starts_with('*') {
-                &raw_handle[1..]
-            } else {
-                raw_handle
-            };
+            let handle_to_search =
+                if raw_handle.starts_with('*') { &raw_handle[1..] } else { raw_handle };
 
             // Look for usage of this handle with heredoc
             let usage_pattern = format!(r"print\s+{}\s+<<", regex::escape(handle_to_search));
@@ -463,8 +460,8 @@ impl PatternDetector for TiedHandleDetector {
     }
 
     fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
-         let AntiPattern::TiedHandleHeredoc { handle_name, .. } = pattern else {
-             panic!("TiedHandleDetector received incompatible pattern type.");
+        let AntiPattern::TiedHandleHeredoc { handle_name, .. } = pattern else {
+            panic!("TiedHandleDetector received incompatible pattern type.");
         };
 
         Diagnostic {
@@ -477,7 +474,6 @@ impl PatternDetector for TiedHandleDetector {
         }
     }
 }
-
 
 impl AntiPatternDetector {
     pub fn new() -> Self {
