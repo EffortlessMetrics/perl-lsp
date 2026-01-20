@@ -1181,8 +1181,8 @@ print "Value: $variable\n";
         let temp_file = "/tmp/test_debug.pl";
         fs::write(temp_file, "print 'debug';").expect("Failed to create test file");
 
-        let result = provider
-            .execute_command("perl.debugTests", vec![Value::String(temp_file.to_string())]);
+        let result =
+            provider.execute_command("perl.debugTests", vec![Value::String(temp_file.to_string())]);
 
         // Clean up
         fs::remove_file(temp_file).ok();
@@ -1225,8 +1225,8 @@ print "Value: $variable\n";
         fs::write(temp_file, "sub test {}").expect("Failed to create test file");
 
         // Test runTestSub with only file path, missing subroutine name
-        let result = provider
-            .execute_command("perl.runTestSub", vec![Value::String(temp_file.to_string())]);
+        let result =
+            provider.execute_command("perl.runTestSub", vec![Value::String(temp_file.to_string())]);
 
         assert!(result.is_err(), "Should fail with missing subroutine name");
         // It might fail with path resolution if file doesn't exist, but here it exists
@@ -1367,7 +1367,6 @@ print "Value: $variable\n";
         assert_eq!(error_response["analyzerUsed"], "test_analyzer");
     }
 
-
     #[test]
     #[allow(deprecated)]
     fn test_run_critic_file_exists_check() {
@@ -1476,8 +1475,8 @@ print "Value: $variable\n";
 
         // This test ensures that execute_command cannot return Ok(Default::default())
         // when it should return meaningful data
-        let result = provider
-            .execute_command("perl.debugTests", vec![Value::String(temp_file.to_string())]);
+        let result =
+            provider.execute_command("perl.debugTests", vec![Value::String(temp_file.to_string())]);
 
         // Clean up
         fs::remove_file(temp_file).ok();
