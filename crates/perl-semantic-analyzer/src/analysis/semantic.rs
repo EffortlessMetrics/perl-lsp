@@ -507,14 +507,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Subroutine {
-                name,
-                prototype,
-                signature,
-                attributes,
-                body,
-                name_span: _,
-            } => {
+            NodeKind::Subroutine { name, prototype, signature, attributes, body, name_span: _ } => {
                 if let Some(sub_name) = name {
                     let token = SemanticToken {
                         location: node.location,
@@ -932,12 +925,13 @@ impl SemanticAnalyzer {
             }
 
             // Phase 2/3 Handlers
-
             NodeKind::MethodCall { object, method, args } => {
                 self.analyze_node(object, scope_id);
 
-                if let Some(offset) = self.find_substring_in_source_after(node, method, object.location.end) {
-                     self.semantic_tokens.push(SemanticToken {
+                if let Some(offset) =
+                    self.find_substring_in_source_after(node, method, object.location.end)
+                {
+                    self.semantic_tokens.push(SemanticToken {
                         location: SourceLocation { start: offset, end: offset + method.len() },
                         token_type: SemanticTokenType::Method,
                         modifiers: vec![],
@@ -951,7 +945,7 @@ impl SemanticAnalyzer {
 
             NodeKind::IndirectCall { method, object, args } => {
                 if let Some(offset) = self.find_method_name_in_source(node, method) {
-                     self.semantic_tokens.push(SemanticToken {
+                    self.semantic_tokens.push(SemanticToken {
                         location: SourceLocation { start: offset, end: offset + method.len() },
                         token_type: SemanticTokenType::Method,
                         modifiers: vec![],
@@ -964,8 +958,11 @@ impl SemanticAnalyzer {
             }
 
             NodeKind::Use { module, args } => {
-                 self.semantic_tokens.push(SemanticToken {
-                    location: SourceLocation { start: node.location.start, end: node.location.start + 3 },
+                self.semantic_tokens.push(SemanticToken {
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 3,
+                    },
                     token_type: SemanticTokenType::Keyword,
                     modifiers: vec![],
                 });
@@ -984,8 +981,11 @@ impl SemanticAnalyzer {
             }
 
             NodeKind::No { module, args } => {
-                 self.semantic_tokens.push(SemanticToken {
-                    location: SourceLocation { start: node.location.start, end: node.location.start + 2 },
+                self.semantic_tokens.push(SemanticToken {
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 2,
+                    },
                     token_type: SemanticTokenType::Keyword,
                     modifiers: vec![],
                 });
@@ -1005,7 +1005,10 @@ impl SemanticAnalyzer {
 
             NodeKind::Given { expr, body } => {
                 self.semantic_tokens.push(SemanticToken {
-                    location: SourceLocation { start: node.location.start, end: node.location.start + 5 }, // given
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 5,
+                    }, // given
                     token_type: SemanticTokenType::KeywordControl,
                     modifiers: vec![],
                 });
@@ -1015,7 +1018,10 @@ impl SemanticAnalyzer {
 
             NodeKind::When { condition, body } => {
                 self.semantic_tokens.push(SemanticToken {
-                    location: SourceLocation { start: node.location.start, end: node.location.start + 4 }, // when
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 4,
+                    }, // when
                     token_type: SemanticTokenType::KeywordControl,
                     modifiers: vec![],
                 });
@@ -1024,8 +1030,11 @@ impl SemanticAnalyzer {
             }
 
             NodeKind::Default { body } => {
-                 self.semantic_tokens.push(SemanticToken {
-                    location: SourceLocation { start: node.location.start, end: node.location.start + 7 }, // default
+                self.semantic_tokens.push(SemanticToken {
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 7,
+                    }, // default
                     token_type: SemanticTokenType::KeywordControl,
                     modifiers: vec![],
                 });
@@ -1034,7 +1043,10 @@ impl SemanticAnalyzer {
 
             NodeKind::Return { value } => {
                 self.semantic_tokens.push(SemanticToken {
-                    location: SourceLocation { start: node.location.start, end: node.location.start + 6 }, // return
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 6,
+                    }, // return
                     token_type: SemanticTokenType::KeywordControl,
                     modifiers: vec![],
                 });
@@ -1044,14 +1056,17 @@ impl SemanticAnalyzer {
             }
 
             NodeKind::Class { name, body } => {
-                 self.semantic_tokens.push(SemanticToken {
-                    location: SourceLocation { start: node.location.start, end: node.location.start + 5 }, // class
+                self.semantic_tokens.push(SemanticToken {
+                    location: SourceLocation {
+                        start: node.location.start,
+                        end: node.location.start + 5,
+                    }, // class
                     token_type: SemanticTokenType::Keyword,
                     modifiers: vec![],
                 });
 
                 if let Some(offset) = self.find_substring_in_source(node, name) {
-                     self.semantic_tokens.push(SemanticToken {
+                    self.semantic_tokens.push(SemanticToken {
                         location: SourceLocation { start: offset, end: offset + name.len() },
                         token_type: SemanticTokenType::Class,
                         modifiers: vec![SemanticTokenModifier::Declaration],
@@ -1158,16 +1173,17 @@ impl SemanticAnalyzer {
     }
 
     /// Find substring in source within node's range, starting search after a specific absolute offset
-    fn find_substring_in_source_after(&self, node: &Node, substring: &str, after: usize) -> Option<usize> {
+    fn find_substring_in_source_after(
+        &self,
+        node: &Node,
+        substring: &str,
+        after: usize,
+    ) -> Option<usize> {
         if self.source.len() < node.location.end || after >= node.location.end {
             return None;
         }
 
-        let start_rel = if after > node.location.start {
-            after - node.location.start
-        } else {
-            0
-        };
+        let start_rel = after.saturating_sub(node.location.start);
 
         let node_text = &self.source[node.location.start..node.location.end];
         if start_rel >= node_text.len() {
@@ -1211,10 +1227,7 @@ struct BuiltinDoc {
 ///
 /// Returns `true` if the name matches a known Perl built-in function.
 fn is_control_keyword(name: &str) -> bool {
-    matches!(
-        name,
-        "next" | "last" | "redo" | "goto" | "return" | "exit" | "die"
-    )
+    matches!(name, "next" | "last" | "redo" | "goto" | "return" | "exit" | "die")
 }
 
 fn is_builtin_function(name: &str) -> bool {
