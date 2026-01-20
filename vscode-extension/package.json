@@ -158,41 +158,53 @@
       {
         "command": "perl-lsp.restart",
         "title": "Restart Perl Language Server",
-        "category": "Perl"
+        "category": "Perl",
+        "icon": "$(refresh)"
       },
       {
         "command": "perl-lsp.showVersion",
         "title": "Show Server Version",
-        "category": "Perl"
+        "category": "Perl",
+        "icon": "$(info)"
       },
       {
         "command": "perl-lsp.organizeImports",
         "title": "Organize Use Statements",
-        "category": "Perl"
+        "category": "Perl",
+        "icon": "$(organization)"
       },
       {
         "command": "perl-lsp.runTests",
         "title": "Run Tests in Current File",
-        "category": "Perl"
+        "category": "Perl",
+        "icon": "$(beaker)"
       },
       {
         "command": "perl-lsp.extractSubroutine",
         "title": "Extract Subroutine",
-        "category": "Perl Refactor"
+        "category": "Perl Refactor",
+        "icon": "$(symbol-method)"
       },
       {
         "command": "perl-lsp.extractVariable",
         "title": "Extract Variable",
-        "category": "Perl Refactor"
+        "category": "Perl Refactor",
+        "icon": "$(symbol-variable)"
       },
       {
         "command": "perl-lsp.inlineVariable",
         "title": "Inline Variable",
-        "category": "Perl Refactor"
+        "category": "Perl Refactor",
+        "icon": "$(replace)"
       }
     ],
     "menus": {
       "editor/context": [
+        {
+          "command": "perl-lsp.runTests",
+          "when": "editorLangId == perl",
+          "group": "navigation"
+        },
         {
           "command": "perl-lsp.extractSubroutine",
           "when": "editorLangId == perl",
