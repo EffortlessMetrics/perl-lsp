@@ -41,8 +41,9 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
                             || event.kind.is_remove()
                         {
                             // Kill the current process if it exists
-                            let mut process_guard = current_process.lock().unwrap();
-                            if let Some(child) = process_guard.as_mut() {
+                            if let Ok(mut process_guard) = current_process.lock()
+                                && let Some(child) = process_guard.as_mut()
+                            {
                                 let _ = child.kill(); // Ignore error if already dead
                                 let _ = child.wait(); // Clean up zombies
                                 *process_guard = None;
@@ -101,12 +102,17 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
                     }
                 };
 
-                let mut stdin = child.stdin.take().expect("Failed to open stdin");
-                let mut stdout = child.stdout.take().expect("Failed to open stdout");
+                let Some(mut stdin) = child.stdin.take() else {
+                    eprintln!("Failed to open stdin");
+                    continue;
+                };
+                let Some(mut stdout) = child.stdout.take() else {
+                    eprintln!("Failed to open stdout");
+                    continue;
+                };
 
                 // Store the child process so watcher can kill it
-                {
-                    let mut guard = current_process.lock().unwrap();
+                if let Ok(mut guard) = current_process.lock() {
                     if let Some(mut old_child) = guard.take() {
                         let _ = old_child.kill();
                         let _ = old_child.wait();
@@ -114,8 +120,14 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
                     *guard = Some(child);
                 }
 
-                let mut stream_clone = stream.try_clone().expect("Failed to clone stream");
-                let mut stream_clone2 = stream.try_clone().expect("Failed to clone stream");
+                let Ok(mut stream_clone) = stream.try_clone() else {
+                    eprintln!("Failed to clone stream");
+                    continue;
+                };
+                let Ok(mut stream_clone2) = stream.try_clone() else {
+                    eprintln!("Failed to clone stream");
+                    continue;
+                };
 
                 // Thread: TCP -> Process Stdin
                 let _t1 = thread::spawn(move || {
