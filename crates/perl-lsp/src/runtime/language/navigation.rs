@@ -330,11 +330,13 @@ impl LspServer {
                     // Attempt to resolve Package->method calls
                     if let Some(arrow_re) = get_arrow_method_regex() {
                         for cap in arrow_re.captures_iter(&text_around) {
-                            if let Some(method_match) = cap.get(2) {
+                            if let (Some(package_match), Some(method_match)) =
+                                (cap.get(1), cap.get(2))
+                            {
                                 if cursor_in_text >= method_match.start()
                                     && cursor_in_text <= method_match.end()
                                 {
-                                    let package_name = cap.get(1).unwrap().as_str();
+                                    let package_name = package_match.as_str();
                                     let method_name = method_match.as_str();
 
                                     if let Some(result) = lookup_workspace_definition(
