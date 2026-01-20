@@ -679,21 +679,25 @@ fn test_diagnostic_recovery() {
     assert!(response["result"].is_array());
     let symbols = response["result"].as_array().unwrap();
 
-    // The test is flaky because incremental document updates might not be working correctly
-    // For now, just check that the server responds properly (no crash) rather than exact symbol count
-    // TODO: Fix the underlying issue with incremental document state tracking
+    // FLAKY: Incremental document updates may not apply correctly under race conditions.
+    // Root cause is unknown but could be:
+    // - UTF-16/UTF-8 position conversion edge cases
+    // - Race between document state update and symbol request
+    // - Deserialization failures (now logged to stderr via text_sync.rs)
+    //
+    // TODO(#307): Investigate why incremental updates fail intermittently.
+    //             Check stderr for "ERROR: Failed to deserialize change" messages.
     if symbols.len() != 3 {
         eprintln!(
-            "WARN: Expected 3 symbols but got {}. This indicates an issue with incremental document updates.",
+            "WARN: Expected 3 symbols but got {}. Incremental update may have failed; check logs.",
             symbols.len()
         );
-        // For now, just verify the server didn't crash and can respond
-        // Verify the server didn't crash and can respond (symbols vector is valid)
+        // Accept degraded behavior: server responds without crash
         shutdown_and_exit(&mut server);
-        return; // Skip the exact assertion for now
+        return;
     }
 
-    assert_eq!(symbols.len(), 3); // Should have all three variables
+    assert_eq!(symbols.len(), 3);
     shutdown_and_exit(&mut server);
 }
 
