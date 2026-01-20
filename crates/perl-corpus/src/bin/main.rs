@@ -69,6 +69,14 @@ enum Generator {
     Heredoc,
     /// Generate whitespace-heavy code
     Whitespace,
+    /// Generate loop control samples (next/redo/continue)
+    ControlFlow,
+    /// Generate format statements
+    Format,
+    /// Generate glob expressions
+    Glob,
+    /// Generate tie/untie samples
+    Tie,
 }
 
 fn main() -> Result<()> {
@@ -228,6 +236,54 @@ fn main() -> Result<()> {
                             .map_err(|e| anyhow::anyhow!("{e:?}"))?
                             .current();
                         println!("# Test case {} (whitespace-heavy)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::ControlFlow => {
+                    use perl_corpus::r#gen::control_flow::loop_with_control;
+                    for i in 0..count {
+                        let value = loop_with_control()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (control-flow)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Format => {
+                    use perl_corpus::r#gen::format_statements::format_statement;
+                    for i in 0..count {
+                        let value = format_statement()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (format)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Glob => {
+                    use perl_corpus::r#gen::glob::glob_in_context;
+                    for i in 0..count {
+                        let value = glob_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (glob)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Tie => {
+                    use perl_corpus::r#gen::tie::tie_in_context;
+                    for i in 0..count {
+                        let value = tie_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (tie)", i + 1);
                         println!("{}", value);
                         println!();
                     }

@@ -125,6 +125,30 @@ mod corpus_gap_tests {
         test_corpus_file("given_when_default.pl")
             .expect("given/when/default test failed");
     }
+
+    #[test]
+    fn test_continue_redo_statements() {
+        test_corpus_file("continue_redo_statements.pl")
+            .expect("continue/redo statements test failed");
+    }
+
+    #[test]
+    fn test_format_statements() {
+        test_corpus_file("format_statements.pl")
+            .expect("format statements test failed");
+    }
+
+    #[test]
+    fn test_glob_expressions() {
+        test_corpus_file("glob_expressions.pl")
+            .expect("glob expressions test failed");
+    }
+
+    #[test]
+    fn test_tie_interface() {
+        test_corpus_file("tie_interface.pl")
+            .expect("tie interface test failed");
+    }
     
     // LSP-specific tests
     #[test]
@@ -238,6 +262,10 @@ mod corpus_gap_tests {
             "data_end_sections.pl",
             "packages_versions.pl",
             "legacy_syntax.pl",
+            "continue_redo_statements.pl",
+            "format_statements.pl",
+            "glob_expressions.pl",
+            "tie_interface.pl",
         ];
         
         for file in files {

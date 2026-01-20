@@ -1,12 +1,25 @@
 //! Perl parser corpus - test data and property-based testing infrastructure
 #![allow(clippy::pedantic)] // Corpus crate - focus on core clippy lints only
 
+pub mod cases;
+pub mod codegen;
+pub mod files;
 pub mod r#gen;
 pub mod index;
 pub mod lint;
 pub mod meta;
 
 use anyhow::{Context, Result};
+pub use cases::{
+    complex_data_structure_cases, edge_cases, get_complex_data_structure_tests,
+    ComplexDataStructureCase, EdgeCase, EdgeCaseGenerator,
+};
+pub use codegen::{
+    generate_perl_code, generate_perl_code_with_seed, generate_perl_code_with_statements,
+};
+pub use files::{
+    get_all_test_files, get_fuzz_files, get_test_files, CorpusPaths, CORPUS_ROOT_ENV,
+};
 use meta::Section;
 use regex::Regex;
 use std::collections::HashMap;

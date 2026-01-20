@@ -34,7 +34,7 @@ The tool analyzes four corpus layers:
 1. **TreeSitter Corpus** (`c/test/corpus`): Tree-sitter test cases
 2. **Highlight Fixtures** (`c/test/highlight`): Syntax highlighting test fixtures
 3. **Test Corpus** (`test_corpus`): General test corpus files
-4. **PerlCorpus Generators** (`crates/perl-corpus/src/generators`): Property-based test generators
+4. **PerlCorpus Generators** (`crates/perl-corpus/src/gen`): Property-based test generators
 
 ## Usage
 

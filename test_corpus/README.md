@@ -17,6 +17,10 @@ This directory contains test files that cover gaps in the original test corpus. 
 6. **end_section.pl** - `__END__` section handling  
 7. **packages_versions.pl** - Versioned packages and multi-package files
 8. **legacy_syntax.pl** - Legacy Perl syntax (bareword filehandles, indirect object, old package separator)
+9. **continue_redo_statements.pl** - Loop control statements (next/redo/continue blocks)
+10. **format_statements.pl** - Legacy format statements and picture lines
+11. **glob_expressions.pl** - Glob operators and angle bracket patterns
+12. **tie_interface.pl** - Tie/untie interface coverage for scalars, arrays, hashes, handles
 
 ## Running Tests
 
