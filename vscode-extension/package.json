@@ -75,7 +75,11 @@
       "properties": {
         "perl-lsp.channel": {
           "type": "string",
-          "enum": ["latest", "stable", "tag"],
+          "enum": [
+            "latest",
+            "stable",
+            "tag"
+          ],
           "default": "latest",
           "markdownDescription": "Release channel: `latest` for newest release, `stable` for latest stable, `tag` for specific version"
         },
@@ -112,32 +116,32 @@
         "perl-lsp.enableDiagnostics": {
           "type": "boolean",
           "default": true,
-          "description": "Enable real-time syntax diagnostics"
+          "markdownDescription": "Enable real-time syntax diagnostics."
         },
         "perl-lsp.enableSemanticTokens": {
           "type": "boolean",
           "default": true,
-          "description": "Enable semantic syntax highlighting"
+          "markdownDescription": "Enable semantic syntax highlighting."
         },
         "perl-lsp.enableFormatting": {
           "type": "boolean",
           "default": true,
-          "description": "Enable document formatting using perltidy. Requires perltidy to be installed on your system."
+          "markdownDescription": "Enable document formatting using `perltidy`. Requires `perltidy` to be installed on your system."
         },
         "perl-lsp.formatOnSave": {
           "type": "boolean",
           "default": false,
-          "description": "Format document on save"
+          "markdownDescription": "Format document on save."
         },
         "perl-lsp.enableRefactoring": {
           "type": "boolean",
           "default": true,
-          "description": "Enable advanced refactoring features"
+          "markdownDescription": "Enable advanced refactoring features."
         },
         "perl-lsp.perltidyConfig": {
           "type": "string",
           "default": "",
-          "description": "Path to your `.perltidyrc` configuration file. If omitted, searches workspace and home directory."
+          "markdownDescription": "Path to your `.perltidyrc` configuration file. If omitted, searches workspace and home directory."
         },
         "perl-lsp.includePaths": {
           "type": "array",
@@ -145,12 +149,12 @@
             "lib",
             "local/lib/perl5"
           ],
-          "description": "Additional library paths (like `use lib`) to search for Perl modules. Relative paths resolve from workspace root."
+          "markdownDescription": "Additional library paths (like `use lib`) to search for Perl modules. Relative paths resolve from workspace root."
         },
         "perl-lsp.enableTestIntegration": {
           "type": "boolean",
           "default": true,
-          "description": "Enable Test::More and Test2 integration"
+          "markdownDescription": "Enable `Test::More` and `Test2` integration."
         }
       }
     },
