@@ -273,40 +273,6 @@ impl LspServer {
         output.flush()
     }
 
-    /// Show a message to the user via window/showMessage
-    ///
-    /// This sends a notification that clients typically display as a popup or notification.
-    ///
-    /// # Arguments
-    /// * `message_type` - Message severity: 1=Error, 2=Warning, 3=Info, 4=Log
-    /// * `message` - The message text to display
-    pub fn show_message(&self, message_type: u8, message: &str) -> io::Result<()> {
-        self.notify(
-            "window/showMessage",
-            json!({
-                "type": message_type,
-                "message": message
-            }),
-        )
-    }
-
-    /// Log a message to the client output via window/logMessage
-    ///
-    /// This sends a notification that clients typically write to their output/log panel.
-    ///
-    /// # Arguments
-    /// * `message_type` - Message severity: 1=Error, 2=Warning, 3=Info, 4=Log
-    /// * `message` - The message text to log
-    pub fn log_message(&self, message_type: u8, message: &str) -> io::Result<()> {
-        self.notify(
-            "window/logMessage",
-            json!({
-                "type": message_type,
-                "message": message
-            }),
-        )
-    }
-
     /// Acquire a lock on the documents map
     ///
     /// This helper centralizes lock acquisition behavior. parking_lot locks
