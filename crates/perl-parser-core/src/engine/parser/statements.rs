@@ -210,15 +210,18 @@ impl<'a> Parser<'a> {
                 | "keys" | "values" | "each" | "delete" | "exists" | "push" | "pop" | "shift"
                 | "unshift" | "sort" | "map" | "grep" | "chomp" | "chop" | "split" | "join" => {
                     let start = token.start;
-                    let func_name = token.text.clone();
+                    // We need to clone the text to check for indirect call pattern because
+                    // is_indirect_call_pattern borrows self mutably to peek ahead
+                    let text = token.text.clone();
 
                     // Check for indirect object syntax before consuming the token
-                    if self.is_indirect_call_pattern(&func_name) {
+                    if self.is_indirect_call_pattern(&text) {
                         return self.parse_indirect_call();
                     }
 
                     // Consume the function name token
-                    self.consume_token()?;
+                    let token = self.consume_token()?;
+                    let func_name = token.text;
 
                     // We're consuming the function name, no longer at statement start
                     self.mark_not_stmt_start();
@@ -309,9 +312,10 @@ impl<'a> Parser<'a> {
                 "new" => {
                     // Check for indirect constructor syntax
                     let _start = token.start;
-                    let func_name = token.text.clone();
+                    // Clone to satisfy borrow checker
+                    let text = token.text.clone();
 
-                    if self.is_indirect_call_pattern(&func_name) {
+                    if self.is_indirect_call_pattern(&text) {
                         return self.parse_indirect_call();
                     }
 
@@ -332,7 +336,7 @@ impl<'a> Parser<'a> {
     /// Parse statement modifier (if, unless, while, until, for)
     fn parse_statement_modifier(&mut self, statement: Node) -> ParseResult<Node> {
         let modifier_token = self.consume_token()?;
-        let modifier = modifier_token.text.clone();
+        let modifier = modifier_token.text;
 
         // For 'for' and 'foreach', we parse a list expression
         let condition = if matches!(modifier_token.kind, TokenKind::For | TokenKind::Foreach) {
@@ -427,7 +431,7 @@ impl<'a> Parser<'a> {
 
         // Parse the label
         let label_token = self.expect(TokenKind::Identifier)?;
-        let label = label_token.text.clone();
+        let label = label_token.text;
 
         // Consume the colon
         self.expect(TokenKind::Colon)?;
