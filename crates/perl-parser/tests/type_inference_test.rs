@@ -70,8 +70,14 @@ fn test_control_flow_union() {
             $x = "string";
         }
     "#;
-    // This test is harder to assert on with current engine because it might just be Any
-    // But ideally it should be Union(Integer, String) or similar.
-    // For now, let's just see what happens.
-    let _engine = infer(code);
+    // The type inference engine currently doesn't track control-flow-aware type narrowing.
+    // Since $x is declared without an initializer, it starts as Undef.
+    // The assignments in if/else branches don't update the declaration's type in the
+    // current implementation (would need data flow analysis for proper union types).
+    let engine = infer(code);
+    let x_type = engine.get_type_at("x");
+    assert!(x_type.is_some(), "Variable $x should have an inferred type");
+    // Currently returns Undef since the declaration `my $x;` has no initializer
+    // and control-flow assignments don't propagate back to the declaration point
+    assert_eq!(x_type, Some(PerlType::Scalar(ScalarType::Undef)));
 }

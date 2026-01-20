@@ -611,37 +611,20 @@ impl ScopeAnalyzer {
         }
     }
 
+    /// Marks variables as initialized when they appear on the left-hand side of an assignment.
+    /// Handles scalar variables, list assignments like `($x, $y) = ...`, and nested structures.
     fn mark_initialized(&self, node: &Node, scope: &Rc<Scope>) {
         match &node.kind {
             NodeKind::Variable { sigil, name } => {
                 let full_name = format!("{}{}", sigil, name);
+                // Skip package-qualified variables (e.g., $Foo::bar)
                 if !full_name.contains("::") {
                     scope.initialize_variable(&full_name);
                 }
             }
-            NodeKind::VariableListDeclaration { variables, .. } => {
-                for variable in variables {
-                    self.mark_initialized(variable, scope);
-                }
-            }
-            NodeKind::ArrayLiteral { elements } => {
-                for element in elements {
-                    self.mark_initialized(element, scope);
-                }
-            }
-            NodeKind::HashLiteral { pairs } => {
-                for (key, value) in pairs {
-                    self.mark_initialized(key, scope);
-                    self.mark_initialized(value, scope);
-                }
-            }
-            NodeKind::ExpressionStatement { expression } => {
-                self.mark_initialized(expression, scope);
-            }
-            // Add other nodes that can appear on LHS if needed
+            // For all other node types (parens, lists, etc.), recurse into children
+            // to find any nested variables that should be marked as initialized
             _ => {
-                // For other nodes, we might need to recurse if they can contain assignable variables
-                // e.g. parens, etc. But for now this covers common cases.
                 for child in node.children() {
                     self.mark_initialized(child, scope);
                 }
