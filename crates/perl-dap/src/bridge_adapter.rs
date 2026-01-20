@@ -180,7 +180,7 @@ impl BridgeAdapter {
 
         // Run both tasks concurrently and wait for both to finish.
         // We use join instead of select to ensure graceful shutdown:
-        // if the client close its input, we want to continue proxying
+        // if the client closes its input, we want to continue proxying
         // any remaining output from the server.
         let (res1, res2) = tokio::join!(client_to_server, server_to_client);
         res1?;
