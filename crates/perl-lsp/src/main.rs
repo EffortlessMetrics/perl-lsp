@@ -21,6 +21,9 @@
 use perl_lsp::LspServer;
 use std::env;
 use std::process;
+use std::sync::Arc;
+use tokio::net::TcpListener;
+use tokio::runtime::Runtime;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -79,19 +82,90 @@ fn main() {
         }
     }
 
-    // Create and run the LSP server
-    let mut server = LspServer::new();
-
     if use_stdio {
+        // Create and run the LSP server
+        let mut server = LspServer::new();
+
         // Run in stdio mode (default)
         if let Err(e) = server.run() {
             eprintln!("LSP server error: {}", e);
             process::exit(1);
         }
     } else {
-        // Socket mode not implemented yet
-        eprintln!("Socket mode is not implemented yet. Please use --stdio");
-        process::exit(1);
+        // Run in socket mode
+        let addr = format!("127.0.0.1:{}", port);
+        let rt = match Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                eprintln!("Failed to create Tokio runtime: {}", e);
+                process::exit(1);
+            }
+        };
+
+        rt.block_on(async {
+            let listener = match TcpListener::bind(&addr).await {
+                Ok(l) => l,
+                Err(e) => {
+                    eprintln!("Failed to bind to {}: {}", addr, e);
+                    process::exit(1);
+                }
+            };
+            let local_addr = match listener.local_addr() {
+                Ok(a) => a,
+                Err(e) => {
+                    eprintln!("Failed to get local address: {}", e);
+                    process::exit(1);
+                }
+            };
+            eprintln!("Perl LSP listening on {}", local_addr);
+
+            loop {
+                match listener.accept().await {
+                    Ok((stream, peer_addr)) => {
+                        eprintln!("Accepted connection from {}", peer_addr);
+                        tokio::spawn(async move {
+                            // Convert to std::net::TcpStream for blocking I/O
+                            if let Ok(std_stream) = stream.into_std() {
+                                // Set non-blocking to false because serve uses blocking I/O
+                                if let Err(e) = std_stream.set_nonblocking(false) {
+                                    eprintln!("Failed to set blocking mode: {}", e);
+                                    return;
+                                }
+
+                                let writer = match std_stream.try_clone() {
+                                    Ok(w) => w,
+                                    Err(e) => {
+                                        eprintln!("Failed to clone stream: {}", e);
+                                        return;
+                                    }
+                                };
+                                let reader = std_stream;
+
+                                // LspServer expects Arc<parking_lot::Mutex<Box<dyn Write + Send>>>
+                                let output = Arc::new(parking_lot::Mutex::new(
+                                    Box::new(writer) as Box<dyn std::io::Write + Send>
+                                ));
+
+                                if let Err(e) = tokio::task::spawn_blocking(move || {
+                                    let mut server = LspServer::with_output(output);
+                                    let mut buf_reader = std::io::BufReader::new(reader);
+                                    if let Err(e) = server.serve(&mut buf_reader) {
+                                        eprintln!("Connection error: {}", e);
+                                    }
+                                })
+                                .await
+                                {
+                                    eprintln!("Task panic: {}", e);
+                                }
+                            } else {
+                                eprintln!("Failed to convert stream to std");
+                            }
+                        });
+                    }
+                    Err(e) => eprintln!("Failed to accept: {}", e),
+                }
+            }
+        });
     }
 }
 
@@ -116,4 +190,7 @@ fn print_help() {
     eprintln!();
     eprintln!("  # Run with logging enabled");
     eprintln!("  perl-lsp --stdio --log");
+    eprintln!();
+    eprintln!("  # Run in TCP socket mode");
+    eprintln!("  perl-lsp --socket --port 9257");
 }
