@@ -12,3 +12,11 @@
 **Prevention:**
 - Use `@ARGV` in the Perl script and pass user inputs as separate arguments to `perl`
 - Add `--` separator before file path arguments to prevent flag injection
+
+## 2025-05-20 - Argument Injection in Perldoc URI
+
+**Vulnerability:** Argument injection in `fetch_perldoc` via `perldoc://` URIs. The module name was passed directly to `perldoc` without `--` separator, allowing URIs like `perldoc://-v` to trigger verbose mode or other flags instead of fetching documentation.
+
+**Learning:** Even "read-only" tools like `perldoc` can have their behavior altered via argument injection. `Command::arg` prevents shell injection (breaking out of quotes) but does not prevent the application from interpreting the argument as a flag if it starts with `-`.
+
+**Prevention:** Always use the `--` argument delimiter when passing user-controlled input as positional arguments to external commands.

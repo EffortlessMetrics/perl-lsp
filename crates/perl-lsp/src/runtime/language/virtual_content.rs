@@ -53,7 +53,13 @@ fn fetch_virtual_content(uri: &str) -> Option<String> {
 /// Fetch Perl documentation using perldoc
 fn fetch_perldoc(module: &str) -> Option<String> {
     // Run perldoc -T Module::Name to get plain text documentation
-    let output = std::process::Command::new("perldoc").arg("-T").arg(module).output().ok()?;
+    // Use -- to prevent argument injection if module starts with -
+    let output = std::process::Command::new("perldoc")
+        .arg("-T")
+        .arg("--")
+        .arg(module)
+        .output()
+        .ok()?;
 
     if output.status.success() { String::from_utf8(output.stdout).ok() } else { None }
 }
@@ -61,6 +67,16 @@ fn fetch_perldoc(module: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parser_fetch_perldoc_argument_injection() {
+        // Try to fetch documentation for a module name that looks like a flag
+        // This should fail gracefully (return None) rather than interpreting the flag
+        // With --, this looks for a module named "-v" instead of enabling verbose mode
+        let result = fetch_perldoc("-v");
+        // Unless there is a module named "-v", this should be None
+        assert!(result.is_none());
+    }
 
     #[test]
     fn parser_fetch_perldoc_strict() {

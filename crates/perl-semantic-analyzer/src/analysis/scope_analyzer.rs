@@ -225,7 +225,7 @@ impl ScopeAnalyzer {
                 // Actually Perl evaluates RHS before LHS assignment, so usages in initializer refer to OUTER scope.
                 // So we analyze initializer first.
                 if let Some(init) = initializer {
-                    self.analyze_node(init, scope, parent_map, issues, code, pragma_map);
+                    self.analyze_node(init, scope, ancestors, issues, code, pragma_map);
                 }
 
                 if let Some(issue_kind) = scope.declare_variable(
@@ -258,7 +258,7 @@ impl ScopeAnalyzer {
 
                 // Analyze initializer first
                 if let Some(init) = initializer {
-                    self.analyze_node(init, scope, parent_map, issues, code, pragma_map);
+                    self.analyze_node(init, scope, ancestors, issues, code, pragma_map);
                 }
 
                 for variable in variables {
@@ -396,7 +396,7 @@ impl ScopeAnalyzer {
             NodeKind::Assignment { lhs, rhs, op: _ } => {
                 // Handle assignment: LHS variable becomes initialized
                 // First analyze RHS (usages)
-                self.analyze_node(rhs, scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(rhs, scope, ancestors, issues, code, pragma_map);
 
                 // Then analyze LHS
                 // We need to recursively mark variables as initialized in the LHS structure
@@ -405,7 +405,7 @@ impl ScopeAnalyzer {
 
                 // Recurse into LHS to trigger UndeclaredVariable checks
                 // Note: 'use_variable' marks as used, which is technically correct for assignment too (write usage)
-                self.analyze_node(lhs, scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(lhs, scope, ancestors, issues, code, pragma_map);
             }
 
             NodeKind::Identifier { name } => {
