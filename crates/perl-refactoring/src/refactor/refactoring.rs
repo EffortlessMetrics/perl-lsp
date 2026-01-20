@@ -1039,12 +1039,12 @@ impl RefactoringEngine {
         let mut warnings = Vec::new();
 
         // Find elements in the AST
-        let mut found_names: Vec<String> = Vec::new();
+        let mut found_names: HashSet<String> = HashSet::new();
         ast.for_each_child(|child| {
             if let NodeKind::Subroutine { name, .. } = &child.kind {
                 if let Some(sub_name) = name {
                     if elements.contains(sub_name) {
-                        found_names.push(sub_name.clone());
+                        found_names.insert(sub_name.clone());
                         elements_to_move.push(ElementToMove {
                             location: child.location,
                             content: source_content[child.location.start..child.location.end]
