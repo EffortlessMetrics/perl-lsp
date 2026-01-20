@@ -736,309 +736,93 @@ impl ScopeAnalyzer {
 
 /// Check if a variable is a built-in Perl global variable
 fn is_builtin_global(name: &str) -> bool {
-    // Standard global variables
-    const BUILTIN_GLOBALS: &[&str] = &[
+    match name {
         // Special variables
-        "$_",
-        "@_",
-        "%_",
-        "$!",
-        "$@",
-        "$?",
-        "$^",
-        "$$",
-        "$0",
-        "$1",
-        "$2",
-        "$3",
-        "$4",
-        "$5",
-        "$6",
-        "$7",
-        "$8",
-        "$9",
-        "$.",
-        "$,",
-        "$/",
-        "$\\",
-        "$\"",
-        "$;",
-        "$%",
-        "$=",
-        "$-",
-        "$~",
-        "$|",
-        "$&",
-        "$`",
-        "$'",
-        "$+",
-        "@+",
-        "%+",
-        "$[",
-        "$]",
-        "$^A",
-        "$^C",
-        "$^D",
-        "$^E",
-        "$^F",
-        "$^H",
-        "$^I",
-        "$^L",
-        "$^M",
-        "$^N",
-        "$^O",
-        "$^P",
-        "$^R",
-        "$^S",
-        "$^T",
-        "$^V",
-        "$^W",
-        "$^X",
+        "$_" | "@_" | "%_" | "$!" | "$@" | "$?" | "$^" | "$$" | "$0" | "$1" | "$2" | "$3"
+        | "$4" | "$5" | "$6" | "$7" | "$8" | "$9" | "$." | "$," | "$/" | "$\\" | "$\"" | "$;"
+        | "$%" | "$=" | "$-" | "$~" | "$|" | "$&" | "$`" | "$'" | "$+" | "@+" | "%+" | "$["
+        | "$]" | "$^A" | "$^C" | "$^D" | "$^E" | "$^F" | "$^H" | "$^I" | "$^L" | "$^M" | "$^N"
+        | "$^O" | "$^P" | "$^R" | "$^S" | "$^T" | "$^V" | "$^W" | "$^X" |
         // Common globals
-        "%ENV",
-        "@INC",
-        "%INC",
-        "@ARGV",
-        "%SIG",
-        "$ARGV",
-        "@EXPORT",
-        "@EXPORT_OK",
-        "%EXPORT_TAGS",
-        "@ISA",
-        "$VERSION",
-        "$AUTOLOAD",
+        "%ENV" | "@INC" | "%INC" | "@ARGV" | "%SIG" | "$ARGV" | "@EXPORT" | "@EXPORT_OK"
+        | "%EXPORT_TAGS" | "@ISA" | "$VERSION" | "$AUTOLOAD" |
         // Filehandles
-        "STDIN",
-        "STDOUT",
-        "STDERR",
-        "DATA",
-        "ARGVOUT",
+        "STDIN" | "STDOUT" | "STDERR" | "DATA" | "ARGVOUT" |
         // Sort variables
-        "$a",
-        "$b",
+        "$a" | "$b" |
         // Error variables
-        "$EVAL_ERROR",
-        "$ERRNO",
-        "$EXTENDED_OS_ERROR",
-        "$CHILD_ERROR",
-        "$PROCESS_ID",
-        "$PROGRAM_NAME",
+        "$EVAL_ERROR" | "$ERRNO" | "$EXTENDED_OS_ERROR" | "$CHILD_ERROR" | "$PROCESS_ID"
+        | "$PROGRAM_NAME" |
         // Perl version variables
-        "$PERL_VERSION",
-        "$OLD_PERL_VERSION",
-    ];
+        "$PERL_VERSION" | "$OLD_PERL_VERSION" => true,
+        _ => {
+            // Check patterns
+            // $^[A-Z] variables
+            if name.starts_with("$^") && name.len() == 3 {
+                if let Some(ch) = name.chars().nth(2) {
+                    if ch.is_ascii_uppercase() {
+                        return true;
+                    }
+                }
+            }
 
-    // Check exact matches
-    if BUILTIN_GLOBALS.contains(&name) {
-        return true;
-    }
-
-    // Check patterns
-    // $^[A-Z] variables
-    if name.starts_with("$^") && name.len() == 3 {
-        if let Some(ch) = name.chars().nth(2) {
-            if ch.is_ascii_uppercase() {
+            // Numbered capture variables ($1, $2, etc.)
+            // Note: $0-$9 are already handled in the match above
+            if name.starts_with('$') && name.len() > 1 && name[1..].chars().all(|c| c.is_ascii_digit()) {
                 return true;
             }
+
+            false
         }
     }
-
-    // Numbered capture variables ($1, $2, etc.)
-    if name.starts_with('$') && name.len() > 1 && name[1..].chars().all(|c| c.is_ascii_digit()) {
-        return true;
-    }
-
-    false
 }
 
 /// Check if an identifier is a known Perl built-in function
 fn is_known_function(name: &str) -> bool {
-    const KNOWN_FUNCTIONS: &[&str] = &[
+    match name {
         // I/O functions
-        "print",
-        "printf",
-        "say",
-        "open",
-        "close",
-        "read",
-        "write",
-        "seek",
-        "tell",
-        "eof",
-        "fileno",
-        "binmode",
-        "sysopen",
-        "sysread",
-        "syswrite",
-        "sysclose",
-        "select",
+        "print" | "printf" | "say" | "open" | "close" | "read" | "write" | "seek" | "tell"
+        | "eof" | "fileno" | "binmode" | "sysopen" | "sysread" | "syswrite" | "sysclose"
+        | "select" |
         // String functions
-        "chomp",
-        "chop",
-        "chr",
-        "crypt",
-        "fc",
-        "hex",
-        "index",
-        "lc",
-        "lcfirst",
-        "length",
-        "oct",
-        "ord",
-        "pack",
-        "q",
-        "qq",
-        "qr",
-        "quotemeta",
-        "qw",
-        "qx",
-        "reverse",
-        "rindex",
-        "sprintf",
-        "substr",
-        "tr",
-        "uc",
-        "ucfirst",
-        "unpack",
+        "chomp" | "chop" | "chr" | "crypt" | "fc" | "hex" | "index" | "lc" | "lcfirst" | "length"
+        | "oct" | "ord" | "pack" | "q" | "qq" | "qr" | "quotemeta" | "qw" | "qx" | "reverse"
+        | "rindex" | "sprintf" | "substr" | "tr" | "uc" | "ucfirst" | "unpack" |
         // Array/List functions
-        "pop",
-        "push",
-        "shift",
-        "unshift",
-        "splice",
-        "split",
-        "join",
-        "grep",
-        "map",
-        "sort",
-        "reverse",
+        "pop" | "push" | "shift" | "unshift" | "splice" | "split" | "join" | "grep" | "map"
+        | "sort" |
         // Hash functions
-        "delete",
-        "each",
-        "exists",
-        "keys",
-        "values",
+        "delete" | "each" | "exists" | "keys" | "values" |
         // Control flow
-        "die",
-        "exit",
-        "return",
-        "goto",
-        "last",
-        "next",
-        "redo",
-        "continue",
-        "break",
-        "given",
-        "when",
-        "default",
+        "die" | "exit" | "return" | "goto" | "last" | "next" | "redo" | "continue" | "break"
+        | "given" | "when" | "default" |
         // File test operators
-        "stat",
-        "lstat",
-        "-r",
-        "-w",
-        "-x",
-        "-o",
-        "-R",
-        "-W",
-        "-X",
-        "-O",
-        "-e",
-        "-z",
-        "-s",
-        "-f",
-        "-d",
-        "-l",
-        "-p",
-        "-S",
-        "-b",
-        "-c",
-        "-t",
-        "-u",
-        "-g",
-        "-k",
-        "-T",
-        "-B",
-        "-M",
-        "-A",
-        "-C",
+        "stat" | "lstat" | "-r" | "-w" | "-x" | "-o" | "-R" | "-W" | "-X" | "-O" | "-e" | "-z"
+        | "-s" | "-f" | "-d" | "-l" | "-p" | "-S" | "-b" | "-c" | "-t" | "-u" | "-g" | "-k"
+        | "-T" | "-B" | "-M" | "-A" | "-C" |
         // System functions
-        "system",
-        "exec",
-        "fork",
-        "wait",
-        "waitpid",
-        "kill",
-        "sleep",
-        "alarm",
-        "getpgrp",
-        "getppid",
-        "getpriority",
-        "setpgrp",
-        "setpriority",
-        "time",
-        "times",
-        "localtime",
-        "gmtime",
+        "system" | "exec" | "fork" | "wait" | "waitpid" | "kill" | "sleep" | "alarm"
+        | "getpgrp" | "getppid" | "getpriority" | "setpgrp" | "setpriority" | "time" | "times"
+        | "localtime" | "gmtime" |
         // Math functions
-        "abs",
-        "atan2",
-        "cos",
-        "exp",
-        "int",
-        "log",
-        "rand",
-        "sin",
-        "sqrt",
-        "srand",
+        "abs" | "atan2" | "cos" | "exp" | "int" | "log" | "rand" | "sin" | "sqrt" | "srand" |
         // Misc functions
-        "defined",
-        "undef",
-        "ref",
-        "bless",
-        "tie",
-        "tied",
-        "untie",
-        "eval",
-        "caller",
-        "import",
-        "require",
-        "use",
-        "do",
-        "package",
-        "sub",
-        "my",
-        "our",
-        "local",
-        "state",
-        "scalar",
-        "wantarray",
-        "warn",
-    ];
-
-    KNOWN_FUNCTIONS.contains(&name)
+        "defined" | "undef" | "ref" | "bless" | "tie" | "tied" | "untie" | "eval" | "caller"
+        | "import" | "require" | "use" | "do" | "package" | "sub" | "my" | "our" | "local"
+        | "state" | "scalar" | "wantarray" | "warn" => true,
+        _ => false,
+    }
 }
 
 /// Check if an identifier is a known filehandle
 #[allow(dead_code)]
 fn is_filehandle(name: &str) -> bool {
-    const KNOWN_FILEHANDLES: &[&str] = &[
-        "STDIN",
-        "STDOUT",
-        "STDERR",
-        "ARGV",
-        "ARGVOUT",
-        "DATA",
-        "STDHANDLE",
-        "__PACKAGE__",
-        "__FILE__",
-        "__LINE__",
-        "__SUB__",
-        "__END__",
-        "__DATA__",
-    ];
-
-    // Check standard filehandles
-    KNOWN_FILEHANDLES.contains(&name) ||
-    // Check if it's all uppercase (common convention for filehandles)
-    (name.chars().all(|c| c.is_ascii_uppercase() || c == '_') && !name.is_empty())
+    match name {
+        "STDIN" | "STDOUT" | "STDERR" | "ARGV" | "ARGVOUT" | "DATA" | "STDHANDLE"
+        | "__PACKAGE__" | "__FILE__" | "__LINE__" | "__SUB__" | "__END__" | "__DATA__" => true,
+        _ => {
+            // Check if it's all uppercase (common convention for filehandles)
+            name.chars().all(|c| c.is_ascii_uppercase() || c == '_') && !name.is_empty()
+        }
+    }
 }
