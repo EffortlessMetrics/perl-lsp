@@ -94,11 +94,29 @@ fn main() {
     } else {
         // Run in socket mode
         let addr = format!("127.0.0.1:{}", port);
-        let rt = Runtime::new().expect("Failed to create Tokio runtime");
+        let rt = match Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                eprintln!("Failed to create Tokio runtime: {}", e);
+                process::exit(1);
+            }
+        };
 
         rt.block_on(async {
-            let listener = TcpListener::bind(&addr).await.expect("Failed to bind port");
-            let local_addr = listener.local_addr().expect("Failed to get local address");
+            let listener = match TcpListener::bind(&addr).await {
+                Ok(l) => l,
+                Err(e) => {
+                    eprintln!("Failed to bind to {}: {}", addr, e);
+                    process::exit(1);
+                }
+            };
+            let local_addr = match listener.local_addr() {
+                Ok(a) => a,
+                Err(e) => {
+                    eprintln!("Failed to get local address: {}", e);
+                    process::exit(1);
+                }
+            };
             eprintln!("Perl LSP listening on {}", local_addr);
 
             loop {
@@ -128,7 +146,7 @@ fn main() {
                                     Box::new(writer) as Box<dyn std::io::Write + Send>
                                 ));
 
-                                tokio::task::spawn_blocking(move || {
+                                if let Err(e) = tokio::task::spawn_blocking(move || {
                                     let mut server = LspServer::with_output(output);
                                     let mut buf_reader = std::io::BufReader::new(reader);
                                     if let Err(e) = server.serve(&mut buf_reader) {
@@ -136,7 +154,9 @@ fn main() {
                                     }
                                 })
                                 .await
-                                .expect("Task panic");
+                                {
+                                    eprintln!("Task panic: {}", e);
+                                }
                             } else {
                                 eprintln!("Failed to convert stream to std");
                             }
