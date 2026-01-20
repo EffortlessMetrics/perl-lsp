@@ -47,7 +47,7 @@ pub struct SignatureHelp {
 pub struct SignatureHelpProvider {
     ast: Node,
     symbol_table: SymbolTable,
-    builtin_signatures: HashMap<&'static str, ImportedBuiltinSignature>,
+    builtin_signatures: &'static HashMap<&'static str, ImportedBuiltinSignature>,
 }
 
 impl SignatureHelpProvider {
