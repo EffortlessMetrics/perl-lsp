@@ -166,9 +166,9 @@ impl ScopeAnalyzer {
         Self
     }
 
-    pub fn analyze<'a>(
+    pub fn analyze(
         &self,
-        ast: &'a Node,
+        ast: &Node,
         code: &str,
         pragma_map: &[(Range<usize>, PragmaState)],
     ) -> Vec<ScopeIssue> {
