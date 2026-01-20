@@ -10,16 +10,18 @@ sub this_is_an_extremely_long_subroutine_name_that_should_still_be_parsed_correc
 ---
 
 (source_file
-  (assignment_expression
-    (variable_declaration
-      (scalar_variable))
-    (assignment_operator)
-    (integer))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (number)))
   (subroutine_declaration_statement
-    (identifier)
+    (bareword)
     (block
-      (return_expression
-        (integer)))))
+      (expression_statement
+        (return_expression
+          (number))))))
 
 ==========================================
 Deeply nested structures
@@ -33,10 +35,10 @@ $d = $a->[0]->{key}->[1]->{another}->[2];
 ---
 
 (source_file
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (anonymous_array_expression
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
       (anonymous_array_expression
         (anonymous_array_expression
           (anonymous_array_expression
@@ -46,99 +48,76 @@ $d = $a->[0]->{key}->[1]->{another}->[2];
                   (anonymous_array_expression
                     (anonymous_array_expression
                       (anonymous_array_expression
-                        (integer))))))))))))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (anonymous_hash_expression
-      (hash_pair
-        (bareword)
-        (fat_arrow_operator)
-        (anonymous_hash_expression
-          (hash_pair
-            (bareword)
-            (fat_arrow_operator)
-            (anonymous_hash_expression
-              (hash_pair
-                (bareword)
-                (fat_arrow_operator)
-                (anonymous_hash_expression
-                  (hash_pair
-                    (bareword)
-                    (fat_arrow_operator)
-                    (anonymous_hash_expression
-                      (hash_pair
-                        (bareword)
-                        (fat_arrow_operator)
-                        (anonymous_hash_expression
-                          (hash_pair
-                            (bareword)
-                            (fat_arrow_operator)
-                            (anonymous_hash_expression
-                              (hash_pair
-                                (bareword)
-                                (fat_arrow_operator)
-                                (anonymous_hash_expression
-                                  (hash_pair
-                                    (bareword)
-                                    (fat_arrow_operator)
-                                    (anonymous_hash_expression
-                                      (hash_pair
-                                        (bareword)
-                                        (fat_arrow_operator)
-                                        (anonymous_hash_expression
-                                          (hash_pair
-                                            (bareword)
-                                            (fat_arrow_operator)
-                                            (integer)))))))))))))))))))))))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (reference_expression
-      (reference_operator)
-      (reference_expression
-        (reference_operator)
-        (reference_expression
-          (reference_operator)
-          (reference_expression
-            (reference_operator)
-            (reference_expression
-              (reference_operator)
-              (reference_expression
-                (reference_operator)
-                (reference_expression
-                  (reference_operator)
-                  (reference_expression
-                    (reference_operator)
-                    (reference_expression
-                      (reference_operator)
-                      (reference_expression
-                        (reference_operator)
-                        (scalar_variable))))))))))))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (array_access_expression
-      (hash_access_expression
-        (array_access_expression
-          (hash_access_expression
-            (array_access_expression
-              (scalar_variable)
-              (arrow_operator)
-              (array_access_index
-                (integer)))
-            (arrow_operator)
-            (hash_access_index
-              (bareword)))
-          (arrow_operator)
-          (array_access_index
-            (integer)))
-        (arrow_operator)
-        (hash_access_index
-          (bareword)))
-      (arrow_operator)
-      (array_access_index
-        (integer)))))
+                        (anonymous_array_expression
+                          (number)))))))))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (anonymous_hash_expression
+        (list_expression
+          (autoquoted_bareword)
+          (anonymous_hash_expression
+            (list_expression
+              (autoquoted_bareword)
+              (anonymous_hash_expression
+                (list_expression
+                  (autoquoted_bareword)
+                  (anonymous_hash_expression
+                    (list_expression
+                      (autoquoted_bareword)
+                      (anonymous_hash_expression
+                        (list_expression
+                          (autoquoted_bareword)
+                          (anonymous_hash_expression
+                            (list_expression
+                              (autoquoted_bareword)
+                              (anonymous_hash_expression
+                                (list_expression
+                                  (autoquoted_bareword)
+                                  (anonymous_hash_expression
+                                    (list_expression
+                                      (autoquoted_bareword)
+                                      (anonymous_hash_expression
+                                        (list_expression
+                                          (autoquoted_bareword)
+                                          (anonymous_hash_expression
+                                            (list_expression
+                                              (autoquoted_bareword)
+                                              (number)))))))))))))))))))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (refgen_expression
+        (refgen_expression
+          (refgen_expression
+            (refgen_expression
+              (refgen_expression
+                (refgen_expression
+                  (refgen_expression
+                    (refgen_expression
+                      (refgen_expression
+                        (refgen_expression
+                          (refgen_expression
+                            (scalar
+                              (varname)))))))))))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (array_element_expression
+        (hash_element_expression
+          (array_element_expression
+            (hash_element_expression
+              (array_element_expression
+                (scalar
+                  (varname))
+                (number))
+              (autoquoted_bareword))
+            (number))
+          (autoquoted_bareword))
+        (number)))))
 
 ==========================================
 Mixed line endings
@@ -152,26 +131,38 @@ $mixed = "line1\nline2\r\nline3\r";
 ---
 
 (source_file
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (string_literal
-      (string_content)))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (string_literal
-      (string_content)))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (string_literal
-      (string_content)))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (string_literal
-      (string_content))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (interpolated_string_literal
+        (string_content
+          (escape_sequence)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (interpolated_string_literal
+        (string_content
+          (escape_sequence)
+          (escape_sequence)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (interpolated_string_literal
+        (string_content
+          (escape_sequence)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (interpolated_string_literal
+        (string_content
+          (escape_sequence)
+          (escape_sequence)
+          (escape_sequence)
+          (escape_sequence))))))
 
 ==========================================
 Ambiguous parsing situations
@@ -202,93 +193,95 @@ $hash = { key => 'value' };
 
 (source_file
   (comment)
-  (func1op_call_expression
-    (identifier)
-    (bareword))
-  (func1op_call_expression
-    (identifier)
-    (string_literal
-      (string_content)))
-  (func1op_call_expression
-    (identifier)
-    (hash_pair
-      (bareword)
-      (fat_arrow_operator)
-      (string_literal
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (bareword)))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (interpolated_string_literal
         (string_content))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (autoquoted_bareword)
+        (interpolated_string_literal
+          (string_content)))))
   (comment)
-  (binary_expression
-    (function_call_expression
-      (identifier)
-      (arguments
+  (expression_statement
+    (binary_expression
+      (function_call_expression
+        (function)
         (binary_expression
-          (integer)
-          (binary_operator)
-          (integer))))
-    (binary_operator)
-    (integer))
-  (func1op_call_expression
-    (identifier)
+          (number)
+          (number)))
+      (number)))
+  (expression_statement
     (binary_expression
-      (binary_expression
-        (integer)
-        (binary_operator)
-        (integer))
-      (binary_operator)
-      (integer)))
+      (function_call_expression
+        (function)
+        (binary_expression
+          (number)
+          (number)))
+      (number)))
   (comment)
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (binary_expression
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
       (binary_expression
-        (scalar_variable)
-        (binary_operator)
-        (integer))
-      (binary_operator)
-      (integer)))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
+        (binary_expression
+          (scalar
+            (varname))
+          (number))
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (binary_expression
+        (binary_expression
+          (scalar
+            (varname))
+          (number))
+        (number))))
+  (expression_statement
     (binary_expression
-      (scalar_variable)
-      (binary_operator)
-      (regex_match_expression
-        (regex
-          (regex_pattern)))))
-  (binary_expression
-    (scalar_variable)
-    (binary_operator)
-    (regex_match_expression
-      (regex
-        (regex_pattern))))
+      (scalar
+        (varname))
+      (match_regexp
+        (regexp_content))))
   (comment)
   (subroutine_declaration_statement
-    (identifier)
+    (bareword)
     (block
+      (expression_statement
+        (anonymous_hash_expression
+          (list_expression
+            (autoquoted_bareword)
+            (string_literal
+              (string_content)))))))
+  (expression_statement
+    (map_grep_expression
+      (block
+        (expression_statement
+          (binary_expression
+            (scalar
+              (varname))
+            (number))))
+      (array
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
       (anonymous_hash_expression
-        (hash_pair
-          (bareword)
-          (fat_arrow_operator)
+        (list_expression
+          (autoquoted_bareword)
           (string_literal
-            (string_content))))))
-  (func1op_call_expression
-    (identifier)
-    (block
-      (binary_expression
-        (special_scalar_variable)
-        (binary_operator)
-        (integer)))
-    (array_variable))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (anonymous_hash_expression
-      (hash_pair
-        (bareword)
-        (fat_arrow_operator)
-        (string_literal
-          (string_content))))))
+            (string_content)))))))
 
 ==========================================
 Whitespace sensitivity
@@ -316,45 +309,50 @@ sub	func	{	}
 
 (source_file
   (comment)
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (integer))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (integer))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (integer))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (integer))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
   (comment)
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (binary_expression
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
       (binary_expression
-        (integer)
-        (binary_operator)
-        (integer))
-      (binary_operator)
-      (integer)))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (integer))
+        (binary_expression
+          (number)
+          (number))
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
   (comment)
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (string_literal
-      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (interpolated_string_literal
+        (string_content))))
   (subroutine_declaration_statement
-    (identifier)
+    (bareword)
     (block)))
 
 ==========================================
@@ -381,45 +379,47 @@ use Module 1.23_45;
 (source_file
   (comment)
   (subroutine_declaration_statement
-    (identifier)
+    (bareword)
     (prototype)
     (block))
   (subroutine_declaration_statement
-    (identifier)
+    (bareword)
     (prototype)
     (block))
   (subroutine_declaration_statement
-    (identifier)
+    (bareword)
     (prototype)
     (block))
   (subroutine_declaration_statement
-    (identifier)
+    (bareword)
     (prototype)
     (block))
   (comment)
   (subroutine_declaration_statement
-    (identifier)
-    (attribute_list
-      (attribute)
-      (attribute))
-    (block))
-  (subroutine_declaration_statement
-    (identifier)
-    (attribute_list
+    (bareword)
+    (attrlist
       (attribute
-        (identifier)
-        (attribute_arguments)))
+        (attribute_name))
+      (attribute
+        (attribute_name)))
+    (block))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)
+        (attribute_value)))
     (block))
   (comment)
   (use_statement
-    (identifier)
+    (package)
+    (number))
+  (use_statement
+    (package)
     (version))
   (use_statement
-    (identifier)
-    (version))
-  (use_statement
-    (identifier)
-    (version)))
+    (package)
+    (number)))
 
 ==========================================
 Empty and minimal constructs
@@ -526,53 +526,56 @@ $hash = {
 ---
 
 (source_file
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (comment)
-    (integer))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (comment)
+      (number)))
   (subroutine_declaration_statement
-    (identifier)
+    (bareword)
     (comment)
-    (arguments
+    (signature
       (comment)
-      (scalar_variable)
-      (comma)
+      (mandatory_parameter
+        (scalar
+          (varname)))
       (comment)
-      (scalar_variable)
+      (mandatory_parameter
+        (scalar
+          (varname)))
       (comment))
     (comment)
     (block
       (comment)
-      (return_expression
-        (comment)
-        (binary_expression
-          (scalar_variable)
-          (binary_operator)
-          (scalar_variable)))
-      (comment))
-    (comment))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (anonymous_hash_expression
-      (hash_pair
-        (bareword)
-        (comment)
-        (fat_arrow_operator)
-        (comment)
-        (string_literal
-          (string_content)))
-      (comma)
-      (comment)
-      (comment)
-      (hash_pair
-        (bareword)
-        (fat_arrow_operator)
-        (string_literal
-          (string_content)))
-      (comma)
-      (comment))))
+      (expression_statement
+        (return_expression
+          (comment)
+          (binary_expression
+            (scalar
+              (varname))
+            (scalar
+              (varname)))))
+      (comment)))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (anonymous_hash_expression
+        (list_expression
+          (autoquoted_bareword)
+          (comment)
+          (comment)
+          (list_expression
+            (string_literal
+              (string_content))
+            (comment)
+            (comment)
+            (autoquoted_bareword)
+            (string_literal
+              (string_content))))
+        (comment)))))
 
 ==========================================
 Numeric edge cases
@@ -600,75 +603,93 @@ $x = 0x1234_5678_9ABC_DEF0;
 ---
 
 (source_file
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (integer))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (octal))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (float))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (float))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (float))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (float))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (float))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (float))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (float))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (float))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (float))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (float))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (binary_number))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (hex_number))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (octal))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (integer))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (binary_number))
-  (assignment_expression
-    (scalar_variable)
-    (assignment_operator)
-    (hex_number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (number))))

@@ -20,9 +20,38 @@ try {
 ---
 
 (source_file
-  (use_statement)
-  (try_catch_statement)
-  (try_catch_statement))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (scalar
+      (varname))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))))))))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (scalar
+      (varname))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname)))))))
 
 ==================
 Try catch finally
@@ -52,9 +81,45 @@ try {
 ---
 
 (source_file
-  (use_statement)
-  (try_catch_statement)
-  (try_catch_statement))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (scalar
+      (varname))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname)))))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)))))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)))
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (scalar
+      (varname))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))))
 
 ==================
 Nested try catch
@@ -78,8 +143,44 @@ catch ($outer) {
 ---
 
 (source_file
-  (use_statement)
-  (try_catch_statement))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (try_statement
+    (block
+      (try_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function))))
+        (scalar
+          (varname))
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname))))))
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname)))))))))
+    (scalar
+      (varname))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname)))))))))
 
 ==================
 Try catch with return
@@ -137,8 +238,64 @@ sub process {
 ---
 
 (source_file
-  (use_statement)
-  (subroutine_declaration))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (lowprec_logical_expression
+          (ambiguous_function_call_expression
+            (function)
+            (list_expression
+              (variable_declaration
+                (scalar
+                  (varname)))
+              (string_literal
+                (string_content))
+              (scalar
+                (varname))))
+          (ambiguous_function_call_expression
+            (function)
+            (scalar
+              (varname)))))
+      (defer_statement
+        (block
+          (expression_statement
+            (func1op_call_expression
+              (scalar
+                (varname))))
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (escape_sequence)))))))
+      (defer_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)))))
+      (loop_statement
+        (readline_expression
+          (filehandle
+            (varname)))
+        (block
+          (defer_statement
+            (block
+              (expression_statement
+                (ambiguous_function_call_expression
+                  (function)
+                  (interpolated_string_literal
+                    (string_content
+                      (escape_sequence)))))))
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname)))))))))
 
 ==================
 Multiple defer blocks
@@ -167,9 +324,77 @@ sub with_defer {
 ---
 
 (source_file
-  (use_statement)
-  (block)
-  (subroutine_declaration))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (block_statement
+    (defer_statement
+      (block
+        (expression_statement
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence)))))))
+    (defer_statement
+      (block
+        (expression_statement
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence)))))))
+    (defer_statement
+      (block
+        (expression_statement
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence)))))))
+    (expression_statement
+      (ambiguous_function_call_expression
+        (function)
+        (interpolated_string_literal
+          (string_content
+            (escape_sequence))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (function_call_expression
+            (function))))
+      (defer_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname))))))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (function_call_expression
+            (function))))
+      (defer_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname))))))
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname)))))))
 
 ==================
 Defer in try catch
@@ -202,9 +427,61 @@ sub safe_operation {
 ---
 
 (source_file
-  (use_statement)
-  (try_catch_statement)
-  (subroutine_declaration))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (try_statement
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (function_call_expression
+            (function))))
+      (defer_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname))))))
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname)))))
+    (scalar
+      (varname))
+    (block
+      (comment)
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (defer_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)))))
+      (try_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function))))
+        (scalar
+          (varname))
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname)))))))))
 
 ==================
 Try without catch
@@ -230,10 +507,31 @@ eval {
 ---
 
 (source_file
-  (use_statement)
-  (try_statement)
-  (try_finally_statement)
-  (eval_block))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)))))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)))))
+  (expression_statement
+    (eval_expression
+      (block
+        (comment)
+        (expression_statement
+          (function_call_expression
+            (function)))))))
 
 ==================
 Catch with patterns
@@ -267,9 +565,80 @@ try {
 ---
 
 (source_file
-  (use_statement)
-  (try_catch_statement)
-  (try_catch_statement))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (scalar
+      (varname))
+    (block
+      (conditional_statement
+        (binary_expression
+          (scalar
+            (varname))
+          (match_regexp
+            (regexp_content)))
+        (block
+          (expression_statement
+            (function_call_expression
+              (function))))
+        (elsif
+          (binary_expression
+            (scalar
+              (varname))
+            (match_regexp
+              (regexp_content)))
+          (block
+            (expression_statement
+              (function_call_expression
+                (function))))
+          (else
+            (block
+              (expression_statement
+                (ambiguous_function_call_expression
+                  (function)
+                  (scalar
+                    (varname))))))))))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (scalar
+      (varname))
+    (block
+      (given_statement
+        (scalar
+          (varname))
+        (block
+          (when_statement
+            (match_regexp
+              (regexp_content))
+            (block
+              (expression_statement
+                (return_expression
+                  (function_call_expression
+                    (function))))))
+          (when_statement
+            (match_regexp
+              (regexp_content))
+            (block
+              (expression_statement
+                (return_expression
+                  (function_call_expression
+                    (function))))))
+          (default_statement
+            (block
+              (expression_statement
+                (ambiguous_function_call_expression
+                  (function)
+                  (scalar
+                    (varname)))))))))))
 
 ==================
 Try catch finally defer combo
@@ -300,5 +669,70 @@ sub complex {
 ---
 
 (source_file
-  (use_statement)
-  (subroutine_declaration))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (function_call_expression
+            (function))))
+      (defer_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname))))))
+      (try_statement
+        (block
+          (expression_statement
+            (assignment_expression
+              (variable_declaration
+                (scalar
+                  (varname)))
+              (function_call_expression
+                (function))))
+          (defer_statement
+            (block
+              (expression_statement
+                (method_call_expression
+                  (scalar
+                    (varname))
+                  (method)))))
+          (expression_statement
+            (function_call_expression
+              (function)
+              (list_expression
+                (scalar
+                  (varname))
+                (scalar
+                  (varname)))))
+          (expression_statement
+            (method_call_expression
+              (scalar
+                (varname))
+              (method))))
+        (scalar
+          (varname))
+        (block
+          (expression_statement
+            (method_call_expression
+              (scalar
+                (varname))
+              (method)))
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (scalar
+                (varname)))))
+        (block
+          (expression_statement
+            (function_call_expression
+              (function))))))))

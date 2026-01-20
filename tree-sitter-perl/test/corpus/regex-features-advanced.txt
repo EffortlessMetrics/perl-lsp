@@ -17,12 +17,49 @@ s/(\d+)(?{ $sum += $1 })/X/g;
 ---
 
 (source_file
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (substitution))
-  (statement (regex)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (scalar
+          (varname))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (array
+          (varname))
+        (scalar
+          (varname)))
+      (match_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (scalar
+          (varname))
+        (escape_sequence))))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content
+        (escape_sequence)
+        (scalar
+          (varname))
+        (scalar
+          (varname)))
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (scalar
+          (varname))))))
 
 ==================
 Recursive patterns
@@ -41,11 +78,30 @@ Recursive patterns
 ---
 
 (source_file
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)))))
 
 ==================
 Named capture groups
@@ -70,12 +126,65 @@ while (/(?<item>\w+)/g) {
 ---
 
 (source_file
-  (statement (regex))
-  (if_statement)
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (while_statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (conditional_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (hash_element_expression
+                (container_variable
+                  (varname))
+                (autoquoted_bareword))
+              (hash_element_expression
+                (container_variable
+                  (varname))
+                (autoquoted_bareword))
+              (escape_sequence)))))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escaped_delimiter)
+        (escape_sequence))))
+  (loop_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))
+      (match_regexp_modifiers))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (hash_element_expression
+                (container_variable
+                  (varname))
+                (autoquoted_bareword))
+              (escape_sequence))))))))
 
 ==================
 Conditional patterns
@@ -94,11 +203,31 @@ Conditional patterns
 ---
 
 (source_file
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)))))
 
 ==================
 Backtracking control verbs
@@ -123,14 +252,31 @@ Backtracking control verbs
 ---
 
 (source_file
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==================
 Lookaround assertions advanced
@@ -151,12 +297,38 @@ s/(?<=\w)(?=\w)/_/g;
 ---
 
 (source_file
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (substitution)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))
+      (replacement)
+      (substitution_regexp_modifiers))))
 
 ==================
 Branch reset groups
@@ -173,9 +345,34 @@ if (/(?|<(\w+)>|\[(\w+)\]|\{(\w+)\})/) {
 ---
 
 (source_file
-  (statement (regex))
-  (statement (regex))
-  (if_statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (conditional_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence))))))))
 
 ==================
 Possessive quantifiers
@@ -195,13 +392,33 @@ Possessive quantifiers
 ---
 
 (source_file
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==================
 Extended regex features
@@ -230,12 +447,16 @@ qr/
 
 (source_file
   (use_statement)
-  (statement (regex))
+  (statement
+    (regex))
   (use_statement)
-  (statement (regex))
+  (statement
+    (regex))
   (use_statement)
-  (statement (regex))
-  (statement (regex)))
+  (statement
+    (regex))
+  (statement
+    (regex)))
 
 ==================
 Unicode regex properties
@@ -267,23 +488,76 @@ Unicode regex properties
 ---
 
 (source_file
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex))
-  (statement (regex)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (comment)
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (comment))
 
 ==================
 Keep and substitution
@@ -304,9 +578,47 @@ s/(?<=\w)\K(?=\w)/_/g;
 ---
 
 (source_file
-  (statement (substitution))
-  (statement (substitution))
-  (statement (substitution))
-  (statement (substitution))
-  (statement (regex))
-  (statement (regex)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))
+      (replacement
+        (scalar
+          (varname))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)))))
