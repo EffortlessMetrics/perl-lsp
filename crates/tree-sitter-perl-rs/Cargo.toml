@@ -15,7 +15,7 @@ perl-lexer = { path = "../perl-lexer" }
 perl-parser = { path = "../perl-parser" }
 tree-sitter = "0.26.3"
 serde = { version = "1.0.228", features = ["derive"] }
-bincode = "1.3"
+bincode = { version = "2.0.0-rc.3", features = ["serde"] }
 proptest = "1.9.0"
 walkdir = "2.5.0"
 thiserror = "2.0.17"

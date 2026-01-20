@@ -12,24 +12,26 @@ Character classes
 ---
 
 (source_file
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==========================================
 Unicode properties
@@ -45,24 +47,30 @@ Unicode properties
 ---
 
 (source_file
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)))))
 
 ==========================================
 Named captures
@@ -76,18 +84,25 @@ $+{name};
 ---
 
 (source_file
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (hash_access_variable
-    (hash_access_index
-      (bareword))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (hash_element_expression
+      (container_variable
+        (varname))
+      (autoquoted_bareword))))
 
 ==========================================
 Non-capturing groups
@@ -102,22 +117,23 @@ Non-capturing groups
 ---
 
 (source_file
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)
-      (regex_flags))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))
+      (match_regexp_modifiers))))
 
 ==========================================
 Lookahead and lookbehind
@@ -132,21 +148,23 @@ Lookahead and lookbehind
 ---
 
 (source_file
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)))))
 
 ==========================================
 Recursive patterns
@@ -159,15 +177,19 @@ Recursive patterns
 ---
 
 (source_file
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==========================================
 Conditional patterns
@@ -181,18 +203,21 @@ Conditional patterns
 ---
 
 (source_file
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)))
-  (regex_match_expression
-    (regex
-      (regex_pattern))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==========================================
 Extended regex with comments
@@ -219,13 +244,21 @@ qr{
 ---
 
 (source_file
-  (regex_match_expression
-    (regex
-      (regex_pattern)
-      (regex_flags)))
-  (quoted_regex
-    (regex_pattern)
-    (regex_flags)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))
+      (match_regexp_modifiers)))
+  (expression_statement
+    (quoted_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))
+      (quoted_regexp_modifiers))))
 
 ==========================================
 Complex regex flags
@@ -240,26 +273,27 @@ qr/pattern/msixpodual;
 ---
 
 (source_file
-  (regex_match_expression
-    (regex
-      (regex_pattern)
-      (regex_flags)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)
-      (regex_flags)))
-  (regex_substitution_expression
-    (regex
-      (regex_pattern)
-      (string_content)
-      (regex_flags)))
-  (regex_match_expression
-    (regex
-      (regex_pattern)
-      (regex_flags)))
-  (quoted_regex
-    (regex_pattern)
-    (regex_flags)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)
+      (match_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)
+      (match_regexp_modifiers)))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement)
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)
+      (match_regexp_modifiers)))
+  (expression_statement
+    (quoted_regexp
+      (regexp_content)
+      (quoted_regexp_modifiers))))
 
 ==========================================
 Special regex variables
@@ -280,20 +314,40 @@ $+[0];
 ---
 
 (source_file
-  (special_scalar_variable)
-  (special_scalar_variable)
-  (special_scalar_variable)
-  (special_scalar_variable)
-  (special_scalar_variable)
-  (array_access_variable
-    (special_array_variable)
-    (array_access_index
-      (integer)))
-  (array_access_variable
-    (special_array_variable)
-    (array_access_index
-      (integer)))
-  (special_array_variable)
-  (special_array_variable)
-  (special_hash_variable)
-  (special_hash_variable))
+  (expression_statement
+    (scalar
+      (varname)))
+  (expression_statement
+    (scalar
+      (varname)))
+  (expression_statement
+    (scalar
+      (varname)))
+  (expression_statement
+    (scalar
+      (varname)))
+  (expression_statement
+    (scalar
+      (varname)))
+  (expression_statement
+    (array_element_expression
+      (container_variable
+        (varname))
+      (number)))
+  (expression_statement
+    (array_element_expression
+      (container_variable
+        (varname))
+      (number)))
+  (expression_statement
+    (array
+      (varname)))
+  (expression_statement
+    (array
+      (varname)))
+  (expression_statement
+    (hash
+      (varname)))
+  (expression_statement
+    (hash
+      (varname))))

@@ -354,24 +354,24 @@ impl ExecuteCommandProvider {
     pub fn execute_command(&self, command: &str, arguments: Vec<Value>) -> Result<Value, String> {
         match command {
             "perl.runTests" => {
-                let file_path = self.extract_file_path_argument(&arguments)?;
-                self.run_tests(file_path)
+                let file_path = self.resolve_path_from_args(&arguments)?;
+                self.run_tests(&file_path)
             }
             "perl.runFile" => {
-                let file_path = self.extract_file_path_argument(&arguments)?;
-                self.run_file(file_path)
+                let file_path = self.resolve_path_from_args(&arguments)?;
+                self.run_file(&file_path)
             }
             "perl.runTestSub" => {
-                let file_path = self.extract_file_path_argument(&arguments)?;
+                let file_path = self.resolve_path_from_args(&arguments)?;
                 let sub_name = arguments
                     .get(1)
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| "Missing subroutine name argument".to_string())?;
-                self.run_test_sub(file_path, sub_name)
+                self.run_test_sub(&file_path, sub_name)
             }
             "perl.debugTests" => {
-                let file_path = self.extract_file_path_argument(&arguments)?;
-                self.debug_tests(file_path)
+                let file_path = self.resolve_path_from_args(&arguments)?;
+                self.debug_tests(&file_path)
             }
             "perl.runCritic" => {
                 // Use secure path resolution instead of extract_file_path_argument
@@ -382,18 +382,19 @@ impl ExecuteCommandProvider {
     }
 
     /// Run all tests in a file using appropriate test runner
-    fn run_tests(&self, file_path: &str) -> Result<Value, String> {
-        let is_test_file = self.is_test_file(file_path);
+    fn run_tests(&self, file_path: &Path) -> Result<Value, String> {
+        let file_path_str = file_path.to_string_lossy();
+        let is_test_file = self.is_test_file(&file_path_str);
         let (command_name, mut cmd) = if is_test_file && self.command_exists("prove") {
             ("prove", {
                 let mut cmd = Command::new("prove");
-                cmd.arg("-v").arg("--").arg(file_path);
+                cmd.arg("-v").arg("--").arg(file_path.as_os_str());
                 cmd
             })
         } else {
             ("perl", {
                 let mut cmd = Command::new("perl");
-                cmd.arg("--").arg(file_path);
+                cmd.arg("--").arg(file_path.as_os_str());
                 cmd
             })
         };
@@ -404,7 +405,7 @@ impl ExecuteCommandProvider {
     }
 
     /// Run a specific test subroutine with enhanced error handling
-    fn run_test_sub(&self, file_path: &str, sub_name: &str) -> Result<Value, String> {
+    fn run_test_sub(&self, file_path: &Path, sub_name: &str) -> Result<Value, String> {
         // Enhanced subroutine invocation with better error detection
         // Use @ARGV to safely pass file path and subroutine name preventing code injection
         let perl_code = r#"
@@ -422,7 +423,7 @@ impl ExecuteCommandProvider {
             .arg("-e")
             .arg(perl_code)
             .arg("--")
-            .arg(file_path)
+            .arg(file_path.as_os_str())
             .arg(sub_name)
             .output()
             .map_err(|e| format!("Failed to run test subroutine: {}", e))?;
@@ -431,10 +432,10 @@ impl ExecuteCommandProvider {
     }
 
     /// Run a Perl file with standardized result formatting
-    fn run_file(&self, file_path: &str) -> Result<Value, String> {
+    fn run_file(&self, file_path: &Path) -> Result<Value, String> {
         let result = Command::new("perl")
             .arg("--") // Safety against argument injection
-            .arg(file_path)
+            .arg(file_path.as_os_str())
             .output()
             .map_err(|e| format!("Failed to run file: {}", e))?;
 
@@ -442,12 +443,13 @@ impl ExecuteCommandProvider {
     }
 
     /// Debug tests (placeholder for future implementation)
-    fn debug_tests(&self, file_path: &str) -> Result<Value, String> {
+    fn debug_tests(&self, file_path: &Path) -> Result<Value, String> {
         // For now, just run with perl -d
         // In the future, this could integrate with Perl debugger or DAP
+        let file_path_str = file_path.to_string_lossy();
         Ok(json!({
             "success": false,
-            "output": format!("Debug mode not yet implemented for {}", file_path),
+            "output": format!("Debug mode not yet implemented for {}", file_path_str),
             "error": Some("Debugging support coming soon".to_string())
         }))
     }
@@ -639,14 +641,6 @@ impl ExecuteCommandProvider {
             "violationCount": formatted_violations.len(),
             "analyzerUsed": "builtin"
         }))
-    }
-
-    /// Extract file path from command arguments with proper error handling
-    fn extract_file_path_argument<'a>(&self, arguments: &'a [Value]) -> Result<&'a str, String> {
-        arguments
-            .first()
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| "Missing file path argument".to_string())
     }
 
     /// Check if a file path appears to be a test file
@@ -1183,8 +1177,15 @@ print "Value: $variable\n";
     fn test_command_routing_perl_debug_tests() {
         let provider = ExecuteCommandProvider::new();
 
-        let result = provider
-            .execute_command("perl.debugTests", vec![Value::String("/tmp/test.pl".to_string())]);
+        // Create a dummy file
+        let temp_file = "/tmp/test_debug.pl";
+        fs::write(temp_file, "print 'debug';").expect("Failed to create test file");
+
+        let result =
+            provider.execute_command("perl.debugTests", vec![Value::String(temp_file.to_string())]);
+
+        // Clean up
+        fs::remove_file(temp_file).ok();
 
         // Verify the command was routed correctly
         assert!(result.is_ok(), "perl.debugTests should execute successfully");
@@ -1219,17 +1220,26 @@ print "Value: $variable\n";
     fn test_parameter_validation_missing_subroutine_name() {
         let provider = ExecuteCommandProvider::new();
 
+        // Create a dummy file
+        let temp_file = "/tmp/test_missing_sub.pl";
+        fs::write(temp_file, "sub test {}").expect("Failed to create test file");
+
         // Test runTestSub with only file path, missing subroutine name
-        let result = provider
-            .execute_command("perl.runTestSub", vec![Value::String("/tmp/test.pl".to_string())]);
+        let result =
+            provider.execute_command("perl.runTestSub", vec![Value::String(temp_file.to_string())]);
+
         assert!(result.is_err(), "Should fail with missing subroutine name");
+        // It might fail with path resolution if file doesn't exist, but here it exists
         assert!(result.unwrap_err().contains("Missing subroutine name argument"));
 
         // Test with null second argument
         let result = provider.execute_command(
             "perl.runTestSub",
-            vec![Value::String("/tmp/test.pl".to_string()), Value::Null],
+            vec![Value::String(temp_file.to_string()), Value::Null],
         );
+
+        fs::remove_file(temp_file).ok();
+
         assert!(result.is_err(), "Should fail with null subroutine name");
         assert!(result.unwrap_err().contains("Missing subroutine name argument"));
     }
@@ -1358,29 +1368,6 @@ print "Value: $variable\n";
     }
 
     #[test]
-    fn test_extract_file_path_argument_validation() {
-        let provider = ExecuteCommandProvider::new();
-
-        // Test valid string argument
-        let args = vec![Value::String("/tmp/test.pl".to_string())];
-        let result = provider.extract_file_path_argument(&args);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "/tmp/test.pl");
-
-        // Test empty array
-        let args = vec![];
-        let result = provider.extract_file_path_argument(&args);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Missing file path argument"));
-
-        // Test non-string argument
-        let args = vec![Value::Number(serde_json::Number::from(123))];
-        let result = provider.extract_file_path_argument(&args);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Missing file path argument"));
-    }
-
-    #[test]
     #[allow(deprecated)]
     fn test_run_critic_file_exists_check() {
         let provider = ExecuteCommandProvider::new();
@@ -1482,10 +1469,17 @@ print "Value: $variable\n";
     fn test_execute_command_return_value_mutations() {
         let provider = ExecuteCommandProvider::new();
 
+        // Create a dummy file
+        let temp_file = "/tmp/test_mutations.pl";
+        fs::write(temp_file, "print 'test';").expect("Failed to create test file");
+
         // This test ensures that execute_command cannot return Ok(Default::default())
         // when it should return meaningful data
-        let result = provider
-            .execute_command("perl.debugTests", vec![Value::String("/tmp/test.pl".to_string())]);
+        let result =
+            provider.execute_command("perl.debugTests", vec![Value::String(temp_file.to_string())]);
+
+        // Clean up
+        fs::remove_file(temp_file).ok();
 
         assert!(result.is_ok(), "Should return Ok");
         let result_value = result.unwrap();
@@ -1522,14 +1516,14 @@ print "Value: $variable\n";
         fs::write(non_test_file, "print 'hello world';").expect("Failed to create .pl file");
 
         // Test with .t file (should attempt to use prove if available)
-        let result = provider.run_tests(test_file_t);
+        let result = provider.run_tests(Path::new(test_file_t));
         assert!(result.is_ok(), "Should handle .t files");
         let result_value = result.unwrap();
         assert!(result_value["success"].is_boolean(), "Should have boolean success");
         assert!(result_value["output"].is_string(), "Should have string output");
 
         // Test with non-test file (should use perl directly)
-        let result = provider.run_tests(non_test_file);
+        let result = provider.run_tests(Path::new(non_test_file));
         assert!(result.is_ok(), "Should handle .pl files");
         let result_value = result.unwrap();
         assert!(result_value["success"].is_boolean(), "Should have boolean success");
@@ -1565,23 +1559,6 @@ print "Value: $variable\n";
         // Edge case - file that would be false if && was used instead of ||
         let result = provider.is_test_file("test"); // has 'test' but not .t or /t/
         assert!(result, "Should be true with OR logic");
-    }
-
-    #[test]
-    fn test_extract_file_path_return_value_mutations() {
-        let provider = ExecuteCommandProvider::new();
-
-        // Test that extract_file_path_argument doesn't return hardcoded values
-        let valid_path = "/tmp/actual_file.pl";
-        let args = vec![Value::String(valid_path.to_string())];
-
-        let result = provider.extract_file_path_argument(&args);
-        assert!(result.is_ok(), "Should succeed with valid args");
-
-        let extracted = result.unwrap();
-        assert_eq!(extracted, valid_path, "Should return actual path, not hardcoded value");
-        assert_ne!(extracted, "", "Should not return empty string");
-        assert_ne!(extracted, "xyzzy", "Should not return hardcoded 'xyzzy'");
     }
 
     #[test]
@@ -1758,7 +1735,7 @@ print "Value: $variable\n";
         fs::write(temp_file, test_content).expect("Failed to create test file");
 
         // Test run_file doesn't return Ok(Default::default())
-        let result = provider.run_file(temp_file);
+        let result = provider.run_file(Path::new(temp_file));
         assert!(result.is_ok(), "run_file should succeed");
         let result_value = result.unwrap();
         assert_ne!(
@@ -1768,7 +1745,7 @@ print "Value: $variable\n";
         );
 
         // Test run_tests doesn't return Ok(Default::default())
-        let result = provider.run_tests(temp_file);
+        let result = provider.run_tests(Path::new(temp_file));
         assert!(result.is_ok(), "run_tests should succeed");
         let result_value = result.unwrap();
         assert_ne!(
@@ -1782,7 +1759,7 @@ print "Value: $variable\n";
         let sub_file = "/tmp/test_sub_return.pl";
         fs::write(sub_file, sub_content).expect("Failed to create sub test file");
 
-        let result = provider.run_test_sub(sub_file, "test_func");
+        let result = provider.run_test_sub(Path::new(sub_file), "test_func");
         assert!(result.is_ok(), "run_test_sub should succeed");
         let result_value = result.unwrap();
         assert_ne!(
@@ -1794,5 +1771,36 @@ print "Value: $variable\n";
         // Clean up
         fs::remove_file(temp_file).ok();
         fs::remove_file(sub_file).ok();
+    }
+
+    #[test]
+    fn test_execute_command_workspace_security() {
+        // Create a temporary workspace and a file outside it
+        let workspace_dir = std::env::temp_dir().join("perl_lsp_workspace");
+        let outside_file = std::env::temp_dir().join("perl_lsp_outside.pl");
+
+        fs::create_dir_all(&workspace_dir).expect("Failed to create workspace dir");
+        fs::write(&outside_file, "print 'outside';").expect("Failed to create outside file");
+
+        let provider = ExecuteCommandProvider::with_workspace_root(Some(workspace_dir.clone()));
+
+        // Try to execute the outside file
+        let result = provider.execute_command(
+            "perl.runFile",
+            vec![Value::String(outside_file.to_string_lossy().to_string())],
+        );
+
+        // Clean up
+        fs::remove_dir_all(&workspace_dir).ok();
+        fs::remove_file(&outside_file).ok();
+
+        // Verify security check
+        assert!(result.is_err(), "Should fail execution outside workspace");
+        let error = result.unwrap_err();
+        assert!(
+            error.contains("Path traversal") || error.contains("outside workspace root"),
+            "Error should indicate security violation: {}",
+            error
+        );
     }
 }

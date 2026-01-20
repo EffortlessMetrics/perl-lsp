@@ -30,6 +30,32 @@ pub struct ShowDocumentOptions {
 }
 
 impl LspServer {
+    /// Send a window/showMessage notification
+    ///
+    /// # Arguments
+    /// * `typ` - Message severity
+    /// * `message` - Message content
+    pub fn show_message(&self, typ: MessageType, message: &str) -> io::Result<()> {
+        let params = json!({
+            "type": typ as i32,
+            "message": message
+        });
+        self.notify("window/showMessage", params)
+    }
+
+    /// Send a window/logMessage notification
+    ///
+    /// # Arguments
+    /// * `typ` - Message severity
+    /// * `message` - Log content
+    pub fn log_message(&self, typ: MessageType, message: &str) -> io::Result<()> {
+        let params = json!({
+            "type": typ as i32,
+            "message": message
+        });
+        self.notify("window/logMessage", params)
+    }
+
     /// Show a message dialog with action buttons and wait for user selection
     ///
     /// Sends a `window/showMessageRequest` request to the client and returns

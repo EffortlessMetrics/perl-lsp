@@ -30,10 +30,6 @@
 //! - import_optimizer: Import statement optimization and cleanup
 
 use crate::error::{ParseError, ParseResult};
-use perl_parser_core::position::line_index::LineIndex;
-use perl_parser_core::{Node, NodeKind, Parser};
-use std::collections::HashSet;
-// Import existing modules conditionally
 use crate::import_optimizer::ImportOptimizer;
 #[cfg(feature = "modernize")]
 use crate::modernize::PerlModernizer as ModernizeEngine;
@@ -41,8 +37,11 @@ use crate::modernize::PerlModernizer as ModernizeEngine;
 use crate::workspace_index::WorkspaceIndex;
 #[cfg(feature = "workspace_refactor")]
 use crate::workspace_refactor::WorkspaceRefactor;
+use perl_parser_core::position::line_index::LineIndex;
+use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Unified refactoring engine that coordinates all refactoring operations
@@ -989,17 +988,159 @@ impl RefactoringEngine {
 
     fn perform_move_code(
         &mut self,
-        _source_file: &Path,
-        _target_file: &Path,
-        _elements: &[String],
+        source_file: &Path,
+        target_file: &Path,
+        elements: &[String],
     ) -> ParseResult<RefactoringResult> {
-        // TODO: Implement code movement
+        // Validate that source and target are different files
+        let source_path = fs::canonicalize(source_file).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to resolve source path: {}", e),
+            location: 0,
+        })?;
+        let target_path = fs::canonicalize(target_file).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to resolve target path: {}", e),
+            location: 0,
+        })?;
+
+        if source_path == target_path {
+            return Err(ParseError::SyntaxError {
+                message: "Source and target files must be different".to_string(),
+                location: 0,
+            });
+        }
+
+        // Read files first to prevent partial failure/data loss
+        let source_content =
+            fs::read_to_string(&source_path).map_err(|e| ParseError::SyntaxError {
+                message: format!("Failed to read source file: {}", e),
+                location: 0,
+            })?;
+
+        let mut target_content =
+            fs::read_to_string(&target_path).map_err(|e| ParseError::SyntaxError {
+                message: format!("Failed to read target file: {}", e),
+                location: 0,
+            })?;
+
+        // Parse source file to find elements
+        let mut parser = Parser::new(&source_content);
+        let ast = parser.parse().map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to parse source file: {}", e),
+            location: 0,
+        })?;
+
+        // Store location AND content for each element
+        struct ElementToMove {
+            location: SourceLocation,
+            content: String,
+        }
+
+        let mut elements_to_move: Vec<ElementToMove> = Vec::new();
+        let mut warnings = Vec::new();
+
+        // Find elements in the AST
+        let mut found_names: HashSet<String> = HashSet::new();
+        ast.for_each_child(|child| {
+            if let NodeKind::Subroutine { name, .. } = &child.kind {
+                if let Some(sub_name) = name {
+                    if elements.contains(sub_name) {
+                        found_names.insert(sub_name.clone());
+                        elements_to_move.push(ElementToMove {
+                            location: child.location,
+                            content: source_content[child.location.start..child.location.end]
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+        });
+
+        // Warn about elements that weren't found
+        for element in elements {
+            if !found_names.contains(element) {
+                warnings.push(format!("Subroutine '{}' not found in source file", element));
+            }
+        }
+
+        if elements_to_move.is_empty() {
+            return Ok(RefactoringResult {
+                success: false,
+                files_modified: 0,
+                changes_made: 0,
+                warnings: vec!["No elements found to move".to_string()],
+                errors: vec![],
+                operation_id: None,
+            });
+        }
+
+        // Sort by start position descending for safe removal from source
+        elements_to_move.sort_by(|a, b| b.location.start.cmp(&a.location.start));
+
+        let mut modified_source = source_content.clone();
+
+        // Remove from source (in descending order)
+        for element in &elements_to_move {
+            let start = element.location.start;
+            let end = element.location.end;
+
+            // Check for trailing newline to remove
+            let remove_end =
+                if end < modified_source.len() && modified_source.as_bytes()[end] == b'\n' {
+                    end + 1
+                } else {
+                    end
+                };
+
+            modified_source.replace_range(start..remove_end, "");
+        }
+
+        // Sort by start position ascending for correct append order
+        elements_to_move.sort_by(|a, b| a.location.start.cmp(&b.location.start));
+
+        // Construct moved content
+        let mut moved_content = String::new();
+        for element in &elements_to_move {
+            moved_content.push_str(&element.content);
+            moved_content.push('\n');
+        }
+
+        // Calculate insertion point in target
+        let insertion_index = if let Some(idx) = target_content.rfind("\n1;") {
+            idx + 1 // Insert after the newline, before 1;
+        } else if let Some(idx) = target_content.rfind("\nreturn 1;") {
+            idx + 1
+        } else {
+            target_content.len()
+        };
+
+        if insertion_index < target_content.len() {
+            // moved_content already ends with newline from loop above
+            target_content.insert_str(insertion_index, &moved_content);
+        } else {
+            target_content.push('\n');
+            target_content.push_str(&moved_content);
+        }
+
+        // Write files - Target first, then Source (safer)
+        fs::write(&target_path, target_content).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to write to target file: {}", e),
+            location: 0,
+        })?;
+
+        fs::write(&source_path, modified_source).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to write source file: {}", e),
+            location: 0,
+        })?;
+
+        // Add warning about missing dependency analysis
+        warnings.push("Warning: Imports and references were not updated. Please review the moved code for missing dependencies.".to_string());
+
         Ok(RefactoringResult {
-            success: false,
-            files_modified: 0,
-            changes_made: 0,
-            warnings: vec![],
-            errors: vec!["Move code not yet implemented".to_string()],
+            success: true,
+            files_modified: 2,
+            changes_made: elements_to_move.len(),
+            warnings,
+            errors: vec![],
             operation_id: None,
         })
     }
@@ -1083,19 +1224,149 @@ impl RefactoringEngine {
 
     fn perform_inline(
         &mut self,
-        _symbol_name: &str,
-        _all_occurrences: bool,
-        _files: &[PathBuf],
+        symbol_name: &str,
+        _all_occurrences: bool, // TODO: Implement multi-file occurrence inlining
+        files: &[PathBuf],
     ) -> ParseResult<RefactoringResult> {
-        // TODO: Implement inlining
+        let mut warnings = Vec::new();
+
+        // Variable inlining - only supported for variables with sigils
+        if symbol_name.starts_with('$')
+            || symbol_name.starts_with('@')
+            || symbol_name.starts_with('%')
+        {
+            #[cfg(feature = "workspace_refactor")]
+            {
+                let mut files_modified = 0;
+                let mut changes_made = 0;
+                let mut applied = false;
+
+                for file in files {
+                    // Try to find and inline variable in this file
+                    match self.workspace_refactor.inline_variable(symbol_name, file, (0, 0)) {
+                        Ok(refactor_result) => {
+                            let edits = refactor_result.file_edits;
+                            if !edits.is_empty() {
+                                let mod_count = self.apply_file_edits(&edits)?;
+                                files_modified += mod_count;
+                                changes_made += edits.iter().map(|e| e.edits.len()).sum::<usize>();
+                                applied = true;
+                                // Variable definition found and inlined - stop searching
+                                // Note: _all_occurrences is not yet implemented for cross-file inlining
+                                break;
+                            }
+                        }
+                        Err(crate::workspace_refactor::RefactorError::SymbolNotFound {
+                            ..
+                        }) => continue,
+                        Err(e) => {
+                            warnings.push(format!("Error checking {}: {}", file.display(), e));
+                        }
+                    }
+                }
+
+                if !applied && warnings.is_empty() {
+                    warnings.push(format!(
+                        "Symbol '{}' definition not found in provided files",
+                        symbol_name
+                    ));
+                }
+
+                return Ok(RefactoringResult {
+                    success: applied,
+                    files_modified,
+                    changes_made,
+                    warnings,
+                    errors: vec![],
+                    operation_id: None,
+                });
+            }
+
+            #[cfg(not(feature = "workspace_refactor"))]
+            {
+                let _ = files; // Acknowledge parameter when feature is disabled
+                warnings.push("Workspace refactoring feature is disabled".to_string());
+            }
+        } else {
+            let _ = files; // Acknowledge parameter for non-variable symbols
+            warnings.push(format!(
+                "Inlining for symbol '{}' not implemented (only variables supported)",
+                symbol_name
+            ));
+        }
+
         Ok(RefactoringResult {
             success: false,
             files_modified: 0,
             changes_made: 0,
-            warnings: vec![],
-            errors: vec!["Inline operation not yet implemented".to_string()],
+            warnings,
+            errors: vec![],
             operation_id: None,
         })
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn apply_file_edits(
+        &self,
+        file_edits: &[crate::workspace_refactor::FileEdit],
+    ) -> ParseResult<usize> {
+        let mut files_modified = 0;
+
+        for file_edit in file_edits {
+            if !file_edit.file_path.exists() {
+                continue;
+            }
+
+            let content = std::fs::read_to_string(&file_edit.file_path).map_err(|e| {
+                ParseError::SyntaxError {
+                    message: format!(
+                        "Failed to read file {}: {}",
+                        file_edit.file_path.display(),
+                        e
+                    ),
+                    location: 0,
+                }
+            })?;
+
+            // Clone and sort edits by start position in descending order to apply them safely
+            // (applying from end to start preserves earlier byte positions)
+            let mut edits = file_edit.edits.clone();
+            edits.sort_by(|a, b| b.start.cmp(&a.start));
+
+            // Clone content for comparison after modifications
+            let mut new_content = content.clone();
+            for edit in edits {
+                if edit.end > new_content.len() {
+                    return Err(ParseError::SyntaxError {
+                        message: format!(
+                            "Edit out of bounds for {}: range {}..{} in content len {}",
+                            file_edit.file_path.display(),
+                            edit.start,
+                            edit.end,
+                            new_content.len()
+                        ),
+                        location: 0,
+                    });
+                }
+                new_content.replace_range(edit.start..edit.end, &edit.new_text);
+            }
+
+            if new_content != content {
+                std::fs::write(&file_edit.file_path, new_content).map_err(|e| {
+                    ParseError::SyntaxError {
+                        message: format!(
+                            "Failed to write file {}: {}",
+                            file_edit.file_path.display(),
+                            e
+                        ),
+                        location: 0,
+                    }
+                })?;
+                files_modified += 1;
+            }
+        }
+
+        Ok(files_modified)
     }
 }
 

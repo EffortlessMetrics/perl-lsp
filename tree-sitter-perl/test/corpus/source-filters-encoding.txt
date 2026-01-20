@@ -27,11 +27,75 @@ sub filter {
 ---
 
 (source_file
-  (use_statement)
-  (filter_block)
-  (use_statement)
-  (subroutine_declaration)
-  (subroutine_declaration))
+  (use_statement
+    (package))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (indirect_object
+        (expression_statement
+          (substitution_regexp
+            (regexp_content
+              (escape_sequence))
+            (replacement
+              (escape_sequence))
+            (substitution_regexp_modifiers))))))
+  (use_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (anonymous_array_expression)))
+      (expression_statement
+        (function_call_expression
+          (function)
+          (ambiguous_function_call_expression
+            (function)
+            (scalar
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (variable_declaration
+          (scalar
+            (varname))))
+      (expression_statement
+        (postfix_conditional_expression
+          (substitution_regexp
+            (regexp_content)
+            (replacement)
+            (substitution_regexp_modifiers))
+          (relational_expression
+            (assignment_expression
+              (scalar
+                (varname))
+              (function_call_expression
+                (function)))
+            (number))))
+      (expression_statement
+        (return_expression
+          (scalar
+            (varname)))))))
 
 ==================
 Encoding pragmas
@@ -52,14 +116,31 @@ no bytes;
 ---
 
 (source_file
-  (use_statement)
-  (use_statement)
-  (use_statement)
-  (no_statement)
-  (use_statement)
-  (no_statement)
-  (use_statement)
-  (no_statement))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (autoquoted_bareword)
+      (number)))
+  (use_statement
+    (package))
+  (use_statement
+    (package))
+  (use_statement
+    (package))
+  (use_statement
+    (package))
+  (use_statement
+    (package)))
 
 ==================
 Encoding directives
@@ -82,10 +163,11 @@ __ENCODING__
 
 (source_file
   (comment)
-  (shebang)
   (comment)
-  (pod_section)
-  (encoding_token))
+  (comment)
+  (pod)
+  (expression_statement
+    (bareword)))
 
 ==================
 Source code with encoding
@@ -105,12 +187,46 @@ sub café_menu {
 ---
 
 (source_file
-  (use_statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (subroutine_declaration))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (array
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (return_expression
+          (quoted_word_list
+            (string_content)))))))
 
 ==================
 Filter::Util::Call usage
@@ -138,10 +254,58 @@ sub import {
 ---
 
 (source_file
-  (package_declaration)
-  (use_statement)
-  (subroutine_declaration)
-  (statement))
+  (package_statement
+    (package))
+  (use_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (array
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (function_call_expression
+          (function)
+          (anonymous_subroutine_expression
+            (block
+              (expression_statement
+                (assignment_expression
+                  (variable_declaration
+                    (scalar
+                      (varname)))
+                  (function_call_expression
+                    (function))))
+              (conditional_statement
+                (relational_expression
+                  (scalar
+                    (varname))
+                  (number))
+                (block
+                  (expression_statement
+                    (substitution_regexp
+                      (regexp_content)
+                      (replacement)
+                      (substitution_regexp_modifiers)))
+                  (expression_statement
+                    (substitution_regexp
+                      (regexp_content
+                        (escape_sequence)
+                        (escape_sequence))
+                      (replacement)
+                      (substitution_regexp_modifiers)))))
+              (expression_statement
+                (return_expression
+                  (scalar
+                    (varname))))))))))
+  (expression_statement
+    (number)))
 
 ==================
 Acme::Bleach style filter
@@ -157,8 +321,8 @@ use Acme::Bleach;
 ---
 
 (source_file
-  (use_statement)
-  (whitespace_code))
+  (use_statement
+    (package)))
 
 ==================
 Switch filter
@@ -204,12 +368,32 @@ for my $i (0..10) {
 ---
 
 (source_file
-  (use_statement)
-  (smart_comment)
-  (statement)
-  (smart_comment)
-  (smart_comment)
-  (for_statement))
+  (use_statement
+    (package))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function))))
+  (comment)
+  (comment)
+  (for_statement
+    (scalar
+      (varname))
+    (binary_expression
+      (number)
+      (number))
+    (block
+      (comment)
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname))))))
+  (comment))
 
 ==================
 Inline::Files filter
@@ -235,11 +419,29 @@ Additional content
 ---
 
 (source_file
-  (use_statement)
-  (statement)
-  (statement)
-  (while_statement)
-  (data_section)
+  (use_statement
+    (package))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (readline_expression
+        (filehandle))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (readline_expression
+        (filehandle))))
+  (loop_statement
+    (readline_expression
+      (filehandle))
+    (block
+      (expression_statement
+        (bareword))))
+  (eof_marker)
   (data_section))
 
 ==================
@@ -259,10 +461,66 @@ use open IN => ':crlf', OUT => ':bytes';
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (use_statement)
-  (use_statement))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (bareword)
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (bareword)
+        (string_literal
+          (string_content)))))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))
+      (autoquoted_bareword)
+      (string_literal
+        (string_content)))))

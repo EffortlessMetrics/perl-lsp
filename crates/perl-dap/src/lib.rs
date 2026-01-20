@@ -35,10 +35,12 @@
 //! ```no_run
 //! use perl_dap::BridgeAdapter;
 //!
-//! # fn main() -> anyhow::Result<()> {
+//! # #[tokio::main]
+//! # async fn main() -> anyhow::Result<()> {
 //! let mut adapter = BridgeAdapter::new();
-//! adapter.spawn_pls_dap()?;
-//! adapter.proxy_messages()?;
+//! adapter.spawn_pls_dap().await?;
+//! adapter.proxy_messages().await?;
+//! adapter.shutdown().await?;
 //! # Ok(())
 //! # }
 //! ```
