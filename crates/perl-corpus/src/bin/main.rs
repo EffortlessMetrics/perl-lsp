@@ -61,6 +61,8 @@ enum Command {
 
 #[derive(Subcommand)]
 enum Generator {
+    /// Generate full programs with mixed statements
+    Program,
     /// Generate qw expressions
     Qw,
     /// Generate quote-like operators
@@ -79,6 +81,10 @@ enum Generator {
     Tie,
     /// Generate package/subroutine declarations and method calls
     Declarations,
+    /// Generate expression-heavy statements
+    Expressions,
+    /// Generate regex match/substitution/transliteration statements
+    Regex,
 }
 
 fn main() -> Result<()> {
@@ -194,6 +200,12 @@ fn main() -> Result<()> {
             println!();
 
             match generator {
+                Generator::Program => {
+                    let code =
+                        perl_corpus::generate_perl_code_with_seed(count as usize, seed);
+                    println!("# Program ({} statements)", count);
+                    println!("{}", code);
+                }
                 Generator::Qw => {
                     use perl_corpus::r#gen::qw::qw_in_context;
                     for i in 0..count {
@@ -298,6 +310,30 @@ fn main() -> Result<()> {
                             .map_err(|e| anyhow::anyhow!("{e:?}"))?
                             .current();
                         println!("# Test case {} (declarations)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Expressions => {
+                    use perl_corpus::r#gen::expressions::expression_in_context;
+                    for i in 0..count {
+                        let value = expression_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (expressions)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Regex => {
+                    use perl_corpus::r#gen::regex::regex_in_context;
+                    for i in 0..count {
+                        let value = regex_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (regex)", i + 1);
                         println!("{}", value);
                         println!();
                     }

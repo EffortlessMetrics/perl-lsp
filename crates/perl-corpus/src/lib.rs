@@ -15,7 +15,8 @@ pub use cases::{
     ComplexDataStructureCase, EdgeCase, EdgeCaseGenerator,
 };
 pub use codegen::{
-    generate_perl_code, generate_perl_code_with_seed, generate_perl_code_with_statements,
+    generate_perl_code, generate_perl_code_with_options, generate_perl_code_with_seed,
+    generate_perl_code_with_statements, CodegenOptions, StatementKind,
 };
 pub use files::{
     get_all_test_files, get_fuzz_files, get_test_files, CorpusPaths, CORPUS_ROOT_ENV,

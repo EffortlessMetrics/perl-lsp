@@ -1,0 +1,84 @@
+use proptest::prelude::*;
+
+use super::quote_like::{q_like_payload, quote_delim, regex_with_modifiers, substitution, transliteration};
+
+fn sanitize_payload(s: &str, left: char, right: char) -> String {
+    s.chars()
+        .filter(|&ch| ch != left && ch != right && ch != '\r')
+        .collect()
+}
+
+fn regex_match_expr() -> impl Strategy<Value = String> {
+    (
+        q_like_payload(),
+        quote_delim(),
+        prop::collection::hash_set(prop::sample::select(vec!['i', 'm', 's', 'x']), 0..3),
+    )
+        .prop_map(|(pattern, (open, close), modifiers)| {
+            let clean_pattern = sanitize_payload(&pattern, open, close);
+            let mods: String = modifiers.into_iter().collect();
+            format!("m{}{}{}{}", open, clean_pattern, close, mods)
+        })
+}
+
+/// Generate regex match statements in common contexts.
+pub fn regex_match_in_context() -> impl Strategy<Value = String> {
+    let target = prop::sample::select(vec!["$text", "$line", "$input", "$_"]);
+
+    prop_oneof![
+        (target.clone(), regex_match_expr())
+            .prop_map(|(target, expr)| format!("{} =~ {};\n", target, expr)),
+        (target.clone(), regex_match_expr())
+            .prop_map(|(target, expr)| {
+                format!(
+                    "if ({} =~ {}) {{\n    print {};\n}}\n",
+                    target, expr, target
+                )
+            }),
+        (target, regex_with_modifiers()).prop_map(|(target, expr)| {
+            format!(
+                "my $re = {};\nif ({} =~ $re) {{\n    print {};\n}}\n",
+                expr, target, target
+            )
+        }),
+    ]
+}
+
+/// Generate substitution statements in context.
+pub fn substitution_in_context() -> impl Strategy<Value = String> {
+    (
+        prop::sample::select(vec!["$text", "$line", "$value", "$_"]),
+        substitution(),
+    )
+        .prop_map(|(target, expr)| format!("{} =~ {};\n", target, expr))
+}
+
+/// Generate transliteration statements in context.
+pub fn transliteration_in_context() -> impl Strategy<Value = String> {
+    (
+        prop::sample::select(vec!["$text", "$line", "$value", "$_"]),
+        transliteration(),
+    )
+        .prop_map(|(target, expr)| format!("{} =~ {};\n", target, expr))
+}
+
+/// Generate regex-related statements (match, substitution, transliteration).
+pub fn regex_in_context() -> impl Strategy<Value = String> {
+    prop_oneof![
+        regex_match_in_context(),
+        substitution_in_context(),
+        transliteration_in_context(),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    proptest! {
+        #[test]
+        fn regex_contains_match_operator(code in regex_in_context()) {
+            assert!(code.contains("=~"));
+        }
+    }
+}

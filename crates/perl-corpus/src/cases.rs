@@ -61,6 +61,32 @@ my $text = qq{Hello $name};
 "#,
     },
     EdgeCase {
+        id: "regex.named.capture",
+        description: "Regex with named capture and hash access.",
+        tags: &["regex", "edge-case"],
+        source: r#"my $text = "abc";
+if ($text =~ /(?<word>abc)/) {
+    print $+{word};
+}
+"#,
+    },
+    EdgeCase {
+        id: "substitution.balanced",
+        description: "Substitution with balanced delimiters and modifiers.",
+        tags: &["substitution", "regex", "edge-case"],
+        source: r#"my $text = "foo bar";
+$text =~ s{foo}{bar}g;
+"#,
+    },
+    EdgeCase {
+        id: "transliteration.basic",
+        description: "Transliteration with character ranges.",
+        tags: &["transliteration", "tr", "edge-case"],
+        source: r#"my $text = "abc";
+$text =~ tr/a-z/A-Z/;
+"#,
+    },
+    EdgeCase {
         id: "map.grep",
         description: "Map/grep with block syntax.",
         tags: &["map", "grep", "list-context"],
@@ -118,6 +144,34 @@ while ($count < 3) {
 } continue {
     my $j = $i * 2;
 }
+"#,
+    },
+    EdgeCase {
+        id: "defined.or",
+        description: "Defined-or operator with undef fallback.",
+        tags: &["defined-or", "operator", "edge-case"],
+        source: r#"my $value = undef // 42;
+"#,
+    },
+    EdgeCase {
+        id: "given.when",
+        description: "Given/when flow with default branch.",
+        tags: &["given", "when", "flow", "edge-case"],
+        source: r#"use v5.10;
+my $value = 2;
+given ($value) {
+    when (1) { print "one"; }
+    when (2) { print "two"; }
+    default { print "other"; }
+}
+"#,
+    },
+    EdgeCase {
+        id: "eval.block",
+        description: "Eval block with error handling.",
+        tags: &["eval", "error", "edge-case"],
+        source: r#"eval { die "boom" };
+warn $@ if $@;
 "#,
     },
     EdgeCase {
@@ -255,6 +309,37 @@ $node->{self} = $node;
     on_ready => sub { return 1; },
     on_error => sub { return 0; },
 };
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "deep.nested.refs",
+        description: "Deeply nested references with arrays and hashes.",
+        source: r#"my $data = {
+    items => [
+        { id => 1, children => [ { id => 2 }, { id => 3 } ] },
+        { id => 4, children => [] },
+    ],
+    meta => { count => 2 },
+};
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "hash.special.keys",
+        description: "Hash with empty and spaced keys.",
+        source: r#"my $data = {
+    "" => 0,
+    " spaced key " => 1,
+    "0" => "zero",
+};
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "array.of.blessed",
+        description: "Array of blessed hash references.",
+        source: r#"my $objs = [
+    bless({ id => 1, label => "a" }, "Obj"),
+    bless({ id => 2, label => "b" }, "Obj"),
+];
 "#,
     },
 ];
