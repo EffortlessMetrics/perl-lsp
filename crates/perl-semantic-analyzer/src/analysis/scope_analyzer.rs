@@ -175,11 +175,11 @@ impl ScopeAnalyzer {
         let mut issues = Vec::new();
         let root_scope = Rc::new(Scope::new());
 
-        // Ancestor stack replaces parent_map for O(1) traversal overhead
-        // instead of O(N) memory and build time
-        let mut ancestors = Vec::new();
+        // Build a parent map so we can walk ancestor relationships
+        let mut parent_map: HashMap<*const Node, &Node> = HashMap::new();
+        self.build_parent_map(ast, None, &mut parent_map);
 
-        self.analyze_node(ast, &root_scope, &mut ancestors, &mut issues, code, pragma_map);
+        self.analyze_node(ast, &root_scope, &parent_map, &mut issues, code, pragma_map);
 
         // Collect all unused variables from all scopes
         self.collect_unused_variables(&root_scope, &mut issues, code);
@@ -187,29 +187,11 @@ impl ScopeAnalyzer {
         issues
     }
 
-    fn analyze_node<'a>(
+    fn analyze_node(
         &self,
-        node: &'a Node,
+        node: &Node,
         scope: &Rc<Scope>,
-        ancestors: &mut Vec<&'a Node>,
-        issues: &mut Vec<ScopeIssue>,
-        code: &str,
-        pragma_map: &[(Range<usize>, PragmaState)],
-    ) {
-        // Push current node to ancestors stack for children to reference
-        ancestors.push(node);
-
-        self.analyze_node_impl(node, scope, ancestors, issues, code, pragma_map);
-
-        // Always pop after processing to maintain stack invariant
-        ancestors.pop();
-    }
-
-    fn analyze_node_impl<'a>(
-        &self,
-        node: &'a Node,
-        scope: &Rc<Scope>,
-        ancestors: &mut Vec<&'a Node>,
+        parent_map: &HashMap<*const Node, &Node>,
         issues: &mut Vec<ScopeIssue>,
         code: &str,
         pragma_map: &[(Range<usize>, PragmaState)],
@@ -354,7 +336,7 @@ impl ScopeAnalyzer {
             NodeKind::Identifier { name } => {
                 // Check for barewords under strict mode, excluding hash keys
                 if strict_mode
-                    && !self.is_in_hash_key_context(node, ancestors)
+                    && !self.is_in_hash_key_context(node, parent_map)
                     && !is_known_function(name)
                 {
                     issues.push(ScopeIssue {
@@ -381,8 +363,8 @@ impl ScopeAnalyzer {
                             }
                         }
                         // Always process both children to ensure undefined variables are caught
-                        self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                        self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
+                        self.analyze_node(left, scope, parent_map, issues, code, pragma_map);
+                        self.analyze_node(right, scope, parent_map, issues, code, pragma_map);
                     }
                     "[]" => {
                         // Array access: $array[index] -> mark @array as used if it exists
@@ -396,27 +378,27 @@ impl ScopeAnalyzer {
                             }
                         }
                         // Always process both children to ensure undefined variables are caught
-                        self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                        self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
+                        self.analyze_node(left, scope, parent_map, issues, code, pragma_map);
+                        self.analyze_node(right, scope, parent_map, issues, code, pragma_map);
                     }
                     _ => {
                         // Other binary operations
-                        self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                        self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
+                        self.analyze_node(left, scope, parent_map, issues, code, pragma_map);
+                        self.analyze_node(right, scope, parent_map, issues, code, pragma_map);
                     }
                 }
             }
 
             NodeKind::ArrayLiteral { elements } => {
                 for element in elements {
-                    self.analyze_node(element, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(element, scope, parent_map, issues, code, pragma_map);
                 }
             }
 
             NodeKind::Block { statements } => {
                 let block_scope = Rc::new(Scope::with_parent(scope.clone()));
                 for stmt in statements {
-                    self.analyze_node(stmt, &block_scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(stmt, &block_scope, parent_map, issues, code, pragma_map);
                 }
                 self.collect_unused_variables(&block_scope, issues, code);
             }
@@ -425,15 +407,15 @@ impl ScopeAnalyzer {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 if let Some(init_node) = init {
-                    self.analyze_node(init_node, &loop_scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(init_node, &loop_scope, parent_map, issues, code, pragma_map);
                 }
                 if let Some(cond) = condition {
-                    self.analyze_node(cond, &loop_scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(cond, &loop_scope, parent_map, issues, code, pragma_map);
                 }
                 if let Some(upd) = update {
-                    self.analyze_node(upd, &loop_scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(upd, &loop_scope, parent_map, issues, code, pragma_map);
                 }
-                self.analyze_node(body, &loop_scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(body, &loop_scope, parent_map, issues, code, pragma_map);
 
                 self.collect_unused_variables(&loop_scope, issues, code);
             }
@@ -442,9 +424,9 @@ impl ScopeAnalyzer {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 // Declare the loop variable
-                self.analyze_node(variable, &loop_scope, ancestors, issues, code, pragma_map);
-                self.analyze_node(list, &loop_scope, ancestors, issues, code, pragma_map);
-                self.analyze_node(body, &loop_scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(variable, &loop_scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(list, &loop_scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(body, &loop_scope, parent_map, issues, code, pragma_map);
 
                 self.collect_unused_variables(&loop_scope, issues, code);
             }
@@ -502,7 +484,7 @@ impl ScopeAnalyzer {
                     }
                 }
 
-                self.analyze_node(body, &sub_scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(body, &sub_scope, parent_map, issues, code, pragma_map);
 
                 // Check for unused parameters
                 if let Some(sig) = signature {
@@ -540,14 +522,14 @@ impl ScopeAnalyzer {
             NodeKind::FunctionCall { args, .. } => {
                 // Handle function arguments, which may contain complex variable patterns
                 for arg in args {
-                    self.analyze_node(arg, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(arg, scope, parent_map, issues, code, pragma_map);
                 }
             }
 
             _ => {
                 // Recursively analyze children
                 for child in node.children() {
-                    self.analyze_node(child, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(child, scope, parent_map, issues, code, pragma_map);
                 }
             }
         }
@@ -617,33 +599,52 @@ impl ScopeAnalyzer {
     }
 
     /// Determines if a node is in a hash key context, where barewords are legitimate.
+    ///
+    /// This method efficiently detects various hash key contexts to avoid false positives
+    /// in strict mode bareword detection. It handles:
+    ///
+    /// # Hash Key Contexts Detected:
+    /// - **Hash subscripts**: `$hash{bareword_key}` or `%hash{bareword_key}`
+    /// - **Hash literals**: `{ key => value, another_key => value2 }`
+    /// - **Hash slices**: `@hash{key1, key2, key3}` where keys are in an array
+    /// - **Nested hash structures**: Complex nested hash access patterns
+    ///
+    /// # Performance Characteristics:
+    /// - Early termination on first positive match
+    /// - Efficient pointer-based parent traversal
+    /// - O(depth) complexity where depth is AST nesting level
+    /// - Typical case: 1-3 parent checks for hash contexts
+    ///
+    /// # Examples:
+    /// ```perl
+    /// use strict;
+    /// my %hash = (key1 => 'value1');        # key1 is in hash key context
+    /// my $val = $hash{bareword_key};         # bareword_key is in hash key context
+    /// my @vals = @hash{key1, key2};          # key1, key2 are in hash key context
+    /// print INVALID_BAREWORD;                # NOT in hash key context - should warn
+    /// ```
     fn is_in_hash_key_context(
         &self,
         node: &Node,
-        ancestors: &[&Node],
+        parent_map: &HashMap<*const Node, &Node>,
     ) -> bool {
-        // Ancestors includes the current node at the end (because we pushed it in analyze_node)
-        // So ancestors = [Root, ..., Parent, Node]
-        // We start checking from Parent (index len - 2)
-        if ancestors.len() < 2 {
-            return false;
-        }
+        let mut current = node as *const Node;
 
-        let mut current_child = node;
+        // Traverse up the AST to find hash key contexts
+        // Limit traversal depth to prevent excessive searching
         let mut depth = 0;
         const MAX_TRAVERSAL_DEPTH: usize = 10;
 
-        // Iterate reversed starting from parent
-        for parent in ancestors[0..ancestors.len() - 1].iter().rev() {
-             if depth > MAX_TRAVERSAL_DEPTH {
-                break;
+        while let Some(parent) = parent_map.get(&current) {
+            if depth > MAX_TRAVERSAL_DEPTH {
+                break; // Safety limit for deeply nested structures
             }
 
             match &parent.kind {
                 // Hash subscript: $hash{key} or %hash{key}
                 NodeKind::Binary { op, left: _, right } if op == "{}" => {
                     // Check if current node is the key (right side of the {} operation)
-                    if std::ptr::eq(right.as_ref(), current_child) {
+                    if std::ptr::eq(right.as_ref(), current) {
                         return true;
                     }
                 }
@@ -652,7 +653,7 @@ impl ScopeAnalyzer {
                 NodeKind::HashLiteral { pairs } => {
                     // Check if current node is a key in any of the pairs
                     for (key, _value) in pairs {
-                        if std::ptr::eq(key, current_child) {
+                        if std::ptr::eq(key, current) {
                             return true;
                         }
                     }
@@ -660,81 +661,41 @@ impl ScopeAnalyzer {
                 // Array literal containing hash keys (for hash slices @hash{key1, key2})
                 NodeKind::ArrayLiteral { elements: _ } => {
                     // Check if the parent of this array literal is a hash subscript
-                    // We need to look at grandparent.
-                    // The loop handles this naturally: `current_child` becomes `parent` (the array literal)
-                    // and we check `grandparent` (next iteration) against it.
-                    // But we need to check if we are *inside* a hash slice context.
-                    // The previous code checked grandparent explicitly.
-                    // Here we rely on the loop continuing up.
-
-                    // Wait, the previous code had specific logic for ArrayLiteral:
-                    /*
                     if let Some(grandparent) = parent_map.get(&(*parent as *const _)) {
                         if let NodeKind::Binary { op, right, .. } = &grandparent.kind {
                             if op == "{}" && std::ptr::eq(right.as_ref(), *parent) {
+                                // This array literal is the key part of a hash slice
                                 return true;
                             }
                         }
                     }
-                    */
-                    // In our loop, when we are at ArrayLiteral (as parent), we don't return true yet.
-                    // We set current_child = ArrayLiteral, and continue.
-                    // Next iteration, parent is Binary { op: "{}" }.
-                    // We check if current_child (ArrayLiteral) is the right child.
-                    // If so, it returns true!
-                    // So the loop naturally handles this nested case without explicit lookahead!
-                    // Assuming `NodeKind::Binary` logic matches.
-                    // The `Binary` logic checks `ptr::eq(right, current_child)`.
-                    // So if ArrayLiteral is `right` of `{}`, it returns true.
-                    // And since we came from inside ArrayLiteral, `node` is effectively in hash key context (via slice).
-
-                    // However, `is_in_hash_key_context` returns true if *node* is valid key.
-                    // In slice `@hash{key1, key2}`, `key1` is child of `ArrayLiteral`.
-                    // `ArrayLiteral` is child of `Binary{}`.
-                    // 1. Parent=ArrayLiteral. `key1` is child. No match in ArrayLiteral logic (unless we add it?).
-                    //    Actually, `ArrayLiteral` logic in previous code was:
-                    //    "Check if the parent of this array literal is a hash subscript".
-                    //    It did NOT check if `current` was a specific child of `ArrayLiteral`.
-                    //    It just assumed if we are in an ArrayLiteral that is part of a hash slice, we are good.
-                    //    Wait, `ArrayLiteral` has `elements`. If we are in `elements`, we are good.
-                    //    So if `parent` is `ArrayLiteral`, and `grandparent` is `Binary{}`, we return true.
-                    //    BUT, my loop logic checks one level at a time.
-                    //    If I return false for `ArrayLiteral`, I proceed to next parent.
-                    //    Next parent is `Binary{}`.
-                    //    It checks if `current_child` (ArrayLiteral) is right child.
-                    //    It returns true!
-                    //    So yes, it works transitively!
                 }
 
-                // Handle parser quirk where print $hash{key} becomes IndirectCall
-                // This occurs because the parser can interpret $hash{...} as an indirect method call
-                // with a block argument.
-                NodeKind::IndirectCall { method: _, object, args } => {
-                     // Check if current_child is a Block in args
-                     if let NodeKind::Variable { sigil, .. } = &object.kind {
-                         if sigil == "$" {
-                              // Check if current_child is in args
-                              for arg in args {
-                                  if std::ptr::eq(arg, current_child) {
-                                      // It is an argument.
-                                      // If it is a Block, then we treat its content as hash key context
-                                      // to avoid false positives for barewords.
-                                      if let NodeKind::Block { .. } = &current_child.kind {
-                                           return true;
-                                      }
-                                  }
-                              }
-                         }
-                     }
-                }
-
-                _ => {}
+                // Handle nested hash contexts (hash of hashes)
+                // This covers cases like $hash{key1}{key2} where we might be in key2 context
+                // Note: These cases are already handled by cases above, but this
+                // documents that we explicitly support nested hash structures
+                _ => {} // Continue traversing for other node types
             }
 
-            current_child = parent;
+            current = *parent as *const _;
             depth += 1;
         }
         false
+    }
+
+    fn build_parent_map<'a>(
+        &self,
+        node: &'a Node,
+        parent: Option<&'a Node>,
+        map: &mut HashMap<*const Node, &'a Node>,
+    ) {
+        if let Some(p) = parent {
+            map.insert(node as *const _, p);
+        }
+        for child in node.children() {
+            self.build_parent_map(child, Some(node), map);
+        }
     }
 
     pub fn get_suggestions(&self, issues: &[ScopeIssue]) -> Vec<String> {
