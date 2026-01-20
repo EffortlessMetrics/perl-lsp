@@ -30,26 +30,6 @@ pub struct ShowDocumentOptions {
 }
 
 impl LspServer {
-    /// Show a message dialog with action buttons and wait for user selection
-    ///
-    /// Sends a `window/showMessageRequest` request to the client and returns
-    /// the title of the selected action, or None if dismissed.
-    ///
-    /// # Arguments
-    /// * `message_type` - The severity level of the message
-    /// * `message` - The message text to display
-    /// * `actions` - Optional list of action button labels
-    ///
-    /// # Returns
-    /// * `Ok(Some(String))` - User selected an action, returns its title
-    /// * `Ok(None)` - User dismissed the dialog without selecting
-    /// * `Err(_)` - Communication error or client doesn't support requests
-    ///
-    /// # Note
-    /// This is a simplified implementation that sends the request but does not
-    /// handle the response in a synchronous manner. A full implementation would
-    /// require an async runtime or response handling mechanism.
-
     /// Send a window/showMessage notification
     ///
     /// # Arguments
@@ -76,6 +56,25 @@ impl LspServer {
         self.notify("window/logMessage", params)
     }
 
+    /// Show a message dialog with action buttons and wait for user selection
+    ///
+    /// Sends a `window/showMessageRequest` request to the client and returns
+    /// the title of the selected action, or None if dismissed.
+    ///
+    /// # Arguments
+    /// * `message_type` - The severity level of the message
+    /// * `message` - The message text to display
+    /// * `actions` - Optional list of action button labels
+    ///
+    /// # Returns
+    /// * `Ok(Some(String))` - User selected an action, returns its title
+    /// * `Ok(None)` - User dismissed the dialog without selecting
+    /// * `Err(_)` - Communication error or client doesn't support requests
+    ///
+    /// # Note
+    /// This is a simplified implementation that sends the request but does not
+    /// handle the response in a synchronous manner. A full implementation would
+    /// require an async runtime or response handling mechanism.
     pub fn show_message_request(
         &self,
         message_type: MessageType,

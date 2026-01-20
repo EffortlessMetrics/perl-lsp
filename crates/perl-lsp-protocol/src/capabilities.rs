@@ -413,15 +413,12 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
         // Build code action kinds based on flags
         let mut kinds = vec![CodeActionKind::QUICKFIX];
 
-        // Only advertise refactoring capabilities that are fully implemented and tested
-        // NOTE: REFACTOR_EXTRACT is implemented in code_actions_enhanced.rs but not advertised.
-        // To enable: verify lsp_code_actions_tests.rs tests pass, then add CodeActionKind::REFACTOR_EXTRACT
-        // See Issue #181 for tracking workspace feature completeness
         if build.source_organize_imports {
             kinds.push(CodeActionKind::SOURCE_ORGANIZE_IMPORTS);
         }
 
-        // UNBLOCKED by passing tests in lsp_code_actions_tests.rs
+        // REFACTOR_EXTRACT is implemented in code_actions_enhanced.rs
+        // Tests verified in lsp_code_actions_tests.rs (Issue #181)
         kinds.push(CodeActionKind::REFACTOR_EXTRACT);
 
         caps.code_action_provider =
