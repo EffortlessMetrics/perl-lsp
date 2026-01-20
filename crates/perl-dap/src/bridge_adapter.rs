@@ -184,8 +184,8 @@ impl BridgeAdapter {
     /// It should be used for graceful cleanup in async contexts.
     pub async fn shutdown(&mut self) -> Result<()> {
         if let Some(mut child) = self.child_process.take() {
+            // kill() sends SIGKILL and waits for the process to exit
             child.kill().await.context("Failed to kill Perl::LanguageServer process")?;
-            child.wait().await.context("Failed to wait for Perl::LanguageServer process")?;
         }
         Ok(())
     }
