@@ -8,8 +8,8 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(name = "perl-corpus", version, about = "Perl test corpus management tool")]
 struct Cli {
-    /// Path to test/corpus directory
-    #[arg(short, long, default_value = "test/corpus")]
+    /// Path to test_corpus directory
+    #[arg(short, long, default_value = "test_corpus")]
     corpus: PathBuf,
 
     #[command(subcommand)]
@@ -77,6 +77,8 @@ enum Generator {
     Glob,
     /// Generate tie/untie samples
     Tie,
+    /// Generate package/subroutine declarations and method calls
+    Declarations,
 }
 
 fn main() -> Result<()> {
@@ -284,6 +286,18 @@ fn main() -> Result<()> {
                             .map_err(|e| anyhow::anyhow!("{e:?}"))?
                             .current();
                         println!("# Test case {} (tie)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Declarations => {
+                    use perl_corpus::r#gen::declarations::declaration_in_context;
+                    for i in 0..count {
+                        let value = declaration_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (declarations)", i + 1);
                         println!("{}", value);
                         println!();
                     }

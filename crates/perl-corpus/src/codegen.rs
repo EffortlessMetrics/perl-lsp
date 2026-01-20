@@ -61,6 +61,7 @@ fn default_seed() -> u64 {
 fn build_strategies() -> Vec<BoxedStrategy<String>> {
     vec![
         basic_statement().boxed(),
+        r#gen::declarations::declaration_in_context().boxed(),
         r#gen::qw::qw_in_context().boxed(),
         r#gen::quote_like::quote_like_single().boxed(),
         r#gen::heredoc::heredoc_in_context().boxed(),

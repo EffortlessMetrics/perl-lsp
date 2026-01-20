@@ -90,7 +90,10 @@ pub fn substitution() -> impl Strategy<Value = String> {
                 format!("s{}{}{}{}{}{}", open, pattern, open, replacement, open, mods)
             } else {
                 // Paired delimiters - special syntax
-                format!("s{}{}{}{}{}{}", open, pattern, close, open, replacement, close)
+                format!(
+                    "s{}{}{}{}{}{}{}",
+                    open, pattern, close, open, replacement, close, mods
+                )
             }
         })
 }
@@ -108,7 +111,7 @@ pub fn transliteration() -> impl Strategy<Value = String> {
             if open == close {
                 format!("tr{}{}{}{}{}{}", open, from, open, to, open, mods)
             } else {
-                format!("tr{}{}{}{}{}{}", open, from, close, open, to, close)
+                format!("tr{}{}{}{}{}{}{}", open, from, close, open, to, close, mods)
             }
         })
 }

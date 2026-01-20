@@ -1,4 +1,5 @@
 pub mod control_flow;
+pub mod declarations;
 pub mod format_statements;
 pub mod glob;
 pub mod heredoc;

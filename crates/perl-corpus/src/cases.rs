@@ -127,6 +127,74 @@ while ($count < 3) {
         source: r#"My::Pkg::helper();
 "#,
     },
+    EdgeCase {
+        id: "signature.defaults",
+        description: "Subroutine signatures with defaults and slurpy params.",
+        tags: &["signature", "subroutine", "edge-case"],
+        source: r#"sub add($x, $y = 0, @rest) {
+    return $x + $y + @rest;
+}
+"#,
+    },
+    EdgeCase {
+        id: "package.block",
+        description: "Package block with nested subroutine.",
+        tags: &["package", "subroutine", "edge-case"],
+        source: r#"package Foo::Bar {
+    sub helper { return 1; }
+}
+"#,
+    },
+    EdgeCase {
+        id: "method.chain",
+        description: "Chained method calls with arrows.",
+        tags: &["method", "arrow", "edge-case"],
+        source: r#"my $value = $obj->foo->bar(1, 2);
+"#,
+    },
+    EdgeCase {
+        id: "try.catch.finally",
+        description: "Try/catch/finally control flow.",
+        tags: &["try", "catch", "finally", "edge-case"],
+        source: r#"try {
+    die "boom";
+}
+catch ($e) {
+    warn $e;
+}
+finally {
+    print "done";
+}
+"#,
+    },
+    EdgeCase {
+        id: "postfix.deref.slice",
+        description: "Postfix dereference with slice.",
+        tags: &["postfix", "dereference", "edge-case"],
+        source: r#"my $aref = [1, 2, 3];
+my @slice = $aref->@[0, 2];
+"#,
+    },
+    EdgeCase {
+        id: "class.field.method",
+        description: "Class with fields and method.",
+        tags: &["class", "field", "method", "edge-case"],
+        source: r#"class Point {
+    field $x :param = 0;
+    method get_x { return $x; }
+}
+"#,
+    },
+    EdgeCase {
+        id: "state.counter",
+        description: "State variable with initialization.",
+        tags: &["state", "edge-case"],
+        source: r#"sub counter($step = 1) {
+    state $count = 0;
+    return $count += $step;
+}
+"#,
+    },
 ];
 
 static COMPLEX_DATA_STRUCTURE_CASES: &[ComplexDataStructureCase] = &[
@@ -166,6 +234,27 @@ $node->{self} = $node;
         description: "Typeglob aliasing and filehandle.",
         source: r#"open my $fh, "<", "file.txt";
 *ALIAS = *STDOUT;
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "graph.refs",
+        description: "Graph-like structure with nested edges.",
+        source: r#"my $graph = {
+    nodes => [
+        { id => 1, edges => [2, 3] },
+        { id => 2, edges => [1] },
+    ],
+    meta => { directed => 0 },
+};
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "handlers.hash",
+        description: "Hash of handlers with coderefs.",
+        source: r#"my $handlers = {
+    on_ready => sub { return 1; },
+    on_error => sub { return 0; },
+};
 "#,
     },
 ];

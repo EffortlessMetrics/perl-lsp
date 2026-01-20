@@ -116,7 +116,7 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
     Ok(sections)
 }
 
-/// Scan the `test/corpus/` directory.
+/// Scan the `test_corpus/` directory.
 pub fn parse_dir(dir: &Path) -> Result<Vec<Section>> {
     let mut all = Vec::new();
 

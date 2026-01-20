@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 /// Environment variable used to override corpus root discovery.
 pub const CORPUS_ROOT_ENV: &str = "PERL_CORPUS_ROOT";
+const TEST_EXTENSIONS: &[&str] = &["pl", "pm", "t", "psgi", "cgi"];
 
 /// Common corpus paths anchored at a root directory.
 #[derive(Debug, Clone)]
@@ -45,7 +46,7 @@ pub fn get_test_files() -> Vec<PathBuf> {
 
 /// Return test corpus files using a specific root.
 pub fn get_test_files_from(paths: &CorpusPaths) -> Vec<PathBuf> {
-    collect_files(&paths.test_corpus, &["pl", "pm"])
+    collect_files(&paths.test_corpus, TEST_EXTENSIONS)
 }
 
 /// Return fuzz regression fixtures (Perl sources only).
@@ -133,4 +134,66 @@ fn has_allowed_extension(path: &Path, extensions: &[&str]) -> bool {
         .and_then(|ext| ext.to_str())
         .map(|ext| extensions.iter().any(|allowed| ext.eq_ignore_ascii_case(allowed)))
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_root(prefix: &str) -> PathBuf {
+        let mut root = std::env::temp_dir();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        root.push(format!("{}_{}_{}", prefix, std::process::id(), nanos));
+        fs::create_dir_all(&root).expect("create temp root");
+        root
+    }
+
+    #[test]
+    fn collect_files_filters_extensions_and_skips_hidden() {
+        let root = temp_root("perl_corpus_files");
+        let keep_dir = root.join("keep");
+        fs::create_dir_all(&keep_dir).expect("create keep dir");
+        fs::create_dir_all(root.join("_skip")).expect("create skip dir");
+        fs::create_dir_all(root.join(".hidden_dir")).expect("create hidden dir");
+
+        let fixtures = [
+            root.join("case.pl"),
+            root.join("case.pm"),
+            root.join("case.t"),
+            root.join("case.psgi"),
+            root.join("case.cgi"),
+            keep_dir.join("nested.pl"),
+        ];
+        for fixture in &fixtures {
+            fs::write(fixture, "print 1;\n").expect("write fixture");
+        }
+
+        fs::write(root.join("case.txt"), "ignore\n").expect("write ignored");
+        fs::write(root.join(".hidden.pl"), "ignore\n").expect("write hidden");
+        fs::write(root.join("_skip/inner.pl"), "ignore\n").expect("write skipped");
+        fs::write(root.join(".hidden_dir/inner.pm"), "ignore\n").expect("write hidden dir");
+
+        let files = collect_files(&root, TEST_EXTENSIONS);
+        let mut names: Vec<_> = files
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+        names.sort();
+
+        let expected = vec![
+            "case.cgi",
+            "case.pl",
+            "case.pm",
+            "case.psgi",
+            "case.t",
+            "nested.pl",
+        ];
+        assert_eq!(names, expected);
+
+        fs::remove_dir_all(&root).expect("cleanup temp root");
+    }
 }
