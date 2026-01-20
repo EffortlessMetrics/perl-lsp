@@ -30,10 +30,6 @@
 //! - import_optimizer: Import statement optimization and cleanup
 
 use crate::error::{ParseError, ParseResult};
-use perl_parser_core::position::line_index::LineIndex;
-use perl_parser_core::{Node, NodeKind, Parser};
-use std::collections::HashSet;
-// Import existing modules conditionally
 use crate::import_optimizer::ImportOptimizer;
 #[cfg(feature = "modernize")]
 use crate::modernize::PerlModernizer as ModernizeEngine;
@@ -41,9 +37,10 @@ use crate::modernize::PerlModernizer as ModernizeEngine;
 use crate::workspace_index::WorkspaceIndex;
 #[cfg(feature = "workspace_refactor")]
 use crate::workspace_refactor::WorkspaceRefactor;
-use perl_parser_core::{NodeKind, Parser, SourceLocation};
+use perl_parser_core::position::line_index::LineIndex;
+use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -1013,10 +1010,11 @@ impl RefactoringEngine {
         }
 
         // Read files first to prevent partial failure/data loss
-        let source_content = fs::read_to_string(&source_path).map_err(|e| ParseError::SyntaxError {
-            message: format!("Failed to read source file: {}", e),
-            location: 0,
-        })?;
+        let source_content =
+            fs::read_to_string(&source_path).map_err(|e| ParseError::SyntaxError {
+                message: format!("Failed to read source file: {}", e),
+                location: 0,
+            })?;
 
         let mut target_content =
             fs::read_to_string(&target_path).map_err(|e| ParseError::SyntaxError {
@@ -1041,18 +1039,28 @@ impl RefactoringEngine {
         let mut warnings = Vec::new();
 
         // Find elements in the AST
+        let mut found_names: Vec<String> = Vec::new();
         ast.for_each_child(|child| {
             if let NodeKind::Subroutine { name, .. } = &child.kind {
                 if let Some(sub_name) = name {
                     if elements.contains(sub_name) {
+                        found_names.push(sub_name.clone());
                         elements_to_move.push(ElementToMove {
                             location: child.location,
-                            content: source_content[child.location.start..child.location.end].to_string(),
+                            content: source_content[child.location.start..child.location.end]
+                                .to_string(),
                         });
                     }
                 }
             }
         });
+
+        // Warn about elements that weren't found
+        for element in elements {
+            if !found_names.contains(element) {
+                warnings.push(format!("Subroutine '{}' not found in source file", element));
+            }
+        }
 
         if elements_to_move.is_empty() {
             return Ok(RefactoringResult {
@@ -1076,11 +1084,12 @@ impl RefactoringEngine {
             let end = element.location.end;
 
             // Check for trailing newline to remove
-            let remove_end = if end < modified_source.len() && modified_source.as_bytes()[end] == b'\n' {
-                end + 1
-            } else {
-                end
-            };
+            let remove_end =
+                if end < modified_source.len() && modified_source.as_bytes()[end] == b'\n' {
+                    end + 1
+                } else {
+                    end
+                };
 
             modified_source.replace_range(start..remove_end, "");
         }
@@ -1105,7 +1114,8 @@ impl RefactoringEngine {
         };
 
         if insertion_index < target_content.len() {
-            target_content.insert_str(insertion_index, &format!("{}\n", moved_content));
+            // moved_content already ends with newline from loop above
+            target_content.insert_str(insertion_index, &moved_content);
         } else {
             target_content.push('\n');
             target_content.push_str(&moved_content);
