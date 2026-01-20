@@ -97,7 +97,7 @@
         "perl-lsp.downloadBaseUrl": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Base URL for internal binary hosting. When set, downloads from this location instead of GitHub releases. Should point to a directory containing release files."
+          "markdownDescription": "Internal base URL hosting perl-lsp archives and SHA256SUMS (bypasses GitHub releases). Example: `https://internal.example.com/perl-lsp/`"
         },
         "perl-lsp.trace.server": {
           "type": "string",
@@ -107,7 +107,7 @@
             "verbose"
           ],
           "default": "off",
-          "description": "Trace server communication for debugging"
+          "description": "Controls the logging verbosity of the language server communication. Useful for debugging LSP issues."
         },
         "perl-lsp.enableDiagnostics": {
           "type": "boolean",
@@ -122,7 +122,7 @@
         "perl-lsp.enableFormatting": {
           "type": "boolean",
           "default": true,
-          "description": "Enable document formatting"
+          "description": "Enable document formatting using perltidy. Requires perltidy to be installed on your system."
         },
         "perl-lsp.formatOnSave": {
           "type": "boolean",
@@ -137,7 +137,7 @@
         "perl-lsp.perltidyConfig": {
           "type": "string",
           "default": "",
-          "description": "Path to .perltidyrc configuration file"
+          "description": "Path to your `.perltidyrc` configuration file. If omitted, searches workspace and home directory."
         },
         "perl-lsp.includePaths": {
           "type": "array",
@@ -145,7 +145,7 @@
             "lib",
             "local/lib/perl5"
           ],
-          "description": "Additional paths to search for Perl modules"
+          "description": "Additional library paths (like `use lib`) to search for Perl modules. Relative paths resolve from workspace root."
         },
         "perl-lsp.enableTestIntegration": {
           "type": "boolean",
@@ -171,7 +171,7 @@
         "command": "perl-lsp.organizeImports",
         "title": "Organize Use Statements",
         "category": "Perl",
-        "icon": "$(list-unordered)"
+        "icon": "$(organization)"
       },
       {
         "command": "perl-lsp.runTests",
@@ -200,6 +200,11 @@
     ],
     "menus": {
       "editor/context": [
+        {
+          "command": "perl-lsp.runTests",
+          "when": "editorLangId == perl",
+          "group": "navigation"
+        },
         {
           "command": "perl-lsp.extractSubroutine",
           "when": "editorLangId == perl",

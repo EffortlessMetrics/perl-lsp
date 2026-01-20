@@ -1038,7 +1038,8 @@ impl LspServer {
             eprintln!("Executing command: {}", command);
 
             // Use the new execute command provider for new commands
-            let provider = ExecuteCommandProvider::new();
+            let root_path = self.root_path.lock().clone();
+            let provider = ExecuteCommandProvider::with_workspace_root(root_path);
 
             match command {
                 // Keep existing test commands for backward compatibility

@@ -83,7 +83,7 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io::{self, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
     Arc,
@@ -273,40 +273,6 @@ impl LspServer {
         output.flush()
     }
 
-    /// Show a message to the user via window/showMessage
-    ///
-    /// This sends a notification that clients typically display as a popup or notification.
-    ///
-    /// # Arguments
-    /// * `message_type` - Message severity: 1=Error, 2=Warning, 3=Info, 4=Log
-    /// * `message` - The message text to display
-    pub fn show_message(&self, message_type: u8, message: &str) -> io::Result<()> {
-        self.notify(
-            "window/showMessage",
-            json!({
-                "type": message_type,
-                "message": message
-            }),
-        )
-    }
-
-    /// Log a message to the client output via window/logMessage
-    ///
-    /// This sends a notification that clients typically write to their output/log panel.
-    ///
-    /// # Arguments
-    /// * `message_type` - Message severity: 1=Error, 2=Warning, 3=Info, 4=Log
-    /// * `message` - The message text to log
-    pub fn log_message(&self, message_type: u8, message: &str) -> io::Result<()> {
-        self.notify(
-            "window/logMessage",
-            json!({
-                "type": message_type,
-                "message": message
-            }),
-        )
-    }
-
     /// Acquire a lock on the documents map
     ///
     /// This helper centralizes lock acquisition behavior. parking_lot locks
@@ -425,18 +391,20 @@ impl LspServer {
         self.coordinator().map(|c| Arc::clone(c.index()))
     }
 
-    /// Run the LSP server
+    /// Run the LSP server using stdio
     pub fn run(&mut self) -> io::Result<()> {
         let stdin = io::stdin();
-        let stdout = io::stdout();
         let mut reader = BufReader::new(stdin.lock());
-        let mut stdout = stdout.lock();
 
-        eprintln!("LSP server started");
+        eprintln!("LSP server started (stdio)");
+        self.serve(&mut reader)
+    }
 
+    /// Serve LSP requests from the given reader
+    pub fn serve<R: BufRead>(&mut self, reader: &mut R) -> io::Result<()> {
         loop {
             // Read LSP message using transport module
-            match read_message(&mut reader)? {
+            match read_message(reader)? {
                 Some(request) => {
                     eprintln!("Received request: {}", request.method);
 
@@ -444,12 +412,15 @@ impl LspServer {
                     if let Some(response) = self.handle_request(request) {
                         // Log and send response using transport module
                         log_response(&response);
-                        write_message(&mut stdout, &response)?;
+
+                        // Use self.output which is thread-safe and configured (stdio or socket)
+                        let mut output = self.output.lock();
+                        write_message(&mut *output, &response)?;
                     }
                 }
                 None => {
                     // EOF reached, exit cleanly
-                    eprintln!("LSP server: EOF on stdin, shutting down");
+                    eprintln!("LSP server: EOF, shutting down");
                     break;
                 }
             }

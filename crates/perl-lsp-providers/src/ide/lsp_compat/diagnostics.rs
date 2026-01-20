@@ -258,7 +258,8 @@ impl DiagnosticsProvider {
                 IssueKind::VariableShadowing
                 | IssueKind::UnusedVariable
                 | IssueKind::ParameterShadowsGlobal
-                | IssueKind::UnusedParameter => DiagnosticSeverity::Warning,
+                | IssueKind::UnusedParameter
+                | IssueKind::UninitializedVariable => DiagnosticSeverity::Warning,
             };
 
             let code = match issue.kind {
@@ -270,6 +271,7 @@ impl DiagnosticsProvider {
                 IssueKind::ParameterShadowsGlobal => "parameter-shadows-global",
                 IssueKind::UnusedParameter => "unused-parameter",
                 IssueKind::UnquotedBareword => "unquoted-bareword",
+                IssueKind::UninitializedVariable => "uninitialized-variable",
             };
 
             diagnostics.push(Diagnostic {

@@ -1,9 +1,11 @@
 //! Test LSP features with demo scripts
 
-use color_eyre::eyre::{Result, bail};
+use color_eyre::eyre::{Result, bail, eyre};
+use serde_json::json;
 use std::fs;
-use std::path::Path;
-use std::process::Command;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 /// Run LSP feature tests
 pub fn run(create_only: bool, test: Option<String>, cleanup: bool) -> Result<()> {
@@ -249,16 +251,179 @@ fn run_all_tests(test_dir: &Path) -> Result<()> {
 fn test_syntax_highlighting(_test_dir: &Path) -> Result<()> {
     println!("🎨 Testing syntax highlighting...");
 
+    // Find LSP server binary
+    let binary_path = if Path::new("target/debug/perl-lsp").exists() {
+        PathBuf::from("target/debug/perl-lsp")
+    } else if Path::new("target/release/perl-lsp").exists() {
+        PathBuf::from("target/release/perl-lsp")
+    } else {
+        PathBuf::from("perl-lsp")
+    };
+
     // Check if LSP server is available
-    let output = Command::new("perl-lsp").arg("--version").output();
+    let output = Command::new(&binary_path).arg("--version").output();
 
     match output {
         Ok(_) => println!("   ✓ LSP server is available"),
-        Err(_) => println!("   ⚠ LSP server not found. Run: cargo install --path crates/perl-lsp"),
+        Err(_) => {
+            println!("   ⚠ LSP server not found. Run: cargo install --path crates/perl-lsp");
+            bail!("LSP server binary 'perl-lsp' not found");
+        }
     }
 
-    // TODO: Add actual syntax highlighting test
-    println!("   ℹ Open test_features.pl in VSCode to verify semantic tokens");
+    println!("   🚀 Starting LSP server process...");
+    let mut child = Command::new(&binary_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    let stdin = child.stdin.as_mut().ok_or_else(|| eyre!("Failed to open stdin"))?;
+    let stdout = child.stdout.as_mut().ok_or_else(|| eyre!("Failed to open stdout"))?;
+    let mut reader = BufReader::new(stdout);
+
+    // Helper to send message
+    let mut send_msg = |msg: serde_json::Value| -> Result<()> {
+        let msg_str = msg.to_string();
+        write!(stdin, "Content-Length: {}\r\n\r\n{}", msg_str.len(), msg_str)?;
+        stdin.flush()?;
+        Ok(())
+    };
+
+    // Helper to read message
+    let mut read_msg = || -> Result<serde_json::Value> {
+        let mut size = None;
+        let mut line = String::new();
+        loop {
+            line.clear();
+            reader.read_line(&mut line)?;
+            if line.trim().is_empty() {
+                break;
+            } // End of headers
+            if line.starts_with("Content-Length: ") {
+                size = Some(line.trim()["Content-Length: ".len()..].parse::<usize>()?);
+            }
+        }
+        let size = size.ok_or_else(|| eyre!("Missing Content-Length"))?;
+        let mut buf = vec![0; size];
+        reader.read_exact(&mut buf)?;
+        let val = serde_json::from_slice(&buf)?;
+        Ok(val)
+    };
+
+    // Helper to wait for specific response
+    let mut wait_for_response = |id: u64| -> Result<serde_json::Value> {
+        loop {
+            let msg = read_msg()?;
+            if let Some(msg_id) = msg.get("id").and_then(|i| i.as_u64()) {
+                if msg_id == id {
+                    return Ok(msg);
+                }
+            }
+            // Log ignored message
+            if let Some(method) = msg.get("method").and_then(|m| m.as_str()) {
+                println!("   ℹ Ignored notification: {}", method);
+            } else {
+                println!("   ℹ Ignored message: {:?}", msg);
+            }
+        }
+    };
+
+    // 1. Initialize
+    println!("   📤 Sending initialize request...");
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "processId": std::process::id(),
+            "rootUri": null,
+            "capabilities": {
+                "textDocument": {
+                    "semanticTokens": {
+                        "requests": {
+                            "full": true
+                        },
+                        "tokenTypes": [],
+                        "tokenModifiers": []
+                    }
+                }
+            }
+        }
+    });
+    send_msg(init_req)?;
+    let _init_resp = wait_for_response(1)?;
+    println!("   ✓ Received initialize response");
+
+    // 2. Initialized
+    send_msg(json!({
+        "jsonrpc": "2.0",
+        "method": "initialized",
+        "params": {}
+    }))?;
+
+    // 3. Open Document
+    let code = "my $x = 10;";
+    send_msg(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didOpen",
+        "params": {
+            "textDocument": {
+                "uri": "file:///test.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": code
+            }
+        }
+    }))?;
+
+    // 4. Request Semantic Tokens
+    println!("   📤 Requesting semantic tokens...");
+    send_msg(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "textDocument/semanticTokens/full",
+        "params": {
+            "textDocument": {
+                "uri": "file:///test.pl"
+            }
+        }
+    }))?;
+
+    let tokens_resp = wait_for_response(2)?;
+
+    // 5. Verify tokens
+    if let Some(data) =
+        tokens_resp.get("result").and_then(|r| r.get("data")).and_then(|d| d.as_array())
+    {
+        if !data.is_empty() {
+            println!("   ✓ Received {} semantic tokens", data.len());
+        } else {
+            println!("   ⚠ Received empty semantic tokens");
+            // Depending on strictness, we might want to fail here
+            // bail!("Semantic tokens expected but got empty list");
+        }
+    } else {
+        println!("   ✗ Failed to get semantic tokens: {:?}", tokens_resp);
+        bail!("Failed to get semantic tokens response");
+    }
+
+    // Shutdown
+    send_msg(json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "shutdown",
+        "params": null
+    }))?;
+    let _shutdown_resp = read_msg()?;
+
+    send_msg(json!({
+        "jsonrpc": "2.0",
+        "method": "exit",
+        "params": null
+    }))?;
+
+    println!("   ℹ Open test_features.pl in VSCode to verify semantic tokens manually");
 
     Ok(())
 }
