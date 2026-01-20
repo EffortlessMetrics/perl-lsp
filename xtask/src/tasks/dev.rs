@@ -36,7 +36,10 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
                 match res {
                     Ok(event) => {
                         // Any modification, creation, or removal triggers a restart
-                        if event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove() {
+                        if event.kind.is_modify()
+                            || event.kind.is_create()
+                            || event.kind.is_remove()
+                        {
                             // Kill the current process if it exists
                             let mut process_guard = current_process.lock().unwrap();
                             if let Some(child) = process_guard.as_mut() {
@@ -71,8 +74,8 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
         if watch { "Watching for changes." } else { "Not watching for changes." }
     ));
 
-    println!("Run 'perl-lsp --socket --port {}' (if it supported it) or connect your editor to this port.", port);
-    println!("Clients will trigger a build and run of 'perl-lsp --stdio'.");
+    println!("Connect your editor to this TCP port to use the dev server.");
+    println!("The server will rebuild and spawn 'perl-lsp --stdio' for each connection.");
 
     // Accept connections
     for stream in listener.incoming() {
@@ -86,9 +89,9 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
                 // We use cargo run to ensure it builds if needed
                 let mut cmd = Command::new("cargo");
                 cmd.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"])
-                   .stdin(Stdio::piped())
-                   .stdout(Stdio::piped())
-                   .stderr(Stdio::inherit()); // Let stderr go to console for logs
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::inherit()); // Let stderr go to console for logs
 
                 let mut child = match cmd.spawn() {
                     Ok(c) => c,
