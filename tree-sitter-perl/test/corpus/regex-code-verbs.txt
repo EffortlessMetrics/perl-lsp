@@ -23,11 +23,52 @@ my $balanced = qr{
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (quoted_regexp
+        (regexp_content
+          (escape_sequence)
+          (scalar
+            (varname))
+          (escape_sequence))
+        (quoted_regexp_modifiers))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement
+        (hash_element_expression
+          (container_variable
+            (varname))
+          (scalar
+            (varname)))
+        (scalar
+          (varname)))
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (quoted_regexp
+        (regexp_content
+          (escaped_delimiter)
+          (scalar
+            (varname))
+          (escaped_delimiter))
+        (quoted_regexp_modifiers)))))
 
 ==================
 Atomic groups
@@ -46,12 +87,28 @@ Atomic groups
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==================
 Branch reset groups
@@ -70,10 +127,38 @@ if (/(?|"([^"]*)"|'([^']*)'|([^"'\s]+))/) {
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (if_statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (conditional_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence))))))))
 
 ==================
 Control verb SKIP
@@ -90,10 +175,22 @@ Control verb SKIP
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (scalar
+          (varname))
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==================
 Control verb FAIL
@@ -110,10 +207,19 @@ Control verb FAIL
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==================
 Control verb PRUNE
@@ -130,10 +236,18 @@ Control verb PRUNE
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==================
 Control verb COMMIT
@@ -150,10 +264,18 @@ Control verb COMMIT
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==================
 Control verb MARK
@@ -170,10 +292,18 @@ Control verb MARK
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==================
 Control verb ACCEPT
@@ -188,9 +318,15 @@ Control verb ACCEPT
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==================
 Control verb THEN
@@ -205,9 +341,15 @@ Control verb THEN
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==================
 Multiple control verbs
@@ -224,10 +366,18 @@ Multiple control verbs
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
 
 ==================
 Re pragma with code blocks
@@ -251,10 +401,42 @@ use re qw(eval debug);
 ---
 
 (source_file
-  (use_statement)
-  (statement)
-  (statement)
-  (no_statement)
-  (block)
-  (use_statement)
-  (statement))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (scalar
+          (varname)))))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (block_statement
+    (use_statement
+      (package)
+      (string_literal
+        (string_content)))
+    (expression_statement
+      (match_regexp
+        (regexp_content
+          (scalar
+            (varname))
+          (escape_sequence)
+          (scalar
+            (varname))))))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)))))

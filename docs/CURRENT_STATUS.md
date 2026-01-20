@@ -78,7 +78,7 @@ Key terms:
 <!-- BEGIN: STATUS_METRICS_BULLETS -->
 - **LSP Coverage**: 100% user-visible feature coverage (53/53 advertised features from `features.toml`)
 - **Protocol Compliance**: 100% overall LSP protocol support (88/88 including plumbing)
-- **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~613 sections) + `test_corpus/` (10 `.pl` files)
+- **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~611 sections) + `test_corpus/` (10 `.pl` files)
 - **Test Status**: 540 lib tests (Tier A), 1 ignores tracked (1 total tracked debt: 0 bug, 1 manual)
 - **Docs (perl-parser)**: missing_docs warnings = 0 (baseline 0)
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
