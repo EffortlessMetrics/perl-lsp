@@ -89,7 +89,10 @@ pub fn substitution() -> impl Strategy<Value = String> {
         q_like_payload(),
         q_like_payload(),
         quote_delim(),
-        prop::collection::hash_set(prop::sample::select(vec!['i', 'x', 's', 'm', 'g', 'e']), 0..4),
+        prop::collection::hash_set(
+            prop::sample::select(vec!['i', 'x', 's', 'm', 'g', 'e', 'r', 'o']),
+            0..4,
+        ),
     )
         .prop_map(|(pattern, replacement, (open, close), modifiers)| {
             let clean_pattern = sanitize_payload(&pattern, open, close);
@@ -124,6 +127,26 @@ pub fn transliteration() -> impl Strategy<Value = String> {
                 format!("tr{}{}{}{}{}{}", open, clean_from, open, clean_to, open, mods)
             } else {
                 format!("tr{}{}{}{}{}{}{}", open, clean_from, close, open, clean_to, close, mods)
+            }
+        })
+}
+
+/// Generate transliteration operator using the y/// alias.
+pub fn transliteration_alias() -> impl Strategy<Value = String> {
+    (
+        "[a-z]{1,5}",
+        "[A-Z]{1,5}",
+        quote_delim(),
+        prop::collection::hash_set(prop::sample::select(vec!['c', 'd', 's', 'r']), 0..2),
+    )
+        .prop_map(|(from, to, (open, close), modifiers)| {
+            let clean_from = sanitize_payload(&from, open, close);
+            let clean_to = sanitize_payload(&to, open, close);
+            let mods = sorted_modifiers(modifiers);
+            if open == close {
+                format!("y{}{}{}{}{}{}", open, clean_from, open, clean_to, open, mods)
+            } else {
+                format!("y{}{}{}{}{}{}{}", open, clean_from, close, open, clean_to, close, mods)
             }
         })
 }

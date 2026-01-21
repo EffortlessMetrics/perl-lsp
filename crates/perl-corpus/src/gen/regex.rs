@@ -2,6 +2,7 @@ use proptest::prelude::*;
 
 use super::quote_like::{
     q_like_payload, quote_delim, regex_with_modifiers, substitution, transliteration,
+    transliteration_alias,
 };
 
 fn sanitize_payload(s: &str, left: char, right: char) -> String {
@@ -34,6 +35,7 @@ fn advanced_pattern() -> impl Strategy<Value = String> {
         Just("(?>foo|fo)bar".to_string()),
         Just("foo(?=bar)".to_string()),
         Just("(?<=foo)bar".to_string()),
+        Just("(?<word>foo)(?(<word>)foo|bar)".to_string()),
         Just("\\G\\w+".to_string()),
         Just("foo\\Kbar".to_string()),
         Just("(?R)".to_string()),
@@ -86,8 +88,9 @@ pub fn substitution_in_context() -> impl Strategy<Value = String> {
 
 /// Generate transliteration statements in context.
 pub fn transliteration_in_context() -> impl Strategy<Value = String> {
-    (prop::sample::select(vec!["$text", "$line", "$value", "$_"]), transliteration())
-        .prop_map(|(target, expr)| format!("{} =~ {};\n", target, expr))
+    let target = prop::sample::select(vec!["$text", "$line", "$value", "$_"]);
+    let translit = prop_oneof![transliteration(), transliteration_alias()];
+    (target, translit).prop_map(|(target, expr)| format!("{} =~ {};\n", target, expr))
 }
 
 /// Generate regex-related statements (match, substitution, transliteration).

@@ -100,11 +100,27 @@ $text =~ s{foo}{bar}g;
 "#,
     },
     EdgeCase {
+        id: "substitution.nondestructive",
+        description: "Non-destructive substitution with the r modifier.",
+        tags: &["substitution", "regex", "edge-case"],
+        source: r#"my $text = "foo bar";
+my $updated = $text =~ s/foo/baz/r;
+"#,
+    },
+    EdgeCase {
         id: "transliteration.basic",
         description: "Transliteration with character ranges.",
         tags: &["transliteration", "tr", "edge-case"],
         source: r#"my $text = "abc";
 $text =~ tr/a-z/A-Z/;
+"#,
+    },
+    EdgeCase {
+        id: "transliteration.alias",
+        description: "Transliteration using the y/// alias operator.",
+        tags: &["transliteration", "tr", "edge-case"],
+        source: r#"my $text = "abc";
+$text =~ y/a-z/A-Z/;
 "#,
     },
     EdgeCase {
@@ -142,6 +158,16 @@ format STDOUT =
 $name, $age
 .
 write;
+"#,
+    },
+    EdgeCase {
+        id: "format.formline",
+        description: "Formline builtin with accumulator and picture string.",
+        tags: &["format", "builtin", "edge-case"],
+        source: r#"my $picture = "@<<";
+formline $picture, "hi";
+my $formatted = $^A;
+$^A = "";
 "#,
     },
     EdgeCase {
@@ -275,6 +301,21 @@ catch ($e) {
 }
 finally {
     print "done";
+}
+"#,
+    },
+    EdgeCase {
+        id: "try.feature.gated",
+        description: "Try/catch with feature gating enabled.",
+        tags: &["try", "catch", "finally", "feature", "edge-case"],
+        source: r#"use feature 'try';
+no warnings 'experimental::try';
+
+try {
+    die "boom";
+}
+catch ($e) {
+    warn $e;
 }
 "#,
     },
@@ -684,6 +725,16 @@ if ($text =~ /(foo)?(?(1)bar|baz)/) {
 "#,
     },
     EdgeCase {
+        id: "regex.conditional.named",
+        description: "Regex conditional using a named capture branch.",
+        tags: &["regex", "edge-case"],
+        source: r#"my $text = "foo";
+if ($text =~ /(?<word>foo)(?(<word>)foo|bar)/) {
+    print "ok";
+}
+"#,
+    },
+    EdgeCase {
         id: "regex.set.ops",
         description: "Regex set operations with character class subtraction.",
         tags: &["regex", "sets", "edge-case"],
@@ -759,11 +810,30 @@ beta
 "#,
     },
     EdgeCase {
+        id: "readline.diamond",
+        description: "Diamond operator readline with eof check.",
+        tags: &["file", "io", "edge-case"],
+        source: r#"while (my $line = <>) {
+    last if eof;
+    print $line;
+}
+"#,
+    },
+    EdgeCase {
         id: "open.layers",
         description: "Open with PerlIO layer specification.",
         tags: &["open", "layers", "perlio", "edge-case"],
         source: r#"open my $fh, "<:encoding(UTF-8)", "file.txt" or die $!;
 binmode $fh, ":raw";
+"#,
+    },
+    EdgeCase {
+        id: "open.scalar.ref",
+        description: "Open a scalar reference as a filehandle.",
+        tags: &["open", "io", "edge-case"],
+        source: r#"my $data = "hello\nworld\n";
+open my $fh, "<", \$data or die $!;
+my $line = <$fh>;
 "#,
     },
     EdgeCase {
@@ -933,6 +1003,15 @@ $node->{self} = $node;
 "#,
     },
     ComplexDataStructureCase {
+        id: "typeglob.map",
+        description: "Hash containing typeglob handle references.",
+        source: r#"my $handles = {
+    out => *STDOUT,
+    err => *STDERR,
+};
+"#,
+    },
+    ComplexDataStructureCase {
         id: "graph.refs",
         description: "Graph-like structure with nested edges.",
         source: r#"my $graph = {
@@ -1050,6 +1129,13 @@ my $value = dualvar(10, "ten");
 "#,
     },
     ComplexDataStructureCase {
+        id: "version.object",
+        description: "Version object parsed from a v-string.",
+        source: r#"use version;
+my $version = version->parse("v1.2.3");
+"#,
+    },
+    ComplexDataStructureCase {
         id: "regex.and.refs",
         description: "Hash with compiled regex and scalar reference.",
         source: r#"my $value = 10;
@@ -1119,6 +1205,13 @@ my $obj = bless $handler, "Handler::Obj";
         description: "Hash containing a filehandle and metadata.",
         source: r#"open my $fh, "<", "file.txt";
 my $data = { handle => $fh, path => "file.txt" };
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "filehandle.array",
+        description: "Array containing filehandles and typeglob refs.",
+        source: r#"open my $fh, "<", "file.txt";
+my $list = [$fh, \*STDIN, \*STDOUT];
 "#,
     },
     ComplexDataStructureCase {
@@ -1235,8 +1328,9 @@ pub fn find_complex_case(id: &str) -> Option<&'static ComplexDataStructureCase> 
 
 /// Sample a deterministic complex data structure fixture by seed.
 pub fn sample_complex_case(seed: u64) -> &'static ComplexDataStructureCase {
-    select_by_seed(complex_data_structure_cases(), seed)
-        .unwrap_or_else(|| complex_data_structure_cases().first().expect("complex case list is empty"))
+    select_by_seed(complex_data_structure_cases(), seed).unwrap_or_else(|| {
+        complex_data_structure_cases().first().expect("complex case list is empty")
+    })
 }
 
 #[cfg(test)]

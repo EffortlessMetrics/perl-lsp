@@ -48,12 +48,10 @@ fn variable_declaration() -> impl Strategy<Value = String> {
     prop_oneof![
         (decl_keyword(), identifier(), prop::sample::select(vec!["1", "\"value\"", "undef"]),)
             .prop_map(|(kw, name, value)| format!("{} ${} = {};\n", kw, name, value)),
-        (decl_keyword(), identifier()).prop_map(|(kw, name)| {
-            format!("{} @{} = (1, 2, 3);\n", kw, name)
-        }),
-        (decl_keyword(), identifier()).prop_map(|(kw, name)| {
-            format!("{} %{} = (a => 1, b => 2);\n", kw, name)
-        }),
+        (decl_keyword(), identifier())
+            .prop_map(|(kw, name)| { format!("{} @{} = (1, 2, 3);\n", kw, name) }),
+        (decl_keyword(), identifier())
+            .prop_map(|(kw, name)| { format!("{} %{} = (a => 1, b => 2);\n", kw, name) }),
     ]
 }
 
