@@ -4,9 +4,9 @@ Debug Adapter Protocol (DAP) server for Perl debugging in VS Code and other DAP-
 
 ## Overview
 
-The **perl-dap** crate provides production-grade debugging capabilities for the Perl LSP ecosystem. It implements a bridge between VS Code's debugger client and Perl's runtime debugging facilities.
+The **perl-dap** crate provides a DAP server for Perl debugging. It includes a native adapter used by the CLI (drives `perl -d` directly) and a BridgeAdapter library that can proxy to Perl::LanguageServer.
 
-**Current Status**: Phase 1 Complete (Bridge Implementation)
+**Current Status**: Native adapter CLI (experimental) + BridgeAdapter library (not wired into CLI)
 
 ## Architecture
 
@@ -14,28 +14,30 @@ The **perl-dap** crate provides production-grade debugging capabilities for the 
 VS Code
   ↓ (DAP over stdio)
 perl-dap (Rust)
-  ├─ Phase 1: BridgeAdapter → Perl::LanguageServer  ✅ Complete
-  ├─ Phase 2: Native DAP server (planned)
-  └─ Phase 3: Security hardening (planned)
-  ↓
-Perl Debugger Runtime (perl -d)
+  ├─ Native adapter (default CLI) → perl -d
+  └─ BridgeAdapter (library) → Perl::LanguageServer DAP → perl -d
 ```
 
 ## Features
 
-### Phase 1 (Current)
+### Native Adapter (Default CLI)
 
-- **Bridge Mode**: Proxies DAP messages between VS Code and Perl::LanguageServer
-- **Launch/Attach Configurations**: Full DAP configuration support with validation
+- **Launch Debugging**: Start `perl -d` via stdio
+- **Breakpoints + Stepping**: Best-effort breakpoint/step control
+- **Stack/Threads**: Best-effort stack frames and single-thread view
+- **Variables/Evaluate**: Placeholder output (no parsed values yet)
 - **Cross-Platform Support**: Windows, macOS, Linux, and WSL path translation
-- **VS Code Integration**: Generates `launch.json` snippets
 
-### Planned (Phase 2/3)
+### BridgeAdapter (Library)
 
-- Native Rust DAP protocol server
+- **Bridge Mode**: Proxy DAP messages to Perl::LanguageServer
+- **Launch/Attach Configurations**: Shared config types + snippets
+
+### Planned
+
+- Attach support in the native adapter
+- Parsed variable/evaluate output
 - AST-based breakpoint validation
-- Safe expression evaluation
-- Performance optimization (<50ms targets)
 
 ## Quick Start
 
@@ -47,7 +49,8 @@ cargo install --path crates/perl-dap
 
 ### Prerequisites
 
-- Perl 5.20+ with `Perl::LanguageServer` installed:
+- Perl 5.20+ available on PATH
+- `Perl::LanguageServer` only if you use BridgeAdapter:
   ```bash
   cpanm Perl::LanguageServer
   ```
@@ -74,7 +77,15 @@ Add to your `.vscode/launch.json`:
 
 ## Usage
 
-### Bridge Mode (Phase 1)
+### Native CLI (Default)
+
+The VS Code extension will launch `perl-dap` automatically. You can also run it directly:
+
+```bash
+perl-dap --stdio
+```
+
+### BridgeAdapter (Library Only)
 
 ```rust
 use perl_dap::BridgeAdapter;
@@ -107,7 +118,9 @@ println!("{}", create_attach_json_snippet());
 | `includePaths` | String[] | Additional @INC paths |
 | `stopOnEntry` | Boolean | Break at first line |
 
-### Attach Configuration
+> Note: `attach` is not supported by the native adapter yet. The attach config applies to BridgeAdapter usage.
+
+### Attach Configuration (BridgeAdapter Only)
 
 | Option | Type | Description |
 |--------|------|-------------|

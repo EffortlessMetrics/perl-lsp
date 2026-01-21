@@ -1,12 +1,27 @@
 //! Perl parser corpus - test data and property-based testing infrastructure
 #![allow(clippy::pedantic)] // Corpus crate - focus on core clippy lints only
 
+pub mod cases;
+pub mod codegen;
+pub mod files;
 pub mod r#gen;
 pub mod index;
 pub mod lint;
 pub mod meta;
 
 use anyhow::{Context, Result};
+pub use cases::{
+    ComplexDataStructureCase, EdgeCase, EdgeCaseGenerator, complex_data_structure_cases,
+    edge_cases, find_complex_case, get_complex_data_structure_tests, sample_complex_case,
+};
+pub use codegen::{
+    CodegenOptions, StatementKind, generate_perl_code, generate_perl_code_with_options,
+    generate_perl_code_with_seed, generate_perl_code_with_statements,
+};
+pub use files::{
+    CORPUS_ROOT_ENV, CorpusFile, CorpusLayer, CorpusPaths, get_all_test_files, get_corpus_files,
+    get_corpus_files_from, get_fuzz_files, get_test_files,
+};
 use meta::Section;
 use regex::Regex;
 use std::collections::HashMap;
@@ -103,7 +118,7 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
     Ok(sections)
 }
 
-/// Scan the `test/corpus/` directory.
+/// Scan the `test_corpus/` directory.
 pub fn parse_dir(dir: &Path) -> Result<Vec<Section>> {
     let mut all = Vec::new();
 

@@ -9,19 +9,17 @@ pub fn sprinkle_whitespace(src: &str, seed: u64) -> String {
     let mut in_regex = false;
     let mut escape_next = false;
 
-    for (i, ch) in src.chars().enumerate() {
+    for ch in src.chars() {
         // Track string/regex context to avoid breaking syntax
-        if !escape_next {
+        if escape_next {
+            escape_next = false;
+        } else {
             match ch {
                 '"' if !in_regex => in_string = !in_string,
-                '/' if !in_string && (i == 0 || src.chars().nth(i - 1) != Some('\\')) => {
-                    in_regex = !in_regex;
-                }
+                '/' if !in_string => in_regex = !in_regex,
                 '\\' => escape_next = true,
                 _ => {}
             }
-        } else {
-            escape_next = false;
         }
 
         result.push(ch);

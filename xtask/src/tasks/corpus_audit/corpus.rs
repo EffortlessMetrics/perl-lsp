@@ -20,7 +20,7 @@ pub enum CorpusLayer {
     Highlight,
     /// Test corpus files (test_corpus/**/*.pl)
     TestCorpus,
-    /// Perl-corpus generator files (crates/perl-corpus/src/generators/*.rs)
+    /// Perl-corpus generator files (crates/perl-corpus/src/gen/*.rs)
     PerlCorpus,
 }
 
@@ -31,7 +31,7 @@ impl CorpusLayer {
             CorpusLayer::TreeSitter => "c/test/corpus",
             CorpusLayer::Highlight => "c/test/highlight",
             CorpusLayer::TestCorpus => "test_corpus",
-            CorpusLayer::PerlCorpus => "crates/perl-corpus/src/generators",
+            CorpusLayer::PerlCorpus => "crates/perl-corpus/src/gen",
         }
     }
 
@@ -187,7 +187,7 @@ mod tests {
         assert_eq!(CorpusLayer::TreeSitter.directory(), "c/test/corpus");
         assert_eq!(CorpusLayer::Highlight.directory(), "c/test/highlight");
         assert_eq!(CorpusLayer::TestCorpus.directory(), "test_corpus");
-        assert_eq!(CorpusLayer::PerlCorpus.directory(), "crates/perl-corpus/src/generators");
+        assert_eq!(CorpusLayer::PerlCorpus.directory(), "crates/perl-corpus/src/gen");
     }
 
     #[test]

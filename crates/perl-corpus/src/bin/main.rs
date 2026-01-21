@@ -8,8 +8,8 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(name = "perl-corpus", version, about = "Perl test corpus management tool")]
 struct Cli {
-    /// Path to test/corpus directory
-    #[arg(short, long, default_value = "test/corpus")]
+    /// Path to test_corpus directory
+    #[arg(short, long, default_value = "test_corpus")]
     corpus: PathBuf,
 
     #[command(subcommand)]
@@ -61,6 +61,8 @@ enum Command {
 
 #[derive(Subcommand)]
 enum Generator {
+    /// Generate full programs with mixed statements
+    Program,
     /// Generate qw expressions
     Qw,
     /// Generate quote-like operators
@@ -69,6 +71,32 @@ enum Generator {
     Heredoc,
     /// Generate whitespace-heavy code
     Whitespace,
+    /// Generate loop control samples (next/redo/continue)
+    ControlFlow,
+    /// Generate format statements
+    Format,
+    /// Generate glob expressions
+    Glob,
+    /// Generate tie/untie samples
+    Tie,
+    /// Generate I/O and filehandle samples
+    Io,
+    /// Generate filetest operator samples
+    Filetest,
+    /// Generate built-in function call samples
+    Builtins,
+    /// Generate map/grep/sort list-operator samples
+    ListOps,
+    /// Generate package/subroutine declarations and method calls
+    Declarations,
+    /// Generate expression-heavy statements
+    Expressions,
+    /// Generate regex match/substitution/transliteration statements
+    Regex,
+    /// Generate sigil and dereference samples
+    Sigils,
+    /// Generate compile-time phase blocks (BEGIN/CHECK/UNITCHECK/INIT/END)
+    Phasers,
 }
 
 fn main() -> Result<()> {
@@ -184,6 +212,11 @@ fn main() -> Result<()> {
             println!();
 
             match generator {
+                Generator::Program => {
+                    let code = perl_corpus::generate_perl_code_with_seed(count as usize, seed);
+                    println!("# Program ({} statements)", count);
+                    println!("{}", code);
+                }
                 Generator::Qw => {
                     use perl_corpus::r#gen::qw::qw_in_context;
                     for i in 0..count {
@@ -228,6 +261,162 @@ fn main() -> Result<()> {
                             .map_err(|e| anyhow::anyhow!("{e:?}"))?
                             .current();
                         println!("# Test case {} (whitespace-heavy)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::ControlFlow => {
+                    use perl_corpus::r#gen::control_flow::loop_with_control;
+                    for i in 0..count {
+                        let value = loop_with_control()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (control-flow)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Format => {
+                    use perl_corpus::r#gen::format_statements::format_statement;
+                    for i in 0..count {
+                        let value = format_statement()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (format)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Glob => {
+                    use perl_corpus::r#gen::glob::glob_in_context;
+                    for i in 0..count {
+                        let value = glob_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (glob)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Tie => {
+                    use perl_corpus::r#gen::tie::tie_in_context;
+                    for i in 0..count {
+                        let value = tie_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (tie)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Io => {
+                    use perl_corpus::r#gen::io::io_in_context;
+                    for i in 0..count {
+                        let value = io_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (io)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Filetest => {
+                    use perl_corpus::r#gen::filetest::filetest_in_context;
+                    for i in 0..count {
+                        let value = filetest_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (filetest)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Builtins => {
+                    use perl_corpus::r#gen::builtins::builtin_in_context;
+                    for i in 0..count {
+                        let value = builtin_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (builtins)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::ListOps => {
+                    use perl_corpus::r#gen::list_ops::list_op_in_context;
+                    for i in 0..count {
+                        let value = list_op_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (list-ops)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Declarations => {
+                    use perl_corpus::r#gen::declarations::declaration_in_context;
+                    for i in 0..count {
+                        let value = declaration_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (declarations)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Expressions => {
+                    use perl_corpus::r#gen::expressions::expression_in_context;
+                    for i in 0..count {
+                        let value = expression_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (expressions)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Regex => {
+                    use perl_corpus::r#gen::regex::regex_in_context;
+                    for i in 0..count {
+                        let value = regex_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (regex)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Sigils => {
+                    use perl_corpus::r#gen::sigils::sigil_in_context;
+                    for i in 0..count {
+                        let value = sigil_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (sigils)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Phasers => {
+                    use perl_corpus::r#gen::phasers::phaser_block;
+                    for i in 0..count {
+                        let value = phaser_block()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (phasers)", i + 1);
                         println!("{}", value);
                         println!();
                     }

@@ -5,6 +5,12 @@ fn sanitize_payload(s: &str, left: char, right: char) -> String {
     s.chars().filter(|&ch| ch != left && ch != right && ch != '\r').collect()
 }
 
+fn sorted_modifiers(modifiers: impl IntoIterator<Item = char>) -> String {
+    let mut mods: Vec<char> = modifiers.into_iter().collect();
+    mods.sort_unstable();
+    mods.into_iter().collect()
+}
+
 /// Generate payload for quote-like operators
 pub fn q_like_payload() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -32,6 +38,7 @@ pub fn quote_delim() -> impl Strategy<Value = (char, char)> {
         Just(('#', '#')),
         Just(('~', '~')),
         Just((',', ',')),
+        Just(('\'', '\'')),
     ]
 }
 
@@ -70,8 +77,9 @@ pub fn regex_with_modifiers() -> impl Strategy<Value = String> {
         ),
     )
         .prop_map(|(pattern, (open, close), modifiers)| {
-            let mods: String = modifiers.into_iter().collect();
-            format!("qr{}{}{}{}", open, pattern, close, mods)
+            let clean_pattern = sanitize_payload(&pattern, open, close);
+            let mods = sorted_modifiers(modifiers);
+            format!("qr{}{}{}{}", open, clean_pattern, close, mods)
         })
 }
 
@@ -84,13 +92,18 @@ pub fn substitution() -> impl Strategy<Value = String> {
         prop::collection::hash_set(prop::sample::select(vec!['i', 'x', 's', 'm', 'g', 'e']), 0..4),
     )
         .prop_map(|(pattern, replacement, (open, close), modifiers)| {
-            let mods: String = modifiers.into_iter().collect();
+            let clean_pattern = sanitize_payload(&pattern, open, close);
+            let clean_replacement = sanitize_payload(&replacement, open, close);
+            let mods = sorted_modifiers(modifiers);
             if open == close {
                 // Symmetric delimiter
-                format!("s{}{}{}{}{}{}", open, pattern, open, replacement, open, mods)
+                format!("s{}{}{}{}{}{}", open, clean_pattern, open, clean_replacement, open, mods)
             } else {
                 // Paired delimiters - special syntax
-                format!("s{}{}{}{}{}{}", open, pattern, close, open, replacement, close)
+                format!(
+                    "s{}{}{}{}{}{}{}",
+                    open, clean_pattern, close, open, clean_replacement, close, mods
+                )
             }
         })
 }
@@ -104,11 +117,13 @@ pub fn transliteration() -> impl Strategy<Value = String> {
         prop::collection::hash_set(prop::sample::select(vec!['c', 'd', 's', 'r']), 0..2),
     )
         .prop_map(|(from, to, (open, close), modifiers)| {
-            let mods: String = modifiers.into_iter().collect();
+            let clean_from = sanitize_payload(&from, open, close);
+            let clean_to = sanitize_payload(&to, open, close);
+            let mods = sorted_modifiers(modifiers);
             if open == close {
-                format!("tr{}{}{}{}{}{}", open, from, open, to, open, mods)
+                format!("tr{}{}{}{}{}{}", open, clean_from, open, clean_to, open, mods)
             } else {
-                format!("tr{}{}{}{}{}{}", open, from, close, open, to, close)
+                format!("tr{}{}{}{}{}{}{}", open, clean_from, close, open, clean_to, close, mods)
             }
         })
 }
