@@ -1,0 +1,3 @@
+## 2025-05-18 - [Optimization of Built-in Global Check]
+**Learning:** `is_builtin_global` was performing unnecessary allocations of `full_name` strings before checking if they were built-ins. Splitting `sigil` and `name` allows checking built-ins without allocation. Also discovered `parent_map` usage in `scope_analyzer.rs` was broken (refactoring leftover) and fixed it by using `ancestors`.
+**Action:** Always verify if high-frequency checks like "is this a built-in?" can be done on raw components before constructing full objects. Also, when working on a file, check for existing compilation errors that might be masking or complicating verification.
