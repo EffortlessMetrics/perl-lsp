@@ -238,6 +238,16 @@ warn $@ if $@;
 "#,
     },
     EdgeCase {
+        id: "signature.attribute",
+        description: "Subroutine signature paired with an lvalue attribute.",
+        tags: &["signature", "subroutine", "edge-case"],
+        source: r#"use feature 'signatures';
+no warnings 'experimental::signatures';
+my $value = 1;
+sub getter ($self) :lvalue { return $value; }
+"#,
+    },
+    EdgeCase {
         id: "package.block",
         description: "Package block with nested subroutine.",
         tags: &["package", "subroutine", "edge-case"],
@@ -297,6 +307,16 @@ my @slice = $aref->@[0, 2];
         source: r#"my $href = { a => 1, b => 2 };
 my %copy = $href->%*;
 my @keys = $href->@{qw(a b)};
+"#,
+    },
+    EdgeCase {
+        id: "slice.hash.array",
+        description: "Array and hash slice notation with list context.",
+        tags: &["array", "hash", "list-context", "edge-case"],
+        source: r#"my @nums = (1, 2, 3, 4);
+my @subset = @nums[1, 3];
+my %map = (a => 1, b => 2, c => 3);
+my @values = @map{qw(a c)};
 "#,
     },
     EdgeCase {

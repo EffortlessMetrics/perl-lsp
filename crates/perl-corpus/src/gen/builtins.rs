@@ -39,6 +39,12 @@ fn keys_values() -> impl Strategy<Value = String> {
     )
 }
 
+fn each_delete() -> impl Strategy<Value = String> {
+    Just(
+        "my %map = (a => 1, b => 2);\nmy ($k, $v) = each %map;\ndelete $map{$k};\n".to_string(),
+    )
+}
+
 fn substr_ops() -> impl Strategy<Value = String> {
     Just(
         "my $text = \"foobar\";\nmy $chunk = substr($text, 1, 3);\nsubstr($text, 0, 1) = \"F\";\n"
@@ -87,7 +93,10 @@ fn reverse_list() -> impl Strategy<Value = String> {
 }
 
 fn uc_lc() -> impl Strategy<Value = String> {
-    Just("my $name = \"Ada\";\nmy $upper = uc $name;\nmy $lower = lc $name;\n".to_string())
+    Just(
+        "my $name = \"Ada\";\nmy $upper = uc $name;\nmy $lower = lc $name;\nmy $upper_first = ucfirst $name;\nmy $lower_first = lcfirst $name;\n"
+            .to_string(),
+    )
 }
 
 fn chr_ord() -> impl Strategy<Value = String> {
@@ -96,6 +105,25 @@ fn chr_ord() -> impl Strategy<Value = String> {
 
 fn rand_int() -> impl Strategy<Value = String> {
     Just("srand 42;\nmy $roll = int(rand 6) + 1;\n".to_string())
+}
+
+fn math_ops() -> impl Strategy<Value = String> {
+    Just(
+        "my $value = -4.2;\nmy $abs = abs($value);\nmy $whole = int($value);\nmy $root = sqrt(9);\nmy $angle = atan2(1, 1);\n"
+            .to_string(),
+    )
+}
+
+fn hex_oct() -> impl Strategy<Value = String> {
+    Just("my $hex = hex(\"ff\");\nmy $oct = oct(\"377\");\n".to_string())
+}
+
+fn chdir_mkdir() -> impl Strategy<Value = String> {
+    Just("my $ok = chdir \"/tmp\";\nmkdir \"data\";\nrmdir \"data\";\n".to_string())
+}
+
+fn rename_unlink() -> impl Strategy<Value = String> {
+    Just("rename \"old.log\", \"new.log\";\nunlink \"old.log\";\n".to_string())
 }
 
 fn stat_lstat() -> impl Strategy<Value = String> {
@@ -119,6 +147,7 @@ pub fn builtin_in_context() -> impl Strategy<Value = String> {
         time_localtime(),
         chomp_line(),
         keys_values(),
+        each_delete(),
         substr_ops(),
         index_ops(),
         length_chop(),
@@ -131,6 +160,10 @@ pub fn builtin_in_context() -> impl Strategy<Value = String> {
         uc_lc(),
         chr_ord(),
         rand_int(),
+        math_ops(),
+        hex_oct(),
+        chdir_mkdir(),
+        rename_unlink(),
         stat_lstat(),
         defined_exists(),
     ]
@@ -169,10 +202,24 @@ mod tests {
                     || code.contains("reverse")
                     || code.contains("uc")
                     || code.contains("lc")
+                    || code.contains("ucfirst")
+                    || code.contains("lcfirst")
                     || code.contains("chr")
                     || code.contains("ord")
                     || code.contains("srand")
                     || code.contains("rand")
+                    || code.contains("abs")
+                    || code.contains("sqrt")
+                    || code.contains("atan2")
+                    || code.contains("hex")
+                    || code.contains("oct")
+                    || code.contains("each")
+                    || code.contains("delete")
+                    || code.contains("chdir")
+                    || code.contains("mkdir")
+                    || code.contains("rmdir")
+                    || code.contains("rename")
+                    || code.contains("unlink")
                     || code.contains("stat")
                     || code.contains("lstat")
                     || code.contains("defined")

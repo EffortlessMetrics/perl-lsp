@@ -107,7 +107,7 @@ pub fn subroutine_declaration() -> impl Strategy<Value = String> {
                 format!(" :{}", attributes.join(" :"))
             };
 
-            format!("sub {}{}{} {{\n    return 1;\n}}\n", name, attribute, signature)
+            format!("sub {}{}{} {{\n    return 1;\n}}\n", name, signature, attribute)
         })
 }
 
@@ -127,6 +127,23 @@ pub fn anonymous_subroutine() -> impl Strategy<Value = String> {
                 if use_signature { format!(" ({})", params.join(", ")) } else { String::new() };
 
             format!("my $handler = sub{} {{ return 1; }};\n", signature)
+        })
+}
+
+/// Generate a forward declaration, optionally with a prototype and attributes.
+pub fn subroutine_forward_declaration() -> impl Strategy<Value = String> {
+    (
+        identifier(),
+        prop::sample::select(vec!["", " ($$)", " (@)", " ($;$)"]),
+        subroutine_attributes(),
+    )
+        .prop_map(|(name, proto, attributes)| {
+            let attribute = if attributes.is_empty() {
+                String::new()
+            } else {
+                format!(" :{}", attributes.join(" :"))
+            };
+            format!("sub {}{}{};\n", name, proto, attribute)
         })
 }
 
@@ -158,11 +175,17 @@ pub fn use_require_statement() -> impl Strategy<Value = String> {
     prop_oneof![
         Just("use strict;\n".to_string()),
         Just("use warnings;\n".to_string()),
+        Just("use warnings FATAL => 'all';\n".to_string()),
         Just("use v5.36;\n".to_string()),
         Just("use v5.38;\n".to_string()),
         Just("use feature ':5.36';\n".to_string()),
         Just("use feature 'signatures';\n".to_string()),
+        Just("use feature qw(signatures say state);\n".to_string()),
+        Just("use experimental qw(try defer);\n".to_string()),
+        Just("use builtin qw(true false is_bool);\n".to_string()),
         Just("use constant PI => 3.14;\n".to_string()),
+        Just("use constant FOO => 1, BAR => 2;\n".to_string()),
+        Just("use constant { FOO => 1, BAR => 2 };\n".to_string()),
         Just("use bytes;\n".to_string()),
         Just("use utf8;\n".to_string()),
         Just("use open ':std', ':encoding(UTF-8)';\n".to_string()),
@@ -172,7 +195,10 @@ pub fn use_require_statement() -> impl Strategy<Value = String> {
         Just("use parent qw(Exporter);\n".to_string()),
         Just("use autodie;\n".to_string()),
         Just("no warnings 'experimental::signatures';\n".to_string()),
+        Just("no warnings qw(experimental::signatures deprecated);\n".to_string()),
         Just("no strict 'refs';\n".to_string()),
+        Just("use if $] >= 5.036, 'feature', 'say';\n".to_string()),
+        Just("use subs qw(helper util);\n".to_string()),
         package_name().prop_map(|name| format!("use {};\n", name)),
         package_name().prop_map(|name| format!("use {} 1.23;\n", name)),
         package_name().prop_map(|name| format!("require {};\n", name)),
@@ -187,6 +213,7 @@ pub fn declaration_in_context() -> impl Strategy<Value = String> {
         variable_declaration(),
         subroutine_declaration(),
         anonymous_subroutine(),
+        subroutine_forward_declaration(),
         stateful_subroutine(),
         method_call_in_context(),
         use_require_statement(),
@@ -211,6 +238,12 @@ mod tests {
         #[test]
         fn anonymous_subroutine_includes_sub(code in anonymous_subroutine()) {
             assert!(code.contains("sub"));
+        }
+
+        #[test]
+        fn forward_declaration_includes_sub(code in subroutine_forward_declaration()) {
+            assert!(code.contains("sub"));
+            assert!(code.trim_end().ends_with(';'));
         }
 
         #[test]
