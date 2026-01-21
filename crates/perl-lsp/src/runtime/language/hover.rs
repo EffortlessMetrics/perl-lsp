@@ -52,15 +52,17 @@ impl LspServer {
                     // This allows hover on variable usages to show the variable's definition info
                     if let Some(symbol_info) = analyzer.find_definition(offset) {
                         // Get symbol kind as string
+                        use crate::symbol::VarKind;
                         let kind_str = match symbol_info.kind {
-                            crate::symbol::SymbolKind::ScalarVariable => "Scalar Variable",
-                            crate::symbol::SymbolKind::ArrayVariable => "Array Variable",
-                            crate::symbol::SymbolKind::HashVariable => "Hash Variable",
+                            crate::symbol::SymbolKind::Variable(VarKind::Scalar) => "Scalar Variable",
+                            crate::symbol::SymbolKind::Variable(VarKind::Array) => "Array Variable",
+                            crate::symbol::SymbolKind::Variable(VarKind::Hash) => "Hash Variable",
                             crate::symbol::SymbolKind::Subroutine => "Subroutine",
                             crate::symbol::SymbolKind::Package => "Package",
                             crate::symbol::SymbolKind::Constant => "Constant",
                             crate::symbol::SymbolKind::Label => "Label",
                             crate::symbol::SymbolKind::Format => "Format",
+                            _ => "Symbol",
                         };
 
                         // Add sigil if applicable

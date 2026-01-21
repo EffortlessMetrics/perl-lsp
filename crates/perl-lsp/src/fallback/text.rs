@@ -89,7 +89,8 @@ pub fn extract_text_based_symbols(
     uri: &str,
     query: &str,
 ) -> Vec<crate::workspace_index::LspWorkspaceSymbol> {
-    use crate::workspace_index::{LspLocation, LspPosition, LspRange, LspWorkspaceSymbol};
+    use crate::workspace_index::LspWorkspaceSymbol;
+    use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 
     let mut symbols = Vec::new();
     let query_lower = query.to_lowercase();
@@ -103,14 +104,14 @@ pub fn extract_text_based_symbols(
                     symbols.push(LspWorkspaceSymbol {
                         name,
                         kind: 12, // Function
-                        location: LspLocation {
+                        location: WireLocation {
                             uri: uri.to_string(),
-                            range: LspRange {
-                                start: LspPosition {
+                            range: WireRange {
+                                start: WirePosition {
                                     line: line_num as u32,
                                     character: byte_to_utf16_col(line, sub_name.start()) as u32,
                                 },
-                                end: LspPosition {
+                                end: WirePosition {
                                     line: line_num as u32,
                                     character: byte_to_utf16_col(line, sub_name.end()) as u32,
                                 },
@@ -132,14 +133,14 @@ pub fn extract_text_based_symbols(
                     symbols.push(LspWorkspaceSymbol {
                         name,
                         kind: 4, // Namespace
-                        location: LspLocation {
+                        location: WireLocation {
                             uri: uri.to_string(),
-                            range: LspRange {
-                                start: LspPosition {
+                            range: WireRange {
+                                start: WirePosition {
                                     line: line_num as u32,
                                     character: byte_to_utf16_col(line, pkg_name.start()) as u32,
                                 },
-                                end: LspPosition {
+                                end: WirePosition {
                                     line: line_num as u32,
                                     character: byte_to_utf16_col(line, pkg_name.end()) as u32,
                                 },

@@ -57,7 +57,7 @@ my $π = 3.14159;  # Greek letter pi
 
         let heart_var = symbols
             .iter()
-            .find(|s| s.name == "$♥" && s.kind == SymbolKind::Variable)
+            .find(|s| s.name == "$♥" && s.kind.is_variable())
             .expect("Should find heart variable");
 
         // Line 11, "my " is 3 chars
@@ -66,7 +66,7 @@ my $π = 3.14159;  # Greek letter pi
 
         let pi_var = symbols
             .iter()
-            .find(|s| s.name == "$π" && s.kind == SymbolKind::Variable)
+            .find(|s| s.name == "$π" && s.kind.is_variable())
             .expect("Should find pi variable");
 
         // Line 12

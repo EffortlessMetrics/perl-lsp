@@ -124,11 +124,13 @@ pub mod v0 {
             SymbolKind::Class => 5,
             SymbolKind::Method => 6,
             SymbolKind::Subroutine => 12,
-            SymbolKind::Variable => 13,
+            SymbolKind::Variable(_) => 13,
             SymbolKind::Constant => 14,
             SymbolKind::Role => 5,    // Treat as Class
             SymbolKind::Import => 15, // Module
             SymbolKind::Export => 15, // Module
+            SymbolKind::Label => 15,  // String
+            SymbolKind::Format => 23, // Struct
         };
 
         WorkspaceSymbolDto {

@@ -459,9 +459,9 @@ impl SemanticAnalyzer {
 
             NodeKind::Variable { sigil, name } => {
                 let kind = match sigil.as_str() {
-                    "$" => SymbolKind::ScalarVariable,
-                    "@" => SymbolKind::ArrayVariable,
-                    "%" => SymbolKind::HashVariable,
+                    "$" => SymbolKind::scalar(),
+                    "@" => SymbolKind::array(),
+                    "%" => SymbolKind::hash(),
                     _ => return,
                 };
 
@@ -1678,7 +1678,7 @@ sub foo {
 
         // Should be able to access symbol table
         let symbol_table = model.symbol_table();
-        let x_symbols = symbol_table.find_symbol("x", 0, SymbolKind::ScalarVariable);
+        let x_symbols = symbol_table.find_symbol("x", 0, SymbolKind::scalar());
         assert!(!x_symbols.is_empty(), "Should find $x in symbol table");
 
         let foo_symbols = symbol_table.find_symbol("foo", 0, SymbolKind::Subroutine);
@@ -1698,7 +1698,7 @@ my $documented = 42;
 
         // Find the location of the variable declaration
         let symbol_table = model.symbol_table();
-        let symbols = symbol_table.find_symbol("documented", 0, SymbolKind::ScalarVariable);
+        let symbols = symbol_table.find_symbol("documented", 0, SymbolKind::scalar());
         assert!(!symbols.is_empty(), "Should find $documented");
 
         // Check if hover info is available
@@ -1729,7 +1729,7 @@ my $documented = 42;
 
         // 1. Must be a scalar named "x"
         assert_eq!(symbol.name, "x");
-        assert_eq!(symbol.kind, SymbolKind::ScalarVariable);
+        assert_eq!(symbol.kind, SymbolKind::scalar());
 
         // 2. Declaration must come before reference
         assert!(
@@ -1761,7 +1761,7 @@ my $documented = 42;
 
         if let Some(symbol) = model.definition_at(byte_offset) {
             assert_eq!(symbol.name, "x");
-            assert_eq!(symbol.kind, SymbolKind::ScalarVariable);
+            assert_eq!(symbol.kind, SymbolKind::scalar());
             assert!(
                 symbol.location.start < byte_offset,
                 "Declaration {:?} should precede reference at byte {}",

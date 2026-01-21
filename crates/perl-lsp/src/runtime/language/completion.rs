@@ -206,7 +206,7 @@ impl LspServer {
                                     crate::workspace_index::SymbolKind::Subroutine => {
                                         CompletionItemKind::Function
                                     }
-                                    crate::workspace_index::SymbolKind::Variable => {
+                                    crate::workspace_index::SymbolKind::Variable(_) => {
                                         CompletionItemKind::Variable
                                     }
                                     crate::workspace_index::SymbolKind::Class => {
@@ -225,6 +225,12 @@ impl LspServer {
                                         CompletionItemKind::Module
                                     }
                                     crate::workspace_index::SymbolKind::Export => {
+                                        CompletionItemKind::Function
+                                    }
+                                    crate::workspace_index::SymbolKind::Label => {
+                                        CompletionItemKind::Keyword
+                                    }
+                                    crate::workspace_index::SymbolKind::Format => {
                                         CompletionItemKind::Function
                                     }
                                 };

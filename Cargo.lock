@@ -1673,9 +1673,17 @@ name = "perl-semantic-analyzer"
 version = "0.8.8"
 dependencies = [
  "perl-parser-core",
+ "perl-symbol-types",
  "perl-workspace-index",
  "regex",
  "rustc-hash",
+ "serde",
+]
+
+[[package]]
+name = "perl-symbol-types"
+version = "0.8.8"
+dependencies = [
  "serde",
 ]
 
@@ -1698,6 +1706,7 @@ dependencies = [
  "parking_lot",
  "perl-parser-core",
  "perl-position-tracking",
+ "perl-symbol-types",
  "regex",
  "serde",
  "url",

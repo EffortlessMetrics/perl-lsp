@@ -426,14 +426,13 @@ impl WorkspaceSymbolsProvider {
 /// 15=String (used for labels), 23=Struct (used for formats).
 fn symbol_kind_to_lsp(kind: &SymbolKind) -> i32 {
     match kind {
-        SymbolKind::Package => 4,         // Namespace
-        SymbolKind::Subroutine => 12,     // Function
-        SymbolKind::ScalarVariable => 13, // Variable
-        SymbolKind::ArrayVariable => 13,  // Variable
-        SymbolKind::HashVariable => 13,   // Variable
-        SymbolKind::Constant => 14,       // Constant
-        SymbolKind::Label => 15,          // String
-        SymbolKind::Format => 23,         // Struct
+        SymbolKind::Package => 4,      // Namespace
+        SymbolKind::Subroutine => 12,  // Function
+        SymbolKind::Variable(_) => 13, // Variable (scalar, array, or hash)
+        SymbolKind::Constant => 14,    // Constant
+        SymbolKind::Label => 15,       // String
+        SymbolKind::Format => 23,      // Struct
+        _ => 13,                       // Default to Variable
     }
 }
 

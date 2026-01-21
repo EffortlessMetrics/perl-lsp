@@ -14,6 +14,7 @@ members = [
     "crates/perl-lsp-protocol",
     "crates/perl-lsp-transport",
     "crates/perl-position-tracking",
+    "crates/perl-symbol-types",
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
@@ -45,6 +46,7 @@ perl-lsp-providers = { path = "crates/perl-lsp-providers" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol" }
 perl-lsp-transport = { path = "crates/perl-lsp-transport" }
 perl-position-tracking = { path = "crates/perl-position-tracking" }
+perl-symbol-types = { path = "crates/perl-symbol-types" }
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust"] }
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c" }
 tree-sitter = "0.26.3"

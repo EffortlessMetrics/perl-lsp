@@ -61,6 +61,7 @@ use crate::ast::{Node, NodeKind};
 use crate::document_store::{Document, DocumentStore};
 use crate::position::{Position, Range};
 use parking_lot::RwLock;
+use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -852,44 +853,15 @@ fn default_has_body() -> bool {
     true
 }
 
-/// Classification of Perl symbol types for workspace indexing
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum SymbolKind {
-    /// Package declaration (package Foo;)
-    Package,
-    /// Subroutine definition (sub name { })
-    Subroutine,
-    /// Method definition in OO context
-    Method,
-    /// Variable declaration (my, our, local)
-    Variable,
-    /// Constant value (use constant NAME => value)
-    Constant,
-    /// Class declaration (class keyword or Moose/Moo)
-    Class,
-    /// Role definition (role keyword or Moose::Role)
-    Role,
-    /// Imported symbol from use statement
-    Import,
-    /// Exported symbol via Exporter
-    Export,
-}
+// Re-export the unified symbol types from perl-symbol-types
+pub use perl_symbol_types::{SymbolKind, VarKind};
 
-impl SymbolKind {
-    /// Convert to LSP-compliant symbol kind number
-    pub fn to_lsp_kind(self) -> u32 {
-        // Using lsp_types::SymbolKind constants
-        match self {
-            SymbolKind::Package => 2,     // Module
-            SymbolKind::Subroutine => 12, // Function
-            SymbolKind::Method => 6,      // Method
-            SymbolKind::Variable => 13,   // Variable
-            SymbolKind::Constant => 14,   // Constant
-            SymbolKind::Class => 5,       // Class
-            SymbolKind::Role => 8,        // Interface (closest match)
-            SymbolKind::Import => 2,      // Module
-            SymbolKind::Export => 12,     // Function
-        }
+/// Helper function to convert sigil to VarKind
+fn sigil_to_var_kind(sigil: &str) -> VarKind {
+    match sigil {
+        "@" => VarKind::Array,
+        "%" => VarKind::Hash,
+        _ => VarKind::Scalar, // Default to scalar for $ and unknown
     }
 }
 
@@ -928,54 +900,23 @@ pub struct LspWorkspaceSymbol {
     /// LSP symbol kind number (see lsp_types::SymbolKind)
     pub kind: u32,
     /// Location of the symbol definition
-    pub location: LspLocation,
+    pub location: WireLocation,
     /// Name of the containing symbol (package, class)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub container_name: Option<String>,
 }
 
-/// LSP-compliant location
-#[derive(Debug, Serialize)]
-pub struct LspLocation {
-    /// Document URI (file:// scheme)
-    pub uri: String,
-    /// Range within the document
-    pub range: LspRange,
-}
-
-/// LSP-compliant range
-#[derive(Debug, Serialize)]
-pub struct LspRange {
-    /// Start position (inclusive)
-    pub start: LspPosition,
-    /// End position (exclusive)
-    pub end: LspPosition,
-}
-
-/// LSP-compliant position
-#[derive(Debug, Serialize)]
-pub struct LspPosition {
-    /// Zero-based line number
-    pub line: u32,
-    /// Zero-based UTF-16 code unit offset
-    pub character: u32,
-}
-
 impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
     fn from(sym: &WorkspaceSymbol) -> Self {
+        let range = WireRange {
+            start: WirePosition { line: sym.range.start.line, character: sym.range.start.column },
+            end: WirePosition { line: sym.range.end.line, character: sym.range.end.column },
+        };
+
         Self {
             name: sym.name.clone(),
             kind: sym.kind.to_lsp_kind(),
-            location: LspLocation {
-                uri: sym.uri.clone(),
-                range: LspRange {
-                    start: LspPosition {
-                        line: sym.range.start.line,
-                        character: sym.range.start.column,
-                    },
-                    end: LspPosition { line: sym.range.end.line, character: sym.range.end.column },
-                },
-            },
+            location: WireLocation { uri: sym.uri.clone(), range },
             container_name: sym.container_name.clone(),
         }
     }
@@ -1464,7 +1405,7 @@ impl IndexVisitor {
 
                     file_index.symbols.push(WorkspaceSymbol {
                         name: var_name.clone(),
-                        kind: SymbolKind::Variable,
+                        kind: SymbolKind::Variable(sigil_to_var_kind(sigil)),
                         uri: self.uri.clone(),
                         range: self.node_to_range(variable),
                         qualified_name: None,
@@ -1497,7 +1438,7 @@ impl IndexVisitor {
 
                         file_index.symbols.push(WorkspaceSymbol {
                             name: var_name.clone(),
-                            kind: SymbolKind::Variable,
+                            kind: SymbolKind::Variable(sigil_to_var_kind(sigil)),
                             uri: self.uri.clone(),
                             range: self.node_to_range(var),
                             qualified_name: None,
@@ -2010,7 +1951,7 @@ my $var = 42;
         let symbols = index.file_symbols(uri);
         assert!(symbols.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
         assert!(symbols.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
-        assert!(symbols.iter().any(|s| s.name == "$var" && s.kind == SymbolKind::Variable));
+        assert!(symbols.iter().any(|s| s.name == "$var" && s.kind.is_variable()));
     }
 
     #[test]

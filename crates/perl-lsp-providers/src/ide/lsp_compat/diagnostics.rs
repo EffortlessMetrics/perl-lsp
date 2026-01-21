@@ -479,7 +479,7 @@ impl DiagnosticsProvider {
         match &node.kind {
             NodeKind::Variable { name, .. } => {
                 // If variable is not defined in scope, it might be undef
-                self.symbol_table.find_symbol(name, 0, SymbolKind::ScalarVariable).is_empty()
+                self.symbol_table.find_symbol(name, 0, SymbolKind::scalar()).is_empty()
             }
             NodeKind::Undef => true,
             _ => false,
