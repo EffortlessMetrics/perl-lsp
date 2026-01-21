@@ -1,10 +1,13 @@
 [package]
 name = "perl-parser-pest"
 version = "0.8.8"
-edition = "2024"
-rust-version = "1.89"
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Perl LSP Contributors"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/perlwasm/perl-lsp"
+homepage = "https://github.com/perlwasm/perl-lsp"
+documentation = "https://docs.rs/perl-parser-pest"
 description = "Legacy Pest-based Perl parser (v2) — maintained as a learning tool and compatibility layer"
 readme = "README.md"
 keywords = ["perl", "parser", "pest", "peg"]

@@ -181,45 +181,32 @@ impl LspServer {
                             name: name.to_string(),
                             kind: crate::type_hierarchy::TypeHierarchySymbolKind::Class,
                             uri: uri.to_string(),
-                            range: WireRange {
-                                start: WirePosition {
-                                    line: item["range"]["start"]["line"].as_u64().unwrap_or(0)
+                            range: WireRange::new(
+                                WirePosition::new(
+                                    item["range"]["start"]["line"].as_u64().unwrap_or(0) as u32,
+                                    item["range"]["start"]["character"].as_u64().unwrap_or(0)
                                         as u32,
-                                    character: item["range"]["start"]["character"]
+                                ),
+                                WirePosition::new(
+                                    item["range"]["end"]["line"].as_u64().unwrap_or(0) as u32,
+                                    item["range"]["end"]["character"].as_u64().unwrap_or(0) as u32,
+                                ),
+                            ),
+                            selection_range: WireRange::new(
+                                WirePosition::new(
+                                    item["selectionRange"]["start"]["line"].as_u64().unwrap_or(0)
+                                        as u32,
+                                    item["selectionRange"]["start"]["character"]
                                         .as_u64()
-                                        .unwrap_or(0)
+                                        .unwrap_or(0) as u32,
+                                ),
+                                WirePosition::new(
+                                    item["selectionRange"]["end"]["line"].as_u64().unwrap_or(0)
                                         as u32,
-                                },
-                                end: WirePosition {
-                                    line: item["range"]["end"]["line"].as_u64().unwrap_or(0) as u32,
-                                    character: item["range"]["end"]["character"]
-                                        .as_u64()
-                                        .unwrap_or(0)
+                                    item["selectionRange"]["end"]["character"].as_u64().unwrap_or(0)
                                         as u32,
-                                },
-                            },
-                            selection_range: WireRange {
-                                start: WirePosition {
-                                    line: item["selectionRange"]["start"]["line"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                    character: item["selectionRange"]["start"]["character"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                },
-                                end: WirePosition {
-                                    line: item["selectionRange"]["end"]["line"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                    character: item["selectionRange"]["end"]["character"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                },
-                            },
+                                ),
+                            ),
                             detail: item["detail"].as_str().map(String::from),
                             data: item.get("data").cloned(),
                         };
@@ -293,45 +280,32 @@ impl LspServer {
                             name: name.to_string(),
                             kind: crate::type_hierarchy::TypeHierarchySymbolKind::Class,
                             uri: uri.to_string(),
-                            range: WireRange {
-                                start: WirePosition {
-                                    line: item["range"]["start"]["line"].as_u64().unwrap_or(0)
+                            range: WireRange::new(
+                                WirePosition::new(
+                                    item["range"]["start"]["line"].as_u64().unwrap_or(0) as u32,
+                                    item["range"]["start"]["character"].as_u64().unwrap_or(0)
                                         as u32,
-                                    character: item["range"]["start"]["character"]
+                                ),
+                                WirePosition::new(
+                                    item["range"]["end"]["line"].as_u64().unwrap_or(0) as u32,
+                                    item["range"]["end"]["character"].as_u64().unwrap_or(0) as u32,
+                                ),
+                            ),
+                            selection_range: WireRange::new(
+                                WirePosition::new(
+                                    item["selectionRange"]["start"]["line"].as_u64().unwrap_or(0)
+                                        as u32,
+                                    item["selectionRange"]["start"]["character"]
                                         .as_u64()
-                                        .unwrap_or(0)
+                                        .unwrap_or(0) as u32,
+                                ),
+                                WirePosition::new(
+                                    item["selectionRange"]["end"]["line"].as_u64().unwrap_or(0)
                                         as u32,
-                                },
-                                end: WirePosition {
-                                    line: item["range"]["end"]["line"].as_u64().unwrap_or(0) as u32,
-                                    character: item["range"]["end"]["character"]
-                                        .as_u64()
-                                        .unwrap_or(0)
+                                    item["selectionRange"]["end"]["character"].as_u64().unwrap_or(0)
                                         as u32,
-                                },
-                            },
-                            selection_range: WireRange {
-                                start: WirePosition {
-                                    line: item["selectionRange"]["start"]["line"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                    character: item["selectionRange"]["start"]["character"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                },
-                                end: WirePosition {
-                                    line: item["selectionRange"]["end"]["line"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                    character: item["selectionRange"]["end"]["character"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                },
-                            },
+                                ),
+                            ),
                             detail: item["detail"].as_str().map(String::from),
                             data: item.get("data").cloned(),
                         };

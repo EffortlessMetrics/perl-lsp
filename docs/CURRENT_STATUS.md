@@ -58,7 +58,7 @@ Key terms:
 | **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 93%+ | In progress |
 <!-- END: STATUS_METRICS_TABLE -->
 | **Parser Coverage** | ~100% | 100% | Complete |
-| **Semantic Analyzer** | Phase 1 (12/12 handlers) | Phase 3 | Core complete |
+| **Semantic Analyzer** | Phase 2-6 Complete | Phase 3 | All NodeKind handlers |
 | **Mutation Score** | 87% | 87%+ | Target met |
 | **Documentation** | perl-parser missing_docs = 0 (baseline 0) | 0 | Ratchet |
 
@@ -67,11 +67,13 @@ Key terms:
 ## What's True Right Now
 
 - **Parser**: Production-ready Perl 5 syntax coverage, 1-150us parsing, 931ns incremental updates
-- **LSP Server**: Capability catalog is `features.toml`; Tier A gate is `just ci-gate`
-- **Semantic Analyzer**: Phase 1 complete with 12/12 critical handlers, `textDocument/definition` integrated
+- **LSP Server**: Capability catalog is `features.toml`; Tier A gate is `just ci-gate`; TCP socket mode available
+- **Semantic Analyzer**: Phase 2-6 complete with all NodeKind handlers, `textDocument/definition` integrated, uninitialized variable detection
+- **Refactoring Engine**: `perform_inline` and `perform_move_code` implemented
 - **Test Infrastructure**: Tier A suite is the only merge-blocking truth (see At a Glance + computed metrics)
-- **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation
-- **DAP Server**: Native adapter CLI (launch/step/breakpoints), BridgeAdapter library present; attach/variables/evaluate pending
+- **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation, O(1) symbol lookups
+- **Security**: Path traversal protection and command injection hardening complete
+- **DAP Server**: Native adapter CLI (launch/step/breakpoints), async BridgeAdapter with graceful shutdown; attach/variables/evaluate pending
 
 ### Computed Metrics (auto-updated by `just status-update`)
 
@@ -91,11 +93,11 @@ Key terms:
 
 ## What's Next
 
-1. **CI Pipeline (#211)** - Blocks merge-blocking gates; $720/year savings potential
-2. **Sprint B remaining**: #180 (name spans), #181 (workspace features), #191 (document highlighting)
-3. **v0.9 Release**: Tag `v0.9.0-semantic-lsp-ready` after docs update
-4. **Production v1.0**: #210 (merge gates), #208 (batteries-included UX), #197 (core docs)
-5. **Semantic Phase 2/3**: Advanced features (closures, multi-file, imports) - post-v0.9
+1. **v0.9.1 Release**: Semantic analyzer complete, refactoring engine, performance optimizations
+2. **CI Pipeline (#211)** - Blocks merge-blocking gates; $720/year savings potential
+3. **Index State Machine**: Workspace indexing state transitions and early-exit optimization
+4. **Documentation Cleanup**: Address remaining `missing_docs` violations
+5. **Production v1.0**: #210 (merge gates), #208 (batteries-included UX), benchmark publication
 
 See [ROADMAP.md](ROADMAP.md) for milestone details.
 
@@ -106,7 +108,7 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 - **Tracked test debt**: see `scripts/ignored-test-count.sh`; feature-gated ignores are by design
 - **CI Pipeline (#211)**: Blocks merge-blocking gates (#210)
 - **Docs scope**: perl-parser missing_docs is ratcheted (see `ci/check_missing_docs.sh`); workspace-wide enforcement is a separate decision
-- **Semantic Phase 2/3**: Advanced features deferred to post-v0.9
+- **Index State Machine**: Workspace indexing optimization deferred to v0.9.1
 
 ---
 
@@ -132,5 +134,5 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-01-18*
+*Last Updated: 2026-01-21*
 *Canonical docs: [ROADMAP.md](ROADMAP.md), [features.toml](../features.toml)*

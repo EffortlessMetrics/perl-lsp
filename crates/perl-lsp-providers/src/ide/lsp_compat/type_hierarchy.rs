@@ -291,14 +291,8 @@ impl TypeHierarchyProvider {
                 name,
                 kind: TypeHierarchySymbolKind::Class,
                 uri: "file:///current".to_string(),
-                range: WireRange {
-                    start: WirePosition { line: 0, character: 0 },
-                    end: WirePosition { line: 0, character: 0 },
-                },
-                selection_range: WireRange {
-                    start: WirePosition { line: 0, character: 0 },
-                    end: WirePosition { line: 0, character: 0 },
-                },
+                range: WireRange::default(),
+                selection_range: WireRange::default(),
                 detail: Some("Parent Class".to_string()),
                 data: None,
             })
@@ -316,14 +310,8 @@ impl TypeHierarchyProvider {
                 name,
                 kind: TypeHierarchySymbolKind::Class,
                 uri: "file:///current".to_string(),
-                range: WireRange {
-                    start: WirePosition { line: 0, character: 0 },
-                    end: WirePosition { line: 0, character: 0 },
-                },
-                selection_range: WireRange {
-                    start: WirePosition { line: 0, character: 0 },
-                    end: WirePosition { line: 0, character: 0 },
-                },
+                range: WireRange::default(),
+                selection_range: WireRange::default(),
                 detail: Some("Subclass".to_string()),
                 data: None,
             })
@@ -496,14 +484,8 @@ use parent 'Other';
             name: "Base".to_string(),
             kind: TypeHierarchySymbolKind::Class,
             uri: "file:///test".to_string(),
-            range: WireRange {
-                start: WirePosition { line: 0, character: 0 },
-                end: WirePosition { line: 0, character: 0 },
-            },
-            selection_range: WireRange {
-                start: WirePosition { line: 0, character: 0 },
-                end: WirePosition { line: 0, character: 0 },
-            },
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
             detail: None,
             data: None,
         };
@@ -555,14 +537,8 @@ use parent 'Outer';
             name: "Outer".to_string(),
             kind: TypeHierarchySymbolKind::Class,
             uri: "file:///test".to_string(),
-            range: WireRange {
-                start: WirePosition { line: 0, character: 0 },
-                end: WirePosition { line: 0, character: 0 },
-            },
-            selection_range: WireRange {
-                start: WirePosition { line: 0, character: 0 },
-                end: WirePosition { line: 0, character: 0 },
-            },
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
             detail: None,
             data: None,
         };

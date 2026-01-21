@@ -744,13 +744,13 @@ impl LspServer {
                     symbols.push(LspWorkspaceSymbol {
                         name: sub_name.clone(),
                         kind: 12, // Function
-                        location: WireLocation {
-                            uri: uri.to_string(),
-                            range: WireRange {
-                                start: WirePosition { line: start_line, character: start_char },
-                                end: WirePosition { line: end_line, character: end_char },
-                            },
-                        },
+                        location: WireLocation::new(
+                            uri.to_string(),
+                            WireRange::new(
+                                WirePosition::new(start_line, start_char),
+                                WirePosition::new(end_line, end_char),
+                            ),
+                        ),
                         container_name: container
                             .map(|s| normalize_package_separator(s).into_owned()),
                     });
@@ -774,13 +774,13 @@ impl LspServer {
                 symbols.push(LspWorkspaceSymbol {
                     name: name.clone(),
                     kind: 2, // Module
-                    location: WireLocation {
-                        uri: uri.to_string(),
-                        range: WireRange {
-                            start: WirePosition { line: start_line, character: start_char },
-                            end: WirePosition { line: end_line, character: end_char },
-                        },
-                    },
+                    location: WireLocation::new(
+                        uri.to_string(),
+                        WireRange::new(
+                            WirePosition::new(start_line, start_char),
+                            WirePosition::new(end_line, end_char),
+                        ),
+                    ),
                     container_name: container.map(|s| normalize_package_separator(s).into_owned()),
                 });
 

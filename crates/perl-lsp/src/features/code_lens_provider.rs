@@ -196,7 +196,7 @@ pub fn resolve_code_lens(lens: CodeLens, reference_count: usize) -> CodeLens {
 pub fn get_shebang_lens(source: &str) -> Option<CodeLens> {
     if source.starts_with("#!") && source.contains("perl") {
         Some(CodeLens {
-            range: WireRange { start: WirePosition::new(0, 0), end: WirePosition::new(0, 0) },
+            range: WireRange::empty(WirePosition::new(0, 0)),
             command: Some(Command {
                 title: "▶ Run Script".to_string(),
                 command: "perl.runScript".to_string(),
@@ -272,7 +272,7 @@ sub test_another {
     #[test]
     fn test_resolve_code_lens() {
         let unresolved = CodeLens {
-            range: WireRange { start: WirePosition::new(5, 0), end: WirePosition::new(5, 0) },
+            range: WireRange::empty(WirePosition::new(5, 0)),
             command: None,
             data: Some(json!({ "name": "foo", "kind": "subroutine" })),
         };

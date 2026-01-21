@@ -32,16 +32,16 @@ pub fn extract_text_based_code_lenses(
                 let name = pkg_name.as_str().to_string();
 
                 lenses.push(crate::code_lens_provider::CodeLens {
-                    range: WireRange {
-                        start: WirePosition::new(
+                    range: WireRange::new(
+                        WirePosition::new(
                             line_num as u32,
                             byte_to_utf16_col(line, pkg_name.start()) as u32,
                         ),
-                        end: WirePosition::new(
+                        WirePosition::new(
                             line_num as u32,
                             byte_to_utf16_col(line, pkg_name.end()) as u32,
                         ),
-                    },
+                    ),
                     command: None, // Will be resolved later
                     data: Some(json!({
                         "name": name,
@@ -59,16 +59,16 @@ pub fn extract_text_based_code_lenses(
                 let name = sub_name.as_str().to_string();
 
                 lenses.push(crate::code_lens_provider::CodeLens {
-                    range: WireRange {
-                        start: WirePosition::new(
+                    range: WireRange::new(
+                        WirePosition::new(
                             line_num as u32,
                             byte_to_utf16_col(line, sub_name.start()) as u32,
                         ),
-                        end: WirePosition::new(
+                        WirePosition::new(
                             line_num as u32,
                             byte_to_utf16_col(line, sub_name.end()) as u32,
                         ),
-                    },
+                    ),
                     command: None, // Will be resolved later
                     data: Some(json!({
                         "name": name,
@@ -104,19 +104,19 @@ pub fn extract_text_based_symbols(
                     symbols.push(LspWorkspaceSymbol {
                         name,
                         kind: 12, // Function
-                        location: WireLocation {
-                            uri: uri.to_string(),
-                            range: WireRange {
-                                start: WirePosition {
-                                    line: line_num as u32,
-                                    character: byte_to_utf16_col(line, sub_name.start()) as u32,
-                                },
-                                end: WirePosition {
-                                    line: line_num as u32,
-                                    character: byte_to_utf16_col(line, sub_name.end()) as u32,
-                                },
-                            },
-                        },
+                        location: WireLocation::new(
+                            uri.to_string(),
+                            WireRange::new(
+                                WirePosition::new(
+                                    line_num as u32,
+                                    byte_to_utf16_col(line, sub_name.start()) as u32,
+                                ),
+                                WirePosition::new(
+                                    line_num as u32,
+                                    byte_to_utf16_col(line, sub_name.end()) as u32,
+                                ),
+                            ),
+                        ),
                         container_name: None,
                     });
                 }
@@ -133,19 +133,19 @@ pub fn extract_text_based_symbols(
                     symbols.push(LspWorkspaceSymbol {
                         name,
                         kind: 4, // Namespace
-                        location: WireLocation {
-                            uri: uri.to_string(),
-                            range: WireRange {
-                                start: WirePosition {
-                                    line: line_num as u32,
-                                    character: byte_to_utf16_col(line, pkg_name.start()) as u32,
-                                },
-                                end: WirePosition {
-                                    line: line_num as u32,
-                                    character: byte_to_utf16_col(line, pkg_name.end()) as u32,
-                                },
-                            },
-                        },
+                        location: WireLocation::new(
+                            uri.to_string(),
+                            WireRange::new(
+                                WirePosition::new(
+                                    line_num as u32,
+                                    byte_to_utf16_col(line, pkg_name.start()) as u32,
+                                ),
+                                WirePosition::new(
+                                    line_num as u32,
+                                    byte_to_utf16_col(line, pkg_name.end()) as u32,
+                                ),
+                            ),
+                        ),
                         container_name: None,
                     });
                 }
