@@ -54,7 +54,9 @@ impl LspServer {
                         // Get symbol kind as string
                         use crate::symbol::VarKind;
                         let kind_str = match symbol_info.kind {
-                            crate::symbol::SymbolKind::Variable(VarKind::Scalar) => "Scalar Variable",
+                            crate::symbol::SymbolKind::Variable(VarKind::Scalar) => {
+                                "Scalar Variable"
+                            }
                             crate::symbol::SymbolKind::Variable(VarKind::Array) => "Array Variable",
                             crate::symbol::SymbolKind::Variable(VarKind::Hash) => "Hash Variable",
                             crate::symbol::SymbolKind::Subroutine => "Subroutine",

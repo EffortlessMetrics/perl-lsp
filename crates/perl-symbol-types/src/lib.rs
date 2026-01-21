@@ -123,17 +123,17 @@ impl SymbolKind {
     #[inline]
     pub const fn to_lsp_kind(self) -> u32 {
         match self {
-            SymbolKind::Package => 2,       // Module
-            SymbolKind::Class => 5,         // Class
-            SymbolKind::Role => 8,          // Interface
-            SymbolKind::Subroutine => 12,   // Function
-            SymbolKind::Method => 6,        // Method
-            SymbolKind::Variable(_) => 13,  // Variable
-            SymbolKind::Constant => 14,     // Constant
-            SymbolKind::Import => 2,        // Module
-            SymbolKind::Export => 12,       // Function
-            SymbolKind::Label => 20,        // Key
-            SymbolKind::Format => 23,       // Struct
+            SymbolKind::Package => 2,      // Module
+            SymbolKind::Class => 5,        // Class
+            SymbolKind::Role => 8,         // Interface
+            SymbolKind::Subroutine => 12,  // Function
+            SymbolKind::Method => 6,       // Method
+            SymbolKind::Variable(_) => 13, // Variable
+            SymbolKind::Constant => 14,    // Constant
+            SymbolKind::Import => 2,       // Module
+            SymbolKind::Export => 12,      // Function
+            SymbolKind::Label => 20,       // Key
+            SymbolKind::Format => 23,      // Struct
         }
     }
 

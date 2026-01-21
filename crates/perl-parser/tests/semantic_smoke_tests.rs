@@ -84,8 +84,7 @@ if ($@) {
     assert!(!tokens.is_empty(), "Eval blocks should generate semantic tokens");
 
     // Should have symbol for $result (scoped to eval block)
-    let _result_symbols =
-        analyzer.symbol_table().find_symbol("result", 0, SymbolKind::scalar());
+    let _result_symbols = analyzer.symbol_table().find_symbol("result", 0, SymbolKind::scalar());
 
     // Note: Depending on scope handling, this might be empty
     // The important part is that analyzer doesn't crash
@@ -163,8 +162,7 @@ sub lvalue_sub :lvalue {
     assert!(!tokens.is_empty(), "Should generate tokens for attributed variables");
 
     // Should have symbol for $shared
-    let shared_symbols =
-        analyzer.symbol_table().find_symbol("shared", 0, SymbolKind::scalar());
+    let shared_symbols = analyzer.symbol_table().find_symbol("shared", 0, SymbolKind::scalar());
     assert!(!shared_symbols.is_empty(), "Should find $shared symbol");
 }
 

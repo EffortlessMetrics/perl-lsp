@@ -16,7 +16,6 @@ pub enum InlayHintKind {
     Parameter = 2,
 }
 
-
 /// An inlay hint.
 #[derive(Debug, Clone)]
 pub struct InlayHint {

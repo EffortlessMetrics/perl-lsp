@@ -101,7 +101,11 @@ impl ByteSpan {
     pub fn intersection(&self, other: ByteSpan) -> Option<ByteSpan> {
         let start = self.start.max(other.start);
         let end = self.end.min(other.end);
-        if start < end { Some(ByteSpan { start, end }) } else { None }
+        if start < end {
+            Some(ByteSpan { start, end })
+        } else {
+            None
+        }
     }
 
     /// Returns a new span that covers both this span and the given span.

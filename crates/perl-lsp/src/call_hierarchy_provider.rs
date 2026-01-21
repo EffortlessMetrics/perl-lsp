@@ -29,7 +29,6 @@ pub struct CallHierarchyItem {
     pub detail: Option<String>,
 }
 
-
 /// Call Hierarchy Provider
 pub struct CallHierarchyProvider {
     source: String,

@@ -1698,8 +1698,7 @@ impl CompletionProvider {
         if !context.prefix.starts_with(['$', '@', '%', '&']) {
             for (name, symbols) in &self.symbol_table.symbols {
                 for symbol in symbols {
-                    if symbol.kind.is_variable() && name.starts_with(&context.prefix)
-                    {
+                    if symbol.kind.is_variable() && name.starts_with(&context.prefix) {
                         let sigil = symbol.kind.sigil().unwrap_or("");
                         completions.push(CompletionItem {
                             label: format!("{}{}", sigil, name),

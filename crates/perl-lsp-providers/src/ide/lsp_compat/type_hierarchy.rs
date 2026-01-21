@@ -242,13 +242,21 @@ impl TypeHierarchyProvider {
         // Check if it's a package or class declaration
         match &target_node.kind {
             NodeKind::Package { name, .. } => {
-                let item =
-                    self.create_type_item(name, target_node, &position_mapper, TypeHierarchySymbolKind::Class);
+                let item = self.create_type_item(
+                    name,
+                    target_node,
+                    &position_mapper,
+                    TypeHierarchySymbolKind::Class,
+                );
                 Some(vec![item])
             }
             NodeKind::Class { name, .. } => {
-                let item =
-                    self.create_type_item(name, target_node, &position_mapper, TypeHierarchySymbolKind::Class);
+                let item = self.create_type_item(
+                    name,
+                    target_node,
+                    &position_mapper,
+                    TypeHierarchySymbolKind::Class,
+                );
                 Some(vec![item])
             }
             NodeKind::Identifier { name } => {
