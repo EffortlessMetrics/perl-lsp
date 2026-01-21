@@ -1,6 +1,13 @@
 use perl_parser::ast::{Node, NodeKind};
 use perl_parser::position_mapper::{Position as ParserPosition, PositionMapper};
+use perl_position_tracking::{WirePosition, WireRange};
 use serde_json::{Value, json};
+
+/// LSP wire type alias for position (0-based line/character with UTF-16 counting)
+pub type Position = WirePosition;
+
+/// LSP wire type alias for range (start/end positions)
+pub type Range = WireRange;
 
 /// Call hierarchy item representing a function or method in Perl code
 ///
@@ -22,23 +29,6 @@ pub struct CallHierarchyItem {
     pub detail: Option<String>,
 }
 
-/// Text range in a document with start and end positions
-#[derive(Debug, Clone)]
-pub struct Range {
-    /// Start position of the range
-    pub start: Position,
-    /// End position of the range
-    pub end: Position,
-}
-
-/// Position in a text document (line and character)
-#[derive(Debug, Clone)]
-pub struct Position {
-    /// Line number (0-based)
-    pub line: u32,
-    /// Character offset within the line (0-based)
-    pub character: u32,
-}
 
 /// Call Hierarchy Provider
 pub struct CallHierarchyProvider {
@@ -166,7 +156,7 @@ impl CallHierarchyProvider {
                         name: method.clone(),
                         kind: "method".to_string(),
                         uri: self.uri.clone(),
-                        range: range.clone(),
+                        range,
                         selection_range: range,
                         detail: None,
                     });
@@ -177,7 +167,7 @@ impl CallHierarchyProvider {
                         name: name.clone(),
                         kind: "function".to_string(),
                         uri: self.uri.clone(),
-                        range: range.clone(),
+                        range,
                         selection_range: range,
                         detail: None,
                     });
@@ -542,7 +532,7 @@ impl CallHierarchyProvider {
                 start: self.offset_to_position(span.start),
                 end: self.offset_to_position(span.end),
             },
-            None => full_range.clone(),
+            None => *full_range,
         }
     }
 }
