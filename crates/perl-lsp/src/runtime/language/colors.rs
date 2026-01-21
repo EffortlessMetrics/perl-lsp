@@ -5,6 +5,7 @@
 
 use super::super::{byte_to_utf16_col, *};
 use lazy_static::lazy_static;
+use perl_position_tracking::{WirePosition, WireRange};
 use regex::Regex;
 
 lazy_static! {
@@ -20,22 +21,8 @@ lazy_static! {
 /// Color information with range and RGBA values
 #[derive(Debug, Clone)]
 pub(super) struct ColorInformation {
-    pub range: ColorRange,
+    pub range: WireRange,
     pub color: Color,
-}
-
-/// Range in document where color appears
-#[derive(Debug, Clone)]
-pub(super) struct ColorRange {
-    pub start: ColorPosition,
-    pub end: ColorPosition,
-}
-
-/// Position in document (line, character)
-#[derive(Debug, Clone)]
-pub(super) struct ColorPosition {
-    pub line: u32,
-    pub character: u32,
 }
 
 /// RGBA color with values 0.0-1.0
@@ -75,9 +62,9 @@ fn detect_hex_colors(text: &str) -> Vec<ColorInformation> {
                 let end_char = byte_to_utf16_col(line, mat.end()) as u32;
 
                 colors.push(ColorInformation {
-                    range: ColorRange {
-                        start: ColorPosition { line: line_num as u32, character: start_char },
-                        end: ColorPosition { line: line_num as u32, character: end_char },
+                    range: WireRange {
+                        start: WirePosition::new(line_num as u32, start_char),
+                        end: WirePosition::new(line_num as u32, end_char),
                     },
                     color,
                 });
@@ -146,9 +133,9 @@ fn detect_ansi_colors(text: &str) -> Vec<ColorInformation> {
                     let end_char = byte_to_utf16_col(line, mat.end()) as u32;
 
                     colors.push(ColorInformation {
-                        range: ColorRange {
-                            start: ColorPosition { line: line_num as u32, character: start_char },
-                            end: ColorPosition { line: line_num as u32, character: end_char },
+                        range: WireRange {
+                            start: WirePosition::new(line_num as u32, start_char),
+                            end: WirePosition::new(line_num as u32, end_char),
                         },
                         color,
                     });

@@ -117,21 +117,7 @@ pub mod v0 {
     #[deprecated(since = "0.7.5", note = "Use workspace_index::WorkspaceSymbol directly")]
     #[inline]
     pub fn to_old_workspace_symbol(sym: &workspace_index::WorkspaceSymbol) -> WorkspaceSymbolDto {
-        use crate::workspace_index::SymbolKind;
-
-        let kind = match sym.kind {
-            SymbolKind::Package => 4,
-            SymbolKind::Class => 5,
-            SymbolKind::Method => 6,
-            SymbolKind::Subroutine => 12,
-            SymbolKind::Variable(_) => 13,
-            SymbolKind::Constant => 14,
-            SymbolKind::Role => 5,    // Treat as Class
-            SymbolKind::Import => 15, // Module
-            SymbolKind::Export => 15, // Module
-            SymbolKind::Label => 15,  // String
-            SymbolKind::Format => 23, // Struct
-        };
+        let kind = sym.kind.to_lsp_kind() as i32;
 
         WorkspaceSymbolDto {
             name: sym.name.clone(),
