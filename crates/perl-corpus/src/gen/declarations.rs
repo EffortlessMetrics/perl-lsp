@@ -66,6 +66,22 @@ fn slurpy_token() -> impl Strategy<Value = Option<String>> {
     ]
 }
 
+fn subroutine_attribute() -> impl Strategy<Value = &'static str> {
+    prop_oneof![
+        Just("method"),
+        Just("lvalue"),
+        Just("prototype($$)"),
+    ]
+}
+
+fn subroutine_attributes() -> impl Strategy<Value = Vec<&'static str>> {
+    prop::collection::vec(subroutine_attribute(), 0..3).prop_map(|mut attrs| {
+        attrs.sort_unstable();
+        attrs.dedup();
+        attrs
+    })
+}
+
 /// Generate a named subroutine declaration, optionally with a signature/attribute.
 pub fn subroutine_declaration() -> impl Strategy<Value = String> {
     (
@@ -73,9 +89,9 @@ pub fn subroutine_declaration() -> impl Strategy<Value = String> {
         prop::collection::vec(param_token(), 0..3),
         slurpy_token(),
         prop::sample::select(vec![true, false]),
-        prop::sample::select(vec![true, false]),
+        subroutine_attributes(),
     )
-        .prop_map(|(name, mut params, slurpy, use_signature, use_attribute)| {
+        .prop_map(|(name, mut params, slurpy, use_signature, attributes)| {
             if let Some(extra) = slurpy {
                 params.push(extra);
             }
@@ -85,7 +101,11 @@ pub fn subroutine_declaration() -> impl Strategy<Value = String> {
             } else {
                 String::new()
             };
-            let attribute = if use_attribute { " :method" } else { "" };
+            let attribute = if attributes.is_empty() {
+                String::new()
+            } else {
+                format!(" :{}", attributes.join(" :"))
+            };
 
             format!(
                 "sub {}{}{} {{\n    return 1;\n}}\n",

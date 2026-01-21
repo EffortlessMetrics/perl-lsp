@@ -31,6 +31,12 @@ pub fn loop_with_control() -> impl Strategy<Value = String> {
             "use v5.36;\nuse feature 'defer';\nno warnings 'experimental::defer';\nsub cleanup {\n    defer { print \"cleanup\\n\"; }\n    return 1;\n}\n"
                 .to_string(),
         ),
+        Just(
+            "my $ok = eval {\n    die \"boom\";\n    1;\n};\nwarn $@ if !$ok;\n".to_string(),
+        ),
+        Just(
+            "my $value = do {\n    my $x = 1;\n    $x + 2;\n};\n".to_string(),
+        ),
     ]
 }
 
@@ -50,7 +56,9 @@ mod tests {
                     || code.contains("try")
                     || code.contains("catch")
                     || code.contains("finally")
-                    || code.contains("defer"),
+                    || code.contains("defer")
+                    || code.contains("eval")
+                    || code.contains("do"),
                 "Expected loop control keyword in: {}",
                 code
             );

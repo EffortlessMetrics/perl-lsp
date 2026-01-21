@@ -57,6 +57,22 @@ pub fn io_in_context() -> impl Strategy<Value = String> {
             "open my $fh, '<', \"input.txt\" or die $!;\nseek $fh, 0, 0;\nmy $pos = tell $fh;\n"
                 .to_string(),
         ),
+        Just(
+            "open my $fh, '<', \"input.txt\" or die $!;\nmy $buf = \"\";\nsysread $fh, $buf, 128;\n"
+                .to_string(),
+        ),
+        Just(
+            "open my $fh, '>', \"output.log\" or die $!;\nmy $bytes = syswrite $fh, \"payload\\n\";\n"
+                .to_string(),
+        ),
+        Just(
+            "open my $fh, '<', \"input.txt\" or die $!;\nwhile (my $line = <$fh>) {\n    print $line;\n}\n"
+                .to_string(),
+        ),
+        Just(
+            "open my $fh, '>', \"output.log\" or die $!;\nmy $old = select($fh);\n$| = 1;\nselect($old);\n"
+                .to_string(),
+        ),
     ]
 }
 
@@ -71,7 +87,10 @@ mod tests {
                 code.contains("open")
                     || code.contains("opendir")
                     || code.contains("pipe")
-                    || code.contains("sysopen"),
+                    || code.contains("sysopen")
+                    || code.contains("sysread")
+                    || code.contains("syswrite")
+                    || code.contains("select"),
                 "Expected IO keywords in: {}",
                 code
             );

@@ -614,6 +614,104 @@ my $text = "na\x{EF}ve";
 my $smile = "\x{1F600}";
 "#,
     },
+    EdgeCase {
+        id: "end.section",
+        description: "END section with trailing content ignored by the parser.",
+        tags: &["end-section", "file", "edge-case"],
+        source: r#"print "before\n";
+__END__
+this should be ignored
+"#,
+    },
+    EdgeCase {
+        id: "source.filter.simple",
+        description: "Source filter using Filter::Simple.",
+        tags: &["source-filter", "use", "edge-case", "parser-sensitive"],
+        source: r#"use Filter::Simple;
+FILTER {
+    s/foo/bar/g;
+}
+my $text = "foo";
+print $text;
+"#,
+    },
+    EdgeCase {
+        id: "inline.c",
+        description: "Inline::C heredoc embedding C source.",
+        tags: &["inline", "xs", "ffi", "edge-case"],
+        source: r#"use Inline C => <<'END_C';
+int add(int x, int y) {
+    return x + y;
+}
+END_C
+
+my $sum = add(1, 2);
+"#,
+    },
+    EdgeCase {
+        id: "bareword.filehandle",
+        description: "Legacy bareword filehandle open/print/close.",
+        tags: &["file", "io", "legacy", "edge-case"],
+        source: r#"open FH, "<", "file.txt" or die $!;
+print FH "ok\n";
+close FH;
+"#,
+    },
+    EdgeCase {
+        id: "lvalue.substr",
+        description: "Lvalue substring assignment.",
+        tags: &["lvalue", "string", "edge-case"],
+        source: r#"my $text = "foobar";
+substr($text, 1, 3) = "OOO";
+"#,
+    },
+    EdgeCase {
+        id: "mro.c3",
+        description: "Method resolution order pragma.",
+        tags: &["mro", "inheritance", "edge-case", "use"],
+        source: r#"use mro "c3";
+our @ISA = ("Base");
+sub method { return 1; }
+"#,
+    },
+    EdgeCase {
+        id: "super.method",
+        description: "SUPER:: method dispatch from a subclass.",
+        tags: &["method", "inheritance", "edge-case", "package"],
+        source: r#"package Child;
+use parent "Base";
+sub new {
+    my $class = shift;
+    return $class->SUPER::new(@_);
+}
+1;
+"#,
+    },
+    EdgeCase {
+        id: "goto.sub",
+        description: "Goto to a subroutine for tail-call style dispatch.",
+        tags: &["goto", "subroutine", "edge-case"],
+        source: r#"sub helper { return 42; }
+sub wrapper { goto &helper; }
+my $value = wrapper();
+"#,
+    },
+    EdgeCase {
+        id: "transliteration.y",
+        description: "Transliteration using the y/// alias.",
+        tags: &["transliteration", "tr", "edge-case"],
+        source: r#"my $text = "abc";
+$text =~ y/a-z/A-Z/;
+"#,
+    },
+    EdgeCase {
+        id: "variable.attribute.shared",
+        description: "Variable attribute using threads::shared.",
+        tags: &["attribute", "variable", "edge-case", "declaration"],
+        source: r#"use threads::shared;
+my $counter :shared = 0;
+"#,
+    },
 ];
 
 static COMPLEX_DATA_STRUCTURE_CASES: &[ComplexDataStructureCase] = &[

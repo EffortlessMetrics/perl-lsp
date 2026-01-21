@@ -12,7 +12,23 @@ fn file_target() -> impl Strategy<Value = String> {
 
 fn filetest_single() -> impl Strategy<Value = String> {
     (
-        prop::sample::select(vec!["-e", "-f", "-d", "-r", "-w", "-x", "-s", "-z"]),
+        prop::sample::select(vec![
+            "-e",
+            "-f",
+            "-d",
+            "-r",
+            "-w",
+            "-x",
+            "-s",
+            "-z",
+            "-l",
+            "-T",
+            "-B",
+            "-o",
+            "-O",
+            "-u",
+            "-g",
+        ]),
         file_target(),
     )
         .prop_map(|(op, target)| {
@@ -77,6 +93,13 @@ mod tests {
                     || code.contains("-x")
                     || code.contains("-s")
                     || code.contains("-z")
+                    || code.contains("-l")
+                    || code.contains("-T")
+                    || code.contains("-B")
+                    || code.contains("-o")
+                    || code.contains("-O")
+                    || code.contains("-u")
+                    || code.contains("-g")
                     || code.contains("-M")
                     || code.contains("-A")
                     || code.contains("-C")

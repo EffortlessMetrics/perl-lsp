@@ -55,9 +55,9 @@ let cases = complex_data_structure_cases();
 - Generators for heredoc, quote-like, regex (advanced patterns), expressions, whitespace, loop control, format, glob, tie, I/O, declarations, phaser blocks
 - List operators (map/grep/sort) including empty-block coverage
 - Filetest operator coverage (stacked and handle-based checks)
-- Built-in call coverage (pack/unpack, split/join, printf/system)
+- Built-in call coverage (pack/unpack, split/join, printf/system, substr/index/length, bless/ref, caller/wantarray)
 - Sigil-heavy variable and dereference generator
-- Expanded edge cases: POD, v-strings, prototypes, postfix control flow, goto labels, flip-flop operators, AUTOLOAD/DESTROY, overload, symbolic references, DATA sections, utf8/unicode escapes, and state/local/our declarations
+- Expanded edge cases: POD, v-strings, prototypes, postfix control flow, goto labels, flip-flop operators, AUTOLOAD/DESTROY, overload, symbolic references, DATA/END sections, source filters, Inline::C/XS/FFI heredocs, bareword filehandles, lvalue substr assignments, SUPER:: dispatch, mro pragmas, y/// transliteration, variable attributes, utf8/unicode escapes, and state/local/our declarations
 
 ## CLI
 

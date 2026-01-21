@@ -37,6 +37,32 @@ fn keys_values() -> impl Strategy<Value = String> {
     Just("my %map = (a => 1, b => 2);\nmy @keys = keys %map;\nmy @vals = values %map;\n".to_string())
 }
 
+fn substr_ops() -> impl Strategy<Value = String> {
+    Just(
+        "my $text = \"foobar\";\nmy $chunk = substr($text, 1, 3);\nsubstr($text, 0, 1) = \"F\";\n"
+            .to_string(),
+    )
+}
+
+fn index_ops() -> impl Strategy<Value = String> {
+    Just(
+        "my $text = \"foobar\";\nmy $pos = index($text, \"bar\");\nmy $last = rindex($text, \"o\");\n"
+            .to_string(),
+    )
+}
+
+fn length_chop() -> impl Strategy<Value = String> {
+    Just("my $text = \"line\\n\";\nmy $len = length $text;\nchop $text;\n".to_string())
+}
+
+fn bless_ref() -> impl Strategy<Value = String> {
+    Just("my $obj = bless { count => 1 }, \"Counter\";\nmy $kind = ref $obj;\n".to_string())
+}
+
+fn caller_wantarray() -> impl Strategy<Value = String> {
+    Just("my @caller = caller;\nmy $context = wantarray();\n".to_string())
+}
+
 /// Generate built-in function call statements.
 pub fn builtin_in_context() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -47,6 +73,11 @@ pub fn builtin_in_context() -> impl Strategy<Value = String> {
         time_localtime(),
         chomp_line(),
         keys_values(),
+        substr_ops(),
+        index_ops(),
+        length_chop(),
+        bless_ref(),
+        caller_wantarray(),
     ]
 }
 
@@ -65,7 +96,16 @@ mod tests {
                     || code.contains("localtime")
                     || code.contains("chomp")
                     || code.contains("keys")
-                    || code.contains("values"),
+                    || code.contains("values")
+                    || code.contains("substr")
+                    || code.contains("index")
+                    || code.contains("rindex")
+                    || code.contains("length")
+                    || code.contains("chop")
+                    || code.contains("bless")
+                    || code.contains("ref")
+                    || code.contains("caller")
+                    || code.contains("wantarray"),
                 "Expected builtin keyword in: {}",
                 code
             );

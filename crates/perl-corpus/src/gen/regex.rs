@@ -34,6 +34,8 @@ fn advanced_pattern() -> impl Strategy<Value = String> {
         Just("(?>foo|fo)bar".to_string()),
         Just("foo(?=bar)".to_string()),
         Just("(?<=foo)bar".to_string()),
+        Just("\\G\\w+".to_string()),
+        Just("foo\\Kbar".to_string()),
         Just("(?R)".to_string()),
         Just("\\p{Latin}+".to_string()),
         Just("a(*SKIP)(*FAIL)|abc".to_string()),
