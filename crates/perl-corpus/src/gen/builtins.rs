@@ -29,6 +29,14 @@ fn time_localtime() -> impl Strategy<Value = String> {
     Just("my $when = localtime(time);\n".to_string())
 }
 
+fn chomp_line() -> impl Strategy<Value = String> {
+    Just("my $line = \"value\\n\";\nchomp $line;\n".to_string())
+}
+
+fn keys_values() -> impl Strategy<Value = String> {
+    Just("my %map = (a => 1, b => 2);\nmy @keys = keys %map;\nmy @vals = values %map;\n".to_string())
+}
+
 /// Generate built-in function call statements.
 pub fn builtin_in_context() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -37,6 +45,8 @@ pub fn builtin_in_context() -> impl Strategy<Value = String> {
         printf_sprintf(),
         system_call(),
         time_localtime(),
+        chomp_line(),
+        keys_values(),
     ]
 }
 
@@ -52,7 +62,10 @@ mod tests {
                     || code.contains("split")
                     || code.contains("sprintf")
                     || code.contains("system")
-                    || code.contains("localtime"),
+                    || code.contains("localtime")
+                    || code.contains("chomp")
+                    || code.contains("keys")
+                    || code.contains("values"),
                 "Expected builtin keyword in: {}",
                 code
             );

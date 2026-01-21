@@ -28,6 +28,8 @@ let code = generate_perl_code_with_options(options);
 
 // Generate edge cases for testing
 let edge_cases = EdgeCaseGenerator::all_cases();
+let regex_or_heredoc = EdgeCaseGenerator::by_tags_any(&["regex", "heredoc"]);
+let regex_code = EdgeCaseGenerator::by_tags_all(&["regex", "regex-code"]);
 
 // Discover local corpus files for integration testing
 let files = get_all_test_files();
@@ -55,7 +57,7 @@ let cases = complex_data_structure_cases();
 - Filetest operator coverage (stacked and handle-based checks)
 - Built-in call coverage (pack/unpack, split/join, printf/system)
 - Sigil-heavy variable and dereference generator
-- Expanded edge cases: POD, v-strings, prototypes, postfix control flow, goto labels, class/field, and state/local/our declarations
+- Expanded edge cases: POD, v-strings, prototypes, postfix control flow, goto labels, flip-flop operators, AUTOLOAD/DESTROY, overload, symbolic references, DATA sections, utf8/unicode escapes, and state/local/our declarations
 
 ## CLI
 

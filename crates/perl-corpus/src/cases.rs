@@ -550,6 +550,70 @@ handle { key => 1 };
 handle({ key => 1 });
 "#,
     },
+    EdgeCase {
+        id: "flipflop.operator",
+        description: "Flip-flop range operator in scalar context.",
+        tags: &["range", "flipflop", "operator", "flow", "edge-case"],
+        source: r#"my $hit = 0;
+for my $i (1..6) {
+    $hit = 1 if $i == 2 .. $i == 4;
+}
+"#,
+    },
+    EdgeCase {
+        id: "autoload.destroy",
+        description: "AUTOLOAD and DESTROY subroutines for method fallback and cleanup.",
+        tags: &["autoload", "destructor", "method", "edge-case"],
+        source: r#"package Auto::Demo;
+sub AUTOLOAD {
+    our $AUTOLOAD;
+    return $AUTOLOAD;
+}
+sub DESTROY { }
+1;
+"#,
+    },
+    EdgeCase {
+        id: "overload.stringify",
+        description: "Operator overloading for string and numeric contexts.",
+        tags: &["overload", "operator", "method", "edge-case"],
+        source: r#"package Counter;
+use overload '""' => sub { $_[0]->{count} }, '0+' => sub { $_[0]->{count} }, fallback => 1;
+sub new { bless { count => 1 }, shift }
+1;
+"#,
+    },
+    EdgeCase {
+        id: "symbolic.reference",
+        description: "Symbolic reference with disabled strict refs.",
+        tags: &["reference", "parser-sensitive", "edge-case"],
+        source: r#"no strict 'refs';
+my $name = "value";
+${$name} = 42;
+my $value = ${"value"};
+"#,
+    },
+    EdgeCase {
+        id: "data.section",
+        description: "DATA section with filehandle reads.",
+        tags: &["file", "io", "edge-case"],
+        source: r#"while (my $line = <DATA>) {
+    print $line;
+}
+__DATA__
+alpha
+beta
+"#,
+    },
+    EdgeCase {
+        id: "utf8.escape",
+        description: "UTF-8 pragma with escaped Unicode code points.",
+        tags: &["utf8", "unicode", "edge-case"],
+        source: r#"use utf8;
+my $text = "na\x{EF}ve";
+my $smile = "\x{1F600}";
+"#,
+    },
 ];
 
 static COMPLEX_DATA_STRUCTURE_CASES: &[ComplexDataStructureCase] = &[
@@ -725,6 +789,22 @@ $cache{foo} = 1;
 my $value = $cache{foo};
 "#,
     },
+    ComplexDataStructureCase {
+        id: "closure.capture",
+        description: "Closure capturing a lexical variable.",
+        source: r#"my $count = 0;
+my $next = sub { return ++$count; };
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "stash.entries",
+        description: "Symbol table stash reference with package entries.",
+        source: r#"package Stash::Demo;
+our $VERSION = "0.01";
+sub helper { return 1; }
+my $stash = \%Stash::Demo::;
+"#,
+    },
 ];
 
 /// Return the static edge case fixtures.
@@ -756,6 +836,30 @@ impl EdgeCaseGenerator {
         edge_cases()
             .iter()
             .filter(|case| case.tags.iter().any(|t| *t == tag))
+            .collect()
+    }
+
+    /// Return edge cases that match any of the provided tags.
+    pub fn by_tags_any(tags: &[&str]) -> Vec<&'static EdgeCase> {
+        if tags.is_empty() {
+            return edge_cases().iter().collect();
+        }
+
+        edge_cases()
+            .iter()
+            .filter(|case| case.tags.iter().any(|tag| tags.contains(tag)))
+            .collect()
+    }
+
+    /// Return edge cases that match all of the provided tags.
+    pub fn by_tags_all(tags: &[&str]) -> Vec<&'static EdgeCase> {
+        if tags.is_empty() {
+            return edge_cases().iter().collect();
+        }
+
+        edge_cases()
+            .iter()
+            .filter(|case| tags.iter().all(|tag| case.tags.iter().any(|t| t == tag)))
             .collect()
     }
 
@@ -793,6 +897,18 @@ mod tests {
     fn edge_cases_can_filter_by_tag() {
         let heredocs = EdgeCaseGenerator::by_tag("heredoc");
         assert!(!heredocs.is_empty());
+    }
+
+    #[test]
+    fn edge_cases_can_filter_by_any_tag() {
+        let matches = EdgeCaseGenerator::by_tags_any(&["regex", "heredoc"]);
+        assert!(!matches.is_empty());
+    }
+
+    #[test]
+    fn edge_cases_can_filter_by_all_tags() {
+        let matches = EdgeCaseGenerator::by_tags_all(&["regex", "regex-code"]);
+        assert!(matches.iter().any(|case| case.id == "regex.code"));
     }
 
     #[test]

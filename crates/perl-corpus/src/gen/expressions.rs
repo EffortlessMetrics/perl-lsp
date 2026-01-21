@@ -132,6 +132,28 @@ fn smartmatch_statement() -> impl Strategy<Value = String> {
     })
 }
 
+fn exists_statement() -> impl Strategy<Value = String> {
+    (scalar_name(), prop::sample::select(vec!["HOME", "PATH", "SHELL"])).prop_map(|(name, key)| {
+        format!("my ${} = exists $ENV{{{}}} ? 1 : 0;\n", name, key)
+    })
+}
+
+fn defined_statement() -> impl Strategy<Value = String> {
+    scalar_name().prop_map(|name| {
+        format!("my ${} = defined $ARGV[0] ? $ARGV[0] : \"\";\n", name)
+    })
+}
+
+fn flipflop_statement() -> impl Strategy<Value = String> {
+    (scalar_name(), small_literal(), small_literal()).prop_map(|(name, a, b)| {
+        let (start, end) = if a <= b { (a, b) } else { (b, a) };
+        format!(
+            "my ${} = 0;\nfor my $i (1..10) {{\n    ${} = 1 if $i == {} .. $i == {};\n}}\n",
+            name, name, start, end
+        )
+    })
+}
+
 /// Generate expression-focused statements for operator coverage.
 pub fn expression_in_context() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -145,6 +167,9 @@ pub fn expression_in_context() -> impl Strategy<Value = String> {
         compound_assignment_statement(),
         binding_statement(),
         smartmatch_statement(),
+        exists_statement(),
+        defined_statement(),
+        flipflop_statement(),
     ]
 }
 

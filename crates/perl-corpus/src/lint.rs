@@ -125,6 +125,7 @@ pub const KNOWN_TAGS: &[&str] = &[
     "isa",
     "can",
     "does",
+    "overload",
     "constructor",
     "destructor",
     "autoload",

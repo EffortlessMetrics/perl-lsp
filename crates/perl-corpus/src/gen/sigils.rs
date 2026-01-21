@@ -103,6 +103,13 @@ fn postfix_deref_usage() -> impl Strategy<Value = String> {
     ]
 }
 
+fn symbolic_ref_usage() -> impl Strategy<Value = String> {
+    Just(
+        "no strict 'refs';\nmy $name = \"value\";\n${$name} = 42;\nmy $value = ${\"value\"};\n"
+            .to_string(),
+    )
+}
+
 /// Generate sigil-heavy Perl snippets (variables, special vars, deref, typeglobs).
 pub fn sigil_in_context() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -112,6 +119,7 @@ pub fn sigil_in_context() -> impl Strategy<Value = String> {
         deref_usage(),
         typeglob_usage(),
         postfix_deref_usage(),
+        symbolic_ref_usage(),
     ]
 }
 
