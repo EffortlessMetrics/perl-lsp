@@ -115,16 +115,13 @@ pub fn generate_perl_code() -> String {
 
 /// Generate random Perl code with a specific statement count.
 pub fn generate_perl_code_with_statements(statements: usize) -> String {
-    let mut options = CodegenOptions::default();
-    options.statements = statements;
+    let options = CodegenOptions { statements, ..Default::default() };
     generate_perl_code_with_options(options)
 }
 
 /// Generate random Perl code with explicit statement count and seed.
 pub fn generate_perl_code_with_seed(statements: usize, seed: u64) -> String {
-    let mut options = CodegenOptions::default();
-    options.statements = statements;
-    options.seed = seed;
+    let options = CodegenOptions { statements, seed, ..Default::default() };
     generate_perl_code_with_options(options)
 }
 

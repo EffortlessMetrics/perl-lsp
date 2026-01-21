@@ -1,4 +1,25 @@
 //! Test-driven development helpers and generators for Perl.
+//!
+//! This crate provides tools to support TDD workflows when working with Perl code,
+//! including test generation, execution runners, and validation utilities for
+//! Perl parser and LSP development.
+//!
+//! # Overview
+//!
+//! The TDD support crate offers:
+//! - Test case generators for Perl syntax patterns
+//! - Test execution runners with result capture
+//! - Basic TDD workflow helpers for parser development
+//! - Utilities for validating parser behavior against expected outcomes
+//!
+//! # Example
+//!
+//! ```no_run
+//! use perl_tdd_support::tdd_basic;
+//!
+//! // Use TDD helpers to validate parser behavior
+//! // (specific APIs depend on tdd module implementation)
+//! ```
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]

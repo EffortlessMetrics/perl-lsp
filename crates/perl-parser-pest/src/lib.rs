@@ -5,6 +5,9 @@
 //!
 //! **Note:** This is maintained as a learning tool and historical reference.
 //! For production parsing and LSP, use `perl-parser` (v3).
+
+// Allow unwrap in this legacy parser - proper error handling is in perl-parser v3
+#![allow(clippy::unwrap_used)]
 //!
 //! # Example
 //!

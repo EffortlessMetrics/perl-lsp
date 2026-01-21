@@ -23,6 +23,12 @@ pub struct PrattParser {
     operators: HashMap<&'static str, OpInfo>,
 }
 
+impl Default for PrattParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PrattParser {
     pub fn new() -> Self {
         let mut operators = HashMap::new();

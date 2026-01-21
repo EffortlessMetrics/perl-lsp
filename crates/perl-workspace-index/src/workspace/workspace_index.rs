@@ -63,7 +63,9 @@ use crate::position::{Position, Range};
 use parking_lot::RwLock;
 use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::Instant;
 use url::Url;
@@ -931,6 +933,8 @@ struct FileIndex {
     references: HashMap<String, Vec<SymbolReference>>,
     /// Dependencies (modules this file imports)
     dependencies: HashSet<String>,
+    /// Content hash for early-exit optimization
+    content_hash: u64,
 }
 
 /// Thread-safe workspace index
@@ -995,6 +999,23 @@ impl WorkspaceIndex {
     pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
         let uri_str = uri.to_string();
 
+        // Compute content hash for early-exit optimization
+        let mut hasher = DefaultHasher::new();
+        text.hash(&mut hasher);
+        let content_hash = hasher.finish();
+
+        // Check if content is unchanged (early-exit optimization)
+        let key = DocumentStore::uri_key(&uri_str);
+        {
+            let files = self.files.read();
+            if let Some(existing_index) = files.get(&key) {
+                if existing_index.content_hash == content_hash {
+                    // Content unchanged, skip re-indexing
+                    return Ok(());
+                }
+            }
+        }
+
         // Update document store
         if self.document_store.is_open(&uri_str) {
             self.document_store.update(&uri_str, 1, text.clone());
@@ -1013,12 +1034,11 @@ impl WorkspaceIndex {
         let mut doc = self.document_store.get(&uri_str).ok_or("Document not found")?;
 
         // Extract symbols and references
-        let mut file_index = FileIndex::default();
+        let mut file_index = FileIndex { content_hash, ..Default::default() };
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone());
         visitor.visit(&ast, &mut file_index);
 
         // Update the index
-        let key = DocumentStore::uri_key(&uri_str);
         {
             let mut files = self.files.write();
             files.insert(key.clone(), file_index);
@@ -2409,5 +2429,98 @@ sub sub10 { }
                 other
             ),
         }
+    }
+
+    #[test]
+    fn test_early_exit_optimization_unchanged_content() {
+        let index = WorkspaceIndex::new();
+        let uri = url::Url::parse("file:///test.pl").unwrap();
+        let code = r#"
+package MyPackage;
+
+sub hello {
+    print "Hello";
+}
+"#;
+
+        // First indexing should parse and index
+        index.index_file(uri.clone(), code.to_string()).unwrap();
+        let symbols1 = index.file_symbols(uri.as_str());
+        assert!(symbols1.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
+        assert!(symbols1.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+
+        // Second indexing with same content should early-exit
+        // We can verify this by checking that the index still works correctly
+        index.index_file(uri.clone(), code.to_string()).unwrap();
+        let symbols2 = index.file_symbols(uri.as_str());
+        assert_eq!(symbols1.len(), symbols2.len());
+        assert!(symbols2.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
+        assert!(symbols2.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+    }
+
+    #[test]
+    fn test_early_exit_optimization_changed_content() {
+        let index = WorkspaceIndex::new();
+        let uri = url::Url::parse("file:///test.pl").unwrap();
+        let code1 = r#"
+package MyPackage;
+
+sub hello {
+    print "Hello";
+}
+"#;
+
+        let code2 = r#"
+package MyPackage;
+
+sub goodbye {
+    print "Goodbye";
+}
+"#;
+
+        // First indexing
+        index.index_file(uri.clone(), code1.to_string()).unwrap();
+        let symbols1 = index.file_symbols(uri.as_str());
+        assert!(symbols1.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+        assert!(!symbols1.iter().any(|s| s.name == "goodbye"));
+
+        // Second indexing with different content should re-parse
+        index.index_file(uri.clone(), code2.to_string()).unwrap();
+        let symbols2 = index.file_symbols(uri.as_str());
+        assert!(!symbols2.iter().any(|s| s.name == "hello"));
+        assert!(symbols2.iter().any(|s| s.name == "goodbye" && s.kind == SymbolKind::Subroutine));
+    }
+
+    #[test]
+    fn test_early_exit_optimization_whitespace_only_change() {
+        let index = WorkspaceIndex::new();
+        let uri = url::Url::parse("file:///test.pl").unwrap();
+        let code1 = r#"
+package MyPackage;
+
+sub hello {
+    print "Hello";
+}
+"#;
+
+        let code2 = r#"
+package MyPackage;
+
+
+sub hello {
+    print "Hello";
+}
+"#;
+
+        // First indexing
+        index.index_file(uri.clone(), code1.to_string()).unwrap();
+        let symbols1 = index.file_symbols(uri.as_str());
+        assert!(symbols1.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+
+        // Second indexing with whitespace change should re-parse (hash will differ)
+        index.index_file(uri.clone(), code2.to_string()).unwrap();
+        let symbols2 = index.file_symbols(uri.as_str());
+        // Symbols should still be found, but content hash differs so it re-indexed
+        assert!(symbols2.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
     }
 }

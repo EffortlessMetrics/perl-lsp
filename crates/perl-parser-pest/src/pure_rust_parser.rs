@@ -1188,14 +1188,13 @@ impl PureRustPerlParser {
                 // q strings don't interpolate, so we just return the whole construct as a string
                 // Special handling for heredoc placeholders
                 let content = pair.as_str();
-                if content.contains("__HEREDOC__") {
+                if content.contains("__HEREDOC__")
+                    && let Some(start_idx) = content.find("{__HEREDOC__")
+                    && let Some(end_idx) = content.rfind("__HEREDOC__}")
+                {
                     // Extract actual heredoc content from q{__HEREDOC__content__HEREDOC__}
-                    if let Some(start_idx) = content.find("{__HEREDOC__") {
-                        if let Some(end_idx) = content.rfind("__HEREDOC__}") {
-                            let heredoc_content = &content[start_idx + 12..end_idx];
-                            return Ok(Some(AstNode::String(Arc::from(heredoc_content))));
-                        }
-                    }
+                    let heredoc_content = &content[start_idx + 12..end_idx];
+                    return Ok(Some(AstNode::String(Arc::from(heredoc_content))));
                 }
                 Ok(Some(AstNode::String(Arc::from(content))))
             }
@@ -1203,14 +1202,13 @@ impl PureRustPerlParser {
                 // qq strings interpolate, so we mark them differently
                 // Special handling for heredoc placeholders
                 let content = pair.as_str();
-                if content.contains("__HEREDOC__") {
+                if content.contains("__HEREDOC__")
+                    && let Some(start_idx) = content.find("{__HEREDOC__")
+                    && let Some(end_idx) = content.rfind("__HEREDOC__}")
+                {
                     // Extract actual heredoc content from qq{__HEREDOC__content__HEREDOC__}
-                    if let Some(start_idx) = content.find("{__HEREDOC__") {
-                        if let Some(end_idx) = content.rfind("__HEREDOC__}") {
-                            let heredoc_content = &content[start_idx + 12..end_idx];
-                            return Ok(Some(AstNode::QqString(Arc::from(heredoc_content))));
-                        }
-                    }
+                    let heredoc_content = &content[start_idx + 12..end_idx];
+                    return Ok(Some(AstNode::QqString(Arc::from(heredoc_content))));
                 }
                 Ok(Some(AstNode::QqString(Arc::from(content))))
             }
@@ -1704,15 +1702,14 @@ impl PureRustPerlParser {
                 let mut else_block = None;
 
                 // Check for else clause
-                if let Some(else_clause) = inner.next() {
-                    if else_clause.as_rule() == Rule::else_clause {
-                        let mut else_inner = else_clause.into_inner();
-                        if let Some(else_block_pair) = else_inner.next() {
-                            else_block = Some(Box::new(
-                                self.build_node(else_block_pair)?
-                                    .unwrap_or(AstNode::EmptyExpression),
-                            ));
-                        }
+                if let Some(else_clause) = inner.next()
+                    && else_clause.as_rule() == Rule::else_clause
+                {
+                    let mut else_inner = else_clause.into_inner();
+                    if let Some(else_block_pair) = else_inner.next() {
+                        else_block = Some(Box::new(
+                            self.build_node(else_block_pair)?.unwrap_or(AstNode::EmptyExpression),
+                        ));
                     }
                 }
 

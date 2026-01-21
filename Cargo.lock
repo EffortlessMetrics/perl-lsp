@@ -1702,6 +1702,7 @@ dependencies = [
 name = "perl-workspace-index"
 version = "0.8.8"
 dependencies = [
+ "criterion",
  "lsp-types",
  "parking_lot",
  "perl-parser-core",
@@ -1709,6 +1710,7 @@ dependencies = [
  "perl-symbol-types",
  "regex",
  "serde",
+ "tempfile",
  "url",
 ]
 

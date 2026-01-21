@@ -1,4 +1,19 @@
 //! LSP provider shims and tooling integrations for Perl.
+//!
+//! This crate provides Language Server Protocol feature implementations and
+//! integrations with external Perl tooling (perltidy, perlcritic) for the
+//! Perl LSP ecosystem.
+//!
+//! # Overview
+//!
+//! The providers crate offers:
+//! - IDE integration shims for LSP/DAP runtime support
+//! - Tooling integrations for formatting (perltidy) and linting (perlcritic)
+//! - Performance utilities for LSP feature optimization
+//!
+//! # Example
+//!
+//! Provider usage depends on specific IDE and tooling module implementations.
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]

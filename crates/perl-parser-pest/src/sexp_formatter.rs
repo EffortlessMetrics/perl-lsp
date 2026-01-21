@@ -62,10 +62,10 @@ impl SexpFormatter {
         write!(output, "({}", node_type).unwrap();
 
         // Add position information if enabled
-        if self.include_positions {
-            if let Some(span) = self.get_node_span(node) {
-                write!(output, " [{}-{}]", span.start.byte, span.end.byte).unwrap();
-            }
+        if self.include_positions
+            && let Some(span) = self.get_node_span(node)
+        {
+            write!(output, " [{}-{}]", span.start.byte, span.end.byte).unwrap();
         }
 
         match node {
@@ -323,16 +323,11 @@ impl SexpFormatter {
 }
 
 /// Enhanced S-expression builder with field tracking
+#[derive(Default)]
 pub struct SexpBuilder {
     buffer: String,
     depth: usize,
     compact: bool,
-}
-
-impl Default for SexpBuilder {
-    fn default() -> Self {
-        Self { buffer: String::new(), depth: 0, compact: false }
-    }
 }
 
 impl SexpBuilder {
