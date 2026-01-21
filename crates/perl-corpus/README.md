@@ -47,6 +47,7 @@ let cases = complex_data_structure_cases();
 - Layered corpus file metadata (test corpus vs fuzz)
 - Generators for heredoc, quote-like, regex, expressions, whitespace, loop control, format, glob, tie, I/O, declarations
 - Sigil-heavy variable and dereference generator
+- Expanded edge cases: POD, v-strings, prototypes, postfix control flow, goto labels, class/field, and state/local/our declarations
 
 ## License
 

@@ -91,6 +91,18 @@ fn typeglob_usage() -> impl Strategy<Value = String> {
     ]
 }
 
+fn postfix_deref_usage() -> impl Strategy<Value = String> {
+    prop_oneof![
+        Just(
+            "my $array_ref = [1, 2, 3];\nmy @slice = $array_ref->@[0, 2];\n".to_string(),
+        ),
+        Just(
+            "my $hash_ref = { a => 1, b => 2 };\nmy %copy = $hash_ref->%*;\nmy @keys = $hash_ref->@{qw(a b)};\n"
+                .to_string(),
+        ),
+    ]
+}
+
 /// Generate sigil-heavy Perl snippets (variables, special vars, deref, typeglobs).
 pub fn sigil_in_context() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -99,6 +111,7 @@ pub fn sigil_in_context() -> impl Strategy<Value = String> {
         special_variable_usage(),
         deref_usage(),
         typeglob_usage(),
+        postfix_deref_usage(),
     ]
 }
 

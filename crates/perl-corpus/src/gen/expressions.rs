@@ -94,6 +94,44 @@ fn logical_statement() -> impl Strategy<Value = String> {
         .prop_map(|(name, lhs, rhs, op)| format!("my ${} = {} {} {};\n", name, lhs, op, rhs))
 }
 
+fn compound_assignment_statement() -> impl Strategy<Value = String> {
+    prop_oneof![
+        (
+            scalar_name(),
+            int_literal(),
+            prop::sample::select(vec!["+=", "-=", "*=", ".=", "||=", "//="]),
+        )
+            .prop_map(|(name, value, op)| {
+                format!("my ${} = {};\n${} {} {};\n", name, value, name, op, value)
+            }),
+        (scalar_name(), nonzero_literal()).prop_map(|(name, value)| {
+            format!("my ${} = {};\n${} /= {};\n", name, value, name, value)
+        }),
+    ]
+}
+
+fn binding_statement() -> impl Strategy<Value = String> {
+    (
+        scalar_name(),
+        prop::sample::select(vec!["alpha", "beta", "gamma"]),
+    )
+        .prop_map(|(name, token)| {
+            format!(
+                "my ${} = \"{}\";\nmy $ok = ${} =~ /{}/;\n",
+                name, token, name, token
+            )
+        })
+}
+
+fn smartmatch_statement() -> impl Strategy<Value = String> {
+    (array_name(), scalar_name()).prop_map(|(array, scalar)| {
+        format!(
+            "my @{} = qw(admin user);\nmy ${} = \"admin\";\nmy $has = ${} ~~ @{};\n",
+            array, scalar, scalar, array
+        )
+    })
+}
+
 /// Generate expression-focused statements for operator coverage.
 pub fn expression_in_context() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -104,6 +142,9 @@ pub fn expression_in_context() -> impl Strategy<Value = String> {
         bitwise_statement(),
         concat_statement(),
         logical_statement(),
+        compound_assignment_statement(),
+        binding_statement(),
+        smartmatch_statement(),
     ]
 }
 

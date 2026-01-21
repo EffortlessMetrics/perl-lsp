@@ -347,6 +347,76 @@ sub getter :lvalue { return $value; }
 sub setter :method { $value = shift; }
 "#,
     },
+    EdgeCase {
+        id: "pod.basic",
+        description: "POD section with a simple header and cut.",
+        tags: &["pod", "edge-case"],
+        source: r#"=pod
+
+=head1 NAME
+
+Sample::Module
+
+=cut
+
+my $value = 1;
+"#,
+    },
+    EdgeCase {
+        id: "vstring.literal",
+        description: "V-string version literals.",
+        tags: &["vstring", "version", "edge-case"],
+        source: r#"my $ver = v5.36.0;
+my $min = v5.10;
+"#,
+    },
+    EdgeCase {
+        id: "prototype.sub",
+        description: "Subroutine with prototype.",
+        tags: &["prototype", "subroutine", "edge-case"],
+        source: r#"sub sum ($$) { return $_[0] + $_[1]; }
+"#,
+    },
+    EdgeCase {
+        id: "postfix.control",
+        description: "Postfix control flow with if/unless.",
+        tags: &["postfix", "if", "unless", "flow", "edge-case"],
+        source: r#"my $ready = 1;
+print "go\n" if $ready;
+warn "no\n" unless $ready;
+"#,
+    },
+    EdgeCase {
+        id: "goto.label",
+        description: "Goto with label and conditional loop.",
+        tags: &["goto", "labels", "flow", "edge-case"],
+        source: r#"my $count = 0;
+START:
+$count++;
+goto START if $count < 2;
+"#,
+    },
+    EdgeCase {
+        id: "use.feature.signatures",
+        description: "Feature and warning pragmas for signatures.",
+        tags: &["use", "feature", "signatures", "warnings", "edge-case"],
+        source: r#"use feature 'signatures';
+no warnings 'experimental::signatures';
+sub add ($x, $y) { return $x + $y; }
+"#,
+    },
+    EdgeCase {
+        id: "state.local.our",
+        description: "State, local, and our variable declarations.",
+        tags: &["state", "local", "our", "declaration", "edge-case"],
+        source: r#"our $global = 1;
+local $global = 2;
+sub tick {
+    state $count = 0;
+    return ++$count;
+}
+"#,
+    },
 ];
 
 static COMPLEX_DATA_STRUCTURE_CASES: &[ComplexDataStructureCase] = &[
@@ -476,6 +546,28 @@ my $data = {
 };
 "#,
     },
+    ComplexDataStructureCase {
+        id: "hash.with.undef",
+        description: "Hash with undef and falsey values.",
+        source: r#"my $data = {
+    ok => 1,
+    nope => 0,
+    maybe => undef,
+    note => "value",
+};
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "regex.and.refs",
+        description: "Hash with compiled regex and scalar reference.",
+        source: r#"my $value = 10;
+my $data = {
+    matcher => qr/^item_\d+$/i,
+    value_ref => \$value,
+    flags => [undef, 0, 1],
+};
+"#,
+    },
 ];
 
 /// Return the static edge case fixtures.
@@ -533,6 +625,7 @@ pub fn find_complex_case(id: &str) -> Option<&'static ComplexDataStructureCase> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn edge_cases_have_ids() {
@@ -555,8 +648,24 @@ mod tests {
     }
 
     #[test]
+    fn edge_case_ids_are_unique() {
+        let mut seen = HashSet::new();
+        for case in edge_cases() {
+            assert!(seen.insert(case.id), "Duplicate edge case id: {}", case.id);
+        }
+    }
+
+    #[test]
     fn complex_case_lookup_by_id() {
         let case = find_complex_case("nested.hash.array");
         assert!(case.is_some());
+    }
+
+    #[test]
+    fn complex_case_ids_are_unique() {
+        let mut seen = HashSet::new();
+        for case in complex_data_structure_cases() {
+            assert!(seen.insert(case.id), "Duplicate complex case id: {}", case.id);
+        }
     }
 }

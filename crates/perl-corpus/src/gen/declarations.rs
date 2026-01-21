@@ -26,6 +26,26 @@ pub fn package_declaration() -> impl Strategy<Value = String> {
         })
 }
 
+/// Generate a class declaration with field and method (Perl 5.38+).
+pub fn class_declaration() -> impl Strategy<Value = String> {
+    (package_name(), identifier(), identifier()).prop_map(|(name, field, method)| {
+        format!(
+            "class {} {{\n    field ${} :param = 0;\n    method {} {{ return ${}; }}\n}}\n",
+            name, field, method, field
+        )
+    })
+}
+
+/// Generate a stateful subroutine declaration.
+pub fn stateful_subroutine() -> impl Strategy<Value = String> {
+    (identifier(), prop::sample::select(vec!["0", "1", "10"])).prop_map(|(name, init)| {
+        format!(
+            "sub {} {{\n    state $count = {};\n    return $count++;\n}}\n",
+            name, init
+        )
+    })
+}
+
 fn param_token() -> impl Strategy<Value = String> {
     prop_oneof![
         Just("$x".to_string()),
@@ -128,6 +148,10 @@ pub fn use_require_statement() -> impl Strategy<Value = String> {
     prop_oneof![
         Just("use strict;\n".to_string()),
         Just("use warnings;\n".to_string()),
+        Just("use v5.36;\n".to_string()),
+        Just("use feature ':5.36';\n".to_string()),
+        Just("use feature 'signatures';\n".to_string()),
+        Just("use constant PI => 3.14;\n".to_string()),
         Just("no warnings 'experimental::signatures';\n".to_string()),
         package_name().prop_map(|name| format!("use {};\n", name)),
         package_name().prop_map(|name| format!("use {} 1.23;\n", name)),
@@ -139,8 +163,10 @@ pub fn use_require_statement() -> impl Strategy<Value = String> {
 pub fn declaration_in_context() -> impl Strategy<Value = String> {
     prop_oneof![
         package_declaration(),
+        class_declaration(),
         subroutine_declaration(),
         anonymous_subroutine(),
+        stateful_subroutine(),
         method_call_in_context(),
         use_require_statement(),
     ]

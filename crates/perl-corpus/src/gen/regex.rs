@@ -8,6 +8,12 @@ fn sanitize_payload(s: &str, left: char, right: char) -> String {
         .collect()
 }
 
+fn sorted_modifiers(modifiers: impl IntoIterator<Item = char>) -> String {
+    let mut mods: Vec<char> = modifiers.into_iter().collect();
+    mods.sort_unstable();
+    mods.into_iter().collect()
+}
+
 fn regex_match_expr() -> impl Strategy<Value = String> {
     (
         q_like_payload(),
@@ -16,7 +22,7 @@ fn regex_match_expr() -> impl Strategy<Value = String> {
     )
         .prop_map(|(pattern, (open, close), modifiers)| {
             let clean_pattern = sanitize_payload(&pattern, open, close);
-            let mods: String = modifiers.into_iter().collect();
+            let mods = sorted_modifiers(modifiers);
             format!("m{}{}{}{}", open, clean_pattern, close, mods)
         })
 }
