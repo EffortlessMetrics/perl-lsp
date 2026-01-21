@@ -8,7 +8,7 @@ Reusable generators for Perl test corpora: proptest strategies, fixtures, and ed
 use perl_corpus::{
     complex_data_structure_cases, generate_perl_code, generate_perl_code_with_options,
     get_all_test_files, get_corpus_files, CodegenOptions, CorpusLayer, EdgeCaseGenerator,
-    StatementKind,
+    StatementKind, sample_complex_case,
 };
 
 // Generate random valid Perl code
@@ -30,6 +30,8 @@ let code = generate_perl_code_with_options(options);
 let edge_cases = EdgeCaseGenerator::all_cases();
 let regex_or_heredoc = EdgeCaseGenerator::by_tags_any(&["regex", "heredoc"]);
 let regex_code = EdgeCaseGenerator::by_tags_all(&["regex", "regex-code"]);
+let sample = EdgeCaseGenerator::sample(42);
+let sampled_tagged = EdgeCaseGenerator::sample_by_tags_any(&["regex", "heredoc"], 7);
 
 // Discover local corpus files for integration testing
 let files = get_all_test_files();
@@ -43,12 +45,14 @@ let fuzz_only: Vec<_> = layered
 
 // Retrieve complex data structure samples for DAP variable rendering
 let cases = complex_data_structure_cases();
+let sample_case = sample_complex_case(7);
 ```
 
 ## Features
 
 - Property-based testing strategies via proptest
 - Edge case fixtures with tags and IDs
+- Deterministic sampling helpers for edge cases and complex data structures
 - Random code generation helpers
 - Local corpus file discovery (test_corpus + fuzz fixtures)
 - Layered corpus file metadata (test corpus vs fuzz)
@@ -58,7 +62,7 @@ let cases = complex_data_structure_cases();
 - Built-in call coverage (pack/unpack, split/join, printf/print/say/system, warn/die, substr/index/length, pos/study, quotemeta, vec, bless/ref, caller/wantarray, push/pop, shift/unshift, splice, reverse, rand/int, abs/sqrt/atan2, hex/oct, chr/ord, uc/lc/ucfirst/lcfirst, each/delete, gmtime/localtime, sleep/alarm, chdir/mkdir/rmdir/rename/unlink, chmod/chown, link/symlink/readlink, umask/truncate, stat/lstat, defined/exists)
 - Sigil-heavy variable and dereference generator
 - Expanded expressions: repetition operator (x) and isa operator
-- Expanded edge cases: POD, v-strings, prototypes, signature+attribute combos, array/hash slices, postfix control flow, goto labels, flip-flop operators, AUTOLOAD/DESTROY, overload, symbolic references, DATA/END sections, source filters, Inline::C/XS/FFI heredocs, bareword filehandles, lvalue substr assignments, SUPER:: dispatch, mro pragmas, y/// transliteration, variable attributes, utf8/unicode escapes, named Unicode escapes, state/local/our declarations, multiple heredocs on one line, Unicode property regex, regex conditionals, regex set ops, CORE::GLOBAL overrides, use constant hashes, variable-length lookbehind, postfix coderef deref, and special constants
+- Expanded edge cases: POD, v-strings, prototypes, signature+attribute combos, array/hash slices, postfix control flow, postfix for loops, goto labels, flip-flop operators, AUTOLOAD/DESTROY, overload, symbolic references, DATA/END sections, PerlIO layers, signal handlers, source filters, Inline::C/XS/FFI heredocs, bareword filehandles, lvalue substr assignments, SUPER:: dispatch, mro pragmas, y/// transliteration, variable attributes, utf8/unicode escapes, named Unicode escapes, state/local/our declarations, async/await, multiple heredocs on one line, Unicode property regex, regex conditionals, regex set ops, CORE::GLOBAL overrides, use constant hashes, variable-length lookbehind, postfix coderef deref, and special constants
 
 ## CLI
 

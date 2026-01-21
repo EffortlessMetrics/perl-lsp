@@ -293,6 +293,24 @@ sub cleanup {
 "#,
     },
     EdgeCase {
+        id: "async.await",
+        description: "Async subroutine with await call.",
+        tags: &["async", "await", "feature", "edge-case"],
+        source: r#"use feature 'async_await';
+no warnings 'experimental::async_await';
+
+async sub fetch {
+    return await lookup();
+}
+
+sub lookup {
+    return 1;
+}
+
+my $result = await fetch();
+"#,
+    },
+    EdgeCase {
         id: "postfix.deref.slice",
         description: "Postfix dereference with slice.",
         tags: &["postfix", "dereference", "edge-case"],
@@ -434,6 +452,15 @@ sub current_name { return __SUB__; }
 "#,
     },
     EdgeCase {
+        id: "signal.handler",
+        description: "Signal handler assignment with SIG hash.",
+        tags: &["signal", "edge-case"],
+        source: r#"my $count = 0;
+$SIG{INT} = sub { $count++; };
+$SIG{TERM} = sub { die "shutdown"; };
+"#,
+    },
+    EdgeCase {
         id: "typeglob.alias",
         description: "Typeglob aliasing and symbol table entries.",
         tags: &["typeglob", "glob", "edge-case"],
@@ -522,6 +549,14 @@ my $min = v5.10;
         source: r#"my $ready = 1;
 print "go\n" if $ready;
 warn "no\n" unless $ready;
+"#,
+    },
+    EdgeCase {
+        id: "postfix.for",
+        description: "Postfix for loop with topic variable.",
+        tags: &["postfix", "for", "flow", "edge-case"],
+        source: r#"my @items = (1, 2, 3);
+print $_ for @items;
 "#,
     },
     EdgeCase {
@@ -721,6 +756,14 @@ my $value = ${"value"};
 __DATA__
 alpha
 beta
+"#,
+    },
+    EdgeCase {
+        id: "open.layers",
+        description: "Open with PerlIO layer specification.",
+        tags: &["open", "layers", "perlio", "edge-case"],
+        source: r#"open my $fh, "<:encoding(UTF-8)", "file.txt" or die $!;
+binmode $fh, ":raw";
 "#,
     },
     EdgeCase {
@@ -1000,6 +1043,13 @@ my $data = {
 "#,
     },
     ComplexDataStructureCase {
+        id: "dualvar.scalar",
+        description: "Scalar with dual numeric/string value.",
+        source: r#"use Scalar::Util 'dualvar';
+my $value = dualvar(10, "ten");
+"#,
+    },
+    ComplexDataStructureCase {
         id: "regex.and.refs",
         description: "Hash with compiled regex and scalar reference.",
         source: r#"my $value = 10;
@@ -1058,6 +1108,13 @@ my $obj = bless \$value, "ScalarObj";
 "#,
     },
     ComplexDataStructureCase {
+        id: "blessed.coderef",
+        description: "Blessed coderef object.",
+        source: r#"my $handler = sub { return 1; };
+my $obj = bless $handler, "Handler::Obj";
+"#,
+    },
+    ComplexDataStructureCase {
         id: "filehandle.in.hash",
         description: "Hash containing a filehandle and metadata.",
         source: r#"open my $fh, "<", "file.txt";
@@ -1086,6 +1143,15 @@ pub fn complex_data_structure_cases() -> &'static [ComplexDataStructureCase] {
 /// Backwards-compatible accessor for complex data structure fixtures.
 pub fn get_complex_data_structure_tests() -> &'static [ComplexDataStructureCase] {
     complex_data_structure_cases()
+}
+
+fn select_by_seed<T>(items: &[T], seed: u64) -> Option<&T> {
+    if items.is_empty() {
+        return None;
+    }
+
+    let idx = (seed % items.len() as u64) as usize;
+    items.get(idx)
 }
 
 /// Convenience helper for working with static edge cases.
@@ -1128,6 +1194,30 @@ impl EdgeCaseGenerator {
         edge_cases().iter().find(|case| case.id == id)
     }
 
+    /// Sample a deterministic edge case by seed.
+    pub fn sample(seed: u64) -> &'static EdgeCase {
+        select_by_seed(edge_cases(), seed)
+            .unwrap_or_else(|| edge_cases().first().expect("edge case list is empty"))
+    }
+
+    /// Sample a deterministic edge case by tag.
+    pub fn sample_by_tag(tag: &str, seed: u64) -> Option<&'static EdgeCase> {
+        let matches = Self::by_tag(tag);
+        select_by_seed(&matches, seed).copied()
+    }
+
+    /// Sample a deterministic edge case matching any provided tag.
+    pub fn sample_by_tags_any(tags: &[&str], seed: u64) -> Option<&'static EdgeCase> {
+        let matches = Self::by_tags_any(tags);
+        select_by_seed(&matches, seed).copied()
+    }
+
+    /// Sample a deterministic edge case matching all provided tags.
+    pub fn sample_by_tags_all(tags: &[&str], seed: u64) -> Option<&'static EdgeCase> {
+        let matches = Self::by_tags_all(tags);
+        select_by_seed(&matches, seed).copied()
+    }
+
     /// Return sorted unique edge case tags.
     pub fn tags() -> Vec<&'static str> {
         let mut tags: Vec<&'static str> =
@@ -1141,6 +1231,12 @@ impl EdgeCaseGenerator {
 /// Find a complex data structure fixture by ID.
 pub fn find_complex_case(id: &str) -> Option<&'static ComplexDataStructureCase> {
     complex_data_structure_cases().iter().find(|case| case.id == id)
+}
+
+/// Sample a deterministic complex data structure fixture by seed.
+pub fn sample_complex_case(seed: u64) -> &'static ComplexDataStructureCase {
+    select_by_seed(complex_data_structure_cases(), seed)
+        .unwrap_or_else(|| complex_data_structure_cases().first().expect("complex case list is empty"))
 }
 
 #[cfg(test)]
@@ -1189,9 +1285,29 @@ mod tests {
     }
 
     #[test]
+    fn edge_case_sample_is_stable() {
+        let first = EdgeCaseGenerator::sample(7);
+        let second = EdgeCaseGenerator::sample(7);
+        assert_eq!(first.id, second.id);
+    }
+
+    #[test]
+    fn edge_case_sample_by_tag_matches() {
+        let case = EdgeCaseGenerator::sample_by_tag("regex", 3).expect("expected regex case");
+        assert!(case.tags.iter().any(|tag| *tag == "regex"));
+    }
+
+    #[test]
     fn complex_case_lookup_by_id() {
         let case = find_complex_case("nested.hash.array");
         assert!(case.is_some());
+    }
+
+    #[test]
+    fn complex_case_sample_is_stable() {
+        let first = sample_complex_case(11);
+        let second = sample_complex_case(11);
+        assert_eq!(first.id, second.id);
     }
 
     #[test]

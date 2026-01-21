@@ -12,7 +12,7 @@ pub mod meta;
 use anyhow::{Context, Result};
 pub use cases::{
     ComplexDataStructureCase, EdgeCase, EdgeCaseGenerator, complex_data_structure_cases,
-    edge_cases, find_complex_case, get_complex_data_structure_tests,
+    edge_cases, find_complex_case, get_complex_data_structure_tests, sample_complex_case,
 };
 pub use codegen::{
     CodegenOptions, StatementKind, generate_perl_code, generate_perl_code_with_options,
