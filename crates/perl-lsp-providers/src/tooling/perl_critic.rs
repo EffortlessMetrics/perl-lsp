@@ -169,6 +169,9 @@ impl CriticAnalyzer {
         // Use verbose format for parsing
         args.push("--verbose=%f:%l:%c:%s:%p:%m\\n".to_string());
 
+        // Add argument separator for security
+        args.push("--".to_string());
+
         // Add file path
         args.push(path_str.clone());
 
@@ -536,6 +539,12 @@ mod tests {
         assert_eq!(invocations.len(), 1);
         assert_eq!(invocations[0].program, "perlcritic");
         assert!(invocations[0].args.contains(&"--severity=3".to_string()));
+        // Ensure argument separator is used for security
+        assert!(invocations[0].args.contains(&"--".to_string()));
+        // Ensure the separator comes before the file path
+        let sep_pos = invocations[0].args.iter().position(|a| a == "--").expect("Missing -- separator");
+        let file_pos = invocations[0].args.iter().position(|a| a == "test.pl").expect("Missing file path");
+        assert!(sep_pos < file_pos, "-- separator must come before file path");
     }
 
     #[test]
