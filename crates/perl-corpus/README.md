@@ -36,7 +36,7 @@ let cases = complex_data_structure_cases();
 - Edge case fixtures with tags and IDs
 - Random code generation helpers
 - Local corpus file discovery (test_corpus + fuzz fixtures)
-- Generators for heredoc, quote-like, regex, expressions, whitespace, loop control, format, glob, tie, declarations
+- Generators for heredoc, quote-like, regex, expressions, whitespace, loop control, format, glob, tie, I/O, declarations
 
 ## License
 

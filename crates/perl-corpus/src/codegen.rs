@@ -35,13 +35,15 @@ pub enum StatementKind {
     Glob,
     /// Tie/untie statements.
     Tie,
+    /// I/O and filehandle statements.
+    Io,
     /// Operator-focused expressions.
     Expressions,
     /// Regex match/substitution/transliteration.
     Regex,
 }
 
-const STATEMENT_KINDS_ALL: [StatementKind; 12] = [
+const STATEMENT_KINDS_ALL: [StatementKind; 13] = [
     StatementKind::Basic,
     StatementKind::Declarations,
     StatementKind::Qw,
@@ -52,6 +54,7 @@ const STATEMENT_KINDS_ALL: [StatementKind; 12] = [
     StatementKind::Format,
     StatementKind::Glob,
     StatementKind::Tie,
+    StatementKind::Io,
     StatementKind::Expressions,
     StatementKind::Regex,
 ];
@@ -190,6 +193,7 @@ fn build_strategies_for(kinds: &[StatementKind]) -> Vec<BoxedStrategy<String>> {
             }
             StatementKind::Glob => strategies.push(r#gen::glob::glob_in_context().boxed()),
             StatementKind::Tie => strategies.push(r#gen::tie::tie_in_context().boxed()),
+            StatementKind::Io => strategies.push(r#gen::io::io_in_context().boxed()),
             StatementKind::Expressions => {
                 strategies.push(r#gen::expressions::expression_in_context().boxed());
             }

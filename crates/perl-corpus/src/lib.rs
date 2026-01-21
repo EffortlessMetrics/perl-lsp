@@ -11,8 +11,8 @@ pub mod meta;
 
 use anyhow::{Context, Result};
 pub use cases::{
-    complex_data_structure_cases, edge_cases, get_complex_data_structure_tests,
-    ComplexDataStructureCase, EdgeCase, EdgeCaseGenerator,
+    complex_data_structure_cases, edge_cases, find_complex_case,
+    get_complex_data_structure_tests, ComplexDataStructureCase, EdgeCase, EdgeCaseGenerator,
 };
 pub use codegen::{
     generate_perl_code, generate_perl_code_with_options, generate_perl_code_with_seed,

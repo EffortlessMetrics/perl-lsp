@@ -79,6 +79,8 @@ enum Generator {
     Glob,
     /// Generate tie/untie samples
     Tie,
+    /// Generate I/O and filehandle samples
+    Io,
     /// Generate package/subroutine declarations and method calls
     Declarations,
     /// Generate expression-heavy statements
@@ -298,6 +300,18 @@ fn main() -> Result<()> {
                             .map_err(|e| anyhow::anyhow!("{e:?}"))?
                             .current();
                         println!("# Test case {} (tie)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Io => {
+                    use perl_corpus::r#gen::io::io_in_context;
+                    for i in 0..count {
+                        let value = io_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (io)", i + 1);
                         println!("{}", value);
                         println!();
                     }

@@ -230,6 +230,15 @@ my @slice = $aref->@[0, 2];
 "#,
     },
     EdgeCase {
+        id: "postfix.deref.hash",
+        description: "Postfix dereference with hash expansion.",
+        tags: &["postfix", "dereference", "edge-case"],
+        source: r#"my $href = { a => 1, b => 2 };
+my %copy = $href->%*;
+my @keys = $href->@{qw(a b)};
+"#,
+    },
+    EdgeCase {
         id: "class.field.method",
         description: "Class with fields and method.",
         tags: &["class", "field", "method", "edge-case"],
@@ -247,6 +256,58 @@ my @slice = $aref->@[0, 2];
     state $count = 0;
     return $count += $step;
 }
+"#,
+    },
+    EdgeCase {
+        id: "smartmatch.array",
+        description: "Smartmatch with array of roles.",
+        tags: &["smartmatch", "operator", "edge-case"],
+        source: r#"my @roles = qw(admin user);
+if ("admin" ~~ @roles) {
+    print "has role";
+}
+"#,
+    },
+    EdgeCase {
+        id: "pack.unpack",
+        description: "Pack and unpack byte arrays.",
+        tags: &["pack", "unpack", "edge-case"],
+        source: r#"my $packed = pack("C*", 65, 66, 67);
+my @bytes = unpack("C*", $packed);
+"#,
+    },
+    EdgeCase {
+        id: "filetest.stack",
+        description: "Stacked filetest operators.",
+        tags: &["filetest", "edge-case"],
+        source: r#"if (-r -w -x $path) {
+    print "read write exec";
+}
+"#,
+    },
+    EdgeCase {
+        id: "sort.block",
+        description: "Sort with comparison block.",
+        tags: &["sort", "list-context", "edge-case"],
+        source: r#"my @sorted = sort { $a <=> $b } @values;
+"#,
+    },
+    EdgeCase {
+        id: "eval.string",
+        description: "String eval with error handling.",
+        tags: &["eval", "error", "edge-case"],
+        source: r#"my $code = "sub generated { return 42; }";
+eval $code;
+warn $@ if $@;
+"#,
+    },
+    EdgeCase {
+        id: "sub.attribute",
+        description: "Subroutines with attributes.",
+        tags: &["subroutine", "method", "edge-case"],
+        source: r#"my $value = 1;
+sub getter :lvalue { return $value; }
+sub setter :method { $value = shift; }
 "#,
     },
 ];
@@ -342,6 +403,42 @@ $node->{self} = $node;
 ];
 "#,
     },
+    ComplexDataStructureCase {
+        id: "mixed.types",
+        description: "Array with mixed scalar and reference types.",
+        source: r#"my $data = [
+    1,
+    "two",
+    [3, 4],
+    { five => 5 },
+    sub { return 6; },
+];
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "array.self.ref",
+        description: "Array that contains a reference to itself.",
+        source: r#"my $list = [];
+push @$list, $list;
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "blessed.array",
+        description: "Blessed array reference object.",
+        source: r#"my $obj = bless [1, 2, 3], "ArrayObj";
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "refs.in.hash",
+        description: "Hash with scalar references and nested collections.",
+        source: r#"my $value = 3;
+my $data = {
+    value => \$value,
+    list => [1, 2, 3],
+    lookup => { a => 1 },
+};
+"#,
+    },
 ];
 
 /// Return the static edge case fixtures.
@@ -380,6 +477,20 @@ impl EdgeCaseGenerator {
     pub fn find(id: &str) -> Option<&'static EdgeCase> {
         edge_cases().iter().find(|case| case.id == id)
     }
+
+    /// Return sorted unique edge case tags.
+    pub fn tags() -> Vec<&'static str> {
+        let mut tags: Vec<&'static str> =
+            edge_cases().iter().flat_map(|case| case.tags.iter().copied()).collect();
+        tags.sort();
+        tags.dedup();
+        tags
+    }
+}
+
+/// Find a complex data structure fixture by ID.
+pub fn find_complex_case(id: &str) -> Option<&'static ComplexDataStructureCase> {
+    complex_data_structure_cases().iter().find(|case| case.id == id)
 }
 
 #[cfg(test)]
@@ -395,5 +506,20 @@ mod tests {
     fn edge_cases_can_filter_by_tag() {
         let heredocs = EdgeCaseGenerator::by_tag("heredoc");
         assert!(!heredocs.is_empty());
+    }
+
+    #[test]
+    fn edge_case_tags_are_unique() {
+        let tags = EdgeCaseGenerator::tags();
+        let mut deduped = tags.clone();
+        deduped.sort();
+        deduped.dedup();
+        assert_eq!(tags, deduped);
+    }
+
+    #[test]
+    fn complex_case_lookup_by_id() {
+        let case = find_complex_case("nested.hash.array");
+        assert!(case.is_some());
     }
 }
