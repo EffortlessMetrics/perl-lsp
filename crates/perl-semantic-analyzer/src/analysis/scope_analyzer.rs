@@ -225,7 +225,7 @@ impl ScopeAnalyzer {
                 // Actually Perl evaluates RHS before LHS assignment, so usages in initializer refer to OUTER scope.
                 // So we analyze initializer first.
                 if let Some(init) = initializer {
-                    self.analyze_node(init, scope, parent_map, issues, code, pragma_map);
+                    self.analyze_node(init, scope, ancestors, issues, code, pragma_map);
                 }
 
                 if let Some(issue_kind) = scope.declare_variable(
@@ -258,7 +258,7 @@ impl ScopeAnalyzer {
 
                 // Analyze initializer first
                 if let Some(init) = initializer {
-                    self.analyze_node(init, scope, parent_map, issues, code, pragma_map);
+                    self.analyze_node(init, scope, ancestors, issues, code, pragma_map);
                 }
 
                 for variable in variables {
@@ -333,17 +333,17 @@ impl ScopeAnalyzer {
                 }
             }
             NodeKind::Variable { sigil, name } => {
-                let full_name = format!("{}{}", sigil, name);
-
                 // Skip package-qualified variables
-                if full_name.contains("::") {
+                if name.contains("::") {
                     return;
                 }
 
                 // Skip built-in global variables
-                if is_builtin_global(&full_name) {
+                if is_builtin_global(sigil, name) {
                     return;
                 }
+
+                let full_name = format!("{}{}", sigil, name);
 
                 // Try to use the variable
                 let (mut variable_used, mut is_initialized) = scope.use_variable(&full_name);
@@ -396,7 +396,7 @@ impl ScopeAnalyzer {
             NodeKind::Assignment { lhs, rhs, op: _ } => {
                 // Handle assignment: LHS variable becomes initialized
                 // First analyze RHS (usages)
-                self.analyze_node(rhs, scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(rhs, scope, ancestors, issues, code, pragma_map);
 
                 // Then analyze LHS
                 // We need to recursively mark variables as initialized in the LHS structure
@@ -405,7 +405,7 @@ impl ScopeAnalyzer {
 
                 // Recurse into LHS to trigger UndeclaredVariable checks
                 // Note: 'use_variable' marks as used, which is technically correct for assignment too (write usage)
-                self.analyze_node(lhs, scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(lhs, scope, ancestors, issues, code, pragma_map);
             }
 
             NodeKind::Identifier { name } => {
@@ -849,31 +849,37 @@ impl ScopeAnalyzer {
 }
 
 /// Check if a variable is a built-in Perl global variable
-fn is_builtin_global(name: &str) -> bool {
-    match name {
+fn is_builtin_global(sigil: &str, name: &str) -> bool {
+    match (sigil, name) {
         // Special variables
-        "$_" | "@_" | "%_" | "$!" | "$@" | "$?" | "$^" | "$$" | "$0" | "$1" | "$2" | "$3"
-        | "$4" | "$5" | "$6" | "$7" | "$8" | "$9" | "$." | "$," | "$/" | "$\\" | "$\"" | "$;"
-        | "$%" | "$=" | "$-" | "$~" | "$|" | "$&" | "$`" | "$'" | "$+" | "@+" | "%+" | "$["
-        | "$]" | "$^A" | "$^C" | "$^D" | "$^E" | "$^F" | "$^H" | "$^I" | "$^L" | "$^M" | "$^N"
-        | "$^O" | "$^P" | "$^R" | "$^S" | "$^T" | "$^V" | "$^W" | "$^X" |
+        ("$", "_") | ("@", "_") | ("%", "_") | ("$", "!") | ("$", "@") | ("$", "?") | ("$", "^") | ("$", "$") | ("$", "0") |
+        ("$", "1") | ("$", "2") | ("$", "3") | ("$", "4") | ("$", "5") | ("$", "6") | ("$", "7") | ("$", "8") | ("$", "9") |
+        ("$", ".") | ("$", ",") | ("$", "/") | ("$", "\\") | ("$", "\"") | ("$", ";") | ("$", "%") | ("$", "=") | ("$", "-") |
+        ("$", "~") | ("$", "|") | ("$", "&") | ("$", "`") | ("$", "'") | ("$", "+") | ("@", "+") | ("%", "+") | ("$", "[") |
+        ("$", "]") | ("$", "^A") | ("$", "^C") | ("$", "^D") | ("$", "^E") | ("$", "^F") | ("$", "^H") | ("$", "^I") |
+        ("$", "^L") | ("$", "^M") | ("$", "^N") | ("$", "^O") | ("$", "^P") | ("$", "^R") | ("$", "^S") | ("$", "^T") |
+        ("$", "^V") | ("$", "^W") | ("$", "^X") |
         // Common globals
-        "%ENV" | "@INC" | "%INC" | "@ARGV" | "%SIG" | "$ARGV" | "@EXPORT" | "@EXPORT_OK"
-        | "%EXPORT_TAGS" | "@ISA" | "$VERSION" | "$AUTOLOAD" |
-        // Filehandles
-        "STDIN" | "STDOUT" | "STDERR" | "DATA" | "ARGVOUT" |
+        ("%", "ENV") | ("@", "INC") | ("%", "INC") | ("@", "ARGV") | ("%", "SIG") | ("$", "ARGV") | ("@", "EXPORT") |
+        ("@", "EXPORT_OK") | ("%", "EXPORT_TAGS") | ("@", "ISA") | ("$", "VERSION") | ("$", "AUTOLOAD") |
+        // Filehandles (often used as globs)
+        // Note: Filehandles are usually barewords, but if used with sigil they might be caught here?
+        // Actually the original code matched "STDIN", "STDOUT" which don't have sigils usually.
+        // But the input to is_builtin_global was full_name including sigil.
+        // If sigil is empty (bareword), then name is STDIN etc.
+        ("", "STDIN") | ("", "STDOUT") | ("", "STDERR") | ("", "DATA") | ("", "ARGVOUT") |
         // Sort variables
-        "$a" | "$b" |
+        ("$", "a") | ("$", "b") |
         // Error variables
-        "$EVAL_ERROR" | "$ERRNO" | "$EXTENDED_OS_ERROR" | "$CHILD_ERROR" | "$PROCESS_ID"
-        | "$PROGRAM_NAME" |
+        ("$", "EVAL_ERROR") | ("$", "ERRNO") | ("$", "EXTENDED_OS_ERROR") | ("$", "CHILD_ERROR") | ("$", "PROCESS_ID") |
+        ("$", "PROGRAM_NAME") |
         // Perl version variables
-        "$PERL_VERSION" | "$OLD_PERL_VERSION" => true,
+        ("$", "PERL_VERSION") | ("$", "OLD_PERL_VERSION") => true,
         _ => {
             // Check patterns
             // $^[A-Z] variables
-            if name.starts_with("$^") && name.len() == 3 {
-                if let Some(ch) = name.chars().nth(2) {
+            if sigil == "$" && name.starts_with('^') && name.len() == 2 {
+                 if let Some(ch) = name.chars().nth(1) {
                     if ch.is_ascii_uppercase() {
                         return true;
                     }
@@ -882,7 +888,7 @@ fn is_builtin_global(name: &str) -> bool {
 
             // Numbered capture variables ($1, $2, etc.)
             // Note: $0-$9 are already handled in the match above
-            if name.starts_with('$') && name.len() > 1 && name[1..].chars().all(|c| c.is_ascii_digit()) {
+            if sigil == "$" && name.len() >= 1 && name.chars().all(|c| c.is_ascii_digit()) {
                 return true;
             }
 
