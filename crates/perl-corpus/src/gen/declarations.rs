@@ -40,6 +40,23 @@ pub fn stateful_subroutine() -> impl Strategy<Value = String> {
     })
 }
 
+fn decl_keyword() -> impl Strategy<Value = &'static str> {
+    prop_oneof![Just("my"), Just("our"), Just("state"), Just("local"),]
+}
+
+fn variable_declaration() -> impl Strategy<Value = String> {
+    prop_oneof![
+        (decl_keyword(), identifier(), prop::sample::select(vec!["1", "\"value\"", "undef"]),)
+            .prop_map(|(kw, name, value)| format!("{} ${} = {};\n", kw, name, value)),
+        (decl_keyword(), identifier()).prop_map(|(kw, name)| {
+            format!("{} @{} = (1, 2, 3);\n", kw, name)
+        }),
+        (decl_keyword(), identifier()).prop_map(|(kw, name)| {
+            format!("{} %{} = (a => 1, b => 2);\n", kw, name)
+        }),
+    ]
+}
+
 fn param_token() -> impl Strategy<Value = String> {
     prop_oneof![
         Just("$x".to_string()),
@@ -146,11 +163,16 @@ pub fn use_require_statement() -> impl Strategy<Value = String> {
         Just("use feature ':5.36';\n".to_string()),
         Just("use feature 'signatures';\n".to_string()),
         Just("use constant PI => 3.14;\n".to_string()),
+        Just("use bytes;\n".to_string()),
+        Just("use utf8;\n".to_string()),
+        Just("use open ':std', ':encoding(UTF-8)';\n".to_string()),
+        Just("use mro 'c3';\n".to_string()),
         Just("use lib \"lib\";\n".to_string()),
         Just("use base qw(Exporter);\n".to_string()),
         Just("use parent qw(Exporter);\n".to_string()),
         Just("use autodie;\n".to_string()),
         Just("no warnings 'experimental::signatures';\n".to_string()),
+        Just("no strict 'refs';\n".to_string()),
         package_name().prop_map(|name| format!("use {};\n", name)),
         package_name().prop_map(|name| format!("use {} 1.23;\n", name)),
         package_name().prop_map(|name| format!("require {};\n", name)),
@@ -162,6 +184,7 @@ pub fn declaration_in_context() -> impl Strategy<Value = String> {
     prop_oneof![
         package_declaration(),
         class_declaration(),
+        variable_declaration(),
         subroutine_declaration(),
         anonymous_subroutine(),
         stateful_subroutine(),
@@ -188,6 +211,16 @@ mod tests {
         #[test]
         fn anonymous_subroutine_includes_sub(code in anonymous_subroutine()) {
             assert!(code.contains("sub"));
+        }
+
+        #[test]
+        fn variable_declaration_includes_keyword(code in variable_declaration()) {
+            assert!(
+                code.contains("my")
+                    || code.contains("our")
+                    || code.contains("state")
+                    || code.contains("local")
+            );
         }
 
         #[test]

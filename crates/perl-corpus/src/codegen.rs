@@ -133,7 +133,7 @@ pub fn generate_perl_code_with_options(options: CodegenOptions) -> String {
     let mut rng = StdRng::seed_from_u64(options.seed);
     let mut runner = TestRunner::new_with_rng(
         Config::default(),
-        TestRng::from_seed(RngAlgorithm::ChaCha, &options.seed.to_le_bytes()),
+        TestRng::from_seed(RngAlgorithm::ChaCha, &proptest_seed(options.seed)),
     );
     let strategies = build_strategies_for(&options.kinds);
 
@@ -173,6 +173,15 @@ fn default_seed() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_else(|_| std::time::Duration::from_secs(0))
         .as_secs()
+}
+
+fn proptest_seed(seed: u64) -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+    for (i, chunk) in bytes.chunks_mut(8).enumerate() {
+        let mixed = seed.wrapping_add((i as u64).wrapping_mul(0x9E3779B97F4A7C15));
+        chunk.copy_from_slice(&mixed.to_le_bytes());
+    }
+    bytes
 }
 
 fn build_strategies_for(kinds: &[StatementKind]) -> Vec<BoxedStrategy<String>> {

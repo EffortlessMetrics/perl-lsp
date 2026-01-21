@@ -74,6 +74,11 @@ fn concat_statement() -> impl Strategy<Value = String> {
         .prop_map(|(name, left, right)| format!("my ${} = {} . {};\n", name, left, right))
 }
 
+fn repeat_statement() -> impl Strategy<Value = String> {
+    (scalar_name(), prop::sample::select(vec!["\"-\"", "\"*\"", "\".\""]), small_literal())
+        .prop_map(|(name, token, count)| format!("my ${} = {} x {};\n", name, token, count))
+}
+
 fn logical_statement() -> impl Strategy<Value = String> {
     (
         scalar_name(),
@@ -117,6 +122,15 @@ fn smartmatch_statement() -> impl Strategy<Value = String> {
     })
 }
 
+fn isa_statement() -> impl Strategy<Value = String> {
+    prop::sample::select(vec!["Thing", "Widget", "Demo"]).prop_map(|class| {
+        format!(
+            "my $object = bless {{ id => 1 }}, \"{}\";\nif ($object isa {}) {{\n    print \"ok\";\n}}\n",
+            class, class
+        )
+    })
+}
+
 fn exists_statement() -> impl Strategy<Value = String> {
     (scalar_name(), prop::sample::select(vec!["HOME", "PATH", "SHELL"]))
         .prop_map(|(name, key)| format!("my ${} = exists $ENV{{{}}} ? 1 : 0;\n", name, key))
@@ -145,10 +159,12 @@ pub fn expression_in_context() -> impl Strategy<Value = String> {
         range_statement(),
         bitwise_statement(),
         concat_statement(),
+        repeat_statement(),
         logical_statement(),
         compound_assignment_statement(),
         binding_statement(),
         smartmatch_statement(),
+        isa_statement(),
         exists_statement(),
         defined_statement(),
         flipflop_statement(),
@@ -162,7 +178,7 @@ mod tests {
     proptest! {
         #[test]
         fn expressions_are_assignments(code in expression_in_context()) {
-            assert!(code.contains("my $"));
+            assert!(code.contains("my $") || code.contains("my @") || code.contains("my %"));
             assert!(code.contains(';'));
         }
     }

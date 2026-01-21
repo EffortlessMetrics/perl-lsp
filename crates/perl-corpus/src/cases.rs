@@ -45,6 +45,17 @@ EOF
 "#,
     },
     EdgeCase {
+        id: "heredoc.multiple.inline",
+        description: "Multiple heredocs declared on one line.",
+        tags: &["heredoc", "edge-case", "parser-sensitive"],
+        source: r#"print <<'A', <<'B';
+alpha
+A
+beta
+B
+"#,
+    },
+    EdgeCase {
         id: "quote.like",
         description: "Quote-like operator with interpolation.",
         tags: &["quote-like", "interpolation"],
@@ -67,6 +78,16 @@ my $text = qq{Hello $name};
         source: r#"my $text = "abc";
 if ($text =~ /(?<word>abc)/) {
     print $+{word};
+}
+"#,
+    },
+    EdgeCase {
+        id: "regex.unicode.property",
+        description: "Regex with Unicode property class.",
+        tags: &["regex", "unicode", "edge-case"],
+        source: r#"my $text = "Cafe";
+if ($text =~ /\p{Latin}+/) {
+    print "ok";
 }
 "#,
     },
@@ -279,12 +300,30 @@ my @keys = $href->@{qw(a b)};
 "#,
     },
     EdgeCase {
+        id: "postfix.deref.code",
+        description: "Postfix dereference for a coderef.",
+        tags: &["postfix", "dereference", "edge-case"],
+        source: r#"my $code = sub { return 1; };
+my $handler = $code->&*;
+"#,
+    },
+    EdgeCase {
         id: "class.field.method",
         description: "Class with fields and method.",
         tags: &["class", "field", "method", "edge-case"],
         source: r#"class Point {
     field $x :param = 0;
     method get_x { return $x; }
+}
+"#,
+    },
+    EdgeCase {
+        id: "isa.operator",
+        description: "ISA operator with class checks.",
+        tags: &["isa", "operator", "edge-case", "class"],
+        source: r#"my $object = bless {}, "Thing";
+if ($object isa Thing) {
+    print "ok";
 }
 "#,
     },
@@ -362,6 +401,16 @@ my $error = $!;
 my $status = $?;
 my $count = @ARGV;
 my $env_home = $ENV{HOME};
+"#,
+    },
+    EdgeCase {
+        id: "special.constants",
+        description: "Special compile-time constants and __SUB__ usage.",
+        tags: &["special-var", "edge-case"],
+        source: r#"my $file = __FILE__;
+my $line = __LINE__;
+my $package = __PACKAGE__;
+sub current_name { return __SUB__; }
 "#,
     },
     EdgeCase {
@@ -518,6 +567,16 @@ if ($text =~ /foo(?=bar)/) {
 }
 if ($text =~ /(?<=foo)bar/) {
     print "behind";
+}
+"#,
+    },
+    EdgeCase {
+        id: "regex.variable.lookbehind",
+        description: "Regex with a variable-length lookbehind.",
+        tags: &["regex", "assertion", "edge-case"],
+        source: r#"my $text = "foo123bar";
+if ($text =~ /(?<=foo\d{1,3})bar/) {
+    print "match";
 }
 "#,
     },
@@ -741,6 +800,16 @@ $node->{self} = $node;
 "#,
     },
     ComplexDataStructureCase {
+        id: "blessed.nested",
+        description: "Blessed hash with nested collections.",
+        source: r#"my $obj = bless {
+    name => "Widget",
+    tags => ["alpha", "beta"],
+    meta => { active => 1, retries => 2 },
+}, "Widget::Thing";
+"#,
+    },
+    ComplexDataStructureCase {
         id: "mapped.records",
         description: "Array of hash records created via map.",
         source: r#"my @values = map { { id => $_, name => "item_$_" } } (1..5);
@@ -763,6 +832,17 @@ $node->{self} = $node;
     ],
     meta => { directed => 0 },
 };
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "weakref.graph",
+        description: "Graph with weak reference edges.",
+        source: r#"use Scalar::Util 'weaken';
+my $a = { id => "a" };
+my $b = { id => "b" };
+$a->{next} = $b;
+$b->{prev} = $a;
+weaken($b->{prev});
 "#,
     },
     ComplexDataStructureCase {

@@ -65,6 +65,50 @@ fn caller_wantarray() -> impl Strategy<Value = String> {
     Just("my @caller = caller;\nmy $context = wantarray();\n".to_string())
 }
 
+fn push_pop() -> impl Strategy<Value = String> {
+    Just("my @stack = (1, 2, 3);\npush @stack, 4;\nmy $last = pop @stack;\n".to_string())
+}
+
+fn shift_unshift() -> impl Strategy<Value = String> {
+    Just(
+        "my @queue = (1, 2, 3);\nunshift @queue, 0;\nmy $first = shift @queue;\n".to_string(),
+    )
+}
+
+fn splice_replace() -> impl Strategy<Value = String> {
+    Just(
+        "my @items = (1, 2, 3, 4, 5);\nmy @removed = splice @items, 1, 2, (9, 10);\n"
+            .to_string(),
+    )
+}
+
+fn reverse_list() -> impl Strategy<Value = String> {
+    Just("my @items = (\"a\", \"b\", \"c\");\nmy @rev = reverse @items;\n".to_string())
+}
+
+fn uc_lc() -> impl Strategy<Value = String> {
+    Just("my $name = \"Ada\";\nmy $upper = uc $name;\nmy $lower = lc $name;\n".to_string())
+}
+
+fn chr_ord() -> impl Strategy<Value = String> {
+    Just("my $letter = chr 65;\nmy $code = ord $letter;\n".to_string())
+}
+
+fn rand_int() -> impl Strategy<Value = String> {
+    Just("srand 42;\nmy $roll = int(rand 6) + 1;\n".to_string())
+}
+
+fn stat_lstat() -> impl Strategy<Value = String> {
+    Just("my @stat = stat \"file.txt\";\nmy @lstat = lstat \"link.txt\";\n".to_string())
+}
+
+fn defined_exists() -> impl Strategy<Value = String> {
+    Just(
+        "my $value = defined $ENV{HOME} ? $ENV{HOME} : \"\";\nmy $has = exists $ENV{PATH};\n"
+            .to_string(),
+    )
+}
+
 /// Generate built-in function call statements.
 pub fn builtin_in_context() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -80,6 +124,15 @@ pub fn builtin_in_context() -> impl Strategy<Value = String> {
         length_chop(),
         bless_ref(),
         caller_wantarray(),
+        push_pop(),
+        shift_unshift(),
+        splice_replace(),
+        reverse_list(),
+        uc_lc(),
+        chr_ord(),
+        rand_int(),
+        stat_lstat(),
+        defined_exists(),
     ]
 }
 
@@ -107,7 +160,23 @@ mod tests {
                     || code.contains("bless")
                     || code.contains("ref")
                     || code.contains("caller")
-                    || code.contains("wantarray"),
+                    || code.contains("wantarray")
+                    || code.contains("push")
+                    || code.contains("pop")
+                    || code.contains("shift")
+                    || code.contains("unshift")
+                    || code.contains("splice")
+                    || code.contains("reverse")
+                    || code.contains("uc")
+                    || code.contains("lc")
+                    || code.contains("chr")
+                    || code.contains("ord")
+                    || code.contains("srand")
+                    || code.contains("rand")
+                    || code.contains("stat")
+                    || code.contains("lstat")
+                    || code.contains("defined")
+                    || code.contains("exists"),
                 "Expected builtin keyword in: {}",
                 code
             );
