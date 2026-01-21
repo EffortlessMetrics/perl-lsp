@@ -89,6 +89,8 @@ enum Generator {
     Regex,
     /// Generate sigil and dereference samples
     Sigils,
+    /// Generate compile-time phase blocks (BEGIN/CHECK/UNITCHECK/INIT/END)
+    Phasers,
 }
 
 fn main() -> Result<()> {
@@ -362,6 +364,18 @@ fn main() -> Result<()> {
                             .map_err(|e| anyhow::anyhow!("{e:?}"))?
                             .current();
                         println!("# Test case {} (sigils)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Phasers => {
+                    use perl_corpus::r#gen::phasers::phaser_block;
+                    for i in 0..count {
+                        let value = phaser_block()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (phasers)", i + 1);
                         println!("{}", value);
                         println!();
                     }

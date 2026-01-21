@@ -417,6 +417,69 @@ sub tick {
 }
 "#,
     },
+    EdgeCase {
+        id: "phaser.blocks",
+        description: "Compile-time phase blocks with setup and teardown.",
+        tags: &["block", "statement", "edge-case"],
+        source: r#"BEGIN { $| = 1; }
+UNITCHECK { my $setup = 1; }
+CHECK { my $ok = 1; }
+INIT { srand 42; }
+END { print "done\n"; }
+"#,
+    },
+    EdgeCase {
+        id: "regex.branch.reset",
+        description: "Regex branch reset groups with shared capture numbering.",
+        tags: &["regex", "branch-reset", "edge-case"],
+        source: r#"my $text = "ab";
+if ($text =~ /(?|(a)(b)|(ab))/) {
+    print $1;
+}
+"#,
+    },
+    EdgeCase {
+        id: "regex.lookaround",
+        description: "Regex lookahead and lookbehind assertions.",
+        tags: &["regex", "assertion", "edge-case"],
+        source: r#"my $text = "foobar";
+if ($text =~ /foo(?=bar)/) {
+    print "ahead";
+}
+if ($text =~ /(?<=foo)bar/) {
+    print "behind";
+}
+"#,
+    },
+    EdgeCase {
+        id: "regex.verbs",
+        description: "Regex with control verbs.",
+        tags: &["regex", "edge-case"],
+        source: r#"my $text = "abc";
+if ($text =~ /a(*SKIP)(*FAIL)|abc/) {
+    print "match";
+}
+"#,
+    },
+    EdgeCase {
+        id: "regex.recursive",
+        description: "Regex with recursion.",
+        tags: &["regex", "edge-case"],
+        source: r#"my $text = "abc";
+if ($text =~ /(a(?R)?c)/) {
+    print $1;
+}
+"#,
+    },
+    EdgeCase {
+        id: "hash.block.ambiguity",
+        description: "Hash vs block ambiguity in function calls.",
+        tags: &["hash", "block", "ambiguous", "parser-sensitive", "edge-case"],
+        source: r#"sub handle { return 1; }
+handle { key => 1 };
+handle({ key => 1 });
+"#,
+    },
 ];
 
 static COMPLEX_DATA_STRUCTURE_CASES: &[ComplexDataStructureCase] = &[
@@ -566,6 +629,14 @@ my $data = {
     value_ref => \$value,
     flags => [undef, 0, 1],
 };
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "tied.hash",
+        description: "Tied hash with stored values.",
+        source: r#"tie my %cache, "Tie::StdHash";
+$cache{foo} = 1;
+my $value = $cache{foo};
 "#,
     },
 ];

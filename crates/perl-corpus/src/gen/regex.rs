@@ -27,6 +27,32 @@ fn regex_match_expr() -> impl Strategy<Value = String> {
         })
 }
 
+fn advanced_pattern() -> impl Strategy<Value = String> {
+    prop_oneof![
+        Just("(?<word>foo)".to_string()),
+        Just("(?|foo|bar)".to_string()),
+        Just("(?>foo|fo)bar".to_string()),
+        Just("foo(?=bar)".to_string()),
+        Just("(?<=foo)bar".to_string()),
+        Just("(?R)".to_string()),
+        Just("\\p{Latin}+".to_string()),
+        Just("a(*SKIP)(*FAIL)|abc".to_string()),
+    ]
+}
+
+fn regex_match_advanced_expr() -> impl Strategy<Value = String> {
+    (
+        advanced_pattern(),
+        quote_delim(),
+        prop::collection::hash_set(prop::sample::select(vec!['i', 'm', 's', 'x']), 0..3),
+    )
+        .prop_map(|(pattern, (open, close), modifiers)| {
+            let clean_pattern = sanitize_payload(&pattern, open, close);
+            let mods = sorted_modifiers(modifiers);
+            format!("m{}{}{}{}", open, clean_pattern, close, mods)
+        })
+}
+
 /// Generate regex match statements in common contexts.
 pub fn regex_match_in_context() -> impl Strategy<Value = String> {
     let target = prop::sample::select(vec!["$text", "$line", "$input", "$_"]);
@@ -48,6 +74,13 @@ pub fn regex_match_in_context() -> impl Strategy<Value = String> {
             )
         }),
     ]
+}
+
+/// Generate advanced regex match statements (branch reset, lookarounds, verbs).
+pub fn regex_advanced_match_in_context() -> impl Strategy<Value = String> {
+    let target = prop::sample::select(vec!["$text", "$line", "$input", "$_"]);
+    (target, regex_match_advanced_expr())
+        .prop_map(|(target, expr)| format!("{} =~ {};\n", target, expr))
 }
 
 /// Generate substitution statements in context.
@@ -72,6 +105,7 @@ pub fn transliteration_in_context() -> impl Strategy<Value = String> {
 pub fn regex_in_context() -> impl Strategy<Value = String> {
     prop_oneof![
         regex_match_in_context(),
+        regex_advanced_match_in_context(),
         substitution_in_context(),
         transliteration_in_context(),
     ]

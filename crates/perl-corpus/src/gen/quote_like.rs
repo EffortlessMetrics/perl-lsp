@@ -38,6 +38,7 @@ pub fn quote_delim() -> impl Strategy<Value = (char, char)> {
         Just(('#', '#')),
         Just(('~', '~')),
         Just((',', ',')),
+        Just(('\'' , '\'')),
     ]
 }
 

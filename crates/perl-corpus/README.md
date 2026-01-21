@@ -18,7 +18,7 @@ let code = generate_perl_code();
 let mut options = CodegenOptions::default();
 options.statements = 50;
 options.ensure_coverage = true;
-options.kinds = vec![StatementKind::Expressions, StatementKind::Regex];
+options.kinds = vec![StatementKind::Expressions, StatementKind::Regex, StatementKind::Phasers];
 let code = generate_perl_code_with_options(options);
 
 // Generate edge cases for testing
@@ -45,7 +45,7 @@ let cases = complex_data_structure_cases();
 - Random code generation helpers
 - Local corpus file discovery (test_corpus + fuzz fixtures)
 - Layered corpus file metadata (test corpus vs fuzz)
-- Generators for heredoc, quote-like, regex, expressions, whitespace, loop control, format, glob, tie, I/O, declarations
+- Generators for heredoc, quote-like, regex (advanced patterns), expressions, whitespace, loop control, format, glob, tie, I/O, declarations, phaser blocks
 - Sigil-heavy variable and dereference generator
 - Expanded edge cases: POD, v-strings, prototypes, postfix control flow, goto labels, class/field, and state/local/our declarations
 

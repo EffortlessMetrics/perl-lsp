@@ -5,6 +5,7 @@ pub mod format_statements;
 pub mod glob;
 pub mod heredoc;
 pub mod io;
+pub mod phasers;
 pub mod quote_like;
 pub mod qw;
 pub mod regex;
