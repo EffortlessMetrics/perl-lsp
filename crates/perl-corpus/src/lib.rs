@@ -19,7 +19,8 @@ pub use codegen::{
     generate_perl_code_with_statements, CodegenOptions, StatementKind,
 };
 pub use files::{
-    get_all_test_files, get_fuzz_files, get_test_files, CorpusPaths, CORPUS_ROOT_ENV,
+    get_all_test_files, get_corpus_files, get_corpus_files_from, get_fuzz_files, get_test_files,
+    CorpusFile, CorpusLayer, CorpusPaths, CORPUS_ROOT_ENV,
 };
 use meta::Section;
 use regex::Regex;

@@ -286,6 +286,43 @@ my @bytes = unpack("C*", $packed);
 "#,
     },
     EdgeCase {
+        id: "ambiguous.slash",
+        description: "Division vs regex slash ambiguity.",
+        tags: &["regex", "operator", "ambiguous", "edge-case"],
+        source: r#"my $ratio = $a / $b;
+my $match = $a =~ /$b/;
+my $complex = $x / $y / $z;
+my $regex = /$x\/$y/;
+"#,
+    },
+    EdgeCase {
+        id: "indirect.object",
+        description: "Indirect object syntax for constructors.",
+        tags: &["method", "ambiguous", "parser-sensitive", "edge-case"],
+        source: r#"my $logger = new Logger "app.log";
+my $time = new DateTime (year => 2024, month => 1, day => 1);
+"#,
+    },
+    EdgeCase {
+        id: "special.vars",
+        description: "Special variables and sigil-heavy globals.",
+        tags: &["special-var", "variable", "edge-case"],
+        source: r#"my $program = $0;
+my $error = $!;
+my $status = $?;
+my $count = @ARGV;
+my $env_home = $ENV{HOME};
+"#,
+    },
+    EdgeCase {
+        id: "typeglob.alias",
+        description: "Typeglob aliasing and symbol table entries.",
+        tags: &["typeglob", "glob", "edge-case"],
+        source: r#"local *STDOUT = *DATA;
+*Alias::printer = \&Other::printer;
+"#,
+    },
+    EdgeCase {
         id: "sort.block",
         description: "Sort with comparison block.",
         tags: &["sort", "list-context", "edge-case"],

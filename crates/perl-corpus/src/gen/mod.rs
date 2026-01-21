@@ -8,5 +8,6 @@ pub mod io;
 pub mod quote_like;
 pub mod qw;
 pub mod regex;
+pub mod sigils;
 pub mod tie;
 pub mod whitespace;

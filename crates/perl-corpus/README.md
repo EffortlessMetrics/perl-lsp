@@ -7,7 +7,8 @@ Reusable generators for Perl test corpora: proptest strategies, fixtures, and ed
 ```rust
 use perl_corpus::{
     complex_data_structure_cases, generate_perl_code, generate_perl_code_with_options,
-    get_all_test_files, CodegenOptions, EdgeCaseGenerator, StatementKind,
+    get_all_test_files, get_corpus_files, CodegenOptions, CorpusLayer, EdgeCaseGenerator,
+    StatementKind,
 };
 
 // Generate random valid Perl code
@@ -26,6 +27,13 @@ let edge_cases = EdgeCaseGenerator::all_cases();
 // Discover local corpus files for integration testing
 let files = get_all_test_files();
 
+// Inspect corpus files with layer metadata
+let layered = get_corpus_files();
+let fuzz_only: Vec<_> = layered
+    .iter()
+    .filter(|file| file.layer == CorpusLayer::Fuzz)
+    .collect();
+
 // Retrieve complex data structure samples for DAP variable rendering
 let cases = complex_data_structure_cases();
 ```
@@ -36,8 +44,10 @@ let cases = complex_data_structure_cases();
 - Edge case fixtures with tags and IDs
 - Random code generation helpers
 - Local corpus file discovery (test_corpus + fuzz fixtures)
+- Layered corpus file metadata (test corpus vs fuzz)
 - Generators for heredoc, quote-like, regex, expressions, whitespace, loop control, format, glob, tie, I/O, declarations
+- Sigil-heavy variable and dereference generator
 
 ## License
 
-MIT
+Apache 2.0 OR MIT

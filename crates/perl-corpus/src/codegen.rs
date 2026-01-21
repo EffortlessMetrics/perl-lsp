@@ -41,9 +41,11 @@ pub enum StatementKind {
     Expressions,
     /// Regex match/substitution/transliteration.
     Regex,
+    /// Sigil-heavy variable and dereference patterns.
+    Sigils,
 }
 
-const STATEMENT_KINDS_ALL: [StatementKind; 13] = [
+const STATEMENT_KINDS_ALL: [StatementKind; 14] = [
     StatementKind::Basic,
     StatementKind::Declarations,
     StatementKind::Qw,
@@ -57,6 +59,7 @@ const STATEMENT_KINDS_ALL: [StatementKind; 13] = [
     StatementKind::Io,
     StatementKind::Expressions,
     StatementKind::Regex,
+    StatementKind::Sigils,
 ];
 
 impl StatementKind {
@@ -199,6 +202,9 @@ fn build_strategies_for(kinds: &[StatementKind]) -> Vec<BoxedStrategy<String>> {
             }
             StatementKind::Regex => {
                 strategies.push(r#gen::regex::regex_in_context().boxed());
+            }
+            StatementKind::Sigils => {
+                strategies.push(r#gen::sigils::sigil_in_context().boxed());
             }
         }
     }

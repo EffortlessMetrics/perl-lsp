@@ -19,6 +19,24 @@ pub struct CorpusPaths {
     pub fuzz: PathBuf,
 }
 
+/// Corpus layers managed by perl-corpus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CorpusLayer {
+    /// Gap coverage test corpus files.
+    TestCorpus,
+    /// Fuzz regression fixtures.
+    Fuzz,
+}
+
+/// Corpus file with its originating layer.
+#[derive(Debug, Clone)]
+pub struct CorpusFile {
+    /// Path to the corpus file.
+    pub path: PathBuf,
+    /// Layer classification for the file.
+    pub layer: CorpusLayer,
+}
+
 impl CorpusPaths {
     /// Discover corpus paths from environment or workspace layout.
     pub fn discover() -> Self {
@@ -59,11 +77,32 @@ pub fn get_fuzz_files_from(paths: &CorpusPaths) -> Vec<PathBuf> {
     collect_files(&paths.fuzz, &["pl"])
 }
 
+/// Return corpus files with their layer annotations.
+pub fn get_corpus_files() -> Vec<CorpusFile> {
+    get_corpus_files_from(&CorpusPaths::discover())
+}
+
+/// Return corpus files with layers from an explicit root.
+pub fn get_corpus_files_from(paths: &CorpusPaths) -> Vec<CorpusFile> {
+    let mut files: Vec<CorpusFile> = get_test_files_from(paths)
+        .into_iter()
+        .map(|path| CorpusFile { path, layer: CorpusLayer::TestCorpus })
+        .collect();
+
+    files.extend(
+        get_fuzz_files_from(paths)
+            .into_iter()
+            .map(|path| CorpusFile { path, layer: CorpusLayer::Fuzz }),
+    );
+
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    files.dedup_by(|a, b| a.path == b.path);
+    files
+}
+
 /// Return all available Perl sources across corpus layers.
 pub fn get_all_test_files() -> Vec<PathBuf> {
-    let paths = CorpusPaths::discover();
-    let mut files = get_test_files_from(&paths);
-    files.extend(get_fuzz_files_from(&paths));
+    let mut files: Vec<PathBuf> = get_corpus_files().into_iter().map(|file| file.path).collect();
     files.sort();
     files.dedup();
     files
@@ -193,6 +232,34 @@ mod tests {
             "nested.pl",
         ];
         assert_eq!(names, expected);
+
+        fs::remove_dir_all(&root).expect("cleanup temp root");
+    }
+
+    #[test]
+    fn corpus_files_include_layer_info() {
+        let root = temp_root("perl_corpus_layers");
+        let test_dir = root.join("test_corpus");
+        let fuzz_dir = root.join("crates/perl-corpus/fuzz");
+        fs::create_dir_all(&test_dir).expect("create test_corpus dir");
+        fs::create_dir_all(&fuzz_dir).expect("create fuzz dir");
+
+        let test_file = test_dir.join("case.pl");
+        let fuzz_file = fuzz_dir.join("fuzz_case.pl");
+        fs::write(&test_file, "print 1;\n").expect("write test fixture");
+        fs::write(&fuzz_file, "print 2;\n").expect("write fuzz fixture");
+
+        let paths = CorpusPaths::from_root(root.clone());
+        let files = get_corpus_files_from(&paths);
+
+        assert!(
+            files.iter().any(|file| file.layer == CorpusLayer::TestCorpus && file.path == test_file),
+            "Expected test corpus file in results"
+        );
+        assert!(
+            files.iter().any(|file| file.layer == CorpusLayer::Fuzz && file.path == fuzz_file),
+            "Expected fuzz file in results"
+        );
 
         fs::remove_dir_all(&root).expect("cleanup temp root");
     }

@@ -87,6 +87,8 @@ enum Generator {
     Expressions,
     /// Generate regex match/substitution/transliteration statements
     Regex,
+    /// Generate sigil and dereference samples
+    Sigils,
 }
 
 fn main() -> Result<()> {
@@ -348,6 +350,18 @@ fn main() -> Result<()> {
                             .map_err(|e| anyhow::anyhow!("{e:?}"))?
                             .current();
                         println!("# Test case {} (regex)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Sigils => {
+                    use perl_corpus::r#gen::sigils::sigil_in_context;
+                    for i in 0..count {
+                        let value = sigil_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (sigils)", i + 1);
                         println!("{}", value);
                         println!();
                     }
