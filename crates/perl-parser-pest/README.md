@@ -1,6 +1,6 @@
 # perl-parser-pest
 
-Legacy Pest-based Perl parser (v2) — maintained as a learning tool and compatibility layer.
+Legacy Pest-based Perl parser (v2) — maintained as a learning tool and compatibility+testing layer.
 
 ## Overview
 
