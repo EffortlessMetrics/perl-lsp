@@ -18,7 +18,12 @@ let code = generate_perl_code();
 let mut options = CodegenOptions::default();
 options.statements = 50;
 options.ensure_coverage = true;
-options.kinds = vec![StatementKind::Expressions, StatementKind::Regex, StatementKind::Phasers];
+options.kinds = vec![
+    StatementKind::Expressions,
+    StatementKind::ListOps,
+    StatementKind::Builtins,
+    StatementKind::Regex,
+];
 let code = generate_perl_code_with_options(options);
 
 // Generate edge cases for testing
@@ -46,8 +51,27 @@ let cases = complex_data_structure_cases();
 - Local corpus file discovery (test_corpus + fuzz fixtures)
 - Layered corpus file metadata (test corpus vs fuzz)
 - Generators for heredoc, quote-like, regex (advanced patterns), expressions, whitespace, loop control, format, glob, tie, I/O, declarations, phaser blocks
+- List operators (map/grep/sort) including empty-block coverage
+- Filetest operator coverage (stacked and handle-based checks)
+- Built-in call coverage (pack/unpack, split/join, printf/system)
 - Sigil-heavy variable and dereference generator
 - Expanded edge cases: POD, v-strings, prototypes, postfix control flow, goto labels, class/field, and state/local/our declarations
+
+## CLI
+
+```bash
+# Lint and index corpus metadata
+perl-corpus lint --corpus tree-sitter-perl/test/corpus
+perl-corpus index --corpus tree-sitter-perl/test/corpus
+
+# Show corpus statistics
+perl-corpus stats --corpus tree-sitter-perl/test/corpus --detailed
+
+# Generate targeted samples
+perl-corpus gen --generator list-ops --count 5
+perl-corpus gen --generator filetest --count 5
+perl-corpus gen --generator builtins --count 5
+```
 
 ## License
 

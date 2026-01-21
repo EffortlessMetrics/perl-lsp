@@ -81,6 +81,12 @@ enum Generator {
     Tie,
     /// Generate I/O and filehandle samples
     Io,
+    /// Generate filetest operator samples
+    Filetest,
+    /// Generate built-in function call samples
+    Builtins,
+    /// Generate map/grep/sort list-operator samples
+    ListOps,
     /// Generate package/subroutine declarations and method calls
     Declarations,
     /// Generate expression-heavy statements
@@ -316,6 +322,42 @@ fn main() -> Result<()> {
                             .map_err(|e| anyhow::anyhow!("{e:?}"))?
                             .current();
                         println!("# Test case {} (io)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Filetest => {
+                    use perl_corpus::r#gen::filetest::filetest_in_context;
+                    for i in 0..count {
+                        let value = filetest_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (filetest)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Builtins => {
+                    use perl_corpus::r#gen::builtins::builtin_in_context;
+                    for i in 0..count {
+                        let value = builtin_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (builtins)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::ListOps => {
+                    use perl_corpus::r#gen::list_ops::list_op_in_context;
+                    for i in 0..count {
+                        let value = list_op_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (list-ops)", i + 1);
                         println!("{}", value);
                         println!();
                     }

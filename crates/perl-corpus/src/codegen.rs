@@ -37,6 +37,12 @@ pub enum StatementKind {
     Tie,
     /// I/O and filehandle statements.
     Io,
+    /// Filetest operators and stacked checks.
+    Filetest,
+    /// Built-in function calls (pack/unpack, split/join, etc).
+    Builtins,
+    /// Map/grep/sort list operators.
+    ListOps,
     /// Operator-focused expressions.
     Expressions,
     /// Regex match/substitution/transliteration.
@@ -47,7 +53,7 @@ pub enum StatementKind {
     Phasers,
 }
 
-const STATEMENT_KINDS_ALL: [StatementKind; 15] = [
+const STATEMENT_KINDS_ALL: [StatementKind; 18] = [
     StatementKind::Basic,
     StatementKind::Declarations,
     StatementKind::Qw,
@@ -59,6 +65,9 @@ const STATEMENT_KINDS_ALL: [StatementKind; 15] = [
     StatementKind::Glob,
     StatementKind::Tie,
     StatementKind::Io,
+    StatementKind::Filetest,
+    StatementKind::Builtins,
+    StatementKind::ListOps,
     StatementKind::Expressions,
     StatementKind::Regex,
     StatementKind::Sigils,
@@ -200,6 +209,15 @@ fn build_strategies_for(kinds: &[StatementKind]) -> Vec<BoxedStrategy<String>> {
             StatementKind::Glob => strategies.push(r#gen::glob::glob_in_context().boxed()),
             StatementKind::Tie => strategies.push(r#gen::tie::tie_in_context().boxed()),
             StatementKind::Io => strategies.push(r#gen::io::io_in_context().boxed()),
+            StatementKind::Filetest => {
+                strategies.push(r#gen::filetest::filetest_in_context().boxed());
+            }
+            StatementKind::Builtins => {
+                strategies.push(r#gen::builtins::builtin_in_context().boxed());
+            }
+            StatementKind::ListOps => {
+                strategies.push(r#gen::list_ops::list_op_in_context().boxed());
+            }
             StatementKind::Expressions => {
                 strategies.push(r#gen::expressions::expression_in_context().boxed());
             }

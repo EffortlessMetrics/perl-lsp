@@ -96,6 +96,22 @@ my @even = grep { $_ % 2 == 0 } @nums;
 "#,
     },
     EdgeCase {
+        id: "map.empty.block",
+        description: "Map with an empty block.",
+        tags: &["map", "list-context", "edge-case"],
+        source: r#"my @nums = (1, 2, 3);
+my @mapped = map { } @nums;
+"#,
+    },
+    EdgeCase {
+        id: "grep.empty.block",
+        description: "Grep with an empty block.",
+        tags: &["grep", "list-context", "edge-case"],
+        source: r#"my @nums = (1, 2, 3);
+my @kept = grep { } @nums;
+"#,
+    },
+    EdgeCase {
         id: "format.statement",
         description: "Format statement with picture lines.",
         tags: &["format", "legacy", "edge-case"],
@@ -175,6 +191,16 @@ warn $@ if $@;
 "#,
     },
     EdgeCase {
+        id: "do.block",
+        description: "Do block returning a computed value.",
+        tags: &["do", "block", "edge-case"],
+        source: r#"my $result = do {
+    my $x = 1;
+    $x + 1;
+};
+"#,
+    },
+    EdgeCase {
         id: "package.qualified",
         description: "Package-qualified subroutine call.",
         tags: &["package", "subroutine", "edge-case"],
@@ -218,6 +244,20 @@ catch ($e) {
 }
 finally {
     print "done";
+}
+"#,
+    },
+    EdgeCase {
+        id: "defer.block",
+        description: "Defer blocks running on scope exit.",
+        tags: &["defer", "block", "edge-case"],
+        source: r#"use v5.36;
+use feature 'defer';
+no warnings 'experimental::defer';
+
+sub cleanup {
+    defer { print "cleanup\n"; }
+    return 1;
 }
 "#,
     },
@@ -286,6 +326,16 @@ my @bytes = unpack("C*", $packed);
 "#,
     },
     EdgeCase {
+        id: "filetest.handle",
+        description: "Filetest operator on a filehandle.",
+        tags: &["filetest", "file", "edge-case"],
+        source: r#"open my $fh, "<", "file.txt";
+if (-t $fh) {
+    print "tty";
+}
+"#,
+    },
+    EdgeCase {
         id: "ambiguous.slash",
         description: "Division vs regex slash ambiguity.",
         tags: &["regex", "operator", "ambiguous", "edge-case"],
@@ -348,6 +398,15 @@ sub setter :method { $value = shift; }
 "#,
     },
     EdgeCase {
+        id: "lexical.sub",
+        description: "Lexical subroutine declaration.",
+        tags: &["subroutine", "declaration", "feature", "edge-case"],
+        source: r#"use feature 'lexical_subs';
+my sub helper ($x) { return $x + 1; }
+my $value = helper(1);
+"#,
+    },
+    EdgeCase {
         id: "pod.basic",
         description: "POD section with a simple header and cut.",
         tags: &["pod", "edge-case"],
@@ -403,6 +462,17 @@ goto START if $count < 2;
         source: r#"use feature 'signatures';
 no warnings 'experimental::signatures';
 sub add ($x, $y) { return $x + $y; }
+"#,
+    },
+    EdgeCase {
+        id: "builtin.truth",
+        description: "Builtin boolean helpers and predicates.",
+        tags: &["builtin", "feature", "edge-case"],
+        source: r#"use v5.36;
+use builtin qw(true false is_bool);
+
+my $flag = true;
+my $ok = is_bool($flag);
 "#,
     },
     EdgeCase {
@@ -629,6 +699,22 @@ my $data = {
     value_ref => \$value,
     flags => [undef, 0, 1],
 };
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "scalar.ref.chain",
+        description: "Nested scalar references.",
+        source: r#"my $value = 42;
+my $ref1 = \$value;
+my $ref2 = \$ref1;
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "tied.array",
+        description: "Tied array with queued values.",
+        source: r#"tie my @queue, "Tie::Array";
+push @queue, "first";
+my $item = $queue[0];
 "#,
     },
     ComplexDataStructureCase {

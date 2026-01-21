@@ -1,10 +1,13 @@
+pub mod builtins;
 pub mod control_flow;
 pub mod declarations;
 pub mod expressions;
+pub mod filetest;
 pub mod format_statements;
 pub mod glob;
 pub mod heredoc;
 pub mod io;
+pub mod list_ops;
 pub mod phasers;
 pub mod quote_like;
 pub mod qw;
