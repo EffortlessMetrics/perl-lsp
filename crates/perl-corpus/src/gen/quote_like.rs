@@ -38,7 +38,7 @@ pub fn quote_delim() -> impl Strategy<Value = (char, char)> {
         Just(('#', '#')),
         Just(('~', '~')),
         Just((',', ',')),
-        Just(('\'' , '\'')),
+        Just(('\'', '\'')),
     ]
 }
 
@@ -97,10 +97,7 @@ pub fn substitution() -> impl Strategy<Value = String> {
             let mods = sorted_modifiers(modifiers);
             if open == close {
                 // Symmetric delimiter
-                format!(
-                    "s{}{}{}{}{}{}",
-                    open, clean_pattern, open, clean_replacement, open, mods
-                )
+                format!("s{}{}{}{}{}{}", open, clean_pattern, open, clean_replacement, open, mods)
             } else {
                 // Paired delimiters - special syntax
                 format!(
@@ -126,10 +123,7 @@ pub fn transliteration() -> impl Strategy<Value = String> {
             if open == close {
                 format!("tr{}{}{}{}{}{}", open, clean_from, open, clean_to, open, mods)
             } else {
-                format!(
-                    "tr{}{}{}{}{}{}{}",
-                    open, clean_from, close, open, clean_to, close, mods
-                )
+                format!("tr{}{}{}{}{}{}{}", open, clean_from, close, open, clean_to, close, mods)
             }
         })
 }

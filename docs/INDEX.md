@@ -53,6 +53,7 @@ bash scripts/ignored-test-count.sh
 
 ### Debug issues
 
+- [Troubleshooting](TROUBLESHOOTING.md) - Common issues and solutions
 - [Known Limitations](KNOWN_LIMITATIONS.md)
 - [Known Flaky Tests](KNOWN_FLAKY_TESTS.md)
 - [Debugging](DEBUGGING.md)
@@ -70,6 +71,7 @@ bash scripts/ignored-test-count.sh
 - `ROADMAP.md` - Release plans and exit criteria
 - `MILESTONES.md` - GitHub milestone tracking and blockers
 - `COMMANDS_REFERENCE.md` - Build, test, and lint commands
+- `CI_README.md` - **CI documentation index** (start here for CI docs)
 - `CI_LOCAL_VALIDATION.md` - Local-first CI validation workflow
 - `CI_TEST_LANES.md` - CI lane definitions
 - `CI_COST_TRACKING.md` - CI budget management and cost optimization

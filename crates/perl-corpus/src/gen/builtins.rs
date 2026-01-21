@@ -34,7 +34,9 @@ fn chomp_line() -> impl Strategy<Value = String> {
 }
 
 fn keys_values() -> impl Strategy<Value = String> {
-    Just("my %map = (a => 1, b => 2);\nmy @keys = keys %map;\nmy @vals = values %map;\n".to_string())
+    Just(
+        "my %map = (a => 1, b => 2);\nmy @keys = keys %map;\nmy @vals = values %map;\n".to_string(),
+    )
 }
 
 fn substr_ops() -> impl Strategy<Value = String> {

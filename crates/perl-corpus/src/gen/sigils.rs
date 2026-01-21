@@ -82,10 +82,7 @@ fn typeglob_usage() -> impl Strategy<Value = String> {
         Just("local *STDOUT = *DATA;\n".to_string()),
         (package_name(), package_name(), identifier(), identifier()).prop_map(
             |(pkg, other, name, other_name)| {
-                format!(
-                    "*{}::{} = \\&{}::{};\n",
-                    pkg, name, other, other_name
-                )
+                format!("*{}::{} = \\&{}::{};\n", pkg, name, other, other_name)
             },
         ),
     ]

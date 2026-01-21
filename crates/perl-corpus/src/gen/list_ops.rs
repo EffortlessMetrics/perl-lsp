@@ -7,57 +7,32 @@ fn array_name() -> impl Strategy<Value = String> {
 }
 
 fn map_block() -> impl Strategy<Value = String> {
-    (array_name(), array_name()).prop_map(|(src, dest)| {
-        format!(
-            "my @{} = map {{ $_ * 2 }} @{};\n",
-            dest, src
-        )
-    })
+    (array_name(), array_name())
+        .prop_map(|(src, dest)| format!("my @{} = map {{ $_ * 2 }} @{};\n", dest, src))
 }
 
 fn map_empty_block() -> impl Strategy<Value = String> {
-    (array_name(), array_name()).prop_map(|(src, dest)| {
-        format!(
-            "my @{} = map {{ }} @{};\n",
-            dest, src
-        )
-    })
+    (array_name(), array_name())
+        .prop_map(|(src, dest)| format!("my @{} = map {{ }} @{};\n", dest, src))
 }
 
 fn grep_block() -> impl Strategy<Value = String> {
-    (array_name(), array_name()).prop_map(|(src, dest)| {
-        format!(
-            "my @{} = grep {{ $_ % 2 == 0 }} @{};\n",
-            dest, src
-        )
-    })
+    (array_name(), array_name())
+        .prop_map(|(src, dest)| format!("my @{} = grep {{ $_ % 2 == 0 }} @{};\n", dest, src))
 }
 
 fn grep_empty_block() -> impl Strategy<Value = String> {
-    (array_name(), array_name()).prop_map(|(src, dest)| {
-        format!(
-            "my @{} = grep {{ }} @{};\n",
-            dest, src
-        )
-    })
+    (array_name(), array_name())
+        .prop_map(|(src, dest)| format!("my @{} = grep {{ }} @{};\n", dest, src))
 }
 
 fn sort_block() -> impl Strategy<Value = String> {
-    (array_name(), array_name()).prop_map(|(src, dest)| {
-        format!(
-            "my @{} = sort {{ $a <=> $b }} @{};\n",
-            dest, src
-        )
-    })
+    (array_name(), array_name())
+        .prop_map(|(src, dest)| format!("my @{} = sort {{ $a <=> $b }} @{};\n", dest, src))
 }
 
 fn sort_simple() -> impl Strategy<Value = String> {
-    (array_name(), array_name()).prop_map(|(src, dest)| {
-        format!(
-            "my @{} = sort @{};\n",
-            dest, src
-        )
-    })
+    (array_name(), array_name()).prop_map(|(src, dest)| format!("my @{} = sort @{};\n", dest, src))
 }
 
 /// Generate map/grep/sort list-operator statements.

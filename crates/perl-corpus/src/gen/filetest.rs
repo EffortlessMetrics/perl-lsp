@@ -13,68 +13,30 @@ fn file_target() -> impl Strategy<Value = String> {
 fn filetest_single() -> impl Strategy<Value = String> {
     (
         prop::sample::select(vec![
-            "-e",
-            "-f",
-            "-d",
-            "-r",
-            "-w",
-            "-x",
-            "-s",
-            "-z",
-            "-l",
-            "-T",
-            "-B",
-            "-o",
-            "-O",
-            "-u",
+            "-e", "-f", "-d", "-r", "-w", "-x", "-s", "-z", "-l", "-T", "-B", "-o", "-O", "-u",
             "-g",
         ]),
         file_target(),
     )
-        .prop_map(|(op, target)| {
-            format!(
-                "if ({} {}) {{\n    print \"ok\";\n}}\n",
-                op, target
-            )
-        })
+        .prop_map(|(op, target)| format!("if ({} {}) {{\n    print \"ok\";\n}}\n", op, target))
 }
 
 fn filetest_time() -> impl Strategy<Value = String> {
-    (
-        prop::sample::select(vec!["-M", "-A", "-C"]),
-        file_target(),
-    )
-        .prop_map(|(op, target)| {
-            format!(
-                "my $age = {} {};\n",
-                op, target
-            )
-        })
+    (prop::sample::select(vec!["-M", "-A", "-C"]), file_target())
+        .prop_map(|(op, target)| format!("my $age = {} {};\n", op, target))
 }
 
 fn filetest_stacked() -> impl Strategy<Value = String> {
-    file_target().prop_map(|target| {
-        format!(
-            "if (-r -w -x {}) {{\n    print \"rw\";\n}}\n",
-            target
-        )
-    })
+    file_target().prop_map(|target| format!("if (-r -w -x {}) {{\n    print \"rw\";\n}}\n", target))
 }
 
 fn filetest_handle() -> impl Strategy<Value = String> {
-    Just(
-        "open my $fh, '<', \"file.txt\";\nif (-t $fh) {\n    print \"tty\";\n}\n".to_string(),
-    )
+    Just("open my $fh, '<', \"file.txt\";\nif (-t $fh) {\n    print \"tty\";\n}\n".to_string())
 }
 
 /// Generate filetest operator statements.
 pub fn filetest_in_context() -> impl Strategy<Value = String> {
-    prop_oneof![
-        filetest_single(),
-        filetest_time(),
-        filetest_stacked(),
-        filetest_handle(),
-    ]
+    prop_oneof![filetest_single(), filetest_time(), filetest_stacked(), filetest_handle(),]
 }
 
 #[cfg(test)]

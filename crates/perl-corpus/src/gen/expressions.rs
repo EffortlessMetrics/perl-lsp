@@ -34,21 +34,14 @@ fn arithmetic_statement() -> impl Strategy<Value = String> {
 
 fn ternary_statement() -> impl Strategy<Value = String> {
     (scalar_name(), int_literal(), int_literal()).prop_map(|(name, lhs, rhs)| {
-        format!(
-            "my ${} = {} > {} ? {} : {};\n",
-            name, lhs, rhs, lhs, rhs
-        )
+        format!("my ${} = {} > {} ? {} : {};\n", name, lhs, rhs, lhs, rhs)
     })
 }
 
 fn defined_or_statement() -> impl Strategy<Value = String> {
     (
         scalar_name(),
-        prop_oneof![
-            Just("undef".to_string()),
-            Just("0".to_string()),
-            Just("\"\"".to_string()),
-        ],
+        prop_oneof![Just("undef".to_string()), Just("0".to_string()), Just("\"\"".to_string()),],
         prop_oneof![
             int_literal().prop_map(|value| value.to_string()),
             Just("\"fallback\"".to_string()),
@@ -67,10 +60,7 @@ fn range_statement() -> impl Strategy<Value = String> {
 fn bitwise_statement() -> impl Strategy<Value = String> {
     (scalar_name(), small_literal(), 0i64..8i64, small_literal()).prop_map(
         |(name, value, shift, mask)| {
-            format!(
-                "my ${} = ({} << {}) | {};\n",
-                name, value, shift, mask
-            )
+            format!("my ${} = ({} << {}) | {};\n", name, value, shift, mask)
         },
     )
 }
@@ -111,16 +101,11 @@ fn compound_assignment_statement() -> impl Strategy<Value = String> {
 }
 
 fn binding_statement() -> impl Strategy<Value = String> {
-    (
-        scalar_name(),
-        prop::sample::select(vec!["alpha", "beta", "gamma"]),
+    (scalar_name(), prop::sample::select(vec!["alpha", "beta", "gamma"])).prop_map(
+        |(name, token)| {
+            format!("my ${} = \"{}\";\nmy $ok = ${} =~ /{}/;\n", name, token, name, token)
+        },
     )
-        .prop_map(|(name, token)| {
-            format!(
-                "my ${} = \"{}\";\nmy $ok = ${} =~ /{}/;\n",
-                name, token, name, token
-            )
-        })
 }
 
 fn smartmatch_statement() -> impl Strategy<Value = String> {
@@ -133,15 +118,12 @@ fn smartmatch_statement() -> impl Strategy<Value = String> {
 }
 
 fn exists_statement() -> impl Strategy<Value = String> {
-    (scalar_name(), prop::sample::select(vec!["HOME", "PATH", "SHELL"])).prop_map(|(name, key)| {
-        format!("my ${} = exists $ENV{{{}}} ? 1 : 0;\n", name, key)
-    })
+    (scalar_name(), prop::sample::select(vec!["HOME", "PATH", "SHELL"]))
+        .prop_map(|(name, key)| format!("my ${} = exists $ENV{{{}}} ? 1 : 0;\n", name, key))
 }
 
 fn defined_statement() -> impl Strategy<Value = String> {
-    scalar_name().prop_map(|name| {
-        format!("my ${} = defined $ARGV[0] ? $ARGV[0] : \"\";\n", name)
-    })
+    scalar_name().prop_map(|name| format!("my ${} = defined $ARGV[0] ? $ARGV[0] : \"\";\n", name))
 }
 
 fn flipflop_statement() -> impl Strategy<Value = String> {

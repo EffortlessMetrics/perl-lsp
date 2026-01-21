@@ -182,10 +182,7 @@ mod tests {
 
     fn temp_root(prefix: &str) -> PathBuf {
         let mut root = std::env::temp_dir();
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
         root.push(format!("{}_{}_{}", prefix, std::process::id(), nanos));
         fs::create_dir_all(&root).expect("create temp root");
         root
@@ -223,14 +220,7 @@ mod tests {
             .collect();
         names.sort();
 
-        let expected = vec![
-            "case.cgi",
-            "case.pl",
-            "case.pm",
-            "case.psgi",
-            "case.t",
-            "nested.pl",
-        ];
+        let expected = vec!["case.cgi", "case.pl", "case.pm", "case.psgi", "case.t", "nested.pl"];
         assert_eq!(names, expected);
 
         fs::remove_dir_all(&root).expect("cleanup temp root");
@@ -253,7 +243,9 @@ mod tests {
         let files = get_corpus_files_from(&paths);
 
         assert!(
-            files.iter().any(|file| file.layer == CorpusLayer::TestCorpus && file.path == test_file),
+            files
+                .iter()
+                .any(|file| file.layer == CorpusLayer::TestCorpus && file.path == test_file),
             "Expected test corpus file in results"
         );
         assert!(

@@ -72,7 +72,7 @@ flowchart TD
 |-----------|--------|-------|
 | perl-parser | Production | Comprehensive Perl 5 parsing |
 | perl-lsp | Production (advertised subset) | See `features.toml` for GA features |
-| perl-dap | Experimental (native adapter) | CLI uses native adapter; BridgeAdapter library available |
+| perl-dap | Experimental | Launch-only; variables/evaluate pending; BridgeAdapter library available |
 | perl-parser-pest | Legacy | Kept out of default gate |
 
 ## Editor Setup
@@ -116,6 +116,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for full guidelines.
 - **[Roadmap](docs/ROADMAP.md)** - Release plans and exit criteria
 - **[Commands Reference](docs/COMMANDS_REFERENCE.md)** - Build, test, lint commands
 - **[LSP Implementation Guide](docs/LSP_IMPLEMENTATION_GUIDE.md)** - Server architecture
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
 
 ## License
 

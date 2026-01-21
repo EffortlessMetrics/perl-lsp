@@ -16,10 +16,7 @@ pub fn package_declaration() -> impl Strategy<Value = String> {
     )
         .prop_map(|(name, version, block)| {
             if block {
-                format!(
-                    "package {}{} {{\n    sub helper {{ return 1; }}\n}}\n",
-                    name, version
-                )
+                format!("package {}{} {{\n    sub helper {{ return 1; }}\n}}\n", name, version)
             } else {
                 format!("package {}{};\n", name, version)
             }
@@ -39,10 +36,7 @@ pub fn class_declaration() -> impl Strategy<Value = String> {
 /// Generate a stateful subroutine declaration.
 pub fn stateful_subroutine() -> impl Strategy<Value = String> {
     (identifier(), prop::sample::select(vec!["0", "1", "10"])).prop_map(|(name, init)| {
-        format!(
-            "sub {} {{\n    state $count = {};\n    return $count++;\n}}\n",
-            name, init
-        )
+        format!("sub {} {{\n    state $count = {};\n    return $count++;\n}}\n", name, init)
     })
 }
 
@@ -59,19 +53,11 @@ fn param_token() -> impl Strategy<Value = String> {
 }
 
 fn slurpy_token() -> impl Strategy<Value = Option<String>> {
-    prop_oneof![
-        Just(None),
-        Just(Some("@rest".to_string())),
-        Just(Some("%opts".to_string())),
-    ]
+    prop_oneof![Just(None), Just(Some("@rest".to_string())), Just(Some("%opts".to_string())),]
 }
 
 fn subroutine_attribute() -> impl Strategy<Value = &'static str> {
-    prop_oneof![
-        Just("method"),
-        Just("lvalue"),
-        Just("prototype($$)"),
-    ]
+    prop_oneof![Just("method"), Just("lvalue"), Just("prototype($$)"),]
 }
 
 fn subroutine_attributes() -> impl Strategy<Value = Vec<&'static str>> {
@@ -96,21 +82,15 @@ pub fn subroutine_declaration() -> impl Strategy<Value = String> {
                 params.push(extra);
             }
 
-            let signature = if use_signature {
-                format!(" ({})", params.join(", "))
-            } else {
-                String::new()
-            };
+            let signature =
+                if use_signature { format!(" ({})", params.join(", ")) } else { String::new() };
             let attribute = if attributes.is_empty() {
                 String::new()
             } else {
                 format!(" :{}", attributes.join(" :"))
             };
 
-            format!(
-                "sub {}{}{} {{\n    return 1;\n}}\n",
-                name, attribute, signature
-            )
+            format!("sub {}{}{} {{\n    return 1;\n}}\n", name, attribute, signature)
         })
 }
 
@@ -126,11 +106,8 @@ pub fn anonymous_subroutine() -> impl Strategy<Value = String> {
                 params.push(extra);
             }
 
-            let signature = if use_signature {
-                format!(" ({})", params.join(", "))
-            } else {
-                String::new()
-            };
+            let signature =
+                if use_signature { format!(" ({})", params.join(", ")) } else { String::new() };
 
             format!("my $handler = sub{} {{ return 1; }};\n", signature)
         })
@@ -149,11 +126,7 @@ fn call_arg() -> impl Strategy<Value = String> {
 /// Generate a method call in context.
 pub fn method_call_in_context() -> impl Strategy<Value = String> {
     (
-        prop_oneof![
-            Just("$obj".to_string()),
-            Just("$self".to_string()),
-            package_name(),
-        ],
+        prop_oneof![Just("$obj".to_string()), Just("$self".to_string()), package_name(),],
         identifier(),
         prop::collection::vec(call_arg(), 0..3),
     )

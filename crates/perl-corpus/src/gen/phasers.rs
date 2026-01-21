@@ -1,13 +1,7 @@
 use proptest::prelude::*;
 
 fn phaser_name() -> impl Strategy<Value = &'static str> {
-    prop_oneof![
-        Just("BEGIN"),
-        Just("CHECK"),
-        Just("UNITCHECK"),
-        Just("INIT"),
-        Just("END"),
-    ]
+    prop_oneof![Just("BEGIN"), Just("CHECK"), Just("UNITCHECK"), Just("INIT"), Just("END"),]
 }
 
 fn phaser_statement() -> impl Strategy<Value = String> {
@@ -27,9 +21,8 @@ fn phaser_body() -> impl Strategy<Value = String> {
 
 /// Generate compile-time phaser blocks (BEGIN/CHECK/UNITCHECK/INIT/END).
 pub fn phaser_block() -> impl Strategy<Value = String> {
-    (phaser_name(), phaser_body()).prop_map(|(name, body)| {
-        format!("{} {{\n    {}\n}}\n", name, body)
-    })
+    (phaser_name(), phaser_body())
+        .prop_map(|(name, body)| format!("{} {{\n    {}\n}}\n", name, body))
 }
 
 #[cfg(test)]

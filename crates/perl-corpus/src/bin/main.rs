@@ -213,8 +213,7 @@ fn main() -> Result<()> {
 
             match generator {
                 Generator::Program => {
-                    let code =
-                        perl_corpus::generate_perl_code_with_seed(count as usize, seed);
+                    let code = perl_corpus::generate_perl_code_with_seed(count as usize, seed);
                     println!("# Program ({} statements)", count);
                     println!("{}", code);
                 }

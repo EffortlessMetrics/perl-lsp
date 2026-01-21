@@ -931,10 +931,7 @@ impl EdgeCaseGenerator {
 
     /// Return edge cases with a matching tag.
     pub fn by_tag(tag: &str) -> Vec<&'static EdgeCase> {
-        edge_cases()
-            .iter()
-            .filter(|case| case.tags.iter().any(|t| *t == tag))
-            .collect()
+        edge_cases().iter().filter(|case| case.tags.iter().any(|t| *t == tag)).collect()
     }
 
     /// Return edge cases that match any of the provided tags.
@@ -943,10 +940,7 @@ impl EdgeCaseGenerator {
             return edge_cases().iter().collect();
         }
 
-        edge_cases()
-            .iter()
-            .filter(|case| case.tags.iter().any(|tag| tags.contains(tag)))
-            .collect()
+        edge_cases().iter().filter(|case| case.tags.iter().any(|tag| tags.contains(tag))).collect()
     }
 
     /// Return edge cases that match all of the provided tags.
