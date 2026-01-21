@@ -7,7 +7,7 @@
 //! # Related Modules
 //!
 //! See also [`crate::workspace_index`] for workspace-wide indexing and
-//! [`crate::references`] for cross-file reference resolution.
+//! cross-file reference resolution.
 
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};

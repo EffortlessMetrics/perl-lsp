@@ -9,7 +9,7 @@
 //! - **Sub-millisecond updates** for simple value edits (target: <1ms)
 //! - **Node reuse efficiency** of 70-90% for typical editing scenarios
 //! - **Graceful fallback** to full parsing for complex structural changes
-//! - **Memory efficient** with LRU cache eviction and Arc<Node> sharing
+//! - **Memory efficient** with LRU cache eviction and `Arc<Node>` sharing
 //!
 //! ## Supported Edit Types
 //!

@@ -53,8 +53,8 @@
 //!
 //! # Related Modules
 //!
-//! See also [`crate::symbol`] for symbol extraction, [`crate::references`] for
-//! reference finding, and [`crate::semantic_tokens`] for semantic classification.
+//! See also the symbol extraction, reference finding, and semantic token classification
+//! modules in the workspace index implementation.
 
 use crate::Parser;
 use crate::ast::{Node, NodeKind};
