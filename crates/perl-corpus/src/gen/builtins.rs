@@ -21,12 +21,20 @@ fn printf_sprintf() -> impl Strategy<Value = String> {
     )
 }
 
+fn print_say() -> impl Strategy<Value = String> {
+    Just("use v5.10;\nprint \"ok\\n\";\nsay \"done\";\n".to_string())
+}
+
 fn system_call() -> impl Strategy<Value = String> {
     Just("system \"echo\", \"ok\";\n".to_string())
 }
 
 fn time_localtime() -> impl Strategy<Value = String> {
     Just("my $when = localtime(time);\n".to_string())
+}
+
+fn time_gmtime() -> impl Strategy<Value = String> {
+    Just("my @utc = gmtime(time);\n".to_string())
 }
 
 fn chomp_line() -> impl Strategy<Value = String> {
@@ -59,8 +67,16 @@ fn index_ops() -> impl Strategy<Value = String> {
     )
 }
 
+fn pos_study() -> impl Strategy<Value = String> {
+    Just("my $text = \"foobar\";\n$text =~ /o/g;\nmy $where = pos($text);\nstudy $text;\n".to_string())
+}
+
 fn length_chop() -> impl Strategy<Value = String> {
     Just("my $text = \"line\\n\";\nmy $len = length $text;\nchop $text;\n".to_string())
+}
+
+fn quotemeta_op() -> impl Strategy<Value = String> {
+    Just("my $text = \"a.b*c\";\nmy $quoted = quotemeta $text;\n".to_string())
 }
 
 fn bless_ref() -> impl Strategy<Value = String> {
@@ -69,6 +85,10 @@ fn bless_ref() -> impl Strategy<Value = String> {
 
 fn caller_wantarray() -> impl Strategy<Value = String> {
     Just("my @caller = caller;\nmy $context = wantarray();\n".to_string())
+}
+
+fn warn_die() -> impl Strategy<Value = String> {
+    Just("warn \"note\";\ndie \"fatal\" if $error;\n".to_string())
 }
 
 fn push_pop() -> impl Strategy<Value = String> {
@@ -118,12 +138,38 @@ fn hex_oct() -> impl Strategy<Value = String> {
     Just("my $hex = hex(\"ff\");\nmy $oct = oct(\"377\");\n".to_string())
 }
 
+fn vec_ops() -> impl Strategy<Value = String> {
+    Just(
+        "my $bits = \"\\0\" x 4;\nvec($bits, 3, 1) = 1;\nmy $flag = vec($bits, 3, 1);\n"
+            .to_string(),
+    )
+}
+
+fn sleep_alarm() -> impl Strategy<Value = String> {
+    Just("alarm 1;\nsleep 1;\n".to_string())
+}
+
 fn chdir_mkdir() -> impl Strategy<Value = String> {
     Just("my $ok = chdir \"/tmp\";\nmkdir \"data\";\nrmdir \"data\";\n".to_string())
 }
 
 fn rename_unlink() -> impl Strategy<Value = String> {
     Just("rename \"old.log\", \"new.log\";\nunlink \"old.log\";\n".to_string())
+}
+
+fn chmod_chown() -> impl Strategy<Value = String> {
+    Just("chmod 0644, \"file.txt\";\nchown 1000, 1000, \"file.txt\";\n".to_string())
+}
+
+fn link_ops() -> impl Strategy<Value = String> {
+    Just(
+        "link \"a.txt\", \"b.txt\";\nsymlink \"a.txt\", \"c.txt\";\nmy $target = readlink \"c.txt\";\n"
+            .to_string(),
+    )
+}
+
+fn truncate_umask() -> impl Strategy<Value = String> {
+    Just("my $old = umask 0022;\ntruncate \"file.txt\", 0;\n".to_string())
 }
 
 fn stat_lstat() -> impl Strategy<Value = String> {
@@ -143,16 +189,21 @@ pub fn builtin_in_context() -> impl Strategy<Value = String> {
         pack_unpack(),
         split_join(),
         printf_sprintf(),
+        print_say(),
         system_call(),
         time_localtime(),
+        time_gmtime(),
         chomp_line(),
         keys_values(),
         each_delete(),
         substr_ops(),
         index_ops(),
+        pos_study(),
         length_chop(),
+        quotemeta_op(),
         bless_ref(),
         caller_wantarray(),
+        warn_die(),
         push_pop(),
         shift_unshift(),
         splice_replace(),
@@ -162,8 +213,13 @@ pub fn builtin_in_context() -> impl Strategy<Value = String> {
         rand_int(),
         math_ops(),
         hex_oct(),
+        vec_ops(),
+        sleep_alarm(),
         chdir_mkdir(),
         rename_unlink(),
+        chmod_chown(),
+        link_ops(),
+        truncate_umask(),
         stat_lstat(),
         defined_exists(),
     ]
@@ -182,18 +238,26 @@ mod tests {
                     || code.contains("sprintf")
                     || code.contains("system")
                     || code.contains("localtime")
+                    || code.contains("gmtime")
+                    || code.contains("print")
+                    || code.contains("say")
                     || code.contains("chomp")
                     || code.contains("keys")
                     || code.contains("values")
                     || code.contains("substr")
                     || code.contains("index")
                     || code.contains("rindex")
+                    || code.contains("pos")
+                    || code.contains("study")
                     || code.contains("length")
                     || code.contains("chop")
+                    || code.contains("quotemeta")
                     || code.contains("bless")
                     || code.contains("ref")
                     || code.contains("caller")
                     || code.contains("wantarray")
+                    || code.contains("warn")
+                    || code.contains("die")
                     || code.contains("push")
                     || code.contains("pop")
                     || code.contains("shift")
@@ -213,6 +277,9 @@ mod tests {
                     || code.contains("atan2")
                     || code.contains("hex")
                     || code.contains("oct")
+                    || code.contains("vec")
+                    || code.contains("alarm")
+                    || code.contains("sleep")
                     || code.contains("each")
                     || code.contains("delete")
                     || code.contains("chdir")
@@ -220,6 +287,13 @@ mod tests {
                     || code.contains("rmdir")
                     || code.contains("rename")
                     || code.contains("unlink")
+                    || code.contains("chmod")
+                    || code.contains("chown")
+                    || code.contains("link")
+                    || code.contains("symlink")
+                    || code.contains("readlink")
+                    || code.contains("umask")
+                    || code.contains("truncate")
                     || code.contains("stat")
                     || code.contains("lstat")
                     || code.contains("defined")

@@ -442,6 +442,16 @@ sub current_name { return __SUB__; }
 "#,
     },
     EdgeCase {
+        id: "core.global.override",
+        description: "CORE::GLOBAL override for a builtin call.",
+        tags: &["builtin", "package", "edge-case"],
+        source: r#"BEGIN {
+    *CORE::GLOBAL::time = sub { 0 };
+}
+my $now = time();
+"#,
+    },
+    EdgeCase {
         id: "sort.block",
         description: "Sort with comparison block.",
         tags: &["sort", "list-context", "edge-case"],
@@ -534,6 +544,14 @@ sub add ($x, $y) { return $x + $y; }
 "#,
     },
     EdgeCase {
+        id: "constant.hash",
+        description: "use constant with a hash initializer.",
+        tags: &["constant", "use", "edge-case"],
+        source: r#"use constant { PI => 3.14159, E => 2.71828 };
+my $area = PI * 2;
+"#,
+    },
+    EdgeCase {
         id: "builtin.truth",
         description: "Builtin boolean helpers and predicates.",
         tags: &["builtin", "feature", "edge-case"],
@@ -621,6 +639,27 @@ if ($text =~ /(a(?R)?c)/) {
 "#,
     },
     EdgeCase {
+        id: "regex.conditional",
+        description: "Regex conditional with a numbered capture branch.",
+        tags: &["regex", "edge-case"],
+        source: r#"my $text = "foobar";
+if ($text =~ /(foo)?(?(1)bar|baz)/) {
+    print "ok";
+}
+"#,
+    },
+    EdgeCase {
+        id: "regex.set.ops",
+        description: "Regex set operations with character class subtraction.",
+        tags: &["regex", "sets", "edge-case"],
+        source: r#"use v5.18;
+my $text = "perl";
+if ($text =~ /(?[ [a-z] - [aeiou] ])/ ) {
+    print "consonant";
+}
+"#,
+    },
+    EdgeCase {
         id: "hash.block.ambiguity",
         description: "Hash vs block ambiguity in function calls.",
         tags: &["hash", "block", "ambiguous", "parser-sensitive", "edge-case"],
@@ -691,6 +730,14 @@ beta
         source: r#"use utf8;
 my $text = "na\x{EF}ve";
 my $smile = "\x{1F600}";
+"#,
+    },
+    EdgeCase {
+        id: "unicode.named.escape",
+        description: "Named Unicode escape with UTF-8 pragma.",
+        tags: &["unicode", "utf8", "edge-case"],
+        source: r#"use utf8;
+my $text = "\N{LATIN SMALL LETTER E WITH ACUTE}";
 "#,
     },
     EdgeCase {
@@ -1001,6 +1048,27 @@ my $next = sub { return ++$count; };
 our $VERSION = "0.01";
 sub helper { return 1; }
 my $stash = \%Stash::Demo::;
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "blessed.scalar.ref",
+        description: "Blessed scalar reference object.",
+        source: r#"my $value = 99;
+my $obj = bless \$value, "ScalarObj";
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "filehandle.in.hash",
+        description: "Hash containing a filehandle and metadata.",
+        source: r#"open my $fh, "<", "file.txt";
+my $data = { handle => $fh, path => "file.txt" };
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "tied.scalar",
+        description: "Tied scalar value.",
+        source: r#"tie my $counter, "Tie::Scalar";
+$counter = 1;
 "#,
     },
 ];

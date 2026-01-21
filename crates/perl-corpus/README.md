@@ -55,10 +55,10 @@ let cases = complex_data_structure_cases();
 - Generators for heredoc, quote-like, regex (advanced patterns), expressions, whitespace, loop control, format, glob, tie, I/O, declarations (forward decls + feature/experimental/builtin imports), phaser blocks
 - List operators (map/grep/sort) including empty-block coverage
 - Filetest operator coverage (stacked and handle-based checks)
-- Built-in call coverage (pack/unpack, split/join, printf/system, substr/index/length, bless/ref, caller/wantarray, push/pop, shift/unshift, splice, reverse, rand/int, abs/sqrt/atan2, hex/oct, chr/ord, uc/lc/ucfirst/lcfirst, each/delete, chdir/mkdir/rmdir/rename/unlink, stat/lstat, defined/exists)
+- Built-in call coverage (pack/unpack, split/join, printf/print/say/system, warn/die, substr/index/length, pos/study, quotemeta, vec, bless/ref, caller/wantarray, push/pop, shift/unshift, splice, reverse, rand/int, abs/sqrt/atan2, hex/oct, chr/ord, uc/lc/ucfirst/lcfirst, each/delete, gmtime/localtime, sleep/alarm, chdir/mkdir/rmdir/rename/unlink, chmod/chown, link/symlink/readlink, umask/truncate, stat/lstat, defined/exists)
 - Sigil-heavy variable and dereference generator
 - Expanded expressions: repetition operator (x) and isa operator
-- Expanded edge cases: POD, v-strings, prototypes, signature+attribute combos, array/hash slices, postfix control flow, goto labels, flip-flop operators, AUTOLOAD/DESTROY, overload, symbolic references, DATA/END sections, source filters, Inline::C/XS/FFI heredocs, bareword filehandles, lvalue substr assignments, SUPER:: dispatch, mro pragmas, y/// transliteration, variable attributes, utf8/unicode escapes, state/local/our declarations, multiple heredocs on one line, Unicode property regex, variable-length lookbehind, postfix coderef deref, and special constants
+- Expanded edge cases: POD, v-strings, prototypes, signature+attribute combos, array/hash slices, postfix control flow, goto labels, flip-flop operators, AUTOLOAD/DESTROY, overload, symbolic references, DATA/END sections, source filters, Inline::C/XS/FFI heredocs, bareword filehandles, lvalue substr assignments, SUPER:: dispatch, mro pragmas, y/// transliteration, variable attributes, utf8/unicode escapes, named Unicode escapes, state/local/our declarations, multiple heredocs on one line, Unicode property regex, regex conditionals, regex set ops, CORE::GLOBAL overrides, use constant hashes, variable-length lookbehind, postfix coderef deref, and special constants
 
 ## CLI
 
