@@ -225,7 +225,7 @@ impl ScopeAnalyzer {
                 // Actually Perl evaluates RHS before LHS assignment, so usages in initializer refer to OUTER scope.
                 // So we analyze initializer first.
                 if let Some(init) = initializer {
-                    self.analyze_node(init, scope, parent_map, issues, code, pragma_map);
+                    self.analyze_node(init, scope, ancestors, issues, code, pragma_map);
                 }
 
                 if let Some(issue_kind) = scope.declare_variable(
@@ -258,7 +258,7 @@ impl ScopeAnalyzer {
 
                 // Analyze initializer first
                 if let Some(init) = initializer {
-                    self.analyze_node(init, scope, parent_map, issues, code, pragma_map);
+                    self.analyze_node(init, scope, ancestors, issues, code, pragma_map);
                 }
 
                 for variable in variables {
@@ -333,17 +333,17 @@ impl ScopeAnalyzer {
                 }
             }
             NodeKind::Variable { sigil, name } => {
+                // Optimization: Skip package-qualified variables without allocation
+                if name.contains("::") {
+                    return;
+                }
+
+                // Optimization: Skip built-in global variables without allocation
+                if is_builtin_global(sigil, name) {
+                    return;
+                }
+
                 let full_name = format!("{}{}", sigil, name);
-
-                // Skip package-qualified variables
-                if full_name.contains("::") {
-                    return;
-                }
-
-                // Skip built-in global variables
-                if is_builtin_global(&full_name) {
-                    return;
-                }
 
                 // Try to use the variable
                 let (mut variable_used, mut is_initialized) = scope.use_variable(&full_name);
@@ -360,6 +360,18 @@ impl ScopeAnalyzer {
                     if hash_used || array_used {
                         variable_used = true;
                         is_initialized = hash_init || array_init;
+                    }
+                }
+
+                // Optimization: Check for hash/array slices which start with @ but resolve to %hash or @array
+                if !variable_used && sigil == "@" {
+                    let hash_name = format!("%{}", name);
+                    // No need to check array_name "@name" because that's "sigil+name" which we already checked via full_name.
+
+                    let (hash_used, hash_init) = scope.use_variable(&hash_name);
+                    if hash_used {
+                        variable_used = true;
+                        is_initialized = hash_init;
                     }
                 }
 
@@ -396,7 +408,7 @@ impl ScopeAnalyzer {
             NodeKind::Assignment { lhs, rhs, op: _ } => {
                 // Handle assignment: LHS variable becomes initialized
                 // First analyze RHS (usages)
-                self.analyze_node(rhs, scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(rhs, scope, ancestors, issues, code, pragma_map);
 
                 // Then analyze LHS
                 // We need to recursively mark variables as initialized in the LHS structure
@@ -405,7 +417,7 @@ impl ScopeAnalyzer {
 
                 // Recurse into LHS to trigger UndeclaredVariable checks
                 // Note: 'use_variable' marks as used, which is technically correct for assignment too (write usage)
-                self.analyze_node(lhs, scope, parent_map, issues, code, pragma_map);
+                self.analyze_node(lhs, scope, ancestors, issues, code, pragma_map);
             }
 
             NodeKind::Identifier { name } => {
@@ -849,45 +861,48 @@ impl ScopeAnalyzer {
 }
 
 /// Check if a variable is a built-in Perl global variable
-fn is_builtin_global(name: &str) -> bool {
-    match name {
-        // Special variables
-        "$_" | "@_" | "%_" | "$!" | "$@" | "$?" | "$^" | "$$" | "$0" | "$1" | "$2" | "$3"
-        | "$4" | "$5" | "$6" | "$7" | "$8" | "$9" | "$." | "$," | "$/" | "$\\" | "$\"" | "$;"
-        | "$%" | "$=" | "$-" | "$~" | "$|" | "$&" | "$`" | "$'" | "$+" | "@+" | "%+" | "$["
-        | "$]" | "$^A" | "$^C" | "$^D" | "$^E" | "$^F" | "$^H" | "$^I" | "$^L" | "$^M" | "$^N"
-        | "$^O" | "$^P" | "$^R" | "$^S" | "$^T" | "$^V" | "$^W" | "$^X" |
-        // Common globals
-        "%ENV" | "@INC" | "%INC" | "@ARGV" | "%SIG" | "$ARGV" | "@EXPORT" | "@EXPORT_OK"
-        | "%EXPORT_TAGS" | "@ISA" | "$VERSION" | "$AUTOLOAD" |
-        // Filehandles
-        "STDIN" | "STDOUT" | "STDERR" | "DATA" | "ARGVOUT" |
-        // Sort variables
-        "$a" | "$b" |
-        // Error variables
-        "$EVAL_ERROR" | "$ERRNO" | "$EXTENDED_OS_ERROR" | "$CHILD_ERROR" | "$PROCESS_ID"
-        | "$PROGRAM_NAME" |
-        // Perl version variables
-        "$PERL_VERSION" | "$OLD_PERL_VERSION" => true,
-        _ => {
-            // Check patterns
-            // $^[A-Z] variables
-            if name.starts_with("$^") && name.len() == 3 {
-                if let Some(ch) = name.chars().nth(2) {
-                    if ch.is_ascii_uppercase() {
-                        return true;
-                    }
-                }
+fn is_builtin_global(sigil: &str, name: &str) -> bool {
+    match sigil {
+        "$" => match name {
+            // Special variables
+            "_" | "!" | "@" | "?" | "^" | "$" | "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" |
+            "8" | "9" | "." | "," | "/" | "\\" | "\"" | ";" | "%" | "=" | "-" | "~" | "|" | "&" |
+            "`" | "'" | "+" | "[" | "]" |
+            // $^A, $^C etc
+            "^A" | "^C" | "^D" | "^E" | "^F" | "^H" | "^I" | "^L" | "^M" | "^N" |
+            "^O" | "^P" | "^R" | "^S" | "^T" | "^V" | "^W" | "^X" |
+            // Common globals
+            "ARGV" | "VERSION" | "AUTOLOAD" |
+            // Sort variables
+            "a" | "b" |
+            // Error variables
+            "EVAL_ERROR" | "ERRNO" | "EXTENDED_OS_ERROR" | "CHILD_ERROR" | "PROCESS_ID" | "PROGRAM_NAME" |
+            // Perl version variables
+            "PERL_VERSION" | "OLD_PERL_VERSION" => true,
+
+            // $^MATCH (e.g. $^A) pattern check
+            // Although we list common ones above, this covers others if any
+            _ if name.starts_with('^') && name.len() == 2 => {
+                let ch = name.chars().nth(1).unwrap_or('\0');
+                ch.is_ascii_uppercase()
             }
 
-            // Numbered capture variables ($1, $2, etc.)
-            // Note: $0-$9 are already handled in the match above
-            if name.starts_with('$') && name.len() > 1 && name[1..].chars().all(|c| c.is_ascii_digit()) {
-                return true;
-            }
-
-            false
-        }
+            // Numbered capture variables ($10, $100 etc. - $0-9 handled above)
+            _ => !name.is_empty() && name.chars().all(|c| c.is_ascii_digit()),
+        },
+        "@" => match name {
+            "_" | "+" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA" => true,
+            _ => false,
+        },
+        "%" => match name {
+            "_" | "+" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS" => true,
+            _ => false,
+        },
+        "" => match name {
+            "STDIN" | "STDOUT" | "STDERR" | "DATA" | "ARGVOUT" => true,
+            _ => false,
+        },
+        _ => false,
     }
 }
 
