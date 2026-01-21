@@ -4,6 +4,7 @@ members = [
     "crates/perl-lexer",
     "crates/perl-parser",
     "crates/perl-parser-core",
+    "crates/perl-parser-pest",
     "crates/perl-semantic-analyzer",
     "crates/perl-workspace-index",
     "crates/perl-refactoring",

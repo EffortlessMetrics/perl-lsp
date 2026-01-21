@@ -1624,11 +1624,27 @@ name = "perl-parser-core"
 version = "0.8.8"
 dependencies = [
  "perl-lexer",
+ "perl-position-tracking",
  "phf",
  "ropey",
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "perl-parser-pest"
+version = "0.8.8"
+dependencies = [
+ "lazy_static",
+ "once_cell",
+ "pest",
+ "pest_derive",
+ "regex",
+ "serde",
+ "stacker",
+ "thiserror",
+ "unicode-ident",
 ]
 
 [[package]]
