@@ -90,9 +90,62 @@ All notable changes to the Perl Language Server extension will be documented in 
 
 ## [Unreleased]
 
+### Added
+- **TCP Socket Mode**: LSP server can now listen on TCP sockets in addition to stdio
+- **Uninitialized Variable Detection**: Semantic analyzer detects use of uninitialized variables
+
+### Changed
+- **Performance**: O(1) symbol lookups, optimized scope analysis
+- **Code Quality**: Unified position/range types, improved code formatting
+
+## [0.9.0] - 2026-01-18
+
+### Added
+- 🔧 **Advanced Refactoring Support**
+  - Extract method refactoring with parameter detection
+  - Inline variable/expression refactoring
+  - Move code refactoring for relocating code blocks
+  - Transactional safety with rollback infrastructure
+- 🎯 **Semantic Definition Integration**
+  - Precise go-to-definition using semantic analysis instead of text search
+  - Multi-symbol support: scalars, arrays, hashes, subroutines, packages
+  - Lexical scoping with proper handling of nested scopes and shadowed variables
+- 🔒 **Security Hardening**
+  - Complete path traversal protection for execute commands
+  - Command injection hardening in executeCommand
+- ⚡ **Performance Optimizations**
+  - O(1) symbol lookups (from linear time)
+  - Stack-based scope analysis for improved performance
+  - Reduced string allocations in parser
+- 🎨 **Product Icons**: Added icons to extension commands
+- 📋 **Context Menu**: Run Tests exposed in editor context menu
+
+### Changed
+- Cross-file Package->method resolution improved
+- Better error logging for incremental document changes
+- Configuration setting descriptions improved
+
+## [0.8.0] - 2025-09-01
+
+### Added
+- **Cross-File Navigation**: Workspace indexing with dual storage pattern for qualified and bare names
+- **Import Optimization**: Detect and organize imports, remove unused imports
+- **Incremental Parsing V2**: Advanced edit tracking with node reuse for faster re-parsing
+- **File Path Completion**: Enterprise-grade file completion with security safeguards
+
+### Changed
+- Optimized workspace indexing for large codebases
+- Enhanced comment documentation extraction for hover
+
+## [0.7.0] - 2025-08-24
+
+### Added
+- **LSP 3.17 Features**: Inlay hints, document links, selection ranges, on-type formatting
+- **Code Actions**: Robust refactoring and quick fixes
+- **Type Hierarchy**: View inheritance relationships
+- **Rename Support**: Symbol renaming with validation
+
 ### Planned
-- Refactoring support (extract/inline variable)
 - Multi-root workspace support
 - Integrated perltidy (no separate installation needed)
-- Debugging support for tests
 - Performance profiling tools
