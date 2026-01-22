@@ -1024,6 +1024,21 @@ impl DebugAdapter {
                 }
 
                 let condition = bp_req.get("condition").and_then(|c| c.as_str());
+
+                // Security: Reject conditions with newlines to prevent command injection
+                if condition.map_or(false, |cond| cond.contains('\n') || cond.contains('\r')) {
+                    let breakpoint = Breakpoint {
+                        id: bp_id,
+                        verified: false,
+                        line,
+                        column: None,
+                        message: Some("Condition cannot contain newlines".to_string()),
+                    };
+                    verified_breakpoints.push(breakpoint);
+                    bp_id += 1;
+                    continue;
+                }
+
                 let mut success = false;
 
                 if let Some(ref mut session) =

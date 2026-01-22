@@ -2,3 +2,8 @@
 **Vulnerability:** `perl-dap`'s `evaluate` command allowed newline injection, enabling execution of arbitrary debugger commands (and potentially shell commands via `!`) because expressions were directly interpolated into the debugger input stream.
 **Learning:** Interfacing with line-based CLI tools (like `perl -d`) requires strict sanitation of inputs to prevent protocol injection. The `DebugAdapter` assumed single-line inputs but didn't enforce it.
 **Prevention:** Validate all user-supplied strings that are passed to CLI tools via stdin, specifically checking for control characters like newlines that could alter the command structure.
+
+## 2025-08-07 - Protocol Injection in Breakpoint Conditions
+**Vulnerability:** `perl-dap`'s `setBreakpoints` request accepted breakpoint conditions containing newlines, allowing protocol injection similar to the `evaluate` vulnerability. This could enable arbitrary debugger command execution when setting breakpoints.
+**Learning:** Security fixes for protocol injection should be applied holistically across all user inputs that are serialized into the protocol stream, not just the most obvious ones like "evaluate".
+**Prevention:** Audit all points where user input is written to a line-based protocol stream and enforce strict validation (rejecting newlines) consistently.
