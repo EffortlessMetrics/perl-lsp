@@ -116,7 +116,6 @@
 
 use crate::error::{ParseError, ParseResult};
 use perl_lexer::{LexerMode, PerlLexer, Token as LexerToken, TokenType as LexerTokenType};
-use std::sync::Arc;
 
 /// Simplified token representation optimized for Perl script parsing within LSP workflow
 ///
@@ -137,7 +136,7 @@ pub struct Token {
     /// Token classification for parser decision making
     pub kind: TokenKind,
     /// Original source text for precise reconstruction
-    pub text: Arc<str>,
+    pub text: String,
     /// Starting byte position for error reporting and location tracking
     pub start: usize,
     /// Ending byte position for span calculation and navigation
@@ -539,7 +538,7 @@ impl<'a> TokenStream<'a> {
                 LexerTokenType::EOF => {
                     return Ok(Token {
                         kind: TokenKind::Eof,
-                        text: Arc::from(""),
+                        text: String::new(),
                         start: lexer_token.start,
                         end: lexer_token.end,
                     });
@@ -728,6 +727,6 @@ impl<'a> TokenStream<'a> {
             _ => TokenKind::Unknown,
         };
 
-        Token { kind, text: token.text, start: token.start, end: token.end }
+        Token { kind, text: token.text.to_string(), start: token.start, end: token.end }
     }
 }

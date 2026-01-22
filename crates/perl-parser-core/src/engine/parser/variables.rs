@@ -3,7 +3,7 @@ impl<'a> Parser<'a> {
     fn parse_variable_declaration(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         let declarator_token = self.consume_token()?;
-        let declarator = declarator_token.text.to_string();
+        let declarator = declarator_token.text;
 
         // Check if we have a list declaration like `my ($x, $y)`
         if self.peek_kind() == Some(TokenKind::LeftParen) {
@@ -20,7 +20,7 @@ impl<'a> Parser<'a> {
                 while self.peek_kind() == Some(TokenKind::Colon) {
                     self.tokens.next()?; // consume colon
                     let attr_token = self.expect(TokenKind::Identifier)?;
-                    var_attributes.push(attr_token.text.to_string());
+                    var_attributes.push(attr_token.text);
                 }
 
                 // Create a node that includes both the variable and its attributes
@@ -92,7 +92,7 @@ impl<'a> Parser<'a> {
             while self.peek_kind() == Some(TokenKind::Colon) {
                 self.tokens.next()?; // consume colon
                 let attr_token = self.expect(TokenKind::Identifier)?;
-                attributes.push(attr_token.text.to_string());
+                attributes.push(attr_token.text);
             }
 
             let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
@@ -122,7 +122,7 @@ impl<'a> Parser<'a> {
     fn parse_local_statement(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         let declarator_token = self.consume_token()?; // consume 'local'
-        let declarator = declarator_token.text.to_string();
+        let declarator = declarator_token.text;
 
         // Parse the lvalue expression that's being localized
         let variable = Box::new(self.parse_expression()?);
@@ -156,7 +156,7 @@ impl<'a> Parser<'a> {
         let text = &token.text;
 
         // Special handling for @{ and %{ (array/hash dereference)
-        if &**text == "@{" || &**text == "%{" {
+        if text == "@{" || text == "%{" {
             let sigil = text
                 .chars()
                 .next()
@@ -231,7 +231,7 @@ impl<'a> Parser<'a> {
         let sigil_token = self.consume_token()?;
         let sigil = match sigil_token.kind {
             TokenKind::BitwiseAnd => "&".to_string(), // Handle & as sigil
-            _ => sigil_token.text.to_string(),
+            _ => sigil_token.text,
         };
         let start = sigil_token.start;
 
@@ -260,7 +260,7 @@ impl<'a> Parser<'a> {
                              (sigil == "&" && matches!(next_kind, Some(k) if can_be_sub_name(k)))
         {
             let name_token = self.tokens.next()?;
-            let mut name = name_token.text.to_string();
+            let mut name = name_token.text;
             let mut end = name_token.end;
 
             // Handle :: in package-qualified variables
@@ -302,7 +302,7 @@ impl<'a> Parser<'a> {
                 Some(TokenKind::Unknown) => {
                     // Could be $?, $^, $#, or other special
                     let token = self.tokens.peek()?;
-                    match token.text.as_ref() {
+                    match token.text.as_str() {
                         "?" => {
                             let token = self.tokens.next()?;
                             ("?".to_string(), token.end)
@@ -339,7 +339,7 @@ impl<'a> Parser<'a> {
                 Some(TokenKind::Number) => {
                     // $0, $1, $2, etc. - numbered capture groups
                     let num_token = self.tokens.next()?;
-                    (num_token.text.to_string(), num_token.end)
+                    (num_token.text, num_token.end)
                 }
                 _ => {
                     // Empty variable name (just the sigil)
@@ -447,7 +447,7 @@ impl<'a> Parser<'a> {
                 && !token.text.starts_with('&')
             {
                 // It's likely a type constraint
-                Some(self.tokens.next()?.text.to_string())
+                Some(self.tokens.next()?.text)
             } else {
                 None
             }
@@ -539,7 +539,7 @@ impl<'a> Parser<'a> {
                     TokenKind::Identifier => {
                         // Check if it's a sigil-only identifier like "$" or "@"
                         // or the special underscore prototype
-                        &*token.text == "_"
+                        token.text == "_"
                             || token.text.chars().all(|c| matches!(c, '$' | '@' | '%' | '*' | '&'))
                     }
                     // Anything else suggests a signature
