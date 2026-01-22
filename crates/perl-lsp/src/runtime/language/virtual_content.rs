@@ -54,7 +54,8 @@ fn fetch_virtual_content(uri: &str) -> Option<String> {
 fn fetch_perldoc(module: &str) -> Option<String> {
     // Run perldoc -T Module::Name to get plain text documentation
     // Use -- to prevent argument injection if module starts with -
-    let output = std::process::Command::new("perldoc").arg("-T").arg("--").arg(module).output().ok()?;
+    let output =
+        std::process::Command::new("perldoc").arg("-T").arg("--").arg(module).output().ok()?;
 
     if output.status.success() { String::from_utf8(output.stdout).ok() } else { None }
 }
