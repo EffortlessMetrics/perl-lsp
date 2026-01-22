@@ -313,13 +313,16 @@ fn test_parameter_validation_comprehensive() {
     // Create a dummy file because path validation runs before argument validation
     fs::write("/tmp/test_validation.pl", "").expect("Failed to create dummy file");
 
-    let result = provider
-        .execute_command("perl.runTestSub", vec![Value::String("/tmp/test_validation.pl".to_string())]);
+    let result = provider.execute_command(
+        "perl.runTestSub",
+        vec![Value::String("/tmp/test_validation.pl".to_string())],
+    );
     assert!(result.is_err(), "runTestSub should fail with missing subroutine name");
     let error_msg = result.unwrap_err();
     assert!(
         error_msg.contains("Missing subroutine name argument"),
-        "Should have missing subroutine name error, got: {}", error_msg
+        "Should have missing subroutine name error, got: {}",
+        error_msg
     );
 
     // Test with invalid subroutine name type
@@ -334,7 +337,8 @@ fn test_parameter_validation_comprehensive() {
     let error_msg = result.unwrap_err();
     assert!(
         error_msg.contains("Missing subroutine name argument"),
-        "Should have missing subroutine name error for invalid type, got: {}", error_msg
+        "Should have missing subroutine name error for invalid type, got: {}",
+        error_msg
     );
 
     // Clean up
