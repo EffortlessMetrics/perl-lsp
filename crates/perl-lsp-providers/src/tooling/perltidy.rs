@@ -226,6 +226,9 @@ impl PerlTidyFormatter {
     pub fn format_file(&self, file_path: &Path) -> Result<(), String> {
         // Build argument list
         let mut args: Vec<String> = self.config.to_args();
+        // SECURITY: Add `--` to prevent argument injection via filenames starting with `-`
+        // (e.g., a file named `-rf` would otherwise be interpreted as a flag)
+        args.push("--".to_string());
         args.push(file_path.to_string_lossy().into_owned());
 
         // Convert to &str slice for the runtime
@@ -467,5 +470,32 @@ mod tests {
         let result = formatter.format("invalid code");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("syntax error"));
+    }
+
+    #[test]
+    fn test_format_file_with_mock_runtime() {
+        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
+
+        let runtime = Arc::new(MockSubprocessRuntime::new());
+        runtime.add_response(MockResponse::success(b"".to_vec()));
+
+        let config = PerlTidyConfig::default();
+        let formatter = PerlTidyFormatter::new(config, runtime.clone());
+
+        let result = formatter.format_file(Path::new("test.pl"));
+        assert!(result.is_ok());
+
+        let invocations = runtime.invocations();
+        assert_eq!(invocations.len(), 1);
+        assert_eq!(invocations[0].program, "perltidy");
+
+        // Ensure argument separator is used for security
+        assert!(invocations[0].args.contains(&"--".to_string()));
+        // Ensure the separator comes before the file path
+        let sep_pos =
+            invocations[0].args.iter().position(|a| a == "--").expect("Missing -- separator");
+        let file_pos =
+            invocations[0].args.iter().position(|a| a == "test.pl").expect("Missing file path");
+        assert!(sep_pos < file_pos, "-- separator must come before file path");
     }
 }

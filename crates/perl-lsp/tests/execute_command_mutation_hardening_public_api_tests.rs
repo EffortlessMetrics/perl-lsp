@@ -21,6 +21,8 @@
 use perl_lsp::execute_command::{ExecuteCommandProvider, get_supported_commands};
 use serde_json::Value;
 use std::fs;
+use std::io::Write;
+use tempfile::NamedTempFile;
 
 // ============= RETURN VALUE BYPASS MUTATION KILLERS =============
 // Target: Functions returning Ok(Default::default()) instead of proper results
@@ -310,20 +312,30 @@ fn test_parameter_validation_comprehensive() {
     }
 
     // Test runTestSub specific validation (requires 2 arguments)
-    let result = provider
-        .execute_command("perl.runTestSub", vec![Value::String("/tmp/test.pl".to_string())]);
+    // Create a dummy file because path validation runs before argument validation
+    // Use NamedTempFile for automatic cleanup (RAII pattern)
+    let mut temp_file =
+        NamedTempFile::new().expect("Failed to create temp file for validation test");
+    temp_file.write_all(b"").expect("Failed to write to temp file");
+    let temp_path = temp_file.path().to_string_lossy().to_string();
+
+    let result = provider.execute_command(
+        "perl.runTestSub",
+        vec![Value::String(temp_path.clone())],
+    );
     assert!(result.is_err(), "runTestSub should fail with missing subroutine name");
     let error_msg = result.unwrap_err();
     assert!(
         error_msg.contains("Missing subroutine name argument"),
-        "Should have missing subroutine name error"
+        "Should have missing subroutine name error, got: {}",
+        error_msg
     );
 
     // Test with invalid subroutine name type
     let result = provider.execute_command(
         "perl.runTestSub",
         vec![
-            Value::String("/tmp/test.pl".to_string()),
+            Value::String(temp_path.clone()),
             Value::Number(serde_json::Number::from(456)),
         ],
     );
@@ -331,8 +343,11 @@ fn test_parameter_validation_comprehensive() {
     let error_msg = result.unwrap_err();
     assert!(
         error_msg.contains("Missing subroutine name argument"),
-        "Should have missing subroutine name error for invalid type"
+        "Should have missing subroutine name error for invalid type, got: {}",
+        error_msg
     );
+
+    // temp_file is automatically cleaned up when it goes out of scope (RAII)
 }
 
 #[test]
