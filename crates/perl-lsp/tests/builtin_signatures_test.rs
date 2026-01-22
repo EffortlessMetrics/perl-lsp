@@ -4,6 +4,19 @@ use perl_lsp::features::signature_help::SignatureHelpProvider;
 use perl_parser::Parser;
 
 #[test]
+fn test_builtin_count_threshold() {
+    use perl_parser_core::builtins::builtin_signatures::create_builtin_signatures;
+    let signatures = create_builtin_signatures();
+
+    // Issue #418: Ensure we have at least 150 built-in function signatures
+    assert!(
+        signatures.len() >= 150,
+        "Expected at least 150 built-in signatures, found {}",
+        signatures.len()
+    );
+}
+
+#[test]
 fn test_comprehensive_builtin_coverage() {
     let ast = Parser::new("").parse().unwrap();
     let provider = SignatureHelpProvider::new(&ast);
@@ -124,6 +137,44 @@ fn test_comprehensive_builtin_coverage() {
         ("shutdown(", "shutdown"),
         ("send(", "send"),
         ("recv(", "recv"),
+        ("getsockopt(", "getsockopt"),
+        ("setsockopt(", "setsockopt"),
+        ("socketpair(", "socketpair"),
+        ("getpeername(", "getpeername"),
+        ("getsockname(", "getsockname"),
+        // I/O control functions
+        ("pipe(", "pipe"),
+        ("fcntl(", "fcntl"),
+        ("ioctl(", "ioctl"),
+        ("flock(", "flock"),
+        ("select(", "select"),
+        ("getc(", "getc"),
+        ("binmode(", "binmode"),
+        ("fileno(", "fileno"),
+        // Network functions
+        ("gethostbyname(", "gethostbyname"),
+        ("gethostbyaddr(", "gethostbyaddr"),
+        ("getnetbyname(", "getnetbyname"),
+        ("getnetbyaddr(", "getnetbyaddr"),
+        ("getprotobyname(", "getprotobyname"),
+        ("getprotobynumber(", "getprotobynumber"),
+        ("getservbyname(", "getservbyname"),
+        ("getservbyport(", "getservbyport"),
+        // User and group functions
+        ("getpwnam(", "getpwnam"),
+        ("getpwuid(", "getpwuid"),
+        ("getgrnam(", "getgrnam"),
+        ("getgrgid(", "getgrgid"),
+        ("getlogin(", "getlogin"),
+        // Miscellaneous system functions
+        ("umask(", "umask"),
+        ("truncate(", "truncate"),
+        ("glob(", "glob"),
+        ("setpgrp(", "setpgrp"),
+        ("getpgrp(", "getpgrp"),
+        ("times(", "times"),
+        ("getpriority(", "getpriority"),
+        ("setpriority(", "setpriority"),
         // Pack/unpack
         ("pack(", "pack"),
         ("unpack(", "unpack"),
@@ -221,4 +272,71 @@ fn test_tied_variable_signatures() {
     let help = provider.get_signature_help(code, code.len() - 1).unwrap();
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("tie"));
+}
+
+#[test]
+fn test_socketpair_signature() {
+    let ast = Parser::new("").parse().unwrap();
+    let provider = SignatureHelpProvider::new(&ast);
+
+    // Test socketpair function
+    let code = "socketpair($sock1, $sock2, ";
+    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    assert!(!help.signatures.is_empty());
+    assert!(help.signatures[0].label.contains("socketpair"));
+    assert_eq!(help.active_parameter, Some(2));
+}
+
+#[test]
+fn test_network_function_signatures() {
+    let ast = Parser::new("").parse().unwrap();
+    let provider = SignatureHelpProvider::new(&ast);
+
+    // Test gethostbyname
+    let code = "gethostbyname(";
+    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    assert!(!help.signatures.is_empty());
+    assert!(help.signatures[0].label.contains("gethostbyname"));
+
+    // Test getservbyname
+    let code = "getservbyname('http', ";
+    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    assert!(!help.signatures.is_empty());
+    assert!(help.signatures[0].label.contains("getservbyname"));
+}
+
+#[test]
+fn test_io_control_function_signatures() {
+    let ast = Parser::new("").parse().unwrap();
+    let provider = SignatureHelpProvider::new(&ast);
+
+    // Test pipe
+    let code = "pipe($read, ";
+    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    assert!(!help.signatures.is_empty());
+    assert!(help.signatures[0].label.contains("pipe"));
+
+    // Test flock
+    let code = "flock($fh, ";
+    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    assert!(!help.signatures.is_empty());
+    assert!(help.signatures[0].label.contains("flock"));
+}
+
+#[test]
+fn test_user_group_function_signatures() {
+    let ast = Parser::new("").parse().unwrap();
+    let provider = SignatureHelpProvider::new(&ast);
+
+    // Test getpwnam
+    let code = "getpwnam(";
+    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    assert!(!help.signatures.is_empty());
+    assert!(help.signatures[0].label.contains("getpwnam"));
+
+    // Test getgrnam
+    let code = "getgrnam(";
+    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    assert!(!help.signatures.is_empty());
+    assert!(help.signatures[0].label.contains("getgrnam"));
 }

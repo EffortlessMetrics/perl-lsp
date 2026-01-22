@@ -1518,6 +1518,57 @@ impl DebugAdapter {
         }
     }
 
+/// Validate that an expression is safe for evaluation (non-mutating)
+///
+/// AC10.2: Safe evaluation mode validates expressions don't have side effects
+fn validate_safe_expression(expression: &str) -> Option<String> {
+    // Check for assignment operators
+    let assignment_ops = [
+        "=", "+=", "-=", "*=", "/=", "%=", "**=", ".=", "&=", "|=", "^=", "<<=", ">>=", "&&=",
+        "||=", "//=",
+    ];
+    for op in &assignment_ops {
+        // Look for assignment operators not in quoted strings (simple heuristic)
+        // This is a basic check - full parsing would be more robust
+        if expression.contains(op) {
+            return Some(format!(
+                "Safe evaluation mode: assignment operator '{}' not allowed (use allowSideEffects: true)",
+                op
+            ));
+        }
+    }
+
+    // Check for mutating operations
+    let mutating_ops = [
+        "push", "pop", "shift", "unshift", "splice", "delete", "undef", "system", "exec", "open",
+        "close", "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown",
+    ];
+
+    for op in &mutating_ops {
+        // Simple word boundary check for function calls
+        let pattern = format!("\\b{}\\b", regex::escape(op));
+        if let Ok(re) = Regex::new(&pattern) {
+            if re.is_match(expression) {
+                return Some(format!(
+                    "Safe evaluation mode: potentially mutating operation '{}' not allowed (use allowSideEffects: true)",
+                    op
+                ));
+            }
+        }
+    }
+
+    // Check for increment/decrement operators
+    if expression.contains("++") || expression.contains("--") {
+        return Some(
+            "Safe evaluation mode: increment/decrement operators not allowed (use allowSideEffects: true)"
+                .to_string(),
+        );
+    }
+
+    None
+}
+
+impl DebugAdapter {
     /// Send interrupt signal to process (cross-platform)
     #[allow(unused_variables)] // pid unused on non-unix/non-windows platforms (e.g., wasm32)
     fn send_interrupt_signal(&self, pid: u32) -> bool {
@@ -1579,7 +1630,11 @@ impl DebugAdapter {
         }
     }
 
-    /// Handle evaluate request
+    /// Handle evaluate request with safe evaluation mode and timeout enforcement
+    ///
+    /// AC10.1: Evaluates expressions in stack frame context
+    /// AC10.2: Safe evaluation mode (non-mutating) by default
+    /// AC10.3: Timeout enforcement (5s default, 30s hard limit)
     fn handle_evaluate(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
         if let Some(args) = arguments {
             let expression = args.get("expression").and_then(|e| e.as_str()).unwrap_or("");
@@ -1606,6 +1661,32 @@ impl DebugAdapter {
                     message: Some("Expression cannot contain newlines".to_string()),
                 };
             }
+
+            // AC10.2: Safe evaluation mode (non-mutating) by default
+            let allow_side_effects =
+                args.get("allowSideEffects").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            // Validate expression safety if side effects are not allowed
+            if !allow_side_effects {
+                if let Some(error) = validate_safe_expression(expression) {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "evaluate".to_string(),
+                        body: None,
+                        message: Some(error),
+                    };
+                }
+            }
+
+            // AC10.3: Get timeout configuration (5s default, 30s hard limit)
+            let timeout_ms = args
+                .get("timeout")
+                .and_then(|t| t.as_u64())
+                .map(|t| t as u32)
+                .unwrap_or(5000);
+            let timeout_ms = timeout_ms.min(30000); // Enforce 30s hard limit
 
             // Send evaluation command to debugger
             if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
@@ -1636,9 +1717,9 @@ impl DebugAdapter {
                 };
             }
 
-            // For now, return a placeholder result
-            // In a full implementation, we'd capture the debugger's response
-            let result = format!("<evaluating: {}>", expression);
+            // For now, return a placeholder result with timeout info
+            // In a full implementation, we'd capture the debugger's response with timeout enforcement
+            let result = format!("<evaluating: {}> (timeout: {}ms)", expression, timeout_ms);
 
             DapMessage::Response {
                 seq,

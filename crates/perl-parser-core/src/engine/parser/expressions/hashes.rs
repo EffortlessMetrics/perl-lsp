@@ -3,22 +3,30 @@ impl<'a> Parser<'a> {
     /// These always parse {} as blocks, never as hashes
     fn parse_builtin_block(&mut self) -> ParseResult<Node> {
         self.check_recursion()?;
-        let start_token = self.tokens.next()?; // consume {
+
+        // RAII guard to ensure exit_recursion is called even on error
+        struct RecursionGuard<'a, 'b>(&'a mut Parser<'b>);
+        impl<'a, 'b> Drop for RecursionGuard<'a, 'b> {
+            fn drop(&mut self) {
+                self.0.exit_recursion();
+            }
+        }
+        let _guard = RecursionGuard(self);
+
+        let start_token = _guard.0.tokens.next()?; // consume {
         let start = start_token.start;
 
         // Parse the expression inside the block (if any)
         let mut statements = Vec::new();
-        if self.peek_kind() != Some(TokenKind::RightBrace) {
-            statements.push(self.parse_expression()?);
+        if _guard.0.peek_kind() != Some(TokenKind::RightBrace) {
+            statements.push(_guard.0.parse_expression()?);
         }
 
-        self.expect(TokenKind::RightBrace)?;
-        let end = self.previous_position();
+        _guard.0.expect(TokenKind::RightBrace)?;
+        let end = _guard.0.previous_position();
 
         // Always return a block node for builtin functions
-        let result = Node::new(NodeKind::Block { statements }, SourceLocation { start, end });
-        self.exit_recursion();
-        Ok(result)
+        Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
     }
 
     /// Parse hash literal or block
@@ -29,9 +37,17 @@ impl<'a> Parser<'a> {
     /// Parse hash literal or block with context about whether blocks are expected
     fn parse_hash_or_block_with_context(&mut self, _expect_block: bool) -> ParseResult<Node> {
         self.check_recursion()?;
-        let result = self.parse_hash_or_block_inner(_expect_block);
-        self.exit_recursion();
-        result
+
+        // RAII guard to ensure exit_recursion is called even on error
+        struct RecursionGuard<'a, 'b>(&'a mut Parser<'b>);
+        impl<'a, 'b> Drop for RecursionGuard<'a, 'b> {
+            fn drop(&mut self) {
+                self.0.exit_recursion();
+            }
+        }
+        let _guard = RecursionGuard(self);
+
+        _guard.0.parse_hash_or_block_inner(_expect_block)
     }
 
     fn parse_hash_or_block_inner(&mut self, _expect_block: bool) -> ParseResult<Node> {

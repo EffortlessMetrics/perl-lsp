@@ -1041,6 +1041,410 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             },
         );
 
+        signatures.insert(
+            "socketpair",
+            BuiltinSignature {
+                signatures: vec!["socketpair SOCKET1, SOCKET2, DOMAIN, TYPE, PROTOCOL"],
+                documentation: "Creates a pair of connected sockets",
+            },
+        );
+
+        signatures.insert(
+            "getpeername",
+            BuiltinSignature {
+                signatures: vec!["getpeername SOCKET"],
+                documentation: "Returns packed sockaddr address of other end of socket connection",
+            },
+        );
+
+        signatures.insert(
+            "getsockname",
+            BuiltinSignature {
+                signatures: vec!["getsockname SOCKET"],
+                documentation: "Returns packed sockaddr address of this end of socket connection",
+            },
+        );
+
+        // ===== I/O Control Functions =====
+        signatures.insert(
+            "pipe",
+            BuiltinSignature {
+                signatures: vec!["pipe READHANDLE, WRITEHANDLE"],
+                documentation: "Opens a pair of connected pipes",
+            },
+        );
+
+        signatures.insert(
+            "fcntl",
+            BuiltinSignature {
+                signatures: vec!["fcntl FILEHANDLE, FUNCTION, SCALAR"],
+                documentation: "File control system call",
+            },
+        );
+
+        signatures.insert(
+            "ioctl",
+            BuiltinSignature {
+                signatures: vec!["ioctl FILEHANDLE, FUNCTION, SCALAR"],
+                documentation: "System-dependent device control system call",
+            },
+        );
+
+        signatures.insert(
+            "flock",
+            BuiltinSignature {
+                signatures: vec!["flock FILEHANDLE, OPERATION"],
+                documentation: "Locks or unlocks file",
+            },
+        );
+
+        signatures.insert(
+            "select",
+            BuiltinSignature {
+                signatures: vec!["select FILEHANDLE", "select RBITS, WBITS, EBITS, TIMEOUT", "select"],
+                documentation: "Sets default filehandle for output or performs select system call",
+            },
+        );
+
+        signatures.insert(
+            "getc",
+            BuiltinSignature {
+                signatures: vec!["getc FILEHANDLE", "getc"],
+                documentation: "Gets next character from filehandle",
+            },
+        );
+
+        signatures.insert(
+            "binmode",
+            BuiltinSignature {
+                signatures: vec!["binmode FILEHANDLE, LAYER", "binmode FILEHANDLE"],
+                documentation: "Sets binary mode on filehandle",
+            },
+        );
+
+        signatures.insert(
+            "fileno",
+            BuiltinSignature {
+                signatures: vec!["fileno FILEHANDLE"],
+                documentation: "Returns file descriptor number",
+            },
+        );
+
+        // ===== Network Functions =====
+        signatures.insert(
+            "gethostbyname",
+            BuiltinSignature {
+                signatures: vec!["gethostbyname NAME"],
+                documentation: "Returns host information by name",
+            },
+        );
+
+        signatures.insert(
+            "gethostbyaddr",
+            BuiltinSignature {
+                signatures: vec!["gethostbyaddr ADDR, ADDRTYPE"],
+                documentation: "Returns host information by address",
+            },
+        );
+
+        signatures.insert(
+            "getnetbyname",
+            BuiltinSignature {
+                signatures: vec!["getnetbyname NAME"],
+                documentation: "Returns network information by name",
+            },
+        );
+
+        signatures.insert(
+            "getnetbyaddr",
+            BuiltinSignature {
+                signatures: vec!["getnetbyaddr ADDR, ADDRTYPE"],
+                documentation: "Returns network information by address",
+            },
+        );
+
+        signatures.insert(
+            "getprotobyname",
+            BuiltinSignature {
+                signatures: vec!["getprotobyname NAME"],
+                documentation: "Returns protocol information by name",
+            },
+        );
+
+        signatures.insert(
+            "getprotobynumber",
+            BuiltinSignature {
+                signatures: vec!["getprotobynumber NUMBER"],
+                documentation: "Returns protocol information by number",
+            },
+        );
+
+        signatures.insert(
+            "getservbyname",
+            BuiltinSignature {
+                signatures: vec!["getservbyname NAME, PROTO"],
+                documentation: "Returns service information by name",
+            },
+        );
+
+        signatures.insert(
+            "getservbyport",
+            BuiltinSignature {
+                signatures: vec!["getservbyport PORT, PROTO"],
+                documentation: "Returns service information by port",
+            },
+        );
+
+        signatures.insert(
+            "gethostent",
+            BuiltinSignature {
+                signatures: vec!["gethostent"],
+                documentation: "Returns next host from hosts file",
+            },
+        );
+
+        signatures.insert(
+            "getnetent",
+            BuiltinSignature {
+                signatures: vec!["getnetent"],
+                documentation: "Returns next network from networks file",
+            },
+        );
+
+        signatures.insert(
+            "getprotoent",
+            BuiltinSignature {
+                signatures: vec!["getprotoent"],
+                documentation: "Returns next protocol from protocols file",
+            },
+        );
+
+        signatures.insert(
+            "getservent",
+            BuiltinSignature {
+                signatures: vec!["getservent"],
+                documentation: "Returns next service from services file",
+            },
+        );
+
+        signatures.insert(
+            "sethostent",
+            BuiltinSignature {
+                signatures: vec!["sethostent STAYOPEN"],
+                documentation: "Opens or rewinds hosts file",
+            },
+        );
+
+        signatures.insert(
+            "setnetent",
+            BuiltinSignature {
+                signatures: vec!["setnetent STAYOPEN"],
+                documentation: "Opens or rewinds networks file",
+            },
+        );
+
+        signatures.insert(
+            "setprotoent",
+            BuiltinSignature {
+                signatures: vec!["setprotoent STAYOPEN"],
+                documentation: "Opens or rewinds protocols file",
+            },
+        );
+
+        signatures.insert(
+            "setservent",
+            BuiltinSignature {
+                signatures: vec!["setservent STAYOPEN"],
+                documentation: "Opens or rewinds services file",
+            },
+        );
+
+        signatures.insert(
+            "endhostent",
+            BuiltinSignature {
+                signatures: vec!["endhostent"],
+                documentation: "Closes hosts file",
+            },
+        );
+
+        signatures.insert(
+            "endnetent",
+            BuiltinSignature {
+                signatures: vec!["endnetent"],
+                documentation: "Closes networks file",
+            },
+        );
+
+        signatures.insert(
+            "endprotoent",
+            BuiltinSignature {
+                signatures: vec!["endprotoent"],
+                documentation: "Closes protocols file",
+            },
+        );
+
+        signatures.insert(
+            "endservent",
+            BuiltinSignature {
+                signatures: vec!["endservent"],
+                documentation: "Closes services file",
+            },
+        );
+
+        // ===== User and Group Functions =====
+        signatures.insert(
+            "getpwnam",
+            BuiltinSignature {
+                signatures: vec!["getpwnam NAME"],
+                documentation: "Returns password entry by name",
+            },
+        );
+
+        signatures.insert(
+            "getpwuid",
+            BuiltinSignature {
+                signatures: vec!["getpwuid UID"],
+                documentation: "Returns password entry by uid",
+            },
+        );
+
+        signatures.insert(
+            "getpwent",
+            BuiltinSignature {
+                signatures: vec!["getpwent"],
+                documentation: "Returns next password entry",
+            },
+        );
+
+        signatures.insert(
+            "setpwent",
+            BuiltinSignature {
+                signatures: vec!["setpwent"],
+                documentation: "Rewinds password file",
+            },
+        );
+
+        signatures.insert(
+            "endpwent",
+            BuiltinSignature {
+                signatures: vec!["endpwent"],
+                documentation: "Closes password file",
+            },
+        );
+
+        signatures.insert(
+            "getgrnam",
+            BuiltinSignature {
+                signatures: vec!["getgrnam NAME"],
+                documentation: "Returns group entry by name",
+            },
+        );
+
+        signatures.insert(
+            "getgrgid",
+            BuiltinSignature {
+                signatures: vec!["getgrgid GID"],
+                documentation: "Returns group entry by gid",
+            },
+        );
+
+        signatures.insert(
+            "getgrent",
+            BuiltinSignature {
+                signatures: vec!["getgrent"],
+                documentation: "Returns next group entry",
+            },
+        );
+
+        signatures.insert(
+            "setgrent",
+            BuiltinSignature {
+                signatures: vec!["setgrent"],
+                documentation: "Rewinds group file",
+            },
+        );
+
+        signatures.insert(
+            "endgrent",
+            BuiltinSignature {
+                signatures: vec!["endgrent"],
+                documentation: "Closes group file",
+            },
+        );
+
+        signatures.insert(
+            "getlogin",
+            BuiltinSignature {
+                signatures: vec!["getlogin"],
+                documentation: "Returns current login name",
+            },
+        );
+
+        // ===== Miscellaneous System Functions =====
+        signatures.insert(
+            "umask",
+            BuiltinSignature {
+                signatures: vec!["umask EXPR", "umask"],
+                documentation: "Sets file creation mode mask",
+            },
+        );
+
+        signatures.insert(
+            "truncate",
+            BuiltinSignature {
+                signatures: vec!["truncate FILEHANDLE, LENGTH", "truncate EXPR, LENGTH"],
+                documentation: "Truncates file to specified length",
+            },
+        );
+
+        signatures.insert(
+            "glob",
+            BuiltinSignature {
+                signatures: vec!["glob EXPR", "glob"],
+                documentation: "Returns list of filenames matching pattern",
+            },
+        );
+
+        signatures.insert(
+            "setpgrp",
+            BuiltinSignature {
+                signatures: vec!["setpgrp PID, PGRP"],
+                documentation: "Sets process group",
+            },
+        );
+
+        signatures.insert(
+            "getpgrp",
+            BuiltinSignature {
+                signatures: vec!["getpgrp PID"],
+                documentation: "Returns process group",
+            },
+        );
+
+        signatures.insert(
+            "times",
+            BuiltinSignature {
+                signatures: vec!["times"],
+                documentation: "Returns elapsed time for process and children",
+            },
+        );
+
+        signatures.insert(
+            "getpriority",
+            BuiltinSignature {
+                signatures: vec!["getpriority WHICH, WHO"],
+                documentation: "Returns current priority for process, process group, or user",
+            },
+        );
+
+        signatures.insert(
+            "setpriority",
+            BuiltinSignature {
+                signatures: vec!["setpriority WHICH, WHO, PRIORITY"],
+                documentation: "Sets priority for process, process group, or user",
+            },
+        );
+
         // ===== Pack/Unpack =====
         signatures.insert(
             "pack",

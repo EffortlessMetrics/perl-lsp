@@ -33,7 +33,6 @@ perl-refactoring = { workspace = true }
 perl-incremental-parsing = { workspace = true, optional = true }
 perl-tdd-support = { workspace = true }
 perl-lsp-providers = { workspace = true }
-perl-dap = { workspace = true }
 thiserror = "2.0.17"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -64,13 +63,8 @@ anyhow = { version = "1.0.100", optional = true }
 name = "perl-parse"
 required-features = ["cli"]
 
-
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)', 'cfg(feature, values("slow_tests"))'] }
-
-[[bin]]
-name = "perl-dap-internal"
-path = "src/bin/perl-dap.rs"
 
 [features]
 default = ["workspace", "lsp-compat"]  # Enable workspace indexing by default for cross-file features

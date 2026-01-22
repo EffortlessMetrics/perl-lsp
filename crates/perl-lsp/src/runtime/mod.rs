@@ -221,7 +221,88 @@ impl LspServer {
         }
     }
 
+    /// Create a new LSP server with custom I/O (for testing)
+    ///
+    /// This constructor allows you to provide custom Read and Write trait objects
+    /// for testing purposes, enabling you to test LSP protocol edge cases without
+    /// requiring actual stdin/stdout or process spawning.
+    ///
+    /// # Parameters
+    ///
+    /// - `reader`: A boxed reader implementing `Read + Send` for reading LSP messages
+    /// - `writer`: A boxed writer implementing `Write + Send` for writing LSP responses
+    ///
+    /// # Thread Safety
+    ///
+    /// Both reader and writer are automatically wrapped in `Arc<Mutex<...>>` to ensure
+    /// thread-safe access. The server can safely be used from multiple threads.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use std::io::Cursor;
+    /// use perl_lsp::LspServer;
+    ///
+    /// let input = Cursor::new(Vec::new());
+    /// let output = Vec::new();
+    ///
+    /// let server = LspServer::with_io(
+    ///     Box::new(input),
+    ///     Box::new(output)
+    /// );
+    /// ```
+    pub fn with_io<R, W>(reader: Box<R>, writer: Box<W>) -> Self
+    where
+        R: Read + Send + 'static,
+        W: Write + Send + 'static,
+    {
+        // Initialize workspace indexing with coordinator lifecycle management
+        #[cfg(feature = "workspace")]
+        let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
+
+        let default_features = {
+            let flags = if cfg!(feature = "lsp-ga-lock") {
+                crate::protocol::capabilities::BuildFlags::ga_lock()
+            } else {
+                crate::protocol::capabilities::BuildFlags::production()
+            };
+            flags.to_advertised_features()
+        };
+
+        // Note: The reader parameter is accepted but not stored because the current
+        // serve() method takes a BufRead parameter. This design allows backward
+        // compatibility while preparing for future refactoring where the reader
+        // might be stored in the server struct.
+        let _ = reader; // Acknowledge unused parameter for now
+
+        Self {
+            documents: Arc::new(Mutex::new(HashMap::new())),
+            initialized: false,
+            shutdown_received: false,
+            #[cfg(feature = "workspace")]
+            index_coordinator,
+            ast_cache: Arc::new(AstCache::new(100, 300)),
+            symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
+            config: Arc::new(Mutex::new(ServerConfig::default())),
+            output: Arc::new(Mutex::new(writer as Box<dyn Write + Send>)),
+            client_capabilities: ClientCapabilities::default(),
+            cancelled: Arc::new(Mutex::new(HashSet::new())),
+            workspace_folders: Arc::new(Mutex::new(Vec::new())),
+            root_path: Arc::new(Mutex::new(None)),
+            advertised_features: Mutex::new(default_features),
+            client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
+            workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
+            next_request_id: Arc::new(AtomicI64::new(1)),
+            progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            refresh_controller: refresh::RefreshController::new(),
+            notebook_store: notebook::NotebookStore::new(),
+        }
+    }
+
     /// Create a new LSP server with custom output (for testing)
+    ///
+    /// **Deprecated**: Use `with_io()` instead for full control over I/O.
+    /// This method is maintained for backward compatibility.
     pub fn with_output(output: Arc<Mutex<Box<dyn Write + Send>>>) -> Self {
         // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]

@@ -546,35 +546,166 @@ mod corpus_tests {
 
 #[cfg(test)]
 mod highlight_tests {
-    use crate::parse;
+    use crate::{language, parse};
 
     use std::fs;
     use std::path::PathBuf;
+    use tree_sitter::{Query, QueryCursor};
+
+    /// Expected token at a specific position
+    #[derive(Debug, Clone)]
+    struct ExpectedToken {
+        line: usize,
+        column: usize,
+        token_type: String,
+    }
 
     /// Highlight test case containing Perl code and expected token classifications
     #[derive(Debug)]
     struct HighlightTestCase {
         name: String,
         source: String,
-        #[allow(dead_code)]
-        expected_tokens: Vec<String>,
+        expected_tokens: Vec<ExpectedToken>,
     }
 
-    /// Parse a highlight test file
+    /// Parse a highlight test file with annotation format:
+    /// # <- token_type   (points to first character of previous line)
+    /// #  ^ token_type   (points to character using caret positioning)
     fn parse_highlight_file(
         path: &PathBuf,
     ) -> Result<Vec<HighlightTestCase>, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
+        let mut expected_tokens = Vec::new();
+        let mut source_lines = Vec::new();
 
-        // Simple parsing for highlight test files
-        // Each file contains Perl code that should produce specific token classifications
+        for (line_idx, line) in content.lines().enumerate() {
+            if let Some(comment_idx) = line.find('#') {
+                let comment = &line[comment_idx..];
+
+                // Check for <- annotation (points to first char of previous line)
+                if comment.contains("<-") {
+                    if let Some(token_start) = comment.find("<-").map(|i| i + 2) {
+                        let token_type = comment[token_start..].trim().to_string();
+                        if !token_type.is_empty() && line_idx > 0 {
+                            expected_tokens.push(ExpectedToken {
+                                line: line_idx - 1,
+                                column: 0,
+                                token_type,
+                            });
+                        }
+                    }
+                }
+                // Check for ^ annotation (points to specific column)
+                else if comment.contains('^') {
+                    if let Some(caret_idx) = comment.find('^') {
+                        let token_start = comment.find('^').map(|i| i + 1).unwrap_or(caret_idx);
+                        let token_type = comment[token_start..].trim().to_string();
+                        if !token_type.is_empty() && line_idx > 0 {
+                            // Calculate column based on caret position
+                            let column = comment_idx + caret_idx;
+                            expected_tokens.push(ExpectedToken {
+                                line: line_idx - 1,
+                                column,
+                                token_type,
+                            });
+                        }
+                    }
+                }
+
+                // Keep only the non-comment part as source
+                let code_part = &line[..comment_idx];
+                source_lines.push(code_part);
+            } else {
+                source_lines.push(line);
+            }
+        }
+
+        let source = source_lines.join("\n");
+
         let test_case = HighlightTestCase {
             name: path.file_name().unwrap().to_string_lossy().to_string(),
-            source: content,
-            expected_tokens: Vec::new(), // TODO: Parse expected token classifications
+            source,
+            expected_tokens,
         };
 
         Ok(vec![test_case])
+    }
+
+    /// Get actual token classifications using tree-sitter highlight query
+    fn get_actual_tokens(
+        source: &str,
+        tree: &tree_sitter::Tree,
+    ) -> Result<Vec<(usize, usize, String)>, Box<dyn std::error::Error>> {
+        let highlights_scm = fs::read_to_string("tree-sitter-perl/queries/highlights.scm")?;
+        let lang = language();
+        let query = Query::new(&lang, &highlights_scm)?;
+        let mut cursor = QueryCursor::new();
+
+        let mut tokens = Vec::new();
+        let source_bytes = source.as_bytes();
+
+        for match_result in cursor.matches(&query, tree.root_node(), source_bytes) {
+            for capture in match_result.captures {
+                let capture_name = query.capture_names()[capture.index as usize].to_string();
+                let node = capture.node;
+                let start_pos = node.start_position();
+
+                tokens.push((start_pos.row, start_pos.column, capture_name));
+            }
+        }
+
+        Ok(tokens)
+    }
+
+    /// Verify that expected tokens match actual captures
+    fn verify_highlight_tokens(
+        test_case: &HighlightTestCase,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        let tree = parse(&test_case.source)?;
+        let actual_tokens = get_actual_tokens(&test_case.source, &tree)?;
+
+        let mut all_matched = true;
+        let mut failures = Vec::new();
+
+        for expected in &test_case.expected_tokens {
+            // Find matching actual token at the same position
+            let matching = actual_tokens.iter().find(|(line, col, _)| {
+                *line == expected.line && *col == expected.column
+            });
+
+            match matching {
+                Some((_, _, actual_type)) => {
+                    if actual_type != &expected.token_type {
+                        all_matched = false;
+                        failures.push(format!(
+                            "Line {}, Col {}: expected '{}' but got '{}'",
+                            expected.line + 1,
+                            expected.column,
+                            expected.token_type,
+                            actual_type
+                        ));
+                    }
+                }
+                None => {
+                    all_matched = false;
+                    failures.push(format!(
+                        "Line {}, Col {}: expected '{}' but no capture found",
+                        expected.line + 1,
+                        expected.column,
+                        expected.token_type
+                    ));
+                }
+            }
+        }
+
+        if !all_matched {
+            println!("❌ Token mismatches in {}:", test_case.name);
+            for failure in failures {
+                println!("   {}", failure);
+            }
+        }
+
+        Ok(all_matched)
     }
 
     /// Test that highlight files can be parsed without errors
@@ -588,6 +719,8 @@ mod highlight_tests {
 
         let mut total_files = 0;
         let mut parsed_files = 0;
+        let mut verified_files = 0;
+        let mut failed_verifications = Vec::new();
 
         for entry in fs::read_dir(&highlight_dir).unwrap() {
             let entry = entry.unwrap();
@@ -603,7 +736,21 @@ mod highlight_tests {
                             match parse(&test_case.source) {
                                 Ok(_tree) => {
                                     parsed_files += 1;
-                                    println!("✅ {}", test_case.name);
+
+                                    // Verify token classifications
+                                    match verify_highlight_tokens(&test_case) {
+                                        Ok(true) => {
+                                            verified_files += 1;
+                                            println!("✅ {} - all tokens verified", test_case.name);
+                                        }
+                                        Ok(false) => {
+                                            failed_verifications.push(test_case.name.clone());
+                                        }
+                                        Err(e) => {
+                                            println!("⚠️  {} - verification error: {}", test_case.name, e);
+                                            failed_verifications.push(test_case.name.clone());
+                                        }
+                                    }
                                 }
                                 Err(e) => {
                                     println!("❌ Failed to parse '{}': {}", test_case.name, e);
@@ -621,6 +768,16 @@ mod highlight_tests {
         println!("\n📊 Highlight Test Summary:");
         println!("   Total files: {}", total_files);
         println!("   Successfully parsed: {} ✅", parsed_files);
+        println!("   Token verification passed: {} ✅", verified_files);
+        println!("   Token verification failed: {} ❌", failed_verifications.len());
+
+        if !failed_verifications.is_empty() {
+            println!("\nFailed files:");
+            for name in &failed_verifications {
+                println!("   - {}", name);
+            }
+            panic!("{} highlight files failed token verification", failed_verifications.len());
+        }
 
         if parsed_files < total_files {
             panic!("{} highlight files failed to parse", total_files - parsed_files);

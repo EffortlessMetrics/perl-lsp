@@ -16,8 +16,129 @@
 //! - [DAP Implementation Spec](../../docs/DAP_IMPLEMENTATION_SPECIFICATION.md#ac7-breakpoint-management)
 
 use crate::protocol::{Breakpoint, SetBreakpointsArguments};
+use perl_parser::ast::{Node, NodeKind};
+use perl_parser::Parser;
+use ropey::Rope;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+
+// ============= AST Validation Utilities (AC7) =============
+
+/// Check if a line contains only comments or whitespace
+fn is_comment_or_blank_line(ast: &Node, line_start: usize, line_end: usize, source: &str) -> bool {
+    // Fast path: Check if blank (only whitespace)
+    let line_text = &source[line_start..line_end.min(source.len())];
+    if line_text.trim().is_empty() {
+        return true;
+    }
+
+    // Fast path: Check if comment (starts with # after whitespace)
+    if line_text.trim_start().starts_with('#') {
+        return true;
+    }
+
+    // AST-based validation: Check if line contains only comment nodes
+    has_only_comments_in_range(ast, line_start, line_end)
+}
+
+/// Check if all nodes in a range are comments
+fn has_only_comments_in_range(node: &Node, start: usize, end: usize) -> bool {
+    // Check if node overlaps with line range
+    if node.location.start >= end || node.location.end <= start {
+        return false;
+    }
+
+    match &node.kind {
+        NodeKind::Program { statements } => {
+            // Get all nodes that overlap with the line range
+            let nodes_in_range: Vec<_> =
+                statements.iter().filter(|s| s.location.start < end && s.location.end > start).collect();
+
+            if nodes_in_range.is_empty() {
+                return true; // No nodes = blank line
+            }
+
+            // All nodes must be comments
+            nodes_in_range.iter().all(|s| matches!(s.kind, NodeKind::Comment { .. }))
+        }
+        NodeKind::Comment { .. } => true,
+        _ => false,
+    }
+}
+
+/// Check if a byte offset is inside a heredoc interior
+fn is_inside_heredoc_interior(node: &Node, byte_offset: usize) -> bool {
+    // Check if offset is within this node
+    if byte_offset < node.location.start || byte_offset >= node.location.end {
+        // Check children
+        return match &node.kind {
+            NodeKind::Program { statements } => {
+                statements.iter().any(|s| is_inside_heredoc_interior(s, byte_offset))
+            }
+            NodeKind::Heredoc { .. } => {
+                // The heredoc node itself - offset is in range
+                true
+            }
+            _ => {
+                // Recursively check other node types with children
+                false
+            }
+        };
+    }
+
+    // Node contains the offset, check if it's a heredoc
+    matches!(node.kind, NodeKind::Heredoc { .. })
+}
+
+/// Validate a breakpoint against the AST
+///
+/// Returns (verified, message) where:
+/// - verified: true if the breakpoint is valid
+/// - message: error/warning message if not verified
+fn validate_breakpoint_line(source: &str, line: i64) -> (bool, Option<String>) {
+    // Parse the source file
+    let mut parser = Parser::new(source);
+    let ast = match parser.parse() {
+        Ok(ast) => ast,
+        Err(_) => {
+            // Parse error - allow breakpoint but mark as unverified
+            return (false, Some("Unable to parse source file".to_string()));
+        }
+    };
+
+    // Build rope for line mapping
+    let rope = Rope::from_str(source);
+
+    // Convert 1-based line to 0-based
+    let line_idx = (line - 1).max(0) as usize;
+
+    // Check if line is valid
+    if line_idx >= rope.len_lines() {
+        return (false, Some("Line number exceeds file length".to_string()));
+    }
+
+    // Get byte range for the line
+    let line_start = rope.line_to_byte(line_idx);
+    let line_end = if line_idx + 1 < rope.len_lines() {
+        rope.line_to_byte(line_idx + 1)
+    } else {
+        rope.len_bytes()
+    };
+
+    // Validation 1: Comment or blank line
+    if is_comment_or_blank_line(&ast, line_start, line_end, source) {
+        return (false, Some("Breakpoint set on comment or blank line".to_string()));
+    }
+
+    // Validation 2: Inside heredoc interior
+    // Check the start of the line
+    if is_inside_heredoc_interior(&ast, line_start) {
+        return (false, Some("Breakpoint set inside heredoc content".to_string()));
+    }
+
+    // Breakpoint is valid
+    (true, None)
+}
 
 /// Individual breakpoint record
 ///
@@ -134,21 +255,30 @@ impl BreakpointStore {
         // Clear existing breakpoints for this source (REPLACE semantics)
         breakpoints_map.remove(&source_path);
 
+        // Read source file for AST validation (AC7)
+        let source_content = std::fs::read_to_string(&source_path).ok();
+
         // Create new breakpoint records
         let mut records = Vec::new();
         for bp in &source_breakpoints {
             let id = *next_id;
             *next_id += 1;
 
-            // For now, all breakpoints are verified=true
-            // Phase 2 (AC7) will add AST-based validation
+            // AC7: AST-based breakpoint validation
+            let (verified, message) = if let Some(ref content) = source_content {
+                validate_breakpoint_line(content, bp.line)
+            } else {
+                // Can't read file - mark as unverified but still create breakpoint
+                (false, Some("Unable to read source file".to_string()))
+            };
+
             let record = BreakpointRecord {
                 id,
                 line: bp.line,
                 column: bp.column,
                 condition: bp.condition.clone(),
-                verified: true,
-                message: None,
+                verified,
+                message,
             };
 
             records.push(record);
