@@ -51,6 +51,28 @@ impl<'a> Parser<'a> {
         self.recursion_depth = self.recursion_depth.saturating_sub(1);
     }
 
+    /// Run `f` under the recursion depth budget.
+    ///
+    /// - `check_recursion()` increments depth (and may error)
+    /// - depth is decremented on scope exit (even on early return / panic)
+    #[inline]
+    fn with_recursion_guard<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> ParseResult<T>,
+    ) -> ParseResult<T> {
+        self.check_recursion()?;
+
+        struct Guard<'p, 'src>(&'p mut Parser<'src>);
+        impl<'p, 'src> Drop for Guard<'p, 'src> {
+            fn drop(&mut self) {
+                self.0.exit_recursion();
+            }
+        }
+
+        let guard = Guard(self);
+        f(guard.0)
+    }
+
     /// Check if an identifier is a builtin function that can take arguments without parens
     fn is_builtin_function(name: &str) -> bool {
         matches!(

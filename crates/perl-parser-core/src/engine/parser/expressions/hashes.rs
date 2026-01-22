@@ -2,31 +2,22 @@ impl<'a> Parser<'a> {
     /// Parse block specifically for builtin functions (map, grep, sort)
     /// These always parse {} as blocks, never as hashes
     fn parse_builtin_block(&mut self) -> ParseResult<Node> {
-        self.check_recursion()?;
+        self.with_recursion_guard(|s| {
+            let start_token = s.tokens.next()?; // consume {
+            let start = start_token.start;
 
-        // RAII guard to ensure exit_recursion is called even on error
-        struct RecursionGuard<'a, 'b>(&'a mut Parser<'b>);
-        impl<'a, 'b> Drop for RecursionGuard<'a, 'b> {
-            fn drop(&mut self) {
-                self.0.exit_recursion();
+            // Parse the expression inside the block (if any)
+            let mut statements = Vec::new();
+            if s.peek_kind() != Some(TokenKind::RightBrace) {
+                statements.push(s.parse_expression()?);
             }
-        }
-        let _guard = RecursionGuard(self);
 
-        let start_token = _guard.0.tokens.next()?; // consume {
-        let start = start_token.start;
+            s.expect(TokenKind::RightBrace)?;
+            let end = s.previous_position();
 
-        // Parse the expression inside the block (if any)
-        let mut statements = Vec::new();
-        if _guard.0.peek_kind() != Some(TokenKind::RightBrace) {
-            statements.push(_guard.0.parse_expression()?);
-        }
-
-        _guard.0.expect(TokenKind::RightBrace)?;
-        let end = _guard.0.previous_position();
-
-        // Always return a block node for builtin functions
-        Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
+            // Always return a block node for builtin functions
+            Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
+        })
     }
 
     /// Parse hash literal or block
@@ -35,19 +26,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse hash literal or block with context about whether blocks are expected
-    fn parse_hash_or_block_with_context(&mut self, _expect_block: bool) -> ParseResult<Node> {
-        self.check_recursion()?;
-
-        // RAII guard to ensure exit_recursion is called even on error
-        struct RecursionGuard<'a, 'b>(&'a mut Parser<'b>);
-        impl<'a, 'b> Drop for RecursionGuard<'a, 'b> {
-            fn drop(&mut self) {
-                self.0.exit_recursion();
-            }
-        }
-        let _guard = RecursionGuard(self);
-
-        _guard.0.parse_hash_or_block_inner(_expect_block)
+    fn parse_hash_or_block_with_context(&mut self, expect_block: bool) -> ParseResult<Node> {
+        self.with_recursion_guard(|s| s.parse_hash_or_block_inner(expect_block))
     }
 
     fn parse_hash_or_block_inner(&mut self, _expect_block: bool) -> ParseResult<Node> {
@@ -75,7 +55,11 @@ impl<'a> Parser<'a> {
         // Try to parse as expression (which might be hash contents)
         let first_expr = match self.parse_expression() {
             Ok(expr) => expr,
-            Err(_) => {
+            Err(e) => {
+                // Propagate RecursionLimit immediately - don't try alternative parse
+                if matches!(e, ParseError::RecursionLimit) {
+                    return Err(e);
+                }
                 // If we can't parse an expression, parse as block statements
                 let mut statements = Vec::new();
                 while self.peek_kind() != Some(TokenKind::RightBrace) && !self.tokens.is_eof() {
