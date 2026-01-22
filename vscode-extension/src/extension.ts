@@ -94,7 +94,7 @@ export async function activate(context: vscode.ExtensionContext) {
     
     context.subscriptions.push(restartCommand, showOutputCommand, showVersionCommand);
     
-    vscode.window.showInformationMessage('Perl Language Server started successfully');
+    outputChannel.appendLine('Perl Language Server started successfully');
 }
 
 export async function deactivate() {

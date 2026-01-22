@@ -107,17 +107,17 @@
             "verbose"
           ],
           "default": "off",
-          "description": "Controls the logging verbosity of the language server communication. Useful for debugging LSP issues."
+          "markdownDescription": "Controls the logging verbosity of the language server communication. Allowed values: `off`, `messages`, `verbose`. Useful for debugging LSP issues."
         },
         "perl-lsp.enableDiagnostics": {
           "type": "boolean",
           "default": true,
-          "description": "Enable real-time syntax diagnostics"
+          "markdownDescription": "Enable real-time **syntax diagnostics**."
         },
         "perl-lsp.enableSemanticTokens": {
           "type": "boolean",
           "default": true,
-          "description": "Enable semantic syntax highlighting"
+          "markdownDescription": "Enable **semantic syntax highlighting**."
         },
         "perl-lsp.enableFormatting": {
           "type": "boolean",
@@ -127,12 +127,12 @@
         "perl-lsp.formatOnSave": {
           "type": "boolean",
           "default": false,
-          "description": "Format document on save"
+          "markdownDescription": "Format document on save. **Note:** This requires a formatter (like `perltidy`) to be configured."
         },
         "perl-lsp.enableRefactoring": {
           "type": "boolean",
           "default": true,
-          "description": "Enable advanced refactoring features"
+          "markdownDescription": "Enable **advanced refactoring features** (e.g. `Extract Variable`, `Extract Subroutine`)."
         },
         "perl-lsp.perltidyConfig": {
           "type": "string",
