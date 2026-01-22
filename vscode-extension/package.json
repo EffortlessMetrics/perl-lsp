@@ -107,37 +107,37 @@
             "verbose"
           ],
           "default": "off",
-          "markdownDescription": "Controls the logging verbosity of the language server communication. Useful for debugging LSP issues."
+          "description": "Controls the logging verbosity of the language server communication. Useful for debugging LSP issues."
         },
         "perl-lsp.enableDiagnostics": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable real-time syntax diagnostics"
+          "description": "Enable real-time syntax diagnostics"
         },
         "perl-lsp.enableSemanticTokens": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable semantic syntax highlighting"
+          "description": "Enable semantic syntax highlighting"
         },
         "perl-lsp.enableFormatting": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable document formatting using `perltidy`. Requires `perltidy` to be installed on your system."
+          "description": "Enable document formatting using perltidy. Requires perltidy to be installed on your system."
         },
         "perl-lsp.formatOnSave": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Format document on save"
+          "description": "Format document on save"
         },
         "perl-lsp.enableRefactoring": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable advanced refactoring features"
+          "description": "Enable advanced refactoring features"
         },
         "perl-lsp.perltidyConfig": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Path to your `.perltidyrc` configuration file. If omitted, searches workspace and home directory."
+          "description": "Path to your `.perltidyrc` configuration file. If omitted, searches workspace and home directory."
         },
         "perl-lsp.includePaths": {
           "type": "array",
@@ -145,12 +145,12 @@
             "lib",
             "local/lib/perl5"
           ],
-          "markdownDescription": "Additional library paths (like `use lib`) to search for Perl modules. Relative paths resolve from workspace root."
+          "description": "Additional library paths (like `use lib`) to search for Perl modules. Relative paths resolve from workspace root."
         },
         "perl-lsp.enableTestIntegration": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable `Test::More` and `Test2` integration"
+          "description": "Enable Test::More and Test2 integration"
         }
       }
     },
