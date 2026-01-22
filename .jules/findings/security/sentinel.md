@@ -25,15 +25,38 @@
 **Prevention:**
 - Always use `.arg("--")` before passing user-supplied module names or search terms to `perldoc`.
 
-## 2026-01-21 - Process Spawn Before Validation in Debug Adapter
+## 2026-01-21 - Process Spawn Before Validation in Debug Adapter (CRITICAL)
 
-**Vulnerability:** Argument injection and potential arbitrary code execution in `launch_debugger`.
+**Vulnerability:** Command injection via `launch_debugger` allowing arbitrary code execution.
+
+**Attack Vector:**
+An attacker could execute arbitrary Perl code by manipulating the `program` argument in the launch configuration. For example, passing `-e` as program and malicious code as args would execute that code via `perl -d -e "malicious_code"`.
 
 **Affected Functions:**
-- `launch_debugger` in `crates/perl-dap/src/debug_adapter.rs`: Spawned `perl` process before validating that `program` file exists, and failed to use `--` separator.
+- `launch_debugger` in `crates/perl-dap/src/debug_adapter.rs`
 
-**Learning:** `Command::spawn()` executes immediately. Validating arguments *after* spawn is too late, as the process may have already executed malicious code (e.g., via `BEGIN` blocks if argument injection occurred). `perl` interprets arguments starting with `-` as flags unless `--` is used.
+**Root Causes:**
+1. Process spawned *before* validating file existence (race condition)
+2. Missing `--` separator allowed flag injection
+3. Used `exists()` instead of `is_file()` (directories accepted)
+4. No input sanitization (empty/whitespace paths)
 
-**Prevention:**
-- Validate all file paths and arguments *before* calling `spawn()`.
-- Always use `--` separator when passing file paths to `perl` CLI to prevent flag injection.
+**Fix Applied:**
+1. Validate program path *before* `Command::spawn()`
+2. Use `std::fs::metadata().is_file()` to ensure regular files only
+3. Reject empty and whitespace-only paths with clear error
+4. Add `--` separator before program argument
+5. Comprehensive regression tests for all attack vectors
+
+**Learning:**
+- `Command::spawn()` executes immediately; validation must precede it
+- `Path::exists()` returns true for directories, symlinks, devices
+- Always use `--` separator for file arguments to `perl`
+- Empty string inputs can bypass naive path checks
+
+**Prevention Checklist:**
+- [ ] Validate before spawn
+- [ ] Use `is_file()` not `exists()` for file paths
+- [ ] Add `--` separator for file arguments
+- [ ] Reject empty/whitespace inputs
+- [ ] Add regression tests for each attack vector
