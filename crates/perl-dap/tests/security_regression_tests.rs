@@ -103,11 +103,7 @@ fn test_launch_with_empty_program_rejected() {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail for empty program");
             let msg = message.unwrap();
-            assert!(
-                msg.contains("cannot be empty"),
-                "Should indicate empty path: {}",
-                msg
-            );
+            assert!(msg.contains("cannot be empty"), "Should indicate empty path: {}", msg);
         }
         _ => panic!("Expected Response"),
     }

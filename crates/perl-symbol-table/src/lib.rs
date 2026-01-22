@@ -298,23 +298,23 @@ impl SymbolTable {
         while let Some(scope_id) = current_scope_id {
             if let Some(scope) = self.scopes.get(&scope_id) {
                 // Check if symbol is defined in this scope
-                if scope.symbols.contains(name) {
-                    if let Some(symbols) = self.symbols.get(name) {
-                        for symbol in symbols {
-                            if symbol.scope_id == scope_id && symbol.kind == kind {
-                                results.push(symbol);
-                            }
+                if scope.symbols.contains(name)
+                    && let Some(symbols) = self.symbols.get(name)
+                {
+                    for symbol in symbols {
+                        if symbol.scope_id == scope_id && symbol.kind == kind {
+                            results.push(symbol);
                         }
                     }
                 }
 
                 // For 'our' variables, also check package scope
-                if scope.kind != ScopeKind::Package {
-                    if let Some(symbols) = self.symbols.get(name) {
-                        for symbol in symbols {
-                            if symbol.declaration.as_deref() == Some("our") && symbol.kind == kind {
-                                results.push(symbol);
-                            }
+                if scope.kind != ScopeKind::Package
+                    && let Some(symbols) = self.symbols.get(name)
+                {
+                    for symbol in symbols {
+                        if symbol.declaration.as_deref() == Some("our") && symbol.kind == kind {
+                            results.push(symbol);
                         }
                     }
                 }

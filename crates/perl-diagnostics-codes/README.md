@@ -36,7 +36,7 @@ let code = DiagnosticCode::from_message("Missing 'use strict' pragma");
 assert_eq!(code, Some(DiagnosticCode::MissingStrict));
 
 // Parse code string
-let code = DiagnosticCode::from_str("PL102");
+let code = DiagnosticCode::parse_code("PL102");
 assert_eq!(code, Some(DiagnosticCode::UnusedVariable));
 ```
 
