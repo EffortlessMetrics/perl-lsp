@@ -19,6 +19,8 @@ pub enum StatementKind {
     Basic,
     /// Package/subroutine declarations and method calls.
     Declarations,
+    /// Object-oriented constructs (bless, inheritance, overload).
+    ObjectOriented,
     /// qw(...) and related list constructs.
     Qw,
     /// Quote-like operators (q/qq/qx/qr).
@@ -55,9 +57,10 @@ pub enum StatementKind {
     Phasers,
 }
 
-const STATEMENT_KINDS_ALL: [StatementKind; 19] = [
+const STATEMENT_KINDS_ALL: [StatementKind; 20] = [
     StatementKind::Basic,
     StatementKind::Declarations,
+    StatementKind::ObjectOriented,
     StatementKind::Qw,
     StatementKind::QuoteLike,
     StatementKind::Heredoc,
@@ -192,6 +195,9 @@ fn build_strategies_for(kinds: &[StatementKind]) -> Vec<BoxedStrategy<String>> {
             StatementKind::Basic => strategies.push(basic_statement().boxed()),
             StatementKind::Declarations => {
                 strategies.push(r#gen::declarations::declaration_in_context().boxed());
+            }
+            StatementKind::ObjectOriented => {
+                strategies.push(r#gen::object_oriented::object_oriented_in_context().boxed());
             }
             StatementKind::Qw => {
                 let qw = r#gen::qw::qw_in_context();

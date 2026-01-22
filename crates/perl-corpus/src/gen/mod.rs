@@ -9,6 +9,7 @@ pub mod glob;
 pub mod heredoc;
 pub mod io;
 pub mod list_ops;
+pub mod object_oriented;
 pub mod phasers;
 pub mod quote_like;
 pub mod qw;

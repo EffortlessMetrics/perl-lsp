@@ -975,6 +975,24 @@ sub new {
 "#,
     },
     EdgeCase {
+        id: "object.can.does",
+        description: "Method introspection with can/DOES checks.",
+        tags: &["method", "can", "does", "edge-case"],
+        source: r#"package Widget;
+sub new { bless {}, shift }
+sub work { return 1; }
+
+package main;
+my $obj = Widget->new();
+if ($obj->can("work")) {
+    $obj->work();
+}
+if ($obj->DOES("Role::Worker")) {
+    print "role";
+}
+"#,
+    },
+    EdgeCase {
         id: "goto.sub",
         description: "Goto to a subroutine for tail-call style dispatch.",
         tags: &["goto", "subroutine", "edge-case"],
@@ -1110,6 +1128,19 @@ weaken($b->{prev});
     "" => 0,
     " spaced key " => 1,
     "0" => "zero",
+};
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "unicode.escapes",
+        description: "Unicode escapes stored in scalars and hashes.",
+        source: r#"use utf8;
+my $smile = "\x{1F600}";
+my $text = "\x{4E16}\x{754C}";
+my $data = {
+    emoji => $smile,
+    cjk => $text,
+    mixed => "$text $smile",
 };
 "#,
     },

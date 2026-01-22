@@ -89,6 +89,8 @@ enum Generator {
     ListOps,
     /// Generate package/subroutine declarations and method calls
     Declarations,
+    /// Generate object-oriented patterns (bless, inheritance, overload)
+    ObjectOriented,
     /// Generate expression-heavy statements
     Expressions,
     /// Generate regex match/substitution/transliteration statements
@@ -371,6 +373,18 @@ fn main() -> Result<()> {
                             .map_err(|e| anyhow::anyhow!("{e:?}"))?
                             .current();
                         println!("# Test case {} (declarations)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::ObjectOriented => {
+                    use perl_corpus::r#gen::object_oriented::object_oriented_in_context;
+                    for i in 0..count {
+                        let value = object_oriented_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (object-oriented)", i + 1);
                         println!("{}", value);
                         println!();
                     }
