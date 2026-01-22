@@ -1,16 +1,26 @@
 # Issue: Tie NodeKind Never Seen in Corpus
 
-## Problem Description
+> **STATUS: ⚠️ NOT YET IMPLEMENTED** - This is a real feature gap, not a coverage gap.
+>
+> The parser does NOT have a `NodeKind::Tie` variant. The `tie` builtin is currently
+> parsed as a regular function call (`NodeKind::FunctionCall`), not as a distinct
+> construct. Implementing a dedicated `Tie` NodeKind would require parser enhancements.
+>
+> **Current behavior**: `tie %hash, 'Package', @args` → `FunctionCall { name: "tie", args: [...] }`
+>
+> **Related issue**: #437 (Corpus Coverage: Add tie-interface test fixtures)
 
-### What We Found
+## Problem Description (Updated)
 
-The `Tie` NodeKind is **never seen** in any corpus test fixture across all four corpus layers:
-- Tree-sitter corpus (`tree-sitter-perl/test/corpus/`): 0 occurrences
-- Highlight fixtures (`tree-sitter-perl/test/highlight/`): 0 occurrences
-- Test corpus (`test_corpus/`): 0 occurrences
-- Perl-corpus generators (`crates/perl-corpus/src/gen/`): 0 generators
+### What We Found (Clarification)
 
-This represents a **6% gap** in NodeKind coverage (4 of 68 NodeKinds never seen).
+~~The `Tie` NodeKind is **never seen** in any corpus test fixture.~~
+
+**Clarification**: There is no `NodeKind::Tie` variant in the parser. The parser
+has 55 NodeKind variants (not 68 as previously stated), and `Tie` is not among them.
+
+The `tie` and `untie` builtins are currently parsed as regular function calls. This
+means semantic analysis for tie operations is limited.
 
 ### Minimal Reproduction
 
