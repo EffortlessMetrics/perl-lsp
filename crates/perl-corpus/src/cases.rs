@@ -56,11 +56,31 @@ B
 "#,
     },
     EdgeCase {
+        id: "heredoc.terminator.content",
+        description: "Heredoc content containing the terminator text inline.",
+        tags: &["heredoc", "edge-case", "parser-sensitive"],
+        source: r#"my $text = <<'END';
+This line mentions END but is not the terminator.
+ENDINGS are tricky too.
+END
+"#,
+    },
+    EdgeCase {
         id: "quote.like",
         description: "Quote-like operator with interpolation.",
         tags: &["quote-like", "interpolation"],
         source: r#"my $name = "Ada";
 my $text = qq{Hello $name};
+"#,
+    },
+    EdgeCase {
+        id: "quote.delimiters.complex",
+        description: "Quote-like operators with mixed delimiters.",
+        tags: &["quote-like", "delimiter", "edge-case"],
+        source: r#"my $raw = q!literal!;
+my $interp = qq{value=$raw};
+my $cmd = qx|echo ok|;
+my $re = qr#foo.+bar#i;
 "#,
     },
     EdgeCase {
@@ -245,6 +265,24 @@ warn $@ if $@;
     my $x = 1;
     $x + 1;
 };
+"#,
+    },
+    EdgeCase {
+        id: "nesting.deep.blocks",
+        description: "Deeply nested blocks and conditionals.",
+        tags: &["block", "flow", "edge-case", "parser-sensitive"],
+        source: r#"my $value = 0;
+if ($value) {
+    if ($value > 1) {
+        if ($value > 2) {
+            if ($value > 3) {
+                if ($value > 4) {
+                    $value++;
+                }
+            }
+        }
+    }
+}
 "#,
     },
     EdgeCase {
@@ -691,6 +729,16 @@ if ($text =~ /(?<=foo)bar/) {
         source: r#"my $text = "foo123bar";
 if ($text =~ /(?<=foo\d{1,3})bar/) {
     print "match";
+}
+"#,
+    },
+    EdgeCase {
+        id: "regex.backtracking",
+        description: "Regex with nested quantifiers that can trigger backtracking.",
+        tags: &["regex", "edge-case", "parser-sensitive"],
+        source: r#"my $text = "aaaaaaaaab";
+if ($text =~ /^(a+)+b$/) {
+    print "ok";
 }
 "#,
     },

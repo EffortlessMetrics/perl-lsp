@@ -61,6 +61,7 @@ let sample_case = sample_complex_case(7);
 - Filetest operator coverage (stacked and handle-based checks)
 - Built-in call coverage (pack/unpack, split/join, printf/print/say/system, warn/die, substr/index/length, pos/study, quotemeta, vec, bless/ref, caller/wantarray, push/pop, shift/unshift, splice, reverse, rand/int, abs/sqrt/atan2, hex/oct, chr/ord, uc/lc/ucfirst/lcfirst, each/delete, gmtime/localtime, sleep/alarm, chdir/mkdir/rmdir/rename/unlink, chmod/chown, link/symlink/readlink, umask/truncate, stat/lstat, defined/exists, formline, fileno, eof)
 - Sigil-heavy variable and dereference generator
+- Ambiguity stress generator (slash vs regex, hash vs block, indirect objects, deep nesting)
 - Expanded expressions: repetition operator (x), exponentiation (**), string comparisons, and isa operator
 - Expanded edge cases: POD, v-strings, prototypes, signature+attribute combos, array/hash slices, postfix control flow, postfix for loops, goto labels, flip-flop operators, AUTOLOAD/DESTROY, overload, symbolic references, DATA/END sections, PerlIO layers, signal handlers, source filters, Inline::C/XS/FFI heredocs, bareword filehandles, lvalue substr assignments, SUPER:: dispatch, mro pragmas, y/// transliteration, nondestructive substitution (s///r), variable attributes, utf8/unicode escapes, named Unicode escapes, state/local/our declarations, async/await, multiple heredocs on one line, Unicode property regex, regex conditionals, regex set ops, CORE::GLOBAL overrides, use constant hashes, scalar-ref open, diamond operator readline, variable-length lookbehind, postfix coderef deref, and special constants
 
@@ -78,6 +79,7 @@ perl-corpus stats --corpus tree-sitter-perl/test/corpus --detailed
 perl-corpus gen --generator list-ops --count 5
 perl-corpus gen --generator filetest --count 5
 perl-corpus gen --generator builtins --count 5
+perl-corpus gen --generator ambiguity --count 5
 ```
 
 ## License

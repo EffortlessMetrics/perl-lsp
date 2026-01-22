@@ -93,6 +93,8 @@ enum Generator {
     Expressions,
     /// Generate regex match/substitution/transliteration statements
     Regex,
+    /// Generate parser-ambiguity stress samples
+    Ambiguity,
     /// Generate sigil and dereference samples
     Sigils,
     /// Generate compile-time phase blocks (BEGIN/CHECK/UNITCHECK/INIT/END)
@@ -393,6 +395,18 @@ fn main() -> Result<()> {
                             .map_err(|e| anyhow::anyhow!("{e:?}"))?
                             .current();
                         println!("# Test case {} (regex)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::Ambiguity => {
+                    use perl_corpus::r#gen::ambiguity::ambiguity_in_context;
+                    for i in 0..count {
+                        let value = ambiguity_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (ambiguity)", i + 1);
                         println!("{}", value);
                         println!();
                     }

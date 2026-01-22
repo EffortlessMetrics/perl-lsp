@@ -41,6 +41,9 @@ fn advanced_pattern() -> impl Strategy<Value = String> {
         Just("(?R)".to_string()),
         Just("\\p{Latin}+".to_string()),
         Just("a(*SKIP)(*FAIL)|abc".to_string()),
+        Just("^(a+)+b$".to_string()),
+        Just("(?<=foo\\d{1,3})bar".to_string()),
+        Just("(?{ $count++ })x".to_string()),
     ]
 }
 

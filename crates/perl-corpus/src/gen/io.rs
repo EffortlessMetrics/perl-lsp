@@ -62,7 +62,15 @@ pub fn io_in_context() -> impl Strategy<Value = String> {
                 .to_string(),
         ),
         Just(
+            "open my $fh, \"<:encoding(UTF-8)\", \"file.txt\" or die $!;\nbinmode $fh, \":raw\";\n"
+                .to_string(),
+        ),
+        Just(
             "open my $fh, '>', \"output.log\" or die $!;\nmy $bytes = syswrite $fh, \"payload\\n\";\n"
+                .to_string(),
+        ),
+        Just(
+            "my $data = \"hello\\nworld\\n\";\nopen my $fh, '<', \\$data or die $!;\nmy $line = <$fh>;\n"
                 .to_string(),
         ),
         Just(

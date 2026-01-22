@@ -47,13 +47,15 @@ pub enum StatementKind {
     Expressions,
     /// Regex match/substitution/transliteration.
     Regex,
+    /// Parser ambiguity and stress cases.
+    Ambiguity,
     /// Sigil-heavy variable and dereference patterns.
     Sigils,
     /// Compile-time phase blocks (BEGIN/CHECK/UNITCHECK/INIT/END).
     Phasers,
 }
 
-const STATEMENT_KINDS_ALL: [StatementKind; 18] = [
+const STATEMENT_KINDS_ALL: [StatementKind; 19] = [
     StatementKind::Basic,
     StatementKind::Declarations,
     StatementKind::Qw,
@@ -70,6 +72,7 @@ const STATEMENT_KINDS_ALL: [StatementKind; 18] = [
     StatementKind::ListOps,
     StatementKind::Expressions,
     StatementKind::Regex,
+    StatementKind::Ambiguity,
     StatementKind::Sigils,
     StatementKind::Phasers,
 ];
@@ -229,6 +232,9 @@ fn build_strategies_for(kinds: &[StatementKind]) -> Vec<BoxedStrategy<String>> {
             }
             StatementKind::Regex => {
                 strategies.push(r#gen::regex::regex_in_context().boxed());
+            }
+            StatementKind::Ambiguity => {
+                strategies.push(r#gen::ambiguity::ambiguity_in_context().boxed());
             }
             StatementKind::Sigils => {
                 strategies.push(r#gen::sigils::sigil_in_context().boxed());

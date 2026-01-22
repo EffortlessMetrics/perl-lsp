@@ -1,3 +1,4 @@
+pub mod ambiguity;
 pub mod builtins;
 pub mod control_flow;
 pub mod declarations;
