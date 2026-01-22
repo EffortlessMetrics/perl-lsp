@@ -10,6 +10,12 @@ repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 readme = "README.md"
 keywords = ["perl", "parser", "lsp", "dap", "debug"]
 categories = ["development-tools", "parsing"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
 
 [[bin]]
 name = "perl-dap"

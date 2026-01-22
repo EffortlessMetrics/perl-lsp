@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
 description = "Workspace indexing and refactoring orchestration for Perl"
+readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
 homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
@@ -14,14 +15,15 @@ categories = ["parsing", "development-tools", "text-editors"]
 include = [
   "src/**",
   "Cargo.toml",
-  "LICENSE*"
+  "LICENSE*",
+  "README.md"
 ]
 
 [lib]
 doctest = false
 
 [dependencies]
-perl-parser-core = { path = "../perl-parser-core" }
+perl-parser-core = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-symbol-types = { workspace = true }
 parking_lot = "0.12.5"

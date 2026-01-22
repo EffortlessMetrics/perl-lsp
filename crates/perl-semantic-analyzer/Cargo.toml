@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
 description = "Semantic analysis and symbol extraction for Perl"
+readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
 homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
@@ -14,15 +15,16 @@ categories = ["parsing", "development-tools", "text-editors"]
 include = [
   "src/**",
   "Cargo.toml",
-  "LICENSE*"
+  "LICENSE*",
+  "README.md"
 ]
 
 [lib]
 doctest = false
 
 [dependencies]
-perl-parser-core = { path = "../perl-parser-core" }
-perl-workspace-index = { path = "../perl-workspace-index" }
+perl-parser-core = { workspace = true }
+perl-workspace-index = { workspace = true }
 perl-symbol-types = { workspace = true }
 regex = "1.12.2"
 rustc-hash = "2.1.1"

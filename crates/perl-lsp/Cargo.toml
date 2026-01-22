@@ -20,12 +20,12 @@ include = [
 ]
 
 [dependencies]
-perl-parser = { path = "../perl-parser", version = "0.8.8", features = ["test-performance"] }
-perl-lsp-providers = { path = "../perl-lsp-providers", version = "0.8.8", features = ["lsp-compat"] }
-perl-lsp-protocol = { path = "../perl-lsp-protocol", version = "0.8.8" }
-perl-lsp-transport = { path = "../perl-lsp-transport", version = "0.8.8" }
-perl-lexer = { path = "../perl-lexer", version = "0.8.8" }
-perl-position-tracking = { path = "../perl-position-tracking", version = "0.8.8", features = ["lsp-compat"] }
+perl-parser = { workspace = true, features = ["test-performance"] }
+perl-lsp-providers = { workspace = true, features = ["lsp-compat"] }
+perl-lsp-protocol = { workspace = true }
+perl-lsp-transport = { workspace = true }
+perl-lexer = { workspace = true }
+perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 lsp-types = "0.97.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -84,7 +84,7 @@ pretty_assertions = "1.4.1"
 serial_test = "3.3.1"
 tempfile = "3.24.0"
 proptest = "1.9.0"
-perl-corpus = { version = "0.8.8" }
+perl-corpus = { workspace = true }
 which = "8.0.0"
 parking_lot = "0.12.5"
 criterion = "0.8.1"

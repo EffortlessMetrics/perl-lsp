@@ -25,15 +25,15 @@ include = [
 doctest = false
 
 [dependencies]
-perl-lexer = { path = "../perl-lexer" }
-perl-parser-core = { path = "../perl-parser-core" }
-perl-semantic-analyzer = { path = "../perl-semantic-analyzer" }
-perl-workspace-index = { path = "../perl-workspace-index" }
-perl-refactoring = { path = "../perl-refactoring" }
-perl-incremental-parsing = { path = "../perl-incremental-parsing", optional = true }
-perl-tdd-support = { path = "../perl-tdd-support" }
-perl-lsp-providers = { path = "../perl-lsp-providers", default-features = false }
-perl-dap = { path = "../perl-dap" }
+perl-lexer = { workspace = true }
+perl-parser-core = { workspace = true }
+perl-semantic-analyzer = { workspace = true }
+perl-workspace-index = { workspace = true }
+perl-refactoring = { workspace = true }
+perl-incremental-parsing = { workspace = true, optional = true }
+perl-tdd-support = { workspace = true }
+perl-lsp-providers = { workspace = true }
+perl-dap = { workspace = true }
 thiserror = "2.0.17"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"

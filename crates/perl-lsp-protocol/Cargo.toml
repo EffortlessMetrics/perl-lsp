@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
 description = "JSON-RPC/LSP protocol types and capability configuration for perl-lsp"
+readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
 homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
@@ -14,7 +15,8 @@ categories = ["development-tools", "text-editors"]
 include = [
   "src/**",
   "Cargo.toml",
-  "LICENSE*"
+  "LICENSE*",
+  "README.md"
 ]
 
 [dependencies]

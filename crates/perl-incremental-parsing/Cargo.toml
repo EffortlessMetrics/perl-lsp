@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
 description = "Incremental parsing support for Perl"
+readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
 homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
@@ -14,15 +15,16 @@ categories = ["parsing", "development-tools", "text-editors"]
 include = [
   "src/**",
   "Cargo.toml",
-  "LICENSE*"
+  "LICENSE*",
+  "README.md"
 ]
 
 [lib]
 doctest = false
 
 [dependencies]
-perl-parser-core = { path = "../perl-parser-core" }
-perl-lexer = { path = "../perl-lexer" }
+perl-parser-core = { workspace = true }
+perl-lexer = { workspace = true }
 anyhow = "1.0.100"
 lsp-types = "0.97.0"
 ropey = "1.6.1"

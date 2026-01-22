@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
 description = "LSP transport layer with Content-Length message framing for perl-lsp"
+readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
 homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
@@ -14,11 +15,12 @@ categories = ["development-tools", "text-editors"]
 include = [
   "src/**",
   "Cargo.toml",
-  "LICENSE*"
+  "LICENSE*",
+  "README.md"
 ]
 
 [dependencies]
-perl-lsp-protocol = { path = "../perl-lsp-protocol", version = "0.8.8" }
+perl-lsp-protocol = { workspace = true }
 serde_json = "1.0.149"
 
 [lints]
