@@ -92,7 +92,7 @@ impl<'a> Parser<'a> {
 
                     expr = Node::new(
                         NodeKind::Binary {
-                            op: op_token.text,
+                            op: op_token.text.to_string(),
                             left: Box::new(expr),
                             right: Box::new(right),
                         },
@@ -117,7 +117,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text,
+                    op: op_token.text.to_string(),
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -137,7 +137,7 @@ impl<'a> Parser<'a> {
             let end = operand.location.end;
 
             return Ok(Node::new(
-                NodeKind::Unary { op: op_token.text, operand: Box::new(operand) },
+                NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(operand) },
                 SourceLocation { start, end },
             ));
         }
@@ -248,7 +248,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text,
+                    op: op_token.text.to_string(),
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -271,7 +271,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text,
+                    op: op_token.text.to_string(),
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -294,7 +294,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text,
+                    op: op_token.text.to_string(),
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -317,7 +317,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text,
+                    op: op_token.text.to_string(),
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -340,7 +340,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text,
+                    op: op_token.text.to_string(),
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -363,7 +363,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text,
+                    op: op_token.text.to_string(),
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
@@ -392,7 +392,7 @@ impl<'a> Parser<'a> {
 
                         expr = Node::new(
                             NodeKind::Binary {
-                                op: op_token.text,
+                                op: op_token.text.to_string(),
                                 left: Box::new(expr),
                                 right: Box::new(right),
                             },
@@ -474,7 +474,7 @@ impl<'a> Parser<'a> {
                             // Normal binary operation
                             expr = Node::new(
                                 NodeKind::Binary {
-                                    op: op_token.text,
+                                    op: op_token.text.to_string(),
                                     left: Box::new(expr),
                                     right: Box::new(right),
                                 },
@@ -485,7 +485,7 @@ impl<'a> Parser<'a> {
                         // Normal binary operation for == and !=
                         expr = Node::new(
                             NodeKind::Binary {
-                                op: op_token.text,
+                                op: op_token.text.to_string(),
                                 left: Box::new(expr),
                                 right: Box::new(right),
                             },
@@ -519,7 +519,7 @@ impl<'a> Parser<'a> {
 
                     expr = Node::new(
                         NodeKind::Binary {
-                            op: op_token.text,
+                            op: op_token.text.to_string(),
                             left: Box::new(expr),
                             right: Box::new(right),
                         },
@@ -528,7 +528,7 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::Identifier => {
                     // Check if it's ISA operator
-                    if self.tokens.peek()?.text == "ISA" {
+                    if &*self.tokens.peek()?.text == "ISA" {
                         let _op_token = self.tokens.next()?;
                         let right = self.parse_shift()?;
                         let start = expr.location.start;
@@ -567,7 +567,7 @@ impl<'a> Parser<'a> {
 
                     expr = Node::new(
                         NodeKind::Binary {
-                            op: op_token.text,
+                            op: op_token.text.to_string(),
                             left: Box::new(expr),
                             right: Box::new(right),
                         },
@@ -595,7 +595,7 @@ impl<'a> Parser<'a> {
 
                     expr = Node::new(
                         NodeKind::Binary {
-                            op: op_token.text,
+                            op: op_token.text.to_string(),
                             left: Box::new(expr),
                             right: Box::new(right),
                         },
@@ -623,7 +623,7 @@ impl<'a> Parser<'a> {
 
                     expr = Node::new(
                         NodeKind::Binary {
-                            op: op_token.text,
+                            op: op_token.text.to_string(),
                             left: Box::new(expr),
                             right: Box::new(right),
                         },
@@ -649,7 +649,7 @@ impl<'a> Parser<'a> {
 
             expr = Node::new(
                 NodeKind::Binary {
-                    op: op_token.text,
+                    op: op_token.text.to_string(),
                     left: Box::new(expr),
                     right: Box::new(right),
                 },
