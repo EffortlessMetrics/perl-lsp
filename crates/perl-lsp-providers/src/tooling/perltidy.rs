@@ -227,6 +227,7 @@ impl PerlTidyFormatter {
         // Build argument list
         let mut args: Vec<String> = self.config.to_args();
         // SECURITY: Add `--` to prevent argument injection via filenames starting with `-`
+        // (e.g., a file named `-rf` would otherwise be interpreted as a flag)
         args.push("--".to_string());
         args.push(file_path.to_string_lossy().into_owned());
 
