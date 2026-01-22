@@ -179,12 +179,11 @@ pub fn normalize_uri(uri: &str) -> String {
 
     // Last resort: if it looks like a file:// URI but is malformed,
     // try to extract the path and reconstruct properly
-    if uri.starts_with("file://") {
-        if let Some(fs_path) = uri_to_fs_path(uri) {
-            if let Ok(normalized) = fs_path_to_uri(&fs_path) {
-                return normalized;
-            }
-        }
+    if uri.starts_with("file://")
+        && let Some(fs_path) = uri_to_fs_path(uri)
+        && let Ok(normalized) = fs_path_to_uri(&fs_path)
+    {
+        return normalized;
     }
 
     // Final fallback: return as-is for special URIs like untitled:

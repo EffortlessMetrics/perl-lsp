@@ -1,16 +1,19 @@
 # Issue: Glob NodeKind Never Seen in Corpus
 
-## Problem Description
+> **STATUS: ✅ RESOLVED** - Glob NodeKind exists and has corpus coverage.
+>
+> - `NodeKind::Glob { pattern }` implemented in `crates/perl-parser-core/src/engine/ast.rs`
+> - Parser support in `crates/perl-parser-core/src/engine/parser/expressions/primary.rs`
+> - Test corpus: `test_corpus/glob_expressions.pl` (added in PR #404)
+> - Also covered in: `test_corpus/legacy_syntax.pl`, `test_corpus/advanced_regex.pl`
 
-### What We Found
+## Original Problem Description (Historical)
 
-The `Glob` NodeKind is **never seen** in any corpus test fixture across all four corpus layers:
-- Tree-sitter corpus (`tree-sitter-perl/test/corpus/`): 0 occurrences
-- Highlight fixtures (`tree-sitter-perl/test/highlight/`): 0 occurrences
-- Test corpus (`test_corpus/`): 0 occurrences
-- Perl-corpus generators (`crates/perl-corpus/src/gen/`): 0 generators
+### What We Found (Now Outdated)
 
-This represents a **6% gap** in NodeKind coverage (4 of 68 NodeKinds never seen).
+~~The `Glob` NodeKind is **never seen** in any corpus test fixture.~~
+
+**Current status**: `NodeKind::Glob { pattern }` exists and is actively used. Test corpus coverage was added in commit 28552903.
 
 ### Minimal Reproduction
 

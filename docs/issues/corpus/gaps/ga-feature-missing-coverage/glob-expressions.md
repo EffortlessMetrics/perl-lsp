@@ -1,16 +1,19 @@
 # Issue: Glob Expressions - No Corpus Coverage
 
-## Problem Description
+> **STATUS: ✅ RESOLVED** - Corpus coverage has been added.
+>
+> - Test corpus: `test_corpus/glob_expressions.pl` (8+ test cases)
+> - Additional coverage: `test_corpus/legacy_syntax.pl`, `test_corpus/advanced_regex.pl`
+> - Added in PR #404 (commit 28552903)
 
-### What We Found
+## Original Problem Description (Historical)
 
-Glob expressions have **zero coverage** in the corpus despite being a P0 critical feature in the GA (Grammar Analyzer) feature list:
-- Tree-sitter corpus (`tree-sitter-perl/test/corpus/`): 0 test cases
-- Highlight fixtures (`tree-sitter-perl/test/highlight/`): 0 test cases
-- Test corpus (`test_corpus/`): 0 test cases
-- Perl-corpus generators (`crates/perl-corpus/src/gen/`): 0 generators
+### What We Found (Now Outdated)
 
-This represents a critical gap in test coverage for file pattern matching, a commonly used Perl feature.
+~~Glob expressions have **zero coverage** in the corpus.~~
+
+**Current status**: Corpus coverage was added. The parser supports glob expressions
+via `NodeKind::Glob { pattern }` and test fixtures now exercise this feature.
 
 ### Minimal Reproduction
 

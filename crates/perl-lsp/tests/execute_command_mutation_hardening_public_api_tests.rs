@@ -319,10 +319,8 @@ fn test_parameter_validation_comprehensive() {
     temp_file.write_all(b"").expect("Failed to write to temp file");
     let temp_path = temp_file.path().to_string_lossy().to_string();
 
-    let result = provider.execute_command(
-        "perl.runTestSub",
-        vec![Value::String(temp_path.clone())],
-    );
+    let result =
+        provider.execute_command("perl.runTestSub", vec![Value::String(temp_path.clone())]);
     assert!(result.is_err(), "runTestSub should fail with missing subroutine name");
     let error_msg = result.unwrap_err();
     assert!(
@@ -334,10 +332,7 @@ fn test_parameter_validation_comprehensive() {
     // Test with invalid subroutine name type
     let result = provider.execute_command(
         "perl.runTestSub",
-        vec![
-            Value::String(temp_path.clone()),
-            Value::Number(serde_json::Number::from(456)),
-        ],
+        vec![Value::String(temp_path.clone()), Value::Number(serde_json::Number::from(456))],
     );
     assert!(result.is_err(), "runTestSub should fail with invalid subroutine name type");
     let error_msg = result.unwrap_err();

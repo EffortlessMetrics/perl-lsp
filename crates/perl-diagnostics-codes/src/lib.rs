@@ -254,7 +254,7 @@ impl DiagnosticCode {
     }
 
     /// Try to parse a code string into a DiagnosticCode.
-    pub fn from_str(code: &str) -> Option<DiagnosticCode> {
+    pub fn parse_code(code: &str) -> Option<DiagnosticCode> {
         match code {
             "PL001" => Some(DiagnosticCode::ParseError),
             "PL002" => Some(DiagnosticCode::SyntaxError),
@@ -370,8 +370,8 @@ mod tests {
 
     #[test]
     fn test_from_str() {
-        assert_eq!(DiagnosticCode::from_str("PL001"), Some(DiagnosticCode::ParseError));
-        assert_eq!(DiagnosticCode::from_str("INVALID"), None);
+        assert_eq!(DiagnosticCode::parse_code("PL001"), Some(DiagnosticCode::ParseError));
+        assert_eq!(DiagnosticCode::parse_code("INVALID"), None);
     }
 
     #[test]

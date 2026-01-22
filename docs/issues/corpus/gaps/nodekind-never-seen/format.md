@@ -1,16 +1,19 @@
 # Issue: Format NodeKind Never Seen in Corpus
 
-## Problem Description
+> **STATUS: ✅ RESOLVED** - Format NodeKind exists and has corpus coverage.
+>
+> - `NodeKind::Format` implemented in `crates/perl-parser-core/src/engine/ast.rs`
+> - Parser support in `crates/perl-parser-core/src/engine/parser/declarations.rs`
+> - Test corpus: `test_corpus/format_statements.pl` (added in PR #404)
+> - Also covered in: `test_corpus/legacy_syntax.pl`
 
-### What We Found
+## Original Problem Description (Historical)
 
-The `Format` NodeKind is **never seen** in any corpus test fixture across all four corpus layers:
-- Tree-sitter corpus (`tree-sitter-perl/test/corpus/`): 0 occurrences
-- Highlight fixtures (`tree-sitter-perl/test/highlight/`): 0 occurrences
-- Test corpus (`test_corpus/`): 0 occurrences
-- Perl-corpus generators (`crates/perl-corpus/src/gen/`): 0 generators
+### What We Found (Now Outdated)
 
-This represents a **6% gap** in NodeKind coverage (4 of 68 NodeKinds never seen).
+~~The `Format` NodeKind is **never seen** in any corpus test fixture.~~
+
+**Current status**: `NodeKind::Format { name, body }` exists and is actively used. Test corpus coverage was added in commit 28552903.
 
 ### Minimal Reproduction
 

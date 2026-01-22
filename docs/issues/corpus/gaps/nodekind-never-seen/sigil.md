@@ -1,16 +1,27 @@
 # Issue: Sigil NodeKind Never Seen in Corpus
 
-## Problem Description
+> **STATUS: ⚠️ NOT A NODEKIND** - This is intentional design, not a coverage gap.
+>
+> The parser does NOT have a `NodeKind::Sigil` variant. Sigils are captured as a
+> `String` field within `NodeKind::Variable { sigil, name }`. This design was chosen
+> because sigils are inherently part of variable constructs in Perl, not standalone
+> semantic units.
+>
+> **Design decision**: Option 2 (Keep Sigils as Part of Other Nodes) - see below.
 
-### What We Found
+## Original Problem Description (Now Clarified)
 
-The `Sigil` NodeKind is **never seen** in any corpus test fixture across all four corpus layers:
-- Tree-sitter corpus (`tree-sitter-perl/test/corpus/`): 0 occurrences
-- Highlight fixtures (`tree-sitter-perl/test/highlight/`): 0 occurrences
-- Test corpus (`test_corpus/`): 0 occurrences
-- Perl-corpus generators (`crates/perl-corpus/src/gen/`): 0 generators
+### What We Found (Clarification)
 
-This represents a **6% gap** in NodeKind coverage (4 of 68 NodeKinds never seen).
+~~The `Sigil` NodeKind is **never seen** in any corpus test fixture.~~
+
+**Clarification**: There is no `NodeKind::Sigil` variant in the parser. The parser
+has 59 NodeKind variants (not 68 as previously stated), and `Sigil` is not among them.
+
+Sigils (`$`, `@`, `%`, `&`, `*`) are represented as the `sigil: String` field in:
+- `NodeKind::Variable { sigil, name }` - for variables like `$foo`, `@array`, `%hash`
+
+This is intentional - sigils are intrinsically part of the variable identifier in Perl.
 
 ### Minimal Reproduction
 

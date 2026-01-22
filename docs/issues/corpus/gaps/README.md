@@ -2,17 +2,19 @@
 
 This directory contains documented gaps in the parser's corpus coverage.
 
-**Status**: These gaps need closure before v0.9.0 release.
+**Status**: Most gaps have been addressed. Remaining items tracked below.
 
 ---
 
 ## Summary
 
-| Category | Count | Priority |
-|----------|-------|----------|
-| GA Feature Missing Coverage | 4 | P0 |
-| NodeKind Never Seen | 4 | P1 |
-| Timeout/Hang Risks | 13 | P0-P2 |
+| Category | Count | Priority | Status |
+|----------|-------|----------|--------|
+| GA Feature Missing Coverage | 4 | P0 | 2 resolved, 2 remaining |
+| NodeKind Coverage Status | 4 | P1 | 2 resolved, 2 clarified |
+| Timeout/Hang Risks | 13 | P0-P2 | tracking |
+
+**Note**: The parser has 59 NodeKind variants (not 68 as previously stated).
 
 ---
 
@@ -21,24 +23,24 @@ This directory contains documented gaps in the parser's corpus coverage.
 Features advertised as GA but lacking test fixtures:
 
 - [continue-redo-statements](ga-feature-missing-coverage/continue-redo-statements.md)
-- [format-statements](ga-feature-missing-coverage/format-statements.md)
-- [glob-expressions](ga-feature-missing-coverage/glob-expressions.md)
-- [tie-interface](ga-feature-missing-coverage/tie-interface.md)
+- ~~[format-statements](ga-feature-missing-coverage/format-statements.md)~~ ✅ RESOLVED - corpus added
+- ~~[glob-expressions](ga-feature-missing-coverage/glob-expressions.md)~~ ✅ RESOLVED - corpus added
+- [tie-interface](ga-feature-missing-coverage/tie-interface.md) - NodeKind not yet implemented
 
 **Required action**: Add fixtures/tests that exercise these features.
 
 ---
 
-## NodeKind Never Seen (P1)
+## NodeKind Coverage Status (P1)
 
-NodeKinds defined in the parser but never encountered in corpus:
+Status of NodeKinds previously flagged as "never seen":
 
-- [format](nodekind-never-seen/format.md)
-- [glob](nodekind-never-seen/glob.md)
-- [sigil](nodekind-never-seen/sigil.md)
-- [tie](nodekind-never-seen/tie.md)
+- ~~[format](nodekind-never-seen/format.md)~~ ✅ RESOLVED - NodeKind exists, corpus added (`test_corpus/format_statements.pl`)
+- ~~[glob](nodekind-never-seen/glob.md)~~ ✅ RESOLVED - NodeKind exists, corpus added (`test_corpus/glob_expressions.pl`)
+- [sigil](nodekind-never-seen/sigil.md) - ⚠️ NOT A NODEKIND - sigils are fields in `Variable` nodes (intentional design)
+- [tie](nodekind-never-seen/tie.md) - ⚠️ NOT A NODEKIND - `Tie` not yet implemented in parser
 
-**Required action**: Determine if intentional (retire/alias) or coverage gap (add fixtures).
+**Required action**: For Sigil, document design decision. For Tie, implement NodeKind if needed.
 
 ---
 
