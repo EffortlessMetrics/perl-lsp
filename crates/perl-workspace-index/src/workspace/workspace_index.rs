@@ -70,6 +70,11 @@ use std::sync::Arc;
 use std::time::Instant;
 use url::Url;
 
+// Re-export URI utilities for backward compatibility
+#[cfg(not(target_arch = "wasm32"))]
+pub use perl_uri::{fs_path_to_uri, uri_to_fs_path};
+pub use perl_uri::{is_file_uri, is_special_scheme, uri_extension, uri_key};
+
 // ============================================================================
 // Index Lifecycle Types (Index Lifecycle v1 Specification)
 // ============================================================================
@@ -769,55 +774,6 @@ pub fn normalize_var(name: &str) -> (Option<char>, &str) {
     }
 }
 
-/// Helper functions for safe URI <-> filesystem path conversion
-///
-/// These functions handle proper percent-encoding/decoding and work correctly
-/// with spaces, Windows paths, and non-ASCII characters.
-/// Convert a file:// URI to a filesystem path
-///
-/// Properly handles percent-encoding and works with spaces, Windows paths,
-/// and non-ASCII characters. Returns None if the URI is not a valid file:// URI.
-///
-/// Note: This function is not available on wasm32 targets (no filesystem).
-#[cfg(not(target_arch = "wasm32"))]
-pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
-    // Parse the URI
-    let url = Url::parse(uri).ok()?;
-
-    // Only handle file:// URIs
-    if url.scheme() != "file" {
-        return None;
-    }
-
-    // Convert to filesystem path using the url crate's built-in method
-    url.to_file_path().ok()
-}
-
-/// Convert a filesystem path to a file:// URI
-///
-/// Properly handles percent-encoding and works with spaces, Windows paths,
-/// and non-ASCII characters.
-///
-/// Note: This function is not available on wasm32 targets (no filesystem).
-#[cfg(not(target_arch = "wasm32"))]
-pub fn fs_path_to_uri<P: AsRef<std::path::Path>>(path: P) -> Result<String, String> {
-    let path = path.as_ref();
-
-    // Convert to absolute path if relative
-    let abs_path = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .map_err(|e| format!("Failed to get current directory: {}", e))?
-            .join(path)
-    };
-
-    // Use the url crate's built-in method to create a proper file:// URI
-    Url::from_file_path(&abs_path)
-        .map(|url| url.to_string())
-        .map_err(|_| format!("Failed to convert path to URI: {}", abs_path.display()))
-}
-
 // Using lsp_types for Position and Range
 
 /// Internal location type using String URIs
@@ -958,41 +914,8 @@ impl WorkspaceIndex {
     }
 
     /// Normalize a URI to a consistent form using proper URI handling
-    #[cfg(not(target_arch = "wasm32"))]
     fn normalize_uri(uri: &str) -> String {
-        // Try to parse as URL first
-        if let Ok(url) = Url::parse(uri) {
-            // Already a valid URI, return as-is
-            return url.to_string();
-        }
-
-        // If not a valid URI, try to treat as a file path
-        let path = std::path::Path::new(uri);
-
-        // Try to convert path to URI using our helper function
-        if let Ok(uri_string) = fs_path_to_uri(path) {
-            return uri_string;
-        }
-
-        // Last resort: if it looks like a file:// URI but is malformed,
-        // try to extract the path and reconstruct properly
-        if uri.starts_with("file://") {
-            if let Some(fs_path) = uri_to_fs_path(uri) {
-                if let Ok(normalized) = fs_path_to_uri(&fs_path) {
-                    return normalized;
-                }
-            }
-        }
-
-        // Final fallback: return as-is for special URIs like untitled:
-        uri.to_string()
-    }
-
-    /// Normalize a URI to a consistent form (wasm32 version - no filesystem)
-    #[cfg(target_arch = "wasm32")]
-    fn normalize_uri(uri: &str) -> String {
-        // On wasm32, just try to parse as URL or return as-is
-        if let Ok(url) = Url::parse(uri) { url.to_string() } else { uri.to_string() }
+        perl_uri::normalize_uri(uri)
     }
 
     /// Index a file from its URI and text content

@@ -1,5 +1,5 @@
 [package]
-name = "perl-parser-pest"
+name = "perl-symbol-table"
 version = "0.8.8"
 edition.workspace = true
 rust-version.workspace = true
@@ -7,30 +7,21 @@ authors = ["Perl LSP Contributors"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/perlwasm/perl-lsp"
 homepage = "https://github.com/perlwasm/perl-lsp"
-documentation = "https://docs.rs/perl-parser-pest"
-description = "Legacy Pest-based Perl parser (v2) — maintained as a learning tool and compatibility layer"
+documentation = "https://docs.rs/perl-symbol-table"
+description = "Symbol table and scope management for Perl LSP"
 readme = "README.md"
-keywords = ["perl", "parser", "pest", "peg"]
+keywords = ["perl", "symbol", "scope", "lsp"]
 categories = ["parsing", "development-tools"]
-include = ["src/**", "src/grammar.pest", "Cargo.toml", "README.md", "LICENSE*"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
-pest = "2.8.4"
-pest_derive = "2.8.4"
-stacker = "0.1.22"
-thiserror = "2.0.17"
+perl-symbol-types = { workspace = true }
+perl-position-tracking = { workspace = true }
 serde = { version = "1.0.228", features = ["derive"], optional = true }
-regex = "1.12.2"
-unicode-ident = "1.0.22"
-once_cell = "1.21.3"
-lazy_static = "1.5.0"
 
 [features]
 default = []
 serde = ["dep:serde"]
-
-[lib]
-doctest = false
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }

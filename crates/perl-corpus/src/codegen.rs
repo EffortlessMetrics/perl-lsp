@@ -55,9 +55,11 @@ pub enum StatementKind {
     Sigils,
     /// Compile-time phase blocks (BEGIN/CHECK/UNITCHECK/INIT/END).
     Phasers,
+    /// Special variables and punctuation variables.
+    SpecialVars,
 }
 
-const STATEMENT_KINDS_ALL: [StatementKind; 20] = [
+const STATEMENT_KINDS_ALL: [StatementKind; 21] = [
     StatementKind::Basic,
     StatementKind::Declarations,
     StatementKind::ObjectOriented,
@@ -78,6 +80,7 @@ const STATEMENT_KINDS_ALL: [StatementKind; 20] = [
     StatementKind::Ambiguity,
     StatementKind::Sigils,
     StatementKind::Phasers,
+    StatementKind::SpecialVars,
 ];
 
 impl StatementKind {
@@ -247,6 +250,9 @@ fn build_strategies_for(kinds: &[StatementKind]) -> Vec<BoxedStrategy<String>> {
             }
             StatementKind::Phasers => {
                 strategies.push(r#gen::phasers::phaser_block().boxed());
+            }
+            StatementKind::SpecialVars => {
+                strategies.push(r#gen::special_vars::special_vars_in_context().boxed());
             }
         }
     }

@@ -13,8 +13,11 @@ members = [
     "crates/perl-lsp-providers",
     "crates/perl-lsp-protocol",
     "crates/perl-lsp-transport",
+    "crates/perl-diagnostics-codes",
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
+    "crates/perl-symbol-table",
+    "crates/perl-uri",
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
@@ -38,7 +41,9 @@ rust-version = "1.89"
 perl-lexer = { path = "crates/perl-lexer", version = "0.8.8" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.8.8" }
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.8.8" }
+perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.8.8" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.8.8" }
+perl-uri = { path = "crates/perl-uri", version = "0.8.8" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.8.8" }
 perl-dap = { path = "crates/perl-dap", version = "0.1.0" }
 
@@ -58,6 +63,9 @@ perl-lsp-providers = { path = "crates/perl-lsp-providers", version = "0.8.8", de
 
 # Tier 5: Application crates
 perl-parser = { path = "crates/perl-parser", version = "0.8.8" }
+
+# Legacy/Compatibility crates
+perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.8.8" }
 
 # External dependencies
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust"] }

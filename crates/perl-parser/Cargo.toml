@@ -116,7 +116,7 @@ serial_test = "3.3.1"
 tempfile = "3.24.0"
 proptest = "1.9.0"
 rstest = "0.26.1"
-perl-corpus = { version = "0.8.8" }
+perl-corpus = { workspace = true }
 which = "8.0.0"
 
 [[bench]]

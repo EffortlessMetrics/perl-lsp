@@ -26,6 +26,7 @@ doctest = false
 perl-parser-core = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-symbol-types = { workspace = true }
+perl-uri = { workspace = true }
 parking_lot = "0.12.5"
 regex = "1.12.2"
 serde = { version = "1.0.228", features = ["derive"] }

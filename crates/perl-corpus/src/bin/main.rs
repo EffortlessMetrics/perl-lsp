@@ -101,6 +101,8 @@ enum Generator {
     Sigils,
     /// Generate compile-time phase blocks (BEGIN/CHECK/UNITCHECK/INIT/END)
     Phasers,
+    /// Generate special variable and punctuation variable samples
+    SpecialVars,
 }
 
 fn main() -> Result<()> {
@@ -445,6 +447,18 @@ fn main() -> Result<()> {
                             .map_err(|e| anyhow::anyhow!("{e:?}"))?
                             .current();
                         println!("# Test case {} (phasers)", i + 1);
+                        println!("{}", value);
+                        println!();
+                    }
+                }
+                Generator::SpecialVars => {
+                    use perl_corpus::r#gen::special_vars::special_vars_in_context;
+                    for i in 0..count {
+                        let value = special_vars_in_context()
+                            .new_tree(&mut runner)
+                            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+                            .current();
+                        println!("# Test case {} (special-vars)", i + 1);
                         println!("{}", value);
                         println!();
                     }

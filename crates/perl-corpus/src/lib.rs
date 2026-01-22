@@ -36,10 +36,39 @@ static META_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
         .unwrap_or_else(|_| panic!("META_RE regex is invalid - this is a bug in the corpus parser"))
 });
 
+fn slugify_title(title: &str) -> String {
+    let mut slug = String::new();
+    let mut last_dash = false;
+
+    for ch in title.chars() {
+        let ch = ch.to_ascii_lowercase();
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch);
+            last_dash = false;
+        } else if !last_dash && !slug.is_empty() {
+            slug.push('-');
+            last_dash = true;
+        }
+    }
+
+    while slug.ends_with('-') {
+        slug.pop();
+    }
+
+    slug
+}
+
 /// Parse a corpus file into sections.
 pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
     let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     let mut sections = Vec::new();
+    let file_stem = path
+        .file_stem()
+        .map(|stem| slugify_title(&stem.to_string_lossy()))
+        .filter(|stem| !stem.is_empty())
+        .unwrap_or_else(|| "corpus".to_string());
+    let mut auto_ids: HashMap<String, usize> = HashMap::new();
+    let mut section_index = 0usize;
 
     // Find all section delimiters
     let mut offs = vec![0usize];
@@ -55,6 +84,8 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
         if start == 0 {
             continue;
         } // skip prelude
+
+        section_index += 1;
 
         // Extract section text
         let section_text = &text[start..end];
@@ -82,7 +113,7 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
         }
 
         // Extract metadata fields
-        let id = meta.get("id").cloned().unwrap_or_default();
+        let mut id = meta.get("id").cloned().unwrap_or_default();
         let tags = meta
             .get("tags")
             .map(|s| {
@@ -98,7 +129,25 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
             .unwrap_or_default();
 
         // Extract body (code after metadata)
-        let body = lines[body_start_idx..].join("\n").trim().to_string();
+        let body_lines = if body_start_idx < lines.len() { &lines[body_start_idx..] } else { &[] };
+        let body_end = body_lines
+            .iter()
+            .position(|line| line.trim() == "---")
+            .unwrap_or(body_lines.len());
+        let body = body_lines[..body_end].join("\n").trim().to_string();
+
+        if id.is_empty() {
+            let title_slug = slugify_title(&title);
+            let base = if title_slug.is_empty() {
+                format!("section-{}", section_index)
+            } else {
+                title_slug
+            };
+            let base_id = format!("{}.{}", file_stem, base);
+            let count = auto_ids.entry(base_id.clone()).or_insert(0);
+            id = if *count == 0 { base_id } else { format!("{}-{}", base_id, *count + 1) };
+            *count += 1;
+        }
 
         // Calculate line number (for error reporting)
         let line_num = text[..start].lines().count() + 1;
@@ -151,4 +200,62 @@ pub fn find_by_tag<'a>(sections: &'a [Section], tag: &str) -> Vec<&'a Section> {
 /// Find sections by flag
 pub fn find_by_flag<'a>(sections: &'a [Section], flag: &str) -> Vec<&'a Section> {
     sections.iter().filter(|s| s.has_flag(flag)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_file(prefix: &str) -> PathBuf {
+        let mut path = std::env::temp_dir();
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+        path.push(format!("{}_{}.txt", prefix, nanos));
+        path
+    }
+
+    #[test]
+    fn parse_file_strips_ast_and_generates_id() {
+        let path = temp_file("perl_corpus_parse");
+        let contents = r#"==========================================
+Sample Section
+==========================================
+
+my $x = 1;
+
+---
+(source_file
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (number))))
+
+==========================================
+Tagged Section
+==========================================
+# @id: custom.id
+# @tags: alpha, Beta
+# @flags: parser-sensitive
+my $y = 2;
+"#;
+
+        fs::write(&path, contents).expect("write temp corpus file");
+        let sections = parse_file(&path).expect("parse corpus file");
+        fs::remove_file(&path).expect("cleanup temp corpus file");
+
+        assert_eq!(sections.len(), 2);
+        let file_stem = path.file_stem().unwrap().to_string_lossy();
+        let expected_prefix = format!("{}.", slugify_title(&file_stem));
+        assert!(sections[0].id.starts_with(&expected_prefix));
+        assert_eq!(sections[0].body, "my $x = 1;");
+        assert!(!sections[0].body.contains("---"));
+        assert_eq!(sections[1].id, "custom.id");
+        assert_eq!(sections[1].tags, vec!["alpha".to_string(), "beta".to_string()]);
+        assert_eq!(sections[1].flags, vec!["parser-sensitive".to_string()]);
+        assert_eq!(sections[1].body, "my $y = 2;");
+    }
 }

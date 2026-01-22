@@ -1,0 +1,27 @@
+[package]
+name = "perl-uri"
+version = "0.8.8"
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Perl LSP Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/perlwasm/perl-lsp"
+homepage = "https://github.com/perlwasm/perl-lsp"
+documentation = "https://docs.rs/perl-uri"
+description = "URI ↔ filesystem path conversion and normalization utilities for Perl LSP"
+readme = "README.md"
+keywords = ["perl", "uri", "path", "lsp"]
+categories = ["development-tools", "encoding"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+url = "2.5.8"
+
+[dev-dependencies]
+tempfile = "3.24.0"
+
+[features]
+default = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }

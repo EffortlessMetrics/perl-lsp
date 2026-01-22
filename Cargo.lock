@@ -1475,6 +1475,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-diagnostics-codes"
+version = "0.8.8"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "perl-incremental-parsing"
 version = "0.8.8"
 dependencies = [
@@ -1681,6 +1688,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-symbol-table"
+version = "0.8.8"
+dependencies = [
+ "perl-position-tracking",
+ "perl-symbol-types",
+ "serde",
+]
+
+[[package]]
 name = "perl-symbol-types"
 version = "0.8.8"
 dependencies = [
@@ -1699,6 +1715,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-uri"
+version = "0.8.8"
+dependencies = [
+ "tempfile",
+ "url",
+]
+
+[[package]]
 name = "perl-workspace-index"
 version = "0.8.8"
 dependencies = [
@@ -1708,6 +1732,7 @@ dependencies = [
  "perl-parser-core",
  "perl-position-tracking",
  "perl-symbol-types",
+ "perl-uri",
  "regex",
  "serde",
  "tempfile",

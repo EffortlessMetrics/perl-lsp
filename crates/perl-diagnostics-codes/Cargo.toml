@@ -1,0 +1,25 @@
+[package]
+name = "perl-diagnostics-codes"
+version = "0.8.8"
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Perl LSP Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/perlwasm/perl-lsp"
+homepage = "https://github.com/perlwasm/perl-lsp"
+documentation = "https://docs.rs/perl-diagnostics-codes"
+description = "Stable diagnostic codes and severity levels for Perl LSP"
+readme = "README.md"
+keywords = ["perl", "diagnostics", "lsp", "errors"]
+categories = ["development-tools"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"], optional = true }
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
