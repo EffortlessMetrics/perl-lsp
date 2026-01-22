@@ -48,9 +48,7 @@ fn keys_values() -> impl Strategy<Value = String> {
 }
 
 fn each_delete() -> impl Strategy<Value = String> {
-    Just(
-        "my %map = (a => 1, b => 2);\nmy ($k, $v) = each %map;\ndelete $map{$k};\n".to_string(),
-    )
+    Just("my %map = (a => 1, b => 2);\nmy ($k, $v) = each %map;\ndelete $map{$k};\n".to_string())
 }
 
 fn substr_ops() -> impl Strategy<Value = String> {
@@ -68,7 +66,10 @@ fn index_ops() -> impl Strategy<Value = String> {
 }
 
 fn pos_study() -> impl Strategy<Value = String> {
-    Just("my $text = \"foobar\";\n$text =~ /o/g;\nmy $where = pos($text);\nstudy $text;\n".to_string())
+    Just(
+        "my $text = \"foobar\";\n$text =~ /o/g;\nmy $where = pos($text);\nstudy $text;\n"
+            .to_string(),
+    )
 }
 
 fn length_chop() -> impl Strategy<Value = String> {
@@ -96,16 +97,11 @@ fn push_pop() -> impl Strategy<Value = String> {
 }
 
 fn shift_unshift() -> impl Strategy<Value = String> {
-    Just(
-        "my @queue = (1, 2, 3);\nunshift @queue, 0;\nmy $first = shift @queue;\n".to_string(),
-    )
+    Just("my @queue = (1, 2, 3);\nunshift @queue, 0;\nmy $first = shift @queue;\n".to_string())
 }
 
 fn splice_replace() -> impl Strategy<Value = String> {
-    Just(
-        "my @items = (1, 2, 3, 4, 5);\nmy @removed = splice @items, 1, 2, (9, 10);\n"
-            .to_string(),
-    )
+    Just("my @items = (1, 2, 3, 4, 5);\nmy @removed = splice @items, 1, 2, (9, 10);\n".to_string())
 }
 
 fn reverse_list() -> impl Strategy<Value = String> {

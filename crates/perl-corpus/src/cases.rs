@@ -1165,7 +1165,7 @@ impl EdgeCaseGenerator {
 
     /// Return edge cases with a matching tag.
     pub fn by_tag(tag: &str) -> Vec<&'static EdgeCase> {
-        edge_cases().iter().filter(|case| case.tags.iter().any(|t| *t == tag)).collect()
+        edge_cases().iter().filter(|case| case.tags.contains(&tag)).collect()
     }
 
     /// Return edge cases that match any of the provided tags.
@@ -1235,8 +1235,9 @@ pub fn find_complex_case(id: &str) -> Option<&'static ComplexDataStructureCase> 
 
 /// Sample a deterministic complex data structure fixture by seed.
 pub fn sample_complex_case(seed: u64) -> &'static ComplexDataStructureCase {
-    select_by_seed(complex_data_structure_cases(), seed)
-        .unwrap_or_else(|| complex_data_structure_cases().first().expect("complex case list is empty"))
+    select_by_seed(complex_data_structure_cases(), seed).unwrap_or_else(|| {
+        complex_data_structure_cases().first().expect("complex case list is empty")
+    })
 }
 
 #[cfg(test)]

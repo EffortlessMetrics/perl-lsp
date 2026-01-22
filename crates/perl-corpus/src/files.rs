@@ -116,10 +116,10 @@ fn find_workspace_root() -> PathBuf {
             continue;
         }
 
-        if let Ok(contents) = fs::read_to_string(&cargo_toml) {
-            if contents.contains("[workspace]") {
-                return ancestor.to_path_buf();
-            }
+        if let Ok(contents) = fs::read_to_string(&cargo_toml)
+            && contents.contains("[workspace]")
+        {
+            return ancestor.to_path_buf();
         }
     }
 
