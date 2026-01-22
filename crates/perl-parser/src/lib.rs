@@ -588,7 +588,13 @@ mod tests {
         for (code, _expected_error) in cases {
             let mut parser = Parser::new(code);
             let result = parser.parse();
-            assert!(result.is_err(), "Expected error for: {}", code);
+
+            // With error recovery, parse() succeeds but collects errors
+            assert!(result.is_ok(), "Parser should recover from errors for: {}", code);
+
+            // Check that errors were recorded
+            let errors = parser.errors();
+            assert!(!errors.is_empty(), "Expected recorded errors for: {}", code);
         }
     }
 

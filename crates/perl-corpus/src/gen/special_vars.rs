@@ -37,10 +37,7 @@ fn signal_vars() -> impl Strategy<Value = String> {
 }
 
 fn regex_capture_vars() -> impl Strategy<Value = String> {
-    Just(
-        "if (\"abc\" =~ /(a)(b)(c)/) {\n    my @starts = @-;\n    my @ends = @+;\n}\n"
-            .to_string(),
-    )
+    Just("if (\"abc\" =~ /(a)(b)(c)/) {\n    my @starts = @-;\n    my @ends = @+;\n}\n".to_string())
 }
 
 fn arg_vars() -> impl Strategy<Value = String> {
@@ -48,7 +45,10 @@ fn arg_vars() -> impl Strategy<Value = String> {
 }
 
 fn format_vars() -> impl Strategy<Value = String> {
-    Just("my $picture = \"@<<\";\nformline $picture, \"ok\";\nmy $out = $^A;\n$^A = \"\";\n".to_string())
+    Just(
+        "my $picture = \"@<<\";\nformline $picture, \"ok\";\nmy $out = $^A;\n$^A = \"\";\n"
+            .to_string(),
+    )
 }
 
 /// Generate statements that exercise special variables and punctuation vars.
@@ -74,27 +74,8 @@ mod tests {
     use super::*;
 
     const MARKERS: &[&str] = &[
-        "$$",
-        "$?",
-        "$0",
-        "$^O",
-        "$^X",
-        "$^V",
-        "$@",
-        "$!",
-        "$/",
-        "$.",
-        "$,",
-        "$;",
-        "$\\",
-        "%ENV",
-        "@INC",
-        "%SIG",
-        "$^T",
-        "@-",
-        "@+",
-        "$^A",
-        "$_",
+        "$$", "$?", "$0", "$^O", "$^X", "$^V", "$@", "$!", "$/", "$.", "$,", "$;", "$\\", "%ENV",
+        "@INC", "%SIG", "$^T", "@-", "@+", "$^A", "$_",
     ];
 
     proptest! {
