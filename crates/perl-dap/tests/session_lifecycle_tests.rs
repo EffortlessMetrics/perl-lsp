@@ -10,7 +10,7 @@
 
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::json;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -41,12 +41,7 @@ fn test_session_lifecycle_initialize() {
     let response = adapter.handle_request(1, "initialize", None);
 
     match response {
-        DapMessage::Response {
-            success,
-            command,
-            body,
-            ..
-        } => {
+        DapMessage::Response { success, command, body, .. } => {
             assert!(success, "Initialize should succeed");
             assert_eq!(command, "initialize");
             assert!(body.is_some(), "Initialize should return capabilities");
@@ -106,12 +101,7 @@ fn test_session_lifecycle_launch_missing_arguments() {
     let response = adapter.handle_request(1, "launch", None);
 
     match response {
-        DapMessage::Response {
-            success,
-            command,
-            message,
-            ..
-        } => {
+        DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "Launch should fail without arguments");
             assert_eq!(command, "launch");
             assert!(message.is_some());
@@ -136,12 +126,7 @@ fn test_session_lifecycle_launch_empty_program() {
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response {
-            success,
-            command,
-            message,
-            ..
-        } => {
+        DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "Launch should fail with empty program");
             assert_eq!(command, "launch");
             assert!(message.is_some());
@@ -171,12 +156,7 @@ fn test_session_lifecycle_launch_nonexistent_program() {
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response {
-            success,
-            command,
-            message,
-            ..
-        } => {
+        DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "Launch should fail with nonexistent program");
             assert_eq!(command, "launch");
             assert!(message.is_some());
@@ -200,12 +180,7 @@ fn test_session_lifecycle_attach_missing_arguments() {
     let response = adapter.handle_request(1, "attach", None);
 
     match response {
-        DapMessage::Response {
-            success,
-            command,
-            message,
-            ..
-        } => {
+        DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "Attach should fail without arguments");
             assert_eq!(command, "attach");
             assert!(message.is_some());
@@ -231,12 +206,7 @@ fn test_session_lifecycle_attach_validation() {
     let response = adapter.handle_request(1, "attach", Some(args));
 
     match response {
-        DapMessage::Response {
-            success,
-            command,
-            message,
-            ..
-        } => {
+        DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "Attach not yet implemented");
             assert_eq!(command, "attach");
             assert!(message.is_some());
@@ -302,12 +272,7 @@ fn test_session_lifecycle_threads_request() {
     let response = adapter.handle_request(1, "threads", None);
 
     match response {
-        DapMessage::Response {
-            success,
-            command,
-            body,
-            ..
-        } => {
+        DapMessage::Response { success, command, body, .. } => {
             assert!(success, "Threads request should succeed");
             assert_eq!(command, "threads");
             assert!(body.is_some());
@@ -333,12 +298,7 @@ fn test_session_lifecycle_stacktrace_request() {
     let response = adapter.handle_request(1, "stackTrace", Some(args));
 
     match response {
-        DapMessage::Response {
-            success,
-            command,
-            body,
-            ..
-        } => {
+        DapMessage::Response { success, command, body, .. } => {
             assert!(success, "StackTrace request should succeed");
             assert_eq!(command, "stackTrace");
             assert!(body.is_some());
@@ -365,12 +325,7 @@ fn test_session_lifecycle_scopes_request() {
     let response = adapter.handle_request(1, "scopes", Some(args));
 
     match response {
-        DapMessage::Response {
-            success,
-            command,
-            body,
-            ..
-        } => {
+        DapMessage::Response { success, command, body, .. } => {
             assert!(success, "Scopes request should succeed");
             assert_eq!(command, "scopes");
             assert!(body.is_some());
@@ -395,12 +350,7 @@ fn test_session_lifecycle_variables_request() {
     let response = adapter.handle_request(1, "variables", Some(args));
 
     match response {
-        DapMessage::Response {
-            success,
-            command,
-            body,
-            ..
-        } => {
+        DapMessage::Response { success, command, body, .. } => {
             assert!(success, "Variables request should succeed");
             assert_eq!(command, "variables");
             assert!(body.is_some());
@@ -420,11 +370,8 @@ fn test_session_lifecycle_variables_request() {
 // AC:5.1
 fn test_message_framing_request_structure() {
     // Test that DapMessage::Request has proper structure
-    let request = DapMessage::Request {
-        seq: 1,
-        command: "initialize".to_string(),
-        arguments: None,
-    };
+    let request =
+        DapMessage::Request { seq: 1, command: "initialize".to_string(), arguments: None };
 
     // Serialize to JSON
     let json = serde_json::to_string(&request).expect("Should serialize");
@@ -433,10 +380,7 @@ fn test_message_framing_request_structure() {
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("Should parse");
     assert_eq!(parsed.get("type").and_then(|v| v.as_str()), Some("request"));
     assert_eq!(parsed.get("seq").and_then(|v| v.as_i64()), Some(1));
-    assert_eq!(
-        parsed.get("command").and_then(|v| v.as_str()),
-        Some("initialize")
-    );
+    assert_eq!(parsed.get("command").and_then(|v| v.as_str()), Some("initialize"));
 }
 
 #[test]
@@ -468,11 +412,7 @@ fn test_message_framing_response_structure() {
 // AC:5.1
 fn test_message_framing_event_structure() {
     // Test that DapMessage::Event has proper structure
-    let event = DapMessage::Event {
-        seq: 3,
-        event: "initialized".to_string(),
-        body: None,
-    };
+    let event = DapMessage::Event { seq: 3, event: "initialized".to_string(), body: None };
 
     // Serialize to JSON
     let json = serde_json::to_string(&event).expect("Should serialize");
@@ -481,10 +421,7 @@ fn test_message_framing_event_structure() {
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("Should parse");
     assert_eq!(parsed.get("type").and_then(|v| v.as_str()), Some("event"));
     assert_eq!(parsed.get("seq").and_then(|v| v.as_i64()), Some(3));
-    assert_eq!(
-        parsed.get("event").and_then(|v| v.as_str()),
-        Some("initialized")
-    );
+    assert_eq!(parsed.get("event").and_then(|v| v.as_str()), Some("initialized"));
 }
 
 #[test]
@@ -536,10 +473,8 @@ fn test_thread_safe_sequence_numbers() {
     }
 
     // Collect all sequence numbers
-    let mut seq_numbers: Vec<i64> = handles
-        .into_iter()
-        .map(|h| h.join().expect("Thread should complete"))
-        .collect();
+    let mut seq_numbers: Vec<i64> =
+        handles.into_iter().map(|h| h.join().expect("Thread should complete")).collect();
 
     // Verify all unique
     seq_numbers.sort_unstable();
@@ -647,13 +582,7 @@ fn test_error_handling_invalid_command() {
     let response = adapter.handle_request(1, "invalidCommand", None);
 
     match response {
-        DapMessage::Response {
-            success,
-            command,
-            message,
-            body,
-            ..
-        } => {
+        DapMessage::Response { success, command, message, body, .. } => {
             assert!(!success, "Invalid command should fail");
             assert_eq!(command, "invalidCommand");
             assert!(message.is_some());
@@ -679,9 +608,7 @@ fn test_error_handling_malformed_arguments() {
     let response = adapter.handle_request(1, "setBreakpoints", Some(args));
 
     match response {
-        DapMessage::Response {
-            success, message, ..
-        } => {
+        DapMessage::Response { success, message, .. } => {
             assert!(!success, "Invalid arguments should fail");
             assert!(message.is_some());
         }
@@ -703,17 +630,11 @@ fn test_error_handling_evaluate_with_newlines() {
     let response = adapter.handle_request(1, "evaluate", Some(args));
 
     match response {
-        DapMessage::Response {
-            success, message, ..
-        } => {
+        DapMessage::Response { success, message, .. } => {
             assert!(!success, "Expression with newlines should be rejected");
             assert!(message.is_some());
             let msg = message.unwrap();
-            assert!(
-                msg.contains("newline"),
-                "Error should mention newlines: {}",
-                msg
-            );
+            assert!(msg.contains("newline"), "Error should mention newlines: {}", msg);
         }
         _ => panic!("Expected Response message"),
     }
@@ -733,9 +654,7 @@ fn test_error_handling_evaluate_empty_expression() {
     let response = adapter.handle_request(1, "evaluate", Some(args));
 
     match response {
-        DapMessage::Response {
-            success, message, ..
-        } => {
+        DapMessage::Response { success, message, .. } => {
             assert!(!success, "Empty expression should be rejected");
             assert!(message.is_some());
             assert!(message.unwrap().contains("Empty"));
@@ -754,9 +673,7 @@ fn test_error_handling_scopes_missing_frame_id() {
     let response = adapter.handle_request(1, "scopes", None);
 
     match response {
-        DapMessage::Response {
-            success, message, ..
-        } => {
+        DapMessage::Response { success, message, .. } => {
             assert!(!success, "Scopes without frameId should fail");
             assert!(message.is_some());
             assert!(message.unwrap().contains("frameId"));
@@ -775,9 +692,7 @@ fn test_error_handling_variables_missing_reference() {
     let response = adapter.handle_request(1, "variables", None);
 
     match response {
-        DapMessage::Response {
-            success, message, ..
-        } => {
+        DapMessage::Response { success, message, .. } => {
             assert!(!success, "Variables without reference should fail");
             assert!(message.is_some());
             assert!(message.unwrap().contains("variablesReference"));
@@ -801,9 +716,7 @@ fn test_error_handling_launch_program_is_directory() {
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response {
-            success, message, ..
-        } => {
+        DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch with directory should fail");
             assert!(message.is_some());
             let msg = message.unwrap();

@@ -9,8 +9,8 @@
 use anyhow::Result;
 use perl_dap::breakpoints::BreakpointStore;
 use perl_dap::protocol::{SetBreakpointsArguments, Source, SourceBreakpoint};
-use tempfile::NamedTempFile;
 use std::io::Write;
+use tempfile::NamedTempFile;
 
 /// Helper to create a temporary Perl file and set breakpoints
 fn create_test_file_and_set_breakpoints(
@@ -29,8 +29,10 @@ fn create_test_file_and_set_breakpoints(
     let store = BreakpointStore::new();
 
     // Create breakpoint arguments
-    let source_breakpoints: Vec<SourceBreakpoint> =
-        lines.iter().map(|&line| SourceBreakpoint { line, column: None, condition: None }).collect();
+    let source_breakpoints: Vec<SourceBreakpoint> = lines
+        .iter()
+        .map(|&line| SourceBreakpoint { line, column: None, condition: None })
+        .collect();
 
     let args = SetBreakpointsArguments {
         source: Source { path: Some(path.clone()), name: Some("test.pl".to_string()) },
@@ -186,7 +188,10 @@ fn test_breakpoint_on_line_with_inline_comment() -> Result<()> {
     let breakpoints = create_test_file_and_set_breakpoints(source, vec![1])?;
 
     assert_eq!(breakpoints.len(), 1);
-    assert!(breakpoints[0].verified, "Breakpoint on line with code and inline comment should be verified");
+    assert!(
+        breakpoints[0].verified,
+        "Breakpoint on line with code and inline comment should be verified"
+    );
 
     Ok(())
 }

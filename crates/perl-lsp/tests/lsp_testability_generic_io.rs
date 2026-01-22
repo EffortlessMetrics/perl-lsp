@@ -41,10 +41,7 @@ fn lsp_testability_accepts_generic_io_traits() {
     let output = Vec::new();
 
     // AC1: Server should accept generic Read + Write trait objects
-    let _server = LspServer::with_io(
-        Box::new(input),
-        Box::new(output)
-    );
+    let _server = LspServer::with_io(Box::new(input), Box::new(output));
 
     // If we got here, the server was successfully created with generic I/O
     // This validates AC1
@@ -57,10 +54,7 @@ fn lsp_testability_with_io_constructor_exists() {
     let output = Vec::new();
 
     // AC2: with_io constructor should exist and be callable
-    let server = LspServer::with_io(
-        Box::new(input),
-        Box::new(output)
-    );
+    let server = LspServer::with_io(Box::new(input), Box::new(output));
 
     // Verify the server was created
     assert!(std::mem::size_of_val(&server) > 0);
@@ -104,10 +98,7 @@ fn lsp_protocol_edge_case_empty_message() {
     let input = Cursor::new(Vec::new());
     let output = Vec::new();
 
-    let server = LspServer::with_io(
-        Box::new(input),
-        Box::new(output)
-    );
+    let server = LspServer::with_io(Box::new(input), Box::new(output));
 
     // Server should be created successfully even with empty input
     assert!(std::mem::size_of_val(&server) > 0);
@@ -139,10 +130,7 @@ fn lsp_protocol_edge_case_large_buffer() {
     let output = Vec::new();
 
     // Server should handle large buffers without issue
-    let _server = LspServer::with_io(
-        Box::new(input),
-        Box::new(output)
-    );
+    let _server = LspServer::with_io(Box::new(input), Box::new(output));
 }
 
 /// Test protocol edge case: Concurrent output writes

@@ -219,6 +219,7 @@ pub struct BackupCleanupResult {
 
 /// Metadata for a backup directory used during cleanup
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // size field reserved for future cleanup policy implementations
 struct BackupDirMetadata {
     /// Path to the backup directory
     path: PathBuf,
@@ -827,10 +828,7 @@ impl RefactoringEngine {
         let backup_root = std::env::temp_dir().join("perl_refactor_backups");
 
         if !backup_root.exists() {
-            return Ok(BackupCleanupResult {
-                directories_removed: 0,
-                space_reclaimed: 0,
-            });
+            return Ok(BackupCleanupResult { directories_removed: 0, space_reclaimed: 0 });
         }
 
         // Collect all backup directories with metadata
@@ -840,15 +838,16 @@ impl RefactoringEngine {
         let dirs_to_remove = self.apply_retention_policies(&mut backup_dirs)?;
 
         // Remove selected backup directories and calculate space reclaimed
-        let (directories_removed, space_reclaimed) = self.remove_backup_directories(&dirs_to_remove)?;
+        let (directories_removed, space_reclaimed) =
+            self.remove_backup_directories(&dirs_to_remove)?;
 
-        Ok(BackupCleanupResult {
-            directories_removed,
-            space_reclaimed,
-        })
+        Ok(BackupCleanupResult { directories_removed, space_reclaimed })
     }
 
-    fn collect_backup_directories(&self, backup_root: &PathBuf) -> ParseResult<Vec<BackupDirMetadata>> {
+    fn collect_backup_directories(
+        &self,
+        backup_root: &PathBuf,
+    ) -> ParseResult<Vec<BackupDirMetadata>> {
         let mut backup_dirs = Vec::new();
 
         let entries = std::fs::read_dir(backup_root).map_err(|e| ParseError::SyntaxError {
@@ -866,23 +865,28 @@ impl RefactoringEngine {
             if path.is_dir() {
                 // Validate backup directory structure
                 if self.validate_backup_directory(&path)? {
-                    let metadata = std::fs::metadata(&path).map_err(|e| ParseError::SyntaxError {
-                        message: format!("Failed to read metadata for {}: {}", path.display(), e),
-                        location: 0,
-                    })?;
+                    let metadata =
+                        std::fs::metadata(&path).map_err(|e| ParseError::SyntaxError {
+                            message: format!(
+                                "Failed to read metadata for {}: {}",
+                                path.display(),
+                                e
+                            ),
+                            location: 0,
+                        })?;
 
                     let modified = metadata.modified().map_err(|e| ParseError::SyntaxError {
-                        message: format!("Failed to get modification time for {}: {}", path.display(), e),
+                        message: format!(
+                            "Failed to get modification time for {}: {}",
+                            path.display(),
+                            e
+                        ),
                         location: 0,
                     })?;
 
                     let size = self.calculate_directory_size(&path)?;
 
-                    backup_dirs.push(BackupDirMetadata {
-                        path,
-                        modified,
-                        size,
-                    });
+                    backup_dirs.push(BackupDirMetadata { path, modified, size });
                 }
             }
         }
@@ -892,9 +896,7 @@ impl RefactoringEngine {
 
     fn validate_backup_directory(&self, dir: &PathBuf) -> ParseResult<bool> {
         // Check if directory name starts with "refactor_" (expected pattern)
-        let dir_name = dir.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let dir_name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
         if !dir_name.starts_with("refactor_") {
             return Ok(false);
@@ -940,7 +942,10 @@ impl RefactoringEngine {
         Ok(total_size)
     }
 
-    fn apply_retention_policies(&self, backup_dirs: &mut Vec<BackupDirMetadata>) -> ParseResult<Vec<PathBuf>> {
+    fn apply_retention_policies(
+        &self,
+        backup_dirs: &mut Vec<BackupDirMetadata>,
+    ) -> ParseResult<Vec<PathBuf>> {
         let mut dirs_to_remove = Vec::new();
 
         // Sort by modification time (oldest first)
@@ -964,7 +969,9 @@ impl RefactoringEngine {
         }
 
         // Apply count-based retention policy
-        if self.config.max_backup_retention > 0 && backup_dirs.len() > self.config.max_backup_retention {
+        if self.config.max_backup_retention > 0
+            && backup_dirs.len() > self.config.max_backup_retention
+        {
             let excess_count = backup_dirs.len() - self.config.max_backup_retention;
             for dir in backup_dirs.iter().take(excess_count) {
                 if !dirs_to_remove.contains(&dir.path) {
@@ -2504,7 +2511,7 @@ sub complex {
                 scope: RefactoringScope::File(path.clone()),
             };
 
-            let _ = engine.perform_refactoring(op, &[path.clone()]);
+            let _ = engine.refactor(op, vec![path.clone()]);
 
             // Verify backup was created
             assert!(!engine.operation_history.is_empty());
@@ -2540,7 +2547,7 @@ sub complex {
                     scope: RefactoringScope::File(path.clone()),
                 };
 
-                let _ = engine.perform_refactoring(op, &[path]);
+                let _ = engine.refactor(op, vec![path]);
                 std::thread::sleep(std::time::Duration::from_millis(100)); // Ensure different timestamps
             }
 
@@ -2553,7 +2560,6 @@ sub complex {
 
         #[test]
         fn test_cleanup_respects_age_limit() {
-            use std::io::Write;
             use std::fs;
 
             let backup_root = std::env::temp_dir().join("perl_refactor_backups");
@@ -2610,8 +2616,6 @@ sub complex {
 
         #[test]
         fn test_calculate_directory_size() {
-            use std::io::Write;
-
             let engine = RefactoringEngine::new().unwrap();
 
             let temp_dir = tempfile::tempdir().unwrap();
@@ -2648,7 +2652,7 @@ sub complex {
                 scope: RefactoringScope::File(path.clone()),
             };
 
-            let _ = engine.perform_refactoring(op, &[path]);
+            let _ = engine.refactor(op, vec![path]);
 
             // Clean up and verify space was reclaimed
             let result = engine.clear_history().unwrap();

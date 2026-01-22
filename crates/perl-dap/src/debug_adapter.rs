@@ -1517,6 +1517,7 @@ impl DebugAdapter {
             message: if !success { Some("Failed to pause debugger".to_string()) } else { None },
         }
     }
+}
 
 /// Validate that an expression is safe for evaluation (non-mutating)
 ///
@@ -1681,11 +1682,8 @@ impl DebugAdapter {
             }
 
             // AC10.3: Get timeout configuration (5s default, 30s hard limit)
-            let timeout_ms = args
-                .get("timeout")
-                .and_then(|t| t.as_u64())
-                .map(|t| t as u32)
-                .unwrap_or(5000);
+            let timeout_ms =
+                args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32).unwrap_or(5000);
             let timeout_ms = timeout_ms.min(30000); // Enforce 30s hard limit
 
             // Send evaluation command to debugger

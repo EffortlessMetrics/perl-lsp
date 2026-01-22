@@ -53,6 +53,9 @@ clap = { version = "4.5.54", features = ["derive"] }
 # Rope for position mapping (reuse from perl-parser)
 ropey = "1.6.1"
 
+# Perl parser for AST breakpoint validation
+perl-parser = { path = "../perl-parser" }
+
 # Process management
 # Note: tokio-process not needed (using tokio::process)
 

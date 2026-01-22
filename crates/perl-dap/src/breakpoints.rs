@@ -16,8 +16,8 @@
 //! - [DAP Implementation Spec](../../docs/DAP_IMPLEMENTATION_SPECIFICATION.md#ac7-breakpoint-management)
 
 use crate::protocol::{Breakpoint, SetBreakpointsArguments};
-use perl_parser::ast::{Node, NodeKind};
 use perl_parser::Parser;
+use perl_parser::ast::{Node, NodeKind};
 use ropey::Rope;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -42,6 +42,10 @@ fn is_comment_or_blank_line(ast: &Node, line_start: usize, line_end: usize, sour
 }
 
 /// Check if all nodes in a range are comments
+///
+/// Note: Comments are stripped during lexing and not represented in the AST.
+/// The fast path in `is_comment_or_blank_line` handles comment detection.
+/// This function checks if there are no executable nodes in the range.
 fn has_only_comments_in_range(node: &Node, start: usize, end: usize) -> bool {
     // Check if node overlaps with line range
     if node.location.start >= end || node.location.end <= start {
@@ -51,17 +55,16 @@ fn has_only_comments_in_range(node: &Node, start: usize, end: usize) -> bool {
     match &node.kind {
         NodeKind::Program { statements } => {
             // Get all nodes that overlap with the line range
-            let nodes_in_range: Vec<_> =
-                statements.iter().filter(|s| s.location.start < end && s.location.end > start).collect();
+            let nodes_in_range: Vec<_> = statements
+                .iter()
+                .filter(|s| s.location.start < end && s.location.end > start)
+                .collect();
 
-            if nodes_in_range.is_empty() {
-                return true; // No nodes = blank line
-            }
-
-            // All nodes must be comments
-            nodes_in_range.iter().all(|s| matches!(s.kind, NodeKind::Comment { .. }))
+            // If no AST nodes in range, it's a blank/comment line
+            // (comments are stripped during lexing and not in AST)
+            nodes_in_range.is_empty()
         }
-        NodeKind::Comment { .. } => true,
+        // Any other node type means there's executable code
         _ => false,
     }
 }

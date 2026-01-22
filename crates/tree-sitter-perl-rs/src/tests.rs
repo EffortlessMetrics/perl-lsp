@@ -669,9 +669,9 @@ mod highlight_tests {
 
         for expected in &test_case.expected_tokens {
             // Find matching actual token at the same position
-            let matching = actual_tokens.iter().find(|(line, col, _)| {
-                *line == expected.line && *col == expected.column
-            });
+            let matching = actual_tokens
+                .iter()
+                .find(|(line, col, _)| *line == expected.line && *col == expected.column);
 
             match matching {
                 Some((_, _, actual_type)) => {
@@ -747,7 +747,10 @@ mod highlight_tests {
                                             failed_verifications.push(test_case.name.clone());
                                         }
                                         Err(e) => {
-                                            println!("⚠️  {} - verification error: {}", test_case.name, e);
+                                            println!(
+                                                "⚠️  {} - verification error: {}",
+                                                test_case.name, e
+                                            );
                                             failed_verifications.push(test_case.name.clone());
                                         }
                                     }

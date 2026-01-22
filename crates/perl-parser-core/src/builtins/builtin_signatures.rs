@@ -1101,7 +1101,11 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
         signatures.insert(
             "select",
             BuiltinSignature {
-                signatures: vec!["select FILEHANDLE", "select RBITS, WBITS, EBITS, TIMEOUT", "select"],
+                signatures: vec![
+                    "select FILEHANDLE",
+                    "select RBITS, WBITS, EBITS, TIMEOUT",
+                    "select",
+                ],
                 documentation: "Sets default filehandle for output or performs select system call",
             },
         );
@@ -1261,10 +1265,7 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
 
         signatures.insert(
             "endhostent",
-            BuiltinSignature {
-                signatures: vec!["endhostent"],
-                documentation: "Closes hosts file",
-            },
+            BuiltinSignature { signatures: vec!["endhostent"], documentation: "Closes hosts file" },
         );
 
         signatures.insert(
@@ -1358,18 +1359,12 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
 
         signatures.insert(
             "setgrent",
-            BuiltinSignature {
-                signatures: vec!["setgrent"],
-                documentation: "Rewinds group file",
-            },
+            BuiltinSignature { signatures: vec!["setgrent"], documentation: "Rewinds group file" },
         );
 
         signatures.insert(
             "endgrent",
-            BuiltinSignature {
-                signatures: vec!["endgrent"],
-                documentation: "Closes group file",
-            },
+            BuiltinSignature { signatures: vec!["endgrent"], documentation: "Closes group file" },
         );
 
         signatures.insert(

@@ -105,10 +105,7 @@ fn test_pause_handler_no_session() {
             // Without an active session, pause should fail gracefully
             assert!(!success, "Pause should fail without active session");
             assert_eq!(command, "pause");
-            assert!(
-                message.is_some(),
-                "Pause without session should provide error message"
-            );
+            assert!(message.is_some(), "Pause without session should provide error message");
 
             if let Some(msg) = message {
                 assert!(
@@ -450,13 +447,7 @@ fn test_all_control_flow_operations_exist() {
     // AC9: Verify all five control flow operations are implemented
     let mut adapter = DebugAdapter::new();
 
-    let operations = vec![
-        "continue",
-        "next",
-        "stepIn",
-        "stepOut",
-        "pause",
-    ];
+    let operations = vec!["continue", "next", "stepIn", "stepOut", "pause"];
 
     for operation in operations {
         let response = adapter.handle_request(1, operation, None);
@@ -464,11 +455,7 @@ fn test_all_control_flow_operations_exist() {
         // Verify the operation is recognized (not unknown command)
         match response {
             DapMessage::Response { command, .. } => {
-                assert_eq!(
-                    command, operation,
-                    "Operation {} should be recognized",
-                    operation
-                );
+                assert_eq!(command, operation, "Operation {} should be recognized", operation);
             }
             _ => panic!("Operation {} should return Response", operation),
         }
