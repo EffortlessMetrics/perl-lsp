@@ -1465,6 +1465,18 @@ impl DebugAdapter {
                 };
             }
 
+            // Security: Reject expressions with newlines to prevent command injection
+            if expression.contains('\n') || expression.contains('\r') {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "evaluate".to_string(),
+                    body: None,
+                    message: Some("Expression cannot contain newlines".to_string()),
+                };
+            }
+
             // Send evaluation command to debugger
             if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             {
