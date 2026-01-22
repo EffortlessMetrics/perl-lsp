@@ -1,16 +1,22 @@
 # Issue: Tie Interface - No Corpus Coverage
 
+> **STATUS: ⚠️ OPEN** - Parser enhancement needed.
+>
+> The parser does not have a dedicated `NodeKind::Tie` variant. Currently, `tie`
+> and `untie` are parsed as regular function calls (`NodeKind::FunctionCall`).
+> This limits semantic analysis capabilities for tie operations.
+>
+> **Related**: Issue #437, nodekind-never-seen/tie.md
+
 ## Problem Description
 
 ### What We Found
 
-Tie interface has **zero coverage** in the corpus despite being a P0 critical feature in the GA (Grammar Analyzer) feature list:
-- Tree-sitter corpus (`tree-sitter-perl/test/corpus/`): 0 test cases
-- Highlight fixtures (`tree-sitter-perl/test/highlight/`): 0 test cases
-- Test corpus (`test_corpus/`): 0 test cases
-- Perl-corpus generators (`crates/perl-corpus/src/gen/`): 0 generators
-
-This represents a critical gap in test coverage for an important Perl feature that enables binding variables to objects.
+Tie interface has **limited support** in the parser:
+- `tie` parsed as: `NodeKind::FunctionCall { name: "tie", args: [...] }`
+- No dedicated `NodeKind::Tie` variant exists
+- Semantic analysis for tie operations is limited
+- Test corpus coverage: none (would exercise function call path only)
 
 ### Minimal Reproduction
 
