@@ -40,8 +40,8 @@
 
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -79,17 +79,17 @@ struct Variable {
 #[derive(Debug)]
 struct Scope {
     // Outer key: sigil, Inner key: name
-    variables: RefCell<HashMap<String, HashMap<String, Rc<Variable>>>>,
+    variables: RefCell<FxHashMap<String, FxHashMap<String, Rc<Variable>>>>,
     parent: Option<Rc<Scope>>,
 }
 
 impl Scope {
     fn new() -> Self {
-        Self { variables: RefCell::new(HashMap::new()), parent: None }
+        Self { variables: RefCell::new(FxHashMap::default()), parent: None }
     }
 
     fn with_parent(parent: Rc<Scope>) -> Self {
-        Self { variables: RefCell::new(HashMap::new()), parent: Some(parent) }
+        Self { variables: RefCell::new(FxHashMap::default()), parent: Some(parent) }
     }
 
     fn declare_variable_parts(
@@ -119,7 +119,7 @@ impl Scope {
 
         // Now insert the variable
         let mut vars = self.variables.borrow_mut();
-        let inner = vars.entry(sigil.to_string()).or_insert_with(HashMap::new);
+        let inner = vars.entry(sigil.to_string()).or_default();
 
         let full_name = format!("{}{}", sigil, name);
         inner.insert(
@@ -902,6 +902,16 @@ impl ScopeAnalyzer {
 
 /// Check if a variable is a built-in Perl global variable
 fn is_builtin_global(sigil: &str, name: &str) -> bool {
+    // Optimization: Fast path for user variables (most common case)
+    // Most user variables start with a lowercase letter (e.g., $counter, @list)
+    // Built-ins typically start with punctuation, digits, underscore, or uppercase letters.
+    // The only exceptions are sort variables $a and $b.
+    if let Some(first_char) = name.chars().next() {
+        if first_char.is_ascii_lowercase() && name != "a" && name != "b" {
+            return false;
+        }
+    }
+
     match (sigil, name) {
         // Special variables
         ("$", "_") | ("@", "_") | ("%", "_") | ("$", "!") | ("$", "@") | ("$", "?") | ("$", "^")
