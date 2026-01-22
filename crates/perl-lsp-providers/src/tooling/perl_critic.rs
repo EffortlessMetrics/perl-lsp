@@ -169,7 +169,8 @@ impl CriticAnalyzer {
         // Use verbose format for parsing
         args.push("--verbose=%f:%l:%c:%s:%p:%m\\n".to_string());
 
-        // Add argument separator for security
+        // SECURITY: Add `--` to prevent argument injection via filenames starting with `-`
+        // (e.g., a file named `-rf` would otherwise be interpreted as a flag)
         args.push("--".to_string());
 
         // Add file path

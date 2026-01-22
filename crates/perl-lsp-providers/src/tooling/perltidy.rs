@@ -226,7 +226,8 @@ impl PerlTidyFormatter {
     pub fn format_file(&self, file_path: &Path) -> Result<(), String> {
         // Build argument list
         let mut args: Vec<String> = self.config.to_args();
-        args.push("--".to_string()); // Safety
+        // SECURITY: Add `--` to prevent argument injection via filenames starting with `-`
+        args.push("--".to_string());
         args.push(file_path.to_string_lossy().into_owned());
 
         // Convert to &str slice for the runtime
