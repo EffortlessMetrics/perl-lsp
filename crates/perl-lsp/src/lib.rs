@@ -295,13 +295,11 @@
 //! ```no_run
 //! use perl_lsp::LspServer;
 //!
-//! fn main() {
-//!     let mut server = LspServer::new();
+//! let mut server = LspServer::new();
 //!
-//!     match server.run() {
-//!         Ok(()) => println!("Server exited cleanly"),
-//!         Err(e) => eprintln!("Server error: {}", e),
-//!     }
+//! match server.run() {
+//!     Ok(()) => println!("Server exited cleanly"),
+//!     Err(e) => eprintln!("Server error: {}", e),
 //! }
 //! ```
 

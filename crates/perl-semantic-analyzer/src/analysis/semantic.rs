@@ -1822,10 +1822,8 @@ my $closure = sub {
         let tokens = analyzer.semantic_tokens();
 
         // Should have a keyword token for 'sub'
-        let sub_keywords: Vec<_> = tokens
-            .iter()
-            .filter(|t| matches!(t.token_type, SemanticTokenType::Keyword))
-            .collect();
+        let sub_keywords: Vec<_> =
+            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Keyword)).collect();
 
         assert!(!sub_keywords.is_empty(), "Should have keyword token for 'sub'");
 
@@ -1864,10 +1862,7 @@ my $adder = sub {
         assert!(hover.is_some(), "Should have hover info");
 
         if let Some(h) = hover {
-            assert!(
-                h.signature.contains("sub"),
-                "Hover signature should contain 'sub'"
-            );
+            assert!(h.signature.contains("sub"), "Hover signature should contain 'sub'");
             assert!(
                 h.details.iter().any(|d| d.contains("Anonymous")),
                 "Hover details should mention anonymous subroutine"

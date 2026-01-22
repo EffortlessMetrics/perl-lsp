@@ -46,9 +46,9 @@ fn lexer_regex_literal_character_classes() {
         "/[abc]/",
         "/[a-z]/",
         "/[A-Z0-9]/",
-        "/[^abc]/",       // Negated class
-        r"/[\w\d\s]/",    // Escape sequences
-        r"/[\[\]]/",      // Escaped brackets
+        "/[^abc]/",        // Negated class
+        r"/[\w\d\s]/",     // Escape sequences
+        r"/[\[\]]/",       // Escaped brackets
         r"/[a-zA-Z0-9_]/", // Combined ranges
     ];
 
@@ -101,12 +101,12 @@ fn lexer_regex_literal_quantifiers() {
 #[test]
 fn lexer_regex_literal_capture_groups() {
     let test_cases = vec![
-        r"/(abc)/",           // Simple group
-        r"/(a)(b)(c)/",       // Multiple groups
-        r"/(?:abc)/",         // Non-capturing group
-        r"/(?<name>abc)/",    // Named capture
-        r"/(a|b|c)/",         // Alternation
-        r"/((a)(b))/",        // Nested groups
+        r"/(abc)/",        // Simple group
+        r"/(a)(b)(c)/",    // Multiple groups
+        r"/(?:abc)/",      // Non-capturing group
+        r"/(?<name>abc)/", // Named capture
+        r"/(a|b|c)/",      // Alternation
+        r"/((a)(b))/",     // Nested groups
     ];
 
     for code in test_cases {
@@ -164,10 +164,10 @@ fn lexer_regex_literal_deeply_nested_captures() {
 #[test]
 fn lexer_regex_literal_lookahead_assertions() {
     let test_cases = vec![
-        r"/(?=abc)/",    // Positive lookahead
-        r"/(?!abc)/",    // Negative lookahead
-        r"/a(?=b)c/",    // Lookahead in pattern
-        r"/(?=.*\d)/",   // Complex lookahead
+        r"/(?=abc)/",  // Positive lookahead
+        r"/(?!abc)/",  // Negative lookahead
+        r"/a(?=b)c/",  // Lookahead in pattern
+        r"/(?=.*\d)/", // Complex lookahead
     ];
 
     for code in test_cases {
@@ -189,9 +189,9 @@ fn lexer_regex_literal_lookahead_assertions() {
 #[test]
 fn lexer_regex_literal_lookbehind_assertions() {
     let test_cases = vec![
-        r"/(?<=abc)/",   // Positive lookbehind
-        r"/(?<!abc)/",   // Negative lookbehind
-        r"/(?<=a)bc/",   // Lookbehind in pattern
+        r"/(?<=abc)/", // Positive lookbehind
+        r"/(?<!abc)/", // Negative lookbehind
+        r"/(?<=a)bc/", // Lookbehind in pattern
     ];
 
     for code in test_cases {
@@ -213,13 +213,13 @@ fn lexer_regex_literal_lookbehind_assertions() {
 #[test]
 fn lexer_regex_literal_modifiers() {
     let test_cases = vec![
-        "/pattern/i",      // Case-insensitive
-        "/pattern/g",      // Global
-        "/pattern/m",      // Multiline
-        "/pattern/s",      // Single-line (dot matches newline)
-        "/pattern/x",      // Extended (ignore whitespace)
-        "/pattern/igm",    // Multiple modifiers
-        "/pattern/imsxg",  // All common modifiers
+        "/pattern/i",     // Case-insensitive
+        "/pattern/g",     // Global
+        "/pattern/m",     // Multiline
+        "/pattern/s",     // Single-line (dot matches newline)
+        "/pattern/x",     // Extended (ignore whitespace)
+        "/pattern/igm",   // Multiple modifiers
+        "/pattern/imsxg", // All common modifiers
     ];
 
     for code in test_cases {
@@ -241,15 +241,15 @@ fn lexer_regex_literal_modifiers() {
 #[test]
 fn lexer_regex_literal_various_delimiters() {
     let test_cases = vec![
-        "m/pattern/",     // Standard /
-        "m{pattern}",     // Braces
-        "m[pattern]",     // Brackets
-        "m(pattern)",     // Parens
-        "m<pattern>",     // Angle brackets
-        "m!pattern!",     // Exclamation
-        "m#pattern#",     // Hash
-        "m|pattern|",     // Pipe
-        "m~pattern~",     // Tilde
+        "m/pattern/", // Standard /
+        "m{pattern}", // Braces
+        "m[pattern]", // Brackets
+        "m(pattern)", // Parens
+        "m<pattern>", // Angle brackets
+        "m!pattern!", // Exclamation
+        "m#pattern#", // Hash
+        "m|pattern|", // Pipe
+        "m~pattern~", // Tilde
     ];
 
     for code in test_cases {
@@ -271,11 +271,11 @@ fn lexer_regex_literal_various_delimiters() {
 #[test]
 fn lexer_regex_literal_nested_delimiters() {
     let test_cases = vec![
-        r"m{a{b}c}",      // Nested braces
-        r"m[a[b]c]",      // Nested brackets
-        r"m(a(b)c)",      // Nested parens
-        r"m<a<b>c>",      // Nested angle brackets
-        r"m{{{text}}}",   // Multiple nesting levels
+        r"m{a{b}c}",    // Nested braces
+        r"m[a[b]c]",    // Nested brackets
+        r"m(a(b)c)",    // Nested parens
+        r"m<a<b>c>",    // Nested angle brackets
+        r"m{{{text}}}", // Multiple nesting levels
     ];
 
     for code in test_cases {
@@ -356,8 +356,8 @@ fn lexer_regex_literal_unicode_patterns() {
     let test_cases = vec![
         "/café/",
         "/日本語/",
-        "/\u{1F600}/", // Emoji
-        r"/\x{263A}/", // Unicode escape
+        "/\u{1F600}/",    // Emoji
+        r"/\x{263A}/",    // Unicode escape
         r"/\N{SNOWMAN}/", // Named Unicode
     ];
 
@@ -475,10 +475,10 @@ fn lexer_regex_literal_malformed_unbalanced_groups() {
 #[test]
 fn lexer_regex_literal_escaped_delimiter() {
     let test_cases = vec![
-        r"/a\/b/",      // Escaped /
-        r"m{a\}b}",     // Escaped }
-        r"m[a\]b]",     // Escaped ]
-        r"m(a\)b)",     // Escaped )
+        r"/a\/b/",  // Escaped /
+        r"m{a\}b}", // Escaped }
+        r"m[a\]b]", // Escaped ]
+        r"m(a\)b)", // Escaped )
     ];
 
     for code in test_cases {
@@ -499,12 +499,7 @@ fn lexer_regex_literal_escaped_delimiter() {
 /// Tests feature spec: ROADMAP.md#regex-literal-handling
 #[test]
 fn lexer_regex_literal_alternation() {
-    let test_cases = vec![
-        "/(a|b)/",
-        "/(abc|def|ghi)/",
-        "/(a|b|c|d|e)/",
-        "/(?:foo|bar)/",
-    ];
+    let test_cases = vec!["/(a|b)/", "/(abc|def|ghi)/", "/(a|b|c|d|e)/", "/(?:foo|bar)/"];
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
@@ -571,19 +566,12 @@ fn lexer_regex_literal_no_hang_complex_pattern() {
     let _timeout = Duration::from_secs(2);
     let completed = handle.join().is_ok();
 
-    assert!(
-        completed,
-        "Lexer should complete complex regex within timeout"
-    );
+    assert!(completed, "Lexer should complete complex regex within timeout");
 
     let result_guard = result_arc.lock().unwrap();
     let result = result_guard.as_ref().expect("Lexer should have returned a result");
 
-    assert!(
-        result.is_some(),
-        "Lexer should handle complex regex pattern: {:?}",
-        result
-    );
+    assert!(result.is_some(), "Lexer should handle complex regex pattern: {:?}", result);
 }
 
 /// Test regex performance doesn't degrade with pattern complexity
@@ -658,13 +646,8 @@ fn lexer_regex_literal_delimiter_nesting_limit() {
 /// Tests feature spec: ROADMAP.md#regex-literal-handling
 #[test]
 fn lexer_regex_literal_qr_quoted_regex() {
-    let test_cases = vec![
-        "qr/pattern/",
-        "qr{pattern}",
-        "qr[pattern]",
-        "qr/pattern/i",
-        "qr/(?:abc)+/igms",
-    ];
+    let test_cases =
+        vec!["qr/pattern/", "qr{pattern}", "qr[pattern]", "qr/pattern/i", "qr/(?:abc)+/igms"];
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);

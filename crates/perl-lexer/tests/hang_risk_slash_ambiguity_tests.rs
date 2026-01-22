@@ -230,13 +230,13 @@ fn lexer_slash_ambiguity_chained_division() {
 #[test]
 fn lexer_slash_ambiguity_division_whitespace_variations() {
     let test_cases = vec![
-        "42/2",      // No whitespace
-        "42 /2",     // Space before
-        "42/ 2",     // Space after
-        "42 / 2",    // Spaces both sides
-        "42  /  2",  // Multiple spaces
-        "42\t/\t2",  // Tabs
-        "42\n/\n2",  // Newlines
+        "42/2",     // No whitespace
+        "42 /2",    // Space before
+        "42/ 2",    // Space after
+        "42 / 2",   // Spaces both sides
+        "42  /  2", // Multiple spaces
+        "42\t/\t2", // Tabs
+        "42\n/\n2", // Newlines
     ];
 
     for code in test_cases {
@@ -259,10 +259,10 @@ fn lexer_slash_ambiguity_division_whitespace_variations() {
 #[test]
 fn lexer_slash_ambiguity_regex_whitespace_variations() {
     let test_cases = vec![
-        "$x=~/pattern/",   // No whitespace
-        "$x =~ /pattern/", // Standard spacing
+        "$x=~/pattern/",     // No whitespace
+        "$x =~ /pattern/",   // Standard spacing
         "$x  =~  /pattern/", // Extra spaces
-        "$x=~\n/pattern/", // Newline before regex
+        "$x=~\n/pattern/",   // Newline before regex
     ];
 
     for code in test_cases {
@@ -381,11 +381,7 @@ fn lexer_slash_ambiguity_division_complex_expression() {
 /// Tests feature spec: ROADMAP.md#slash-ambiguity
 #[test]
 fn lexer_slash_ambiguity_regex_with_modifiers() {
-    let test_cases = vec![
-        "$x =~ /pattern/i",
-        "$x =~ /pattern/gi",
-        "$x =~ /pattern/imsx",
-    ];
+    let test_cases = vec!["$x =~ /pattern/i", "$x =~ /pattern/gi", "$x =~ /pattern/imsx"];
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
@@ -467,11 +463,7 @@ fn lexer_slash_ambiguity_division_after_postfix_op() {
             }
         }
 
-        assert!(
-            found_div,
-            "Expected to find division operator after variable in '{}'",
-            code
-        );
+        assert!(found_div, "Expected to find division operator after variable in '{}'", code);
     }
 }
 
@@ -605,10 +597,7 @@ fn lexer_slash_ambiguity_no_hang_on_pathological_input() {
     let _timeout = Duration::from_secs(2);
     let completed = handle.join().is_ok();
 
-    assert!(
-        completed,
-        "Lexer should complete within timeout on pathological slash input"
-    );
+    assert!(completed, "Lexer should complete within timeout on pathological slash input");
 }
 
 /// Test regex vs division after keyword
@@ -687,10 +676,6 @@ fn lexer_slash_ambiguity_real_world_regex_in_map_grep() {
             }
         }
 
-        assert!(
-            found_regex,
-            "Expected to find regex in map/grep: '{}'",
-            code
-        );
+        assert!(found_regex, "Expected to find regex in map/grep: '{}'", code);
     }
 }

@@ -599,11 +599,8 @@ mod tests {
     #[test]
     fn test_attach_config_validation_empty_host() {
         // Test: empty host fails validation
-        let config = AttachConfiguration {
-            host: "".to_string(),
-            port: 13603,
-            timeout_ms: Some(5000),
-        };
+        let config =
+            AttachConfiguration { host: "".to_string(), port: 13603, timeout_ms: Some(5000) };
 
         let result = config.validate();
         assert!(result.is_err(), "Empty host should fail validation");
@@ -613,11 +610,8 @@ mod tests {
     #[test]
     fn test_attach_config_validation_whitespace_host() {
         // Test: whitespace-only host fails validation
-        let config = AttachConfiguration {
-            host: "   ".to_string(),
-            port: 13603,
-            timeout_ms: Some(5000),
-        };
+        let config =
+            AttachConfiguration { host: "   ".to_string(), port: 13603, timeout_ms: Some(5000) };
 
         let result = config.validate();
         assert!(result.is_err(), "Whitespace host should fail validation");
@@ -626,11 +620,8 @@ mod tests {
     #[test]
     fn test_attach_config_validation_zero_port() {
         // Test: port 0 is invalid
-        let config = AttachConfiguration {
-            host: "localhost".to_string(),
-            port: 0,
-            timeout_ms: Some(5000),
-        };
+        let config =
+            AttachConfiguration { host: "localhost".to_string(), port: 0, timeout_ms: Some(5000) };
 
         let result = config.validate();
         assert!(result.is_err(), "Port 0 should fail validation");
@@ -640,11 +631,8 @@ mod tests {
     #[test]
     fn test_attach_config_validation_zero_timeout() {
         // Test: zero timeout fails validation
-        let config = AttachConfiguration {
-            host: "localhost".to_string(),
-            port: 13603,
-            timeout_ms: Some(0),
-        };
+        let config =
+            AttachConfiguration { host: "localhost".to_string(), port: 13603, timeout_ms: Some(0) };
 
         let result = config.validate();
         assert!(result.is_err(), "Zero timeout should fail validation");
@@ -667,11 +655,8 @@ mod tests {
     #[test]
     fn test_attach_config_validation_no_timeout() {
         // Test: no timeout specified is valid
-        let config = AttachConfiguration {
-            host: "localhost".to_string(),
-            port: 13603,
-            timeout_ms: None,
-        };
+        let config =
+            AttachConfiguration { host: "localhost".to_string(), port: 13603, timeout_ms: None };
 
         assert!(config.validate().is_ok(), "Config without timeout should be valid");
     }

@@ -66,7 +66,7 @@ required-features = ["cli"]
 
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)', 'cfg(feature, values("slow_tests"))'] }
 
 [[bin]]
 name = "perl-dap-internal"
@@ -103,6 +103,7 @@ utf16-complete = []  # Complete UTF-16 round-trip support
 semantic-phase2 = []  # Semantic analyzer Phase 2+ features
 parser-extras = []  # General aspirational parser tests
 crash-repros = []  # Enable crash reproducer tests (may hang - use with timeout)
+slow_tests = []  # Enable slow stress tests (deep nesting, etc.)
 
 [dev-dependencies]
 assert_cmd = "2.1.2"

@@ -291,10 +291,16 @@ impl ScopeAnalyzer {
                         range: (variable.location.start, variable.location.end),
                         description: match issue_kind {
                             IssueKind::VariableShadowing => {
-                                format!("Variable '{}' shadows a variable in outer scope", full_name)
+                                format!(
+                                    "Variable '{}' shadows a variable in outer scope",
+                                    full_name
+                                )
                             }
                             IssueKind::VariableRedeclaration => {
-                                format!("Variable '{}' is already declared in this scope", full_name)
+                                format!(
+                                    "Variable '{}' is already declared in this scope",
+                                    full_name
+                                )
                             }
                             _ => String::new(),
                         },
@@ -377,7 +383,13 @@ impl ScopeAnalyzer {
                             if !var_name.is_empty() {
                                 let (sigil, name) = split_variable_name(var_name);
                                 if !sigil.is_empty() {
-                                    scope.declare_variable_parts(sigil, name, node.location.start, true, true);
+                                    scope.declare_variable_parts(
+                                        sigil,
+                                        name,
+                                        node.location.start,
+                                        true,
+                                        true,
+                                    );
                                 }
                             }
                         }
@@ -620,7 +632,13 @@ impl ScopeAnalyzer {
                         }
 
                         // Declare the parameter in subroutine scope
-                        sub_scope.declare_variable_parts(sigil, name, param.location.start, false, true); // Parameters are initialized
+                        sub_scope.declare_variable_parts(
+                            sigil,
+                            name,
+                            param.location.start,
+                            false,
+                            true,
+                        ); // Parameters are initialized
                         // Don't mark parameters as automatically used yet - track their actual usage
                     }
                 }

@@ -506,7 +506,9 @@ impl CodeActionsProvider {
 
                 // Find the actual end of the statement (before any trailing whitespace)
                 let mut end_pos = line_end;
-                while end_pos > diagnostic.range.0 && self.source.as_bytes()[end_pos - 1].is_ascii_whitespace() {
+                while end_pos > diagnostic.range.0
+                    && self.source.as_bytes()[end_pos - 1].is_ascii_whitespace()
+                {
                     end_pos -= 1;
                 }
 
@@ -531,7 +533,10 @@ impl CodeActionsProvider {
                     diagnostics: vec![code.to_string()],
                     edit: CodeActionEdit {
                         changes: vec![TextEdit {
-                            location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
+                            location: SourceLocation {
+                                start: diagnostic.range.1,
+                                end: diagnostic.range.1,
+                            },
                             new_text: "\"".to_string(),
                         }],
                     },
@@ -545,7 +550,10 @@ impl CodeActionsProvider {
                     diagnostics: vec![code.to_string()],
                     edit: CodeActionEdit {
                         changes: vec![TextEdit {
-                            location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
+                            location: SourceLocation {
+                                start: diagnostic.range.1,
+                                end: diagnostic.range.1,
+                            },
                             new_text: ")".to_string(),
                         }],
                     },
@@ -559,7 +567,10 @@ impl CodeActionsProvider {
                     diagnostics: vec![code.to_string()],
                     edit: CodeActionEdit {
                         changes: vec![TextEdit {
-                            location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
+                            location: SourceLocation {
+                                start: diagnostic.range.1,
+                                end: diagnostic.range.1,
+                            },
                             new_text: "]".to_string(),
                         }],
                     },
@@ -573,7 +584,10 @@ impl CodeActionsProvider {
                     diagnostics: vec![code.to_string()],
                     edit: CodeActionEdit {
                         changes: vec![TextEdit {
-                            location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
+                            location: SourceLocation {
+                                start: diagnostic.range.1,
+                                end: diagnostic.range.1,
+                            },
                             new_text: "}".to_string(),
                         }],
                     },
@@ -618,7 +632,8 @@ impl CodeActionsProvider {
 
         if let Some(var_name) = diagnostic.message.split('\'').nth(1) {
             // Remove sigil for the base name
-            let base_name = var_name.trim_start_matches('$').trim_start_matches('@').trim_start_matches('%');
+            let base_name =
+                var_name.trim_start_matches('$').trim_start_matches('@').trim_start_matches('%');
 
             // Suggest alternative names
             let suggestions = vec![

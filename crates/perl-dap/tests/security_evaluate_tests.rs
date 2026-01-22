@@ -16,7 +16,10 @@ fn test_evaluate_rejects_newlines() {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Evaluate should fail for expression with newlines");
             let msg = message.expect("Should have error message");
-            assert_eq!(msg, "Expression cannot contain newlines", "Should reject newlines explicitly");
+            assert_eq!(
+                msg, "Expression cannot contain newlines",
+                "Should reject newlines explicitly"
+            );
         }
         _ => panic!("Expected Response"),
     }
@@ -37,7 +40,10 @@ fn test_evaluate_rejects_carriage_returns() {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Evaluate should fail for expression with carriage returns");
             let msg = message.expect("Should have error message");
-            assert_eq!(msg, "Expression cannot contain newlines", "Should reject newlines explicitly");
+            assert_eq!(
+                msg, "Expression cannot contain newlines",
+                "Should reject newlines explicitly"
+            );
         }
         _ => panic!("Expected Response"),
     }

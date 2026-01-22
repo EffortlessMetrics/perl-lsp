@@ -380,8 +380,8 @@ pub use breakpoints::{BreakpointRecord, BreakpointStore};
 pub use dispatcher::{DapDispatcher, DispatchResult};
 pub use protocol::{
     AttachRequestArguments, Breakpoint, Capabilities, Event, InitializeRequestArguments,
-    LaunchRequestArguments, Request, Response, SetBreakpointsArguments,
-    SetBreakpointsResponseBody, Source, SourceBreakpoint,
+    LaunchRequestArguments, Request, Response, SetBreakpointsArguments, SetBreakpointsResponseBody,
+    Source, SourceBreakpoint,
 };
 
 /// DAP server configuration (Phase 2 placeholder)

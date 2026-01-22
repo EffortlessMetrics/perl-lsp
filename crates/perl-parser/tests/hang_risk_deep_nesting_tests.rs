@@ -41,11 +41,7 @@ fn parser_hang_risk_nested_blocks_exceed_limit() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for {} nested blocks",
-        depth
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for {} nested blocks", depth);
     assert!(
         matches!(result.unwrap_err(), ParseError::RecursionLimit),
         "Expected RecursionLimit error, got different error type"
@@ -71,10 +67,7 @@ fn parser_hang_risk_nested_parentheses_exceed_limit() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested parentheses"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested parentheses");
     assert!(
         matches!(result.unwrap_err(), ParseError::RecursionLimit),
         "Expected RecursionLimit error for nested parentheses"
@@ -100,10 +93,7 @@ fn parser_hang_risk_nested_array_literals() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested array literals"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested array literals");
 }
 
 /// Test deeply nested hash literals
@@ -125,10 +115,7 @@ fn parser_hang_risk_nested_hash_literals() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested hash literals"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested hash literals");
 }
 
 /// Test deeply nested function calls
@@ -150,10 +137,7 @@ fn parser_hang_risk_nested_function_calls() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested function calls"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested function calls");
 }
 
 /// Test deeply nested if statements (control flow)
@@ -175,10 +159,7 @@ fn parser_hang_risk_nested_if_statements() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested if statements"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested if statements");
 }
 
 /// Test deeply nested while loops
@@ -200,10 +181,7 @@ fn parser_hang_risk_nested_while_loops() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested while loops"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested while loops");
 }
 
 /// Test deeply nested for loops
@@ -225,10 +203,7 @@ fn parser_hang_risk_nested_for_loops() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested for loops"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested for loops");
 }
 
 /// Test mixed nesting: blocks + expressions
@@ -250,10 +225,7 @@ fn parser_hang_risk_mixed_blocks_expressions() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for mixed blocks and expressions"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for mixed blocks and expressions");
 }
 
 /// Test deeply nested ternary operators
@@ -275,10 +247,7 @@ fn parser_hang_risk_nested_ternary_operators() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested ternary operators"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested ternary operators");
 }
 
 /// Test deeply nested regex capture groups
@@ -336,10 +305,7 @@ fn parser_hang_risk_nested_hash_deref() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested hash dereferencing"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested hash dereferencing");
 }
 
 /// Test deeply nested array reference indexing
@@ -358,10 +324,7 @@ fn parser_hang_risk_nested_array_indexing() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested array indexing"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested array indexing");
 }
 
 /// Test nested quote operators with paired delimiters
@@ -417,11 +380,7 @@ fn parser_hang_risk_reasonable_nesting_succeeds() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_ok(),
-        "Expected success for reasonable nesting depth: {:?}",
-        result.err()
-    );
+    assert!(result.is_ok(), "Expected success for reasonable nesting depth: {:?}", result.err());
 }
 
 /// Test boundary condition: just below limit
@@ -443,11 +402,7 @@ fn parser_hang_risk_boundary_just_below_limit() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_ok(),
-        "Expected success for nesting just below limit: {:?}",
-        result.err()
-    );
+    assert!(result.is_ok(), "Expected success for nesting just below limit: {:?}", result.err());
 }
 
 /// Test boundary condition: just above limit
@@ -469,10 +424,7 @@ fn parser_hang_risk_boundary_just_above_limit() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for nesting just above limit"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for nesting just above limit");
     assert!(
         matches!(result.unwrap_err(), ParseError::RecursionLimit),
         "Expected RecursionLimit error type"
@@ -502,10 +454,7 @@ fn parser_hang_risk_mixed_control_flow_nesting() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for mixed control flow nesting"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for mixed control flow nesting");
 }
 
 /// Test deeply nested anonymous subroutines
@@ -527,10 +476,7 @@ fn parser_hang_risk_nested_anonymous_subs() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested anonymous subs"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested anonymous subs");
 }
 
 /// Test deeply nested do blocks
@@ -552,10 +498,7 @@ fn parser_hang_risk_nested_do_blocks() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested do blocks"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested do blocks");
 }
 
 /// Test deeply nested eval blocks
@@ -577,10 +520,7 @@ fn parser_hang_risk_nested_eval_blocks() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested eval blocks"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested eval blocks");
 }
 
 /// Test deeply nested map/grep builtins
@@ -606,10 +546,7 @@ fn parser_hang_risk_nested_map_grep() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(
-        result.is_err(),
-        "Expected RecursionLimit error for deeply nested map/grep"
-    );
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested map/grep");
 }
 
 /// Test pathological case: alternating array and hash nesting
@@ -679,19 +616,13 @@ fn parser_hang_risk_no_timeout_on_pathological_input() {
     let _timeout = Duration::from_secs(5);
     let completed = handle.join().is_ok();
 
-    assert!(
-        completed,
-        "Parser should complete within timeout, not hang indefinitely"
-    );
+    assert!(completed, "Parser should complete within timeout, not hang indefinitely");
 
     let result_guard = result_arc.lock().unwrap();
     let result = result_guard.as_ref().expect("Parser should have returned a result");
 
     // Should fail with RecursionLimit, not hang
-    assert!(
-        result.is_err(),
-        "Parser should reject extremely deep nesting"
-    );
+    assert!(result.is_err(), "Parser should reject extremely deep nesting");
 }
 
 /// Test performance doesn't degrade linearly with depth
@@ -737,9 +668,5 @@ fn parser_hang_risk_performance_bounded() {
 
     // Ratio should be less than 10x (linear would be 2.5x, allowing some overhead)
     let ratio = limit_duration.as_micros() as f64 / safe_duration.as_micros() as f64;
-    assert!(
-        ratio < 10.0,
-        "Parse time ratio {} indicates potential performance issue",
-        ratio
-    );
+    assert!(ratio < 10.0, "Parse time ratio {} indicates potential performance issue", ratio);
 }

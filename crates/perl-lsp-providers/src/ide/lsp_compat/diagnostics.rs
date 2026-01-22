@@ -786,22 +786,27 @@ mod tests {
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
 
         // Find the undeclared variable diagnostic
-        let undeclared_diag = diagnostics
-            .iter()
-            .find(|d| d.code == Some("undeclared-variable".to_string()));
+        let undeclared_diag =
+            diagnostics.iter().find(|d| d.code == Some("undeclared-variable".to_string()));
 
         if let Some(diag) = undeclared_diag {
             // Should have related information with suggestions
-            assert!(!diag.related_information.is_empty(),
-                "Diagnostic should have related information with suggestions");
+            assert!(
+                !diag.related_information.is_empty(),
+                "Diagnostic should have related information with suggestions"
+            );
 
             // Should have a lightbulb suggestion
-            assert!(diag.related_information.iter().any(|r| r.message.contains("💡")),
-                "Should have actionable suggestion marked with lightbulb");
+            assert!(
+                diag.related_information.iter().any(|r| r.message.contains("💡")),
+                "Should have actionable suggestion marked with lightbulb"
+            );
 
             // Should have explanatory information
-            assert!(diag.related_information.iter().any(|r| r.message.contains("ℹ️")),
-                "Should have explanatory information marked with info icon");
+            assert!(
+                diag.related_information.iter().any(|r| r.message.contains("ℹ️")),
+                "Should have explanatory information marked with info icon"
+            );
         }
     }
 
@@ -821,9 +826,8 @@ mod tests {
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
 
         // Find deprecated diagnostic
-        let deprecated_diag = diagnostics
-            .iter()
-            .find(|d| d.code == Some("deprecated-defined".to_string()));
+        let deprecated_diag =
+            diagnostics.iter().find(|d| d.code == Some("deprecated-defined".to_string()));
 
         if let Some(diag) = deprecated_diag {
             assert_eq!(diag.severity, DiagnosticSeverity::Warning);
@@ -831,14 +835,18 @@ mod tests {
             assert!(diag.tags.contains(&DiagnosticTag::Deprecated));
 
             // Should have helpful related information
-            assert!(!diag.related_information.is_empty(),
-                "Deprecated syntax should have explanation");
+            assert!(
+                !diag.related_information.is_empty(),
+                "Deprecated syntax should have explanation"
+            );
 
             // Check for both suggestion and explanation
             let has_suggestion = diag.related_information.iter().any(|r| r.message.contains("💡"));
             let has_explanation = diag.related_information.iter().any(|r| r.message.contains("ℹ️"));
-            assert!(has_suggestion && has_explanation,
-                "Deprecated diagnostic should have both suggestion and explanation");
+            assert!(
+                has_suggestion && has_explanation,
+                "Deprecated diagnostic should have both suggestion and explanation"
+            );
         }
     }
 
@@ -857,21 +865,20 @@ mod tests {
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
 
-        let assignment_diag = diagnostics
-            .iter()
-            .find(|d| d.code == Some("assignment-in-condition".to_string()));
+        let assignment_diag =
+            diagnostics.iter().find(|d| d.code == Some("assignment-in-condition".to_string()));
 
         if let Some(diag) = assignment_diag {
             assert_eq!(diag.severity, DiagnosticSeverity::Warning);
-            assert!(diag.message.contains("=="),
-                "Message should suggest using == instead");
+            assert!(diag.message.contains("=="), "Message should suggest using == instead");
 
             // Should have helpful suggestions
             assert!(!diag.related_information.is_empty());
-            let has_comparison_suggestion = diag.related_information.iter()
+            let has_comparison_suggestion = diag
+                .related_information
+                .iter()
                 .any(|r| r.message.contains("==") || r.message.contains("eq"));
-            assert!(has_comparison_suggestion,
-                "Should suggest using comparison operators");
+            assert!(has_comparison_suggestion, "Should suggest using comparison operators");
         }
     }
 
@@ -885,16 +892,14 @@ mod tests {
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
 
-        let strict_diag = diagnostics
-            .iter()
-            .find(|d| d.code == Some("missing-strict".to_string()));
+        let strict_diag = diagnostics.iter().find(|d| d.code == Some("missing-strict".to_string()));
 
         if let Some(diag) = strict_diag {
             assert_eq!(diag.severity, DiagnosticSeverity::Information);
             assert!(!diag.related_information.is_empty());
 
-            let has_suggestion = diag.related_information.iter()
-                .any(|r| r.message.contains("use strict"));
+            let has_suggestion =
+                diag.related_information.iter().any(|r| r.message.contains("use strict"));
             assert!(has_suggestion, "Should suggest adding 'use strict'");
         }
     }
@@ -912,19 +917,21 @@ mod tests {
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
 
-        let unused_diag = diagnostics
-            .iter()
-            .find(|d| d.code == Some("unused-variable".to_string()));
+        let unused_diag =
+            diagnostics.iter().find(|d| d.code == Some("unused-variable".to_string()));
 
         if let Some(diag) = unused_diag {
-            assert!(diag.tags.contains(&DiagnosticTag::Unnecessary),
-                "Unused variable should be tagged as unnecessary");
+            assert!(
+                diag.tags.contains(&DiagnosticTag::Unnecessary),
+                "Unused variable should be tagged as unnecessary"
+            );
 
             // Should have suggestion to remove or prefix with underscore
-            let has_removal_suggestion = diag.related_information.iter()
+            let has_removal_suggestion = diag
+                .related_information
+                .iter()
                 .any(|r| r.message.contains("Remove") || r.message.contains("_"));
-            assert!(has_removal_suggestion,
-                "Should suggest removing or prefixing with underscore");
+            assert!(has_removal_suggestion, "Should suggest removing or prefixing with underscore");
         }
     }
 
@@ -937,7 +944,7 @@ mod tests {
             use perl_parser_core::{Node, NodeKind, SourceLocation};
             Node::new(
                 NodeKind::Error { message: "test".to_string() },
-                SourceLocation { start: 0, end: source.len() }
+                SourceLocation { start: 0, end: source.len() },
             )
         });
 
@@ -946,10 +953,6 @@ mod tests {
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
 
         // Just verify the provider doesn't crash with error nodes
-        let _diagnostics = provider.get_diagnostics(
-            &ast,
-            &[],
-            source
-        );
+        let _diagnostics = provider.get_diagnostics(&ast, &[], source);
     }
 }

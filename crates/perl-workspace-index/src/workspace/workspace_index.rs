@@ -569,11 +569,13 @@ impl IndexCoordinator {
         match &*state {
             IndexState::Building { .. } | IndexState::Degraded { .. } => {
                 // Valid transition - proceed
-                *state = IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
+                *state =
+                    IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
             }
             IndexState::Ready { .. } => {
                 // Already Ready - update metrics but don't log as transition
-                *state = IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
+                *state =
+                    IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
             }
         }
         drop(state); // Release write lock before checking limits
@@ -2616,8 +2618,7 @@ sub sub10 { }
 
         match coordinator.state() {
             IndexState::Degraded {
-                reason: DegradationReason::ScanTimeout { elapsed_ms },
-                ..
+                reason: DegradationReason::ScanTimeout { elapsed_ms }, ..
             } => {
                 assert!(elapsed_ms > 0, "Elapsed time should be recorded");
             }

@@ -938,12 +938,7 @@ impl DebugAdapter {
     /// - Provides foundation for future TCP socket implementation
     ///
     /// Process ID attachment will be added in Phase 2.
-    fn handle_attach(
-        &self,
-        seq: i64,
-        request_seq: i64,
-        arguments: Option<Value>,
-    ) -> DapMessage {
+    fn handle_attach(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
         // Parse attach arguments
         if let Some(args) = arguments {
             // Extract host and port for TCP attachment
@@ -1026,10 +1021,7 @@ impl DebugAdapter {
                 } else {
                     String::new()
                 };
-                eprintln!(
-                    "Attach request: TCP attachment to {}:{}{}",
-                    host, port, timeout_msg
-                );
+                eprintln!("Attach request: TCP attachment to {}:{}{}", host, port, timeout_msg);
 
                 // TODO: Implement TCP socket connection to Perl::LanguageServer DAP
                 // This will require:
