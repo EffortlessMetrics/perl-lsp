@@ -50,11 +50,11 @@ pub mod engine;
 /// Token stream and trivia utilities for the parser.
 pub mod tokens;
 
+pub use ast_v2::{DiagnosticId, MissingKind};
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 pub use engine::ast;
 /// Experimental second-generation AST (work in progress).
 pub use engine::ast_v2;
-pub use ast_v2::{DiagnosticId, MissingKind};
 /// Edit tracking for incremental parsing.
 pub use engine::edit;
 /// Heredoc content collector with FIFO ordering and indent stripping.
@@ -76,8 +76,8 @@ pub use engine::parser::Parser;
 /// Error classification and recovery strategies for parse failures.
 pub use error::classifier as error_classifier;
 pub use error::recovery as error_recovery;
-pub use error_recovery::RecoveryResult;
 pub use error::recovery_parser;
+pub use error_recovery::RecoveryResult;
 
 pub use position::line_index;
 pub use position::position_mapper;

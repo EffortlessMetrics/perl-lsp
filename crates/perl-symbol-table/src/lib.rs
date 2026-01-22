@@ -261,13 +261,8 @@ impl SymbolTable {
         let scope_id = self.next_scope_id;
         self.next_scope_id += 1;
 
-        let scope = Scope {
-            id: scope_id,
-            parent: Some(parent),
-            kind,
-            location,
-            symbols: HashSet::new(),
-        };
+        let scope =
+            Scope { id: scope_id, parent: Some(parent), kind, location, symbols: HashSet::new() };
 
         self.scopes.insert(scope_id, scope);
         self.scope_stack.push(scope_id);
@@ -393,7 +388,8 @@ mod tests {
         let mut table = SymbolTable::new();
 
         // Push a subroutine scope
-        let sub_scope = table.push_scope(ScopeKind::Subroutine, SourceLocation { start: 10, end: 100 });
+        let sub_scope =
+            table.push_scope(ScopeKind::Subroutine, SourceLocation { start: 10, end: 100 });
         assert_eq!(table.current_scope(), sub_scope);
 
         // Push a block scope inside

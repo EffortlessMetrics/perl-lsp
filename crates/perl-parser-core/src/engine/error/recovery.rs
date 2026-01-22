@@ -105,6 +105,10 @@ pub enum SyncPoint {
 pub enum RecoveryResult {
     /// Recovery succeeded, consumed the given number of tokens.
     Recovered(usize),
+    /// Already at a sync point when recovery was called.
+    /// The caller must decide whether to consume the sync token.
+    /// This prevents infinite loops at call boundaries.
+    AtSyncPoint,
     /// Recovery failed due to budget exhaustion.
     BudgetExhausted,
     /// Recovery reached EOF without finding sync point.
@@ -194,14 +198,22 @@ impl ErrorRecovery for ParserContext {
     }
 
     fn skip_until(&mut self, sync_points: &[SyncPoint]) -> usize {
-        // Use default budget for backwards compatibility
-        let budget = ParseBudget::default();
-        let mut tracker = BudgetTracker::new();
+        // Copy budget out (ParseBudget is Copy)
+        let budget = *self.budget();
 
-        match self.skip_until_with_budget(sync_points, &budget, &mut tracker) {
-            RecoveryResult::Recovered(count) => count,
-            RecoveryResult::BudgetExhausted | RecoveryResult::ReachedEof => tracker.tokens_skipped,
-        }
+        // Move tracker out to avoid &mut self + &mut field aliasing
+        let mut tracker = std::mem::take(self.budget_tracker_mut());
+        let before = tracker.tokens_skipped;
+
+        let _result = self.skip_until_with_budget(sync_points, &budget, &mut tracker);
+
+        let after = tracker.tokens_skipped;
+
+        // Restore the tracker
+        *self.budget_tracker_mut() = tracker;
+
+        // Return how many tokens we skipped in THIS call, not the total
+        after.saturating_sub(before)
     }
 
     fn skip_until_with_budget(
@@ -210,25 +222,29 @@ impl ErrorRecovery for ParserContext {
         budget: &ParseBudget,
         tracker: &mut BudgetTracker,
     ) -> RecoveryResult {
-        let mut skipped_this_call = 0;
+        // Check if already at a sync point BEFORE consuming anything.
+        // This prevents infinite loops at call boundaries where recovery
+        // is called repeatedly without making progress.
+        if sync_points.iter().any(|sp| self.is_sync_point(*sp)) {
+            return RecoveryResult::AtSyncPoint;
+        }
 
-        // Record this recovery attempt
-        tracker.record_recovery();
-        if tracker.recoveries_exhausted(budget) {
+        // Check if at EOF before attempting recovery
+        if self.current_token().is_none() {
+            return RecoveryResult::ReachedEof;
+        }
+
+        // Begin recovery attempt - checks budget BEFORE recording
+        if !tracker.begin_recovery(budget) {
             return RecoveryResult::BudgetExhausted;
         }
 
-        while let Some(_token) = self.current_token() {
-            // Check if we've reached a sync point
-            for sync_point in sync_points {
-                if self.is_sync_point(*sync_point) {
-                    tracker.record_skip(skipped_this_call);
-                    return RecoveryResult::Recovered(skipped_this_call);
-                }
-            }
+        let mut skipped_this_call: usize = 0;
 
-            // Check budget before skipping another token
-            if tracker.skip_would_exceed(budget, 1) {
+        while let Some(_token) = self.current_token() {
+            // Check budget before skipping another token.
+            // Use can_skip_more which considers skipped_this_call + 1 as "additional"
+            if !tracker.can_skip_more(budget, skipped_this_call.saturating_add(1)) {
                 tracker.record_skip(skipped_this_call);
                 return RecoveryResult::BudgetExhausted;
             }
@@ -236,6 +252,12 @@ impl ErrorRecovery for ParserContext {
             // PROGRESS INVARIANT: Consume at least one token per iteration
             self.advance();
             skipped_this_call += 1;
+
+            // Check if we've reached a sync point AFTER consuming
+            if sync_points.iter().any(|sp| self.is_sync_point(*sp)) {
+                tracker.record_skip(skipped_this_call);
+                return RecoveryResult::Recovered(skipped_this_call);
+            }
         }
 
         // Reached EOF
@@ -372,5 +394,158 @@ mod tests {
         assert_eq!(error.expected, vec!["identifier"]);
         assert_eq!(error.found, "number");
         assert_eq!(error.recovery_hint, Some("Did you mean to use a variable?".to_string()));
+    }
+
+    #[test]
+    fn test_begin_recovery_respects_budget() {
+        let budget = ParseBudget { max_recoveries: 2, ..Default::default() };
+        let mut tracker = BudgetTracker::new();
+
+        // First two should succeed
+        assert!(tracker.begin_recovery(&budget));
+        assert_eq!(tracker.recoveries_attempted, 1);
+        assert!(tracker.begin_recovery(&budget));
+        assert_eq!(tracker.recoveries_attempted, 2);
+
+        // Third should fail - budget exhausted
+        assert!(!tracker.begin_recovery(&budget));
+        assert_eq!(tracker.recoveries_attempted, 2); // Unchanged
+    }
+
+    #[test]
+    fn test_can_skip_more_considers_pending_skips() {
+        let budget = ParseBudget { max_tokens_skipped: 5, ..Default::default() };
+        let mut tracker = BudgetTracker::new();
+
+        // Skip 3 tokens
+        tracker.record_skip(3);
+        assert_eq!(tracker.tokens_skipped, 3);
+
+        // Can skip 2 more (total would be 5)
+        assert!(tracker.can_skip_more(&budget, 2));
+
+        // Cannot skip 3 more (total would be 6)
+        assert!(!tracker.can_skip_more(&budget, 3));
+    }
+
+    #[test]
+    fn test_skip_until_at_sync_point_returns_immediately() {
+        // When already at a sync point, skip_until should return AtSyncPoint
+        // without consuming anything to prevent infinite loops
+        let mut ctx = ParserContext::new("my $x;".to_string());
+        let budget = ParseBudget::default();
+        let mut tracker = BudgetTracker::new();
+
+        // First, advance past "my" and "$x" to reach ";"
+        ctx.advance(); // Skip 'my'
+        ctx.advance(); // Skip '$x'
+
+        // Now at semicolon - should return AtSyncPoint
+        let result = ctx.skip_until_with_budget(&[SyncPoint::Semicolon], &budget, &mut tracker);
+
+        assert_eq!(result, RecoveryResult::AtSyncPoint);
+        assert_eq!(tracker.tokens_skipped, 0);
+        assert_eq!(tracker.recoveries_attempted, 0);
+    }
+
+    #[test]
+    fn test_skip_until_respects_token_budget() {
+        let mut ctx = ParserContext::new("a b c d e f g h i j".to_string());
+        let budget = ParseBudget { max_tokens_skipped: 3, ..Default::default() };
+        let mut tracker = BudgetTracker::new();
+
+        // Try to skip until semicolon (which doesn't exist)
+        // Should stop after 3 tokens
+        let result = ctx.skip_until_with_budget(&[SyncPoint::Semicolon], &budget, &mut tracker);
+
+        assert_eq!(result, RecoveryResult::BudgetExhausted);
+        assert_eq!(tracker.tokens_skipped, 3);
+    }
+
+    #[test]
+    fn test_skip_until_respects_recovery_budget() {
+        let mut ctx = ParserContext::new("a b c d e f".to_string());
+        let budget = ParseBudget { max_recoveries: 1, ..Default::default() };
+        let mut tracker = BudgetTracker::new();
+
+        // First recovery should work - skip until semicolon (which doesn't exist)
+        let result = ctx.skip_until_with_budget(&[SyncPoint::Semicolon], &budget, &mut tracker);
+        assert!(matches!(result, RecoveryResult::ReachedEof));
+        assert_eq!(tracker.recoveries_attempted, 1);
+
+        // Reset context to beginning
+        ctx.set_index(0);
+
+        // Second recovery should fail - budget exhausted
+        let result = ctx.skip_until_with_budget(&[SyncPoint::Semicolon], &budget, &mut tracker);
+        assert_eq!(result, RecoveryResult::BudgetExhausted);
+        assert_eq!(tracker.recoveries_attempted, 1); // Unchanged
+    }
+
+    #[test]
+    fn test_skip_until_uses_context_budget() {
+        // Verify that skip_until (without _with_budget) uses the context's budget
+        let mut ctx = ParserContext::with_budget(
+            "a b c d e f g h i j".to_string(),
+            ParseBudget { max_tokens_skipped: 3, ..Default::default() },
+        );
+
+        // skip_until should use the context's budget
+        let skipped = ctx.skip_until(&[SyncPoint::Semicolon]);
+
+        // Should have skipped 3 tokens before hitting budget
+        assert_eq!(skipped, 3);
+        assert_eq!(ctx.budget_tracker().tokens_skipped, 3);
+    }
+
+    #[test]
+    fn test_recovery_makes_progress_on_pathological_input() {
+        // Test that recovery doesn't spin on malformed input
+        let input = "= = = = = =";
+        let mut ctx = ParserContext::with_budget(
+            input.to_string(),
+            ParseBudget {
+                max_errors: 5,
+                max_tokens_skipped: 50,
+                max_recoveries: 10,
+                ..Default::default()
+            },
+        );
+
+        let budget = *ctx.budget();
+        let mut tracker = std::mem::take(ctx.budget_tracker_mut());
+
+        // Recovery should either find a sync point or exhaust budget
+        let mut iterations = 0;
+        let max_iterations = 100;
+
+        loop {
+            let result = ctx.skip_until_with_budget(&[SyncPoint::Semicolon], &budget, &mut tracker);
+
+            iterations += 1;
+
+            match result {
+                RecoveryResult::Recovered(_) => {
+                    // Found sync point, try next recovery
+                    ctx.advance(); // Consume the sync point
+                }
+                RecoveryResult::AtSyncPoint => {
+                    // At sync point, consume and continue
+                    ctx.advance();
+                }
+                RecoveryResult::BudgetExhausted | RecoveryResult::ReachedEof => {
+                    break;
+                }
+            }
+
+            assert!(
+                iterations < max_iterations,
+                "Recovery appears to be spinning (iteration {})",
+                iterations
+            );
+        }
+
+        // Should have made progress before terminating
+        assert!(tracker.tokens_skipped > 0 || iterations > 0);
     }
 }

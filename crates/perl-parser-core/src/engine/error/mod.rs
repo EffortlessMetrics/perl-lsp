@@ -162,12 +162,7 @@ pub struct ParseBudget {
 
 impl Default for ParseBudget {
     fn default() -> Self {
-        Self {
-            max_errors: 100,
-            max_depth: 256,
-            max_tokens_skipped: 1000,
-            max_recoveries: 500,
-        }
+        Self { max_errors: 100, max_depth: 256, max_tokens_skipped: 1000, max_recoveries: 500 }
     }
 }
 
@@ -179,12 +174,7 @@ impl ParseBudget {
 
     /// Create a strict budget for parsing untrusted input.
     pub fn strict() -> Self {
-        Self {
-            max_errors: 10,
-            max_depth: 64,
-            max_tokens_skipped: 100,
-            max_recoveries: 50,
-        }
+        Self { max_errors: 10, max_depth: 64, max_tokens_skipped: 100, max_recoveries: 50 }
     }
 
     /// Create an unlimited budget (use with caution).
@@ -240,6 +230,25 @@ impl BudgetTracker {
     /// Check if recovery budget is exhausted.
     pub fn recoveries_exhausted(&self, budget: &ParseBudget) -> bool {
         self.recoveries_attempted >= budget.max_recoveries
+    }
+
+    /// Begin a recovery attempt, checking budget first.
+    ///
+    /// Returns `false` if another recovery attempt would exceed the budget.
+    /// If this returns `true`, the recovery attempt has been recorded.
+    pub fn begin_recovery(&mut self, budget: &ParseBudget) -> bool {
+        if self.recoveries_attempted >= budget.max_recoveries {
+            return false;
+        }
+        self.recoveries_attempted = self.recoveries_attempted.saturating_add(1);
+        true
+    }
+
+    /// Check if skipping `additional` more tokens would stay within budget.
+    ///
+    /// This considers both already-skipped tokens and the proposed additional count.
+    pub fn can_skip_more(&self, budget: &ParseBudget, additional: usize) -> bool {
+        self.tokens_skipped.saturating_add(additional) <= budget.max_tokens_skipped
     }
 
     /// Record an error emission.
@@ -447,15 +456,26 @@ impl ParseOutput {
     }
 
     /// Create a parse output with errors.
+    ///
+    /// Note: This re-derives budget_usage from diagnostics count.
+    /// For accurate budget tracking, use `finish()` instead.
     pub fn with_errors(ast: Node, diagnostics: Vec<ParseError>) -> Self {
         let mut budget_usage = BudgetTracker::new();
         budget_usage.errors_emitted = diagnostics.len();
-        Self {
-            ast,
-            diagnostics,
-            budget_usage,
-            terminated_early: false,
-        }
+        Self { ast, diagnostics, budget_usage, terminated_early: false }
+    }
+
+    /// Create a parse output with full budget tracking.
+    ///
+    /// This is the preferred constructor when the actual BudgetTracker
+    /// from parsing is available, as it preserves accurate metrics.
+    pub fn finish(
+        ast: Node,
+        diagnostics: Vec<ParseError>,
+        budget_usage: BudgetTracker,
+        terminated_early: bool,
+    ) -> Self {
+        Self { ast, diagnostics, budget_usage, terminated_early }
     }
 
     /// Check if parse completed without any errors.
@@ -636,14 +656,73 @@ mod tests {
             NodeKind::Program { statements: vec![] },
             SourceLocation { start: 0, end: 0 },
         );
-        let errors = vec![
-            ParseError::syntax("error 1", 0),
-            ParseError::syntax("error 2", 5),
-        ];
+        let errors = vec![ParseError::syntax("error 1", 0), ParseError::syntax("error 2", 5)];
         let output = ParseOutput::with_errors(ast, errors);
 
         assert!(!output.is_ok());
         assert!(output.has_errors());
         assert_eq!(output.error_count(), 2);
+    }
+
+    #[test]
+    fn test_parse_output_finish_preserves_tracker() {
+        use crate::ast::{Node, NodeKind, SourceLocation};
+
+        let ast = Node::new(
+            NodeKind::Program { statements: vec![] },
+            SourceLocation { start: 0, end: 0 },
+        );
+        let errors = vec![ParseError::syntax("error 1", 0)];
+
+        // Create a tracker with specific values
+        let mut tracker = BudgetTracker::new();
+        tracker.errors_emitted = 5;
+        tracker.tokens_skipped = 42;
+        tracker.recoveries_attempted = 3;
+        tracker.max_depth_reached = 10;
+
+        let output = ParseOutput::finish(ast, errors, tracker, true);
+
+        // Verify all tracker values are preserved
+        assert_eq!(output.budget_usage.errors_emitted, 5);
+        assert_eq!(output.budget_usage.tokens_skipped, 42);
+        assert_eq!(output.budget_usage.recoveries_attempted, 3);
+        assert_eq!(output.budget_usage.max_depth_reached, 10);
+        assert!(output.terminated_early);
+        assert_eq!(output.error_count(), 1);
+    }
+
+    #[test]
+    fn test_begin_recovery_checks_budget_first() {
+        let budget = ParseBudget { max_recoveries: 0, ..Default::default() };
+        let mut tracker = BudgetTracker::new();
+
+        // Should fail immediately - budget is 0
+        assert!(!tracker.begin_recovery(&budget));
+        assert_eq!(tracker.recoveries_attempted, 0);
+    }
+
+    #[test]
+    fn test_can_skip_more_boundary_conditions() {
+        let budget = ParseBudget { max_tokens_skipped: 10, ..Default::default() };
+        let mut tracker = BudgetTracker::new();
+
+        // At 0 skipped, can skip up to 10
+        assert!(tracker.can_skip_more(&budget, 10));
+        assert!(!tracker.can_skip_more(&budget, 11));
+
+        // Skip 5
+        tracker.record_skip(5);
+
+        // At 5 skipped, can skip up to 5 more
+        assert!(tracker.can_skip_more(&budget, 5));
+        assert!(!tracker.can_skip_more(&budget, 6));
+
+        // Skip 5 more to reach limit
+        tracker.record_skip(5);
+
+        // At limit, cannot skip any more
+        assert!(!tracker.can_skip_more(&budget, 1));
+        assert!(tracker.can_skip_more(&budget, 0));
     }
 }

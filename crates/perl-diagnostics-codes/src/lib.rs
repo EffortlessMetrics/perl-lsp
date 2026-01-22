@@ -175,7 +175,9 @@ impl DiagnosticCode {
             DiagnosticCode::MissingWarnings => Some("https://docs.perl-lsp.org/errors/PL101"),
             DiagnosticCode::UnusedVariable => Some("https://docs.perl-lsp.org/errors/PL102"),
             DiagnosticCode::UndefinedVariable => Some("https://docs.perl-lsp.org/errors/PL103"),
-            DiagnosticCode::MissingPackageDeclaration => Some("https://docs.perl-lsp.org/errors/PL200"),
+            DiagnosticCode::MissingPackageDeclaration => {
+                Some("https://docs.perl-lsp.org/errors/PL200")
+            }
             DiagnosticCode::DuplicatePackage => Some("https://docs.perl-lsp.org/errors/PL201"),
             DiagnosticCode::DuplicateSubroutine => Some("https://docs.perl-lsp.org/errors/PL300"),
             DiagnosticCode::MissingReturn => Some("https://docs.perl-lsp.org/errors/PL301"),
@@ -183,11 +185,11 @@ impl DiagnosticCode {
             DiagnosticCode::TwoArgOpen => Some("https://docs.perl-lsp.org/errors/PL401"),
             DiagnosticCode::ImplicitReturn => Some("https://docs.perl-lsp.org/errors/PL402"),
             // Perl::Critic codes don't have centralized documentation
-            DiagnosticCode::CriticSeverity1 |
-            DiagnosticCode::CriticSeverity2 |
-            DiagnosticCode::CriticSeverity3 |
-            DiagnosticCode::CriticSeverity4 |
-            DiagnosticCode::CriticSeverity5 => None,
+            DiagnosticCode::CriticSeverity1
+            | DiagnosticCode::CriticSeverity2
+            | DiagnosticCode::CriticSeverity3
+            | DiagnosticCode::CriticSeverity4
+            | DiagnosticCode::CriticSeverity5 => None,
         }
     }
 
@@ -195,29 +197,29 @@ impl DiagnosticCode {
     pub fn severity(&self) -> DiagnosticSeverity {
         match self {
             // Errors
-            DiagnosticCode::ParseError |
-            DiagnosticCode::SyntaxError |
-            DiagnosticCode::UnexpectedEof |
-            DiagnosticCode::UndefinedVariable => DiagnosticSeverity::Error,
+            DiagnosticCode::ParseError
+            | DiagnosticCode::SyntaxError
+            | DiagnosticCode::UnexpectedEof
+            | DiagnosticCode::UndefinedVariable => DiagnosticSeverity::Error,
 
             // Warnings
-            DiagnosticCode::MissingStrict |
-            DiagnosticCode::MissingWarnings |
-            DiagnosticCode::UnusedVariable |
-            DiagnosticCode::MissingPackageDeclaration |
-            DiagnosticCode::DuplicatePackage |
-            DiagnosticCode::DuplicateSubroutine |
-            DiagnosticCode::MissingReturn |
-            DiagnosticCode::BarewordFilehandle |
-            DiagnosticCode::TwoArgOpen |
-            DiagnosticCode::ImplicitReturn |
-            DiagnosticCode::CriticSeverity1 |
-            DiagnosticCode::CriticSeverity2 => DiagnosticSeverity::Warning,
+            DiagnosticCode::MissingStrict
+            | DiagnosticCode::MissingWarnings
+            | DiagnosticCode::UnusedVariable
+            | DiagnosticCode::MissingPackageDeclaration
+            | DiagnosticCode::DuplicatePackage
+            | DiagnosticCode::DuplicateSubroutine
+            | DiagnosticCode::MissingReturn
+            | DiagnosticCode::BarewordFilehandle
+            | DiagnosticCode::TwoArgOpen
+            | DiagnosticCode::ImplicitReturn
+            | DiagnosticCode::CriticSeverity1
+            | DiagnosticCode::CriticSeverity2 => DiagnosticSeverity::Warning,
 
             // Information/Hints
-            DiagnosticCode::CriticSeverity3 |
-            DiagnosticCode::CriticSeverity4 |
-            DiagnosticCode::CriticSeverity5 => DiagnosticSeverity::Hint,
+            DiagnosticCode::CriticSeverity3
+            | DiagnosticCode::CriticSeverity4
+            | DiagnosticCode::CriticSeverity5 => DiagnosticSeverity::Hint,
         }
     }
 
@@ -306,30 +308,32 @@ impl DiagnosticCode {
     /// Get the category of this diagnostic code.
     pub fn category(&self) -> DiagnosticCategory {
         match self {
-            DiagnosticCode::ParseError |
-            DiagnosticCode::SyntaxError |
-            DiagnosticCode::UnexpectedEof => DiagnosticCategory::Parser,
+            DiagnosticCode::ParseError
+            | DiagnosticCode::SyntaxError
+            | DiagnosticCode::UnexpectedEof => DiagnosticCategory::Parser,
 
-            DiagnosticCode::MissingStrict |
-            DiagnosticCode::MissingWarnings |
-            DiagnosticCode::UnusedVariable |
-            DiagnosticCode::UndefinedVariable => DiagnosticCategory::StrictWarnings,
+            DiagnosticCode::MissingStrict
+            | DiagnosticCode::MissingWarnings
+            | DiagnosticCode::UnusedVariable
+            | DiagnosticCode::UndefinedVariable => DiagnosticCategory::StrictWarnings,
 
-            DiagnosticCode::MissingPackageDeclaration |
-            DiagnosticCode::DuplicatePackage => DiagnosticCategory::PackageModule,
+            DiagnosticCode::MissingPackageDeclaration | DiagnosticCode::DuplicatePackage => {
+                DiagnosticCategory::PackageModule
+            }
 
-            DiagnosticCode::DuplicateSubroutine |
-            DiagnosticCode::MissingReturn => DiagnosticCategory::Subroutine,
+            DiagnosticCode::DuplicateSubroutine | DiagnosticCode::MissingReturn => {
+                DiagnosticCategory::Subroutine
+            }
 
-            DiagnosticCode::BarewordFilehandle |
-            DiagnosticCode::TwoArgOpen |
-            DiagnosticCode::ImplicitReturn => DiagnosticCategory::BestPractices,
+            DiagnosticCode::BarewordFilehandle
+            | DiagnosticCode::TwoArgOpen
+            | DiagnosticCode::ImplicitReturn => DiagnosticCategory::BestPractices,
 
-            DiagnosticCode::CriticSeverity1 |
-            DiagnosticCode::CriticSeverity2 |
-            DiagnosticCode::CriticSeverity3 |
-            DiagnosticCode::CriticSeverity4 |
-            DiagnosticCode::CriticSeverity5 => DiagnosticCategory::PerlCritic,
+            DiagnosticCode::CriticSeverity1
+            | DiagnosticCode::CriticSeverity2
+            | DiagnosticCode::CriticSeverity3
+            | DiagnosticCode::CriticSeverity4
+            | DiagnosticCode::CriticSeverity5 => DiagnosticCategory::PerlCritic,
         }
     }
 }

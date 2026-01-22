@@ -195,11 +195,7 @@ pub fn normalize_uri(uri: &str) -> String {
 #[cfg(target_arch = "wasm32")]
 pub fn normalize_uri(uri: &str) -> String {
     // On wasm32, just try to parse as URL or return as-is
-    if let Ok(url) = Url::parse(uri) {
-        url.to_string()
-    } else {
-        uri.to_string()
-    }
+    if let Ok(url) = Url::parse(uri) { url.to_string() } else { uri.to_string() }
 }
 
 /// Normalize a URI to a consistent key for lookups.
@@ -314,11 +310,7 @@ pub fn uri_extension(uri: &str) -> Option<&str> {
     // Find the extension
     let dot_pos = path_part.rfind('.')?;
     let ext = &path_part[dot_pos + 1..];
-    if ext.is_empty() {
-        None
-    } else {
-        Some(ext)
-    }
+    if ext.is_empty() { None } else { Some(ext) }
 }
 
 #[cfg(test)]

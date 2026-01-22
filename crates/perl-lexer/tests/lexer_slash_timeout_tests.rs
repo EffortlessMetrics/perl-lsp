@@ -213,12 +213,7 @@ fn test_division_in_list_context() {
 #[test]
 fn test_regex_in_conditional() {
     // Regex in if/unless/while conditions
-    let test_cases = vec![
-        "if (/test/)",
-        "unless (/test/)",
-        "while (/test/)",
-        "until (/test/)",
-    ];
+    let test_cases = vec!["if (/test/)", "unless (/test/)", "while (/test/)", "until (/test/)"];
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);

@@ -66,8 +66,7 @@ fn test_nested_quantifiers_safe_handling() {
         assert!(
             has_regex_or_error,
             "{}: should produce regex or error token. Input: {}",
-            description,
-            input
+            description, input
         );
     }
 }
@@ -131,10 +130,7 @@ fn test_deeply_nested_delimiters_budget_guard() {
     let tokens: Vec<_> = lexer.collect_tokens();
 
     // Should handle or produce error token for excessive nesting
-    assert!(
-        !tokens.is_empty(),
-        "Deeply nested delimiters should be handled without hanging"
-    );
+    assert!(!tokens.is_empty(), "Deeply nested delimiters should be handled without hanging");
 }
 
 /// Test that escaped characters in patterns don't cause issues
@@ -269,9 +265,12 @@ fn test_mixed_operators_sequence() {
     );
 
     // Count different operator types
-    let regex_count = tokens.iter().filter(|t| matches!(t.token_type, TokenType::RegexMatch)).count();
-    let subst_count = tokens.iter().filter(|t| matches!(t.token_type, TokenType::Substitution)).count();
-    let trans_count = tokens.iter().filter(|t| matches!(t.token_type, TokenType::Transliteration)).count();
+    let regex_count =
+        tokens.iter().filter(|t| matches!(t.token_type, TokenType::RegexMatch)).count();
+    let subst_count =
+        tokens.iter().filter(|t| matches!(t.token_type, TokenType::Substitution)).count();
+    let trans_count =
+        tokens.iter().filter(|t| matches!(t.token_type, TokenType::Transliteration)).count();
 
     // Verify we found multiple operators (demonstrates no hang on any single operator)
     assert!(
@@ -291,7 +290,8 @@ fn test_budget_guard_clean_error() {
     let tokens: Vec<_> = lexer.collect_tokens();
 
     // Find UnknownRest token
-    let unknown_rest_tokens: Vec<_> = tokens.iter().filter(|t| matches!(t.token_type, TokenType::UnknownRest)).collect();
+    let unknown_rest_tokens: Vec<_> =
+        tokens.iter().filter(|t| matches!(t.token_type, TokenType::UnknownRest)).collect();
 
     assert!(!unknown_rest_tokens.is_empty(), "Budget exhaustion should produce UnknownRest token");
 
@@ -310,10 +310,10 @@ fn test_budget_guard_clean_error() {
 #[test]
 fn test_normal_patterns_fast_tokenization() {
     let test_cases = vec![
-        r"/^\d{3}-\d{3}-\d{4}$/",  // Phone number
-        r"s/foo/bar/g",              // Simple substitution
-        r"m/^[a-zA-Z0-9]+$/",        // Alphanumeric match
-        r"qr/\w+@\w+\.\w+/",         // Email-like pattern
+        r"/^\d{3}-\d{3}-\d{4}$/", // Phone number
+        r"s/foo/bar/g",           // Simple substitution
+        r"m/^[a-zA-Z0-9]+$/",     // Alphanumeric match
+        r"qr/\w+@\w+\.\w+/",      // Email-like pattern
     ];
 
     for input in test_cases {
@@ -321,7 +321,8 @@ fn test_normal_patterns_fast_tokenization() {
         let tokens: Vec<_> = lexer.collect_tokens();
 
         // These should tokenize successfully without budget limits
-        let has_unknown_rest = tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+        let has_unknown_rest =
+            tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
         assert!(
             !has_unknown_rest,
             "Normal patterns should not trigger budget guard. Input: {}",
