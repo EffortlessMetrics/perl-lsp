@@ -199,6 +199,32 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "perl-lsp.restart",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.organizeImports",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.runTests",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.extractSubroutine",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.extractVariable",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.inlineVariable",
+          "when": "editorLangId == perl"
+        }
+      ],
       "editor/context": [
         {
           "command": "perl-lsp.runTests",
