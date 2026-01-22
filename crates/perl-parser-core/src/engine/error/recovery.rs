@@ -3,9 +3,22 @@
 //! This module implements error recovery strategies to continue parsing
 //! even when syntax errors are encountered. This is essential for IDE
 //! scenarios where code is often incomplete or temporarily invalid.
+//!
+//! # Progress Invariant
+//!
+//! All recovery operations guarantee forward progress: every recovery attempt
+//! must consume at least one token or exit. This prevents infinite loops when
+//! the parser cannot make sense of the input.
+//!
+//! # Budget Awareness
+//!
+//! Recovery operations respect the `ParseBudget` limits to prevent runaway
+//! parsing on adversarial input. When budget is exhausted, recovery returns
+//! immediately with an appropriate error node.
 
 use crate::{
     ast_v2::{Node, NodeKind},
+    error::{BudgetTracker, ParseBudget},
     parser_context::ParserContext,
     position::Range,
 };
@@ -87,6 +100,17 @@ pub enum SyncPoint {
     Eof,
 }
 
+/// Result of a recovery operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecoveryResult {
+    /// Recovery succeeded, consumed the given number of tokens.
+    Recovered(usize),
+    /// Recovery failed due to budget exhaustion.
+    BudgetExhausted,
+    /// Recovery reached EOF without finding sync point.
+    ReachedEof,
+}
+
 /// Error recovery strategies
 pub trait ErrorRecovery {
     /// Create an error node and recover
@@ -103,8 +127,26 @@ pub trait ErrorRecovery {
     /// Try to recover from an error
     fn recover_with_node(&mut self, error: ParseError) -> Node;
 
-    /// Skip tokens until a sync point
+    /// Skip tokens until a sync point.
+    ///
+    /// # Progress Invariant
+    ///
+    /// This method guarantees forward progress: it will consume at least one
+    /// token on each call (unless already at EOF or a sync point), preventing
+    /// infinite recovery loops.
     fn skip_until(&mut self, sync_points: &[SyncPoint]) -> usize;
+
+    /// Budget-aware skip that respects limits.
+    ///
+    /// # Progress Invariant
+    ///
+    /// Consumes at least one token per call (unless at sync point, EOF, or budget exhausted).
+    fn skip_until_with_budget(
+        &mut self,
+        sync_points: &[SyncPoint],
+        budget: &ParseBudget,
+        tracker: &mut BudgetTracker,
+    ) -> RecoveryResult;
 
     /// Check if current token is a sync point
     fn is_sync_point(&self, sync_point: SyncPoint) -> bool;
@@ -152,27 +194,53 @@ impl ErrorRecovery for ParserContext {
     }
 
     fn skip_until(&mut self, sync_points: &[SyncPoint]) -> usize {
-        let mut skipped = 0;
+        // Use default budget for backwards compatibility
+        let budget = ParseBudget::default();
+        let mut tracker = BudgetTracker::new();
+
+        match self.skip_until_with_budget(sync_points, &budget, &mut tracker) {
+            RecoveryResult::Recovered(count) => count,
+            RecoveryResult::BudgetExhausted | RecoveryResult::ReachedEof => tracker.tokens_skipped,
+        }
+    }
+
+    fn skip_until_with_budget(
+        &mut self,
+        sync_points: &[SyncPoint],
+        budget: &ParseBudget,
+        tracker: &mut BudgetTracker,
+    ) -> RecoveryResult {
+        let mut skipped_this_call = 0;
+
+        // Record this recovery attempt
+        tracker.record_recovery();
+        if tracker.recoveries_exhausted(budget) {
+            return RecoveryResult::BudgetExhausted;
+        }
 
         while let Some(_token) = self.current_token() {
             // Check if we've reached a sync point
             for sync_point in sync_points {
                 if self.is_sync_point(*sync_point) {
-                    return skipped;
+                    tracker.record_skip(skipped_this_call);
+                    return RecoveryResult::Recovered(skipped_this_call);
                 }
             }
 
-            // Skip the current token
-            self.advance();
-            skipped += 1;
-
-            // Prevent infinite loops
-            if skipped > 100 {
-                break;
+            // Check budget before skipping another token
+            if tracker.skip_would_exceed(budget, 1) {
+                tracker.record_skip(skipped_this_call);
+                return RecoveryResult::BudgetExhausted;
             }
+
+            // PROGRESS INVARIANT: Consume at least one token per iteration
+            self.advance();
+            skipped_this_call += 1;
         }
 
-        skipped
+        // Reached EOF
+        tracker.record_skip(skipped_this_call);
+        RecoveryResult::ReachedEof
     }
 
     fn is_sync_point(&self, sync_point: SyncPoint) -> bool {

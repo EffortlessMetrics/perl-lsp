@@ -54,6 +54,7 @@ pub mod tokens;
 pub use engine::ast;
 /// Experimental second-generation AST (work in progress).
 pub use engine::ast_v2;
+pub use ast_v2::{DiagnosticId, MissingKind};
 /// Edit tracking for incremental parsing.
 pub use engine::edit;
 /// Heredoc content collector with FIFO ordering and indent stripping.
@@ -75,6 +76,7 @@ pub use engine::parser::Parser;
 /// Error classification and recovery strategies for parse failures.
 pub use error::classifier as error_classifier;
 pub use error::recovery as error_recovery;
+pub use error_recovery::RecoveryResult;
 pub use error::recovery_parser;
 
 pub use position::line_index;
@@ -83,7 +85,7 @@ pub use position::position_mapper;
 pub use position::positions;
 
 pub use ast::{Node, NodeKind, SourceLocation};
-pub use error::{ParseError, ParseResult};
+pub use error::{BudgetTracker, ParseBudget, ParseError, ParseOutput, ParseResult};
 
 pub use builtins::builtin_signatures;
 pub use builtins::builtin_signatures_phf;
