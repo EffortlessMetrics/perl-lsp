@@ -6,8 +6,6 @@
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::json;
 use std::sync::mpsc::channel;
-use std::thread;
-use std::time::Duration;
 
 /// Test that `-e` flag injection is blocked
 ///
@@ -30,16 +28,18 @@ fn test_command_injection_via_program_argument() {
     match response {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail because file '-e' does not exist");
+            let msg = message.unwrap();
             assert!(
-                message.unwrap().contains("does not exist"),
-                "Should fail with file not found error"
+                msg.contains("Could not access program file"),
+                "Should fail with access error: {}",
+                msg
             );
         }
         _ => panic!("Expected Response"),
     }
 
-    // Give it a moment to potentially run and produce output (if vulnerable)
-    thread::sleep(Duration::from_millis(500));
+    // Launch is expected to fail synchronously, so we can immediately check
+    // if any output was produced. No sleep needed since the process was never spawned.
 
     // Check if we received any output containing "pwned"
     let mut found_pwned = false;
@@ -74,7 +74,12 @@ fn test_launch_with_nonexistent_file_errors_gracefully() {
     match response {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail for nonexistent file");
-            assert!(message.unwrap().contains("does not exist"), "Should return meaningful error");
+            let msg = message.unwrap();
+            assert!(
+                msg.contains("Could not access program file"),
+                "Should return meaningful error: {}",
+                msg
+            );
         }
         _ => panic!("Expected Response"),
     }
@@ -99,8 +104,8 @@ fn test_launch_with_empty_program_rejected() {
             assert!(!success, "Launch should fail for empty program");
             let msg = message.unwrap();
             assert!(
-                msg.contains("empty") || msg.contains("does not exist"),
-                "Should indicate empty or invalid path: {}",
+                msg.contains("cannot be empty"),
+                "Should indicate empty path: {}",
                 msg
             );
         }
@@ -127,8 +132,8 @@ fn test_launch_with_whitespace_program_rejected() {
             assert!(!success, "Launch should fail for whitespace-only program");
             let msg = message.unwrap();
             assert!(
-                msg.contains("empty") || msg.contains("does not exist"),
-                "Should indicate empty or invalid path: {}",
+                msg.contains("cannot be empty"),
+                "Should indicate empty path after trimming: {}",
                 msg
             );
         }
@@ -143,9 +148,12 @@ fn test_launch_with_directory_rejected() {
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
 
-    // Use a directory that definitely exists
+    // Use tempdir for cross-platform compatibility (avoids hardcoded /tmp on non-Unix)
+    let temp_dir = tempfile::tempdir().expect("Failed to create temporary directory");
+    let dir_path = temp_dir.path().to_str().unwrap();
+
     let args = json!({
-        "program": "/tmp",
+        "program": dir_path,
         "args": []
     });
 
@@ -156,7 +164,7 @@ fn test_launch_with_directory_rejected() {
             assert!(!success, "Launch should fail for directory path");
             let msg = message.unwrap();
             assert!(
-                msg.contains("not a regular file") || msg.contains("does not exist"),
+                msg.contains("not a regular file"),
                 "Should indicate path is not a file: {}",
                 msg
             );

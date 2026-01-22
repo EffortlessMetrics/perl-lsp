@@ -549,8 +549,8 @@ impl DebugAdapter {
                     return Err(format!("Program path is not a regular file: {}", program));
                 }
             }
-            Err(_) => {
-                return Err(format!("Program file does not exist: {}", program));
+            Err(e) => {
+                return Err(format!("Could not access program file '{}': {}", program, e));
             }
         }
 
