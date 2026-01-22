@@ -525,11 +525,23 @@ impl DebugAdapter {
         args: Vec<String>,
         stop_on_entry: bool,
     ) -> Result<i32, String> {
+        // Validate that the program file exists before attempting to spawn
+        // This prevents executing arbitrary code if 'program' is a flag (e.g. -e)
+        // and checks existence before any process creation.
+        use std::path::Path;
+        if !Path::new(program).exists() {
+            return Err(format!("Program file does not exist: {}", program));
+        }
+
         let mut cmd = Command::new("perl");
         cmd.arg("-d");
 
         // Perl debugger stops on the first line by default
         let _ = stop_on_entry; // currently unused
+
+        // Use -- to separate flags from script name, preventing argument injection
+        // if program starts with -
+        cmd.arg("--");
         cmd.arg(program);
         cmd.args(&args);
 
@@ -539,15 +551,7 @@ impl DebugAdapter {
         cmd.stderr(Stdio::piped());
 
         match cmd.spawn() {
-            Ok(mut child) => {
-                // Validate that the program file exists before proceeding
-                use std::path::Path;
-                if !Path::new(program).exists() {
-                    // Kill the child process and return error
-                    let _ = child.kill();
-                    return Err(format!("Program file does not exist: {}", program));
-                }
-
+            Ok(child) => {
                 let thread_id = {
                     if let Ok(mut counter) = self.thread_counter.lock() {
                         *counter += 1;
