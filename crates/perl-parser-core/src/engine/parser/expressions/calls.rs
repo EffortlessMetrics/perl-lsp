@@ -67,7 +67,7 @@ impl<'a> Parser<'a> {
                     }
 
                     // Allow classic argument starts and sigiled variables ($x, @arr, %hash)
-                    let third_text = third.text.as_str();
+                    let third_text = &third.text;
                     return matches!(
                         third.kind,
                         TokenKind::String       // print $fh "x"
@@ -140,7 +140,7 @@ impl<'a> Parser<'a> {
 
         // Return as an indirect call node (using MethodCall with a flag or separate node)
         Ok(Node::new(
-            NodeKind::IndirectCall { method, object: Box::new(object), args },
+            NodeKind::IndirectCall { method: method.to_string(), object: Box::new(object), args },
             SourceLocation { start, end },
         ))
     }

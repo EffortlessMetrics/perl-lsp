@@ -174,7 +174,7 @@ impl<'a> Parser<'a> {
 
         // Check for special blocks like AUTOLOAD and DESTROY
         if let Ok(token) = self.tokens.peek() {
-            if matches!(token.text.as_str(), "AUTOLOAD" | "DESTROY" | "CLONE" | "CLONE_SKIP") {
+            if matches!(token.text.as_ref(), "AUTOLOAD" | "DESTROY" | "CLONE" | "CLONE_SKIP") {
                 // Check if next token is a block
                 if let Ok(second) = self.tokens.peek_second() {
                     if second.kind == TokenKind::LeftBrace {
@@ -244,7 +244,7 @@ impl<'a> Parser<'a> {
                             // No arguments - return as function call with empty args
                             let end = self.previous_position();
                             Ok(Node::new(
-                                NodeKind::FunctionCall { name: func_name, args: vec![] },
+                                NodeKind::FunctionCall { name: func_name.to_string(), args: vec![] },
                                 SourceLocation { start, end },
                             ))
                         }
@@ -254,14 +254,14 @@ impl<'a> Parser<'a> {
 
                             // Parse first argument
                             // Special handling for open/pipe/socket/tie which can take my $var as first arg
-                            if (func_name == "open"
-                                || func_name == "pipe"
-                                || func_name == "socket"
-                                || func_name == "tie")
+                            if (&*func_name == "open"
+                                || &*func_name == "pipe"
+                                || &*func_name == "socket"
+                                || &*func_name == "tie")
                                 && self.peek_kind() == Some(TokenKind::My)
                             {
                                 args.push(self.parse_variable_declaration()?);
-                            } else if matches!(func_name.as_str(), "map" | "grep" | "sort")
+                            } else if matches!(func_name.as_ref(), "map" | "grep" | "sort")
                                 && self.peek_kind() == Some(TokenKind::LeftBrace)
                             {
                                 // Special handling for map/grep/sort with block first argument
@@ -274,7 +274,7 @@ impl<'a> Parser<'a> {
 
                             // Parse remaining arguments
                             // For map/grep/sort, parse list arguments without requiring commas
-                            if matches!(func_name.as_str(), "map" | "grep" | "sort") {
+                            if matches!(func_name.as_ref(), "map" | "grep" | "sort") {
                                 // Parse list arguments until statement boundary
                                 while !Self::is_statement_terminator(self.peek_kind())
                                     && !self.is_statement_modifier_keyword()
@@ -306,7 +306,7 @@ impl<'a> Parser<'a> {
                             let end = args.last().map(|a| a.location.end).unwrap_or(start);
 
                             Ok(Node::new(
-                                NodeKind::FunctionCall { name: func_name, args },
+                                NodeKind::FunctionCall { name: func_name.to_string(), args },
                                 SourceLocation { start, end },
                             ))
                         }
@@ -339,7 +339,7 @@ impl<'a> Parser<'a> {
     /// Parse statement modifier (if, unless, while, until, for)
     fn parse_statement_modifier(&mut self, statement: Node) -> ParseResult<Node> {
         let modifier_token = self.consume_token()?;
-        let modifier = modifier_token.text;
+        let modifier = modifier_token.text.to_string();
 
         // For 'for' and 'foreach', we parse a list expression
         let condition = if matches!(modifier_token.kind, TokenKind::For | TokenKind::Foreach) {
@@ -434,7 +434,7 @@ impl<'a> Parser<'a> {
 
         // Parse the label
         let label_token = self.expect(TokenKind::Identifier)?;
-        let label = label_token.text;
+        let label = label_token.text.to_string();
 
         // Consume the colon
         self.expect(TokenKind::Colon)?;

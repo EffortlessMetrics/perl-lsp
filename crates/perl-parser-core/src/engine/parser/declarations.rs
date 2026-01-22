@@ -19,7 +19,7 @@ impl<'a> Parser<'a> {
             | Some(TokenKind::Format) => {
                 let token = self.tokens.next()?;
                 (
-                    Some(token.text),
+                    Some(token.text.to_string()),
                     Some(SourceLocation { start: token.start, end: token.end }),
                 )
             }
@@ -43,7 +43,7 @@ impl<'a> Parser<'a> {
                     }
                 };
 
-                let mut attr_name = attr_token.text;
+                let mut attr_name = attr_token.text.to_string();
 
                 // Check if attribute has a value in parentheses (like :prototype($))
                 if self.peek_kind() == Some(TokenKind::LeftParen) {
@@ -128,7 +128,7 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'class'
 
         let name_token = self.expect(TokenKind::Identifier)?;
-        let name = name_token.text;
+        let name = name_token.text.to_string();
 
         let body = self.parse_block()?;
 
@@ -142,7 +142,7 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'method'
 
         let name_token = self.expect(TokenKind::Identifier)?;
-        let name = name_token.text;
+        let name = name_token.text.to_string();
 
         // Parse optional signature
         let signature = if self.peek_kind() == Some(TokenKind::LeftParen) {
@@ -176,7 +176,7 @@ impl<'a> Parser<'a> {
         } else {
             // Named format
             let name_token = self.expect(TokenKind::Identifier)?;
-            name_token.text
+            name_token.text.to_string()
         };
 
         // Expect =
@@ -188,7 +188,7 @@ impl<'a> Parser<'a> {
         // Get the format body
         let body_token = self.tokens.next()?;
         let body = if body_token.kind == TokenKind::FormatBody {
-            body_token.text
+            body_token.text.to_string()
         } else {
             return Err(ParseError::UnexpectedToken {
                 expected: "format body".to_string(),
@@ -208,7 +208,7 @@ impl<'a> Parser<'a> {
 
         // Parse package name (can include ::)
         let first = self.expect(TokenKind::Identifier)?;
-        let mut name = first.text;
+        let mut name = first.text.to_string();
         let name_start = first.start;
         let mut name_end = first.end;
 
@@ -246,13 +246,13 @@ impl<'a> Parser<'a> {
 
         // Check for optional version number or v-string
         let version = if self.peek_kind() == Some(TokenKind::Number) {
-            Some(self.tokens.next()?.text)
+            Some(self.tokens.next()?.text.to_string())
         } else if let Some(TokenKind::Identifier) = self.peek_kind() {
             // Check if it's a v-string version
             if let Ok(token) = self.tokens.peek() {
                 if token.text.starts_with('v') && token.text.len() > 1 {
                     // It's a v-string like v1 or v5
-                    let mut version_str = self.tokens.next()?.text;
+                    let mut version_str = self.tokens.next()?.text.to_string();
 
                     // Collect the rest of the v-string (e.g., .2.3)
                     while let Some(TokenKind::Number) = self.peek_kind() {
@@ -304,7 +304,7 @@ impl<'a> Parser<'a> {
         // Parse module name, version, or identifier
         let mut module = if self.peek_kind() == Some(TokenKind::Number) {
             // Numeric version like 5.036
-            self.consume_token()?.text
+            self.consume_token()?.text.to_string()
         } else {
             let first_token = self.consume_token()?;
 
@@ -314,12 +314,12 @@ impl<'a> Parser<'a> {
                 && first_token.text.chars().skip(1).all(|c| c.is_numeric())
             {
                 // Version identifier like v5 or v536
-                let mut version = first_token.text;
+                let mut version = first_token.text.to_string();
 
                 // Check if followed by dot and more numbers (e.g., v5.36)
                 if self.peek_kind() == Some(TokenKind::Unknown) {
                     if let Ok(dot_token) = self.tokens.peek() {
-                        if dot_token.text == "." {
+                        if &*dot_token.text == "." {
                             self.consume_token()?; // consume dot
                             if self.peek_kind() != /* ~ changed by cargo-mutants ~ */ Some(TokenKind::Number)
                             {
@@ -331,12 +331,12 @@ impl<'a> Parser<'a> {
                     }
                 }
                 version
-            } else if first_token.text == "v" && self.peek_kind() == Some(TokenKind::Number) {
+            } else if first_token.text.as_ref() == "v" && self.peek_kind() == Some(TokenKind::Number) {
                 // Version string like v5.36 (tokenized as "v" followed by number)
                 let version = self.expect(TokenKind::Number)?;
                 format!("v{}", version.text)
             } else if first_token.kind == TokenKind::Identifier {
-                first_token.text
+                first_token.text.to_string()
             } else {
                 return Err(ParseError::syntax(
                     format!("Expected module name or version, found {:?}", first_token.kind),
@@ -383,7 +383,7 @@ impl<'a> Parser<'a> {
         loop {
             // Special case: ALWAYS check for qw FIRST before any other parsing
             // Check if next token is "qw" - this is critical to handle before bare args
-            let is_qw = self.tokens.peek().map(|t| t.text == "qw").unwrap_or(false);
+            let is_qw = self.tokens.peek().map(|t| t.text.as_ref() == "qw").unwrap_or(false);
             if is_qw {
                 self.consume_token()?; // consume 'qw'
 
@@ -399,7 +399,7 @@ impl<'a> Parser<'a> {
                         {
                             if let Ok(tok) = self.tokens.next() {
                                 if matches!(tok.kind, TokenKind::Identifier | TokenKind::Number) {
-                                    words.push(tok.text);
+                                    words.push(tok.text.to_string());
                                 }
                             } else {
                                 break;
@@ -418,13 +418,13 @@ impl<'a> Parser<'a> {
                     if let Some(TokenKind::String | TokenKind::Number | TokenKind::Identifier) =
                         self.peek_kind()
                     {
-                        args.push(self.consume_token()?.text);
+                        args.push(self.consume_token()?.text.to_string());
                     } else {
                         // best-effort: slurp tokens until ',' or ';'
                         while !Self::is_statement_terminator(self.peek_kind())
                             && self.peek_kind() != Some(TokenKind::Comma)
                         {
-                            args.push(self.consume_token()?.text);
+                            args.push(self.consume_token()?.text.to_string());
                         }
                     }
                 }
@@ -445,7 +445,7 @@ impl<'a> Parser<'a> {
         // Handle unary plus forcing hash syntax: use constant +{ FOO => 42 }
         if self.peek_kind() == Some(TokenKind::Plus) {
             let plus = self.consume_token()?;
-            args.push(plus.text);
+            args.push(plus.text.to_string());
             // Next should be a hash
             if self.peek_kind() == Some(TokenKind::LeftBrace) {
                 // Consume the hash expression
@@ -454,17 +454,17 @@ impl<'a> Parser<'a> {
                     match self.peek_kind() {
                         Some(TokenKind::LeftBrace) => {
                             depth += 1;
-                            args.push(self.consume_token()?.text);
+                            args.push(self.consume_token()?.text.to_string());
                         }
                         Some(TokenKind::RightBrace) => {
-                            args.push(self.consume_token()?.text);
+                            args.push(self.consume_token()?.text.to_string());
                             depth -= 1;
                             if depth == 0 {
                                 break;
                             }
                         }
                         _ => {
-                            args.push(self.consume_token()?.text);
+                            args.push(self.consume_token()?.text.to_string());
                         }
                     }
                 }
@@ -482,14 +482,14 @@ impl<'a> Parser<'a> {
                     match self.peek_kind() {
                         Some(TokenKind::LeftBrace) => {
                             depth += 1;
-                            args.push(self.consume_token()?.text);
+                            args.push(self.consume_token()?.text.to_string());
                         }
                         Some(TokenKind::RightBrace) => {
-                            args.push(self.consume_token()?.text);
+                            args.push(self.consume_token()?.text.to_string());
                             depth -= 1;
                         }
                         _ => {
-                            args.push(self.consume_token()?.text);
+                            args.push(self.consume_token()?.text.to_string());
                         }
                     }
                 }
@@ -499,12 +499,12 @@ impl<'a> Parser<'a> {
                     if let Some(TokenKind::String | TokenKind::Number | TokenKind::Identifier) =
                         self.peek_kind()
                     {
-                        args.push(self.consume_token()?.text);
+                        args.push(self.consume_token()?.text.to_string());
                     } else {
                         while !Self::is_statement_terminator(self.peek_kind())
                             && self.peek_kind() != Some(TokenKind::Comma)
                         {
-                            args.push(self.consume_token()?.text);
+                            args.push(self.consume_token()?.text.to_string());
                         }
                     }
                 }
@@ -527,7 +527,7 @@ impl<'a> Parser<'a> {
             loop {
                 // Check for qw BEFORE the match to avoid it being consumed as a generic identifier
                 if let Ok(tok) = self.tokens.peek() {
-                    if tok.text == "qw" {
+                    if tok.text.as_ref() == "qw" {
                         self.consume_token()?; // consume 'qw'
                         let list = self.parse_qw_words()?;
                         // Format as "qw(FOO BAR BAZ)" so DeclarationProvider can recognize it
@@ -541,13 +541,13 @@ impl<'a> Parser<'a> {
                                 TokenKind::String | TokenKind::Number | TokenKind::Identifier,
                             ) = self.peek_kind()
                             {
-                                args.push(self.consume_token()?.text);
+                                args.push(self.consume_token()?.text.to_string());
                             } else {
                                 // best-effort: slurp tokens until ',' or ';'
                                 while !Self::is_statement_terminator(self.peek_kind())
                                     && self.peek_kind() != Some(TokenKind::Comma)
                                 {
-                                    args.push(self.consume_token()?.text);
+                                    args.push(self.consume_token()?.text.to_string());
                                 }
                             }
                         }
@@ -557,7 +557,7 @@ impl<'a> Parser<'a> {
 
                 match self.peek_kind() {
                     Some(TokenKind::String) => {
-                        args.push(self.consume_token()?.text);
+                        args.push(self.consume_token()?.text.to_string());
                     }
                     Some(TokenKind::QuoteWords) => {
                         // Handle qw(...) in use statements
@@ -596,13 +596,13 @@ impl<'a> Parser<'a> {
                             args.push(format!("-{}", flag.text));
                         } else {
                             // Just a minus sign (shouldn't happen in use statements)
-                            args.push(minus.text);
+                            args.push(minus.text.to_string());
                         }
                     }
                     Some(TokenKind::Identifier) => {
                         // Check if this might be a constant declaration
                         let ident = self.consume_token()?;
-                        args.push(ident.text);
+                        args.push(ident.text.to_string());
 
                         // Check for comma or fat arrow
                         match self.peek_kind() {
@@ -616,7 +616,7 @@ impl<'a> Parser<'a> {
                                 // But check if an identifier is followed by => (making it a key, not a value)
                                 match self.peek_kind() {
                                     Some(TokenKind::Number | TokenKind::String) => {
-                                        args.push(self.consume_token()?.text);
+                                        args.push(self.consume_token()?.text.to_string());
                                     }
                                     Some(TokenKind::Identifier) => {
                                         // Peek ahead to see if this identifier is followed by =>
@@ -626,7 +626,7 @@ impl<'a> Parser<'a> {
                                         {
                                             // Don't consume - let the outer loop handle it as a key
                                         } else {
-                                            args.push(self.consume_token()?.text);
+                                            args.push(self.consume_token()?.text.to_string());
                                         }
                                     }
                                     _ => {
@@ -635,7 +635,7 @@ impl<'a> Parser<'a> {
                                             && self.peek_kind() != Some(TokenKind::Comma)
                                             && self.peek_kind() != Some(TokenKind::FatArrow)
                                         {
-                                            args.push(self.consume_token()?.text);
+                                            args.push(self.consume_token()?.text.to_string());
                                         }
                                     }
                                 }
@@ -663,9 +663,9 @@ impl<'a> Parser<'a> {
             // Parse import list
             while self.peek_kind() != Some(TokenKind::RightParen) {
                 if self.peek_kind() == Some(TokenKind::String) {
-                    args.push(self.consume_token()?.text);
+                    args.push(self.consume_token()?.text.to_string());
                 } else if self.peek_kind() == Some(TokenKind::Identifier) {
-                    args.push(self.consume_token()?.text);
+                    args.push(self.consume_token()?.text.to_string());
                 } else {
                     return Err(ParseError::syntax(
                         "Expected string or identifier in import list",
@@ -696,7 +696,7 @@ impl<'a> Parser<'a> {
     fn parse_special_block(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         let name_token = self.consume_token()?;
-        let name = name_token.text;
+        let name = name_token.text.to_string();
 
         // Capture name_span from token for precise LSP navigation
         let name_span = Some(SourceLocation { start: name_token.start, end: name_token.end });
@@ -722,7 +722,7 @@ impl<'a> Parser<'a> {
     fn parse_phase_block(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         let phase_token = self.consume_token()?;
-        let phase = phase_token.text;
+        let phase = phase_token.text.to_string();
 
         // Capture phase_span from token for precise LSP navigation
         let phase_span = Some(SourceLocation { start: phase_token.start, end: phase_token.end });
@@ -751,12 +751,12 @@ impl<'a> Parser<'a> {
 
         // Consume the data marker token
         let marker_token = self.consume_token()?;
-        let marker = marker_token.text;
+        let marker = marker_token.text.to_string();
 
         // Check if there's a data body token
         let body = if self.peek_kind() == Some(TokenKind::DataBody) {
             let body_token = self.consume_token()?;
-            Some(body_token.text)
+            Some(body_token.text.to_string())
         } else {
             None
         };
@@ -773,7 +773,7 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'no'
 
         // Parse module name (can include ::)
-        let mut module = self.expect(TokenKind::Identifier)?.text;
+        let mut module = self.expect(TokenKind::Identifier)?.text.to_string();
 
         // Handle :: in module names
         // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
@@ -816,7 +816,7 @@ impl<'a> Parser<'a> {
             loop {
                 // Check for qw BEFORE the match to avoid it being consumed as a generic identifier
                 if let Ok(tok) = self.tokens.peek() {
-                    if tok.text == "qw" {
+                    if tok.text.as_ref() == "qw" {
                         self.consume_token()?; // consume 'qw'
                         let list = self.parse_qw_words()?;
                         // Format as "qw(FOO BAR BAZ)" so DeclarationProvider can recognize it
@@ -830,13 +830,13 @@ impl<'a> Parser<'a> {
                                 TokenKind::String | TokenKind::Number | TokenKind::Identifier,
                             ) = self.peek_kind()
                             {
-                                args.push(self.consume_token()?.text);
+                                args.push(self.consume_token()?.text.to_string());
                             } else {
                                 // best-effort: slurp tokens until ',' or ';'
                                 while !Self::is_statement_terminator(self.peek_kind())
                                     && self.peek_kind() != Some(TokenKind::Comma)
                                 {
-                                    args.push(self.consume_token()?.text);
+                                    args.push(self.consume_token()?.text.to_string());
                                 }
                             }
                         }
@@ -846,10 +846,10 @@ impl<'a> Parser<'a> {
 
                 match self.peek_kind() {
                     Some(TokenKind::String) => {
-                        args.push(self.consume_token()?.text);
+                        args.push(self.consume_token()?.text.to_string());
                     }
                     Some(TokenKind::Identifier) => {
-                        args.push(self.consume_token()?.text);
+                        args.push(self.consume_token()?.text.to_string());
                     }
                     _ => break,
                 }
@@ -865,9 +865,9 @@ impl<'a> Parser<'a> {
             // Parse argument list
             while self.peek_kind() != Some(TokenKind::RightParen) {
                 if self.peek_kind() == Some(TokenKind::String) {
-                    args.push(self.consume_token()?.text);
+                    args.push(self.consume_token()?.text.to_string());
                 } else if self.peek_kind() == Some(TokenKind::Identifier) {
-                    args.push(self.consume_token()?.text);
+                    args.push(self.consume_token()?.text.to_string());
                 } else {
                     return Err(ParseError::syntax(
                         "Expected string or identifier in argument list",
