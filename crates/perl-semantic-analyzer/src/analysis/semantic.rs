@@ -509,6 +509,7 @@ impl SemanticAnalyzer {
 
             NodeKind::Subroutine { name, prototype, signature, attributes, body, name_span: _ } => {
                 if let Some(sub_name) = name {
+                    // Named subroutine
                     let token = SemanticToken {
                         location: node.location,
                         token_type: SemanticTokenType::FunctionDeclaration,
@@ -531,6 +532,37 @@ impl SemanticAnalyzer {
                         } else {
                             vec![format!("Attributes: {}", attributes.join(", "))]
                         },
+                    };
+
+                    self.hover_info.insert(node.location, hover);
+                } else {
+                    // Anonymous subroutine (closure)
+                    // Add semantic token for the 'sub' keyword
+                    self.semantic_tokens.push(SemanticToken {
+                        location: SourceLocation {
+                            start: node.location.start,
+                            end: node.location.start + 3, // "sub"
+                        },
+                        token_type: SemanticTokenType::Keyword,
+                        modifiers: vec![],
+                    });
+
+                    // Add hover info for anonymous subs
+                    let mut signature_str = "sub".to_string();
+                    if signature.is_some() {
+                        signature_str.push_str(" (...)");
+                    }
+                    signature_str.push_str(" { ... }");
+
+                    let mut details = vec!["Anonymous subroutine (closure)".to_string()];
+                    if !attributes.is_empty() {
+                        details.push(format!("Attributes: {}", attributes.join(", ")));
+                    }
+
+                    let hover = HoverInfo {
+                        signature: signature_str,
+                        documentation: self.extract_documentation(node.location.start),
+                        details,
                     };
 
                     self.hover_info.insert(node.location, hover);
@@ -1770,6 +1802,80 @@ my $documented = 42;
             );
         } else {
             panic!("definition_at returned None for $x reference at {}", byte_offset);
+        }
+    }
+
+    #[test]
+    fn test_anonymous_subroutine_semantic_tokens() {
+        let code = r#"
+my $closure = sub {
+    my $x = 42;
+    return $x + 1;
+};
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        // Check that we have semantic tokens for the anonymous sub
+        let tokens = analyzer.semantic_tokens();
+
+        // Should have a keyword token for 'sub'
+        let sub_keywords: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Keyword))
+            .collect();
+
+        assert!(!sub_keywords.is_empty(), "Should have keyword token for 'sub'");
+
+        // Check hover info exists for the anonymous sub
+        let sub_position = code.find("sub {").unwrap();
+        let hover_exists = analyzer
+            .hover_info
+            .iter()
+            .any(|(loc, _)| loc.start <= sub_position && loc.end >= sub_position);
+
+        assert!(hover_exists, "Should have hover info for anonymous subroutine");
+    }
+
+    #[test]
+    fn test_anonymous_subroutine_hover_info() {
+        let code = r#"
+# This is a closure
+my $adder = sub {
+    my ($x, $y) = @_;
+    return $x + $y;
+};
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        // Find hover info for the anonymous sub
+        let sub_position = code.find("sub {").unwrap();
+        let hover = analyzer
+            .hover_info
+            .iter()
+            .find(|(loc, _)| loc.start <= sub_position && loc.end >= sub_position)
+            .map(|(_, h)| h);
+
+        assert!(hover.is_some(), "Should have hover info");
+
+        if let Some(h) = hover {
+            assert!(
+                h.signature.contains("sub"),
+                "Hover signature should contain 'sub'"
+            );
+            assert!(
+                h.details.iter().any(|d| d.contains("Anonymous")),
+                "Hover details should mention anonymous subroutine"
+            );
+            assert!(
+                h.documentation.as_ref().map(|d| d.contains("closure")).unwrap_or(false),
+                "Hover should extract documentation comment"
+            );
         }
     }
 }

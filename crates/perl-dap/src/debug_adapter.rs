@@ -920,15 +920,153 @@ impl DebugAdapter {
     }
 
     /// Handle attach request
-    fn handle_attach(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        // Not implemented yet
-        DapMessage::Response {
-            seq,
-            request_seq,
-            success: false,
-            command: "attach".to_string(),
-            body: None,
-            message: Some("Attach not yet implemented".to_string()),
+    ///
+    /// Attaches to a running Perl process. Supports two modes:
+    /// 1. TCP attachment - Connect to Perl::LanguageServer DAP via host:port
+    /// 2. Process ID attachment - Attach to local Perl process (future implementation)
+    ///
+    /// For TCP attachment, the arguments should contain:
+    /// - `host`: Hostname or IP address (default: "localhost")
+    /// - `port`: Port number (default: 13603)
+    /// - `timeout`: Connection timeout in milliseconds (optional)
+    ///
+    /// # Current Implementation
+    ///
+    /// TCP attachment is not yet fully implemented. This is a placeholder that:
+    /// - Validates attach arguments
+    /// - Returns appropriate error messages
+    /// - Provides foundation for future TCP socket implementation
+    ///
+    /// Process ID attachment will be added in Phase 2.
+    fn handle_attach(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        // Parse attach arguments
+        if let Some(args) = arguments {
+            // Extract host and port for TCP attachment
+            let host = args.get("host").and_then(|h| h.as_str()).unwrap_or("localhost");
+            let port = args.get("port").and_then(|p| p.as_u64()).unwrap_or(13603) as u16;
+            let timeout = args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32);
+            let process_id = args.get("processId").and_then(|p| p.as_u64()).map(|p| p as u32);
+
+            // Validate arguments
+            if host.trim().is_empty() {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "attach".to_string(),
+                    body: None,
+                    message: Some("Host cannot be empty".to_string()),
+                };
+            }
+
+            if port == 0 {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "attach".to_string(),
+                    body: None,
+                    message: Some("Port must be in range 1-65535".to_string()),
+                };
+            }
+
+            if let Some(t) = timeout {
+                if t == 0 {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "attach".to_string(),
+                        body: None,
+                        message: Some("Timeout must be greater than 0 milliseconds".to_string()),
+                    };
+                }
+                if t > 300_000 {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "attach".to_string(),
+                        body: None,
+                        message: Some(
+                            "Timeout cannot exceed 300000 milliseconds (5 minutes)".to_string(),
+                        ),
+                    };
+                }
+            }
+
+            // Determine attachment mode
+            if let Some(pid) = process_id {
+                // Process ID attachment mode (future implementation)
+                eprintln!(
+                    "Attach request: Process ID attachment to PID {} (not yet implemented)",
+                    pid
+                );
+                DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "attach".to_string(),
+                    body: None,
+                    message: Some(format!(
+                        "Process ID attachment not yet implemented (PID: {}). \
+                         Use TCP attachment with host/port for Perl::LanguageServer compatibility.",
+                        pid
+                    )),
+                }
+            } else {
+                // TCP attachment mode (future implementation)
+                let timeout_msg = if let Some(t) = timeout {
+                    format!(" with {}ms timeout", t)
+                } else {
+                    String::new()
+                };
+                eprintln!(
+                    "Attach request: TCP attachment to {}:{}{}",
+                    host, port, timeout_msg
+                );
+
+                // TODO: Implement TCP socket connection to Perl::LanguageServer DAP
+                // This will require:
+                // 1. Establishing TCP connection to host:port
+                // 2. Setting up bidirectional message proxying
+                // 3. Handling connection errors gracefully
+                // 4. Managing timeout during connection attempt
+                // 5. Sending appropriate DAP events (attached, initialized)
+
+                DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "attach".to_string(),
+                    body: None,
+                    message: Some(format!(
+                        "TCP attachment not yet fully implemented. \
+                         Would connect to {}:{}{} for Perl::LanguageServer DAP. \
+                         Use BridgeAdapter for current Perl::LanguageServer integration.",
+                        host, port, timeout_msg
+                    )),
+                }
+            }
+        } else {
+            // No arguments provided
+            DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "attach".to_string(),
+                body: None,
+                message: Some(
+                    "Missing attach arguments. Provide either 'processId' for process attachment \
+                     or 'host' and 'port' for TCP attachment."
+                        .to_string(),
+                ),
+            }
         }
     }
 
@@ -1564,6 +1702,215 @@ mod tests {
                 assert!(success);
                 assert_eq!(command, "initialize");
                 assert!(body.is_some());
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_attach_missing_arguments() {
+        let mut adapter = DebugAdapter::new();
+        let response = adapter.handle_request(1, "attach", None);
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.unwrap();
+                assert!(msg.contains("Missing attach arguments"));
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_attach_tcp_valid_arguments() {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": "localhost",
+            "port": 13603,
+            "timeout": 5000
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success); // Not yet implemented, but validates correctly
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.unwrap();
+                assert!(msg.contains("localhost:13603"));
+                assert!(msg.contains("5000ms timeout"));
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_attach_process_id_mode() {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "processId": 12345
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success); // Not yet implemented
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.unwrap();
+                assert!(msg.contains("Process ID attachment"));
+                assert!(msg.contains("12345"));
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_attach_empty_host() {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": "",
+            "port": 13603
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.unwrap();
+                assert!(msg.contains("Host cannot be empty"));
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_attach_whitespace_host() {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": "   ",
+            "port": 13603
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.unwrap();
+                assert!(msg.contains("Host cannot be empty"));
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_attach_zero_port() {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": "localhost",
+            "port": 0
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.unwrap();
+                assert!(msg.contains("Port must be in range"));
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_attach_zero_timeout() {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": "localhost",
+            "port": 13603,
+            "timeout": 0
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.unwrap();
+                assert!(msg.contains("Timeout must be greater than 0"));
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_attach_excessive_timeout() {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": "localhost",
+            "port": 13603,
+            "timeout": 400000
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.unwrap();
+                assert!(msg.contains("Timeout cannot exceed"));
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_attach_default_values() {
+        let mut adapter = DebugAdapter::new();
+        // Empty args should use defaults and fail with missing arguments message
+        let args = json!({});
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                // Should use default host/port but still not be implemented
+                let msg = message.unwrap();
+                assert!(msg.contains("localhost:13603"));
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_attach_custom_port() {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": "192.168.1.100",
+            "port": 9000
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success); // Not yet implemented
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.unwrap();
+                assert!(msg.contains("192.168.1.100:9000"));
             }
             _ => panic!("Expected response"),
         }

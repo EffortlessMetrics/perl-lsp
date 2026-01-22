@@ -166,6 +166,7 @@ fn benchmark_attach_config_creation(c: &mut Criterion) {
             let _config = AttachConfiguration {
                 host: black_box("localhost".to_string()),
                 port: black_box(13603),
+                timeout_ms: Some(5000),
             };
         })
     });
@@ -175,6 +176,7 @@ fn benchmark_attach_config_creation(c: &mut Criterion) {
             let _config = AttachConfiguration {
                 host: black_box("192.168.1.100".to_string()),
                 port: black_box(9000),
+                timeout_ms: Some(5000),
             };
         })
     });

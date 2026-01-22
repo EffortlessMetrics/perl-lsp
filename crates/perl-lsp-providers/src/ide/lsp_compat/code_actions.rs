@@ -153,6 +153,15 @@ impl CodeActionsProvider {
                     "unquoted-bareword" => {
                         actions.extend(self.fix_bareword(diagnostic));
                     }
+                    code if code.starts_with("parse-error-") => {
+                        actions.extend(self.fix_parse_error(diagnostic, code));
+                    }
+                    "unused-parameter" => {
+                        actions.extend(self.fix_unused_parameter(diagnostic));
+                    }
+                    "variable-shadowing" => {
+                        actions.extend(self.fix_variable_shadowing(diagnostic));
+                    }
                     _ => {}
                 }
             }
@@ -478,6 +487,173 @@ impl CodeActionsProvider {
                 },
                 is_preferred: false,
             });
+        }
+
+        actions
+    }
+
+    /// Fix parse errors with automated corrections
+    fn fix_parse_error(&self, diagnostic: &Diagnostic, code: &str) -> Vec<CodeAction> {
+        let mut actions = Vec::new();
+
+        match code {
+            "parse-error-missingsemicolon" => {
+                // Add semicolon at the end
+                let line_end = self.source[diagnostic.range.0..]
+                    .find('\n')
+                    .map(|p| diagnostic.range.0 + p)
+                    .unwrap_or(self.source.len());
+
+                // Find the actual end of the statement (before any trailing whitespace)
+                let mut end_pos = line_end;
+                while end_pos > diagnostic.range.0 && self.source.as_bytes()[end_pos - 1].is_ascii_whitespace() {
+                    end_pos -= 1;
+                }
+
+                actions.push(CodeAction {
+                    title: "Add missing semicolon".to_string(),
+                    kind: CodeActionKind::QuickFix,
+                    diagnostics: vec![code.to_string()],
+                    edit: CodeActionEdit {
+                        changes: vec![TextEdit {
+                            location: SourceLocation { start: end_pos, end: end_pos },
+                            new_text: ";".to_string(),
+                        }],
+                    },
+                    is_preferred: true,
+                });
+            }
+            "parse-error-unclosedstring" => {
+                // Add closing quote
+                actions.push(CodeAction {
+                    title: "Add closing quote".to_string(),
+                    kind: CodeActionKind::QuickFix,
+                    diagnostics: vec![code.to_string()],
+                    edit: CodeActionEdit {
+                        changes: vec![TextEdit {
+                            location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
+                            new_text: "\"".to_string(),
+                        }],
+                    },
+                    is_preferred: true,
+                });
+            }
+            "parse-error-unclosedparenthesis" => {
+                actions.push(CodeAction {
+                    title: "Add closing parenthesis".to_string(),
+                    kind: CodeActionKind::QuickFix,
+                    diagnostics: vec![code.to_string()],
+                    edit: CodeActionEdit {
+                        changes: vec![TextEdit {
+                            location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
+                            new_text: ")".to_string(),
+                        }],
+                    },
+                    is_preferred: true,
+                });
+            }
+            "parse-error-unclosedbracket" => {
+                actions.push(CodeAction {
+                    title: "Add closing bracket".to_string(),
+                    kind: CodeActionKind::QuickFix,
+                    diagnostics: vec![code.to_string()],
+                    edit: CodeActionEdit {
+                        changes: vec![TextEdit {
+                            location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
+                            new_text: "]".to_string(),
+                        }],
+                    },
+                    is_preferred: true,
+                });
+            }
+            "parse-error-unclosedbrace" | "parse-error-unclosedblock" => {
+                actions.push(CodeAction {
+                    title: "Add closing brace".to_string(),
+                    kind: CodeActionKind::QuickFix,
+                    diagnostics: vec![code.to_string()],
+                    edit: CodeActionEdit {
+                        changes: vec![TextEdit {
+                            location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
+                            new_text: "}".to_string(),
+                        }],
+                    },
+                    is_preferred: true,
+                });
+            }
+            _ => {}
+        }
+
+        actions
+    }
+
+    /// Fix unused parameter by adding underscore prefix
+    fn fix_unused_parameter(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+        let mut actions = Vec::new();
+
+        if let Some(param_name) = diagnostic.message.split('\'').nth(1) {
+            // Add underscore prefix
+            actions.push(CodeAction {
+                title: format!("Rename to '_{}'", param_name),
+                kind: CodeActionKind::QuickFix,
+                diagnostics: vec!["unused-parameter".to_string()],
+                edit: CodeActionEdit {
+                    changes: vec![TextEdit {
+                        location: SourceLocation {
+                            start: diagnostic.range.0,
+                            end: diagnostic.range.1,
+                        },
+                        new_text: format!("_{}", param_name),
+                    }],
+                },
+                is_preferred: true,
+            });
+        }
+
+        actions
+    }
+
+    /// Fix variable shadowing by suggesting rename
+    fn fix_variable_shadowing(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+        let mut actions = Vec::new();
+
+        if let Some(var_name) = diagnostic.message.split('\'').nth(1) {
+            // Remove sigil for the base name
+            let base_name = var_name.trim_start_matches('$').trim_start_matches('@').trim_start_matches('%');
+
+            // Suggest alternative names
+            let suggestions = vec![
+                format!("{}_inner", base_name),
+                format!("{}_local", base_name),
+                format!("my_{}", base_name),
+            ];
+
+            for suggestion in suggestions {
+                let new_name = if var_name.starts_with('$') {
+                    format!("${}", suggestion)
+                } else if var_name.starts_with('@') {
+                    format!("@{}", suggestion)
+                } else if var_name.starts_with('%') {
+                    format!("%{}", suggestion)
+                } else {
+                    suggestion.clone()
+                };
+
+                actions.push(CodeAction {
+                    title: format!("Rename to '{}'", new_name),
+                    kind: CodeActionKind::QuickFix,
+                    diagnostics: vec!["variable-shadowing".to_string()],
+                    edit: CodeActionEdit {
+                        changes: vec![TextEdit {
+                            location: SourceLocation {
+                                start: diagnostic.range.0,
+                                end: diagnostic.range.1,
+                            },
+                            new_text: new_name,
+                        }],
+                    },
+                    is_preferred: false,
+                });
+            }
         }
 
         actions
