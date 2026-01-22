@@ -525,11 +525,44 @@ impl DebugAdapter {
         args: Vec<String>,
         stop_on_entry: bool,
     ) -> Result<i32, String> {
+        // Security: Validate program path before any process spawning
+        // This prevents command injection via flag arguments (e.g., "-e malicious_code")
+        // and ensures we're launching a real Perl script file.
+
+        let program = program.trim();
+
+        // Reject empty or whitespace-only paths
+        if program.is_empty() {
+            return Err("Program path cannot be empty".to_string());
+        }
+
+        // Validate that the program is a regular file (not a directory, device, etc.)
+        // Using metadata().is_file() is more robust than exists() because:
+        // - exists() returns true for directories
+        // - exists() returns true for symlinks to non-files
+        // - is_file() specifically checks for regular files
+        use std::path::Path;
+        let path = Path::new(program);
+        match std::fs::metadata(path) {
+            Ok(metadata) => {
+                if !metadata.is_file() {
+                    return Err(format!("Program path is not a regular file: {}", program));
+                }
+            }
+            Err(e) => {
+                return Err(format!("Could not access program file '{}': {}", program, e));
+            }
+        }
+
         let mut cmd = Command::new("perl");
         cmd.arg("-d");
 
         // Perl debugger stops on the first line by default
         let _ = stop_on_entry; // currently unused
+
+        // Use -- to separate flags from script name, preventing argument injection
+        // if program starts with -
+        cmd.arg("--");
         cmd.arg(program);
         cmd.args(&args);
 
@@ -539,15 +572,7 @@ impl DebugAdapter {
         cmd.stderr(Stdio::piped());
 
         match cmd.spawn() {
-            Ok(mut child) => {
-                // Validate that the program file exists before proceeding
-                use std::path::Path;
-                if !Path::new(program).exists() {
-                    // Kill the child process and return error
-                    let _ = child.kill();
-                    return Err(format!("Program file does not exist: {}", program));
-                }
-
+            Ok(child) => {
                 let thread_id = {
                     if let Ok(mut counter) = self.thread_counter.lock() {
                         *counter += 1;
