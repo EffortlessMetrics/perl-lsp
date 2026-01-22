@@ -17,7 +17,7 @@
 ~~The `Tie` NodeKind is **never seen** in any corpus test fixture.~~
 
 **Clarification**: There is no `NodeKind::Tie` variant in the parser. The parser
-has 55 NodeKind variants (not 68 as previously stated), and `Tie` is not among them.
+has 59 NodeKind variants (not 68 as previously stated), and `Tie` is not among them.
 
 The `tie` and `untie` builtins are currently parsed as regular function calls. This
 means semantic analysis for tie operations is limited.

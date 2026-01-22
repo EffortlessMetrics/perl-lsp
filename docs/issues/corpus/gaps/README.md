@@ -14,7 +14,7 @@ This directory contains documented gaps in the parser's corpus coverage.
 | NodeKind Coverage Status | 2 | P1 | 2 resolved, 2 clarified |
 | Timeout/Hang Risks | 13 | P0-P2 | tracking |
 
-**Note**: The parser has 55 NodeKind variants (not 68 as previously stated).
+**Note**: The parser has 59 NodeKind variants (not 68 as previously stated).
 
 ---
 

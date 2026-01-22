@@ -16,7 +16,7 @@
 ~~The `Sigil` NodeKind is **never seen** in any corpus test fixture.~~
 
 **Clarification**: There is no `NodeKind::Sigil` variant in the parser. The parser
-has 55 NodeKind variants (not 68 as previously stated), and `Sigil` is not among them.
+has 59 NodeKind variants (not 68 as previously stated), and `Sigil` is not among them.
 
 Sigils (`$`, `@`, `%`, `&`, `*`) are represented as the `sigil: String` field in:
 - `NodeKind::Variable { sigil, name }` - for variables like `$foo`, `@array`, `%hash`
