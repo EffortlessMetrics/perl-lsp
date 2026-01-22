@@ -53,7 +53,9 @@ fn fetch_virtual_content(uri: &str) -> Option<String> {
 /// Fetch Perl documentation using perldoc
 fn fetch_perldoc(module: &str) -> Option<String> {
     // Run perldoc -T Module::Name to get plain text documentation
-    let output = std::process::Command::new("perldoc").arg("-T").arg(module).output().ok()?;
+    // Use -- to prevent argument injection if module starts with -
+    let output =
+        std::process::Command::new("perldoc").arg("-T").arg("--").arg(module).output().ok()?;
 
     if output.status.success() { String::from_utf8(output.stdout).ok() } else { None }
 }
@@ -96,5 +98,14 @@ mod tests {
         let uri = "invalid://some/path";
         let content = fetch_virtual_content(uri);
         assert!(content.is_none());
+    }
+
+    #[test]
+    fn parser_fetch_perldoc_argument_injection() {
+        // Try to fetch documentation with a flag-like string
+        // This should not crash or execute unexpected commands
+        // perldoc -T -- -f should look for module named "-f" which likely doesn't exist
+        let result = fetch_perldoc("-f");
+        assert!(result.is_none());
     }
 }
