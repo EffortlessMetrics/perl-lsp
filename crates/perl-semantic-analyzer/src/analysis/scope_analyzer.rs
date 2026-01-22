@@ -78,7 +78,8 @@ struct Variable {
 
 #[derive(Debug)]
 struct Scope {
-    variables: RefCell<HashMap<String, Rc<Variable>>>,
+    // Outer key: sigil, Inner key: name
+    variables: RefCell<HashMap<String, HashMap<String, Rc<Variable>>>>,
     parent: Option<Rc<Scope>>,
 }
 
@@ -91,8 +92,9 @@ impl Scope {
         Self { variables: RefCell::new(HashMap::new()), parent: Some(parent) }
     }
 
-    fn declare_variable(
+    fn declare_variable_parts(
         &self,
+        sigil: &str,
         name: &str,
         line: usize,
         is_our: bool,
@@ -101,24 +103,29 @@ impl Scope {
         // First check if already declared in this scope
         {
             let vars = self.variables.borrow();
-            if vars.contains_key(name) {
-                return Some(IssueKind::VariableRedeclaration);
+            if let Some(inner) = vars.get(sigil) {
+                if inner.contains_key(name) {
+                    return Some(IssueKind::VariableRedeclaration);
+                }
             }
         }
 
         // Check if it shadows a parent scope variable
         let shadows = if let Some(ref parent) = self.parent {
-            parent.lookup_variable(name).is_some()
+            parent.lookup_variable_parts(sigil, name).is_some()
         } else {
             false
         };
 
         // Now insert the variable
         let mut vars = self.variables.borrow_mut();
-        vars.insert(
+        let inner = vars.entry(sigil.to_string()).or_insert_with(HashMap::new);
+
+        let full_name = format!("{}{}", sigil, name);
+        inner.insert(
             name.to_string(),
             Rc::new(Variable {
-                name: name.to_string(),
+                name: full_name,
                 line,
                 is_used: RefCell::new(is_our), // 'our' variables are considered used
                 is_our,
@@ -129,16 +136,17 @@ impl Scope {
         if shadows { Some(IssueKind::VariableShadowing) } else { None }
     }
 
-    fn lookup_variable(&self, name: &str) -> Option<Rc<Variable>> {
-        self.variables
-            .borrow()
-            .get(name)
-            .cloned()
-            .or_else(|| self.parent.as_ref()?.lookup_variable(name))
+    fn lookup_variable_parts(&self, sigil: &str, name: &str) -> Option<Rc<Variable>> {
+        if let Some(inner) = self.variables.borrow().get(sigil) {
+            if let Some(var) = inner.get(name) {
+                return Some(var.clone());
+            }
+        }
+        self.parent.as_ref()?.lookup_variable_parts(sigil, name)
     }
 
-    fn use_variable(&self, name: &str) -> (bool, bool) {
-        if let Some(var) = self.lookup_variable(name) {
+    fn use_variable_parts(&self, sigil: &str, name: &str) -> (bool, bool) {
+        if let Some(var) = self.lookup_variable_parts(sigil, name) {
             *var.is_used.borrow_mut() = true;
             (true, *var.is_initialized.borrow())
         } else {
@@ -146,8 +154,8 @@ impl Scope {
         }
     }
 
-    fn initialize_variable(&self, name: &str) {
-        if let Some(var) = self.lookup_variable(name) {
+    fn initialize_variable_parts(&self, sigil: &str, name: &str) {
+        if let Some(var) = self.lookup_variable_parts(sigil, name) {
             *var.is_initialized.borrow_mut() = true;
         }
     }
@@ -155,16 +163,54 @@ impl Scope {
     fn get_unused_variables(&self) -> Vec<(String, usize)> {
         let mut unused = Vec::new();
 
-        for var in self.variables.borrow().values() {
-            if !*var.is_used.borrow() && !var.is_our {
-                unused.push((var.name.clone(), var.line));
+        for inner in self.variables.borrow().values() {
+            for var in inner.values() {
+                if !*var.is_used.borrow() && !var.is_our {
+                    unused.push((var.name.clone(), var.line));
+                }
             }
         }
 
-        // Recursively collect from parent scopes if needed
-        // (Not needed for our current use case)
-
         unused
+    }
+}
+
+/// Helper to split a full variable name into sigil and name parts.
+fn split_variable_name(full_name: &str) -> (&str, &str) {
+    if !full_name.is_empty() {
+        let c = full_name.as_bytes()[0];
+        if c == b'$' || c == b'@' || c == b'%' || c == b'&' || c == b'*' {
+            return (&full_name[0..1], &full_name[1..]);
+        }
+    }
+    ("", full_name)
+}
+
+enum ExtractedName<'a> {
+    Parts(&'a str, &'a str),
+    Full(String),
+}
+
+impl<'a> ExtractedName<'a> {
+    fn to_string(&self) -> String {
+        match self {
+            ExtractedName::Parts(sigil, name) => format!("{}{}", sigil, name),
+            ExtractedName::Full(s) => s.clone(),
+        }
+    }
+
+    fn parts(&self) -> (&str, &str) {
+        match self {
+            ExtractedName::Parts(sigil, name) => (sigil, name),
+            ExtractedName::Full(s) => split_variable_name(s),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            ExtractedName::Parts(sigil, name) => sigil.is_empty() && name.is_empty(),
+            ExtractedName::Full(s) => s.is_empty(),
+        }
     }
 }
 
@@ -215,7 +261,10 @@ impl ScopeAnalyzer {
         let strict_mode = pragma_state.strict_subs;
         match &node.kind {
             NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
-                let var_name = self.extract_variable_name(variable);
+                let extracted = self.extract_variable_name(variable);
+                let (sigil, var_name_part) = extracted.parts();
+                let full_name = extracted.to_string(); // Only used for reporting issues if needed, sadly declaration still needs some allocs usually
+
                 let line = self.get_line_from_node(variable, code);
                 let is_our = declarator == "our";
                 let is_initialized = initializer.is_some();
@@ -228,23 +277,24 @@ impl ScopeAnalyzer {
                     self.analyze_node(init, scope, ancestors, issues, code, pragma_map);
                 }
 
-                if let Some(issue_kind) = scope.declare_variable(
-                    &var_name,
+                if let Some(issue_kind) = scope.declare_variable_parts(
+                    sigil,
+                    var_name_part,
                     variable.location.start,
                     is_our,
                     is_initialized,
                 ) {
                     issues.push(ScopeIssue {
                         kind: issue_kind,
-                        variable_name: var_name.clone(),
+                        variable_name: full_name.clone(),
                         line,
                         range: (variable.location.start, variable.location.end),
                         description: match issue_kind {
                             IssueKind::VariableShadowing => {
-                                format!("Variable '{}' shadows a variable in outer scope", var_name)
+                                format!("Variable '{}' shadows a variable in outer scope", full_name)
                             }
                             IssueKind::VariableRedeclaration => {
-                                format!("Variable '{}' is already declared in this scope", var_name)
+                                format!("Variable '{}' is already declared in this scope", full_name)
                             }
                             _ => String::new(),
                         },
@@ -262,31 +312,34 @@ impl ScopeAnalyzer {
                 }
 
                 for variable in variables {
-                    let var_name = self.extract_variable_name(variable);
+                    let extracted = self.extract_variable_name(variable);
+                    let (sigil, var_name_part) = extracted.parts();
+                    let full_name = extracted.to_string();
                     let line = self.get_line_from_node(variable, code);
 
-                    if let Some(issue_kind) = scope.declare_variable(
-                        &var_name,
+                    if let Some(issue_kind) = scope.declare_variable_parts(
+                        sigil,
+                        var_name_part,
                         variable.location.start,
                         is_our,
                         is_initialized,
                     ) {
                         issues.push(ScopeIssue {
                             kind: issue_kind,
-                            variable_name: var_name.clone(),
+                            variable_name: full_name.clone(),
                             line,
                             range: (variable.location.start, variable.location.end),
                             description: match issue_kind {
                                 IssueKind::VariableShadowing => {
                                     format!(
                                         "Variable '{}' shadows a variable in outer scope",
-                                        var_name
+                                        full_name
                                     )
                                 }
                                 IssueKind::VariableRedeclaration => {
                                     format!(
                                         "Variable '{}' is already declared in this scope",
-                                        var_name
+                                        full_name
                                     )
                                 }
                                 _ => String::new(),
@@ -304,29 +357,28 @@ impl ScopeAnalyzer {
                         if arg.starts_with("qw(") && arg.ends_with(")") {
                             let content = &arg[3..arg.len() - 1]; // Remove qw( and )
                             for var_name in content.split_whitespace() {
-                                if !var_name.is_empty()
-                                    && (var_name.starts_with('$')
-                                        || var_name.starts_with('@')
-                                        || var_name.starts_with('%'))
-                                {
-                                    // Declare these variables as globals in the current scope
-                                    scope.declare_variable(
-                                        var_name,
-                                        node.location.start,
-                                        true,
-                                        true,
-                                    ); // true = is_our (global), true = initialized (assumed)
+                                if !var_name.is_empty() {
+                                    let (sigil, name) = split_variable_name(var_name);
+                                    if !sigil.is_empty() {
+                                        // Declare these variables as globals in the current scope
+                                        scope.declare_variable_parts(
+                                            sigil,
+                                            name,
+                                            node.location.start,
+                                            true,
+                                            true,
+                                        ); // true = is_our (global), true = initialized (assumed)
+                                    }
                                 }
                             }
                         } else {
                             // Handle regular variable names (not in qw())
                             let var_name = arg.trim();
-                            if !var_name.is_empty()
-                                && (var_name.starts_with('$')
-                                    || var_name.starts_with('@')
-                                    || var_name.starts_with('%'))
-                            {
-                                scope.declare_variable(var_name, node.location.start, true, true);
+                            if !var_name.is_empty() {
+                                let (sigil, name) = split_variable_name(var_name);
+                                if !sigil.is_empty() {
+                                    scope.declare_variable_parts(sigil, name, node.location.start, true, true);
+                                }
                             }
                         }
                     }
@@ -343,19 +395,14 @@ impl ScopeAnalyzer {
                     return;
                 }
 
-                let full_name = format!("{}{}", sigil, name);
-
-                // Try to use the variable
-                let (mut variable_used, mut is_initialized) = scope.use_variable(&full_name);
+                // Try to use the variable - allocation free!
+                let (mut variable_used, mut is_initialized) = scope.use_variable_parts(sigil, name);
 
                 // If not found as simple variable, check if this is part of a hash/array access pattern
                 if !variable_used && sigil == "$" {
-                    // Check if the corresponding hash or array exists
-                    let hash_name = format!("%{}", name);
-                    let array_name = format!("@{}", name);
-
-                    let (hash_used, hash_init) = scope.use_variable(&hash_name);
-                    let (array_used, array_init) = scope.use_variable(&array_name);
+                    // Check if the corresponding hash or array exists - allocation free!
+                    let (hash_used, hash_init) = scope.use_variable_parts("%", name);
+                    let (array_used, array_init) = scope.use_variable_parts("@", name);
 
                     if hash_used || array_used {
                         variable_used = true;
@@ -366,6 +413,7 @@ impl ScopeAnalyzer {
                 // Variable not found - check if we should report it
                 if !variable_used {
                     if strict_mode {
+                        let full_name = format!("{}{}", sigil, name);
                         issues.push(ScopeIssue {
                             kind: IssueKind::UndeclaredVariable,
                             variable_name: full_name.clone(),
@@ -379,8 +427,7 @@ impl ScopeAnalyzer {
                     }
                 } else if !is_initialized {
                     // Variable found but used before initialization
-                    // Note: This check is rudimentary and doesn't account for flow control
-                    // It only catches: my $x; print $x;
+                    let full_name = format!("{}{}", sigil, name);
                     issues.push(ScopeIssue {
                         kind: IssueKind::UninitializedVariable,
                         variable_name: full_name.clone(),
@@ -430,10 +477,9 @@ impl ScopeAnalyzer {
                         // Hash access: $hash{key} -> mark %hash as used if it exists
                         if let NodeKind::Variable { sigil, name } = &left.kind {
                             if sigil == "$" {
-                                let hash_name = format!("%{}", name);
-                                // Only mark as used if the hash actually exists
-                                if scope.lookup_variable(&hash_name).is_some() {
-                                    scope.use_variable(&hash_name);
+                                // Only mark as used if the hash actually exists - allocation free!
+                                if scope.lookup_variable_parts("%", name).is_some() {
+                                    scope.use_variable_parts("%", name);
                                 }
                             }
                         }
@@ -447,10 +493,9 @@ impl ScopeAnalyzer {
                         // Array access: $array[index] -> mark @array as used if it exists
                         if let NodeKind::Variable { sigil, name } = &left.kind {
                             if sigil == "$" {
-                                let array_name = format!("@{}", name);
-                                // Only mark as used if the array actually exists
-                                if scope.lookup_variable(&array_name).is_some() {
-                                    scope.use_variable(&array_name);
+                                // Only mark as used if the array actually exists - allocation free!
+                                if scope.lookup_variable_parts("@", name).is_some() {
+                                    scope.use_variable_parts("@", name);
                                 }
                             }
                         }
@@ -541,8 +586,11 @@ impl ScopeAnalyzer {
                 };
 
                 for param in &params_to_check {
-                    let full_name = self.extract_variable_name(param);
-                    if !full_name.is_empty() {
+                    let extracted = self.extract_variable_name(param);
+                    if !extracted.is_empty() {
+                        let full_name = extracted.to_string();
+                        let (sigil, name) = extracted.parts();
+
                         // Check for duplicate parameters
                         if !param_names.insert(full_name.clone()) {
                             issues.push(ScopeIssue {
@@ -558,7 +606,7 @@ impl ScopeAnalyzer {
                         }
 
                         // Check if parameter shadows a global or parent scope variable
-                        if scope.lookup_variable(&full_name).is_some() {
+                        if scope.lookup_variable_parts(sigil, name).is_some() {
                             issues.push(ScopeIssue {
                                 kind: IssueKind::ParameterShadowsGlobal,
                                 variable_name: full_name.clone(),
@@ -572,7 +620,7 @@ impl ScopeAnalyzer {
                         }
 
                         // Declare the parameter in subroutine scope
-                        sub_scope.declare_variable(&full_name, param.location.start, false, true); // Parameters are initialized
+                        sub_scope.declare_variable_parts(sigil, name, param.location.start, false, true); // Parameters are initialized
                         // Don't mark parameters as automatically used yet - track their actual usage
                     }
                 }
@@ -585,14 +633,16 @@ impl ScopeAnalyzer {
                 if let Some(sig) = signature {
                     if let NodeKind::Signature { parameters } = &sig.kind {
                         for param in parameters {
-                            let full_name = self.extract_variable_name(param);
-                            if !full_name.is_empty() {
+                            let extracted = self.extract_variable_name(param);
+                            if !extracted.is_empty() {
+                                let (sigil, name) = extracted.parts();
+                                let full_name = extracted.to_string();
+
                                 // Skip parameters starting with underscore (intentionally unused)
-                                let name_part = &full_name[1..]; // Remove sigil
-                                if name_part.starts_with('_') {
+                                if name.starts_with('_') {
                                     continue;
                                 }
-                                if let Some(var) = sub_scope.lookup_variable(&full_name) {
+                                if let Some(var) = sub_scope.lookup_variable_parts(sigil, name) {
                                     if !*var.is_used.borrow() {
                                         issues.push(ScopeIssue {
                                             kind: IssueKind::UnusedParameter,
@@ -639,10 +689,9 @@ impl ScopeAnalyzer {
     fn mark_initialized(&self, node: &Node, scope: &Rc<Scope>) {
         match &node.kind {
             NodeKind::Variable { sigil, name } => {
-                let full_name = format!("{}{}", sigil, name);
                 // Skip package-qualified variables (e.g., $Foo::bar)
-                if !full_name.contains("::") {
-                    scope.initialize_variable(&full_name);
+                if !name.contains("::") {
+                    scope.initialize_variable_parts(sigil, name);
                 }
             }
             // For all other node types (parens, lists, etc.), recurse into children
@@ -663,7 +712,10 @@ impl ScopeAnalyzer {
     ) {
         for (var_name, offset) in scope.get_unused_variables() {
             // Skip variables starting with underscore (intentionally unused)
-            if var_name.len() > 1 && var_name.chars().nth(1) == Some('_') {
+            // Need to check the name part, not the sigil.
+            // var_name is full name.
+            let (_, name) = split_variable_name(&var_name);
+            if name.starts_with('_') {
                 continue;
             }
             let start = offset.min(code.len());
@@ -678,9 +730,9 @@ impl ScopeAnalyzer {
         }
     }
 
-    fn extract_variable_name(&self, node: &Node) -> String {
+    fn extract_variable_name<'a>(&self, node: &'a Node) -> ExtractedName<'a> {
         match &node.kind {
-            NodeKind::Variable { sigil, name } => format!("{}{}", sigil, name),
+            NodeKind::Variable { sigil, name } => ExtractedName::Parts(sigil, name),
             NodeKind::MandatoryParameter { variable } => self.extract_variable_name(variable),
             NodeKind::ArrayLiteral { elements } => {
                 // Handle array reference patterns like @{$ref}
@@ -689,7 +741,7 @@ impl ScopeAnalyzer {
                         return self.extract_variable_name(first);
                     }
                 }
-                String::new()
+                ExtractedName::Full(String::new())
             }
             NodeKind::Binary { op, left, .. } if op == "->" => {
                 // Handle method call patterns on variables
@@ -699,7 +751,7 @@ impl ScopeAnalyzer {
                 if let Some(child) = node.children().first() {
                     self.extract_variable_name(child)
                 } else {
-                    String::new()
+                    ExtractedName::Full(String::new())
                 }
             }
         }
