@@ -52,7 +52,7 @@
 //! ```
 
 use perl_parser_core::{SourceLocation, ast::Node};
-use perl_position_tracking::offset_to_utf16_line_col;
+use perl_position_tracking::{WireLocation, WireRange};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -93,43 +93,10 @@ pub struct WorkspaceSymbol {
     /// LSP symbol kind as integer (e.g., 4=Namespace, 12=Function, 13=Variable).
     pub kind: i32,
     /// Location of the symbol definition in the workspace.
-    pub location: Location,
+    pub location: WireLocation,
     /// Optional containing package or class name for qualified symbols.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub container_name: Option<String>,
-}
-
-/// LSP Location identifying a position within a document.
-///
-/// Corresponds to the LSP `Location` type.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Location {
-    /// Document URI (e.g., `file:///path/to/file.pl`).
-    pub uri: String,
-    /// Range within the document where the symbol is defined.
-    pub range: Range,
-}
-
-/// LSP Range representing a text span within a document.
-///
-/// Corresponds to the LSP `Range` type.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Range {
-    /// Start position of the range (inclusive).
-    pub start: Position,
-    /// End position of the range (exclusive).
-    pub end: Position,
-}
-
-/// LSP Position representing a cursor location in a document.
-///
-/// Corresponds to the LSP `Position` type. Both line and character are zero-indexed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Position {
-    /// Zero-indexed line number.
-    pub line: u32,
-    /// Zero-indexed character offset within the line.
-    pub character: u32,
 }
 
 /// Internal symbol information used for indexing.
@@ -216,14 +183,8 @@ impl WorkspaceSymbolsProvider {
                 // Create a minimal workspace symbol for indexing
                 all_symbols.push(WorkspaceSymbol {
                     name: symbol.name.clone(),
-                    kind: symbol_kind_to_lsp(&symbol.kind),
-                    location: Location {
-                        uri: uri.clone(),
-                        range: Range {
-                            start: Position { line: 0, character: 0 },
-                            end: Position { line: 0, character: 0 },
-                        },
-                    },
+                    kind: symbol.kind.to_lsp_kind() as i32,
+                    location: WireLocation::new(uri.clone(), WireRange::default()),
                     container_name: symbol.container.as_ref().map(|s| norm_pkg(s).into_owned()),
                 });
             }
@@ -402,48 +363,27 @@ impl WorkspaceSymbolsProvider {
         source: &str,
     ) -> WorkspaceSymbol {
         // Use canonical UTF-16 conversion from perl-position-tracking
-        let (start_line, start_col) = offset_to_utf16_line_col(source, symbol.location.start);
-        let (end_line, end_col) = offset_to_utf16_line_col(source, symbol.location.end);
+        let range =
+            WireRange::from_byte_offsets(source, symbol.location.start, symbol.location.end);
 
         WorkspaceSymbol {
             name: symbol.name.clone(),
-            kind: symbol_kind_to_lsp(&symbol.kind),
-            location: Location {
-                uri: uri.to_string(),
-                range: Range {
-                    start: Position { line: start_line, character: start_col },
-                    end: Position { line: end_line, character: end_col },
-                },
-            },
+            kind: symbol.kind.to_lsp_kind() as i32,
+            location: WireLocation::new(uri.to_string(), range),
             container_name: symbol.container.as_ref().map(|s| norm_pkg(s).into_owned()),
         }
     }
 }
 
-/// Converts an internal `SymbolKind` to an LSP symbol kind integer.
-///
-/// LSP symbol kinds: 4=Namespace, 12=Function, 13=Variable, 14=Constant,
-/// 15=String (used for labels), 23=Struct (used for formats).
-fn symbol_kind_to_lsp(kind: &SymbolKind) -> i32 {
-    match kind {
-        SymbolKind::Package => 4,         // Namespace
-        SymbolKind::Subroutine => 12,     // Function
-        SymbolKind::ScalarVariable => 13, // Variable
-        SymbolKind::ArrayVariable => 13,  // Variable
-        SymbolKind::HashVariable => 13,   // Variable
-        SymbolKind::Constant => 14,       // Constant
-        SymbolKind::Label => 15,          // String
-        SymbolKind::Format => 23,         // Struct
-    }
-}
-
-// Position conversion is handled by perl_position_tracking::offset_to_utf16_line_col
+// Symbol kind conversion is handled by perl_symbol_types::SymbolKind::to_lsp_kind()
+// Position conversion is handled by perl_position_tracking via WireRange::from_byte_offsets()
 // which correctly counts UTF-16 code units as required by the LSP protocol.
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use perl_parser_core::Parser;
+    use perl_position_tracking::offset_to_utf16_line_col;
 
     #[test]
     fn test_workspace_symbols_search() {

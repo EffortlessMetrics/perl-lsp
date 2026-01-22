@@ -1,5 +1,6 @@
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_parser_core::position_mapper::PositionMapper;
+use perl_position_tracking::{WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -9,46 +10,31 @@ pub struct TypeHierarchyItem {
     /// Fully qualified name of the type (e.g., package name)
     pub name: String,
     /// Kind of symbol (Class, Method, or Function)
-    pub kind: SymbolKind,
+    pub kind: TypeHierarchySymbolKind,
     /// URI of the document containing this type
     pub uri: String,
     /// Full range of the type declaration
-    pub range: Range,
+    pub range: WireRange,
     /// Range of the type name for highlighting
-    pub selection_range: Range,
+    pub selection_range: WireRange,
     /// Optional detail string (e.g., "Perl Package")
     pub detail: Option<String>,
     /// Optional additional data for client use
     pub data: Option<serde_json::Value>,
 }
 
-/// Kind of symbol in the type hierarchy
+/// Kind of symbol in the type hierarchy (LSP protocol values)
+///
+/// This enum uses explicit discriminant values matching the LSP protocol
+/// SymbolKind values for direct wire serialization.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum SymbolKind {
+pub enum TypeHierarchySymbolKind {
     /// A class or package (LSP value 5)
     Class = 5,
     /// A method (LSP value 6)
     Method = 6,
     /// A function (LSP value 12)
     Function = 12,
-}
-
-/// A range in a text document expressed as start and end positions
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Range {
-    /// Start position of the range (inclusive)
-    pub start: Position,
-    /// End position of the range (exclusive)
-    pub end: Position,
-}
-
-/// A position in a text document (zero-indexed line and character)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Position {
-    /// Zero-indexed line number
-    pub line: u32,
-    /// Zero-indexed character offset (UTF-16 code units)
-    pub character: u32,
 }
 
 /// Index for tracking package hierarchy relationships
@@ -256,13 +242,21 @@ impl TypeHierarchyProvider {
         // Check if it's a package or class declaration
         match &target_node.kind {
             NodeKind::Package { name, .. } => {
-                let item =
-                    self.create_type_item(name, target_node, &position_mapper, SymbolKind::Class);
+                let item = self.create_type_item(
+                    name,
+                    target_node,
+                    &position_mapper,
+                    TypeHierarchySymbolKind::Class,
+                );
                 Some(vec![item])
             }
             NodeKind::Class { name, .. } => {
-                let item =
-                    self.create_type_item(name, target_node, &position_mapper, SymbolKind::Class);
+                let item = self.create_type_item(
+                    name,
+                    target_node,
+                    &position_mapper,
+                    TypeHierarchySymbolKind::Class,
+                );
                 Some(vec![item])
             }
             NodeKind::Identifier { name } => {
@@ -270,7 +264,7 @@ impl TypeHierarchyProvider {
                 if self.is_package_identifier(ast, offset, name) {
                     let item = TypeHierarchyItem {
                         name: name.clone(),
-                        kind: SymbolKind::Class,
+                        kind: TypeHierarchySymbolKind::Class,
                         uri: "file:///current".to_string(),
                         range: self.node_to_range(target_node, &position_mapper),
                         selection_range: self.node_to_range(target_node, &position_mapper),
@@ -295,16 +289,10 @@ impl TypeHierarchyProvider {
             .into_iter()
             .map(|name| TypeHierarchyItem {
                 name,
-                kind: SymbolKind::Class,
+                kind: TypeHierarchySymbolKind::Class,
                 uri: "file:///current".to_string(),
-                range: Range {
-                    start: Position { line: 0, character: 0 },
-                    end: Position { line: 0, character: 0 },
-                },
-                selection_range: Range {
-                    start: Position { line: 0, character: 0 },
-                    end: Position { line: 0, character: 0 },
-                },
+                range: WireRange::default(),
+                selection_range: WireRange::default(),
                 detail: Some("Parent Class".to_string()),
                 data: None,
             })
@@ -320,16 +308,10 @@ impl TypeHierarchyProvider {
             .into_iter()
             .map(|name| TypeHierarchyItem {
                 name,
-                kind: SymbolKind::Class,
+                kind: TypeHierarchySymbolKind::Class,
                 uri: "file:///current".to_string(),
-                range: Range {
-                    start: Position { line: 0, character: 0 },
-                    end: Position { line: 0, character: 0 },
-                },
-                selection_range: Range {
-                    start: Position { line: 0, character: 0 },
-                    end: Position { line: 0, character: 0 },
-                },
+                range: WireRange::default(),
+                selection_range: WireRange::default(),
                 detail: Some("Subclass".to_string()),
                 data: None,
             })
@@ -390,7 +372,7 @@ impl TypeHierarchyProvider {
         name: &str,
         node: &Node,
         position_mapper: &PositionMapper,
-        kind: SymbolKind,
+        kind: TypeHierarchySymbolKind,
     ) -> TypeHierarchyItem {
         TypeHierarchyItem {
             name: name.to_string(),
@@ -401,9 +383,9 @@ impl TypeHierarchyProvider {
             detail: Some(format!(
                 "Perl {}",
                 match kind {
-                    SymbolKind::Class => "Package",
-                    SymbolKind::Method => "Method",
-                    SymbolKind::Function => "Function",
+                    TypeHierarchySymbolKind::Class => "Package",
+                    TypeHierarchySymbolKind::Method => "Method",
+                    TypeHierarchySymbolKind::Function => "Function",
                 }
             )),
             data: None,
@@ -411,12 +393,12 @@ impl TypeHierarchyProvider {
     }
 
     /// Convert node to LSP range using PositionMapper for UTF-16 compliance
-    fn node_to_range(&self, node: &Node, position_mapper: &PositionMapper) -> Range {
+    fn node_to_range(&self, node: &Node, position_mapper: &PositionMapper) -> WireRange {
         let start_pos = self.offset_to_position(node.location.start, position_mapper);
         let end_pos = self.offset_to_position(node.location.end, position_mapper);
-        Range {
-            start: Position { line: start_pos.0, character: start_pos.1 },
-            end: Position { line: end_pos.0, character: end_pos.1 },
+        WireRange {
+            start: WirePosition { line: start_pos.0, character: start_pos.1 },
+            end: WirePosition { line: end_pos.0, character: end_pos.1 },
         }
     }
 
@@ -500,16 +482,10 @@ use parent 'Other';
         // Create a Base item
         let base_item = TypeHierarchyItem {
             name: "Base".to_string(),
-            kind: SymbolKind::Class,
+            kind: TypeHierarchySymbolKind::Class,
             uri: "file:///test".to_string(),
-            range: Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: 0, character: 0 },
-            },
-            selection_range: Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: 0, character: 0 },
-            },
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
             detail: None,
             data: None,
         };
@@ -559,16 +535,10 @@ use parent 'Outer';
 
         let outer_item = TypeHierarchyItem {
             name: "Outer".to_string(),
-            kind: SymbolKind::Class,
+            kind: TypeHierarchySymbolKind::Class,
             uri: "file:///test".to_string(),
-            range: Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: 0, character: 0 },
-            },
-            selection_range: Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: 0, character: 0 },
-            },
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
             detail: None,
             data: None,
         };

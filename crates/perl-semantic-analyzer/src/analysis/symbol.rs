@@ -7,45 +7,15 @@
 //! # Related Modules
 //!
 //! See also [`crate::workspace_index`] for workspace-wide indexing and
-//! [`crate::references`] for cross-file reference resolution.
+//! cross-file reference resolution.
 
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 
-/// Type of symbol (variable, function, package, etc.)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SymbolKind {
-    /// Scalar variable ($foo)
-    ScalarVariable,
-    /// Array variable (@foo)
-    ArrayVariable,
-    /// Hash variable (%foo)
-    HashVariable,
-    /// Subroutine (sub foo)
-    Subroutine,
-    /// Package (package Foo)
-    Package,
-    /// Constant (use constant FOO => 42)
-    Constant,
-    /// Label (FOO: while ...)
-    Label,
-    /// Format (format STDOUT =)
-    Format,
-}
-
-impl SymbolKind {
-    /// Get the sigil for this symbol kind if applicable
-    pub fn sigil(&self) -> Option<&'static str> {
-        match self {
-            SymbolKind::ScalarVariable => Some("$"),
-            SymbolKind::ArrayVariable => Some("@"),
-            SymbolKind::HashVariable => Some("%"),
-            _ => None,
-        }
-    }
-}
+// Re-export the unified symbol types from perl-symbol-types
+pub use perl_symbol_types::{SymbolKind, VarKind};
 
 /// A symbol definition in Perl code with comprehensive metadata.
 ///
@@ -403,9 +373,9 @@ impl SymbolExtractor {
 
             NodeKind::Variable { sigil, name } => {
                 let kind = match sigil.as_str() {
-                    "$" => SymbolKind::ScalarVariable,
-                    "@" => SymbolKind::ArrayVariable,
-                    "%" => SymbolKind::HashVariable,
+                    "$" => SymbolKind::scalar(),
+                    "@" => SymbolKind::array(),
+                    "%" => SymbolKind::hash(),
                     _ => return,
                 };
 
@@ -829,9 +799,9 @@ impl SymbolExtractor {
     ) {
         if let NodeKind::Variable { sigil, name } = &variable.kind {
             let kind = match sigil.as_str() {
-                "$" => SymbolKind::ScalarVariable,
-                "@" => SymbolKind::ArrayVariable,
-                "%" => SymbolKind::HashVariable,
+                "$" => SymbolKind::scalar(),
+                "@" => SymbolKind::array(),
+                "%" => SymbolKind::hash(),
                 _ => return,
             };
 
@@ -892,7 +862,7 @@ impl SymbolExtractor {
 
                 let reference = SymbolReference {
                     name: var_name.to_string(),
-                    kind: SymbolKind::ScalarVariable,
+                    kind: SymbolKind::scalar(),
                     location: SourceLocation { start: start_offset, end: end_offset },
                     scope_id: self.table.current_scope(),
                     is_write: false,

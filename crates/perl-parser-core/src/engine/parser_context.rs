@@ -5,6 +5,7 @@
 
 use crate::{
     ast_v2::NodeIdGenerator,
+    error::{BudgetTracker, ParseBudget},
     error_recovery::ParseError,
     position::{Position, Range},
     positions::LineStartsCache,
@@ -27,6 +28,10 @@ pub struct ParserContext {
     source: String,
     /// Position tracker for efficient position mapping
     _position_tracker: PositionTracker,
+    /// Budget limits for this parse
+    budget: ParseBudget,
+    /// Budget consumption tracker
+    budget_tracker: BudgetTracker,
 }
 
 /// Efficient position tracking using line starts cache
@@ -91,7 +96,55 @@ impl ParserContext {
             errors: Vec::new(),
             source,
             _position_tracker: position_tracker,
+            budget: ParseBudget::default(),
+            budget_tracker: BudgetTracker::new(),
         }
+    }
+
+    /// Create a new parser context with a custom budget.
+    pub fn with_budget(source: String, budget: ParseBudget) -> Self {
+        let mut ctx = Self::new(source);
+        ctx.budget = budget;
+        ctx
+    }
+
+    /// Get the current budget.
+    pub fn budget(&self) -> &ParseBudget {
+        &self.budget
+    }
+
+    /// Get the budget tracker.
+    pub fn budget_tracker(&self) -> &BudgetTracker {
+        &self.budget_tracker
+    }
+
+    /// Get mutable access to the budget tracker.
+    pub fn budget_tracker_mut(&mut self) -> &mut BudgetTracker {
+        &mut self.budget_tracker
+    }
+
+    /// Check if error budget is exhausted.
+    pub fn errors_exhausted(&self) -> bool {
+        self.budget_tracker.errors_exhausted(&self.budget)
+    }
+
+    /// Check if depth budget would be exceeded.
+    pub fn depth_would_exceed(&self) -> bool {
+        self.budget_tracker.depth_would_exceed(&self.budget)
+    }
+
+    /// Enter a nesting level, tracking depth.
+    pub fn enter_depth(&mut self) -> bool {
+        if self.depth_would_exceed() {
+            return false;
+        }
+        self.budget_tracker.enter_depth();
+        true
+    }
+
+    /// Exit a nesting level.
+    pub fn exit_depth(&mut self) {
+        self.budget_tracker.exit_depth();
     }
 
     /// Get current token
@@ -139,9 +192,22 @@ impl ParserContext {
         }
     }
 
-    /// Add a parse error
-    pub fn add_error(&mut self, error: ParseError) {
+    /// Add a parse error, tracking budget consumption.
+    ///
+    /// Returns `true` if the error was added, `false` if error budget exhausted.
+    pub fn add_error(&mut self, error: ParseError) -> bool {
+        if self.errors_exhausted() {
+            return false;
+        }
         self.errors.push(error);
+        self.budget_tracker.record_error();
+        true
+    }
+
+    /// Add a parse error without checking budget (for critical errors).
+    pub fn add_error_unchecked(&mut self, error: ParseError) {
+        self.errors.push(error);
+        self.budget_tracker.record_error();
     }
 
     /// Get all accumulated errors

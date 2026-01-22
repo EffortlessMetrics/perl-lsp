@@ -79,6 +79,19 @@ fn repeat_statement() -> impl Strategy<Value = String> {
         .prop_map(|(name, token, count)| format!("my ${} = {} x {};\n", name, token, count))
 }
 
+fn exponent_statement() -> impl Strategy<Value = String> {
+    (scalar_name(), small_literal(), small_literal())
+        .prop_map(|(name, base, exp)| format!("my ${} = {} ** {};\n", name, base, exp))
+}
+
+fn string_compare_statement() -> impl Strategy<Value = String> {
+    prop_oneof![
+        scalar_name().prop_map(|name| format!("my ${} = \"a\" cmp \"b\";\n", name)),
+        scalar_name().prop_map(|name| format!("my ${} = \"a\" eq \"b\";\n", name)),
+        scalar_name().prop_map(|name| format!("my ${} = \"a\" ne \"b\";\n", name)),
+    ]
+}
+
 fn logical_statement() -> impl Strategy<Value = String> {
     (
         scalar_name(),
@@ -160,6 +173,8 @@ pub fn expression_in_context() -> impl Strategy<Value = String> {
         bitwise_statement(),
         concat_statement(),
         repeat_statement(),
+        exponent_statement(),
+        string_compare_statement(),
         logical_statement(),
         compound_assignment_statement(),
         binding_statement(),

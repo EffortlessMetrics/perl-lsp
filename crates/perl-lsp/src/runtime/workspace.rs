@@ -223,18 +223,19 @@ impl LspServer {
                                 // additional details without panicking if fields are missing
                                 let mut resolved = json!(symbol);
 
+                                use crate::symbol::VarKind;
                                 // Add detail based on symbol kind
                                 let detail = match sym.kind {
                                     crate::symbol::SymbolKind::Subroutine => {
                                         format!("sub {}", name)
                                     }
-                                    crate::symbol::SymbolKind::ScalarVariable => {
+                                    crate::symbol::SymbolKind::Variable(VarKind::Scalar) => {
                                         format!("${}", name)
                                     }
-                                    crate::symbol::SymbolKind::ArrayVariable => {
+                                    crate::symbol::SymbolKind::Variable(VarKind::Array) => {
                                         format!("@{}", name)
                                     }
-                                    crate::symbol::SymbolKind::HashVariable => {
+                                    crate::symbol::SymbolKind::Variable(VarKind::Hash) => {
                                         format!("%{}", name)
                                     }
                                     crate::symbol::SymbolKind::Package => {

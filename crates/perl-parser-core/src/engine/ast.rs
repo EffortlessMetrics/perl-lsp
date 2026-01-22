@@ -101,7 +101,8 @@
 //! }
 //! ```
 
-use std::fmt;
+// Re-export SourceLocation from perl-position-tracking for unified span handling
+pub use perl_position_tracking::SourceLocation;
 
 /// Core AST node representing any Perl language construct within Perl parsing workflows
 ///
@@ -1857,37 +1858,5 @@ fn format_binary_operator(op: &str) -> String {
     }
 }
 
-/// Source location information for precise position tracking during Perl parsing workflows
-///
-/// This structure represents byte offsets within source text, enabling accurate error reporting
-/// and code navigation during LSP workflow operations on large Perl files. The compact design
-/// supports efficient processing of 50GB+ email datasets while maintaining precise location context.
-///
-/// # LSP Workflow Usage
-///
-/// Location information is critical throughout the pipeline:
-/// - **Extract**: Track original positions in Perl script content
-/// - **Normalize**: Maintain source mapping during AST transformations
-/// - **Thread**: Preserve location context for cross-reference analysis
-/// - **Render**: Enable accurate source reconstruction with formatting
-/// - **Index**: Support fast lookup and navigation to specific code locations
-///
-/// # Performance Characteristics
-///
-/// - Byte-based offsets for precise UTF-8 position tracking
-/// - Copy semantics for zero-cost passing across pipeline stages
-/// - Hash implementation enables efficient location-based caching
-/// - Compact representation minimizes memory overhead during large-scale processing
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SourceLocation {
-    /// Starting byte offset in the source text
-    pub start: usize,
-    /// Ending byte offset in the source text (exclusive)
-    pub end: usize,
-}
-
-impl fmt::Display for SourceLocation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}..{}", self.start, self.end)
-    }
-}
+// SourceLocation is now provided by perl-position-tracking crate
+// See the re-export at the top of this file

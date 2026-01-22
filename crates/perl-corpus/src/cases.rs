@@ -56,11 +56,31 @@ B
 "#,
     },
     EdgeCase {
+        id: "heredoc.terminator.content",
+        description: "Heredoc content containing the terminator text inline.",
+        tags: &["heredoc", "edge-case", "parser-sensitive"],
+        source: r#"my $text = <<'END';
+This line mentions END but is not the terminator.
+ENDINGS are tricky too.
+END
+"#,
+    },
+    EdgeCase {
         id: "quote.like",
         description: "Quote-like operator with interpolation.",
         tags: &["quote-like", "interpolation"],
         source: r#"my $name = "Ada";
 my $text = qq{Hello $name};
+"#,
+    },
+    EdgeCase {
+        id: "quote.delimiters.complex",
+        description: "Quote-like operators with mixed delimiters.",
+        tags: &["quote-like", "delimiter", "edge-case"],
+        source: r#"my $raw = q!literal!;
+my $interp = qq{value=$raw};
+my $cmd = qx|echo ok|;
+my $re = qr#foo.+bar#i;
 "#,
     },
     EdgeCase {
@@ -100,11 +120,27 @@ $text =~ s{foo}{bar}g;
 "#,
     },
     EdgeCase {
+        id: "substitution.nondestructive",
+        description: "Non-destructive substitution with the r modifier.",
+        tags: &["substitution", "regex", "edge-case"],
+        source: r#"my $text = "foo bar";
+my $updated = $text =~ s/foo/baz/r;
+"#,
+    },
+    EdgeCase {
         id: "transliteration.basic",
         description: "Transliteration with character ranges.",
         tags: &["transliteration", "tr", "edge-case"],
         source: r#"my $text = "abc";
 $text =~ tr/a-z/A-Z/;
+"#,
+    },
+    EdgeCase {
+        id: "transliteration.alias",
+        description: "Transliteration using the y/// alias operator.",
+        tags: &["transliteration", "tr", "edge-case"],
+        source: r#"my $text = "abc";
+$text =~ y/a-z/A-Z/;
 "#,
     },
     EdgeCase {
@@ -142,6 +178,16 @@ format STDOUT =
 $name, $age
 .
 write;
+"#,
+    },
+    EdgeCase {
+        id: "format.formline",
+        description: "Formline builtin with accumulator and picture string.",
+        tags: &["format", "builtin", "edge-case"],
+        source: r#"my $picture = "@<<";
+formline $picture, "hi";
+my $formatted = $^A;
+$^A = "";
 "#,
     },
     EdgeCase {
@@ -222,6 +268,24 @@ warn $@ if $@;
 "#,
     },
     EdgeCase {
+        id: "nesting.deep.blocks",
+        description: "Deeply nested blocks and conditionals.",
+        tags: &["block", "flow", "edge-case", "parser-sensitive"],
+        source: r#"my $value = 0;
+if ($value) {
+    if ($value > 1) {
+        if ($value > 2) {
+            if ($value > 3) {
+                if ($value > 4) {
+                    $value++;
+                }
+            }
+        }
+    }
+}
+"#,
+    },
+    EdgeCase {
         id: "package.qualified",
         description: "Package-qualified subroutine call.",
         tags: &["package", "subroutine", "edge-case"],
@@ -275,6 +339,21 @@ catch ($e) {
 }
 finally {
     print "done";
+}
+"#,
+    },
+    EdgeCase {
+        id: "try.feature.gated",
+        description: "Try/catch with feature gating enabled.",
+        tags: &["try", "catch", "finally", "feature", "edge-case"],
+        source: r#"use feature 'try';
+no warnings 'experimental::try';
+
+try {
+    die "boom";
+}
+catch ($e) {
+    warn $e;
 }
 "#,
     },
@@ -654,6 +733,16 @@ if ($text =~ /(?<=foo\d{1,3})bar/) {
 "#,
     },
     EdgeCase {
+        id: "regex.backtracking",
+        description: "Regex with nested quantifiers that can trigger backtracking.",
+        tags: &["regex", "edge-case", "parser-sensitive"],
+        source: r#"my $text = "aaaaaaaaab";
+if ($text =~ /^(a+)+b$/) {
+    print "ok";
+}
+"#,
+    },
+    EdgeCase {
         id: "regex.verbs",
         description: "Regex with control verbs.",
         tags: &["regex", "edge-case"],
@@ -679,6 +768,16 @@ if ($text =~ /(a(?R)?c)/) {
         tags: &["regex", "edge-case"],
         source: r#"my $text = "foobar";
 if ($text =~ /(foo)?(?(1)bar|baz)/) {
+    print "ok";
+}
+"#,
+    },
+    EdgeCase {
+        id: "regex.conditional.named",
+        description: "Regex conditional using a named capture branch.",
+        tags: &["regex", "edge-case"],
+        source: r#"my $text = "foo";
+if ($text =~ /(?<word>foo)(?(<word>)foo|bar)/) {
     print "ok";
 }
 "#,
@@ -759,11 +858,30 @@ beta
 "#,
     },
     EdgeCase {
+        id: "readline.diamond",
+        description: "Diamond operator readline with eof check.",
+        tags: &["file", "io", "edge-case"],
+        source: r#"while (my $line = <>) {
+    last if eof;
+    print $line;
+}
+"#,
+    },
+    EdgeCase {
         id: "open.layers",
         description: "Open with PerlIO layer specification.",
         tags: &["open", "layers", "perlio", "edge-case"],
         source: r#"open my $fh, "<:encoding(UTF-8)", "file.txt" or die $!;
 binmode $fh, ":raw";
+"#,
+    },
+    EdgeCase {
+        id: "open.scalar.ref",
+        description: "Open a scalar reference as a filehandle.",
+        tags: &["open", "io", "edge-case"],
+        source: r#"my $data = "hello\nworld\n";
+open my $fh, "<", \$data or die $!;
+my $line = <$fh>;
 "#,
     },
     EdgeCase {
@@ -857,6 +975,24 @@ sub new {
 "#,
     },
     EdgeCase {
+        id: "object.can.does",
+        description: "Method introspection with can/DOES checks.",
+        tags: &["method", "can", "does", "edge-case"],
+        source: r#"package Widget;
+sub new { bless {}, shift }
+sub work { return 1; }
+
+package main;
+my $obj = Widget->new();
+if ($obj->can("work")) {
+    $obj->work();
+}
+if ($obj->DOES("Role::Worker")) {
+    print "role";
+}
+"#,
+    },
+    EdgeCase {
         id: "goto.sub",
         description: "Goto to a subroutine for tail-call style dispatch.",
         tags: &["goto", "subroutine", "edge-case"],
@@ -933,6 +1069,15 @@ $node->{self} = $node;
 "#,
     },
     ComplexDataStructureCase {
+        id: "typeglob.map",
+        description: "Hash containing typeglob handle references.",
+        source: r#"my $handles = {
+    out => *STDOUT,
+    err => *STDERR,
+};
+"#,
+    },
+    ComplexDataStructureCase {
         id: "graph.refs",
         description: "Graph-like structure with nested edges.",
         source: r#"my $graph = {
@@ -983,6 +1128,19 @@ weaken($b->{prev});
     "" => 0,
     " spaced key " => 1,
     "0" => "zero",
+};
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "unicode.escapes",
+        description: "Unicode escapes stored in scalars and hashes.",
+        source: r#"use utf8;
+my $smile = "\x{1F600}";
+my $text = "\x{4E16}\x{754C}";
+my $data = {
+    emoji => $smile,
+    cjk => $text,
+    mixed => "$text $smile",
 };
 "#,
     },
@@ -1047,6 +1205,13 @@ my $data = {
         description: "Scalar with dual numeric/string value.",
         source: r#"use Scalar::Util 'dualvar';
 my $value = dualvar(10, "ten");
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "version.object",
+        description: "Version object parsed from a v-string.",
+        source: r#"use version;
+my $version = version->parse("v1.2.3");
 "#,
     },
     ComplexDataStructureCase {
@@ -1119,6 +1284,13 @@ my $obj = bless $handler, "Handler::Obj";
         description: "Hash containing a filehandle and metadata.",
         source: r#"open my $fh, "<", "file.txt";
 my $data = { handle => $fh, path => "file.txt" };
+"#,
+    },
+    ComplexDataStructureCase {
+        id: "filehandle.array",
+        description: "Array containing filehandles and typeglob refs.",
+        source: r#"open my $fh, "<", "file.txt";
+my $list = [$fh, \*STDIN, \*STDOUT];
 "#,
     },
     ComplexDataStructureCase {
@@ -1195,6 +1367,7 @@ impl EdgeCaseGenerator {
     }
 
     /// Sample a deterministic edge case by seed.
+    #[allow(clippy::expect_used)] // Static list is guaranteed non-empty at compile time
     pub fn sample(seed: u64) -> &'static EdgeCase {
         select_by_seed(edge_cases(), seed)
             .unwrap_or_else(|| edge_cases().first().expect("edge case list is empty"))
@@ -1234,6 +1407,7 @@ pub fn find_complex_case(id: &str) -> Option<&'static ComplexDataStructureCase> 
 }
 
 /// Sample a deterministic complex data structure fixture by seed.
+#[allow(clippy::expect_used)] // Static list is guaranteed non-empty at compile time
 pub fn sample_complex_case(seed: u64) -> &'static ComplexDataStructureCase {
     select_by_seed(complex_data_structure_cases(), seed).unwrap_or_else(|| {
         complex_data_structure_cases().first().expect("complex case list is empty")

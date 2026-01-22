@@ -4,6 +4,7 @@ members = [
     "crates/perl-lexer",
     "crates/perl-parser",
     "crates/perl-parser-core",
+    "crates/perl-parser-pest",
     "crates/perl-semantic-analyzer",
     "crates/perl-workspace-index",
     "crates/perl-refactoring",
@@ -12,7 +13,11 @@ members = [
     "crates/perl-lsp-providers",
     "crates/perl-lsp-protocol",
     "crates/perl-lsp-transport",
+    "crates/perl-diagnostics-codes",
     "crates/perl-position-tracking",
+    "crates/perl-symbol-types",
+    "crates/perl-symbol-table",
+    "crates/perl-uri",
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
@@ -32,18 +37,37 @@ edition = "2024"
 rust-version = "1.89"
 
 [workspace.dependencies]
-perl-lexer = { path = "crates/perl-lexer" }
-perl-parser = { path = "crates/perl-parser" }
-perl-parser-core = { path = "crates/perl-parser-core" }
-perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer" }
-perl-workspace-index = { path = "crates/perl-workspace-index" }
-perl-refactoring = { path = "crates/perl-refactoring" }
-perl-incremental-parsing = { path = "crates/perl-incremental-parsing" }
-perl-tdd-support = { path = "crates/perl-tdd-support" }
-perl-lsp-providers = { path = "crates/perl-lsp-providers" }
-perl-lsp-protocol = { path = "crates/perl-lsp-protocol" }
-perl-lsp-transport = { path = "crates/perl-lsp-transport" }
-perl-position-tracking = { path = "crates/perl-position-tracking" }
+# Tier 1: Leaf crates (no internal dependencies)
+perl-lexer = { path = "crates/perl-lexer", version = "0.8.8" }
+perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.8.8" }
+perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.8.8" }
+perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.8.8" }
+perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.8.8" }
+perl-uri = { path = "crates/perl-uri", version = "0.8.8" }
+perl-corpus = { path = "crates/perl-corpus", version = "0.8.8" }
+perl-dap = { path = "crates/perl-dap", version = "0.1.0" }
+
+# Tier 2: Single-level dependencies
+perl-parser-core = { path = "crates/perl-parser-core", version = "0.8.8" }
+perl-lsp-transport = { path = "crates/perl-lsp-transport", version = "0.8.8" }
+perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.8.8" }
+
+# Tier 3: Two-level dependencies
+perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.8.8" }
+perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.8.8" }
+perl-refactoring = { path = "crates/perl-refactoring", version = "0.8.8" }
+
+# Tier 4: Three-level dependencies
+perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer", version = "0.8.8" }
+perl-lsp-providers = { path = "crates/perl-lsp-providers", version = "0.8.8", default-features = false }
+
+# Tier 5: Application crates
+perl-parser = { path = "crates/perl-parser", version = "0.8.8" }
+
+# Legacy/Compatibility crates
+perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.8.8" }
+
+# External dependencies
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust"] }
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c" }
 tree-sitter = "0.26.3"

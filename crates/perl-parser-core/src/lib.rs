@@ -50,6 +50,7 @@ pub mod engine;
 /// Token stream and trivia utilities for the parser.
 pub mod tokens;
 
+pub use ast_v2::{DiagnosticId, MissingKind};
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 pub use engine::ast;
 /// Experimental second-generation AST (work in progress).
@@ -76,6 +77,7 @@ pub use engine::parser::Parser;
 pub use error::classifier as error_classifier;
 pub use error::recovery as error_recovery;
 pub use error::recovery_parser;
+pub use error_recovery::RecoveryResult;
 
 pub use position::line_index;
 pub use position::position_mapper;
@@ -83,7 +85,7 @@ pub use position::position_mapper;
 pub use position::positions;
 
 pub use ast::{Node, NodeKind, SourceLocation};
-pub use error::{ParseError, ParseResult};
+pub use error::{BudgetTracker, ParseBudget, ParseError, ParseOutput, ParseResult};
 
 pub use builtins::builtin_signatures;
 pub use builtins::builtin_signatures_phf;

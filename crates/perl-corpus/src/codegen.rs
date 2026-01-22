@@ -19,6 +19,8 @@ pub enum StatementKind {
     Basic,
     /// Package/subroutine declarations and method calls.
     Declarations,
+    /// Object-oriented constructs (bless, inheritance, overload).
+    ObjectOriented,
     /// qw(...) and related list constructs.
     Qw,
     /// Quote-like operators (q/qq/qx/qr).
@@ -47,15 +49,20 @@ pub enum StatementKind {
     Expressions,
     /// Regex match/substitution/transliteration.
     Regex,
+    /// Parser ambiguity and stress cases.
+    Ambiguity,
     /// Sigil-heavy variable and dereference patterns.
     Sigils,
     /// Compile-time phase blocks (BEGIN/CHECK/UNITCHECK/INIT/END).
     Phasers,
+    /// Special variables and punctuation variables.
+    SpecialVars,
 }
 
-const STATEMENT_KINDS_ALL: [StatementKind; 18] = [
+const STATEMENT_KINDS_ALL: [StatementKind; 21] = [
     StatementKind::Basic,
     StatementKind::Declarations,
+    StatementKind::ObjectOriented,
     StatementKind::Qw,
     StatementKind::QuoteLike,
     StatementKind::Heredoc,
@@ -70,8 +77,10 @@ const STATEMENT_KINDS_ALL: [StatementKind; 18] = [
     StatementKind::ListOps,
     StatementKind::Expressions,
     StatementKind::Regex,
+    StatementKind::Ambiguity,
     StatementKind::Sigils,
     StatementKind::Phasers,
+    StatementKind::SpecialVars,
 ];
 
 impl StatementKind {
@@ -190,6 +199,9 @@ fn build_strategies_for(kinds: &[StatementKind]) -> Vec<BoxedStrategy<String>> {
             StatementKind::Declarations => {
                 strategies.push(r#gen::declarations::declaration_in_context().boxed());
             }
+            StatementKind::ObjectOriented => {
+                strategies.push(r#gen::object_oriented::object_oriented_in_context().boxed());
+            }
             StatementKind::Qw => {
                 let qw = r#gen::qw::qw_in_context();
                 let constants = r#gen::qw::use_constant_qw().prop_map(|(src, _)| src);
@@ -230,11 +242,17 @@ fn build_strategies_for(kinds: &[StatementKind]) -> Vec<BoxedStrategy<String>> {
             StatementKind::Regex => {
                 strategies.push(r#gen::regex::regex_in_context().boxed());
             }
+            StatementKind::Ambiguity => {
+                strategies.push(r#gen::ambiguity::ambiguity_in_context().boxed());
+            }
             StatementKind::Sigils => {
                 strategies.push(r#gen::sigils::sigil_in_context().boxed());
             }
             StatementKind::Phasers => {
                 strategies.push(r#gen::phasers::phaser_block().boxed());
+            }
+            StatementKind::SpecialVars => {
+                strategies.push(r#gen::special_vars::special_vars_in_context().boxed());
             }
         }
     }

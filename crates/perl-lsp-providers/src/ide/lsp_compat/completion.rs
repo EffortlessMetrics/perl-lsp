@@ -674,21 +674,21 @@ impl CompletionProvider {
         // Determine what kind of completions to provide based on context
         if context.prefix.starts_with('$') {
             // Scalar variable completion
-            self.add_variable_completions(&mut completions, &context, SymbolKind::ScalarVariable);
+            self.add_variable_completions(&mut completions, &context, SymbolKind::scalar());
             if is_cancelled() {
                 return vec![];
             }
             self.add_special_variables(&mut completions, &context, "$");
         } else if context.prefix.starts_with('@') {
             // Array variable completion
-            self.add_variable_completions(&mut completions, &context, SymbolKind::ArrayVariable);
+            self.add_variable_completions(&mut completions, &context, SymbolKind::array());
             if is_cancelled() {
                 return vec![];
             }
             self.add_special_variables(&mut completions, &context, "@");
         } else if context.prefix.starts_with('%') {
             // Hash variable completion
-            self.add_variable_completions(&mut completions, &context, SymbolKind::HashVariable);
+            self.add_variable_completions(&mut completions, &context, SymbolKind::hash());
             if is_cancelled() {
                 return vec![];
             }
@@ -1188,7 +1188,7 @@ impl CompletionProvider {
                         });
                     }
                 }
-                WsSymbolKind::Variable => {
+                WsSymbolKind::Variable(_) => {
                     if symbol.name.starts_with(member_prefix) {
                         completions.push(CompletionItem {
                             label: symbol.name.clone(),
@@ -1698,13 +1698,7 @@ impl CompletionProvider {
         if !context.prefix.starts_with(['$', '@', '%', '&']) {
             for (name, symbols) in &self.symbol_table.symbols {
                 for symbol in symbols {
-                    if matches!(
-                        symbol.kind,
-                        SymbolKind::ScalarVariable
-                            | SymbolKind::ArrayVariable
-                            | SymbolKind::HashVariable
-                    ) && name.starts_with(&context.prefix)
-                    {
+                    if symbol.kind.is_variable() && name.starts_with(&context.prefix) {
                         let sigil = symbol.kind.sigil().unwrap_or("");
                         completions.push(CompletionItem {
                             label: format!("{}{}", sigil, name),

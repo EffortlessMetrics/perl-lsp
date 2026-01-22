@@ -219,10 +219,10 @@ impl CodeFormatter {
             crate::util::byte_to_utf16_col(lines[end_line], lines[end_line].len()) as u32;
 
         Ok(vec![FormatTextEdit {
-            range: WireRange {
-                start: WirePosition::new(start_line as u32, start_char),
-                end: WirePosition::new(end_line as u32, end_char),
-            },
+            range: WireRange::new(
+                WirePosition::new(start_line as u32, start_char),
+                WirePosition::new(end_line as u32, end_char),
+            ),
             new_text: formatted,
         }])
     }

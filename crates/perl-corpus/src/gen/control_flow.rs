@@ -21,6 +21,7 @@ pub fn loop_with_control() -> impl Strategy<Value = String> {
         ),
         Just("my @items = (1, 2, 3);\nprint $_ for @items;\n".to_string()),
         Just("my $count = 0;\n$count++ while $count < 3;\n".to_string()),
+        Just("my $value = 0;\nuntil ($value > 3) {\n    $value++;\n}\n".to_string()),
         Just(
             "use v5.10;\nmy $value = 2;\ngiven ($value) {\n    when (1) { print \"one\"; }\n    when (2) { print \"two\"; }\n    default { print \"other\"; }\n}\n"
                 .to_string(),
@@ -55,6 +56,7 @@ mod tests {
                     || code.contains("continue")
                     || code.contains("for")
                     || code.contains("while")
+                    || code.contains("until")
                     || code.contains("given")
                     || code.contains("when")
                     || code.contains("try")

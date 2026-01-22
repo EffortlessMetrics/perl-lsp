@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-01-18)**: v0.9.0 release — semantic definition + production hardening complete.
+> **Status (2026-01-21)**: v0.9.1 in progress — Semantic Analyzer complete (Phase 2-6), refactoring engine, performance optimizations.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -38,7 +38,7 @@ If a number is not backed by a receipt, it must be labeled **UNVERIFIED** or rem
 | **perl-lsp** | Production (advertised subset) | capability snapshots + targeted tests | Advertise only what's tested; keep GA-lock stable |
 | **perl-dap** | Experimental (native adapter) | manual smoke | CLI uses native adapter; BridgeAdapter library available (Perl::LanguageServer) |
 | **perl-parser-pest** (v2) | Legacy | N/A | Optional crate; keep out of default gate |
-| **Semantic Analyzer** | Phase 1 Complete | `just ci-gate` | 12/12 handlers; lexical scoping + textDocument/definition |
+| **Semantic Analyzer** | Phase 2-6 Complete | `just ci-gate` | All NodeKind handlers; full semantic analysis pipeline |
 
 *Only features that pass `ci-gate` or have targeted integration tests count as "Production".*
 
@@ -105,13 +105,51 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 - **Protocol Compliance**: 100% (88/88 including plumbing)
 - **Test Count**: 535 lib tests (discovered), 1 ignored (tracked debt: 0 bug, 1 manual)
 - **Parser Coverage**: ~100% Perl 5 syntax
-- **Semantic Analyzer**: Phase 1 complete (12/12 handlers)
+- **Semantic Analyzer**: Phase 1 complete (12/12 critical handlers)
 
 ### v0.9.1: Post-Release Optimization (January 2026)
 
-**Goal**: Performance optimization and documentation debt reduction.
+**Status**: In Progress
 
-**Planned Deliverables**:
+**Goal**: Performance optimization, semantic analyzer completion, and refactoring infrastructure.
+
+**Completed Deliverables**:
+
+1. **Semantic Analyzer Phase 2-6** ✓ (PR #389)
+   - Complete NodeKind coverage
+   - Uninitialized variable detection (PR #396)
+   - Type inference improvements
+
+2. **Refactoring Engine** ✓
+   - `perform_inline` implementation (PR #391)
+   - `perform_move_code` implementation (PR #392)
+   - Complete LSP refactoring infrastructure (PR #387)
+
+3. **Performance Optimizations** ✓
+   - O(1) symbol lookups (PR #336)
+   - Stack-based ScopeAnalyzer (PR #383)
+   - Reduced string allocations in parser (PR #367, #372, #368)
+
+4. **LSP Server Enhancements** ✓
+   - TCP socket mode (PR #370)
+   - Cross-file Package->method resolution (PR #375)
+   - Unified position/range types
+
+5. **Security Hardening** ✓
+   - Path traversal protection (PR #388)
+   - Command injection hardening (PR #332)
+
+6. **DAP Improvements** ✓
+   - Async BridgeAdapter with graceful shutdown (PR #369)
+   - CLI argument parsing with clap (PR #374)
+   - Stdio transport (PR #330)
+
+7. **Test Infrastructure** ✓
+   - Comprehensive test corpus (PR #404)
+   - Workspace indexing synchronization (PR #394)
+   - Syntax highlighting validation (PR #397)
+
+**Remaining Deliverables**:
 
 1. **Index State Machine** (deferred from v0.9.0)
    - Proper state transitions for workspace indexing
@@ -119,24 +157,9 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
    - Performance caps: <100ms initial index, <10ms incremental
 
 2. **Documentation Cleanup**
-   - Address remaining 484 violations flagged by `missing_docs`
+   - Address remaining violations flagged by `missing_docs`
    - Public API documentation coverage to 95%+
    - Module-level documentation for all crates
-
-3. **LSP Coverage Maintenance**
-   - Maintain 100% advertised GA coverage
-   - Focus on quality improvements for existing features
-   - Resolve routes for any remaining edge cases
-
-4. **Test Infrastructure**
-   - Maintain near-zero tracked debt (currently 1: 0 bug, 1 manual)
-   - Add integration tests for deferred workspace features
-   - Expand corpus coverage for edge cases
-
-5. **DAP Adapter Alignment**
-   - Document native adapter limits vs BridgeAdapter
-   - Implement attach support or wire BridgeAdapter into CLI
-   - Replace placeholder variables/evaluate with parsed output
 
 **Exit criteria**:
 - Index state machine implemented with performance benchmarks
@@ -146,11 +169,10 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 
 ---
 
-### Not Before v0.9
+### Not Before v1.0
 
 These items are explicitly deferred:
 - Full LSP 3.18 compliance (see CURRENT_STATUS.md for current coverage)
-- Semantic Analyzer Phase 2/3 (closures, multi-file resolution, imports)
 - Native DAP completeness (attach, variables/evaluate, safe eval; bridge wiring decision)
 - Benchmark result publication (framework exists, results not committed)
 - Package manager distribution (Homebrew, apt, etc.)
@@ -225,6 +247,11 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - Statement Tracker & Heredocs (2025-11-20)
 - Semantic Analyzer Phase 1 (2025-11-20)
 - Band 1: Semantic Stack Validation (2025-12-27)
+- Semantic Analyzer Phase 2-6 Complete (2026-01-21)
+- Refactoring Engine: inline + move_code (2026-01-21)
+- O(1) Symbol Lookups Optimization (2026-01-21)
+- TCP Socket Mode for LSP Server (2026-01-21)
+- Security Hardening: path traversal + command injection (2026-01-21)
 
 ---
 
@@ -284,4 +311,4 @@ Older targets (Q1-Q4 2025, 2026 vision) have been archived. Current focus is v0.
 - **[features.toml](../features.toml)** - Canonical capability definitions
 - **[LESSONS.md](LESSONS.md)** - What went wrong and what changed
 
-<!-- Last Updated: 2026-01-11 -->
+<!-- Last Updated: 2026-01-21 -->

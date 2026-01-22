@@ -117,10 +117,10 @@ impl LspServer {
                     trim_final_newlines: None,
                 });
 
-            let range = WireRange {
-                start: WirePosition::new(start_line, start_char),
-                end: WirePosition::new(end_line, end_char),
-            };
+            let range = WireRange::new(
+                WirePosition::new(start_line, start_char),
+                WirePosition::new(end_line, end_char),
+            );
 
             eprintln!("Formatting range in document: {}", uri);
 
@@ -232,10 +232,10 @@ impl LspServer {
                         invalid_params(&format!("ranges[{}].end.character exceeds u32::MAX", idx))
                     })?;
 
-                    let range = WireRange {
-                        start: WirePosition::new(start_line, start_char),
-                        end: WirePosition::new(end_line, end_char),
-                    };
+                    let range = WireRange::new(
+                        WirePosition::new(start_line, start_char),
+                        WirePosition::new(end_line, end_char),
+                    );
 
                     match formatter.format_range(&doc.text, &range, &options) {
                         Ok(edits) => {

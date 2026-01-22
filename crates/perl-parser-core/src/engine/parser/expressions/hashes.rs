@@ -2,6 +2,7 @@ impl<'a> Parser<'a> {
     /// Parse block specifically for builtin functions (map, grep, sort)
     /// These always parse {} as blocks, never as hashes
     fn parse_builtin_block(&mut self) -> ParseResult<Node> {
+        self.check_recursion()?;
         let start_token = self.tokens.next()?; // consume {
         let start = start_token.start;
 
@@ -15,7 +16,9 @@ impl<'a> Parser<'a> {
         let end = self.previous_position();
 
         // Always return a block node for builtin functions
-        Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
+        let result = Node::new(NodeKind::Block { statements }, SourceLocation { start, end });
+        self.exit_recursion();
+        Ok(result)
     }
 
     /// Parse hash literal or block
@@ -25,6 +28,13 @@ impl<'a> Parser<'a> {
 
     /// Parse hash literal or block with context about whether blocks are expected
     fn parse_hash_or_block_with_context(&mut self, _expect_block: bool) -> ParseResult<Node> {
+        self.check_recursion()?;
+        let result = self.parse_hash_or_block_inner(_expect_block);
+        self.exit_recursion();
+        result
+    }
+
+    fn parse_hash_or_block_inner(&mut self, _expect_block: bool) -> ParseResult<Node> {
         let start_token = self.tokens.next()?; // consume {
         let start = start_token.start;
 

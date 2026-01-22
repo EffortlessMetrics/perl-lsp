@@ -15,7 +15,35 @@ impl<'a> Parser<'a> {
                 break; // Stop parsing but preserve earlier nodes
             }
 
-            statements.push(self.parse_statement()?);
+            // Parse statement with error recovery
+            match self.parse_statement() {
+                Ok(stmt) => statements.push(stmt),
+                Err(e) => {
+                    // Don't recover from recursion limit - propagate immediately
+                    if matches!(e, ParseError::RecursionLimit) {
+                        return Err(e);
+                    }
+
+                    // Create error node for failed statement
+                    let error_location = self.current_position();
+                    let error_msg = format!("{}", e);
+                    // Collect peek_kind before mutable borrow in recover_from_error
+                    let peek_kind = format!("{:?}", self.peek_kind());
+                    let error_node = self.recover_from_error(
+                        error_msg,
+                        "statement".to_string(),
+                        peek_kind,
+                        error_location
+                    );
+                    statements.push(error_node);
+
+                    // Try to synchronize to next statement
+                    if !self.synchronize() {
+                        // If synchronization fails, we're likely at EOF
+                        break;
+                    }
+                }
+            }
         }
 
         let end = self.previous_position();

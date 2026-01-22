@@ -179,6 +179,24 @@ fn defined_exists() -> impl Strategy<Value = String> {
     )
 }
 
+fn fileno_close() -> impl Strategy<Value = String> {
+    Just(
+        "open my $fh, \"<\", \"file.txt\" or die $!;\nmy $fd = fileno $fh;\nclose $fh;\n"
+            .to_string(),
+    )
+}
+
+fn readline_eof() -> impl Strategy<Value = String> {
+    Just("my $line = <STDIN>;\nif (eof STDIN) { warn \"eof\"; }\n".to_string())
+}
+
+fn formline_statement() -> impl Strategy<Value = String> {
+    Just(
+        "my $picture = \"@<<\";\nformline $picture, \"ok\";\nmy $out = $^A;\n$^A = \"\";\n"
+            .to_string(),
+    )
+}
+
 /// Generate built-in function call statements.
 pub fn builtin_in_context() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -218,6 +236,9 @@ pub fn builtin_in_context() -> impl Strategy<Value = String> {
         truncate_umask(),
         stat_lstat(),
         defined_exists(),
+        fileno_close(),
+        readline_eof(),
+        formline_statement(),
     ]
 }
 
@@ -293,7 +314,12 @@ mod tests {
                     || code.contains("stat")
                     || code.contains("lstat")
                     || code.contains("defined")
-                    || code.contains("exists"),
+                    || code.contains("exists")
+                    || code.contains("fileno")
+                    || code.contains("open")
+                    || code.contains("close")
+                    || code.contains("eof")
+                    || code.contains("formline"),
                 "Expected builtin keyword in: {}",
                 code
             );

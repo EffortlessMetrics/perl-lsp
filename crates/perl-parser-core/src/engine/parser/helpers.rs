@@ -284,4 +284,66 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Record a parse error for later retrieval
+    fn record_error(&mut self, error: ParseError) {
+        self.errors.push(error);
+    }
+
+    /// Get all recorded errors
+    pub fn get_errors(&self) -> &[ParseError] {
+        &self.errors
+    }
+
+    /// Check if current token is a synchronization point for error recovery
+    fn is_sync_point(&mut self) -> bool {
+        match self.peek_kind() {
+            Some(TokenKind::Semicolon) => true,
+            Some(TokenKind::RightBrace) => true,
+            Some(TokenKind::My) | Some(TokenKind::Our) | Some(TokenKind::Local) | Some(TokenKind::State) => true,
+            Some(TokenKind::Sub) | Some(TokenKind::Package) | Some(TokenKind::Use) => true,
+            Some(TokenKind::If) | Some(TokenKind::Unless) => true,
+            Some(TokenKind::While) | Some(TokenKind::Until) => true,
+            Some(TokenKind::For) | Some(TokenKind::Foreach) => true,
+            None => true,  // EOF is a sync point
+            _ => false,
+        }
+    }
+
+    /// Synchronize to next statement boundary for error recovery
+    /// Returns true if synchronization was successful
+    fn synchronize(&mut self) -> bool {
+        let mut skipped = 0;
+
+        while !self.tokens.is_eof() && skipped < 100 {
+            // Check if we're at a sync point
+            if self.is_sync_point() {
+                // If we're at a semicolon, consume it
+                if matches!(self.peek_kind(), Some(TokenKind::Semicolon)) {
+                    let _ = self.consume_token();
+                }
+                return true;
+            }
+
+            // Skip the current token
+            let _ = self.consume_token();
+            skipped += 1;
+        }
+
+        false
+    }
+
+    /// Create an error node and record the error
+    fn recover_from_error(&mut self, message: String, expected: String, found: String, location: usize) -> Node {
+        // Record the error
+        let error = ParseError::unexpected(expected, found.clone(), location);
+        self.record_error(error);
+
+        // Create error node
+        let end = self.current_position();
+        Node::new(
+            NodeKind::Error { message },
+            SourceLocation { start: location, end }
+        )
+    }
+
 }

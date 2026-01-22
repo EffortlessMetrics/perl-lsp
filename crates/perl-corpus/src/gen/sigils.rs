@@ -97,6 +97,7 @@ fn postfix_deref_usage() -> impl Strategy<Value = String> {
             "my $hash_ref = { a => 1, b => 2 };\nmy %copy = $hash_ref->%*;\nmy @keys = $hash_ref->@{qw(a b)};\n"
                 .to_string(),
         ),
+        Just("my $code = sub { return 1; };\nmy $handler = $code->&*;\n".to_string()),
     ]
 }
 

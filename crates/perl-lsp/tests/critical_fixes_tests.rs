@@ -82,13 +82,13 @@ fn test_lsp_workspace_symbol_no_internal_fields() {
 
 #[test]
 fn test_symbol_kind_uses_lsp_constants() {
-    use perl_parser::workspace_index::SymbolKind;
+    use perl_parser::workspace_index::{SymbolKind, VarKind};
 
     // Test that to_lsp_kind returns proper LSP-compliant values
     assert_eq!(SymbolKind::Package.to_lsp_kind(), 2); // Module
     assert_eq!(SymbolKind::Subroutine.to_lsp_kind(), 12); // Function
     assert_eq!(SymbolKind::Method.to_lsp_kind(), 6); // Method
-    assert_eq!(SymbolKind::Variable.to_lsp_kind(), 13); // Variable
+    assert_eq!(SymbolKind::Variable(VarKind::Scalar).to_lsp_kind(), 13); // Variable
     assert_eq!(SymbolKind::Constant.to_lsp_kind(), 14); // Constant
     assert_eq!(SymbolKind::Class.to_lsp_kind(), 5); // Class
 
@@ -100,16 +100,20 @@ fn test_symbol_kind_uses_lsp_constants() {
     .into_iter()
     .collect();
 
-    for kind in &[
+    for kind in [
         SymbolKind::Package,
         SymbolKind::Subroutine,
         SymbolKind::Method,
-        SymbolKind::Variable,
+        SymbolKind::Variable(VarKind::Scalar),
+        SymbolKind::Variable(VarKind::Array),
+        SymbolKind::Variable(VarKind::Hash),
         SymbolKind::Constant,
         SymbolKind::Class,
         SymbolKind::Role,
         SymbolKind::Import,
         SymbolKind::Export,
+        SymbolKind::Label,
+        SymbolKind::Format,
     ] {
         let lsp_kind = kind.to_lsp_kind();
         assert!(

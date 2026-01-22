@@ -89,9 +89,11 @@ pub struct Parser<'a> {
     src_bytes: &'a [u8],
     /// Byte cursor tracking position for heredoc content collection
     byte_cursor: usize,
+    /// Collection of parse errors encountered during parsing (for error recovery)
+    errors: Vec<ParseError>,
 }
 
-const MAX_RECURSION_DEPTH: usize = 500;
+const MAX_RECURSION_DEPTH: usize = 256;
 
 impl<'a> Parser<'a> {
     /// Create a new parser for processing Perl script content within LSP workflow
@@ -124,6 +126,7 @@ impl<'a> Parser<'a> {
             pending_heredocs: VecDeque::new(),
             src_bytes: input.as_bytes(),
             byte_cursor: 0,
+            errors: Vec::new(),
         }
     }
 
@@ -177,6 +180,30 @@ impl<'a> Parser<'a> {
     /// - Template processing code within email systems
     pub fn parse(&mut self) -> ParseResult<Node> {
         self.parse_program()
+    }
+
+    /// Get all parse errors collected during parsing
+    ///
+    /// When error recovery is enabled, the parser continues after syntax errors
+    /// and collects them for later retrieval. This is useful for IDE integration
+    /// where you want to show all errors at once.
+    ///
+    /// # Returns
+    ///
+    /// A slice of all `ParseError`s encountered during parsing
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::Parser;
+    ///
+    /// let mut parser = Parser::new("my $x = ; sub foo {");
+    /// let _ast = parser.parse(); // Parse with recovery
+    /// let errors = parser.errors();
+    /// // errors will contain details about syntax errors
+    /// ```
+    pub fn errors(&self) -> &[ParseError] {
+        &self.errors
     }
 }
 

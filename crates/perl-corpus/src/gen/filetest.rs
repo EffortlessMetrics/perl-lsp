@@ -14,7 +14,7 @@ fn filetest_single() -> impl Strategy<Value = String> {
     (
         prop::sample::select(vec![
             "-e", "-f", "-d", "-r", "-w", "-x", "-s", "-z", "-l", "-T", "-B", "-o", "-O", "-u",
-            "-g",
+            "-g", "-R", "-W", "-X", "-S", "-p", "-c", "-b", "-k",
         ]),
         file_target(),
     )
@@ -62,6 +62,14 @@ mod tests {
                     || code.contains("-O")
                     || code.contains("-u")
                     || code.contains("-g")
+                    || code.contains("-R")
+                    || code.contains("-W")
+                    || code.contains("-X")
+                    || code.contains("-S")
+                    || code.contains("-p")
+                    || code.contains("-c")
+                    || code.contains("-b")
+                    || code.contains("-k")
                     || code.contains("-M")
                     || code.contains("-A")
                     || code.contains("-C")

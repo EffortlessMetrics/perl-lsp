@@ -50,20 +50,7 @@ impl DocumentStore {
     /// Normalize a URI to a consistent key
     /// This handles platform differences and ensures consistent lookups
     pub fn uri_key(uri: &str) -> String {
-        if let Ok(u) = url::Url::parse(uri) {
-            let s = u.as_str().to_string();
-            if let Some(rest) = s.strip_prefix("file:///") {
-                if rest.len() > 1
-                    && rest.as_bytes()[1] == b':'
-                    && rest.as_bytes()[0].is_ascii_alphabetic()
-                {
-                    return format!("file:///{}{}", rest[0..1].to_ascii_lowercase(), &rest[1..]);
-                }
-            }
-            s
-        } else {
-            uri.to_string()
-        }
+        perl_uri::uri_key(uri)
     }
 
     /// Open or update a document

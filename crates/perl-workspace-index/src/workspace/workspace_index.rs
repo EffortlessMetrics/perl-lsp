@@ -53,19 +53,27 @@
 //!
 //! # Related Modules
 //!
-//! See also [`crate::symbol`] for symbol extraction, [`crate::references`] for
-//! reference finding, and [`crate::semantic_tokens`] for semantic classification.
+//! See also the symbol extraction, reference finding, and semantic token classification
+//! modules in the workspace index implementation.
 
 use crate::Parser;
 use crate::ast::{Node, NodeKind};
 use crate::document_store::{Document, DocumentStore};
 use crate::position::{Position, Range};
 use parking_lot::RwLock;
+use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::Instant;
 use url::Url;
+
+// Re-export URI utilities for backward compatibility
+#[cfg(not(target_arch = "wasm32"))]
+pub use perl_uri::{fs_path_to_uri, uri_to_fs_path};
+pub use perl_uri::{is_file_uri, is_special_scheme, uri_extension, uri_key};
 
 // ============================================================================
 // Index Lifecycle Types (Index Lifecycle v1 Specification)
@@ -766,55 +774,6 @@ pub fn normalize_var(name: &str) -> (Option<char>, &str) {
     }
 }
 
-/// Helper functions for safe URI <-> filesystem path conversion
-///
-/// These functions handle proper percent-encoding/decoding and work correctly
-/// with spaces, Windows paths, and non-ASCII characters.
-/// Convert a file:// URI to a filesystem path
-///
-/// Properly handles percent-encoding and works with spaces, Windows paths,
-/// and non-ASCII characters. Returns None if the URI is not a valid file:// URI.
-///
-/// Note: This function is not available on wasm32 targets (no filesystem).
-#[cfg(not(target_arch = "wasm32"))]
-pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
-    // Parse the URI
-    let url = Url::parse(uri).ok()?;
-
-    // Only handle file:// URIs
-    if url.scheme() != "file" {
-        return None;
-    }
-
-    // Convert to filesystem path using the url crate's built-in method
-    url.to_file_path().ok()
-}
-
-/// Convert a filesystem path to a file:// URI
-///
-/// Properly handles percent-encoding and works with spaces, Windows paths,
-/// and non-ASCII characters.
-///
-/// Note: This function is not available on wasm32 targets (no filesystem).
-#[cfg(not(target_arch = "wasm32"))]
-pub fn fs_path_to_uri<P: AsRef<std::path::Path>>(path: P) -> Result<String, String> {
-    let path = path.as_ref();
-
-    // Convert to absolute path if relative
-    let abs_path = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .map_err(|e| format!("Failed to get current directory: {}", e))?
-            .join(path)
-    };
-
-    // Use the url crate's built-in method to create a proper file:// URI
-    Url::from_file_path(&abs_path)
-        .map(|url| url.to_string())
-        .map_err(|_| format!("Failed to convert path to URI: {}", abs_path.display()))
-}
-
 // Using lsp_types for Position and Range
 
 /// Internal location type using String URIs
@@ -852,44 +811,15 @@ fn default_has_body() -> bool {
     true
 }
 
-/// Classification of Perl symbol types for workspace indexing
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum SymbolKind {
-    /// Package declaration (package Foo;)
-    Package,
-    /// Subroutine definition (sub name { })
-    Subroutine,
-    /// Method definition in OO context
-    Method,
-    /// Variable declaration (my, our, local)
-    Variable,
-    /// Constant value (use constant NAME => value)
-    Constant,
-    /// Class declaration (class keyword or Moose/Moo)
-    Class,
-    /// Role definition (role keyword or Moose::Role)
-    Role,
-    /// Imported symbol from use statement
-    Import,
-    /// Exported symbol via Exporter
-    Export,
-}
+// Re-export the unified symbol types from perl-symbol-types
+pub use perl_symbol_types::{SymbolKind, VarKind};
 
-impl SymbolKind {
-    /// Convert to LSP-compliant symbol kind number
-    pub fn to_lsp_kind(self) -> u32 {
-        // Using lsp_types::SymbolKind constants
-        match self {
-            SymbolKind::Package => 2,     // Module
-            SymbolKind::Subroutine => 12, // Function
-            SymbolKind::Method => 6,      // Method
-            SymbolKind::Variable => 13,   // Variable
-            SymbolKind::Constant => 14,   // Constant
-            SymbolKind::Class => 5,       // Class
-            SymbolKind::Role => 8,        // Interface (closest match)
-            SymbolKind::Import => 2,      // Module
-            SymbolKind::Export => 12,     // Function
-        }
+/// Helper function to convert sigil to VarKind
+fn sigil_to_var_kind(sigil: &str) -> VarKind {
+    match sigil {
+        "@" => VarKind::Array,
+        "%" => VarKind::Hash,
+        _ => VarKind::Scalar, // Default to scalar for $ and unknown
     }
 }
 
@@ -928,54 +858,23 @@ pub struct LspWorkspaceSymbol {
     /// LSP symbol kind number (see lsp_types::SymbolKind)
     pub kind: u32,
     /// Location of the symbol definition
-    pub location: LspLocation,
+    pub location: WireLocation,
     /// Name of the containing symbol (package, class)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub container_name: Option<String>,
 }
 
-/// LSP-compliant location
-#[derive(Debug, Serialize)]
-pub struct LspLocation {
-    /// Document URI (file:// scheme)
-    pub uri: String,
-    /// Range within the document
-    pub range: LspRange,
-}
-
-/// LSP-compliant range
-#[derive(Debug, Serialize)]
-pub struct LspRange {
-    /// Start position (inclusive)
-    pub start: LspPosition,
-    /// End position (exclusive)
-    pub end: LspPosition,
-}
-
-/// LSP-compliant position
-#[derive(Debug, Serialize)]
-pub struct LspPosition {
-    /// Zero-based line number
-    pub line: u32,
-    /// Zero-based UTF-16 code unit offset
-    pub character: u32,
-}
-
 impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
     fn from(sym: &WorkspaceSymbol) -> Self {
+        let range = WireRange {
+            start: WirePosition { line: sym.range.start.line, character: sym.range.start.column },
+            end: WirePosition { line: sym.range.end.line, character: sym.range.end.column },
+        };
+
         Self {
             name: sym.name.clone(),
             kind: sym.kind.to_lsp_kind(),
-            location: LspLocation {
-                uri: sym.uri.clone(),
-                range: LspRange {
-                    start: LspPosition {
-                        line: sym.range.start.line,
-                        character: sym.range.start.column,
-                    },
-                    end: LspPosition { line: sym.range.end.line, character: sym.range.end.column },
-                },
-            },
+            location: WireLocation { uri: sym.uri.clone(), range },
             container_name: sym.container_name.clone(),
         }
     }
@@ -990,6 +889,8 @@ struct FileIndex {
     references: HashMap<String, Vec<SymbolReference>>,
     /// Dependencies (modules this file imports)
     dependencies: HashSet<String>,
+    /// Content hash for early-exit optimization
+    content_hash: u64,
 }
 
 /// Thread-safe workspace index
@@ -1013,46 +914,30 @@ impl WorkspaceIndex {
     }
 
     /// Normalize a URI to a consistent form using proper URI handling
-    #[cfg(not(target_arch = "wasm32"))]
     fn normalize_uri(uri: &str) -> String {
-        // Try to parse as URL first
-        if let Ok(url) = Url::parse(uri) {
-            // Already a valid URI, return as-is
-            return url.to_string();
-        }
-
-        // If not a valid URI, try to treat as a file path
-        let path = std::path::Path::new(uri);
-
-        // Try to convert path to URI using our helper function
-        if let Ok(uri_string) = fs_path_to_uri(path) {
-            return uri_string;
-        }
-
-        // Last resort: if it looks like a file:// URI but is malformed,
-        // try to extract the path and reconstruct properly
-        if uri.starts_with("file://") {
-            if let Some(fs_path) = uri_to_fs_path(uri) {
-                if let Ok(normalized) = fs_path_to_uri(&fs_path) {
-                    return normalized;
-                }
-            }
-        }
-
-        // Final fallback: return as-is for special URIs like untitled:
-        uri.to_string()
-    }
-
-    /// Normalize a URI to a consistent form (wasm32 version - no filesystem)
-    #[cfg(target_arch = "wasm32")]
-    fn normalize_uri(uri: &str) -> String {
-        // On wasm32, just try to parse as URL or return as-is
-        if let Ok(url) = Url::parse(uri) { url.to_string() } else { uri.to_string() }
+        perl_uri::normalize_uri(uri)
     }
 
     /// Index a file from its URI and text content
     pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
         let uri_str = uri.to_string();
+
+        // Compute content hash for early-exit optimization
+        let mut hasher = DefaultHasher::new();
+        text.hash(&mut hasher);
+        let content_hash = hasher.finish();
+
+        // Check if content is unchanged (early-exit optimization)
+        let key = DocumentStore::uri_key(&uri_str);
+        {
+            let files = self.files.read();
+            if let Some(existing_index) = files.get(&key) {
+                if existing_index.content_hash == content_hash {
+                    // Content unchanged, skip re-indexing
+                    return Ok(());
+                }
+            }
+        }
 
         // Update document store
         if self.document_store.is_open(&uri_str) {
@@ -1072,12 +957,11 @@ impl WorkspaceIndex {
         let mut doc = self.document_store.get(&uri_str).ok_or("Document not found")?;
 
         // Extract symbols and references
-        let mut file_index = FileIndex::default();
+        let mut file_index = FileIndex { content_hash, ..Default::default() };
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone());
         visitor.visit(&ast, &mut file_index);
 
         // Update the index
-        let key = DocumentStore::uri_key(&uri_str);
         {
             let mut files = self.files.write();
             files.insert(key.clone(), file_index);
@@ -1464,7 +1348,7 @@ impl IndexVisitor {
 
                     file_index.symbols.push(WorkspaceSymbol {
                         name: var_name.clone(),
-                        kind: SymbolKind::Variable,
+                        kind: SymbolKind::Variable(sigil_to_var_kind(sigil)),
                         uri: self.uri.clone(),
                         range: self.node_to_range(variable),
                         qualified_name: None,
@@ -1497,7 +1381,7 @@ impl IndexVisitor {
 
                         file_index.symbols.push(WorkspaceSymbol {
                             name: var_name.clone(),
-                            kind: SymbolKind::Variable,
+                            kind: SymbolKind::Variable(sigil_to_var_kind(sigil)),
                             uri: self.uri.clone(),
                             range: self.node_to_range(var),
                             qualified_name: None,
@@ -2010,7 +1894,7 @@ my $var = 42;
         let symbols = index.file_symbols(uri);
         assert!(symbols.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
         assert!(symbols.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
-        assert!(symbols.iter().any(|s| s.name == "$var" && s.kind == SymbolKind::Variable));
+        assert!(symbols.iter().any(|s| s.name == "$var" && s.kind.is_variable()));
     }
 
     #[test]
@@ -2468,5 +2352,98 @@ sub sub10 { }
                 other
             ),
         }
+    }
+
+    #[test]
+    fn test_early_exit_optimization_unchanged_content() {
+        let index = WorkspaceIndex::new();
+        let uri = url::Url::parse("file:///test.pl").unwrap();
+        let code = r#"
+package MyPackage;
+
+sub hello {
+    print "Hello";
+}
+"#;
+
+        // First indexing should parse and index
+        index.index_file(uri.clone(), code.to_string()).unwrap();
+        let symbols1 = index.file_symbols(uri.as_str());
+        assert!(symbols1.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
+        assert!(symbols1.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+
+        // Second indexing with same content should early-exit
+        // We can verify this by checking that the index still works correctly
+        index.index_file(uri.clone(), code.to_string()).unwrap();
+        let symbols2 = index.file_symbols(uri.as_str());
+        assert_eq!(symbols1.len(), symbols2.len());
+        assert!(symbols2.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
+        assert!(symbols2.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+    }
+
+    #[test]
+    fn test_early_exit_optimization_changed_content() {
+        let index = WorkspaceIndex::new();
+        let uri = url::Url::parse("file:///test.pl").unwrap();
+        let code1 = r#"
+package MyPackage;
+
+sub hello {
+    print "Hello";
+}
+"#;
+
+        let code2 = r#"
+package MyPackage;
+
+sub goodbye {
+    print "Goodbye";
+}
+"#;
+
+        // First indexing
+        index.index_file(uri.clone(), code1.to_string()).unwrap();
+        let symbols1 = index.file_symbols(uri.as_str());
+        assert!(symbols1.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+        assert!(!symbols1.iter().any(|s| s.name == "goodbye"));
+
+        // Second indexing with different content should re-parse
+        index.index_file(uri.clone(), code2.to_string()).unwrap();
+        let symbols2 = index.file_symbols(uri.as_str());
+        assert!(!symbols2.iter().any(|s| s.name == "hello"));
+        assert!(symbols2.iter().any(|s| s.name == "goodbye" && s.kind == SymbolKind::Subroutine));
+    }
+
+    #[test]
+    fn test_early_exit_optimization_whitespace_only_change() {
+        let index = WorkspaceIndex::new();
+        let uri = url::Url::parse("file:///test.pl").unwrap();
+        let code1 = r#"
+package MyPackage;
+
+sub hello {
+    print "Hello";
+}
+"#;
+
+        let code2 = r#"
+package MyPackage;
+
+
+sub hello {
+    print "Hello";
+}
+"#;
+
+        // First indexing
+        index.index_file(uri.clone(), code1.to_string()).unwrap();
+        let symbols1 = index.file_symbols(uri.as_str());
+        assert!(symbols1.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+
+        // Second indexing with whitespace change should re-parse (hash will differ)
+        index.index_file(uri.clone(), code2.to_string()).unwrap();
+        let symbols2 = index.file_symbols(uri.as_str());
+        // Symbols should still be found, but content hash differs so it re-indexed
+        assert!(symbols2.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
     }
 }

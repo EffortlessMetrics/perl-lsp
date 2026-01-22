@@ -8,9 +8,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 <!-- Next release changes go here -->
+
+### Added - Semantic Analyzer Phase 2-6 Complete (PR #389)
+
+- **Complete NodeKind Coverage**: All remaining AST node handlers implemented
+- **Comprehensive Analysis**: Full semantic analysis pipeline for all Perl constructs
+
+### Added - LSP Features & Refactoring
+
+- **Complete LSP Feature Implementation** (PR #387)
+  - Window helpers for user interaction
+  - Refactoring infrastructure completion
+
+- **Refactoring Engine Enhancements**
+  - **Inline Refactoring**: `perform_inline` for variable/expression inlining (PR #391)
+  - **Move Code Refactoring**: `perform_move_code` for relocating code blocks (PR #392)
+
+- **TCP Socket Mode** (PR #370): LSP server can now listen on TCP sockets in addition to stdio
+
+- **Uninitialized Variable Detection** (PR #396): Semantic analyzer now detects use of uninitialized variables with improved type inference
+
+- **Non-Interpolated Regexp/Transliteration** (PR #393): Grammar support for non-interpolated content in regexp and transliteration operators
+
+- **Development Server** (PR #395): New xtask development server with live reload capability
+
+- **Syntax Highlighting Test** (PR #397): Actual syntax highlighting validation infrastructure
+
+- **Enhanced S-Expression Formatter**: Improved debugging output with byte-based span types
+
+- **Unified Position/Range Types**: Consolidated position and range types across call hierarchy and inlay hints providers
+
+- **Edge Case Detectors** (PR #373): Manual review edge case detectors for tree-sitter-perl-rs
+
+### Added - VS Code Extension
+
+- **Product Icons** (PR #384): Added icons to commands
+- **Run Tests Context Menu** (PR #384): Exposed runTests in editor context menu
+- **Inline Variable Command** (PR #335): Improved context menu visibility
+
+### Added - DAP Improvements
+
+- **CLI Argument Parsing** (PR #374): Implemented with clap for better UX
+- **Bidirectional Message Proxying**: Enhanced bridge adapter with full duplex communication
+- **Async BridgeAdapter** (PR #369): Fully async with graceful shutdown and join!-based proxying
+- **Stdio Transport** (PR #330): DAP server stdio transport implementation
+
+### Added - Test Infrastructure
+
+- **Comprehensive Test Corpus** (PR #404): Test corpus infrastructure and DAP documentation updates
+- **Workspace Indexing Wait** (PR #394): Robust test assertions with proper indexing synchronization
+- **Edge Case and Generator Coverage** (PR #6677faed): Expanded corpus coverage
+
+### Changed - Performance Optimizations
+
+- **O(1) Symbol Lookups** (PR #336): Optimized symbol lookups from linear to constant time
+- **ScopeAnalyzer Optimization** (PR #383): Stack-based ancestor tracking for improved performance
+- **Parser AST Construction** (PR #367, #372): Reduced string allocations in AST construction
+- **Semantic Package Lookup** (PR #368): Return `&str` from `find_current_package` to avoid allocations
+
+### Changed - Architecture
+
+- **Symbol Handling Refactor**: Improved symbol handling in Perl LSP
+- **Code Formatting**: Improved code formatting and consistency across multiple files
+
+### Fixed - Security
+
+- **Path Traversal Protection** (PR #388): Complete protection for all execute commands
+- **Command Injection Hardening** (PR #332): Hardened executeCommand against injection attacks
+
+### Fixed - Bug Fixes
+
+- **Cross-File Method Resolution** (PR #375): Fixed Package->method call resolution across files
+- **Incremental Document Changes** (PR #386): Added error logging for deserialization issues
+
 ### Documentation
-- Clarified perl-dap adapter modes (native CLI vs BridgeAdapter) and current DAP limits (launch-only, placeholder variables/evaluate, attach pending).
-- Updated roadmap entries to track DAP adapter wiring and variable/evaluate work.
+
+- **README**: Clarified purpose of legacy parser (PR #8331f9e5)
+- **VS Code Config**: Improved configuration setting descriptions (PR #385, #371)
+- Clarified perl-dap adapter modes (native CLI vs BridgeAdapter) and current DAP limits (launch-only, placeholder variables/evaluate, attach pending)
+- Updated roadmap entries to track DAP adapter wiring and variable/evaluate work
 
 ## [v0.9.0] - 2026-01-18
 

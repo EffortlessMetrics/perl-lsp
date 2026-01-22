@@ -1,7 +1,11 @@
 use perl_parser::ast::{Node, NodeKind};
 use perl_parser::builtin_signatures_phf::get_param_names;
 use perl_parser::positions::{Position as LspPosition, Range, pos_in_range};
+use perl_position_tracking::WirePosition;
 use serde_json::{Value, json};
+
+/// LSP wire type alias for position (0-based line/character with UTF-16 counting)
+pub type Position = WirePosition;
 
 /// Inlay Hint types according to LSP spec
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -10,15 +14,6 @@ pub enum InlayHintKind {
     Type = 1,
     /// An inlay hint for a parameter.
     Parameter = 2,
-}
-
-/// Position in a document
-#[derive(Debug, Clone)]
-pub struct Position {
-    /// The line number (0-based).
-    pub line: u32,
-    /// The character offset on that line (0-based).
-    pub character: u32,
 }
 
 /// An inlay hint.

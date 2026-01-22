@@ -256,9 +256,9 @@ impl RenameProvider {
         // Check if we're on a sigil
         let (sigil, name_start) = if position > 0 {
             match chars.get(position - 1) {
-                Some('$') => (Some(SymbolKind::ScalarVariable), position),
-                Some('@') => (Some(SymbolKind::ArrayVariable), position),
-                Some('%') => (Some(SymbolKind::HashVariable), position),
+                Some('$') => (Some(SymbolKind::scalar()), position),
+                Some('@') => (Some(SymbolKind::array()), position),
+                Some('%') => (Some(SymbolKind::hash()), position),
                 Some('&') => (Some(SymbolKind::Subroutine), position),
                 _ => (None, position),
             }
@@ -269,9 +269,9 @@ impl RenameProvider {
         // If no sigil, check the current character
         let (sigil, name_start) = if sigil.is_none() && position < chars.len() {
             match chars[position] {
-                '$' => (Some(SymbolKind::ScalarVariable), position + 1),
-                '@' => (Some(SymbolKind::ArrayVariable), position + 1),
-                '%' => (Some(SymbolKind::HashVariable), position + 1),
+                '$' => (Some(SymbolKind::scalar()), position + 1),
+                '@' => (Some(SymbolKind::array()), position + 1),
+                '%' => (Some(SymbolKind::hash()), position + 1),
                 '&' => (Some(SymbolKind::Subroutine), position + 1),
                 _ => (sigil, name_start),
             }
@@ -585,14 +585,14 @@ my $result = calculate();
         let provider = RenameProvider::new(&ast, code.to_string());
 
         // Invalid names
-        assert!(provider.validate_name("", SymbolKind::ScalarVariable).is_err());
-        assert!(provider.validate_name("123abc", SymbolKind::ScalarVariable).is_err());
-        assert!(provider.validate_name("my", SymbolKind::ScalarVariable).is_err());
-        assert!(provider.validate_name("test-var", SymbolKind::ScalarVariable).is_err());
+        assert!(provider.validate_name("", SymbolKind::scalar()).is_err());
+        assert!(provider.validate_name("123abc", SymbolKind::scalar()).is_err());
+        assert!(provider.validate_name("my", SymbolKind::scalar()).is_err());
+        assert!(provider.validate_name("test-var", SymbolKind::scalar()).is_err());
 
         // Valid names
-        assert!(provider.validate_name("valid_name", SymbolKind::ScalarVariable).is_ok());
-        assert!(provider.validate_name("_private", SymbolKind::ScalarVariable).is_ok());
-        assert!(provider.validate_name("camelCase", SymbolKind::ScalarVariable).is_ok());
+        assert!(provider.validate_name("valid_name", SymbolKind::scalar()).is_ok());
+        assert!(provider.validate_name("_private", SymbolKind::scalar()).is_ok());
+        assert!(provider.validate_name("camelCase", SymbolKind::scalar()).is_ok());
     }
 }

@@ -1,9 +1,35 @@
 //! Incremental parsing support for Perl.
+//!
+//! This crate provides efficient incremental parsing capabilities for Perl code,
+//! enabling Language Server Protocol features to respond quickly to document edits
+//! by reusing portions of the previous parse tree.
+//!
+//! # Overview
+//!
+//! The incremental parser minimizes re-parsing overhead when documents change by:
+//! - Identifying which portions of the AST are affected by an edit
+//! - Reusing unaffected subtrees from the previous parse
+//! - Only re-parsing the modified regions and their dependent nodes
+//!
+//! # Usage
+//!
+//! ```no_run
+//! use perl_incremental_parsing::incremental;
+//! use perl_parser_core::Parser;
+//!
+//! // Initial parse
+//! let source = "sub foo { return 42; }";
+//! let mut parser = Parser::new(source);
+//! let ast = parser.parse();
+//!
+//! // After edit, incrementally reparse only affected portions
+//! // (specific APIs depend on incremental module implementation)
+//! ```
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]
 #![warn(rust_2018_idioms)]
-#![allow(missing_docs)]
+#![warn(missing_docs)]
 #![warn(clippy::all)]
 #![allow(
     clippy::too_many_lines,

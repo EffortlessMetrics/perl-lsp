@@ -165,7 +165,7 @@ impl DeadCodeDetector {
         for sym in self.workspace_index.find_unused_symbols() {
             let code_type = match sym.kind {
                 SymbolKind::Subroutine => DeadCodeType::UnusedSubroutine,
-                SymbolKind::Variable => DeadCodeType::UnusedVariable,
+                SymbolKind::Variable(_) => DeadCodeType::UnusedVariable,
                 SymbolKind::Constant => DeadCodeType::UnusedConstant,
                 SymbolKind::Package => DeadCodeType::UnusedPackage,
                 _ => continue,

@@ -341,18 +341,13 @@ impl LspServer {
     }
 }
 
-/// Map symbol kind to LSP SymbolKind numeric value
+/// Map symbol kind to LSP SymbolKind numeric value for document symbols.
+///
+/// Uses the richer document symbol profile that distinguishes
+/// array and hash variables with distinct icons.
+#[inline]
 fn symbol_kind_to_lsp(kind: crate::symbol::SymbolKind) -> u32 {
-    match kind {
-        crate::symbol::SymbolKind::Package => 4,         // Module
-        crate::symbol::SymbolKind::Subroutine => 12,     // Function
-        crate::symbol::SymbolKind::ScalarVariable => 13, // Variable
-        crate::symbol::SymbolKind::ArrayVariable => 18,  // Array
-        crate::symbol::SymbolKind::HashVariable => 19,   // Object (closest match)
-        crate::symbol::SymbolKind::Constant => 14,       // Constant
-        crate::symbol::SymbolKind::Label => 16,          // String (closest match)
-        crate::symbol::SymbolKind::Format => 12,         // Function
-    }
+    kind.to_lsp_kind_document_symbol()
 }
 
 /// Helper function to convert offset to line number

@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
 description = "LSP provider glue and tooling integrations for Perl"
+readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
 homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
@@ -14,20 +15,21 @@ categories = ["development-tools", "text-editors"]
 include = [
   "src/**",
   "Cargo.toml",
-  "LICENSE*"
+  "LICENSE*",
+  "README.md"
 ]
 
 [lib]
 doctest = false
 
 [dependencies]
-perl-parser-core = { path = "../perl-parser-core" }
-perl-semantic-analyzer = { path = "../perl-semantic-analyzer" }
-perl-workspace-index = { path = "../perl-workspace-index" }
-perl-refactoring = { path = "../perl-refactoring" }
-perl-incremental-parsing = { path = "../perl-incremental-parsing" }
-perl-lexer = { path = "../perl-lexer" }
-perl-position-tracking = { path = "../perl-position-tracking" }
+perl-parser-core = { workspace = true }
+perl-semantic-analyzer = { workspace = true }
+perl-workspace-index = { workspace = true }
+perl-refactoring = { workspace = true }
+perl-incremental-parsing = { workspace = true }
+perl-lexer = { workspace = true }
+perl-position-tracking = { workspace = true }
 rustc-hash = "2.1.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"

@@ -175,7 +175,7 @@ my ($x, $y, $z) = (1, 2, 3);
 
     let scalar = index.find_symbols("$scalar");
     assert_eq!(scalar.len(), 1, "Should find $scalar");
-    assert_eq!(scalar[0].kind, SymbolKind::Variable);
+    assert!(scalar[0].kind.is_variable());
 
     let array = index.find_symbols("@array");
     assert_eq!(array.len(), 1, "Should find @array");

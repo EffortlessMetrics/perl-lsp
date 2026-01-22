@@ -84,8 +84,7 @@ if ($@) {
     assert!(!tokens.is_empty(), "Eval blocks should generate semantic tokens");
 
     // Should have symbol for $result (scoped to eval block)
-    let _result_symbols =
-        analyzer.symbol_table().find_symbol("result", 0, SymbolKind::ScalarVariable);
+    let _result_symbols = analyzer.symbol_table().find_symbol("result", 0, SymbolKind::scalar());
 
     // Note: Depending on scope handling, this might be empty
     // The important part is that analyzer doesn't crash
@@ -109,7 +108,7 @@ my $value = do {
 
     // Should have symbols for both $value and $temp
     let symbols = analyzer.symbol_table();
-    let value_symbols = symbols.find_symbol("value", 0, SymbolKind::ScalarVariable);
+    let value_symbols = symbols.find_symbol("value", 0, SymbolKind::scalar());
     assert!(!value_symbols.is_empty(), "Should find $value declaration");
 }
 
@@ -139,9 +138,9 @@ my @arr = ($x, $y);
 
     // Should have symbols for x, y, z
     let symbols = analyzer.symbol_table();
-    assert!(!symbols.find_symbol("x", 0, SymbolKind::ScalarVariable).is_empty());
-    assert!(!symbols.find_symbol("y", 0, SymbolKind::ScalarVariable).is_empty());
-    assert!(!symbols.find_symbol("z", 0, SymbolKind::ScalarVariable).is_empty());
+    assert!(!symbols.find_symbol("x", 0, SymbolKind::scalar()).is_empty());
+    assert!(!symbols.find_symbol("y", 0, SymbolKind::scalar()).is_empty());
+    assert!(!symbols.find_symbol("z", 0, SymbolKind::scalar()).is_empty());
 }
 
 #[test]
@@ -163,8 +162,7 @@ sub lvalue_sub :lvalue {
     assert!(!tokens.is_empty(), "Should generate tokens for attributed variables");
 
     // Should have symbol for $shared
-    let shared_symbols =
-        analyzer.symbol_table().find_symbol("shared", 0, SymbolKind::ScalarVariable);
+    let shared_symbols = analyzer.symbol_table().find_symbol("shared", 0, SymbolKind::scalar());
     assert!(!shared_symbols.is_empty(), "Should find $shared symbol");
 }
 
@@ -246,7 +244,7 @@ while (<>) {
     assert!(!tokens.is_empty(), "Should generate tokens for readline operations");
 
     // Should have symbol for $line
-    let line_symbols = analyzer.symbol_table().find_symbol("line", 0, SymbolKind::ScalarVariable);
+    let line_symbols = analyzer.symbol_table().find_symbol("line", 0, SymbolKind::scalar());
     assert!(!line_symbols.is_empty(), "Should find $line symbol");
 }
 
@@ -419,9 +417,9 @@ my $value = $$ref;
 
         // Should have symbols for all variables
         let symbols = analyzer.symbol_table();
-        assert!(!symbols.find_symbol("scalar", 0, SymbolKind::ScalarVariable).is_empty());
-        assert!(!symbols.find_symbol("ref", 0, SymbolKind::ScalarVariable).is_empty());
-        assert!(!symbols.find_symbol("value", 0, SymbolKind::ScalarVariable).is_empty());
+        assert!(!symbols.find_symbol("scalar", 0, SymbolKind::scalar()).is_empty());
+        assert!(!symbols.find_symbol("ref", 0, SymbolKind::scalar()).is_empty());
+        assert!(!symbols.find_symbol("value", 0, SymbolKind::scalar()).is_empty());
     }
 
     #[test]

@@ -5,6 +5,7 @@
 
 use super::super::*;
 use crate::protocol::{req_position, req_uri};
+use perl_position_tracking::{WirePosition, WireRange};
 use std::sync::OnceLock;
 
 static SUB_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
@@ -178,47 +179,34 @@ impl LspServer {
                         // Extract range from request item (LSP uses camelCase)
                         let type_item = crate::type_hierarchy::TypeHierarchyItem {
                             name: name.to_string(),
-                            kind: crate::type_hierarchy::SymbolKind::Class,
+                            kind: crate::type_hierarchy::TypeHierarchySymbolKind::Class,
                             uri: uri.to_string(),
-                            range: crate::type_hierarchy::Range {
-                                start: crate::type_hierarchy::Position {
-                                    line: item["range"]["start"]["line"].as_u64().unwrap_or(0)
+                            range: WireRange::new(
+                                WirePosition::new(
+                                    item["range"]["start"]["line"].as_u64().unwrap_or(0) as u32,
+                                    item["range"]["start"]["character"].as_u64().unwrap_or(0)
                                         as u32,
-                                    character: item["range"]["start"]["character"]
+                                ),
+                                WirePosition::new(
+                                    item["range"]["end"]["line"].as_u64().unwrap_or(0) as u32,
+                                    item["range"]["end"]["character"].as_u64().unwrap_or(0) as u32,
+                                ),
+                            ),
+                            selection_range: WireRange::new(
+                                WirePosition::new(
+                                    item["selectionRange"]["start"]["line"].as_u64().unwrap_or(0)
+                                        as u32,
+                                    item["selectionRange"]["start"]["character"]
                                         .as_u64()
-                                        .unwrap_or(0)
+                                        .unwrap_or(0) as u32,
+                                ),
+                                WirePosition::new(
+                                    item["selectionRange"]["end"]["line"].as_u64().unwrap_or(0)
                                         as u32,
-                                },
-                                end: crate::type_hierarchy::Position {
-                                    line: item["range"]["end"]["line"].as_u64().unwrap_or(0) as u32,
-                                    character: item["range"]["end"]["character"]
-                                        .as_u64()
-                                        .unwrap_or(0)
+                                    item["selectionRange"]["end"]["character"].as_u64().unwrap_or(0)
                                         as u32,
-                                },
-                            },
-                            selection_range: crate::type_hierarchy::Range {
-                                start: crate::type_hierarchy::Position {
-                                    line: item["selectionRange"]["start"]["line"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                    character: item["selectionRange"]["start"]["character"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                },
-                                end: crate::type_hierarchy::Position {
-                                    line: item["selectionRange"]["end"]["line"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                    character: item["selectionRange"]["end"]["character"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                },
-                            },
+                                ),
+                            ),
                             detail: item["detail"].as_str().map(String::from),
                             data: item.get("data").cloned(),
                         };
@@ -290,47 +278,34 @@ impl LspServer {
                         // Extract range from request item (LSP uses camelCase)
                         let type_item = crate::type_hierarchy::TypeHierarchyItem {
                             name: name.to_string(),
-                            kind: crate::type_hierarchy::SymbolKind::Class,
+                            kind: crate::type_hierarchy::TypeHierarchySymbolKind::Class,
                             uri: uri.to_string(),
-                            range: crate::type_hierarchy::Range {
-                                start: crate::type_hierarchy::Position {
-                                    line: item["range"]["start"]["line"].as_u64().unwrap_or(0)
+                            range: WireRange::new(
+                                WirePosition::new(
+                                    item["range"]["start"]["line"].as_u64().unwrap_or(0) as u32,
+                                    item["range"]["start"]["character"].as_u64().unwrap_or(0)
                                         as u32,
-                                    character: item["range"]["start"]["character"]
+                                ),
+                                WirePosition::new(
+                                    item["range"]["end"]["line"].as_u64().unwrap_or(0) as u32,
+                                    item["range"]["end"]["character"].as_u64().unwrap_or(0) as u32,
+                                ),
+                            ),
+                            selection_range: WireRange::new(
+                                WirePosition::new(
+                                    item["selectionRange"]["start"]["line"].as_u64().unwrap_or(0)
+                                        as u32,
+                                    item["selectionRange"]["start"]["character"]
                                         .as_u64()
-                                        .unwrap_or(0)
+                                        .unwrap_or(0) as u32,
+                                ),
+                                WirePosition::new(
+                                    item["selectionRange"]["end"]["line"].as_u64().unwrap_or(0)
                                         as u32,
-                                },
-                                end: crate::type_hierarchy::Position {
-                                    line: item["range"]["end"]["line"].as_u64().unwrap_or(0) as u32,
-                                    character: item["range"]["end"]["character"]
-                                        .as_u64()
-                                        .unwrap_or(0)
+                                    item["selectionRange"]["end"]["character"].as_u64().unwrap_or(0)
                                         as u32,
-                                },
-                            },
-                            selection_range: crate::type_hierarchy::Range {
-                                start: crate::type_hierarchy::Position {
-                                    line: item["selectionRange"]["start"]["line"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                    character: item["selectionRange"]["start"]["character"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                },
-                                end: crate::type_hierarchy::Position {
-                                    line: item["selectionRange"]["end"]["line"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                    character: item["selectionRange"]["end"]["character"]
-                                        .as_u64()
-                                        .unwrap_or(0)
-                                        as u32,
-                                },
-                            },
+                                ),
+                            ),
                             detail: item["detail"].as_str().map(String::from),
                             data: item.get("data").cloned(),
                         };

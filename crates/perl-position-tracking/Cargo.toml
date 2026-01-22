@@ -3,8 +3,15 @@ name = "perl-position-tracking"
 version = "0.8.8"
 edition = "2021"
 description = "UTF-8/UTF-16 position tracking and conversion for Perl LSP"
+readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/perlwasm/perl-lsp"
+include = [
+  "src/**",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
 
 [dependencies]
 ropey = "1.6.1"

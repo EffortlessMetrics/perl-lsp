@@ -5,8 +5,41 @@
 
 use crate::position::Range;
 
-/// A unique identifier for AST nodes to support incremental parsing
+/// A unique identifier for AST nodes to support incremental parsing.
 pub type NodeId = usize;
+
+/// Index into the diagnostics array in `ParseOutput`.
+///
+/// This type enables lightweight error nodes that reference diagnostics
+/// stored separately from the AST, reducing memory overhead and decoupling
+/// tree structure from human-readable messages.
+pub type DiagnosticId = u32;
+
+/// Kinds of missing syntax elements for error recovery.
+///
+/// This enum provides specific information about what was expected
+/// but not found, enabling better IDE diagnostics and recovery.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MissingKind {
+    /// Missing expression (e.g., after `=` in assignment)
+    Expression,
+    /// Missing statement
+    Statement,
+    /// Missing identifier/name
+    Identifier,
+    /// Missing block `{ ... }`
+    Block,
+    /// Missing closing delimiter
+    ClosingDelimiter(char),
+    /// Missing semicolon
+    Semicolon,
+    /// Missing condition (e.g., in `if`)
+    Condition,
+    /// Missing argument
+    Argument,
+    /// Missing operator
+    Operator,
+}
 
 /// Enhanced AST node with full position tracking
 #[derive(Debug, Clone, PartialEq)]
@@ -85,7 +118,10 @@ pub enum NodeKind {
     },
 
     // Error recovery nodes
-    /// An error/recovery node produced during parsing.
+    /// An error/recovery node produced during parsing (legacy, rich payload).
+    ///
+    /// This variant embeds the error information directly in the AST node.
+    /// For new code, prefer `ErrorRef` which stores only a diagnostic index.
     Error {
         /// Human readable error message.
         message: String,
@@ -93,6 +129,28 @@ pub enum NodeKind {
         expected: Vec<String>,
         /// Optional partially parsed node for recovery contexts.
         partial: Option<Box<Node>>,
+    },
+
+    /// Lightweight error node referencing a diagnostic by index.
+    ///
+    /// This is the preferred error representation for memory efficiency.
+    /// The actual diagnostic information is stored in `ParseOutput.diagnostics`
+    /// and can be looked up by the `diag_id`.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let output = parser.parse_with_recovery();
+    /// for node in output.ast.walk() {
+    ///     if let NodeKind::ErrorRef { diag_id } = &node.kind {
+    ///         let diagnostic = &output.diagnostics[*diag_id as usize];
+    ///         println!("Error at {:?}: {}", node.range, diagnostic);
+    ///     }
+    /// }
+    /// ```
+    ErrorRef {
+        /// Index into the diagnostics array in `ParseOutput`.
+        diag_id: DiagnosticId,
     },
 
     /// Placeholder for a missing expression during error recovery.
@@ -103,6 +161,12 @@ pub enum NodeKind {
     MissingIdentifier,
     /// Placeholder for a missing block during error recovery.
     MissingBlock,
+
+    /// Specific kind of missing syntax element.
+    ///
+    /// This provides more granular information about what's missing
+    /// without embedding full diagnostic details in the AST.
+    Missing(MissingKind),
 
     // Include all other variants from original AST...
     // (Abbreviated for example - would include all original variants)
@@ -195,9 +259,13 @@ impl NodeKind {
             }
 
             Error { message, .. } => format!("(ERROR {})", message),
+            ErrorRef { diag_id } => format!("(ERROR_REF #{})", diag_id),
 
             MissingExpression => "(MISSING_EXPRESSION)".to_string(),
             MissingStatement => "(MISSING_STATEMENT)".to_string(),
+            MissingIdentifier => "(MISSING_IDENTIFIER)".to_string(),
+            MissingBlock => "(MISSING_BLOCK)".to_string(),
+            Missing(kind) => format!("(MISSING {:?})", kind),
 
             // Add other variants...
             _ => format!("({:?})", self),

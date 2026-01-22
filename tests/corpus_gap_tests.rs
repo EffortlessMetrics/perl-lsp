@@ -149,6 +149,12 @@ mod corpus_gap_tests {
         test_corpus_file("tie_interface.pl")
             .expect("tie interface test failed");
     }
+
+    #[test]
+    fn test_parser_stress_cases() {
+        test_corpus_file("parser_stress_cases.pl")
+            .expect("parser stress cases test failed");
+    }
     
     // LSP-specific tests
     #[test]

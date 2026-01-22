@@ -97,6 +97,8 @@ use crate::util::uri::parse_uri;
 use perl_parser::workspace_index::{
     IndexCoordinator, LspWorkspaceSymbol, WorkspaceIndex, uri_to_fs_path,
 };
+#[cfg(feature = "workspace")]
+use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 
 #[cfg(feature = "workspace")]
 use crate::fallback::text::extract_text_based_symbols;
@@ -742,19 +744,13 @@ impl LspServer {
                     symbols.push(LspWorkspaceSymbol {
                         name: sub_name.clone(),
                         kind: 12, // Function
-                        location: perl_parser::workspace_index::LspLocation {
-                            uri: uri.to_string(),
-                            range: perl_parser::workspace_index::LspRange {
-                                start: perl_parser::workspace_index::LspPosition {
-                                    line: start_line,
-                                    character: start_char,
-                                },
-                                end: perl_parser::workspace_index::LspPosition {
-                                    line: end_line,
-                                    character: end_char,
-                                },
-                            },
-                        },
+                        location: WireLocation::new(
+                            uri.to_string(),
+                            WireRange::new(
+                                WirePosition::new(start_line, start_char),
+                                WirePosition::new(end_line, end_char),
+                            ),
+                        ),
                         container_name: container
                             .map(|s| normalize_package_separator(s).into_owned()),
                     });
@@ -778,19 +774,13 @@ impl LspServer {
                 symbols.push(LspWorkspaceSymbol {
                     name: name.clone(),
                     kind: 2, // Module
-                    location: perl_parser::workspace_index::LspLocation {
-                        uri: uri.to_string(),
-                        range: perl_parser::workspace_index::LspRange {
-                            start: perl_parser::workspace_index::LspPosition {
-                                line: start_line,
-                                character: start_char,
-                            },
-                            end: perl_parser::workspace_index::LspPosition {
-                                line: end_line,
-                                character: end_char,
-                            },
-                        },
-                    },
+                    location: WireLocation::new(
+                        uri.to_string(),
+                        WireRange::new(
+                            WirePosition::new(start_line, start_char),
+                            WirePosition::new(end_line, end_char),
+                        ),
+                    ),
                     container_name: container.map(|s| normalize_package_separator(s).into_owned()),
                 });
 

@@ -1,3 +1,4 @@
+pub mod ambiguity;
 pub mod builtins;
 pub mod control_flow;
 pub mod declarations;
@@ -8,10 +9,12 @@ pub mod glob;
 pub mod heredoc;
 pub mod io;
 pub mod list_ops;
+pub mod object_oriented;
 pub mod phasers;
 pub mod quote_like;
 pub mod qw;
 pub mod regex;
 pub mod sigils;
+pub mod special_vars;
 pub mod tie;
 pub mod whitespace;

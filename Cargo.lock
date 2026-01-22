@@ -1475,6 +1475,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-diagnostics-codes"
+version = "0.8.8"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "perl-incremental-parsing"
 version = "0.8.8"
 dependencies = [
@@ -1624,11 +1631,27 @@ name = "perl-parser-core"
 version = "0.8.8"
 dependencies = [
  "perl-lexer",
+ "perl-position-tracking",
  "phf",
  "ropey",
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "perl-parser-pest"
+version = "0.8.8"
+dependencies = [
+ "lazy_static",
+ "once_cell",
+ "pest",
+ "pest_derive",
+ "regex",
+ "serde",
+ "stacker",
+ "thiserror",
+ "unicode-ident",
 ]
 
 [[package]]
@@ -1657,9 +1680,26 @@ name = "perl-semantic-analyzer"
 version = "0.8.8"
 dependencies = [
  "perl-parser-core",
+ "perl-symbol-types",
  "perl-workspace-index",
  "regex",
  "rustc-hash",
+ "serde",
+]
+
+[[package]]
+name = "perl-symbol-table"
+version = "0.8.8"
+dependencies = [
+ "perl-position-tracking",
+ "perl-symbol-types",
+ "serde",
+]
+
+[[package]]
+name = "perl-symbol-types"
+version = "0.8.8"
+dependencies = [
  "serde",
 ]
 
@@ -1675,15 +1715,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-uri"
+version = "0.8.8"
+dependencies = [
+ "tempfile",
+ "url",
+]
+
+[[package]]
 name = "perl-workspace-index"
 version = "0.8.8"
 dependencies = [
+ "criterion",
  "lsp-types",
  "parking_lot",
  "perl-parser-core",
  "perl-position-tracking",
+ "perl-symbol-types",
+ "perl-uri",
  "regex",
  "serde",
+ "tempfile",
  "url",
 ]
 
