@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_dap::{DapMessage, DebugAdapter};
 use serde_json::json;
 use std::fs::write;

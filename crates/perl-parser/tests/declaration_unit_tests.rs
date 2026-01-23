@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_parser::{Parser, declaration::DeclarationProvider};
 use std::sync::Arc;
 

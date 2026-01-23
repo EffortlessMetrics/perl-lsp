@@ -3,6 +3,8 @@
 //! These tests verify that command injection vulnerabilities are properly mitigated
 //! in the debug adapter's program launch functionality.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::json;
 use std::sync::mpsc::channel;

@@ -14,10 +14,13 @@ mod issue_146_tests {
     #[test]
     fn test_tdd_workflow_compilation_fix() {
         // Test that tdd_workflow.rs compiles without the undefined signature error
-        let output = Command::new("cargo")
+        let output = match Command::new("cargo")
             .args(["check", "--package", "perl-parser", "--message-format", "json"])
             .output()
-            .expect("Failed to run cargo check");
+        {
+            Ok(o) => o,
+            Err(e) => panic!("Failed to run cargo check: {}", e),
+        };
 
         let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -108,10 +111,13 @@ mod integration_tests {
     /// Full compilation test for entire perl-parser crate
     #[test]
     fn test_full_crate_compilation() {
-        let output = Command::new("cargo")
+        let output = match Command::new("cargo")
             .args(["build", "--package", "perl-parser"])
             .output()
-            .expect("Failed to run cargo build");
+        {
+            Ok(o) => o,
+            Err(e) => panic!("Failed to run cargo build: {}", e),
+        };
 
         assert!(
             output.status.success(),
@@ -123,10 +129,13 @@ mod integration_tests {
     /// Test that clippy passes after architectural repairs
     #[test]
     fn test_clippy_compliance() {
-        let output = Command::new("cargo")
+        let output = match Command::new("cargo")
             .args(["clippy", "--package", "perl-parser", "--", "-D", "warnings"])
             .output()
-            .expect("Failed to run cargo clippy");
+        {
+            Ok(o) => o,
+            Err(e) => panic!("Failed to run cargo clippy: {}", e),
+        };
 
         assert!(
             output.status.success(),
@@ -141,10 +150,13 @@ mod integration_tests {
         // This test validates that LSP functionality works correctly
         // after tdd_workflow.rs and refactoring.rs are restored
 
-        let output = Command::new("cargo")
+        let output = match Command::new("cargo")
             .args(["test", "--package", "perl-lsp", "--test", "lsp_comprehensive_e2e_test"])
             .output()
-            .expect("Failed to run LSP E2E tests");
+        {
+            Ok(o) => o,
+            Err(e) => panic!("Failed to run LSP E2E tests: {}", e),
+        };
 
         assert!(
             output.status.success(),

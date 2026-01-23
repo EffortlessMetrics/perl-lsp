@@ -10,6 +10,8 @@
 //! - Import organization with correct action kinds
 //! - Performance validation maintaining revolutionary improvements
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use serde_json::json;
 use std::time::Duration;
 

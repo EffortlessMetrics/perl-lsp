@@ -4,6 +4,7 @@
 //! and properly validates all inputs/outputs according to the LSP specification.
 
 #![allow(clippy::collapsible_if)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use serde_json::{Value, json};
 use std::collections::HashSet;

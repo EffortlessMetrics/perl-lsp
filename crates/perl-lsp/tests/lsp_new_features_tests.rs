@@ -1,4 +1,7 @@
-/// Tests for new LSP features in v0.8.2
+//! Tests for new LSP features in v0.8.2
+
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use serde_json::json;
 
 mod common;

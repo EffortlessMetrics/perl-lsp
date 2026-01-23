@@ -6,6 +6,8 @@
 //!
 //! Run with: cargo test -p perl-dap
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use anyhow::Result;
 use perl_dap::breakpoints::BreakpointStore;
 use perl_dap::protocol::{SetBreakpointsArguments, Source, SourceBreakpoint};

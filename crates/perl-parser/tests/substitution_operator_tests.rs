@@ -1,6 +1,9 @@
-/// Comprehensive tests for substitution operator (s///) parsing
-/// This test module ensures complete coverage of the substitution operator
-/// including edge cases, modifiers, and special delimiters
+//! Comprehensive tests for substitution operator (s///) parsing
+//! This test module ensures complete coverage of the substitution operator
+//! including edge cases, modifiers, and special delimiters
+
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_parser::{Parser, ast::NodeKind};
 
 #[test]

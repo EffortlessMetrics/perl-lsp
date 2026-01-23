@@ -3,6 +3,8 @@
 //! This test suite targets surviving mutants in LSP cancellation handling logic
 //! by implementing comprehensive edge case coverage for concurrent request
 //! cancellation scenarios, timeout handling, and workspace operations.
+
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //!
 //! Focuses on eliminating mutants in:
 //! - `is_cancelled()` boolean logic boundary conditions

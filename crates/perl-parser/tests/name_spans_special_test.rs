@@ -42,17 +42,17 @@ fn find_phase_block(node: &Node) -> Option<&Node> {
 }
 
 #[test]
-fn test_autoload_name_span() {
+fn test_autoload_name_span() -> Result<(), Box<dyn std::error::Error>> {
     let code = "sub AUTOLOAD { print 'auto'; }";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Failed to parse AUTOLOAD");
+    let ast = parser.parse()?;
 
-    let sub_node = find_subroutine(&ast).expect("No Subroutine node found");
+    let sub_node = find_subroutine(&ast).ok_or("No Subroutine node found")?;
 
     if let NodeKind::Subroutine { name, name_span, .. } = &sub_node.kind {
         assert_eq!(name, &Some("AUTOLOAD".to_string()), "Subroutine name should be AUTOLOAD");
 
-        let span = name_span.expect("name_span should be Some for AUTOLOAD");
+        let span = name_span.ok_or("name_span should be Some for AUTOLOAD")?;
 
         // Verify the span points to "AUTOLOAD" in the source
         // "sub AUTOLOAD" - AUTOLOAD starts at position 4 and ends at 12
@@ -63,22 +63,23 @@ fn test_autoload_name_span() {
         let extracted = &code[span.start..span.end];
         assert_eq!(extracted, "AUTOLOAD", "Extracted text should match AUTOLOAD");
     } else {
-        panic!("Expected Subroutine node, got {:?}", sub_node.kind);
+        return Err(format!("Expected Subroutine node, got {:?}", sub_node.kind).into());
     }
+    Ok(())
 }
 
 #[test]
-fn test_destroy_name_span() {
+fn test_destroy_name_span() -> Result<(), Box<dyn std::error::Error>> {
     let code = "sub DESTROY { print 'destroy'; }";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Failed to parse DESTROY");
+    let ast = parser.parse()?;
 
-    let sub_node = find_subroutine(&ast).expect("No Subroutine node found");
+    let sub_node = find_subroutine(&ast).ok_or("No Subroutine node found")?;
 
     if let NodeKind::Subroutine { name, name_span, .. } = &sub_node.kind {
         assert_eq!(name, &Some("DESTROY".to_string()), "Subroutine name should be DESTROY");
 
-        let span = name_span.expect("name_span should be Some for DESTROY");
+        let span = name_span.ok_or("name_span should be Some for DESTROY")?;
 
         // Verify the span points to "DESTROY" in the source
         // "sub DESTROY" - DESTROY starts at position 4 and ends at 11
@@ -89,22 +90,23 @@ fn test_destroy_name_span() {
         let extracted = &code[span.start..span.end];
         assert_eq!(extracted, "DESTROY", "Extracted text should match DESTROY");
     } else {
-        panic!("Expected Subroutine node, got {:?}", sub_node.kind);
+        return Err(format!("Expected Subroutine node, got {:?}", sub_node.kind).into());
     }
+    Ok(())
 }
 
 #[test]
-fn test_begin_phase_span() {
+fn test_begin_phase_span() -> Result<(), Box<dyn std::error::Error>> {
     let code = "BEGIN { print 'starting'; }";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Failed to parse BEGIN");
+    let ast = parser.parse()?;
 
-    let phase_node = find_phase_block(&ast).expect("No PhaseBlock node found");
+    let phase_node = find_phase_block(&ast).ok_or("No PhaseBlock node found")?;
 
     if let NodeKind::PhaseBlock { phase, phase_span, .. } = &phase_node.kind {
         assert_eq!(phase, "BEGIN", "Phase should be BEGIN");
 
-        let span = phase_span.expect("phase_span should be Some for BEGIN");
+        let span = phase_span.ok_or("phase_span should be Some for BEGIN")?;
 
         // Verify the span points to "BEGIN" in the source
         // "BEGIN {" - BEGIN starts at position 0 and ends at 5
@@ -115,22 +117,23 @@ fn test_begin_phase_span() {
         let extracted = &code[span.start..span.end];
         assert_eq!(extracted, "BEGIN", "Extracted text should match BEGIN");
     } else {
-        panic!("Expected PhaseBlock node, got {:?}", phase_node.kind);
+        return Err(format!("Expected PhaseBlock node, got {:?}", phase_node.kind).into());
     }
+    Ok(())
 }
 
 #[test]
-fn test_end_phase_span() {
+fn test_end_phase_span() -> Result<(), Box<dyn std::error::Error>> {
     let code = "END { print 'cleanup'; }";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Failed to parse END");
+    let ast = parser.parse()?;
 
-    let phase_node = find_phase_block(&ast).expect("No PhaseBlock node found");
+    let phase_node = find_phase_block(&ast).ok_or("No PhaseBlock node found")?;
 
     if let NodeKind::PhaseBlock { phase, phase_span, .. } = &phase_node.kind {
         assert_eq!(phase, "END", "Phase should be END");
 
-        let span = phase_span.expect("phase_span should be Some for END");
+        let span = phase_span.ok_or("phase_span should be Some for END")?;
 
         // Verify the span points to "END" in the source
         // "END {" - END starts at position 0 and ends at 3
@@ -141,22 +144,23 @@ fn test_end_phase_span() {
         let extracted = &code[span.start..span.end];
         assert_eq!(extracted, "END", "Extracted text should match END");
     } else {
-        panic!("Expected PhaseBlock node, got {:?}", phase_node.kind);
+        return Err(format!("Expected PhaseBlock node, got {:?}", phase_node.kind).into());
     }
+    Ok(())
 }
 
 #[test]
-fn test_check_phase_span() {
+fn test_check_phase_span() -> Result<(), Box<dyn std::error::Error>> {
     let code = "CHECK { print 'checking'; }";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Failed to parse CHECK");
+    let ast = parser.parse()?;
 
-    let phase_node = find_phase_block(&ast).expect("No PhaseBlock node found");
+    let phase_node = find_phase_block(&ast).ok_or("No PhaseBlock node found")?;
 
     if let NodeKind::PhaseBlock { phase, phase_span, .. } = &phase_node.kind {
         assert_eq!(phase, "CHECK", "Phase should be CHECK");
 
-        let span = phase_span.expect("phase_span should be Some for CHECK");
+        let span = phase_span.ok_or("phase_span should be Some for CHECK")?;
 
         // Verify the span points to "CHECK" in the source
         assert_eq!(span.start, 0, "CHECK phase_span should start at position 0");
@@ -166,22 +170,23 @@ fn test_check_phase_span() {
         let extracted = &code[span.start..span.end];
         assert_eq!(extracted, "CHECK", "Extracted text should match CHECK");
     } else {
-        panic!("Expected PhaseBlock node, got {:?}", phase_node.kind);
+        return Err(format!("Expected PhaseBlock node, got {:?}", phase_node.kind).into());
     }
+    Ok(())
 }
 
 #[test]
-fn test_init_phase_span() {
+fn test_init_phase_span() -> Result<(), Box<dyn std::error::Error>> {
     let code = "INIT { print 'initializing'; }";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Failed to parse INIT");
+    let ast = parser.parse()?;
 
-    let phase_node = find_phase_block(&ast).expect("No PhaseBlock node found");
+    let phase_node = find_phase_block(&ast).ok_or("No PhaseBlock node found")?;
 
     if let NodeKind::PhaseBlock { phase, phase_span, .. } = &phase_node.kind {
         assert_eq!(phase, "INIT", "Phase should be INIT");
 
-        let span = phase_span.expect("phase_span should be Some for INIT");
+        let span = phase_span.ok_or("phase_span should be Some for INIT")?;
 
         // Verify the span points to "INIT" in the source
         assert_eq!(span.start, 0, "INIT phase_span should start at position 0");
@@ -191,22 +196,23 @@ fn test_init_phase_span() {
         let extracted = &code[span.start..span.end];
         assert_eq!(extracted, "INIT", "Extracted text should match INIT");
     } else {
-        panic!("Expected PhaseBlock node, got {:?}", phase_node.kind);
+        return Err(format!("Expected PhaseBlock node, got {:?}", phase_node.kind).into());
     }
+    Ok(())
 }
 
 #[test]
-fn test_unitcheck_phase_span() {
+fn test_unitcheck_phase_span() -> Result<(), Box<dyn std::error::Error>> {
     let code = "UNITCHECK { print 'unit checking'; }";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Failed to parse UNITCHECK");
+    let ast = parser.parse()?;
 
-    let phase_node = find_phase_block(&ast).expect("No PhaseBlock node found");
+    let phase_node = find_phase_block(&ast).ok_or("No PhaseBlock node found")?;
 
     if let NodeKind::PhaseBlock { phase, phase_span, .. } = &phase_node.kind {
         assert_eq!(phase, "UNITCHECK", "Phase should be UNITCHECK");
 
-        let span = phase_span.expect("phase_span should be Some for UNITCHECK");
+        let span = phase_span.ok_or("phase_span should be Some for UNITCHECK")?;
 
         // Verify the span points to "UNITCHECK" in the source
         assert_eq!(span.start, 0, "UNITCHECK phase_span should start at position 0");
@@ -216,19 +222,20 @@ fn test_unitcheck_phase_span() {
         let extracted = &code[span.start..span.end];
         assert_eq!(extracted, "UNITCHECK", "Extracted text should match UNITCHECK");
     } else {
-        panic!("Expected PhaseBlock node, got {:?}", phase_node.kind);
+        return Err(format!("Expected PhaseBlock node, got {:?}", phase_node.kind).into());
     }
+    Ok(())
 }
 
 #[test]
-fn test_multiple_phase_blocks_with_spans() {
+fn test_multiple_phase_blocks_with_spans() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 BEGIN { print 'start'; }
 END { print 'end'; }
 CHECK { print 'check'; }
 "#;
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Failed to parse multiple phase blocks");
+    let ast = parser.parse()?;
 
     // Collect all phase blocks
     let mut phase_blocks = Vec::new();
@@ -245,21 +252,22 @@ CHECK { print 'check'; }
     // Verify each phase block has proper span
     for phase_node in phase_blocks {
         if let NodeKind::PhaseBlock { phase, phase_span, .. } = &phase_node.kind {
-            let span = phase_span.expect("phase_span should be Some");
+            let span = phase_span.ok_or("phase_span should be Some")?;
             let extracted = &code[span.start..span.end];
             assert_eq!(extracted, phase, "Extracted text should match phase name");
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_autoload_and_destroy_both_have_spans() {
+fn test_autoload_and_destroy_both_have_spans() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 sub AUTOLOAD { print 'auto'; }
 sub DESTROY { print 'destroy'; }
 "#;
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Failed to parse AUTOLOAD and DESTROY");
+    let ast = parser.parse()?;
 
     // Collect all subroutines
     let mut subroutines = Vec::new();
@@ -276,28 +284,29 @@ sub DESTROY { print 'destroy'; }
     // Verify both have proper name_span
     for sub_node in subroutines {
         if let NodeKind::Subroutine { name, name_span, .. } = &sub_node.kind {
-            let span = name_span.expect("name_span should be Some");
+            let span = name_span.ok_or("name_span should be Some")?;
             let extracted = &code[span.start..span.end];
             assert_eq!(
                 extracted,
-                name.as_ref().unwrap(),
+                name.as_ref().ok_or("name should be Some")?,
                 "Extracted text should match subroutine name"
             );
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_name_span_not_entire_block() {
+fn test_name_span_not_entire_block() -> Result<(), Box<dyn std::error::Error>> {
     // This test ensures name_span is just the identifier, not the entire block
     let code = "sub AUTOLOAD { my $x = 1; print $x; }";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Failed to parse");
+    let ast = parser.parse()?;
 
-    let sub_node = find_subroutine(&ast).expect("No Subroutine node found");
+    let sub_node = find_subroutine(&ast).ok_or("No Subroutine node found")?;
 
     if let NodeKind::Subroutine { name_span, .. } = &sub_node.kind {
-        let span = name_span.expect("name_span should be Some");
+        let span = name_span.ok_or("name_span should be Some")?;
 
         // The span should be much smaller than the entire code
         let span_length = span.end - span.start;
@@ -312,19 +321,20 @@ fn test_name_span_not_entire_block() {
         assert!(!extracted.contains('{'), "name_span should not include block delimiter");
         assert!(!extracted.contains("print"), "name_span should not include block body");
     }
+    Ok(())
 }
 
 #[test]
-fn test_phase_span_not_entire_block() {
+fn test_phase_span_not_entire_block() -> Result<(), Box<dyn std::error::Error>> {
     // This test ensures phase_span is just the phase keyword, not the entire block
     let code = "BEGIN { my $x = 1; print $x; }";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Failed to parse");
+    let ast = parser.parse()?;
 
-    let phase_node = find_phase_block(&ast).expect("No PhaseBlock node found");
+    let phase_node = find_phase_block(&ast).ok_or("No PhaseBlock node found")?;
 
     if let NodeKind::PhaseBlock { phase_span, .. } = &phase_node.kind {
-        let span = phase_span.expect("phase_span should be Some");
+        let span = phase_span.ok_or("phase_span should be Some")?;
 
         // The span should be much smaller than the entire code
         let span_length = span.end - span.start;
@@ -339,4 +349,5 @@ fn test_phase_span_not_entire_block() {
         assert!(!extracted.contains('{'), "phase_span should not include block delimiter");
         assert!(!extracted.contains("print"), "phase_span should not include block body");
     }
+    Ok(())
 }

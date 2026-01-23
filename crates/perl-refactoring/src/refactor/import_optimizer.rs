@@ -646,15 +646,15 @@ mod tests {
     use std::path::PathBuf;
     use tempfile::TempDir;
 
-    fn create_test_file(content: &str) -> (TempDir, PathBuf) {
-        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    fn create_test_file(content: &str) -> Result<(TempDir, PathBuf), Box<dyn std::error::Error>> {
+        let temp_dir = TempDir::new()?;
         let file_path = temp_dir.path().join("test.pl");
-        fs::write(&file_path, content).expect("Failed to write test file");
-        (temp_dir, file_path)
+        fs::write(&file_path, content)?;
+        Ok((temp_dir, file_path))
     }
 
     #[test]
-    fn test_basic_import_analysis() {
+    fn test_basic_import_analysis() -> Result<(), Box<dyn std::error::Error>> {
         let optimizer = ImportOptimizer::new();
         let content = r#"#!/usr/bin/perl
 use strict;
@@ -664,8 +664,8 @@ use Data::Dumper;
 print Dumper(\@ARGV);
 "#;
 
-        let (_temp_dir, file_path) = create_test_file(content);
-        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+        let (_temp_dir, file_path) = create_test_file(content)?;
+        let analysis = optimizer.analyze_file(&file_path)?;
 
         assert_eq!(analysis.imports.len(), 3);
         assert_eq!(analysis.imports[0].module, "strict");
@@ -674,10 +674,11 @@ print Dumper(\@ARGV);
 
         // Data::Dumper should not be marked as unused since Dumper is used
         assert!(analysis.unused_imports.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_unused_import_detection() {
+    fn test_unused_import_detection() -> Result<(), Box<dyn std::error::Error>> {
         let optimizer = ImportOptimizer::new();
         let content = r#"use strict;
 use warnings;
@@ -687,16 +688,17 @@ use JSON;          # This is not used
 print "Hello World\n";
 "#;
 
-        let (_temp_dir, file_path) = create_test_file(content);
-        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+        let (_temp_dir, file_path) = create_test_file(content)?;
+        let analysis = optimizer.analyze_file(&file_path)?;
 
         // Bare imports without explicit symbols are assumed to have side effects,
         // so they are not reported as unused even if their exports aren't referenced.
         assert!(analysis.unused_imports.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_missing_import_detection() {
+    fn test_missing_import_detection() -> Result<(), Box<dyn std::error::Error>> {
         let optimizer = ImportOptimizer::new();
         let content = r#"use strict;
 use warnings;
@@ -704,22 +706,23 @@ use warnings;
 # Using JSON::encode_json without importing JSON
 my $json = JSON::encode_json({key => 'value'});
 
-# Using Data::Dumper::Dumper without importing Data::Dumper  
+# Using Data::Dumper::Dumper without importing Data::Dumper
 print Data::Dumper::Dumper(\@ARGV);
 "#;
 
-        let (_temp_dir, file_path) = create_test_file(content);
-        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+        let (_temp_dir, file_path) = create_test_file(content)?;
+        let analysis = optimizer.analyze_file(&file_path)?;
         assert_eq!(analysis.missing_imports.len(), 2);
         assert!(analysis.missing_imports.iter().any(|m| m.module == "JSON"));
         assert!(analysis.missing_imports.iter().any(|m| m.module == "Data::Dumper"));
         for m in &analysis.missing_imports {
             assert_eq!(m.suggested_location, 3);
         }
+        Ok(())
     }
 
     #[test]
-    fn test_duplicate_import_detection() {
+    fn test_duplicate_import_detection() -> Result<(), Box<dyn std::error::Error>> {
         let optimizer = ImportOptimizer::new();
         let content = r#"use strict;
 use warnings;
@@ -730,17 +733,18 @@ use Data::Dumper;  # Duplicate
 print Dumper(\@ARGV);
 "#;
 
-        let (_temp_dir, file_path) = create_test_file(content);
-        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+        let (_temp_dir, file_path) = create_test_file(content)?;
+        let analysis = optimizer.analyze_file(&file_path)?;
 
         assert_eq!(analysis.duplicate_imports.len(), 1);
         assert_eq!(analysis.duplicate_imports[0].module, "Data::Dumper");
         assert_eq!(analysis.duplicate_imports[0].lines.len(), 2);
         assert!(analysis.duplicate_imports[0].can_merge);
+        Ok(())
     }
 
     #[test]
-    fn test_organization_suggestions() {
+    fn test_organization_suggestions() -> Result<(), Box<dyn std::error::Error>> {
         let optimizer = ImportOptimizer::new();
         let content = r#"use warnings;
 use strict;
@@ -749,8 +753,8 @@ use Data::Dumper;
 use Data::Dumper;  # duplicate
 "#;
 
-        let (_temp_dir, file_path) = create_test_file(content);
-        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+        let (_temp_dir, file_path) = create_test_file(content)?;
+        let analysis = optimizer.analyze_file(&file_path)?;
 
         assert!(
             analysis
@@ -770,10 +774,11 @@ use Data::Dumper;  # duplicate
                 .iter()
                 .any(|s| s.description.contains("Sort and deduplicate symbols"))
         );
+        Ok(())
     }
 
     #[test]
-    fn test_qw_import_parsing() {
+    fn test_qw_import_parsing() -> Result<(), Box<dyn std::error::Error>> {
         let optimizer = ImportOptimizer::new();
         let content = r#"use List::Util qw(first max min sum);
 use Scalar::Util qw(blessed reftype);
@@ -784,27 +789,28 @@ print "Sum: " . sum(@nums) . "\n";
 print "First: " . first { $_ > 3 } @nums;
 "#;
 
-        let (_temp_dir, file_path) = create_test_file(content);
-        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+        let (_temp_dir, file_path) = create_test_file(content)?;
+        let analysis = optimizer.analyze_file(&file_path)?;
 
         assert_eq!(analysis.imports.len(), 2);
 
-        let list_util = analysis.imports.iter().find(|i| i.module == "List::Util").unwrap();
+        let list_util = analysis.imports.iter().find(|i| i.module == "List::Util").ok_or("List::Util import not found")?;
         assert_eq!(list_util.symbols, vec!["first", "max", "min", "sum"]);
 
-        let scalar_util = analysis.imports.iter().find(|i| i.module == "Scalar::Util").unwrap();
+        let scalar_util = analysis.imports.iter().find(|i| i.module == "Scalar::Util").ok_or("Scalar::Util import not found")?;
         assert_eq!(scalar_util.symbols, vec!["blessed", "reftype"]);
 
         // Should detect unused symbols in both modules
         assert_eq!(analysis.unused_imports.len(), 2);
 
         let list_util_unused =
-            analysis.unused_imports.iter().find(|u| u.module == "List::Util").unwrap();
+            analysis.unused_imports.iter().find(|u| u.module == "List::Util").ok_or("List::Util unused imports not found")?;
         assert_eq!(list_util_unused.symbols, vec!["min"]);
 
         let scalar_util_unused =
-            analysis.unused_imports.iter().find(|u| u.module == "Scalar::Util").unwrap();
+            analysis.unused_imports.iter().find(|u| u.module == "Scalar::Util").ok_or("Scalar::Util unused imports not found")?;
         assert_eq!(scalar_util_unused.symbols, vec!["blessed", "reftype"]);
+        Ok(())
     }
 
     #[test]
@@ -851,21 +857,22 @@ print "First: " . first { $_ > 3 } @nums;
     }
 
     #[test]
-    fn test_empty_file_analysis() {
+    fn test_empty_file_analysis() -> Result<(), Box<dyn std::error::Error>> {
         let optimizer = ImportOptimizer::new();
         let content = "";
 
-        let (_temp_dir, file_path) = create_test_file(content);
-        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+        let (_temp_dir, file_path) = create_test_file(content)?;
+        let analysis = optimizer.analyze_file(&file_path)?;
 
         assert!(analysis.imports.is_empty());
         assert!(analysis.unused_imports.is_empty());
         assert!(analysis.missing_imports.is_empty());
         assert!(analysis.duplicate_imports.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_complex_perl_code_analysis() {
+    fn test_complex_perl_code_analysis() -> Result<(), Box<dyn std::error::Error>> {
         let optimizer = ImportOptimizer::new();
         let content = r#"#!/usr/bin/perl
 use strict;
@@ -889,8 +896,8 @@ my $response = HTTP::Tiny::new()->get('http://example.com');
 print Dumper($response);
 "#;
 
-        let (_temp_dir, file_path) = create_test_file(content);
-        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+        let (_temp_dir, file_path) = create_test_file(content)?;
+        let analysis = optimizer.analyze_file(&file_path)?;
 
         // Should detect unused imports
         assert!(analysis.unused_imports.iter().any(|u| u.module == "LWP::UserAgent"));
@@ -904,10 +911,11 @@ print Dumper($response);
 
         // Should detect missing import for HTTP::Tiny
         assert!(analysis.missing_imports.iter().any(|m| m.module == "HTTP::Tiny"));
+        Ok(())
     }
 
     #[test]
-    fn test_bare_import_with_exports_detection() {
+    fn test_bare_import_with_exports_detection() -> Result<(), Box<dyn std::error::Error>> {
         let optimizer = ImportOptimizer::new();
         let content = r#"use strict;
 use warnings;
@@ -918,8 +926,8 @@ use SomeUnknownModule;  # Conservative - not marked as unused
 print Dumper(\@ARGV);
 "#;
 
-        let (_temp_dir, file_path) = create_test_file(content);
-        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+        let (_temp_dir, file_path) = create_test_file(content)?;
+        let analysis = optimizer.analyze_file(&file_path)?;
 
         // Data::Dumper should not be unused (Dumper is used)
         assert!(!analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"));
@@ -927,10 +935,11 @@ print Dumper(\@ARGV);
         // JSON and SomeUnknownModule are treated as having potential side effects,
         // so neither is flagged as unused.
         assert!(analysis.unused_imports.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_regex_edge_cases() {
+    fn test_regex_edge_cases() -> Result<(), Box<dyn std::error::Error>> {
         let optimizer = ImportOptimizer::new();
         let content = r#"use strict;
 use warnings;
@@ -944,16 +953,17 @@ print "Module::Name is just text";
 my $result = JSON::encode_json({test => 1});
 "#;
 
-        let (_temp_dir, file_path) = create_test_file(content);
-        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+        let (_temp_dir, file_path) = create_test_file(content)?;
+        let analysis = optimizer.analyze_file(&file_path)?;
 
         // Should only detect the actual module usage, not the ones in strings/regex
         assert_eq!(analysis.missing_imports.len(), 1);
         assert_eq!(analysis.missing_imports[0].module, "JSON");
+        Ok(())
     }
 
     #[test]
-    fn test_malformed_regex_capture_safety() {
+    fn test_malformed_regex_capture_safety() -> Result<(), Box<dyn std::error::Error>> {
         let optimizer = ImportOptimizer::new();
         // Content with patterns that could potentially cause regex capture issues
         let content = r#"use strict;
@@ -967,12 +977,13 @@ my $incomplete = "Something::";
 my $partial = "::Function";
 "#;
 
-        let (_temp_dir, file_path) = create_test_file(content);
+        let (_temp_dir, file_path) = create_test_file(content)?;
         // Should not panic even with edge case patterns
-        let analysis = optimizer.analyze_file(&file_path).expect("Analysis should succeed");
+        let analysis = optimizer.analyze_file(&file_path)?;
 
         // Should detect JSON usage
         assert_eq!(analysis.missing_imports.len(), 1);
         assert_eq!(analysis.missing_imports[0].module, "JSON");
+        Ok(())
     }
 }

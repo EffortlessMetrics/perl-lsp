@@ -19,6 +19,8 @@
 //! - Pattern match nesting
 //! - Complex real-world pathological patterns
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_parser::{ParseError, Parser};
 
 /// Test deeply nested blocks exceed recursion limit

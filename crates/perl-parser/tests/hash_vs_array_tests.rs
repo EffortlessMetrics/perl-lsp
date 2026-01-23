@@ -1,4 +1,5 @@
 #![allow(clippy::collapsible_if)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use perl_parser::{Parser, ast::NodeKind};
 

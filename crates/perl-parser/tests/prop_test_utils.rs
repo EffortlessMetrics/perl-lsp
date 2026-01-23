@@ -1,3 +1,5 @@
+#[allow(dead_code)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 #[allow(unused_imports)] // Used by macros
 use proptest::prelude::*;
 use std::collections::HashSet;
@@ -216,7 +218,7 @@ pub fn shape(root: &Node) -> Vec<String> {
 fn push_variant_name(n: &Node, out: &mut Vec<String>) {
     // Variant name from Debug up to '(' or '{'
     let s = format!("{:?}", n.kind);
-    let name = s.split(['(', '{']).next().unwrap_or(&s).to_string();
+    let name = s.split(['(', '{']).next().map_or_else(|| s.clone(), |n| n.to_string());
     out.push(name);
 }
 
@@ -477,16 +479,17 @@ pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
     if let TokenType::Identifier(_) = &left.kind {
         let text = &left.text;
         if text.ends_with('{') && text.len() == 2 {
-            let first_char = text.chars().next().unwrap();
-            if matches!(first_char, '$' | '@' | '%') {
-                return false;
+            if let Some(first_char) = text.chars().next() {
+                if matches!(first_char, '$' | '@' | '%') {
+                    return false;
+                }
             }
         }
     }
 
     // Also check if the left token is a contextual token that loses meaning when isolated
     let left_alone = lex_core_spans(&left.text);
-    if left_alone.len() != 1 || left_alone[0].text != left.text || left_alone[0].kind != left.kind {
+    if left_alone.len() != 1 || left_alone.first().map_or(true, |t| t.text != left.text || t.kind != left.kind) {
         // The left token behaves differently when lexed alone vs in context
         return false;
     }
@@ -494,10 +497,8 @@ pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
     let joined = format!("{}{}", left.text, right.text);
     let re = lex_core_spans(&joined);
     re.len() == 2
-        && re[0].kind == left.kind
-        && re[0].text == left.text
-        && re[1].kind == right.kind
-        && re[1].text == right.text
+        && re.first().map_or(false, |t| t.kind == left.kind && t.text == left.text)
+        && re.get(1).map_or(false, |t| t.kind == right.kind && t.text == right.text)
 }
 
 /// Neighbor-aware: would inserting `ws` between toks[i] and toks[i+1]

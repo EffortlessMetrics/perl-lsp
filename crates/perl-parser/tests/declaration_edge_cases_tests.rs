@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 #[cfg(test)]
 mod declaration_edge_cases_tests {
     use perl_parser::Parser;

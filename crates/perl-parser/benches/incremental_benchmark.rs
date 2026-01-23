@@ -42,7 +42,10 @@ process_data($items);
                 new_end_byte: 187,
                 new_text: "process".to_string(),
             };
-            apply_edits(&mut state, &[edit]).unwrap();
+            match apply_edits(&mut state, &[edit]) {
+                Ok(_) => {},
+                Err(e) => panic!("bench iteration: apply_edits failed: {e}"),
+            }
             black_box(&state.ast);
         })
     });
@@ -110,7 +113,10 @@ print "$x $y $z\n";
                     new_text: "20".to_string(),
                 },
             ];
-            apply_edits(&mut state, &edits).unwrap();
+            match apply_edits(&mut state, &edits) {
+                Ok(_) => {},
+                Err(e) => panic!("bench iteration: apply_edits failed: {e}"),
+            }
             black_box(&state.ast);
         })
     });
@@ -118,15 +124,24 @@ print "$x $y $z\n";
 
 fn bench_incremental_document_single_edit(c: &mut Criterion) {
     let source = "my $x = 42; my $y = 100; print $x + $y;";
-    let start = source.find("42").unwrap();
+    let start = match source.find("42") {
+        Some(pos) => pos,
+        None => panic!("bench setup: could not find '42' in source"),
+    };
     let end = start + 2;
 
     c.bench_function("incremental_document single edit", |b| {
         b.iter_batched(
-            || IncrementalDocument::new(source.to_string()).unwrap(),
+            || match IncrementalDocument::new(source.to_string()) {
+                Ok(doc) => doc,
+                Err(e) => panic!("bench setup: IncrementalDocument::new failed: {e}"),
+            },
             |mut doc| {
                 let edit = IncrementalEdit::new(start, end, "43".to_string());
-                doc.apply_edit(edit).unwrap();
+                match doc.apply_edit(edit) {
+                    Ok(_) => {},
+                    Err(e) => panic!("bench iteration: apply_edit failed: {e}"),
+                }
                 black_box(doc.metrics.nodes_reused);
             },
             BatchSize::SmallInput,
@@ -136,17 +151,29 @@ fn bench_incremental_document_single_edit(c: &mut Criterion) {
 
 fn bench_incremental_document_multiple_edits(c: &mut Criterion) {
     let source = "sub calc { my $a = 10; my $b = 20; $a + $b }";
-    let pos_a = source.find("10").unwrap();
-    let pos_b = source.find("20").unwrap();
+    let pos_a = match source.find("10") {
+        Some(pos) => pos,
+        None => panic!("bench setup: could not find '10' in source"),
+    };
+    let pos_b = match source.find("20") {
+        Some(pos) => pos,
+        None => panic!("bench setup: could not find '20' in source"),
+    };
 
     c.bench_function("incremental_document multiple edits", |b| {
         b.iter_batched(
-            || IncrementalDocument::new(source.to_string()).unwrap(),
+            || match IncrementalDocument::new(source.to_string()) {
+                Ok(doc) => doc,
+                Err(e) => panic!("bench setup: IncrementalDocument::new failed: {e}"),
+            },
             |mut doc| {
                 let mut edits = IncrementalEditSet::new();
                 edits.add(IncrementalEdit::new(pos_a, pos_a + 2, "15".to_string()));
                 edits.add(IncrementalEdit::new(pos_b, pos_b + 2, "25".to_string()));
-                doc.apply_edits(&edits).unwrap();
+                match doc.apply_edits(&edits) {
+                    Ok(_) => {},
+                    Err(e) => panic!("bench iteration: apply_edits failed: {e}"),
+                }
                 black_box(doc.metrics.nodes_reused);
             },
             BatchSize::SmallInput,

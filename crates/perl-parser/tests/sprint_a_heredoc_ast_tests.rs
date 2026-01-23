@@ -56,7 +56,7 @@ fn count_block_statements(node: &Node) -> Option<usize> {
 // ============================================================================
 
 #[test]
-fn f5_heredoc_in_if_block_ast_structure() {
+fn f5_heredoc_in_if_block_ast_structure() -> Result<(), Box<dyn std::error::Error>> {
     let src = r#"if ($cond) {
     my $x = <<EOF;
 line 1
@@ -66,7 +66,7 @@ EOF
 "#;
 
     let mut parser = Parser::new(src);
-    let root = parser.parse().expect("parse should succeed");
+    let root = parser.parse()?;
 
     // Collect heredocs
     let heredocs = collect_heredocs(&root);
@@ -80,14 +80,15 @@ EOF
     let block_stmt_count = count_block_statements(&root);
     assert!(block_stmt_count.is_some(), "Should find a block node in the AST");
     assert_eq!(
-        block_stmt_count.unwrap(),
+        block_stmt_count.ok_or("No block found")?,
         2,
         "Block should contain 2 separate statements (heredoc assignment and say)"
     );
+    Ok(())
 }
 
 #[test]
-fn f5_heredoc_statement_boundaries() {
+fn f5_heredoc_statement_boundaries() -> Result<(), Box<dyn std::error::Error>> {
     // Verify that the heredoc statement doesn't swallow the next statement
     let src = r#"if ($cond) {
     my $x = <<EOF;
@@ -98,7 +99,7 @@ EOF
 "#;
 
     let mut parser = Parser::new(src);
-    let root = parser.parse().expect("parse should succeed");
+    let root = parser.parse()?;
     let sexp = root.to_sexp();
 
     // The say statement should be present and separate
@@ -109,6 +110,7 @@ EOF
         !sexp.contains("(identifier line)"),
         "Heredoc body should be consumed, not parsed as identifier"
     );
+    Ok(())
 }
 
 // ============================================================================
@@ -116,7 +118,7 @@ EOF
 // ============================================================================
 
 #[test]
-fn f6_two_heredocs_same_block_ast_structure() {
+fn f6_two_heredocs_same_block_ast_structure() -> Result<(), Box<dyn std::error::Error>> {
     let src = r#"if ($cond) {
     my $x = <<EOF1;
 foo
@@ -128,7 +130,7 @@ EOF2
 "#;
 
     let mut parser = Parser::new(src);
-    let root = parser.parse().expect("parse should succeed");
+    let root = parser.parse()?;
 
     // Collect heredocs
     let heredocs = collect_heredocs(&root);
@@ -141,11 +143,12 @@ EOF2
     // 2. my $y = <<EOF2; (lines 5-7)
     let block_stmt_count = count_block_statements(&root);
     assert!(block_stmt_count.is_some(), "Should find a block node in the AST");
-    assert_eq!(block_stmt_count.unwrap(), 2, "Block should contain 2 separate heredoc statements");
+    assert_eq!(block_stmt_count.ok_or("No block found")?, 2, "Block should contain 2 separate heredoc statements");
+    Ok(())
 }
 
 #[test]
-fn f6_two_heredocs_distinct_statements() {
+fn f6_two_heredocs_distinct_statements() -> Result<(), Box<dyn std::error::Error>> {
     // Verify that each heredoc is in its own statement (not merged)
     let src = r#"if ($cond) {
     my $x = <<EOF1;
@@ -158,7 +161,7 @@ EOF2
 "#;
 
     let mut parser = Parser::new(src);
-    let root = parser.parse().expect("parse should succeed");
+    let root = parser.parse()?;
     let sexp = root.to_sexp();
 
     // Both variables should be present
@@ -168,6 +171,7 @@ EOF2
     // Heredoc bodies should be consumed
     assert!(!sexp.contains("(identifier foo)"), "First heredoc body should be consumed");
     assert!(!sexp.contains("(identifier bar)"), "Second heredoc body should be consumed");
+    Ok(())
 }
 
 // ============================================================================
@@ -175,7 +179,7 @@ EOF2
 // ============================================================================
 
 #[test]
-fn edge_case_heredoc_in_eval_block() {
+fn edge_case_heredoc_in_eval_block() -> Result<(), Box<dyn std::error::Error>> {
     let src = r#"eval {
     my $x = <<EOF;
 content
@@ -185,7 +189,7 @@ EOF
 "#;
 
     let mut parser = Parser::new(src);
-    let root = parser.parse().expect("parse should succeed");
+    let root = parser.parse()?;
 
     // Collect heredocs
     let heredocs = collect_heredocs(&root);
@@ -198,6 +202,7 @@ EOF
         !sexp.contains("(identifier content)"),
         "Heredoc body should be consumed in eval block"
     );
+    Ok(())
 }
 
 // ============================================================================
@@ -205,7 +210,7 @@ EOF
 // ============================================================================
 
 #[test]
-fn edge_case_back_to_back_heredocs() {
+fn edge_case_back_to_back_heredocs() -> Result<(), Box<dyn std::error::Error>> {
     // Two heredocs with no blank line between their bodies
     let src = r#"my $x = <<EOF1;
 first
@@ -216,7 +221,7 @@ EOF2
 "#;
 
     let mut parser = Parser::new(src);
-    let root = parser.parse().expect("parse should succeed");
+    let root = parser.parse()?;
 
     // Collect heredocs
     let heredocs = collect_heredocs(&root);
@@ -233,4 +238,5 @@ EOF2
     let sexp = root.to_sexp();
     assert!(!sexp.contains("(identifier first)"), "First heredoc body should be consumed");
     assert!(!sexp.contains("(identifier second)"), "Second heredoc body should be consumed");
+    Ok(())
 }

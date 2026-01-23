@@ -3,6 +3,7 @@
 //! Provides robust assertion helpers and utilities for testing LSP functionality
 
 #![allow(clippy::collapsible_if)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 pub mod client_caps;
 pub mod env_guard;

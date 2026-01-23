@@ -3,6 +3,8 @@
 //! These tests cover various edge cases and complex scenarios for the Perl debugger
 //! output parsing to ensure robustness.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_dap::{DapMessage, DebugAdapter};
 use serde_json::json;
 use std::fs::write;

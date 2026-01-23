@@ -3,6 +3,8 @@
 //! This test suite uses advanced property-based testing techniques to eliminate
 //! surviving mutants in AST generation, S-expression serialization, and parser
 //! state management through comprehensive invariant validation.
+
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //!
 //! Focuses on eliminating mutants in:
 //! - AST node construction and parent-child relationships

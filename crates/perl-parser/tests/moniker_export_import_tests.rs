@@ -1,8 +1,10 @@
-/// Tests feature spec: PR #262 - qw<> delimiter support for export/import parsing
-///
-/// This test suite provides fixture coverage for qw delimiter forms used by
-/// moniker/import/export heuristics in the LSP server. It validates:
-/// - Parser correctly handles all qw delimiter styles (qw<>, qw(), qw[], qw{}, qw//, qw||, qw!!)
+//! Tests feature spec: PR #262 - qw<> delimiter support for export/import parsing
+//!
+//! This test suite provides fixture coverage for qw delimiter forms used by
+//! moniker/import/export heuristics in the LSP server. It validates:
+//! - Parser correctly handles all qw delimiter styles (qw<>, qw(), qw[], qw{}, qw//, qw||, qw!!)
+
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 /// - AST structure for Use nodes with various import argument formats
 /// - @EXPORT and @EXPORT_OK declarations parse correctly with all delimiter forms
 ///

@@ -39,37 +39,39 @@ if (1) {
 }
 
 #[test]
-fn print_scalar_with_arithmetic() {
+fn print_scalar_with_arithmetic() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"print $x + 1;"#;
     let mut parser = Parser::new(code);
     let ast = parser.parse();
     assert!(ast.is_ok(), "Failed to parse: print $x + 1");
 
     // Should parse as print($x + 1), NOT as indirect object
-    let ast = ast.unwrap();
+    let ast = ast?;
     let sexp = ast.to_sexp();
     assert!(
         !sexp.contains("indirect_call"),
         "Should not parse arithmetic as indirect object: {}",
         sexp
     );
+    Ok(())
 }
 
 #[test]
-fn print_scalar_with_string_concat() {
+fn print_scalar_with_string_concat() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"print $x . "s";"#;
     let mut parser = Parser::new(code);
     let ast = parser.parse();
     assert!(ast.is_ok(), "Failed to parse: print $x . \"s\"");
 
     // Should parse as print($x . "s"), NOT as indirect object
-    let ast = ast.unwrap();
+    let ast = ast?;
     let sexp = ast.to_sexp();
     assert!(
         !sexp.contains("indirect_call"),
         "Should not parse string concat as indirect object: {}",
         sexp
     );
+    Ok(())
 }
 
 #[test]
@@ -82,20 +84,21 @@ fn print_indirect_object_still_works() {
 }
 
 #[test]
-fn print_filehandle_then_variable_is_indirect() {
+fn print_filehandle_then_variable_is_indirect() -> Result<(), Box<dyn std::error::Error>> {
     // Ensure: print $fh $x; is treated as indirect object form
     let code = r#"print $fh $x;"#;
     let mut parser = Parser::new(code);
     let ast = parser.parse();
     assert!(ast.is_ok(), "Failed to parse: print $fh $x");
 
-    let ast = ast.unwrap();
+    let ast = ast?;
     let sexp = ast.to_sexp();
     assert!(
         sexp.contains("indirect_call"),
         "print $fh $x should be treated as indirect object: {}",
         sexp
     );
+    Ok(())
 }
 
 #[test]
@@ -120,7 +123,7 @@ fn new_constructor_pattern() {
 }
 
 #[test]
-fn statement_modifier_inside_block_if() {
+fn statement_modifier_inside_block_if() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
     {
         my @array = (1, 2, 3);
@@ -130,17 +133,18 @@ fn statement_modifier_inside_block_if() {
     }
     "#;
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("should parse postfix if inside block");
+    let ast = parser.parse()?;
     let sexp = ast.to_sexp();
     // We accept the statement modifier node in the output
     assert!(
         sexp.contains("statement_modifier") || sexp.contains("(if "),
         "expected statement_modifier or if in output; got: {sexp}"
     );
+    Ok(())
 }
 
 #[test]
-fn statement_modifier_inside_block_for() {
+fn statement_modifier_inside_block_for() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
     {
         my @arr = (1,2,3);
@@ -148,12 +152,13 @@ fn statement_modifier_inside_block_for() {
     }
     "#;
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("should parse postfix for inside block");
+    let ast = parser.parse()?;
     let sexp = ast.to_sexp();
     assert!(
         sexp.contains("statement_modifier") || sexp.contains("(for ") || sexp.contains("(foreach "),
         "expected statement_modifier or for/foreach in output"
     );
+    Ok(())
 }
 
 // Regression tests for declaration + control flow issues
@@ -247,7 +252,7 @@ fn complex_foreach_with_modifiers() {
 }
 
 #[test]
-fn statement_modifier_unless_and_while() {
+fn statement_modifier_unless_and_while() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
     {
         my $x = 0;
@@ -256,13 +261,14 @@ fn statement_modifier_unless_and_while() {
     }
     "#;
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("should parse postfix unless/while inside block");
+    let ast = parser.parse()?;
     let sexp = ast.to_sexp();
     assert!(sexp.contains("statement_modifier"), "expected statement_modifier nodes in output");
+    Ok(())
 }
 
 #[test]
-fn statement_modifier_nested_blocks() {
+fn statement_modifier_nested_blocks() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
     sub test {
         {
@@ -273,16 +279,17 @@ fn statement_modifier_nested_blocks() {
     }
     "#;
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("should parse statement modifiers in nested blocks");
+    let ast = parser.parse()?;
     let sexp = ast.to_sexp();
     assert!(
         sexp.contains("statement_modifier"),
         "expected statement_modifier nodes in nested blocks"
     );
+    Ok(())
 }
 
 #[test]
-fn statement_modifier_with_complex_expression() {
+fn statement_modifier_with_complex_expression() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
     {
         my $x = 5;
@@ -290,10 +297,11 @@ fn statement_modifier_with_complex_expression() {
     }
     "#;
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("should parse statement modifier with complex expression");
+    let ast = parser.parse()?;
     let sexp = ast.to_sexp();
     assert!(
         sexp.contains("statement_modifier"),
         "expected statement_modifier with complex expression"
     );
+    Ok(())
 }
