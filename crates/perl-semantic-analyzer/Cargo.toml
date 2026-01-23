@@ -30,5 +30,6 @@ regex = "1.12.2"
 rustc-hash = "2.1.1"
 serde = { version = "1.0.228", features = ["derive"] }
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+[lints]
+workspace = true
+

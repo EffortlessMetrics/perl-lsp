@@ -46,7 +46,9 @@ mod incremental_performance_tests {
 
                 // Initial parse with timing
                 let start = Instant::now();
-                self.parser.parse(initial_source).unwrap();
+                if let Err(e) = self.parser.parse(initial_source) {
+                    panic!("Initial parse failed: {:?}", e);
+                }
                 let initial_time = start.elapsed();
                 self.baseline_times.push(initial_time);
 
@@ -55,7 +57,9 @@ mod incremental_performance_tests {
                 self.parser.edit(edit);
 
                 let start = Instant::now();
-                let _tree = self.parser.parse(&new_source).unwrap();
+                if let Err(e) = self.parser.parse(&new_source) {
+                    panic!("Incremental parse failed: {:?}", e);
+                }
                 let incremental_time = start.elapsed();
                 self.incremental_times.push(incremental_time);
 
@@ -94,8 +98,8 @@ mod incremental_performance_tests {
                 incremental_times.iter().sum::<u128>() / incremental_times.len() as u128;
             let avg_initial = initial_times.iter().sum::<u128>() / initial_times.len() as u128;
 
-            let min_incremental = *incremental_times.iter().min().unwrap();
-            let max_incremental = *incremental_times.iter().max().unwrap();
+            let min_incremental = incremental_times.iter().min().copied().unwrap_or(0);
+            let max_incremental = incremental_times.iter().max().copied().unwrap_or(0);
 
             let avg_reused = reports.iter().map(|r| r.nodes_reused).sum::<usize>() / reports.len();
             let avg_reparsed =
@@ -287,7 +291,10 @@ if ($condition) {
             TestSourceGenerator::simple_variable(),
             |source| {
                 let new_source = source.replace("42", "9999");
-                let pos = source.find("42").unwrap();
+                let pos = match source.find("42") {
+                    Some(p) => p,
+                    None => panic!("Test data should contain '42'"),
+                };
                 let edit = Edit::new(
                     pos,
                     pos + 2,
@@ -341,7 +348,10 @@ if ($condition) {
             &source,
             |source| {
                 let new_source = source.replace("10", "100");
-                let pos = source.find("10").unwrap();
+                let pos = match source.find("10") {
+                    Some(p) => p,
+                    None => panic!("Test data should contain '10'"),
+                };
                 let edit = Edit::new(
                     pos,
                     pos + 2,
@@ -380,7 +390,10 @@ if ($condition) {
             &source,
             |source| {
                 let new_source = source.replace("42", "9999");
-                let pos = source.find("42").unwrap();
+                let pos = match source.find("42") {
+                    Some(p) => p,
+                    None => panic!("Test data should contain '42'"),
+                };
                 let edit = Edit::new(
                     pos,
                     pos + 2,
@@ -409,7 +422,10 @@ if ($condition) {
             &source,
             |source| {
                 let new_source = source.replace("500", "999");
-                let pos = source.find("500").unwrap();
+                let pos = match source.find("500") {
+                    Some(p) => p,
+                    None => panic!("Test data should contain '500'"),
+                };
                 let edit = Edit::new(
                     pos,
                     pos + 3,
@@ -441,7 +457,10 @@ if ($condition) {
             &source,
             |source| {
                 let new_source = source.replace("你好世界", "再见");
-                let pos = source.find("你好世界").unwrap();
+                let pos = match source.find("你好世界") {
+                    Some(p) => p,
+                    None => panic!("Test data should contain '你好世界'"),
+                };
                 let end_pos = pos + "你好世界".len();
                 let edit = Edit::new(
                     pos,
@@ -474,7 +493,10 @@ if ($condition) {
                 TestSourceGenerator::simple_variable(),
                 |source| {
                     let new_source = source.replace("42", &format!("{}{}", 42, batch));
-                    let pos = source.find("42").unwrap();
+                    let pos = match source.find("42") {
+                    Some(p) => p,
+                    None => panic!("Test data should contain '42'"),
+                };
                     let new_len = new_source.len() - source.len() + 2;
                     let edit = Edit::new(
                         pos,
@@ -526,7 +548,10 @@ if ($condition) {
             source,
             |source| {
                 let new_source = source.replace("123", "12456");
-                let pos = source.find("123").unwrap();
+                let pos = match source.find("123") {
+                    Some(p) => p,
+                    None => panic!("Test data should contain '123'"),
+                };
                 let edit = Edit::new(
                     pos + 2, // Edit at boundary between digits
                     pos + 3,
@@ -554,7 +579,9 @@ if ($condition) {
 
         // Multiple rapid edits
         let mut parser = IncrementalParserV2::new();
-        parser.parse(source).unwrap();
+        if let Err(e) = parser.parse(source) {
+            panic!("Failed to parse test source: {:?}", e);
+        }
 
         let edits = [
             (8, 9, "10".to_string()),   // Change "1" to "10"
@@ -584,7 +611,9 @@ if ($condition) {
             };
 
             let start = Instant::now();
-            parser.parse(modified_source).unwrap();
+            if let Err(e) = parser.parse(modified_source) {
+                panic!("Failed to parse modified source: {:?}", e);
+            }
             let parse_time = start.elapsed();
 
             total_time += parse_time;

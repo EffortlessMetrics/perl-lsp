@@ -54,7 +54,7 @@ fn debug_hash_context(node: &Node, parent_map: &HashMap<*const Node, &Node>) -> 
     false
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"use strict;
 my %h = ();
 my $x = $h{key};
@@ -63,7 +63,7 @@ print FOO;"#;
     println!("Code:\n{}", code);
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
 
     // Build parent map
     let mut parent_map: HashMap<*const Node, &Node> = HashMap::new();
@@ -81,6 +81,7 @@ print FOO;"#;
             println!("   Is hash key: {}", is_hash_key);
         }
     }
+    Ok(())
 }
 
 fn build_parent_map<'a>(

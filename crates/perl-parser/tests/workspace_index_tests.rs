@@ -3,6 +3,8 @@
 //! This test suite demonstrates that the WorkspaceIndex can successfully:
 //! 1. Index symbols from multiple files
 //! 2. Find symbols across file boundaries
+
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! 3. Track dependencies between files
 //! 4. Find unused symbols across the workspace
 

@@ -510,7 +510,9 @@ mod doc_validation_helpers {
                 let content_lower = content.to_lowercase();
                 for stage in &pipeline_stages {
                     if content_lower.contains(&stage.to_lowercase()) {
-                        *coverage.get_mut(*stage).unwrap() += 1;
+                        if let Some(count) = coverage.get_mut(*stage) {
+                            *count += 1;
+                        }
                     }
                 }
             }
@@ -605,7 +607,10 @@ mod missing_docs_tests {
         if std::env::var("PERL_LSP_PERFORMANCE_TEST").is_ok() {
             // Fast path: Basic validation for performance-critical test runs
             let lib_path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/lib.rs");
-            let content = std::fs::read_to_string(lib_path).expect("Failed to read lib.rs");
+            let content = match std::fs::read_to_string(lib_path) {
+                Ok(c) => c,
+                Err(e) => panic!("Failed to read lib.rs: {}", e),
+            };
             assert!(
                 content.contains("warn(missing_docs)"),
                 "missing_docs warning should be configured"
@@ -1647,7 +1652,10 @@ mod missing_docs_tests {
 
     /// Analyzes CI documentation enforcement configuration
     fn analyze_ci_documentation_enforcement(lib_path: &str) -> CiEnforcementStatus {
-        let lib_content = fs::read_to_string(lib_path).expect("Failed to read lib.rs");
+        let lib_content = match fs::read_to_string(lib_path) {
+            Ok(c) => c,
+            Err(e) => panic!("Failed to read lib.rs: {}", e),
+        };
 
         let has_enabled_missing_docs = lib_content.contains("#![warn(missing_docs)]")
             && !lib_content.contains("// #![warn(missing_docs)]");
@@ -1730,7 +1738,9 @@ mod missing_docs_tests {
                 let content_lower = content.to_lowercase();
                 for stage in &pipeline_stages {
                     if content_lower.contains(&stage.to_lowercase()) {
-                        *coverage.get_mut(*stage).unwrap() += 1;
+                        if let Some(count) = coverage.get_mut(*stage) {
+                            *count += 1;
+                        }
                     }
                 }
             }

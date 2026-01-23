@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive deep nesting boundedness tests for hang/bounds risk mitigation
 //!
 //! Tests feature spec: ROADMAP.md#known-gaps-hang-bounds-risks

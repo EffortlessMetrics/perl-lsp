@@ -782,7 +782,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_completion_resolve_builtin_function() {
+    fn test_completion_resolve_builtin_function() -> Result<(), Box<dyn std::error::Error>> {
         // Test that built-in function documentation is added
         let item = json!({
             "label": "print",
@@ -793,20 +793,21 @@ mod tests {
         let result = server.handle_completion_resolve(Some(item));
 
         assert!(result.is_ok());
-        let resolved = result.unwrap().unwrap();
+        let resolved = result.map_err(|e| format!("{}", e.message))?.ok_or("expected resolved value")?;
 
         // Check that documentation was added
         assert!(resolved.get("documentation").is_some());
-        let doc = resolved.get("documentation").unwrap();
+        let doc = resolved.get("documentation").ok_or("expected documentation")?;
         assert_eq!(doc.get("kind").and_then(|v| v.as_str()), Some("markdown"));
 
         let value = doc.get("value").and_then(|v| v.as_str()).unwrap_or("");
         assert!(value.contains("Signatures:"));
         assert!(value.contains("print"));
+        Ok(())
     }
 
     #[test]
-    fn test_completion_resolve_keyword() {
+    fn test_completion_resolve_keyword() -> Result<(), Box<dyn std::error::Error>> {
         // Test that keyword documentation is added
         let item = json!({
             "label": "my",
@@ -817,17 +818,18 @@ mod tests {
         let result = server.handle_completion_resolve(Some(item));
 
         assert!(result.is_ok());
-        let resolved = result.unwrap().unwrap();
+        let resolved = result.map_err(|e| format!("{}", e.message))?.ok_or("expected resolved value")?;
 
         // Check that documentation was added
         assert!(resolved.get("documentation").is_some());
-        let doc = resolved.get("documentation").unwrap();
+        let doc = resolved.get("documentation").ok_or("expected documentation")?;
         let value = doc.get("value").and_then(|v| v.as_str()).unwrap_or("");
         assert!(value.contains("lexically scoped"));
+        Ok(())
     }
 
     #[test]
-    fn test_completion_resolve_variable() {
+    fn test_completion_resolve_variable() -> Result<(), Box<dyn std::error::Error>> {
         // Test that variable documentation is added
         let item = json!({
             "label": "$foo",
@@ -838,17 +840,18 @@ mod tests {
         let result = server.handle_completion_resolve(Some(item));
 
         assert!(result.is_ok());
-        let resolved = result.unwrap().unwrap();
+        let resolved = result.map_err(|e| format!("{}", e.message))?.ok_or("expected resolved value")?;
 
         // Check that documentation was added
         assert!(resolved.get("documentation").is_some());
-        let doc = resolved.get("documentation").unwrap();
+        let doc = resolved.get("documentation").ok_or("expected documentation")?;
         let value = doc.get("value").and_then(|v| v.as_str()).unwrap_or("");
         assert!(value.contains("Scalar variable"));
+        Ok(())
     }
 
     #[test]
-    fn test_completion_resolve_array_variable() {
+    fn test_completion_resolve_array_variable() -> Result<(), Box<dyn std::error::Error>> {
         // Test that array variable documentation is added
         let item = json!({
             "label": "@items",
@@ -859,17 +862,18 @@ mod tests {
         let result = server.handle_completion_resolve(Some(item));
 
         assert!(result.is_ok());
-        let resolved = result.unwrap().unwrap();
+        let resolved = result.map_err(|e| format!("{}", e.message))?.ok_or("expected resolved value")?;
 
         // Check that documentation was added
         assert!(resolved.get("documentation").is_some());
-        let doc = resolved.get("documentation").unwrap();
+        let doc = resolved.get("documentation").ok_or("expected documentation")?;
         let value = doc.get("value").and_then(|v| v.as_str()).unwrap_or("");
         assert!(value.contains("Array variable"));
+        Ok(())
     }
 
     #[test]
-    fn test_completion_resolve_passthrough() {
+    fn test_completion_resolve_passthrough() -> Result<(), Box<dyn std::error::Error>> {
         // Test that unknown items are passed through unchanged (except for no documentation)
         let item = json!({
             "label": "some_custom_function",
@@ -880,12 +884,13 @@ mod tests {
         let result = server.handle_completion_resolve(Some(item.clone()));
 
         assert!(result.is_ok());
-        let resolved = result.unwrap().unwrap();
+        let resolved = result.map_err(|e| format!("{}", e.message))?.ok_or("expected resolved value")?;
 
         // Label should be preserved
         assert_eq!(resolved.get("label").and_then(|v| v.as_str()), Some("some_custom_function"));
         // Kind should be preserved
         assert_eq!(resolved.get("kind").and_then(|v| v.as_u64()), Some(3));
+        Ok(())
     }
 
     #[test]

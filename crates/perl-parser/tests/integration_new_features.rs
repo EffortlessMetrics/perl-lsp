@@ -1,5 +1,7 @@
 //! Integration tests for all new features implemented in perl-parser
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_parser::Parser;
 
 #[test]

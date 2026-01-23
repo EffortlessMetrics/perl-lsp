@@ -9,9 +9,10 @@
 #[cfg(test)]
 mod tests {
     use crate::workspace_index::{SymbolKind, WorkspaceIndex};
+    use anyhow::{anyhow, Result};
 
     #[test]
-    fn test_utf16_positions_with_emoji() {
+    fn test_utf16_positions_with_emoji() -> Result<()> {
         let index = WorkspaceIndex::new();
         let uri = "file:///emoji_test.pl";
 
@@ -32,7 +33,7 @@ my $♥ = 'love';  # Heart variable
 my $π = 3.14159;  # Greek letter pi
 "#;
 
-        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
+        index.index_file(url::Url::parse(uri)?, code.to_string()).map_err(|e| anyhow!(e))?;
 
         let symbols = index.file_symbols(uri);
 
@@ -40,7 +41,7 @@ my $π = 3.14159;  # Greek letter pi
         let package = symbols
             .iter()
             .find(|s| s.name == "Emoji📦" && s.kind == SymbolKind::Package)
-            .expect("Should find emoji package");
+            .ok_or_else(|| anyhow!("Should find emoji package"))?;
 
         // Line 4 (0-indexed), "package " is 8 chars, starts at col 0
         assert_eq!(package.range.start.line, 4);
@@ -49,7 +50,7 @@ my $π = 3.14159;  # Greek letter pi
         let sub = symbols
             .iter()
             .find(|s| s.name == "celebrate🎉" && s.kind == SymbolKind::Subroutine)
-            .expect("Should find celebrate function");
+            .ok_or_else(|| anyhow!("Should find celebrate function"))?;
 
         // Line 6, "sub " is 4 chars
         assert_eq!(sub.range.start.line, 6);
@@ -58,7 +59,7 @@ my $π = 3.14159;  # Greek letter pi
         let heart_var = symbols
             .iter()
             .find(|s| s.name == "$♥" && s.kind.is_variable())
-            .expect("Should find heart variable");
+            .ok_or_else(|| anyhow!("Should find heart variable"))?;
 
         // Line 11, "my " is 3 chars
         assert_eq!(heart_var.range.start.line, 11);
@@ -67,15 +68,17 @@ my $π = 3.14159;  # Greek letter pi
         let pi_var = symbols
             .iter()
             .find(|s| s.name == "$π" && s.kind.is_variable())
-            .expect("Should find pi variable");
+            .ok_or_else(|| anyhow!("Should find pi variable"))?;
 
         // Line 12
         assert_eq!(pi_var.range.start.line, 12);
         assert_eq!(pi_var.range.start.column, 3);
+
+        Ok(())
     }
 
     #[test]
-    fn test_utf16_column_calculation() {
+    fn test_utf16_column_calculation() -> Result<()> {
         let index = WorkspaceIndex::new();
         let uri = "file:///utf16_test.pl";
 
@@ -88,24 +91,29 @@ my $😀 = 2;  # Emoji at column 3, takes 2 UTF-16 units
 my $世 = 3;  # CJK at column 3, takes 1 UTF-16 unit
 "#;
 
-        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
+        index.index_file(url::Url::parse(uri)?, code.to_string()).map_err(|e| anyhow!(e))?;
 
         let symbols = index.file_symbols(uri);
 
         // Check each variable's position
-        let var_a = symbols.iter().find(|s| s.name == "$a").expect("Should find $a");
+        let var_a = symbols.iter().find(|s| s.name == "$a").ok_or_else(|| anyhow!("Should find $a"))?;
         assert_eq!(var_a.range.start.column, 3); // "my " = 3 units
 
-        let var_emoji =
-            symbols.iter().find(|s| s.name == "$😀").expect("Should find emoji variable");
+        let var_emoji = symbols
+            .iter()
+            .find(|s| s.name == "$😀")
+            .ok_or_else(|| anyhow!("Should find emoji variable"))?;
         assert_eq!(var_emoji.range.start.column, 3); // "my " = 3 units
 
-        let var_cjk = symbols.iter().find(|s| s.name == "$世").expect("Should find CJK variable");
+        let var_cjk =
+            symbols.iter().find(|s| s.name == "$世").ok_or_else(|| anyhow!("Should find CJK variable"))?;
         assert_eq!(var_cjk.range.start.column, 3); // "my " = 3 units
+
+        Ok(())
     }
 
     #[test]
-    fn test_multi_package_in_file() {
+    fn test_multi_package_in_file() -> Result<()> {
         let index = WorkspaceIndex::new();
         let uri = "file:///multi_package.pl";
 
@@ -128,7 +136,7 @@ sub third_sub {
 }
 "#;
 
-        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
+        index.index_file(url::Url::parse(uri)?, code.to_string()).map_err(|e| anyhow!(e))?;
 
         let symbols = index.file_symbols(uri);
 
@@ -141,35 +149,37 @@ sub third_sub {
         let first_sub = symbols
             .iter()
             .find(|s| s.name == "first_sub" && s.kind == SymbolKind::Subroutine)
-            .expect("Should find first_sub");
+            .ok_or_else(|| anyhow!("Should find first_sub"))?;
         assert_eq!(first_sub.qualified_name, Some("First::first_sub".to_string()));
 
         let second_sub = symbols
             .iter()
             .find(|s| s.name == "second_sub" && s.kind == SymbolKind::Subroutine)
-            .expect("Should find second_sub");
+            .ok_or_else(|| anyhow!("Should find second_sub"))?;
         assert_eq!(second_sub.qualified_name, Some("Second::second_sub".to_string()));
 
         let third_sub = symbols
             .iter()
             .find(|s| s.name == "third_sub" && s.kind == SymbolKind::Subroutine)
-            .expect("Should find third_sub");
+            .ok_or_else(|| anyhow!("Should find third_sub"))?;
         assert_eq!(third_sub.qualified_name, Some("Third::Nested::third_sub".to_string()));
+
+        Ok(())
     }
 
     #[test]
-    fn test_read_write_tracking() {
+    fn test_read_write_tracking() -> Result<()> {
         let index = WorkspaceIndex::new();
         let uri = "file:///read_write.pl";
 
         let code = r#"my $x;           # Definition
 $x = 5;          # Write
-$x++;            # Read and Write  
+$x++;            # Read and Write
 my $y = $x + 1;  # Read $x
 print $x;        # Read
 "#;
 
-        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
+        index.index_file(url::Url::parse(uri)?, code.to_string()).map_err(|e| anyhow!(e))?;
 
         let refs = index.find_references("$x");
 
@@ -182,10 +192,12 @@ print $x;        # Read
         assert!(lines.contains(&1), "Should have reference on line 1 (assignment)");
         assert!(lines.contains(&3), "Should have reference on line 3 (read in expression)");
         assert!(lines.contains(&4), "Should have reference on line 4 (print)");
+
+        Ok(())
     }
 
     #[test]
-    fn test_document_update_reindex() {
+    fn test_document_update_reindex() -> Result<()> {
         let index = WorkspaceIndex::new();
         let uri = "file:///update_test.pl";
 
@@ -194,7 +206,7 @@ print $x;        # Read
     return 42;
 }"#;
 
-        index.index_file(url::Url::parse(uri).unwrap(), code_v1.to_string()).unwrap();
+        index.index_file(url::Url::parse(uri)?, code_v1.to_string()).map_err(|e| anyhow!(e))?;
 
         let symbols_v1 = index.file_symbols(uri);
         assert!(symbols_v1.iter().any(|s| s.name == "old_name"));
@@ -205,22 +217,24 @@ print $x;        # Read
     return 42;
 }"#;
 
-        index.index_file(url::Url::parse(uri).unwrap(), code_v2.to_string()).unwrap();
+        index.index_file(url::Url::parse(uri)?, code_v2.to_string()).map_err(|e| anyhow!(e))?;
 
         let symbols_v2 = index.file_symbols(uri);
         assert!(!symbols_v2.iter().any(|s| s.name == "old_name"), "old_name should be gone");
         assert!(symbols_v2.iter().any(|s| s.name == "new_name"), "new_name should exist");
+
+        Ok(())
     }
 
     #[test]
-    fn test_clear_file() {
+    fn test_clear_file() -> Result<()> {
         let index = WorkspaceIndex::new();
         let uri = "file:///clear_test.pl";
 
         let code = r#"package Test;
 sub test_sub { }"#;
 
-        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
+        index.index_file(url::Url::parse(uri)?, code.to_string()).map_err(|e| anyhow!(e))?;
 
         // Verify symbols exist
         let symbols = index.file_symbols(uri);
@@ -236,5 +250,7 @@ sub test_sub { }"#;
         // Verify definition lookup also fails
         assert!(index.find_definition("Test").is_none());
         assert!(index.find_definition("test_sub").is_none());
+
+        Ok(())
     }
 }

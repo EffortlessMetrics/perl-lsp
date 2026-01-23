@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Metamorphic property tests for whitespace and comment insertion
 
 use perl_parser::Parser;

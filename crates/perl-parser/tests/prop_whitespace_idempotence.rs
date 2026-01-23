@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use proptest::prelude::*;
 
 // Include the shared utilities (which includes TokenType import)

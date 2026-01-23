@@ -775,83 +775,82 @@ impl WorkspaceRefactor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
+    use tempfile::{tempdir, TempDir};
 
-    fn setup_index(files: Vec<(&str, &str)>) -> (WorkspaceIndex, Vec<PathBuf>) {
-        let dir = tempdir().expect("Failed to create temp directory for test");
+    fn setup_index(files: Vec<(&str, &str)>) -> Result<(TempDir, WorkspaceIndex, Vec<PathBuf>), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
         let mut paths = Vec::new();
         let index = WorkspaceIndex::new();
         for (name, content) in files {
             let path = dir.path().join(name);
-            std::fs::write(&path, content)
-                .unwrap_or_else(|e| panic!("Failed to write test file {}: {}", name, e));
-            let path_str = path.to_str().unwrap_or_else(|| {
-                panic!("Failed to convert path to string for test file: {}", name)
-            });
-            index.index_file_str(path_str, content)
-                .unwrap_or_else(|e| panic!("Failed to index file {}: {}. Consider simplifying test content to avoid complex Perl constructs that may not parse correctly.", name, e));
+            std::fs::write(&path, content)?;
+            let path_str = path.to_str().ok_or_else(|| {
+                format!("Failed to convert path to string for test file: {}", name)
+            })?;
+            index.index_file_str(path_str, content)?;
             paths.push(path);
         }
-        (index, paths)
+        Ok((dir, index, paths))
     }
 
     #[test]
-    fn test_rename_symbol() {
-        let (index, paths) =
-            setup_index(vec![("a.pl", "my $foo = 1; print $foo;"), ("b.pl", "print $foo;")]);
+    fn test_rename_symbol() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) =
+            setup_index(vec![("a.pl", "my $foo = 1; print $foo;"), ("b.pl", "print $foo;")])?;
         let refactor = WorkspaceRefactor::new(index);
         let result = refactor
-            .rename_symbol("$foo", "$bar", &paths[0], (0, 0))
-            .expect("rename_symbol should succeed in test");
+            .rename_symbol("$foo", "$bar", &paths[0], (0, 0))?;
         assert!(!result.file_edits.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_extract_module() {
-        let (index, paths) = setup_index(vec![("a.pl", "my $x = 1;\nprint $x;\n")]);
+    fn test_extract_module() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![("a.pl", "my $x = 1;\nprint $x;\n")])?;
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor
-            .extract_module(&paths[0], 2, 2, "Extracted")
-            .expect("extract_module should succeed in test");
+            .extract_module(&paths[0], 2, 2, "Extracted")?;
         assert_eq!(res.file_edits.len(), 2);
+        Ok(())
     }
 
     #[test]
-    fn test_optimize_imports() {
-        let (index, _paths) = setup_index(vec![
+    fn test_optimize_imports() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, _paths) = setup_index(vec![
             ("a.pl", "use B;\nuse A;\nuse B;\n"),
             ("b.pl", "use C;\nuse A;\nuse C;\n"),
-        ]);
+        ])?;
         let refactor = WorkspaceRefactor::new(index);
-        let res = refactor.optimize_imports().expect("optimize_imports should succeed in test");
+        let res = refactor.optimize_imports()?;
         assert_eq!(res.file_edits.len(), 2);
+        Ok(())
     }
 
     #[test]
-    fn test_move_subroutine() {
-        let (index, paths) = setup_index(vec![("a.pl", "sub foo {1}\n"), ("b.pm", "")]);
+    fn test_move_subroutine() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![("a.pl", "sub foo {1}\n"), ("b.pm", "")])?;
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor
-            .move_subroutine("foo", &paths[0], "b")
-            .expect("move_subroutine should succeed in test");
+            .move_subroutine("foo", &paths[0], "b")?;
         assert_eq!(res.file_edits.len(), 2);
+        Ok(())
     }
 
     #[test]
-    fn test_inline_variable() {
-        let (index, paths) =
-            setup_index(vec![("a.pl", "my $x = 42;\nmy $y = $x + 1;\nprint $y;\n")]);
+    fn test_inline_variable() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) =
+            setup_index(vec![("a.pl", "my $x = 42;\nmy $y = $x + 1;\nprint $y;\n")])?;
         let refactor = WorkspaceRefactor::new(index);
         let result = refactor
-            .inline_variable("$x", &paths[0], (0, 0))
-            .expect("inline_variable should succeed in test");
+            .inline_variable("$x", &paths[0], (0, 0))?;
         assert!(!result.file_edits.is_empty());
+        Ok(())
     }
 
     // Edge case and error handling tests
     #[test]
-    fn test_rename_symbol_validation_errors() {
-        let (index, paths) = setup_index(vec![("a.pl", "my $foo = 1;")]);
+    fn test_rename_symbol_validation_errors() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![("a.pl", "my $foo = 1;")])?;
         let refactor = WorkspaceRefactor::new(index);
 
         // Empty old name
@@ -871,11 +870,12 @@ mod tests {
             refactor.rename_symbol("$foo", "$foo", &paths[0], (0, 0)),
             Err(RefactorError::InvalidInput(_))
         ));
+        Ok(())
     }
 
     #[test]
-    fn test_extract_module_validation_errors() {
-        let (index, paths) = setup_index(vec![("a.pl", "my $x = 1;\nprint $x;\n")]);
+    fn test_extract_module_validation_errors() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![("a.pl", "my $x = 1;\nprint $x;\n")])?;
         let refactor = WorkspaceRefactor::new(index);
 
         // Empty module name
@@ -889,11 +889,12 @@ mod tests {
             refactor.extract_module(&paths[0], 5, 2, "Test"),
             Err(RefactorError::InvalidInput(_))
         ));
+        Ok(())
     }
 
     #[test]
-    fn test_move_subroutine_validation_errors() {
-        let (index, paths) = setup_index(vec![("a.pl", "sub foo { 1 }")]);
+    fn test_move_subroutine_validation_errors() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![("a.pl", "sub foo { 1 }")])?;
         let refactor = WorkspaceRefactor::new(index);
 
         // Empty subroutine name
@@ -907,11 +908,12 @@ mod tests {
             refactor.move_subroutine("foo", &paths[0], ""),
             Err(RefactorError::InvalidInput(_))
         ));
+        Ok(())
     }
 
     #[test]
-    fn test_inline_variable_validation_errors() {
-        let (index, paths) = setup_index(vec![("a.pl", "my $x = 42;")]);
+    fn test_inline_variable_validation_errors() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![("a.pl", "my $x = 42;")])?;
         let refactor = WorkspaceRefactor::new(index);
 
         // Empty variable name
@@ -919,72 +921,72 @@ mod tests {
             refactor.inline_variable("", &paths[0], (0, 0)),
             Err(RefactorError::InvalidInput(_))
         ));
+        Ok(())
     }
 
     // Unicode and international character tests
     #[test]
-    fn test_rename_symbol_unicode_variables() {
-        let (index, paths) = setup_index(vec![
+    fn test_rename_symbol_unicode_variables() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![
             ("unicode.pl", "my $♥ = '爱'; print $♥; # Unicode variable"),
             ("unicode2.pl", "use utf8; my $données = 42; print $données;"), // French accents
-        ]);
+        ])?;
         let refactor = WorkspaceRefactor::new(index);
 
         // Rename Unicode variable
         let result = refactor
-            .rename_symbol("$♥", "$love", &paths[0], (0, 0))
-            .expect("rename_symbol with Unicode should succeed in test");
+            .rename_symbol("$♥", "$love", &paths[0], (0, 0))?;
         assert!(!result.file_edits.is_empty());
         assert!(result.description.contains("♥"));
 
         // Rename variable with accents
         let result = refactor
-            .rename_symbol("$données", "$data", &paths[1], (0, 0))
-            .expect("rename_symbol with accented characters should succeed in test");
+            .rename_symbol("$données", "$data", &paths[1], (0, 0))?;
         assert!(!result.file_edits.is_empty());
         assert!(result.description.contains("données"));
+        Ok(())
     }
 
     #[test]
-    fn test_extract_module_unicode_content() {
-        let (index, paths) = setup_index(vec![(
+    fn test_extract_module_unicode_content() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![(
             "unicode_content.pl",
             "# コメント in Japanese\nmy $message = \"你好世界\";\nprint $message;\n# More 中文 content\n",
-        )]);
+        )])?;
         let refactor = WorkspaceRefactor::new(index);
 
         let result = refactor
-            .extract_module(&paths[0], 2, 3, "UnicodeUtils")
-            .expect("extract_module with Unicode content should succeed in test");
+            .extract_module(&paths[0], 2, 3, "UnicodeUtils")?;
         assert_eq!(result.file_edits.len(), 2); // Original + new module
 
         // Check that the extracted content contains Unicode
         let new_module_edit = &result.file_edits[1];
         assert!(new_module_edit.edits[0].new_text.contains("你好世界"));
+        Ok(())
     }
 
     #[test]
-    fn test_inline_variable_unicode_expressions() {
-        let (index, paths) = setup_index(vec![(
+    fn test_inline_variable_unicode_expressions() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![(
             "unicode_expr.pl",
             "my $表达式 = \"测试表达式\";\nmy $result = $表达式 . \"suffix\";\nprint $result;\n",
-        )]);
+        )])?;
         let refactor = WorkspaceRefactor::new(index);
 
         let result = refactor
-            .inline_variable("$表达式", &paths[0], (0, 0))
-            .expect("inline_variable with Unicode should succeed in test");
+            .inline_variable("$表达式", &paths[0], (0, 0))?;
         assert!(!result.file_edits.is_empty());
 
         // Check that the replacement contains the Unicode string literal
         let edits = &result.file_edits[0].edits;
         assert!(edits.iter().any(|edit| edit.new_text.contains("测试表达式")));
+        Ok(())
     }
 
     // Complex edge cases
     #[test]
-    fn test_rename_symbol_complex_perl_constructs() {
-        let (index, paths) = setup_index(vec![(
+    fn test_rename_symbol_complex_perl_constructs() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![(
             "complex.pl",
             r#"
 package MyPackage;
@@ -997,22 +999,22 @@ for my $item (@{[$var1, $var2]}) {
     print $item;
 }
 "#,
-        )]);
+        )])?;
         let refactor = WorkspaceRefactor::new(index);
 
         let result = refactor
-            .rename_symbol("$var1", "$renamed_var", &paths[0], (0, 0))
-            .expect("rename_symbol with complex Perl constructs should succeed in test");
+            .rename_symbol("$var1", "$renamed_var", &paths[0], (0, 0))?;
         assert!(!result.file_edits.is_empty());
 
         // Should find multiple occurrences in different contexts
         let edits = &result.file_edits[0].edits;
         assert!(edits.len() > 3); // Should find multiple instances
+        Ok(())
     }
 
     #[test]
-    fn test_extract_module_with_dependencies() {
-        let (index, paths) = setup_index(vec![(
+    fn test_extract_module_with_dependencies() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![(
             "with_deps.pl",
             r#"
 use strict;
@@ -1029,23 +1031,23 @@ sub main_func {
     print $result;
 }
 "#,
-        )]);
+        )])?;
         let refactor = WorkspaceRefactor::new(index);
 
         let result = refactor
-            .extract_module(&paths[0], 5, 8, "Utils")
-            .expect("extract_module with dependencies should succeed in test");
+            .extract_module(&paths[0], 5, 8, "Utils")?;
         assert_eq!(result.file_edits.len(), 2);
 
         // Check that extracted content includes the subroutine
         let new_module_edit = &result.file_edits[1];
         assert!(new_module_edit.edits[0].new_text.contains("sub utility_func"));
         assert!(new_module_edit.edits[0].new_text.contains("utility result"));
+        Ok(())
     }
 
     #[test]
-    fn test_optimize_imports_complex_scenarios() {
-        let (index, _paths) = setup_index(vec![
+    fn test_optimize_imports_complex_scenarios() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, _paths) = setup_index(vec![
             (
                 "complex_imports.pl",
                 r#"
@@ -1061,12 +1063,11 @@ use JSON; # Duplicate
             ),
             ("minimal_imports.pl", "use strict;\nuse warnings;"),
             ("no_imports.pl", "print 'Hello World';"),
-        ]);
+        ])?;
         let refactor = WorkspaceRefactor::new(index);
 
         let result = refactor
-            .optimize_imports()
-            .expect("optimize_imports with complex scenarios should succeed in test");
+            .optimize_imports()?;
 
         // Should optimize the complex file, skip minimal (no duplicates), skip no imports
         assert!(result.file_edits.len() <= 3);
@@ -1075,42 +1076,45 @@ use JSON; # Duplicate
         for file_edit in &result.file_edits {
             assert!(!file_edit.edits.is_empty());
         }
+        Ok(())
     }
 
     #[test]
-    fn test_move_subroutine_not_found() {
-        let (index, paths) = setup_index(vec![("empty.pl", "# No subroutines here")]);
+    fn test_move_subroutine_not_found() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![("empty.pl", "# No subroutines here")])?;
         let refactor = WorkspaceRefactor::new(index);
 
         let result = refactor.move_subroutine("nonexistent", &paths[0], "Target");
         assert!(matches!(result, Err(RefactorError::SymbolNotFound { .. })));
+        Ok(())
     }
 
     #[test]
-    fn test_inline_variable_no_initializer() {
-        let (index, paths) =
-            setup_index(vec![("no_init.pl", "my $var;\n$var = 42;\nprint $var;\n")]);
+    fn test_inline_variable_no_initializer() -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) =
+            setup_index(vec![("no_init.pl", "my $var;\n$var = 42;\nprint $var;\n")])?;
         let refactor = WorkspaceRefactor::new(index);
 
         let result = refactor.inline_variable("$var", &paths[0], (0, 0));
         // Should fail because the found line "my $var;" doesn't have an initializer after =
         assert!(matches!(result, Err(RefactorError::ParseError(_))));
+        Ok(())
     }
 
     #[test]
-    fn test_import_optimization_integration() {
+    fn test_import_optimization_integration() -> Result<(), Box<dyn std::error::Error>> {
         // Test the integration between workspace refactor and import optimizer
-        let (index, _paths) = setup_index(vec![
+        let (_dir, index, _paths) = setup_index(vec![
             (
                 "with_unused.pl",
                 "use strict;\nuse warnings;\nuse JSON qw(encode_json unused_symbol);\n\nmy $json = encode_json('test');",
             ),
             ("clean.pl", "use strict;\nuse warnings;\n\nprint 'test';"),
-        ]);
+        ])?;
         let refactor = WorkspaceRefactor::new(index);
 
         let result =
-            refactor.optimize_imports().expect("optimize_imports integration test should succeed");
+            refactor.optimize_imports()?;
 
         // Should only optimize files that have optimizations available
         // Files with unused imports should get optimized edits
@@ -1119,11 +1123,12 @@ use JSON; # Duplicate
         // Check that we actually have some optimization suggestions
         let has_optimizations = result.file_edits.iter().any(|edit| !edit.edits.is_empty());
         assert!(has_optimizations);
+        Ok(())
     }
 
     // Performance and scalability tests
     #[test]
-    fn test_large_file_handling() {
+    fn test_large_file_handling() -> Result<(), Box<dyn std::error::Error>> {
         // Create a large file with many occurrences
         let mut large_content = String::new();
         large_content.push_str("my $target = 'value';\n");
@@ -1131,36 +1136,36 @@ use JSON; # Duplicate
             large_content.push_str(&format!("print \"Line {}: $target\\n\";\n", i));
         }
 
-        let (index, paths) = setup_index(vec![("large.pl", &large_content)]);
+        let (_dir, index, paths) = setup_index(vec![("large.pl", &large_content)])?;
         let refactor = WorkspaceRefactor::new(index);
 
         let result = refactor
-            .rename_symbol("$target", "$renamed", &paths[0], (0, 0))
-            .expect("rename_symbol on large file should succeed in test");
+            .rename_symbol("$target", "$renamed", &paths[0], (0, 0))?;
         assert!(!result.file_edits.is_empty());
 
         // Should handle all occurrences
         let edits = &result.file_edits[0].edits;
         assert!(edits.len() >= 100); // At least one per line
+        Ok(())
     }
 
     #[test]
-    fn test_multiple_files_workspace() {
+    fn test_multiple_files_workspace() -> Result<(), Box<dyn std::error::Error>> {
         let files = (0..10)
             .map(|i| (format!("file_{}.pl", i), format!("my $shared = {}; print $shared;\n", i)))
             .collect::<Vec<_>>();
 
         let files_refs: Vec<_> =
             files.iter().map(|(name, content)| (name.as_str(), content.as_str())).collect();
-        let (index, paths) = setup_index(files_refs);
+        let (_dir, index, paths) = setup_index(files_refs)?;
         let refactor = WorkspaceRefactor::new(index);
 
         let result = refactor
-            .rename_symbol("$shared", "$common", &paths[0], (0, 0))
-            .expect("rename_symbol across multiple files should succeed in test");
+            .rename_symbol("$shared", "$common", &paths[0], (0, 0))?;
         assert!(!result.file_edits.is_empty());
 
         // Should potentially affect multiple files if fallback search is used
         assert!(!result.description.is_empty());
+        Ok(())
     }
 }

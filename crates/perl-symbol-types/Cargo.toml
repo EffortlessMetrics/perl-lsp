@@ -27,5 +27,6 @@ serde = { version = "1.0.228", features = ["derive"] }
 [features]
 default = []
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+[lints]
+workspace = true
+

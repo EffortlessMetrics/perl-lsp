@@ -8,6 +8,7 @@
 //! is not yet implemented. Tests are gated behind the `lsp-extras` feature.
 
 #![cfg(feature = "lsp-extras")]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use perl_lsp::features::diagnostics::DiagnosticsProvider;
 use perl_parser::Parser;

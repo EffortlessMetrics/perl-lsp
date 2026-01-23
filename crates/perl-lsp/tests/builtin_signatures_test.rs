@@ -5,7 +5,7 @@ use perl_parser::Parser;
 
 #[test]
 fn test_builtin_count_threshold() {
-    use perl_parser_core::builtins::builtin_signatures::create_builtin_signatures;
+    use perl_parser::builtins::builtin_signatures::create_builtin_signatures;
     let signatures = create_builtin_signatures();
 
     // Issue #418: Ensure we have at least 150 built-in function signatures

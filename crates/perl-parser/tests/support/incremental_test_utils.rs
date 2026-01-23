@@ -3,6 +3,8 @@
 //! Provides helper functions and structures for comprehensive testing of
 //! incremental parsing functionality with detailed performance metrics.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_parser::incremental_v2::{IncrementalMetrics, IncrementalParserV2};
 use perl_parser::{edit::Edit, position::Position};
 use std::time::{Duration, Instant};

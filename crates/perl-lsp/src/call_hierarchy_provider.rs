@@ -680,9 +680,11 @@ sub process_data {
             // Find function at position (line 1, char 5) - "main"
             let items = provider.prepare(&ast, 1, 5);
             assert!(items.is_some());
-            let items = items.unwrap();
-            assert_eq!(items.len(), 1);
-            assert_eq!(items[0].name, "main");
+            let items = items.ok_or("expected items").map_err(|e| e.to_string());
+            if let Ok(items) = items {
+                assert_eq!(items.len(), 1);
+                assert_eq!(items[0].name, "main");
+            }
         }
     }
 
@@ -732,8 +734,11 @@ sub target_func {
             assert!(caller_names.contains(&&"caller2".to_string()));
 
             // caller2 should have 2 ranges (called twice)
-            let caller2 = incoming.iter().find(|c| c.from.name == "caller2").unwrap();
-            assert_eq!(caller2.from_ranges.len(), 2);
+            if let Some(caller2) = incoming.iter().find(|c| c.from.name == "caller2") {
+                assert_eq!(caller2.from_ranges.len(), 2);
+            } else {
+                panic!("caller2 not found in incoming calls");
+            }
         }
     }
 

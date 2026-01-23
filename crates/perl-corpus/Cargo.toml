@@ -46,3 +46,5 @@ ci-fast = []
 
 [package.metadata.docs.rs]
 all-features = false
+[lints]
+workspace = true

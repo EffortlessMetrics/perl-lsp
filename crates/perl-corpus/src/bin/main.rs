@@ -193,16 +193,19 @@ fn main() -> Result<()> {
             use proptest::strategy::ValueTree;
             use proptest::test_runner::{Config, TestRunner};
 
-            let seed = seed.unwrap_or_else(|| {
-                use std::time::{SystemTime, UNIX_EPOCH};
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_else(|e| {
-                        eprintln!("Warning: system time appears to be before UNIX_EPOCH: {}", e);
-                        std::time::Duration::from_secs(0)
-                    })
-                    .as_secs()
-            });
+            let seed = match seed {
+                Some(s) => s,
+                None => {
+                    use std::time::{SystemTime, UNIX_EPOCH};
+                    match SystemTime::now().duration_since(UNIX_EPOCH) {
+                        Ok(duration) => duration.as_secs(),
+                        Err(e) => {
+                            eprintln!("Warning: system time appears to be before UNIX_EPOCH: {}", e);
+                            0
+                        }
+                    }
+                }
+            };
 
             let config = Config { cases: count as u32, ..Config::default() };
 

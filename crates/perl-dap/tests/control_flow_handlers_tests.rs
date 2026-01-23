@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Control Flow Handlers Tests (AC9)
 //!
 //! Tests for DAP control flow operations: continue, next, stepIn, stepOut, pause
@@ -327,8 +328,8 @@ fn test_control_flow_with_null_arguments() {
             DapMessage::Response { success, .. } => {
                 // These should succeed even without arguments (for most operations)
                 if command == "pause" {
-                    // Pause may fail without a session
-                    assert!(!success || success, "Pause may succeed or fail without session");
+                    // Pause may fail without a session - we accept either outcome
+                    let _ = success;
                 } else {
                     assert!(success, "{} should succeed with null arguments", command);
                 }

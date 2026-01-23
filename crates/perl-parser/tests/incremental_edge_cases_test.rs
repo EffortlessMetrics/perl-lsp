@@ -1,9 +1,9 @@
+#![cfg(feature = "incremental")]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive edge case tests for incremental parsing
 //!
 //! This module tests the incremental parser against challenging scenarios
 //! that stress the tree reuse algorithms and fallback mechanisms.
-
-#![cfg(feature = "incremental")]
 
 mod support;
 

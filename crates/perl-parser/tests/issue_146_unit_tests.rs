@@ -9,9 +9,8 @@ mod tdd_workflow_unit_tests {
 
     /// Test that tdd_workflow.rs signature variable fix is correct
     #[test]
-    fn test_signature_variable_fix() {
-        let content =
-            fs::read_to_string("src/tdd_workflow.rs").expect("Failed to read tdd_workflow.rs");
+    fn test_signature_variable_fix() -> Result<(), Box<dyn std::error::Error>> {
+        let content = fs::read_to_string("src/tdd_workflow.rs")?;
 
         // Should not contain undefined signature variable usage
         assert!(
@@ -24,13 +23,14 @@ mod tdd_workflow_unit_tests {
             content.contains("params.iter()") || content.contains("let args = params"),
             "tdd_workflow.rs does not use params parameter correctly"
         );
+
+        Ok(())
     }
 
     /// Test that tower_lsp imports are replaced with lsp_types
     #[test]
-    fn test_lsp_imports_fix() {
-        let content =
-            fs::read_to_string("src/tdd_workflow.rs").expect("Failed to read tdd_workflow.rs");
+    fn test_lsp_imports_fix() -> Result<(), Box<dyn std::error::Error>> {
+        let content = fs::read_to_string("src/tdd_workflow.rs")?;
 
         // Should not contain tower_lsp imports
         assert!(
@@ -43,23 +43,29 @@ mod tdd_workflow_unit_tests {
             content.contains("use lsp_types::") || !content.contains("CodeAction"),
             "tdd_workflow.rs does not use lsp_types properly"
         );
+
+        Ok(())
     }
 
     /// Test that generate_basic_test method compiles correctly
     #[test]
-    fn test_generate_basic_test_method() {
+    fn test_generate_basic_test_method() -> Result<(), Box<dyn std::error::Error>> {
         // This test validates that the method signature and implementation are correct
         // We can't directly test the method without uncommenting the module,
         // but we can validate the source code syntax
 
-        let content =
-            fs::read_to_string("src/tdd_workflow.rs").expect("Failed to read tdd_workflow.rs");
+        let content = fs::read_to_string("src/tdd_workflow.rs")?;
 
         // Check that the method exists and has correct parameter usage
         if content.contains("fn generate_basic_test") {
             // The method should use the params parameter
-            let method_start = content.find("fn generate_basic_test").unwrap();
-            let method_end = content[method_start..].find("\n    }").unwrap() + method_start;
+            let method_start = content
+                .find("fn generate_basic_test")
+                .ok_or("generate_basic_test method not found")?;
+            let method_end = content[method_start..]
+                .find("\n    }")
+                .ok_or("generate_basic_test method end not found")?
+                + method_start;
             let method_content = &content[method_start..method_end];
 
             assert!(
@@ -67,6 +73,8 @@ mod tdd_workflow_unit_tests {
                 "generate_basic_test method does not reference params parameter"
             );
         }
+
+        Ok(())
     }
 }
 
@@ -85,9 +93,8 @@ mod refactoring_module_tests {
 
     /// Test refactoring module structure after implementation
     #[test]
-    fn test_refactoring_module_structure() {
-        let content =
-            std::fs::read_to_string("src/refactoring.rs").expect("Failed to read refactoring.rs");
+    fn test_refactoring_module_structure() -> Result<(), Box<dyn std::error::Error>> {
+        let content = std::fs::read_to_string("src/refactoring.rs")?;
 
         // Should contain the main RefactoringEngine struct
         assert!(
@@ -106,6 +113,8 @@ mod refactoring_module_tests {
             content.contains("pub struct RefactoringResult"),
             "RefactoringResult struct not found in refactoring.rs"
         );
+
+        Ok(())
     }
 
     /// Test refactoring module API compatibility
@@ -129,8 +138,8 @@ mod refactoring_module_tests {
 mod lib_integration_tests {
     /// Test that lib.rs module declarations are correct after uncommenting
     #[test]
-    fn test_lib_module_declarations() {
-        let content = std::fs::read_to_string("src/lib.rs").expect("Failed to read lib.rs");
+    fn test_lib_module_declarations() -> Result<(), Box<dyn std::error::Error>> {
+        let content = std::fs::read_to_string("src/lib.rs")?;
 
         // Should contain uncommented tdd_workflow module
         assert!(
@@ -145,12 +154,14 @@ mod lib_integration_tests {
                 && !content.contains("// pub mod refactoring;"),
             "refactoring module is still commented out in lib.rs"
         );
+
+        Ok(())
     }
 
     /// Test that public API exports are added correctly
     #[test]
-    fn test_public_api_exports() {
-        let content = std::fs::read_to_string("src/lib.rs").expect("Failed to read lib.rs");
+    fn test_public_api_exports() -> Result<(), Box<dyn std::error::Error>> {
+        let content = std::fs::read_to_string("src/lib.rs")?;
 
         // Check for TDD workflow exports
         assert!(
@@ -163,6 +174,8 @@ mod lib_integration_tests {
             content.contains("RefactoringEngine") || content.contains("pub use refactoring"),
             "Refactoring types are not exported from lib.rs"
         );
+
+        Ok(())
     }
 }
 
@@ -211,11 +224,10 @@ mod quality_assurance_tests {
 
     /// Test that the crate builds without warnings after fixes
     #[test]
-    fn test_build_without_warnings() {
+    fn test_build_without_warnings() -> Result<(), Box<dyn std::error::Error>> {
         let output = Command::new("cargo")
             .args(["build", "--package", "perl-parser"])
-            .output()
-            .expect("Failed to run cargo build");
+            .output()?;
 
         let stderr = String::from_utf8_lossy(&output.stderr);
 
@@ -223,20 +235,23 @@ mod quality_assurance_tests {
         assert!(!stderr.contains("warning:"), "Build contains warnings: {}", stderr);
 
         assert!(output.status.success(), "Build failed: {}", stderr);
+
+        Ok(())
     }
 
     /// Test that tests pass after architectural repair
     #[test]
-    fn test_test_suite_passes() {
+    fn test_test_suite_passes() -> Result<(), Box<dyn std::error::Error>> {
         let output = Command::new("cargo")
             .args(["test", "--package", "perl-parser", "--lib"])
-            .output()
-            .expect("Failed to run tests");
+            .output()?;
 
         assert!(
             output.status.success(),
             "Test suite failed after architectural repair: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+
+        Ok(())
     }
 }

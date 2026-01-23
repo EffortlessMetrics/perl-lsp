@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use insta::assert_yaml_snapshot;
 use perl_lsp::features::map::feature_ids_from_caps;
 use perl_lsp::features::{advertised_features, compliance_percent};

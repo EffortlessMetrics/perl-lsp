@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_parser::Parser;
 use perl_parser::workspace_index::WorkspaceIndex;
 use proptest::prelude::*;

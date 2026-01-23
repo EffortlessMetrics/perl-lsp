@@ -528,24 +528,25 @@ mod tests {
     }
 
     #[test]
-    fn test_cancellation_registry_operations() {
+    fn test_cancellation_registry_operations() -> Result<(), Box<dyn std::error::Error>> {
         let registry = CancellationRegistry::new();
         let token = PerlLspCancellationToken::new(json!(456), "references".to_string());
 
         // Register token
-        registry.register_token(token.clone()).unwrap();
+        registry.register_token(token.clone())?;
         assert_eq!(registry.active_count(), 1);
 
         // Check cancellation status
         assert!(!registry.is_cancelled(&json!(456)));
 
         // Cancel request
-        registry.cancel_request(&json!(456)).unwrap();
+        registry.cancel_request(&json!(456))?;
         assert!(registry.is_cancelled(&json!(456)));
 
         // Remove request
         registry.remove_request(&json!(456));
         assert_eq!(registry.active_count(), 0);
+        Ok(())
     }
 
     #[test]
@@ -589,9 +590,9 @@ mod tests {
     static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
-    fn test_request_cleanup_guard_auto_cleanup() {
+    fn test_request_cleanup_guard_auto_cleanup() -> Result<(), Box<dyn std::error::Error>> {
         // Serialize access to global registry to avoid interference between tests
-        let _lock = TEST_LOCK.lock().unwrap();
+        let _lock = TEST_LOCK.lock().map_err(|e| format!("lock error: {}", e))?;
 
         let req_id = json!(9999);
 
@@ -602,7 +603,7 @@ mod tests {
         {
             // Register a token in the global registry
             let token = PerlLspCancellationToken::new(req_id.clone(), "test".to_string());
-            GLOBAL_CANCELLATION_REGISTRY.register_token(token).unwrap();
+            GLOBAL_CANCELLATION_REGISTRY.register_token(token)?;
 
             assert_eq!(
                 GLOBAL_CANCELLATION_REGISTRY.active_count(),
@@ -621,6 +622,7 @@ mod tests {
             count_before,
             "Token should be removed by guard drop"
         );
+        Ok(())
     }
 
     #[test]
@@ -631,16 +633,17 @@ mod tests {
     }
 
     #[test]
-    fn test_request_cleanup_guard_from_ref() {
+    fn test_request_cleanup_guard_from_ref() -> Result<(), Box<dyn std::error::Error>> {
         // Test that from_ref correctly clones the value
         let req_id = json!(9998);
         let guard = RequestCleanupGuard::from_ref(Some(&req_id));
 
         // Verify the guard has the request_id
         assert!(guard.request_id.is_some());
-        assert_eq!(guard.request_id.as_ref().unwrap(), &req_id);
+        assert_eq!(guard.request_id.as_ref().ok_or("expected request_id")?, &req_id);
 
         // Let it drop - this exercises the Drop impl even if nothing is registered
         drop(guard);
+        Ok(())
     }
 }

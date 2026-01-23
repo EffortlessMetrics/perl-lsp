@@ -6,10 +6,10 @@
 use perl_parser::Parser;
 
 #[test]
-fn qr_paren_mods_are_attached() {
+fn qr_paren_mods_are_attached() -> Result<(), Box<dyn std::error::Error>> {
     let code = "my $re = qr(t)ia;";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("parse");
+    let ast = parser.parse()?;
     let s = format!("{:?}", ast);
 
     // Check that modifiers are attached to the regex node
@@ -18,13 +18,14 @@ fn qr_paren_mods_are_attached() {
     // Should NOT have a separate identifier for modifiers
     let count = s.matches("Identifier").count();
     assert!(count <= 1, "Modifiers leaked as identifier (found {} identifiers): {}", count, s);
+    Ok(())
 }
 
 #[test]
-fn qr_hash_mods_are_attached() {
+fn qr_hash_mods_are_attached() -> Result<(), Box<dyn std::error::Error>> {
     let code = "my $re = qr#t#ia;";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("parse");
+    let ast = parser.parse()?;
     let s = format!("{:?}", ast);
 
     // Check that modifiers are attached to the regex node
@@ -33,10 +34,11 @@ fn qr_hash_mods_are_attached() {
     // Should NOT have a separate identifier for modifiers
     let count = s.matches("Identifier").count();
     assert!(count <= 1, "Modifiers leaked as identifier (found {} identifiers): {}", count, s);
+    Ok(())
 }
 
 #[test]
-fn qr_different_delimiters_same_shape() {
+fn qr_different_delimiters_same_shape() -> Result<(), Box<dyn std::error::Error>> {
     let codes = vec![
         "qr(pattern)i",
         "qr{pattern}i",
@@ -50,7 +52,7 @@ fn qr_different_delimiters_same_shape() {
 
     for code in &codes {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("parse");
+        let ast = parser.parse()?;
         let shape = extract_shape(&ast);
         shapes.push((code, shape));
     }
@@ -60,10 +62,11 @@ fn qr_different_delimiters_same_shape() {
     for (code, shape) in &shapes[1..] {
         assert_eq!(shape, first_shape, "Shape mismatch for '{}' vs '{}'", code, shapes[0].0);
     }
+    Ok(())
 }
 
 #[test]
-fn m_different_delimiters_same_shape() {
+fn m_different_delimiters_same_shape() -> Result<(), Box<dyn std::error::Error>> {
     let codes = vec![
         "m(pattern)gc",
         "m{pattern}gc",
@@ -77,7 +80,7 @@ fn m_different_delimiters_same_shape() {
 
     for code in &codes {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("parse");
+        let ast = parser.parse()?;
         let shape = extract_shape(&ast);
         shapes.push((code, shape));
     }
@@ -87,10 +90,11 @@ fn m_different_delimiters_same_shape() {
     for (code, shape) in &shapes[1..] {
         assert_eq!(shape, first_shape, "Shape mismatch for '{}' vs '{}'", code, shapes[0].0);
     }
+    Ok(())
 }
 
 #[test]
-fn s_different_delimiters_same_shape() {
+fn s_different_delimiters_same_shape() -> Result<(), Box<dyn std::error::Error>> {
     let codes = vec![
         "s(old)(new)ge",
         "s{old}{new}ge",
@@ -104,7 +108,7 @@ fn s_different_delimiters_same_shape() {
 
     for code in &codes {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("parse");
+        let ast = parser.parse()?;
         let shape = extract_shape(&ast);
         shapes.push((code, shape));
     }
@@ -114,26 +118,28 @@ fn s_different_delimiters_same_shape() {
     for (code, shape) in &shapes[1..] {
         assert_eq!(shape, first_shape, "Shape mismatch for '{}' vs '{}'", code, shapes[0].0);
     }
+    Ok(())
 }
 
 #[test]
-fn tr_y_alias_same_shape() {
+fn tr_y_alias_same_shape() -> Result<(), Box<dyn std::error::Error>> {
     let tr_code = "tr(abc)(xyz)d";
     let y_code = "y(abc)(xyz)d";
 
     let mut tr_parser = Parser::new(tr_code);
-    let tr_ast = tr_parser.parse().expect("parse tr");
+    let tr_ast = tr_parser.parse()?;
     let tr_shape = extract_shape(&tr_ast);
 
     let mut y_parser = Parser::new(y_code);
-    let y_ast = y_parser.parse().expect("parse y");
+    let y_ast = y_parser.parse()?;
     let y_shape = extract_shape(&y_ast);
 
     assert_eq!(tr_shape, y_shape, "tr and y should produce identical shapes");
+    Ok(())
 }
 
 #[test]
-fn q_qq_different_delimiters_same_shape() {
+fn q_qq_different_delimiters_same_shape() -> Result<(), Box<dyn std::error::Error>> {
     let q_codes = vec!["q(hello)", "q{hello}", "q[hello]", "q<hello>", "q#hello#"];
 
     let qq_codes = vec!["qq(hello)", "qq{hello}", "qq[hello]", "qq<hello>", "qq#hello#"];
@@ -142,7 +148,7 @@ fn q_qq_different_delimiters_same_shape() {
     let mut q_shapes = Vec::new();
     for code in &q_codes {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("parse");
+        let ast = parser.parse()?;
         let shape = extract_shape(&ast);
         q_shapes.push((code, shape));
     }
@@ -156,7 +162,7 @@ fn q_qq_different_delimiters_same_shape() {
     let mut qq_shapes = Vec::new();
     for code in &qq_codes {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("parse");
+        let ast = parser.parse()?;
         let shape = extract_shape(&ast);
         qq_shapes.push((code, shape));
     }
@@ -169,6 +175,7 @@ fn q_qq_different_delimiters_same_shape() {
             code, qq_shapes[0].0
         );
     }
+    Ok(())
 }
 
 #[test]

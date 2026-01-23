@@ -41,11 +41,12 @@ walkdir = "2.5.0"
 
 # Unix-only dependency for signal handling in debug adapter
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.30.1", features = ["signal"] }
+nix = { version = "0.31.1", features = ["signal"] }
 
 [features]
 default = ["lsp-compat"]
 lsp-compat = ["lsp-types"]
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+[lints]
+workspace = true
+

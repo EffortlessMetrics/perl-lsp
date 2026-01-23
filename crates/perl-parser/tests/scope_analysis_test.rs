@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_parser::Parser;
 use perl_semantic_analyzer::analysis::scope_analyzer::{IssueKind, ScopeAnalyzer};
 use perl_semantic_analyzer::pragma_tracker::PragmaState;

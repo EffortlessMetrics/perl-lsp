@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 // Property-based tests for quote-like operators (q, qq, qr, qw, s///, tr///)
 
 // Include the utilities module

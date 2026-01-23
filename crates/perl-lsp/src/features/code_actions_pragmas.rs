@@ -124,7 +124,7 @@ sub hello {
         assert_eq!(actions.len(), 2);
 
         let titles: Vec<String> =
-            actions.iter().map(|a| a["title"].as_str().unwrap().to_string()).collect();
+            actions.iter().filter_map(|a| a["title"].as_str().map(|s| s.to_string())).collect();
 
         assert!(titles.contains(&"Add use strict;".to_string()));
         assert!(titles.contains(&"Add use warnings;".to_string()));

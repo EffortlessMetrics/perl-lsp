@@ -6,7 +6,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use tree_sitter::{Parser, Query, QueryCursor};
+use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 use walkdir::WalkDir;
 
 /// Highlight expectation from test file comments
@@ -180,7 +180,7 @@ fn run_highlight_test_case(
     let mut captures = cursor.captures(&query, tree.root_node(), test_case.source.as_bytes());
     let mut actual_counts: HashMap<String, usize> = HashMap::new();
     while let Some((match_, capture_index)) = captures.next() {
-        let name = query.capture_names()[capture_index].to_string();
+        let name = query.capture_names()[*capture_index].to_string();
         *actual_counts.entry(name).or_insert(0) += 1;
     }
 

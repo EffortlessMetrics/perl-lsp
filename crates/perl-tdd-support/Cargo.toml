@@ -33,5 +33,6 @@ url = { version = "2.5.8", optional = true }
 default = []
 lsp-compat = ["lsp-types", "url"]
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+[lints]
+workspace = true
+

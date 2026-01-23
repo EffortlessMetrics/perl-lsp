@@ -34,6 +34,7 @@ url = "2.5.8"
 lsp-types = { version = "0.97.0", optional = true }
 
 [dev-dependencies]
+anyhow = "1.0.100"
 criterion = "0.8.1"
 tempfile = "3.24.0"
 
@@ -47,5 +48,6 @@ name = "workspace_index_benchmark"
 harness = false
 required-features = ["workspace"]
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+[lints]
+workspace = true
+

@@ -1,4 +1,7 @@
-/// Fixed substitution operator tests with correct AST structure
+//! Fixed substitution operator tests with correct AST structure
+
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_parser::{Parser, ast::NodeKind};
 
 // Helper function to extract substitution node from AST

@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_lsp::features::code_actions_provider::{
     CodeActionKind as CodeActionKindV2, CodeActionsProvider as CodeActionsProviderV2,
 };

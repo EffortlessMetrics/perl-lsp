@@ -34,10 +34,9 @@ simd = []
 # Enable slow stress tests (regex fuzzing, etc.)
 slow_tests = []
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("slow_tests"))'] }
+[lints]
+workspace = true
 
 [[bench]]
 name = "lexer_benchmarks"
 harness = false
-

@@ -23,5 +23,6 @@ tempfile = "3.24.0"
 [features]
 default = []
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+[lints]
+workspace = true
+

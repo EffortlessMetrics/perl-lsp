@@ -8,6 +8,8 @@
 //!
 //! Specification: GitHub Issue #449 - AC5.1, AC5.3, AC5.4, AC5.5
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::json;
 use std::sync::mpsc::{Receiver, channel};

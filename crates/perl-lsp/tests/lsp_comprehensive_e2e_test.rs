@@ -5,6 +5,7 @@
 //! a professional IDE experience.
 
 #![allow(clippy::collapsible_if)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
 

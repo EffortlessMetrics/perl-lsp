@@ -248,10 +248,14 @@ fn main() {
                         OutputFormat::Sexp => println!("{}", ast.to_sexp()),
                         OutputFormat::Json => {
                             let json = ast_to_json(&ast);
-                            if args.pretty {
-                                println!("{}", serde_json::to_string_pretty(&json).unwrap());
+                            let output = if args.pretty {
+                                serde_json::to_string_pretty(&json)
                             } else {
-                                println!("{}", serde_json::to_string(&json).unwrap());
+                                serde_json::to_string(&json)
+                            };
+                            match output {
+                                Ok(s) => println!("{s}"),
+                                Err(e) => eprintln!("JSON serialization error: {e}"),
                             }
                         }
                         OutputFormat::Debug => println!("{:#?}", ast),

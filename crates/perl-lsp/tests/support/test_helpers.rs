@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Test helper functions for LSP test assertions
 //!
 //! This module provides specialized assertion helpers for validating LSP responses.

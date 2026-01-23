@@ -1,4 +1,5 @@
 #![allow(dead_code)] // Some tests are feature-gated while being fixed
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use serde_json::json;
 use std::time::Duration;

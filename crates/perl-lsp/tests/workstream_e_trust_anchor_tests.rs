@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Workstream E: Test Hardening (Trust Anchor)
 //!
 //! This module contains small, brutal regression tests to prevent regressions in:

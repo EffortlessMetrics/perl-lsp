@@ -1779,7 +1779,7 @@ mod tests {
     }
 
     #[test]
-    fn test_attach_missing_arguments() {
+    fn test_attach_missing_arguments() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let response = adapter.handle_request(1, "attach", None);
 
@@ -1788,15 +1788,16 @@ mod tests {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
-                let msg = message.unwrap();
+                let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Missing attach arguments"));
             }
             _ => panic!("Expected response"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_attach_tcp_valid_arguments() {
+    fn test_attach_tcp_valid_arguments() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let args = json!({
             "host": "localhost",
@@ -1810,16 +1811,17 @@ mod tests {
                 assert!(!success); // Not yet implemented, but validates correctly
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
-                let msg = message.unwrap();
+                let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("localhost:13603"));
                 assert!(msg.contains("5000ms timeout"));
             }
             _ => panic!("Expected response"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_attach_process_id_mode() {
+    fn test_attach_process_id_mode() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let args = json!({
             "processId": 12345
@@ -1831,16 +1833,17 @@ mod tests {
                 assert!(!success); // Not yet implemented
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
-                let msg = message.unwrap();
+                let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Process ID attachment"));
                 assert!(msg.contains("12345"));
             }
             _ => panic!("Expected response"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_attach_empty_host() {
+    fn test_attach_empty_host() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let args = json!({
             "host": "",
@@ -1853,15 +1856,16 @@ mod tests {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
-                let msg = message.unwrap();
+                let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Host cannot be empty"));
             }
             _ => panic!("Expected response"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_attach_whitespace_host() {
+    fn test_attach_whitespace_host() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let args = json!({
             "host": "   ",
@@ -1874,15 +1878,16 @@ mod tests {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
-                let msg = message.unwrap();
+                let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Host cannot be empty"));
             }
             _ => panic!("Expected response"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_attach_zero_port() {
+    fn test_attach_zero_port() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let args = json!({
             "host": "localhost",
@@ -1895,15 +1900,16 @@ mod tests {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
-                let msg = message.unwrap();
+                let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Port must be in range"));
             }
             _ => panic!("Expected response"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_attach_zero_timeout() {
+    fn test_attach_zero_timeout() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let args = json!({
             "host": "localhost",
@@ -1917,15 +1923,16 @@ mod tests {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
-                let msg = message.unwrap();
+                let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Timeout must be greater than 0"));
             }
             _ => panic!("Expected response"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_attach_excessive_timeout() {
+    fn test_attach_excessive_timeout() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let args = json!({
             "host": "localhost",
@@ -1939,15 +1946,16 @@ mod tests {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
-                let msg = message.unwrap();
+                let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Timeout cannot exceed"));
             }
             _ => panic!("Expected response"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_attach_default_values() {
+    fn test_attach_default_values() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         // Empty args should use defaults and fail with missing arguments message
         let args = json!({});
@@ -1959,15 +1967,16 @@ mod tests {
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
                 // Should use default host/port but still not be implemented
-                let msg = message.unwrap();
+                let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("localhost:13603"));
             }
             _ => panic!("Expected response"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_attach_custom_port() {
+    fn test_attach_custom_port() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let args = json!({
             "host": "192.168.1.100",
@@ -1980,10 +1989,11 @@ mod tests {
                 assert!(!success); // Not yet implemented
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
-                let msg = message.unwrap();
+                let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("192.168.1.100:9000"));
             }
             _ => panic!("Expected response"),
         }
+        Ok(())
     }
 }

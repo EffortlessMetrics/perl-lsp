@@ -1,5 +1,7 @@
 //! Property-based tests for `qw/.../` expressions
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use perl_parser::Parser;
 use proptest::{
     collection, prop_assume, prop_oneof, proptest,

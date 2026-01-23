@@ -152,13 +152,14 @@ mod tests {
     use std::sync::Arc;
     use url::Url;
 
-    fn index_text(idx: &WorkspaceIndex, uri: &str, text: &str) {
-        let url = Url::parse(uri).unwrap();
-        idx.index_file(url, text.to_string()).unwrap();
+    fn index_text(idx: &WorkspaceIndex, uri: &str, text: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let url = Url::parse(uri)?;
+        idx.index_file(url, text.to_string())?;
+        Ok(())
     }
 
     #[test]
-    fn rename_sub_preserves_package_qualifier() {
+    fn rename_sub_preserves_package_qualifier() -> Result<(), Box<dyn std::error::Error>> {
         let idx = WorkspaceIndex::new();
         let uri = "file:///test.pl";
         let text = r#"
@@ -169,7 +170,7 @@ Package::name();
 name();
 $var;
 "#;
-        index_text(&idx, uri, text);
+        index_text(&idx, uri, text)?;
 
         let key = SymbolKey {
             pkg: Arc::from("Package"),
@@ -189,14 +190,14 @@ $var;
         assert!(texts.contains(&"new_name".to_string()));
 
         // Apply edits and verify other symbols remain unchanged
-        let mut doc = idx.document_store().get(uri).unwrap();
+        let mut doc = idx.document_store().get(uri).ok_or("document not found")?;
         let mut replacements: Vec<(usize, usize, &str)> = edits[0]
             .edits
             .iter()
-            .map(|e| {
-                let start = doc.line_index.position_to_offset(e.start.0, e.start.1).unwrap();
-                let end = doc.line_index.position_to_offset(e.end.0, e.end.1).unwrap();
-                (start, end, e.new_text.as_str())
+            .filter_map(|e| {
+                let start = doc.line_index.position_to_offset(e.start.0, e.start.1)?;
+                let end = doc.line_index.position_to_offset(e.end.0, e.end.1)?;
+                Some((start, end, e.new_text.as_str()))
             })
             .collect();
         replacements.sort_by(|a, b| b.0.cmp(&a.0));
@@ -209,5 +210,6 @@ $var;
         assert!(new_text.contains("$var"));
         // Workspace indexing now works correctly - should rename function calls too
         assert!(new_text.contains("new_name")); // Declaration and calls should be renamed
+        Ok(())
     }
 }

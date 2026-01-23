@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Semantic-aware textDocument/definition tests
 //!
 //! These tests verify that the LSP definition handler uses SemanticAnalyzer

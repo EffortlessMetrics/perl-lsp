@@ -4,6 +4,7 @@
 //! for all LSP features, ensuring complete end-to-end testing.
 
 #![allow(clippy::collapsible_if)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use colored::*;
 use std::collections::HashMap;

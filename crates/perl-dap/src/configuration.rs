@@ -355,7 +355,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_launch_configuration_serialization() {
+    fn test_launch_configuration_serialization() -> Result<(), Box<dyn std::error::Error>> {
         let config = LaunchConfiguration {
             program: PathBuf::from("/path/to/script.pl"),
             args: vec!["--verbose".to_string()],
@@ -365,9 +365,10 @@ mod tests {
             include_paths: vec![PathBuf::from("/workspace/lib")],
         };
 
-        let json = serde_json::to_string(&config).expect("Serialization failed");
+        let json = serde_json::to_string(&config)?;
         assert!(json.contains("perlPath"));
         assert!(json.contains("includePaths"));
+        Ok(())
     }
 
     #[test]
@@ -422,11 +423,12 @@ mod tests {
     }
 
     #[test]
-    fn test_launch_config_validation_program_is_directory() {
+    fn test_launch_config_validation_program_is_directory() -> Result<(), Box<dyn std::error::Error>>
+    {
         // Test: program path is a directory, not a file
         use std::env;
         let config = LaunchConfiguration {
-            program: env::current_dir().expect("Failed to get current dir"),
+            program: env::current_dir()?,
             args: vec![],
             cwd: None,
             env: HashMap::new(),
@@ -436,18 +438,19 @@ mod tests {
 
         let result = config.validate();
         assert!(result.is_err(), "Should fail validation when program is a directory");
-        let err = result.unwrap_err();
+        let err = result.err().ok_or("Expected an error")?;
         assert!(err.to_string().contains("not a file"), "Error should mention path is not a file");
+        Ok(())
     }
 
     #[test]
-    fn test_launch_config_validation_invalid_cwd() {
+    fn test_launch_config_validation_invalid_cwd() -> Result<(), Box<dyn std::error::Error>> {
         // Test: cwd is not a directory
         use std::env;
 
         // Create a config with a file as cwd (should fail)
         let temp_file = env::temp_dir().join("test_file.txt");
-        std::fs::write(&temp_file, "test").expect("Failed to create temp file");
+        std::fs::write(&temp_file, "test")?;
 
         let config = LaunchConfiguration {
             program: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml"),
@@ -463,6 +466,7 @@ mod tests {
         let _ = std::fs::remove_file(&temp_file);
 
         assert!(result.is_err(), "Should fail validation when cwd is not a directory");
+        Ok(())
     }
 
     #[test]
@@ -508,7 +512,7 @@ mod tests {
     }
 
     #[test]
-    fn test_launch_config_path_resolution_absolute() {
+    fn test_launch_config_path_resolution_absolute() -> Result<(), Box<dyn std::error::Error>> {
         // Test: absolute paths don't get modified
         let mut config = LaunchConfiguration {
             program: PathBuf::from("/absolute/path/script.pl"),
@@ -519,7 +523,7 @@ mod tests {
             include_paths: vec![PathBuf::from("/absolute/lib")],
         };
 
-        config.resolve_paths(&PathBuf::from("/workspace")).expect("resolve_paths failed");
+        config.resolve_paths(&PathBuf::from("/workspace"))?;
 
         assert_eq!(
             config.program,
@@ -527,7 +531,7 @@ mod tests {
             "Absolute program path should be preserved"
         );
         assert_eq!(
-            config.cwd.as_ref().unwrap(),
+            config.cwd.as_ref().ok_or("cwd should be Some")?,
             &PathBuf::from("/absolute/cwd"),
             "Absolute cwd should be preserved"
         );
@@ -536,10 +540,11 @@ mod tests {
             PathBuf::from("/absolute/lib"),
             "Absolute include path should be preserved"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_launch_config_path_resolution_relative() {
+    fn test_launch_config_path_resolution_relative() -> Result<(), Box<dyn std::error::Error>> {
         // Test: relative paths get resolved against workspace root
         let mut config = LaunchConfiguration {
             program: PathBuf::from("script.pl"),
@@ -551,7 +556,7 @@ mod tests {
         };
 
         let workspace = PathBuf::from("/workspace");
-        config.resolve_paths(&workspace).expect("resolve_paths failed");
+        config.resolve_paths(&workspace)?;
 
         assert_eq!(
             config.program,
@@ -559,7 +564,7 @@ mod tests {
             "Relative program path should be resolved"
         );
         assert_eq!(
-            config.cwd.as_ref().unwrap(),
+            config.cwd.as_ref().ok_or("cwd should be Some")?,
             &workspace.join("build"),
             "Relative cwd should be resolved"
         );
@@ -568,10 +573,11 @@ mod tests {
             workspace.join("lib"),
             "Relative include path should be resolved"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_attach_config_custom_port() {
+    fn test_attach_config_custom_port() -> Result<(), Box<dyn std::error::Error>> {
         // Test: custom port handling
         let config = AttachConfiguration {
             host: "192.168.1.100".to_string(),
@@ -579,9 +585,10 @@ mod tests {
             timeout_ms: Some(10000),
         };
 
-        let json = serde_json::to_string(&config).expect("Serialization failed");
+        let json = serde_json::to_string(&config)?;
         assert!(json.contains("192.168.1.100"), "Should contain custom host");
         assert!(json.contains("9000"), "Should contain custom port");
+        Ok(())
     }
 
     #[test]
@@ -597,14 +604,15 @@ mod tests {
     }
 
     #[test]
-    fn test_attach_config_validation_empty_host() {
+    fn test_attach_config_validation_empty_host() -> Result<(), Box<dyn std::error::Error>> {
         // Test: empty host fails validation
         let config =
             AttachConfiguration { host: "".to_string(), port: 13603, timeout_ms: Some(5000) };
 
         let result = config.validate();
         assert!(result.is_err(), "Empty host should fail validation");
-        assert!(result.unwrap_err().to_string().contains("Host"));
+        assert!(result.err().ok_or("Expected an error")?.to_string().contains("Host"));
+        Ok(())
     }
 
     #[test]
@@ -618,25 +626,27 @@ mod tests {
     }
 
     #[test]
-    fn test_attach_config_validation_zero_port() {
+    fn test_attach_config_validation_zero_port() -> Result<(), Box<dyn std::error::Error>> {
         // Test: port 0 is invalid
         let config =
             AttachConfiguration { host: "localhost".to_string(), port: 0, timeout_ms: Some(5000) };
 
         let result = config.validate();
         assert!(result.is_err(), "Port 0 should fail validation");
-        assert!(result.unwrap_err().to_string().contains("Port"));
+        assert!(result.err().ok_or("Expected an error")?.to_string().contains("Port"));
+        Ok(())
     }
 
     #[test]
-    fn test_attach_config_validation_zero_timeout() {
+    fn test_attach_config_validation_zero_timeout() -> Result<(), Box<dyn std::error::Error>> {
         // Test: zero timeout fails validation
         let config =
             AttachConfiguration { host: "localhost".to_string(), port: 13603, timeout_ms: Some(0) };
 
         let result = config.validate();
         assert!(result.is_err(), "Zero timeout should fail validation");
-        assert!(result.unwrap_err().to_string().contains("Timeout"));
+        assert!(result.err().ok_or("Expected an error")?.to_string().contains("Timeout"));
+        Ok(())
     }
 
     #[test]
@@ -662,11 +672,10 @@ mod tests {
     }
 
     #[test]
-    fn test_launch_json_snippet_valid_json() {
+    fn test_launch_json_snippet_valid_json() -> Result<(), Box<dyn std::error::Error>> {
         // Test: generated JSON snippets parse correctly
         let snippet = create_launch_json_snippet();
-        let parsed: serde_json::Value =
-            serde_json::from_str(&snippet).expect("Launch JSON snippet should be valid JSON");
+        let parsed: serde_json::Value = serde_json::from_str(&snippet)?;
 
         assert_eq!(parsed["type"], "perl");
         assert_eq!(parsed["request"], "launch");
@@ -674,24 +683,25 @@ mod tests {
         assert!(parsed["args"].is_array());
         assert!(parsed["perlPath"].is_string());
         assert!(parsed["includePaths"].is_array());
+        Ok(())
     }
 
     #[test]
-    fn test_attach_json_snippet_valid_json() {
+    fn test_attach_json_snippet_valid_json() -> Result<(), Box<dyn std::error::Error>> {
         // Test: attach JSON snippet is valid and complete
         let snippet = create_attach_json_snippet();
-        let parsed: serde_json::Value =
-            serde_json::from_str(&snippet).expect("Attach JSON snippet should be valid JSON");
+        let parsed: serde_json::Value = serde_json::from_str(&snippet)?;
 
         assert_eq!(parsed["type"], "perl");
         assert_eq!(parsed["request"], "attach");
         assert_eq!(parsed["host"], "localhost");
         assert_eq!(parsed["port"], 13603);
         assert!(parsed["timeout"].is_number());
+        Ok(())
     }
 
     #[test]
-    fn test_launch_config_empty_args() {
+    fn test_launch_config_empty_args() -> Result<(), Box<dyn std::error::Error>> {
         // Test: empty args array is valid
         let config = LaunchConfiguration {
             program: PathBuf::from("script.pl"),
@@ -702,12 +712,13 @@ mod tests {
             include_paths: vec![],
         };
 
-        let json = serde_json::to_string(&config).expect("Serialization failed");
+        let json = serde_json::to_string(&config)?;
         assert!(json.contains("\"args\":[]"), "Empty args should serialize correctly");
+        Ok(())
     }
 
     #[test]
-    fn test_launch_config_empty_include_paths() {
+    fn test_launch_config_empty_include_paths() -> Result<(), Box<dyn std::error::Error>> {
         // Test: empty include_paths is valid
         let config = LaunchConfiguration {
             program: PathBuf::from("script.pl"),
@@ -718,10 +729,11 @@ mod tests {
             include_paths: vec![],
         };
 
-        let json = serde_json::to_string(&config).expect("Serialization failed");
+        let json = serde_json::to_string(&config)?;
         assert!(
             json.contains("\"includePaths\":[]"),
             "Empty include_paths should serialize correctly"
         );
+        Ok(())
     }
 }

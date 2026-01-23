@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 #[cfg(test)]
 mod builtin_empty_blocks_tests {
     use perl_parser::Parser;

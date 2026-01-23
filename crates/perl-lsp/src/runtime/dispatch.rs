@@ -13,7 +13,7 @@ pub(super) fn enhanced_cancelled_response(
     let provider_name =
         if let Some(context) = cleanup_context { &context.provider_type } else { token.provider() };
 
-    let method_name = provider_name.split('/').next_back().unwrap_or(provider_name);
+    let method_name = provider_name.split('/').last().unwrap_or_default();
     let message = format!("Request cancelled - {} provider", method_name);
 
     let mut data = json!({
@@ -191,16 +191,8 @@ impl LspServer {
                 Err(e) => Err(e),
             },
             "textDocument/didChange" => {
-                // Use incremental version if available
-                #[cfg(feature = "incremental")]
-                let result = if std::env::var("PERL_LSP_INCREMENTAL").is_ok() {
-                    self.handle_did_change_incremental(request.params)
-                } else {
-                    self.handle_did_change(request.params)
-                };
-                #[cfg(not(feature = "incremental"))]
-                let result = self.handle_did_change(request.params);
-                match result {
+                // Incremental parsing is handled internally by handle_did_change
+                match self.handle_did_change(request.params) {
                     Ok(_) => Ok(None),
                     Err(e) => Err(e),
                 }
