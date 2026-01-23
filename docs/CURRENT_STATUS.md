@@ -71,8 +71,8 @@ Key terms:
 - **Semantic Analyzer**: Phase 2-6 complete with all NodeKind handlers, `textDocument/definition` integrated, uninitialized variable detection
 - **Refactoring Engine**: `perform_inline` and `perform_move_code` implemented
 - **Test Infrastructure**: Tier A suite is the only merge-blocking truth (see At a Glance + computed metrics)
-- **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation, O(1) symbol lookups
-- **Security**: Path traversal protection and command injection hardening complete
+- **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation, O(1) symbol lookups, zero-allocation variable lookups
+- **Security**: Comprehensive hardening complete (path traversal, command injection, DAP evaluate, perldoc/perlcritic argument injection)
 - **DAP Server**: Native adapter CLI (launch/step/breakpoints), async BridgeAdapter with graceful shutdown; attach/variables/evaluate pending
 
 ### Computed Metrics (auto-updated by `just status-update`)
@@ -93,8 +93,8 @@ Key terms:
 
 ## What's Next
 
-1. **v0.9.1 Release**: Semantic analyzer complete, refactoring engine, performance optimizations
-2. **CI Pipeline (#211)** - Blocks merge-blocking gates; $720/year savings potential
+1. **v0.9.1 Release**: Nearing completion - security hardening and performance optimizations complete
+2. **v1.0 Preparation**: Benchmarks, documentation, and code quality improvements in progress
 3. **Index State Machine**: Workspace indexing state transitions and early-exit optimization
 4. **Documentation Cleanup**: Address remaining `missing_docs` violations
 5. **Production v1.0**: #210 (merge gates), #208 (batteries-included UX), benchmark publication
@@ -134,5 +134,5 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-01-21*
+*Last Updated: 2026-01-23*
 *Canonical docs: [ROADMAP.md](ROADMAP.md), [features.toml](../features.toml)*

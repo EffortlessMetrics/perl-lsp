@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-01-21)**: v0.9.1 in progress — Semantic Analyzer complete (Phase 2-6), refactoring engine, performance optimizations.
+> **Status (2026-01-23)**: v0.9.1 nearing completion — v1.0 preparation underway, security hardening, performance optimizations complete.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -100,12 +100,12 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 - Release notes generated ✓
 - Tag cut ✓
 
-**Metrics** (2026-01-18):
+**Metrics** (2026-01-23):
 - **LSP Coverage**: 100% (53/53 advertised features from `features.toml`)
 - **Protocol Compliance**: 100% (88/88 including plumbing)
-- **Test Count**: 535 lib tests (discovered), 1 ignored (tracked debt: 0 bug, 1 manual)
+- **Test Count**: 601 lib tests (discovered), 2 ignored (tracked debt: 0 bug, 1 manual)
 - **Parser Coverage**: ~100% Perl 5 syntax
-- **Semantic Analyzer**: Phase 1 complete (12/12 critical handlers)
+- **Semantic Analyzer**: Phase 2-6 complete (all NodeKind handlers)
 
 ### v0.9.1: Post-Release Optimization (January 2026)
 
@@ -149,6 +149,25 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
    - Workspace indexing synchronization (PR #394)
    - Syntax highlighting validation (PR #397)
 
+8. **v1.0 Preparation** ✓ (PR #483)
+   - Benchmark framework and documentation
+   - Code quality improvements
+   - Zero-allocation variable lookup (PR #473)
+   - Token allocations with Arc<str> (PR #464)
+   - Cached built-in function signatures (PR #467)
+   - Comprehensive corpus expansion (PR #462)
+
+9. **Additional Security Hardening** ✓
+   - DAP evaluate request injection prevention (PR #475)
+   - Launch debugger command injection hardening (PR #463)
+   - Perlcritic/perltidy argument injection prevention (PR #469)
+   - Perldoc lookup injection prevention (PR #466)
+
+10. **VSCode Integration** ✓
+    - Markdown descriptions and silent startup (PR #474)
+    - Settings with code references (PR #468)
+    - Command palette filtering for Perl files (PR #470)
+
 **Remaining Deliverables**:
 
 1. **Index State Machine** (deferred from v0.9.0)
@@ -164,8 +183,9 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 **Exit criteria**:
 - Index state machine implemented with performance benchmarks
 - Documentation violations < 200
-- LSP coverage maintained at 100%
-- Tracked test debt ≤ 2
+- LSP coverage maintained at 100% ✓
+- Tracked test debt ≤ 2 ✓
+- Security hardening complete ✓
 
 ---
 
@@ -252,6 +272,10 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - O(1) Symbol Lookups Optimization (2026-01-21)
 - TCP Socket Mode for LSP Server (2026-01-21)
 - Security Hardening: path traversal + command injection (2026-01-21)
+- v1.0 Preparation: benchmarks + documentation (2026-01-23)
+- Performance: zero-allocation lookups + Arc<str> tokens (2026-01-23)
+- Security: DAP/perldoc/perlcritic injection hardening (2026-01-23)
+- VSCode: improved UX + command filtering (2026-01-23)
 
 ---
 
@@ -311,4 +335,4 @@ Older targets (Q1-Q4 2025, 2026 vision) have been archived. Current focus is v0.
 - **[features.toml](../features.toml)** - Canonical capability definitions
 - **[LESSONS.md](LESSONS.md)** - What went wrong and what changed
 
-<!-- Last Updated: 2026-01-21 -->
+<!-- Last Updated: 2026-01-23 -->
