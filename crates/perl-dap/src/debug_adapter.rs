@@ -1543,6 +1543,9 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
     let mutating_ops = [
         "push", "pop", "shift", "unshift", "splice", "delete", "undef", "system", "exec", "open",
         "close", "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown",
+        // Command execution and potentially dangerous operations
+        "qx", "syscall", "eval", "readpipe", // I/O operations (side effects)
+        "print", "say", "printf",
     ];
 
     for op in &mutating_ops {
@@ -1556,6 +1559,14 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
                 ));
             }
         }
+    }
+
+    // Check for backticks (command execution)
+    if expression.contains('`') {
+        return Some(
+            "Safe evaluation mode: backticks (command execution) not allowed (use allowSideEffects: true)"
+                .to_string(),
+        );
     }
 
     // Check for increment/decrement operators
