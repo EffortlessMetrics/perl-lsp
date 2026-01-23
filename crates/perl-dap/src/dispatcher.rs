@@ -333,7 +333,7 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_initialize() {
+    fn test_handle_initialize() -> Result<(), Box<dyn std::error::Error>> {
         let dispatcher = DapDispatcher::new();
         let request = Request {
             seq: 1,
@@ -358,13 +358,15 @@ mod tests {
         assert!(response.body.is_some());
 
         // Parse capabilities
-        let capabilities: Capabilities = serde_json::from_value(response.body.unwrap()).unwrap();
+        let capabilities: Capabilities =
+            serde_json::from_value(response.body.ok_or("Expected body")?)?;
         assert_eq!(capabilities.supports_configuration_done_request, Some(true));
         assert_eq!(capabilities.supports_evaluate_for_hovers, Some(true));
+        Ok(())
     }
 
     #[test]
-    fn test_handle_set_breakpoints() {
+    fn test_handle_set_breakpoints() -> Result<(), Box<dyn std::error::Error>> {
         let dispatcher = DapDispatcher::new();
         let request = Request {
             seq: 2,
@@ -390,16 +392,17 @@ mod tests {
 
         // Parse response body
         let body: SetBreakpointsResponseBody =
-            serde_json::from_value(response.body.unwrap()).unwrap();
+            serde_json::from_value(response.body.ok_or("Expected body")?)?;
         assert_eq!(body.breakpoints.len(), 2);
         assert_eq!(body.breakpoints[0].line, 10);
         assert_eq!(body.breakpoints[1].line, 25);
         assert!(body.breakpoints[0].verified);
         assert!(body.breakpoints[1].verified);
+        Ok(())
     }
 
     #[test]
-    fn test_handle_set_breakpoints_replace_semantics() {
+    fn test_handle_set_breakpoints_replace_semantics() -> Result<(), Box<dyn std::error::Error>> {
         let dispatcher = DapDispatcher::new();
 
         // Set initial breakpoints
@@ -428,14 +431,15 @@ mod tests {
 
         assert!(response.success);
         let body: SetBreakpointsResponseBody =
-            serde_json::from_value(response.body.unwrap()).unwrap();
+            serde_json::from_value(response.body.ok_or("Expected body")?)?;
         assert_eq!(body.breakpoints.len(), 2);
         assert_eq!(body.breakpoints[0].line, 20);
         assert_eq!(body.breakpoints[1].line, 30);
+        Ok(())
     }
 
     #[test]
-    fn test_handle_set_breakpoints_preserves_order() {
+    fn test_handle_set_breakpoints_preserves_order() -> Result<(), Box<dyn std::error::Error>> {
         let dispatcher = DapDispatcher::new();
         let request = Request {
             seq: 2,
@@ -455,16 +459,17 @@ mod tests {
 
         assert!(response.success);
         let body: SetBreakpointsResponseBody =
-            serde_json::from_value(response.body.unwrap()).unwrap();
+            serde_json::from_value(response.body.ok_or("Expected body")?)?;
 
         // Order must match request
         assert_eq!(body.breakpoints[0].line, 100);
         assert_eq!(body.breakpoints[1].line, 50);
         assert_eq!(body.breakpoints[2].line, 75);
+        Ok(())
     }
 
     #[test]
-    fn test_handle_unknown_command() {
+    fn test_handle_unknown_command() -> Result<(), Box<dyn std::error::Error>> {
         let dispatcher = DapDispatcher::new();
         let request = Request {
             seq: 99,
@@ -478,7 +483,10 @@ mod tests {
         assert!(!response.success);
         assert_eq!(response.command, "unknownCommand");
         assert!(response.message.is_some());
-        assert!(response.message.unwrap().contains("Unknown command: unknownCommand"));
+        assert!(
+            response.message.ok_or("Expected message")?.contains("Unknown command: unknownCommand")
+        );
+        Ok(())
     }
 
     #[test]
@@ -577,7 +585,7 @@ mod tests {
     }
 
     #[test]
-    fn test_configuration_done_before_initialize_fails() {
+    fn test_configuration_done_before_initialize_fails() -> Result<(), Box<dyn std::error::Error>> {
         let dispatcher = DapDispatcher::new();
 
         // configurationDone without initialize should fail
@@ -591,7 +599,8 @@ mod tests {
 
         assert!(!response.success);
         assert!(response.message.is_some());
-        assert!(response.message.unwrap().contains("before initialized"));
+        assert!(response.message.ok_or("Expected message")?.contains("before initialized"));
+        Ok(())
     }
 
     #[test]

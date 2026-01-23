@@ -535,7 +535,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_breakpoint_by_id() {
+    fn test_get_breakpoint_by_id() -> Result<(), Box<dyn std::error::Error>> {
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
             source: Source {
@@ -555,11 +555,12 @@ mod tests {
         // Retrieve by ID
         let record = store.get_breakpoint_by_id(id);
         assert!(record.is_some());
-        assert_eq!(record.unwrap().line, 10);
+        assert_eq!(record.ok_or("Expected record")?.line, 10);
 
         // Non-existent ID
         let not_found = store.get_breakpoint_by_id(999999);
         assert!(not_found.is_none());
+        Ok(())
     }
 
     #[test]

@@ -618,7 +618,7 @@ sub test_function {
     }
 
     #[test]
-    fn test_semantic_tokens_thread_safety() {
+    fn test_semantic_tokens_thread_safety() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 package Test;
 my $var = 42;
@@ -626,7 +626,7 @@ sub func { return $var; }
 "#;
 
         let provider = SemanticTokensProvider::new(code.to_string());
-        let ast = crate::Parser::new(code).parse().unwrap();
+        let ast = crate::Parser::new(code).parse()?;
 
         // Multiple calls should produce identical results
         let tokens1 = provider.extract(&ast);
@@ -650,10 +650,11 @@ sub func { return $var; }
             assert_eq!(t2.token_type, t3.token_type);
             assert_eq!(t2.modifiers, t3.modifiers);
         }
+        Ok(())
     }
 
     #[test]
-    fn test_semantic_tokens_performance() {
+    fn test_semantic_tokens_performance() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 package TestPerf;
 use strict;
@@ -677,7 +678,7 @@ function_two();
 "#;
 
         let provider = SemanticTokensProvider::new(code.to_string());
-        let ast = crate::Parser::new(code).parse().unwrap();
+        let ast = crate::Parser::new(code).parse()?;
 
         // Measure time for semantic token extraction
         let start = std::time::Instant::now();
@@ -698,10 +699,11 @@ function_two();
             "Semantic token generation took {}µs, expected <100µs",
             avg_time.as_micros()
         );
+        Ok(())
     }
 
     #[test]
-    fn test_semantic_tokens_consistency_under_load() {
+    fn test_semantic_tokens_consistency_under_load() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 package LoadTest;
 my $shared = 'test';
@@ -709,7 +711,7 @@ sub process { return $shared; }
 "#;
 
         let provider = SemanticTokensProvider::new(code.to_string());
-        let ast = crate::Parser::new(code).parse().unwrap();
+        let ast = crate::Parser::new(code).parse()?;
 
         // Simulate concurrent usage
         let mut results = Vec::new();
@@ -728,5 +730,6 @@ sub process { return $shared; }
                 assert_eq!(t1.token_type, t2.token_type);
             }
         }
+        Ok(())
     }
 }

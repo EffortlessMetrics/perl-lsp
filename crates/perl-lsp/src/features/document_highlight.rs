@@ -421,27 +421,28 @@ mod tests {
     use crate::Parser;
 
     #[test]
-    fn test_highlight_scalar_variable() {
+    fn test_highlight_scalar_variable() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"my $foo = 42;
 print $foo;
 $foo = 100;"#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let provider = DocumentHighlightProvider::new();
 
         // Position on first $foo (byte offset around 3)
         let highlights = provider.find_highlights(&ast, code, 3);
 
         assert!(!highlights.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_highlight_function_call() {
+    fn test_highlight_function_call() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"sub hello { print "Hello" }
 hello();
 hello();"#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let provider = DocumentHighlightProvider::new();
 
         // Position on first hello() call (byte offset 29)
@@ -453,28 +454,30 @@ hello();"#;
             "Expected at least 2 highlights for function calls, found {}",
             highlights.len()
         );
+        Ok(())
     }
 
     #[test]
-    fn test_no_highlights_for_non_symbol() {
+    fn test_no_highlights_for_non_symbol() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"my $x = "Hello World";"#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let provider = DocumentHighlightProvider::new();
 
         // Position on string literal (byte offset 12 is in "Hello")
         let highlights = provider.find_highlights(&ast, code, 12);
 
         assert_eq!(highlights.len(), 0);
+        Ok(())
     }
 
     #[test]
-    fn test_highlight_statement_modifier() {
+    fn test_highlight_statement_modifier() -> Result<(), Box<dyn std::error::Error>> {
         // Test statement modifiers with new AST structure (Issue #191)
         let code = r#"my $x = 5;
 print $x if $x > 0;"#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let provider = DocumentHighlightProvider::new();
 
         // Position on first $x
@@ -486,5 +489,6 @@ print $x if $x > 0;"#;
             "Expected at least 3 highlights for $x, found {}",
             highlights.len()
         );
+        Ok(())
     }
 }

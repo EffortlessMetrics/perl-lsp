@@ -139,6 +139,9 @@ RUSTC_WRAPPER=""        # Disable rustc wrapper
 
 - Run `cargo clippy --workspace` before committing
 - Use `cargo fmt` for consistent formatting
+- **No `unwrap()` or `expect()`** - workspace enforces `clippy::unwrap_used` and `clippy::expect_used` as deny
+  - In production code: use `?`, `.ok_or_else()`, or pattern matching
+  - In tests: use `#[allow(clippy::unwrap_used, clippy::expect_used)]` on test modules, or convert tests to return `Result`
 - Prefer `.first()` over `.get(0)`
 - Use `.push(char)` instead of `.push_str("x")` for single chars
 - Use `or_default()` instead of `or_insert_with(Vec::new)`

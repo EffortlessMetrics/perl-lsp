@@ -473,12 +473,13 @@ mod tests {
         let result = formatter.format_document(code, &options);
 
         assert!(result.is_ok());
-        let edits = result.unwrap();
-        assert!(!edits.is_empty());
+        if let Ok(edits) = result {
+            assert!(!edits.is_empty());
 
-        // The formatted code should have proper spacing
-        let formatted = &edits[0].new_text;
-        assert!(formatted.contains("sub test"));
-        assert!(formatted.contains("my $x"));
+            // The formatted code should have proper spacing
+            let formatted = &edits[0].new_text;
+            assert!(formatted.contains("sub test"));
+            assert!(formatted.contains("my $x"));
+        }
     }
 }
