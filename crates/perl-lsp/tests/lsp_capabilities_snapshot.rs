@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Capability snapshot tests to prevent drift
 //!
 //! This test ensures that changes to advertised capabilities are intentional

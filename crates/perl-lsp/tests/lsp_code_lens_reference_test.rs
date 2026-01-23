@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Tests for CodeLens reference counting functionality
 
 use perl_lsp::{JsonRpcRequest, LspServer};

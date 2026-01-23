@@ -1,4 +1,5 @@
 //! Common test utilities for LSP integration tests
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //!
 //! ## Test Harness Contracts
 //!

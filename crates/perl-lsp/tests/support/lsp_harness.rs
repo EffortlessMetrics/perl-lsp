@@ -4,6 +4,7 @@
 
 #![allow(dead_code)]
 #![allow(clippy::collapsible_if)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use parking_lot::Mutex;
 use perl_lsp::LspServer;

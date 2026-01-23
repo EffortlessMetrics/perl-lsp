@@ -1,4 +1,5 @@
 #![allow(dead_code)] // This is a utility module used by other tests
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 //! Test utilities and helpers for LSP testing
 //!

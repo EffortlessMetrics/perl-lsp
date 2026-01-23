@@ -1,4 +1,5 @@
 //! Targeted mutation hardening tests for LSP cancellation atomic operations
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //!
 //! This test suite specifically targets surviving mutants in the cancellation.rs
 //! module by focusing on atomic operations, state transitions, and performance

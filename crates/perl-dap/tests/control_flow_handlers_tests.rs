@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Control Flow Handlers Tests (AC9)
 //!
 //! Tests for DAP control flow operations: continue, next, stepIn, stepOut, pause

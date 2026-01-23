@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Semantic-aware textDocument/hover tests
 //!
 //! These tests verify that the LSP hover handler uses SemanticAnalyzer

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive deep nesting boundedness tests for hang/bounds risk mitigation
 //!
 //! Tests feature spec: ROADMAP.md#known-gaps-hang-bounds-risks
@@ -18,8 +19,6 @@
 //! - Subroutine call nesting
 //! - Pattern match nesting
 //! - Complex real-world pathological patterns
-
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use perl_parser::{ParseError, Parser};
 

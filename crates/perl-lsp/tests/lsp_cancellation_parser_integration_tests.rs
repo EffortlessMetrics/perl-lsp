@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive LSP Cancellation Parser Integration Test Suite
 //! Tests AC6-AC8: Parser integration with incremental parsing and workspace indexing
 //!

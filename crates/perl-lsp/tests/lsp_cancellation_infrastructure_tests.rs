@@ -13,6 +13,7 @@
 //! edge case coverage and performance monitoring integration.
 
 #![allow(unused_imports, dead_code)] // Scaffolding may have unused imports initially
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};

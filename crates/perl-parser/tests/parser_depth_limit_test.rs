@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Test parser depth limit to prevent stack overflow on deeply nested constructs
 //!
 //! This test verifies that the parser cleanly rejects deeply nested constructs
