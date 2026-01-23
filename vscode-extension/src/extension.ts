@@ -5,7 +5,8 @@ import {
     LanguageClient,
     LanguageClientOptions,
     ServerOptions,
-    TransportKind
+    TransportKind,
+    State
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger } from './debugAdapter';
@@ -14,16 +15,28 @@ import { BinaryDownloader } from './downloader';
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
+let statusBarItem: vscode.StatusBarItem;
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
     
+    // Status Bar initialization
+    if (statusBarItem) {
+        statusBarItem.dispose();
+    }
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    context.subscriptions.push(statusBarItem);
+    statusBarItem.command = 'perl-lsp.showStatusMenu';
+    updateStatusBar(State.Starting);
+    statusBarItem.show();
+
     // Get the path to perl-lsp
     const serverPath = await getServerPath(context);
     if (!serverPath) {
         vscode.window.showErrorMessage(
             'Perl Language Server (perl-lsp) not found. Please install it or set perl.lsp.path in settings.'
         );
+        updateStatusBar(State.Stopped);
         return;
     }
 
@@ -62,6 +75,11 @@ export async function activate(context: vscode.ExtensionContext) {
         clientOptions
     );
 
+    // Update status bar on state change
+    client.onDidChangeState((event) => {
+        updateStatusBar(event.newState);
+    });
+
     // Start the client
     await client.start();
     
@@ -91,8 +109,12 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         });
     });
+
+    const showStatusMenuCommand = vscode.commands.registerCommand('perl-lsp.showStatusMenu', async () => {
+        await showStatusMenu();
+    });
     
-    context.subscriptions.push(restartCommand, showOutputCommand, showVersionCommand);
+    context.subscriptions.push(restartCommand, showOutputCommand, showVersionCommand, showStatusMenuCommand);
     
     outputChannel.appendLine('Perl Language Server started successfully');
 }
@@ -178,4 +200,46 @@ async function restartServer(context: vscode.ExtensionContext) {
     
     await activate(context);
     vscode.window.showInformationMessage('Perl Language Server restarted');
+}
+
+function updateStatusBar(state: State) {
+    if (!statusBarItem) {
+        return;
+    }
+
+    switch (state) {
+        case State.Starting:
+            statusBarItem.text = '$(sync~spin) Perl LSP: Starting...';
+            statusBarItem.tooltip = 'Perl Language Server is starting';
+            break;
+        case State.Running:
+            statusBarItem.text = '$(check) Perl LSP: Ready';
+            statusBarItem.tooltip = 'Perl Language Server is running';
+            break;
+        case State.Stopped:
+            statusBarItem.text = '$(circle-slash) Perl LSP: Stopped';
+            statusBarItem.tooltip = 'Perl Language Server is stopped';
+            break;
+    }
+}
+
+async function showStatusMenu() {
+    const items = [
+        { label: '$(refresh) Restart Server', description: 'Restart the language server', command: 'perl-lsp.restart' },
+        { label: '$(output) Show Output', description: 'Show the language server output channel', command: 'perl.showOutputChannel' },
+        { label: '$(info) Show Version', description: 'Show the current version of the language server', command: 'perl-lsp.showVersion' },
+        { label: '$(settings) Configure Settings', description: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['perl-lsp'] }
+    ];
+
+    const selection = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Perl Language Server Actions'
+    });
+
+    if (selection) {
+        if (selection.args) {
+            vscode.commands.executeCommand(selection.command, ...selection.args);
+        } else {
+            vscode.commands.executeCommand(selection.command);
+        }
+    }
 }
