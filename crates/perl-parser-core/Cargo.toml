@@ -34,5 +34,6 @@ ropey = "1.6.1"
 [features]
 default = []
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+[lints]
+workspace = true
+

@@ -129,3 +129,6 @@ path = "tests/dap_packaging_tests.rs"
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"
 harness = false
+
+[lints]
+workspace = true

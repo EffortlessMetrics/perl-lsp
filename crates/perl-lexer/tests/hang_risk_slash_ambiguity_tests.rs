@@ -18,74 +18,79 @@
 
 use perl_lexer::{PerlLexer, TokenType};
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 /// Test division after numeric literal
 ///
 /// Tests feature spec: ROADMAP.md#slash-ambiguity
 #[test]
-fn lexer_slash_ambiguity_division_after_number() {
+fn lexer_slash_ambiguity_division_after_number() -> TestResult {
     let code = "42 / 2";
     let mut lexer = PerlLexer::new(code);
 
     // Expect: 42 (Number), / (Division), 2 (Number)
-    let tok1 = lexer.next_token().expect("Expected number token");
+    let tok1 = lexer.next_token().ok_or("Expected number token")?;
     assert!(matches!(tok1.token_type, TokenType::Number(_)));
 
-    let tok2 = lexer.next_token().expect("Expected division operator");
+    let tok2 = lexer.next_token().ok_or("Expected division operator")?;
     assert!(
         matches!(tok2.token_type, TokenType::Division),
         "Expected division operator after number, got {:?}",
         tok2.token_type
     );
+    Ok(())
 }
 
 /// Test division after variable
 ///
 /// Tests feature spec: ROADMAP.md#slash-ambiguity
 #[test]
-fn lexer_slash_ambiguity_division_after_variable() {
+fn lexer_slash_ambiguity_division_after_variable() -> TestResult {
     let code = "$x / 2";
     let mut lexer = PerlLexer::new(code);
 
     // Skip to division operator
     let _ = lexer.next_token(); // $x
-    let tok = lexer.next_token().expect("Expected division operator");
+    let tok = lexer.next_token().ok_or("Expected division operator")?;
 
     assert!(
         matches!(tok.token_type, TokenType::Division),
         "Expected division operator after variable, got {:?}",
         tok.token_type
     );
+    Ok(())
 }
 
 /// Test division after closing parenthesis
 ///
 /// Tests feature spec: ROADMAP.md#slash-ambiguity
 #[test]
-fn lexer_slash_ambiguity_division_after_paren() {
+fn lexer_slash_ambiguity_division_after_paren() -> TestResult {
     let code = "(1 + 2) / 3";
     let mut lexer = PerlLexer::new(code);
 
     // Skip to after closing paren
     loop {
-        let tok = lexer.next_token().expect("Expected token");
+        let tok = lexer.next_token().ok_or("Expected token")?;
         if matches!(tok.token_type, TokenType::RightParen) {
             break;
         }
     }
 
-    let tok = lexer.next_token().expect("Expected division operator");
+    let tok = lexer.next_token().ok_or("Expected division operator")?;
     assert!(
         matches!(tok.token_type, TokenType::Division),
         "Expected division operator after closing paren, got {:?}",
         tok.token_type
     );
+    Ok(())
 }
 
 /// Test division after array/hash access
 ///
 /// Tests feature spec: ROADMAP.md#slash-ambiguity
 #[test]
-fn lexer_slash_ambiguity_division_after_subscript() {
+fn lexer_slash_ambiguity_division_after_subscript() -> TestResult {
     let test_cases = vec!["$arr[0] / 2", "$hash{key} / 2", "@arr[0..5] / 2"];
 
     for code in test_cases {
@@ -93,13 +98,13 @@ fn lexer_slash_ambiguity_division_after_subscript() {
 
         // Tokenize until we find RBracket or RBrace
         loop {
-            let tok = lexer.next_token().expect("Expected token");
+            let tok = lexer.next_token().ok_or("Expected token")?;
             if matches!(tok.token_type, TokenType::RightBracket | TokenType::RightBrace) {
                 break;
             }
         }
 
-        let tok = lexer.next_token().expect("Expected division operator");
+        let tok = lexer.next_token().ok_or("Expected division operator")?;
         assert!(
             matches!(tok.token_type, TokenType::Division),
             "Expected division after subscript in '{}', got {:?}",
@@ -107,70 +112,74 @@ fn lexer_slash_ambiguity_division_after_subscript() {
             tok.token_type
         );
     }
+    Ok(())
 }
 
 /// Test regex match at statement start
 ///
 /// Tests feature spec: ROADMAP.md#slash-ambiguity
 #[test]
-fn lexer_slash_ambiguity_regex_at_statement_start() {
+fn lexer_slash_ambiguity_regex_at_statement_start() -> TestResult {
     let code = "/pattern/";
     let mut lexer = PerlLexer::new(code);
 
-    let tok = lexer.next_token().expect("Expected regex token");
+    let tok = lexer.next_token().ok_or("Expected regex token")?;
     assert!(
         matches!(tok.token_type, TokenType::RegexMatch),
         "Expected regex at statement start, got {:?}",
         tok.token_type
     );
+    Ok(())
 }
 
 /// Test regex match after binding operator
 ///
 /// Tests feature spec: ROADMAP.md#slash-ambiguity
 #[test]
-fn lexer_slash_ambiguity_regex_after_binding() {
+fn lexer_slash_ambiguity_regex_after_binding() -> TestResult {
     let code = "$x =~ /pattern/";
     let mut lexer = PerlLexer::new(code);
 
     // Skip to binding operator
     loop {
-        let tok = lexer.next_token().expect("Expected token");
+        let tok = lexer.next_token().ok_or("Expected token")?;
         if tok.text.as_ref() == "=~" {
             break;
         }
     }
 
-    let tok = lexer.next_token().expect("Expected regex token");
+    let tok = lexer.next_token().ok_or("Expected regex token")?;
     assert!(
         matches!(tok.token_type, TokenType::RegexMatch),
         "Expected regex after =~, got {:?}",
         tok.token_type
     );
+    Ok(())
 }
 
 /// Test regex match after negated binding operator
 ///
 /// Tests feature spec: ROADMAP.md#slash-ambiguity
 #[test]
-fn lexer_slash_ambiguity_regex_after_negated_binding() {
+fn lexer_slash_ambiguity_regex_after_negated_binding() -> TestResult {
     let code = "$x !~ /pattern/";
     let mut lexer = PerlLexer::new(code);
 
     // Skip to binding operator
     loop {
-        let tok = lexer.next_token().expect("Expected token");
+        let tok = lexer.next_token().ok_or("Expected token")?;
         if tok.text.as_ref() == "!~" {
             break;
         }
     }
 
-    let tok = lexer.next_token().expect("Expected regex token");
+    let tok = lexer.next_token().ok_or("Expected regex token")?;
     assert!(
         matches!(tok.token_type, TokenType::RegexMatch),
         "Expected regex after !~, got {:?}",
         tok.token_type
     );
+    Ok(())
 }
 
 /// Test defined-or operator (//) vs empty regex

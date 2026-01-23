@@ -32,5 +32,6 @@ serde = ["dep:serde"]
 [lib]
 doctest = false
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+[lints]
+workspace = true
+

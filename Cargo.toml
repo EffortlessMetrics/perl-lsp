@@ -100,6 +100,11 @@ codegen-units = 1
 inherits = "release"
 lto = "thin"
 
-# Workspace lints - relax collapsible_if for v0.8.3 release
+# Workspace lints
 [workspace.lints.clippy]
 collapsible_if = "allow"
+unwrap_used = "deny"
+expect_used = "deny"
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)', 'cfg(feature, values("slow_tests"))'] }
