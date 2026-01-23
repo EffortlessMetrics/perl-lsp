@@ -26,6 +26,56 @@ fn test_evaluate_rejects_newlines() {
 }
 
 #[test]
+fn test_evaluate_detects_unsafe_backticks() {
+    let mut adapter = DebugAdapter::new();
+
+    // Expression with backticks (shell execution)
+    let args = json!({
+        "expression": "`ls -la`",
+        "allowSideEffects": false
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Evaluate should fail for backticks in safe mode");
+            let msg = message.expect("Should have error message");
+            assert!(
+                msg.contains("Safe evaluation mode: backticks"),
+                "Should specifically mention backticks"
+            );
+        }
+        _ => panic!("Expected Response"),
+    }
+}
+
+#[test]
+fn test_evaluate_detects_unsafe_qx() {
+    let mut adapter = DebugAdapter::new();
+
+    // Expression with qx (shell execution)
+    let args = json!({
+        "expression": "qx(ls -la)",
+        "allowSideEffects": false
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Evaluate should fail for qx in safe mode");
+            let msg = message.expect("Should have error message");
+            assert!(
+                msg.contains("Safe evaluation mode: potentially mutating operation 'qx'"),
+                "Should specifically mention qx"
+            );
+        }
+        _ => panic!("Expected Response"),
+    }
+}
+
+#[test]
 fn test_evaluate_rejects_carriage_returns() {
     let mut adapter = DebugAdapter::new();
 
