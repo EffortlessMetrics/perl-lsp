@@ -1,6 +1,7 @@
 impl<'a> Parser<'a> {
     /// Parse qualified identifier (may contain ::)
     fn parse_qualified_identifier(&mut self) -> ParseResult<Node> {
+        // Note: qualified identifier parsing is not recursive - no guard needed
         let start_token = self.consume_token()?;
         let start = start_token.start;
         let mut name = if start_token.kind == TokenKind::DoubleColon {
@@ -41,6 +42,11 @@ impl<'a> Parser<'a> {
 
     /// Parse primary expression
     fn parse_primary(&mut self) -> ParseResult<Node> {
+        self.with_recursion_guard(|s| s.parse_primary_inner())
+    }
+
+    /// Inner implementation of parse_primary (called under recursion guard)
+    fn parse_primary_inner(&mut self) -> ParseResult<Node> {
         let token = self.tokens.peek()?;
         let token_kind = token.kind;
 

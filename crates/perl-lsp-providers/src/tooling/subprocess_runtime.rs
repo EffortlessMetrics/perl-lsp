@@ -216,7 +216,10 @@ pub mod mock {
 
         /// Add a response to be returned for the next command
         pub fn add_response(&self, response: MockResponse) {
-            self.responses.lock().unwrap().push(response);
+            self.responses
+                .lock()
+                .expect("MockSubprocessRuntime: responses mutex poisoned")
+                .push(response);
         }
 
         /// Set the default response when no queued responses remain
@@ -226,12 +229,18 @@ pub mod mock {
 
         /// Get all recorded invocations
         pub fn invocations(&self) -> Vec<CommandInvocation> {
-            self.invocations.lock().unwrap().clone()
+            self.invocations
+                .lock()
+                .expect("MockSubprocessRuntime: invocations mutex poisoned")
+                .clone()
         }
 
         /// Clear recorded invocations
         pub fn clear_invocations(&self) {
-            self.invocations.lock().unwrap().clear();
+            self.invocations
+                .lock()
+                .expect("MockSubprocessRuntime: invocations mutex poisoned")
+                .clear();
         }
     }
 
@@ -249,15 +258,19 @@ pub mod mock {
             stdin: Option<&[u8]>,
         ) -> Result<SubprocessOutput, SubprocessError> {
             // Record the invocation
-            self.invocations.lock().unwrap().push(CommandInvocation {
-                program: program.to_string(),
-                args: args.iter().map(|s| s.to_string()).collect(),
-                stdin: stdin.map(|s| s.to_vec()),
-            });
+            self.invocations
+                .lock()
+                .expect("MockSubprocessRuntime: invocations mutex poisoned")
+                .push(CommandInvocation {
+                    program: program.to_string(),
+                    args: args.iter().map(|s| s.to_string()).collect(),
+                    stdin: stdin.map(|s| s.to_vec()),
+                });
 
             // Get the next response or use default
             let response = {
-                let mut responses = self.responses.lock().unwrap();
+                let mut responses =
+                    self.responses.lock().expect("MockSubprocessRuntime: responses mutex poisoned");
                 if responses.is_empty() {
                     self.default_response.clone()
                 } else {

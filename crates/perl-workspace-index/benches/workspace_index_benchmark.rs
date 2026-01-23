@@ -537,6 +537,148 @@ fn bench_file_removal_and_reindex(c: &mut Criterion) {
     });
 }
 
+/// Benchmark state transitions in IndexCoordinator
+///
+/// Validates that state transitions are fast enough for LSP responsiveness (<1ms overhead)
+fn bench_state_transitions(c: &mut Criterion) {
+    use perl_workspace_index::workspace_index::IndexCoordinator;
+
+    c.bench_function("state transitions", |b| {
+        b.iter_batched(
+            || IndexCoordinator::new(),
+            |coordinator| {
+                // Building → Ready
+                coordinator.transition_to_ready(100, 5000);
+                black_box(coordinator.state());
+
+                // Ready → Building
+                coordinator.transition_to_building(100);
+                black_box(coordinator.state());
+
+                // Building progress update
+                coordinator.update_building_progress(50);
+                black_box(coordinator.state());
+
+                black_box(coordinator);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
+/// Benchmark state query operations (hot path)
+///
+/// Validates that state() calls are fast enough for every LSP request (<100ns)
+fn bench_state_query(c: &mut Criterion) {
+    use perl_workspace_index::workspace_index::IndexCoordinator;
+
+    let coordinator = IndexCoordinator::new();
+    coordinator.transition_to_ready(100, 5000);
+
+    c.bench_function("state query (hot path)", |b| {
+        b.iter(|| {
+            let state = coordinator.state();
+            black_box(state);
+        });
+    });
+}
+
+/// Benchmark parse storm detection and recovery
+///
+/// Validates that parse storm detection overhead is minimal (<10μs per notify)
+fn bench_parse_storm_detection(c: &mut Criterion) {
+    use perl_workspace_index::workspace_index::IndexCoordinator;
+
+    c.bench_function("parse storm detection and recovery", |b| {
+        b.iter_batched(
+            || {
+                let coordinator = IndexCoordinator::new();
+                coordinator.transition_to_ready(100, 5000);
+                coordinator
+            },
+            |coordinator| {
+                // Trigger parse storm (15 changes, threshold is 10)
+                for i in 0..15 {
+                    coordinator.notify_change(&format!("file{}.pm", i));
+                }
+
+                // Check degradation
+                black_box(coordinator.state());
+
+                // Recover
+                for i in 0..15 {
+                    coordinator.notify_parse_complete(&format!("file{}.pm", i));
+                }
+
+                // Check recovery
+                black_box(coordinator.state());
+                black_box(coordinator);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
+/// Benchmark early-exit optimization (content hash check)
+///
+/// Validates that early-exit check is fast enough to be worth it (<1μs)
+fn bench_early_exit_optimization(c: &mut Criterion) {
+    c.bench_function("early exit content hash check", |b| {
+        b.iter_batched(
+            || {
+                let temp_dir = TempDir::new().unwrap();
+                let base_path = temp_dir.path();
+                fs::write(base_path.join("module1.pm"), SAMPLE_MODULE).unwrap();
+
+                let index = WorkspaceIndex::new();
+                let uri = Url::from_file_path(base_path.join("module1.pm")).unwrap();
+
+                // Initial index
+                index.index_file(uri.clone(), SAMPLE_MODULE.to_string()).ok();
+
+                (temp_dir, index, uri)
+            },
+            |(temp_dir, index, uri)| {
+                // Benchmark: re-index with same content (should early-exit)
+                index.index_file(uri, SAMPLE_MODULE.to_string()).ok();
+
+                black_box(&index);
+                black_box(temp_dir);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
+/// Benchmark coordinator with resource limits enforcement
+///
+/// Validates that limit checking overhead is acceptable (<10μs per check)
+fn bench_resource_limit_enforcement(c: &mut Criterion) {
+    use perl_workspace_index::workspace_index::{IndexCoordinator, IndexResourceLimits};
+
+    c.bench_function("resource limit enforcement", |b| {
+        b.iter_batched(
+            || {
+                let limits = IndexResourceLimits {
+                    max_files: 1000,
+                    max_total_symbols: 50000,
+                    ..Default::default()
+                };
+                let coordinator = IndexCoordinator::with_limits(limits);
+                coordinator.transition_to_ready(500, 25000);
+                coordinator
+            },
+            |coordinator| {
+                // Check limits (this happens after every index operation)
+                coordinator.enforce_limits();
+                black_box(coordinator.state());
+                black_box(coordinator);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
 criterion_group!(
     benches,
     bench_initial_index_small_workspace,
@@ -546,5 +688,10 @@ criterion_group!(
     bench_find_references,
     bench_workspace_symbol_search,
     bench_file_removal_and_reindex,
+    bench_state_transitions,
+    bench_state_query,
+    bench_parse_storm_detection,
+    bench_early_exit_optimization,
+    bench_resource_limit_enforcement,
 );
 criterion_main!(benches);

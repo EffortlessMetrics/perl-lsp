@@ -259,12 +259,76 @@ impl ErrorClassifier {
                 Some("Add a closing quote to terminate the string".to_string())
             }
             ParseErrorKind::UnclosedParenthesis => {
-                Some("Add a closing parenthesis ')'".to_string())
+                Some("Add a closing parenthesis ')' to match the opening '('".to_string())
             }
-            ParseErrorKind::UnclosedBracket => Some("Add a closing bracket ']'".to_string()),
-            ParseErrorKind::UnclosedBrace => Some("Add a closing brace '}'".to_string()),
+            ParseErrorKind::UnclosedBracket => {
+                Some("Add a closing bracket ']' to match the opening '['".to_string())
+            }
+            ParseErrorKind::UnclosedBrace => {
+                Some("Add a closing brace '}' to match the opening '{'".to_string())
+            }
+            ParseErrorKind::UnclosedBlock => {
+                Some("Add a closing brace '}' to complete the code block".to_string())
+            }
             ParseErrorKind::UnclosedRegex => {
-                Some("Add a closing delimiter to terminate the regex".to_string())
+                Some("Add a closing delimiter to terminate the regex pattern".to_string())
+            }
+            ParseErrorKind::UnterminatedHeredoc => {
+                Some("Add the heredoc terminator marker on its own line".to_string())
+            }
+            ParseErrorKind::InvalidVariableName => {
+                Some("Variable names must start with a letter or underscore, followed by alphanumeric characters or underscores".to_string())
+            }
+            ParseErrorKind::InvalidSubroutineName => {
+                Some("Subroutine names must start with a letter or underscore, followed by alphanumeric characters or underscores".to_string())
+            }
+            ParseErrorKind::MissingOperator => {
+                Some("Add an operator between operands (e.g., +, -, *, /, ., ==, !=)".to_string())
+            }
+            ParseErrorKind::MissingOperand => {
+                Some("Add a value or expression after the operator".to_string())
+            }
+            ParseErrorKind::UnexpectedEof => {
+                Some("The file ended unexpectedly - check for unclosed blocks, strings, or parentheses".to_string())
+            }
+            ParseErrorKind::UnexpectedToken { expected, found: _ } => {
+                Some(format!("Expected {} at this location", expected))
+            }
+            ParseErrorKind::InvalidSyntax => None,
+        }
+    }
+
+    /// Get a detailed explanation for the error kind
+    ///
+    /// Provides additional context and explanation beyond the basic diagnostic message
+    /// to help developers understand the root cause of the error.
+    ///
+    /// # Arguments
+    ///
+    /// * `kind` - Classified error type
+    ///
+    /// # Returns
+    ///
+    /// Optional detailed explanation
+    pub fn get_explanation(&self, kind: &ParseErrorKind) -> Option<String> {
+        match kind {
+            ParseErrorKind::MissingSemicolon => {
+                Some("In Perl, most statements must end with a semicolon. The only exceptions are the last statement in a block and statements that end with a block (like if, while, sub, etc.).".to_string())
+            }
+            ParseErrorKind::UnclosedString => {
+                Some("String literals must be properly terminated with a matching quote. Use double quotes (\") for interpolated strings or single quotes (') for literal strings.".to_string())
+            }
+            ParseErrorKind::UnclosedRegex => {
+                Some("Regular expressions must be properly delimited. Common forms include /pattern/, m/pattern/, s/old/new/, and qr/pattern/.".to_string())
+            }
+            ParseErrorKind::UnterminatedHeredoc => {
+                Some("Heredoc blocks must have their terminator marker appear on a line by itself with no leading or trailing whitespace (unless using <<~MARKER for indented heredocs).".to_string())
+            }
+            ParseErrorKind::InvalidVariableName => {
+                Some("Perl variable names (after the sigil) must follow identifier rules: start with a letter (a-z, A-Z) or underscore (_), followed by any combination of letters, digits, or underscores.".to_string())
+            }
+            ParseErrorKind::UnclosedBlock => {
+                Some("Code blocks must have matching braces. Each opening '{' needs a corresponding closing '}'.".to_string())
             }
             _ => None,
         }

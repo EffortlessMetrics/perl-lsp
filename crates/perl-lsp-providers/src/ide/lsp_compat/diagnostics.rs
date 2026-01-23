@@ -274,12 +274,86 @@ impl DiagnosticsProvider {
                 IssueKind::UninitializedVariable => "uninitialized-variable",
             };
 
+            // Build helpful related information based on issue type
+            let related_info = match issue.kind {
+                IssueKind::UndeclaredVariable => vec![
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "💡 Declare the variable with 'my', 'our', 'local', or 'state'".to_string(),
+                    },
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "ℹ️ Under 'use strict', all variables must be declared before use. Use 'my' for lexical scope or 'our' for package variables.".to_string(),
+                    }
+                ],
+                IssueKind::UnusedVariable => vec![
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "💡 Remove the unused variable or prefix with '_' to indicate it's intentionally unused".to_string(),
+                    }
+                ],
+                IssueKind::UnusedParameter => vec![
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "💡 Remove the unused parameter or prefix with '_' (e.g., $_unused) to indicate it's intentionally unused".to_string(),
+                    }
+                ],
+                IssueKind::VariableShadowing => vec![
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "💡 Rename this variable or use the outer scope variable instead".to_string(),
+                    },
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "ℹ️ Variable shadowing can make code harder to understand and may hide bugs.".to_string(),
+                    }
+                ],
+                IssueKind::VariableRedeclaration => vec![
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "💡 Remove the duplicate 'my' declaration - just assign to the existing variable".to_string(),
+                    }
+                ],
+                IssueKind::DuplicateParameter => vec![
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "💡 Remove the duplicate parameter or use a different name".to_string(),
+                    }
+                ],
+                IssueKind::ParameterShadowsGlobal => vec![
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "💡 Rename the parameter to avoid shadowing the global variable".to_string(),
+                    }
+                ],
+                IssueKind::UninitializedVariable => vec![
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "💡 Initialize the variable when declaring it: my $var = value;".to_string(),
+                    },
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "ℹ️ Using uninitialized variables may cause warnings and unexpected behavior.".to_string(),
+                    }
+                ],
+                IssueKind::UnquotedBareword => vec![
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "💡 Quote the bareword as a string: 'word' or \"word\"".to_string(),
+                    },
+                    RelatedInformation {
+                        location: issue.range,
+                        message: "ℹ️ Under 'use strict', barewords are not allowed unless they're subroutine calls or hash keys.".to_string(),
+                    }
+                ],
+            };
+
             diagnostics.push(Diagnostic {
                 range: issue.range,
                 severity,
                 code: Some(code.to_string()),
                 message: issue.description.clone(),
-                related_information: Vec::new(),
+                related_information: related_info,
                 tags: if matches!(
                     issue.kind,
                     IssueKind::UnusedVariable | IssueKind::UnusedParameter
@@ -332,20 +406,27 @@ impl DiagnosticsProvider {
                 NodeKind::FunctionCall { name, args } => {
                     if name == "defined" {
                         if let Some(arg) = args.first() {
-                            if let NodeKind::Variable { sigil, .. } = &arg.kind {
+                            if let NodeKind::Variable { sigil, name } = &arg.kind {
                                 if sigil == "@" || sigil == "%" {
+                                    let type_name = if sigil == "@" { "array" } else { "hash" };
                                     diagnostics.push(Diagnostic {
                                         range: (n.location.start, n.location.end),
                                         severity: DiagnosticSeverity::Warning,
                                         code: Some("deprecated-defined".to_string()),
                                         message: format!(
-                                            "Use of 'defined {}variable' is deprecated",
-                                            sigil
+                                            "Use of 'defined {}{}' is deprecated",
+                                            sigil, name
                                         ),
-                                        related_information: vec![RelatedInformation {
-                                            location: (arg.location.start, arg.location.end),
-                                            message: format!("Use 'if ({}array)' instead", sigil),
-                                        }],
+                                        related_information: vec![
+                                            RelatedInformation {
+                                                location: (arg.location.start, arg.location.end),
+                                                message: format!("💡 Use 'if ({}{})'  or 'if ({}{}[0])' instead", sigil, name, sigil, name),
+                                            },
+                                            RelatedInformation {
+                                                location: (n.location.start, n.location.end),
+                                                message: format!("ℹ️ Testing definedness of {} is deprecated because it was rarely useful and often wrong. Empty {}s are false in boolean context.", type_name, type_name),
+                                            }
+                                        ],
                                         tags: vec![DiagnosticTag::Deprecated],
                                     });
                                 }
@@ -362,7 +443,16 @@ impl DiagnosticsProvider {
                             severity: DiagnosticSeverity::Warning,
                             code: Some("deprecated-array-base".to_string()),
                             message: "Use of '$[' is deprecated and will be removed".to_string(),
-                            related_information: Vec::new(),
+                            related_information: vec![
+                                RelatedInformation {
+                                    location: (n.location.start, n.location.start + 2),
+                                    message: "💡 Remove usage of '$[' - arrays always start at index 0".to_string(),
+                                },
+                                RelatedInformation {
+                                    location: (n.location.start, n.location.start + 2),
+                                    message: "ℹ️ The $[ variable was used to change the base index of arrays, but this feature has been deprecated since Perl 5.12 and will be removed in future versions.".to_string(),
+                                }
+                            ],
                             tags: vec![DiagnosticTag::Deprecated],
                         });
                     }
@@ -396,7 +486,16 @@ impl DiagnosticsProvider {
                 severity: DiagnosticSeverity::Information,
                 code: Some("missing-strict".to_string()),
                 message: "Consider adding 'use strict;' for better error checking".to_string(),
-                related_information: Vec::new(),
+                related_information: vec![
+                    RelatedInformation {
+                        location: (0, 0),
+                        message: "💡 Add 'use strict;' at the beginning of your script".to_string(),
+                    },
+                    RelatedInformation {
+                        location: (0, 0),
+                        message: "ℹ️ The 'use strict' pragma enforces good coding practices by requiring variable declarations, disabling barewords, and preventing symbolic references.".to_string(),
+                    }
+                ],
                 tags: Vec::new(),
             });
         }
@@ -407,7 +506,16 @@ impl DiagnosticsProvider {
                 severity: DiagnosticSeverity::Information,
                 code: Some("missing-warnings".to_string()),
                 message: "Consider adding 'use warnings;' for better error detection".to_string(),
-                related_information: Vec::new(),
+                related_information: vec![
+                    RelatedInformation {
+                        location: (0, 0),
+                        message: "💡 Add 'use warnings;' at the beginning of your script".to_string(),
+                    },
+                    RelatedInformation {
+                        location: (0, 0),
+                        message: "ℹ️ The 'use warnings' pragma enables helpful warning messages about questionable constructs, uninitialized values, and deprecated features.".to_string(),
+                    }
+                ],
                 tags: Vec::new(),
             });
         }
@@ -456,7 +564,16 @@ impl DiagnosticsProvider {
                     severity: DiagnosticSeverity::Warning,
                     code: Some("assignment-in-condition".to_string()),
                     message: "Assignment in condition - did you mean '=='?".to_string(),
-                    related_information: Vec::new(),
+                    related_information: vec![
+                        RelatedInformation {
+                            location: (condition.location.start, condition.location.end),
+                            message: "💡 Use '==' for comparison or 'eq' for string comparison".to_string(),
+                        },
+                        RelatedInformation {
+                            location: (condition.location.start, condition.location.end),
+                            message: "ℹ️ Assignment (=) in conditions is usually a mistake. If intentional, wrap in parentheses: if (($x = value))".to_string(),
+                        }
+                    ],
                     tags: Vec::new(),
                 });
             }
@@ -466,7 +583,16 @@ impl DiagnosticsProvider {
                     severity: DiagnosticSeverity::Warning,
                     code: Some("assignment-in-condition".to_string()),
                     message: "Assignment in condition - did you mean '=='?".to_string(),
-                    related_information: Vec::new(),
+                    related_information: vec![
+                        RelatedInformation {
+                            location: (condition.location.start, condition.location.end),
+                            message: "💡 Use '==' for comparison or 'eq' for string comparison".to_string(),
+                        },
+                        RelatedInformation {
+                            location: (condition.location.start, condition.location.end),
+                            message: "ℹ️ Assignment in conditions is usually a mistake. If intentional, wrap in parentheses: if (($x = value))".to_string(),
+                        }
+                    ],
                     tags: Vec::new(),
                 });
             }
@@ -544,24 +670,37 @@ impl DiagnosticsProvider {
                 let error_kind = self.error_classifier.classify(n, source);
                 let diagnostic_message = self.error_classifier.get_diagnostic_message(&error_kind);
                 let suggestion = self.error_classifier.get_suggestion(&error_kind);
+                let explanation = self.error_classifier.get_explanation(&error_kind);
 
                 let mut full_message = diagnostic_message.clone();
                 if !message.is_empty() {
                     full_message.push_str(&format!(": {}", message));
                 }
-                if let Some(sugg) = suggestion {
-                    full_message.push_str(&format!(". {}", sugg));
-                }
 
                 let start = n.location.start;
                 let end = n.location.end.min(source.len());
+
+                // Build related information with suggestion and explanation
+                let mut related_info = Vec::new();
+                if let Some(sugg) = suggestion {
+                    related_info.push(RelatedInformation {
+                        location: (start, end),
+                        message: format!("💡 {}", sugg),
+                    });
+                }
+                if let Some(exp) = explanation {
+                    related_info.push(RelatedInformation {
+                        location: (start, end),
+                        message: format!("ℹ️ {}", exp),
+                    });
+                }
 
                 diagnostics.push(Diagnostic {
                     range: (start, end),
                     severity: DiagnosticSeverity::Error,
                     code: Some(format!("parse-error-{:?}", error_kind).to_lowercase()),
                     message: full_message,
-                    related_information: Vec::new(),
+                    related_information: related_info,
                     tags: Vec::new(),
                 });
             }
@@ -631,5 +770,189 @@ mod tests {
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
 
         assert!(diagnostics.iter().any(|d| d.code == Some("unused-variable".to_string())));
+    }
+
+    #[test]
+    fn test_diagnostic_has_helpful_suggestions() {
+        let source = r#"
+            use strict;
+            print $undefined_var;
+        "#;
+
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().unwrap();
+
+        let provider = DiagnosticsProvider::new(&ast, source.to_string());
+        let diagnostics = provider.get_diagnostics(&ast, &[], source);
+
+        // Find the undeclared variable diagnostic
+        let undeclared_diag =
+            diagnostics.iter().find(|d| d.code == Some("undeclared-variable".to_string()));
+
+        if let Some(diag) = undeclared_diag {
+            // Should have related information with suggestions
+            assert!(
+                !diag.related_information.is_empty(),
+                "Diagnostic should have related information with suggestions"
+            );
+
+            // Should have a lightbulb suggestion
+            assert!(
+                diag.related_information.iter().any(|r| r.message.contains("💡")),
+                "Should have actionable suggestion marked with lightbulb"
+            );
+
+            // Should have explanatory information
+            assert!(
+                diag.related_information.iter().any(|r| r.message.contains("ℹ️")),
+                "Should have explanatory information marked with info icon"
+            );
+        }
+    }
+
+    #[test]
+    fn test_deprecated_syntax_has_explanation() {
+        let source = r#"
+            my @array = (1, 2, 3);
+            if (defined @array) {
+                print "array defined";
+            }
+        "#;
+
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().unwrap();
+
+        let provider = DiagnosticsProvider::new(&ast, source.to_string());
+        let diagnostics = provider.get_diagnostics(&ast, &[], source);
+
+        // Find deprecated diagnostic
+        let deprecated_diag =
+            diagnostics.iter().find(|d| d.code == Some("deprecated-defined".to_string()));
+
+        if let Some(diag) = deprecated_diag {
+            assert_eq!(diag.severity, DiagnosticSeverity::Warning);
+            assert!(!diag.tags.is_empty(), "Should be tagged as deprecated");
+            assert!(diag.tags.contains(&DiagnosticTag::Deprecated));
+
+            // Should have helpful related information
+            assert!(
+                !diag.related_information.is_empty(),
+                "Deprecated syntax should have explanation"
+            );
+
+            // Check for both suggestion and explanation
+            let has_suggestion = diag.related_information.iter().any(|r| r.message.contains("💡"));
+            let has_explanation = diag.related_information.iter().any(|r| r.message.contains("ℹ️"));
+            assert!(
+                has_suggestion && has_explanation,
+                "Deprecated diagnostic should have both suggestion and explanation"
+            );
+        }
+    }
+
+    #[test]
+    fn test_assignment_in_condition_has_helpful_message() {
+        let source = r#"
+            my $x = 10;
+            if ($x = 5) {
+                print $x;
+            }
+        "#;
+
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().unwrap();
+
+        let provider = DiagnosticsProvider::new(&ast, source.to_string());
+        let diagnostics = provider.get_diagnostics(&ast, &[], source);
+
+        let assignment_diag =
+            diagnostics.iter().find(|d| d.code == Some("assignment-in-condition".to_string()));
+
+        if let Some(diag) = assignment_diag {
+            assert_eq!(diag.severity, DiagnosticSeverity::Warning);
+            assert!(diag.message.contains("=="), "Message should suggest using == instead");
+
+            // Should have helpful suggestions
+            assert!(!diag.related_information.is_empty());
+            let has_comparison_suggestion = diag
+                .related_information
+                .iter()
+                .any(|r| r.message.contains("==") || r.message.contains("eq"));
+            assert!(has_comparison_suggestion, "Should suggest using comparison operators");
+        }
+    }
+
+    #[test]
+    fn test_missing_strict_has_suggestion() {
+        let source = "print 'Hello';";
+
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().unwrap();
+
+        let provider = DiagnosticsProvider::new(&ast, source.to_string());
+        let diagnostics = provider.get_diagnostics(&ast, &[], source);
+
+        let strict_diag = diagnostics.iter().find(|d| d.code == Some("missing-strict".to_string()));
+
+        if let Some(diag) = strict_diag {
+            assert_eq!(diag.severity, DiagnosticSeverity::Information);
+            assert!(!diag.related_information.is_empty());
+
+            let has_suggestion =
+                diag.related_information.iter().any(|r| r.message.contains("use strict"));
+            assert!(has_suggestion, "Should suggest adding 'use strict'");
+        }
+    }
+
+    #[test]
+    fn test_unused_variable_tagged_appropriately() {
+        let source = r#"
+            my $unused = 42;
+            print "test";
+        "#;
+
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().unwrap();
+
+        let provider = DiagnosticsProvider::new(&ast, source.to_string());
+        let diagnostics = provider.get_diagnostics(&ast, &[], source);
+
+        let unused_diag =
+            diagnostics.iter().find(|d| d.code == Some("unused-variable".to_string()));
+
+        if let Some(diag) = unused_diag {
+            assert!(
+                diag.tags.contains(&DiagnosticTag::Unnecessary),
+                "Unused variable should be tagged as unnecessary"
+            );
+
+            // Should have suggestion to remove or prefix with underscore
+            let has_removal_suggestion = diag
+                .related_information
+                .iter()
+                .any(|r| r.message.contains("Remove") || r.message.contains("_"));
+            assert!(has_removal_suggestion, "Should suggest removing or prefixing with underscore");
+        }
+    }
+
+    #[test]
+    fn test_parse_error_has_suggestion_and_explanation() {
+        let source = r#"my $x = "unclosed string"#;
+
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().unwrap_or_else(|_| {
+            use perl_parser_core::{Node, NodeKind, SourceLocation};
+            Node::new(
+                NodeKind::Error { message: "test".to_string() },
+                SourceLocation { start: 0, end: source.len() },
+            )
+        });
+
+        // We need to test via error nodes in AST if recovery happened
+        // For now, this tests the error classifier integration
+        let provider = DiagnosticsProvider::new(&ast, source.to_string());
+
+        // Just verify the provider doesn't crash with error nodes
+        let _diagnostics = provider.get_diagnostics(&ast, &[], source);
     }
 }

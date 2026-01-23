@@ -31,6 +31,7 @@
 //! let config = AttachConfiguration {
 //!     host: "localhost".to_string(),
 //!     port: 13603,
+//!     timeout_ms: Some(5000),
 //! };
 //! ```
 
@@ -208,17 +209,74 @@ impl LaunchConfiguration {
 /// This configuration is used when attaching to an already-running Perl process
 /// that has been started with the Perl::LanguageServer DAP module.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AttachConfiguration {
     /// Host to connect to (typically "localhost")
     pub host: String,
 
     /// Port number for the DAP server (default: 13603)
     pub port: u16,
+
+    /// Connection timeout in milliseconds (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u32>,
 }
 
 impl Default for AttachConfiguration {
     fn default() -> Self {
-        Self { host: "localhost".to_string(), port: 13603 }
+        Self { host: "localhost".to_string(), port: 13603, timeout_ms: Some(5000) }
+    }
+}
+
+impl AttachConfiguration {
+    /// Validate the attach configuration
+    ///
+    /// This method checks that:
+    /// - Host is not empty
+    /// - Port is in valid range (1-65535)
+    /// - Timeout is reasonable (if specified)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if validation fails
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_dap::AttachConfiguration;
+    ///
+    /// let config = AttachConfiguration {
+    ///     host: "localhost".to_string(),
+    ///     port: 13603,
+    ///     timeout_ms: Some(5000),
+    /// };
+    ///
+    /// config.validate().expect("Valid configuration");
+    /// ```
+    pub fn validate(&self) -> Result<()> {
+        // Verify host is not empty
+        if self.host.trim().is_empty() {
+            anyhow::bail!("Host cannot be empty");
+        }
+
+        // Port is u16, so it's automatically in range 0-65535
+        // But we should reject port 0 as it's not valid for connecting
+        if self.port == 0 {
+            anyhow::bail!("Port must be in range 1-65535");
+        }
+
+        // Verify timeout is reasonable (if specified)
+        if let Some(timeout) = self.timeout_ms {
+            if timeout == 0 {
+                anyhow::bail!("Timeout must be greater than 0 milliseconds");
+            }
+            if timeout > 300_000 {
+                // 5 minutes max
+                anyhow::bail!("Timeout cannot exceed 300000 milliseconds (5 minutes)");
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -317,6 +375,7 @@ mod tests {
         let config = AttachConfiguration::default();
         assert_eq!(config.host, "localhost");
         assert_eq!(config.port, 13603);
+        assert_eq!(config.timeout_ms, Some(5000));
     }
 
     #[test]
@@ -514,11 +573,92 @@ mod tests {
     #[test]
     fn test_attach_config_custom_port() {
         // Test: custom port handling
-        let config = AttachConfiguration { host: "192.168.1.100".to_string(), port: 9000 };
+        let config = AttachConfiguration {
+            host: "192.168.1.100".to_string(),
+            port: 9000,
+            timeout_ms: Some(10000),
+        };
 
         let json = serde_json::to_string(&config).expect("Serialization failed");
         assert!(json.contains("192.168.1.100"), "Should contain custom host");
         assert!(json.contains("9000"), "Should contain custom port");
+    }
+
+    #[test]
+    fn test_attach_config_validation_valid() {
+        // Test: valid attach configuration
+        let config = AttachConfiguration {
+            host: "localhost".to_string(),
+            port: 13603,
+            timeout_ms: Some(5000),
+        };
+
+        assert!(config.validate().is_ok(), "Valid config should pass validation");
+    }
+
+    #[test]
+    fn test_attach_config_validation_empty_host() {
+        // Test: empty host fails validation
+        let config =
+            AttachConfiguration { host: "".to_string(), port: 13603, timeout_ms: Some(5000) };
+
+        let result = config.validate();
+        assert!(result.is_err(), "Empty host should fail validation");
+        assert!(result.unwrap_err().to_string().contains("Host"));
+    }
+
+    #[test]
+    fn test_attach_config_validation_whitespace_host() {
+        // Test: whitespace-only host fails validation
+        let config =
+            AttachConfiguration { host: "   ".to_string(), port: 13603, timeout_ms: Some(5000) };
+
+        let result = config.validate();
+        assert!(result.is_err(), "Whitespace host should fail validation");
+    }
+
+    #[test]
+    fn test_attach_config_validation_zero_port() {
+        // Test: port 0 is invalid
+        let config =
+            AttachConfiguration { host: "localhost".to_string(), port: 0, timeout_ms: Some(5000) };
+
+        let result = config.validate();
+        assert!(result.is_err(), "Port 0 should fail validation");
+        assert!(result.unwrap_err().to_string().contains("Port"));
+    }
+
+    #[test]
+    fn test_attach_config_validation_zero_timeout() {
+        // Test: zero timeout fails validation
+        let config =
+            AttachConfiguration { host: "localhost".to_string(), port: 13603, timeout_ms: Some(0) };
+
+        let result = config.validate();
+        assert!(result.is_err(), "Zero timeout should fail validation");
+        assert!(result.unwrap_err().to_string().contains("Timeout"));
+    }
+
+    #[test]
+    fn test_attach_config_validation_excessive_timeout() {
+        // Test: timeout > 5 minutes fails validation
+        let config = AttachConfiguration {
+            host: "localhost".to_string(),
+            port: 13603,
+            timeout_ms: Some(400_000), // 400 seconds
+        };
+
+        let result = config.validate();
+        assert!(result.is_err(), "Excessive timeout should fail validation");
+    }
+
+    #[test]
+    fn test_attach_config_validation_no_timeout() {
+        // Test: no timeout specified is valid
+        let config =
+            AttachConfiguration { host: "localhost".to_string(), port: 13603, timeout_ms: None };
+
+        assert!(config.validate().is_ok(), "Config without timeout should be valid");
     }
 
     #[test]

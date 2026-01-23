@@ -241,6 +241,9 @@ pub struct IndexResourceLimits {
 
     /// Maximum AST cache items (default: 100)
     pub max_ast_cache_items: usize,
+
+    /// Maximum workspace scan duration in milliseconds (default: 30,000ms = 30s)
+    pub max_scan_duration_ms: u64,
 }
 
 impl Default for IndexResourceLimits {
@@ -251,6 +254,7 @@ impl Default for IndexResourceLimits {
             max_total_symbols: 500_000,
             max_ast_cache_bytes: 256 * 1024 * 1024, // 256MB
             max_ast_cache_items: 100,
+            max_scan_duration_ms: 30_000, // 30 seconds
         }
     }
 }
@@ -539,6 +543,12 @@ impl IndexCoordinator {
     /// scan. Records the file count, symbol count, and completion timestamp.
     /// Enforces resource limits after transition.
     ///
+    /// # State Transition Guards
+    ///
+    /// Only valid transitions:
+    /// - `Building` → `Ready` (normal completion)
+    /// - `Degraded` → `Ready` (recovery after fix)
+    ///
     /// # Arguments
     ///
     /// * `file_count` - Total number of files indexed
@@ -554,11 +564,130 @@ impl IndexCoordinator {
     /// ```
     pub fn transition_to_ready(&self, file_count: usize, symbol_count: usize) {
         let mut state = self.state.write();
-        *state = IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
+
+        // State transition guard: validate current state allows transition to Ready
+        match &*state {
+            IndexState::Building { .. } | IndexState::Degraded { .. } => {
+                // Valid transition - proceed
+                *state =
+                    IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
+            }
+            IndexState::Ready { .. } => {
+                // Already Ready - update metrics but don't log as transition
+                *state =
+                    IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
+            }
+        }
         drop(state); // Release write lock before checking limits
 
         // Enforce resource limits after transition
         self.enforce_limits();
+    }
+
+    /// Transition to Building state
+    ///
+    /// Marks the index as building/scanning. Used when starting initial scan
+    /// or when recovering from degraded state. Tracks progress via indexed_count
+    /// and total_count for LSP progress reporting.
+    ///
+    /// # State Transition Guards
+    ///
+    /// Valid transitions:
+    /// - `Degraded` → `Building` (recovery attempt)
+    /// - `Ready` → `Building` (workspace folder change, re-scan)
+    /// - `Building` → `Building` (progress update)
+    ///
+    /// # Arguments
+    ///
+    /// * `total_count` - Total number of files discovered in workspace
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::IndexCoordinator;
+    ///
+    /// let coordinator = IndexCoordinator::new();
+    /// coordinator.transition_to_building(100); // Start scan with 100 files
+    /// ```
+    pub fn transition_to_building(&self, total_count: usize) {
+        let mut state = self.state.write();
+
+        // State transition guard: validate transition is allowed
+        match &*state {
+            IndexState::Degraded { .. } | IndexState::Ready { .. } => {
+                // Valid transition - start fresh scan
+                *state = IndexState::Building {
+                    indexed_count: 0,
+                    total_count,
+                    started_at: Instant::now(),
+                };
+            }
+            IndexState::Building { indexed_count, started_at, .. } => {
+                // Already building - update total count but preserve progress
+                *state = IndexState::Building {
+                    indexed_count: *indexed_count,
+                    total_count,
+                    started_at: *started_at,
+                };
+            }
+        }
+    }
+
+    /// Update Building state progress
+    ///
+    /// Increments the indexed file count and checks for scan timeout.
+    /// If timeout is exceeded, automatically transitions to Degraded state.
+    ///
+    /// # Arguments
+    ///
+    /// * `indexed_count` - Number of files indexed so far
+    ///
+    /// # State Transitions
+    ///
+    /// - `Building` → `Degraded(ScanTimeout)` if max_scan_duration exceeded
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::IndexCoordinator;
+    ///
+    /// let coordinator = IndexCoordinator::new();
+    /// coordinator.transition_to_building(100);
+    ///
+    /// for i in 0..100 {
+    ///     // ... index file ...
+    ///     coordinator.update_building_progress(i + 1);
+    /// }
+    /// ```
+    pub fn update_building_progress(&self, indexed_count: usize) {
+        let mut state = self.state.write();
+
+        if let IndexState::Building { started_at, total_count, .. } = &*state {
+            let elapsed = started_at.elapsed().as_millis() as u64;
+
+            // Check for scan timeout
+            if elapsed > self.limits.max_scan_duration_ms {
+                // Timeout exceeded - transition to degraded
+                let available_symbols = {
+                    let files = self.index.files.read();
+                    files.values().map(|fi| fi.symbols.len()).sum()
+                };
+
+                *state = IndexState::Degraded {
+                    reason: DegradationReason::ScanTimeout { elapsed_ms: elapsed },
+                    available_symbols,
+                    since: Instant::now(),
+                };
+                return;
+            }
+
+            // Update progress
+            *state = IndexState::Building {
+                indexed_count,
+                total_count: *total_count,
+                started_at: *started_at,
+            };
+        }
     }
 
     /// Transition to Degraded state
@@ -2170,6 +2299,7 @@ use Data::Dumper;
             max_total_symbols: 100_000,
             max_ast_cache_bytes: 128 * 1024 * 1024,
             max_ast_cache_items: 50,
+            max_scan_duration_ms: 30_000,
         };
 
         let coordinator = IndexCoordinator::with_limits(limits.clone());
@@ -2211,6 +2341,7 @@ use Data::Dumper;
             max_total_symbols: 50_000,
             max_ast_cache_bytes: 128 * 1024 * 1024,
             max_ast_cache_items: 50,
+            max_scan_duration_ms: 30_000,
         };
 
         let coordinator = IndexCoordinator::with_limits(limits);
@@ -2249,6 +2380,7 @@ use Data::Dumper;
             max_total_symbols: 50, // Very low limit for testing
             max_ast_cache_bytes: 128 * 1024 * 1024,
             max_ast_cache_items: 50,
+            max_scan_duration_ms: 30_000,
         };
 
         let coordinator = IndexCoordinator::with_limits(limits);
@@ -2324,6 +2456,7 @@ sub sub10 { }
             max_total_symbols: 50_000,
             max_ast_cache_bytes: 128 * 1024 * 1024,
             max_ast_cache_items: 50,
+            max_scan_duration_ms: 30_000,
         };
 
         let coordinator = IndexCoordinator::with_limits(limits);
@@ -2351,6 +2484,167 @@ sub sub10 { }
                 "Expected Degraded state after transition_to_ready with exceeded limits, got: {:?}",
                 other
             ),
+        }
+    }
+
+    #[test]
+    fn test_state_transition_guard_ready_to_ready() {
+        // Test that Ready → Ready is allowed (metrics update)
+        let coordinator = IndexCoordinator::new();
+        coordinator.transition_to_ready(100, 5000);
+
+        // Transition to Ready again with different metrics
+        coordinator.transition_to_ready(150, 7500);
+
+        match coordinator.state() {
+            IndexState::Ready { file_count, symbol_count, .. } => {
+                assert_eq!(file_count, 150);
+                assert_eq!(symbol_count, 7500);
+            }
+            other => panic!("Expected Ready state, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_state_transition_guard_building_to_building() {
+        // Test that Building → Building is allowed (progress update)
+        let coordinator = IndexCoordinator::new();
+
+        // Initial building state
+        coordinator.transition_to_building(100);
+
+        match coordinator.state() {
+            IndexState::Building { indexed_count, total_count, .. } => {
+                assert_eq!(indexed_count, 0);
+                assert_eq!(total_count, 100);
+            }
+            other => panic!("Expected Building state, got: {:?}", other),
+        }
+
+        // Update total count
+        coordinator.transition_to_building(200);
+
+        match coordinator.state() {
+            IndexState::Building { indexed_count, total_count, .. } => {
+                assert_eq!(indexed_count, 0); // Preserved
+                assert_eq!(total_count, 200); // Updated
+            }
+            other => panic!("Expected Building state, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_state_transition_ready_to_building() {
+        // Test that Ready → Building is allowed (re-scan)
+        let coordinator = IndexCoordinator::new();
+        coordinator.transition_to_ready(100, 5000);
+
+        // Trigger re-scan
+        coordinator.transition_to_building(150);
+
+        match coordinator.state() {
+            IndexState::Building { indexed_count, total_count, .. } => {
+                assert_eq!(indexed_count, 0);
+                assert_eq!(total_count, 150);
+            }
+            other => panic!("Expected Building state after re-scan, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_state_transition_degraded_to_building() {
+        // Test that Degraded → Building is allowed (recovery)
+        let coordinator = IndexCoordinator::new();
+        coordinator.transition_to_degraded(DegradationReason::IoError {
+            message: "Test error".to_string(),
+        });
+
+        // Attempt recovery
+        coordinator.transition_to_building(100);
+
+        match coordinator.state() {
+            IndexState::Building { indexed_count, total_count, .. } => {
+                assert_eq!(indexed_count, 0);
+                assert_eq!(total_count, 100);
+            }
+            other => panic!("Expected Building state after recovery, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_update_building_progress() {
+        let coordinator = IndexCoordinator::new();
+        coordinator.transition_to_building(100);
+
+        // Update progress
+        coordinator.update_building_progress(50);
+
+        match coordinator.state() {
+            IndexState::Building { indexed_count, total_count, .. } => {
+                assert_eq!(indexed_count, 50);
+                assert_eq!(total_count, 100);
+            }
+            other => panic!("Expected Building state with updated progress, got: {:?}", other),
+        }
+
+        // Update progress again
+        coordinator.update_building_progress(100);
+
+        match coordinator.state() {
+            IndexState::Building { indexed_count, total_count, .. } => {
+                assert_eq!(indexed_count, 100);
+                assert_eq!(total_count, 100);
+            }
+            other => panic!("Expected Building state with completed progress, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_scan_timeout_detection() {
+        // Test that scan timeout triggers degradation
+        let limits = IndexResourceLimits {
+            max_scan_duration_ms: 0, // Immediate timeout for testing
+            ..Default::default()
+        };
+
+        let coordinator = IndexCoordinator::with_limits(limits);
+        coordinator.transition_to_building(100);
+
+        // Small sleep to ensure elapsed time > 0
+        std::thread::sleep(std::time::Duration::from_millis(1));
+
+        // Update progress should detect timeout
+        coordinator.update_building_progress(10);
+
+        match coordinator.state() {
+            IndexState::Degraded {
+                reason: DegradationReason::ScanTimeout { elapsed_ms }, ..
+            } => {
+                assert!(elapsed_ms > 0, "Elapsed time should be recorded");
+            }
+            other => panic!("Expected Degraded state with ScanTimeout, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_scan_timeout_does_not_trigger_within_limit() {
+        // Test that scan doesn't timeout within the limit
+        let limits = IndexResourceLimits {
+            max_scan_duration_ms: 10_000, // 10 seconds - should not trigger
+            ..Default::default()
+        };
+
+        let coordinator = IndexCoordinator::with_limits(limits);
+        coordinator.transition_to_building(100);
+
+        // Update progress immediately (well within limit)
+        coordinator.update_building_progress(50);
+
+        match coordinator.state() {
+            IndexState::Building { indexed_count, .. } => {
+                assert_eq!(indexed_count, 50, "Should still be building without timeout");
+            }
+            other => panic!("Expected Building state (no timeout), got: {:?}", other),
         }
     }
 

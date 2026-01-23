@@ -52,10 +52,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a single statement
     fn parse_statement(&mut self) -> ParseResult<Node> {
-        self.check_recursion()?;
-        let result = self.parse_statement_inner();
-        self.exit_recursion();
-        result
+        self.with_recursion_guard(|s| s.parse_statement_inner())
     }
 
     fn parse_statement_inner(&mut self) -> ParseResult<Node> {
@@ -392,34 +389,34 @@ impl<'a> Parser<'a> {
 
     /// Parse a block statement
     fn parse_block(&mut self) -> ParseResult<Node> {
-        self.check_recursion()?;
-        let start = self.current_position();
-        self.expect(TokenKind::LeftBrace)?;
+        self.with_recursion_guard(|s| {
+            let start = s.current_position();
 
-        let mut statements = Vec::new();
+            s.expect(TokenKind::LeftBrace)?;
 
-        while self.peek_kind() != Some(TokenKind::RightBrace) && !self.tokens.is_eof() {
-            let stmt = self.parse_statement()?;
-            // Don't add empty blocks (from lone semicolons) to the statement list
-            if !matches!(stmt.kind, NodeKind::Block { ref statements } if statements.is_empty()) {
-                statements.push(stmt);
+            let mut statements = Vec::new();
+
+            while s.peek_kind() != Some(TokenKind::RightBrace) && !s.tokens.is_eof() {
+                let stmt = s.parse_statement()?;
+                // Don't add empty blocks (from lone semicolons) to the statement list
+                if !matches!(stmt.kind, NodeKind::Block { ref statements } if statements.is_empty()) {
+                    statements.push(stmt);
+                }
+
+                // parse_statement already invalidates peek, so we don't need to do it again
+
+                // Swallow any stray semicolons before checking for the next statement or closing brace
+                while s.peek_kind() == Some(TokenKind::Semicolon) {
+                    s.consume_token()?;
+                    s.tokens.invalidate_peek();
+                }
             }
 
-            // parse_statement already invalidates peek, so we don't need to do it again
+            s.expect(TokenKind::RightBrace)?;
+            let end = s.previous_position();
 
-            // Swallow any stray semicolons before checking for the next statement or closing brace
-            while self.peek_kind() == Some(TokenKind::Semicolon) {
-                self.consume_token()?;
-                self.tokens.invalidate_peek();
-            }
-        }
-
-        self.expect(TokenKind::RightBrace)?;
-        let end = self.previous_position();
-
-        let result = Node::new(NodeKind::Block { statements }, SourceLocation { start, end });
-        self.exit_recursion();
-        Ok(result)
+            Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
+        })
     }
 
     /// Check if we're at the start of a labeled statement (LABEL: ...)

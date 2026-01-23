@@ -83,6 +83,10 @@ pub struct RefactoringConfig {
     pub operation_timeout: u64,
     /// Enable parallel processing for multi-file operations
     pub parallel_processing: bool,
+    /// Maximum number of backup directories to retain (0 = unlimited)
+    pub max_backup_retention: usize,
+    /// Maximum age of backup directories in seconds (0 = no age limit)
+    pub backup_max_age_seconds: u64,
 }
 
 impl Default for RefactoringConfig {
@@ -93,6 +97,8 @@ impl Default for RefactoringConfig {
             create_backups: true,
             operation_timeout: 60,
             parallel_processing: true,
+            max_backup_retention: 10,
+            backup_max_age_seconds: 7 * 24 * 60 * 60, // 7 days
         }
     }
 }
@@ -200,6 +206,27 @@ pub struct BackupInfo {
     pub backup_dir: PathBuf,
     /// Mapping of original files to backup locations
     pub file_mappings: HashMap<PathBuf, PathBuf>,
+}
+
+/// Result of backup cleanup operation
+#[derive(Debug, Clone)]
+pub struct BackupCleanupResult {
+    /// Number of backup directories removed
+    pub directories_removed: usize,
+    /// Total space reclaimed in bytes
+    pub space_reclaimed: u64,
+}
+
+/// Metadata for a backup directory used during cleanup
+#[derive(Debug, Clone)]
+#[allow(dead_code)] // size field reserved for future cleanup policy implementations
+struct BackupDirMetadata {
+    /// Path to the backup directory
+    path: PathBuf,
+    /// Last modification time
+    modified: std::time::SystemTime,
+    /// Total size in bytes
+    size: u64,
 }
 
 /// Result of a refactoring operation
@@ -355,10 +382,10 @@ impl RefactoringEngine {
     }
 
     /// Clear operation history and cleanup backups
-    pub fn clear_history(&mut self) -> ParseResult<()> {
-        // TODO: Cleanup backup directories
+    pub fn clear_history(&mut self) -> ParseResult<BackupCleanupResult> {
+        let cleanup_result = self.cleanup_backup_directories()?;
         self.operation_history.clear();
-        Ok(())
+        Ok(cleanup_result)
     }
 
     // Private implementation methods
@@ -795,6 +822,184 @@ impl RefactoringEngine {
         }
 
         Ok(BackupInfo { backup_dir, file_mappings })
+    }
+
+    fn cleanup_backup_directories(&self) -> ParseResult<BackupCleanupResult> {
+        let backup_root = std::env::temp_dir().join("perl_refactor_backups");
+
+        if !backup_root.exists() {
+            return Ok(BackupCleanupResult { directories_removed: 0, space_reclaimed: 0 });
+        }
+
+        // Collect all backup directories with metadata
+        let mut backup_dirs = self.collect_backup_directories(&backup_root)?;
+
+        // Apply retention policies
+        let dirs_to_remove = self.apply_retention_policies(&mut backup_dirs)?;
+
+        // Remove selected backup directories and calculate space reclaimed
+        let (directories_removed, space_reclaimed) =
+            self.remove_backup_directories(&dirs_to_remove)?;
+
+        Ok(BackupCleanupResult { directories_removed, space_reclaimed })
+    }
+
+    fn collect_backup_directories(
+        &self,
+        backup_root: &PathBuf,
+    ) -> ParseResult<Vec<BackupDirMetadata>> {
+        let mut backup_dirs = Vec::new();
+
+        let entries = std::fs::read_dir(backup_root).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to read backup directory: {}", e),
+            location: 0,
+        })?;
+
+        for entry in entries {
+            let entry = entry.map_err(|e| ParseError::SyntaxError {
+                message: format!("Failed to read directory entry: {}", e),
+                location: 0,
+            })?;
+
+            let path = entry.path();
+            if path.is_dir() {
+                // Validate backup directory structure
+                if self.validate_backup_directory(&path)? {
+                    let metadata =
+                        std::fs::metadata(&path).map_err(|e| ParseError::SyntaxError {
+                            message: format!(
+                                "Failed to read metadata for {}: {}",
+                                path.display(),
+                                e
+                            ),
+                            location: 0,
+                        })?;
+
+                    let modified = metadata.modified().map_err(|e| ParseError::SyntaxError {
+                        message: format!(
+                            "Failed to get modification time for {}: {}",
+                            path.display(),
+                            e
+                        ),
+                        location: 0,
+                    })?;
+
+                    let size = self.calculate_directory_size(&path)?;
+
+                    backup_dirs.push(BackupDirMetadata { path, modified, size });
+                }
+            }
+        }
+
+        Ok(backup_dirs)
+    }
+
+    fn validate_backup_directory(&self, dir: &PathBuf) -> ParseResult<bool> {
+        // Check if directory name starts with "refactor_" (expected pattern)
+        let dir_name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+        if !dir_name.starts_with("refactor_") {
+            return Ok(false);
+        }
+
+        // Ensure it's a directory and not a symlink (security check)
+        let metadata = std::fs::symlink_metadata(dir).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to read symlink metadata for {}: {}", dir.display(), e),
+            location: 0,
+        })?;
+
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
+    fn calculate_directory_size(&self, dir: &PathBuf) -> ParseResult<u64> {
+        let mut total_size = 0u64;
+
+        let entries = std::fs::read_dir(dir).map_err(|e| ParseError::SyntaxError {
+            message: format!("Failed to read directory {}: {}", dir.display(), e),
+            location: 0,
+        })?;
+
+        for entry in entries {
+            let entry = entry.map_err(|e| ParseError::SyntaxError {
+                message: format!("Failed to read entry: {}", e),
+                location: 0,
+            })?;
+
+            let metadata = entry.metadata().map_err(|e| ParseError::SyntaxError {
+                message: format!("Failed to read entry metadata: {}", e),
+                location: 0,
+            })?;
+
+            if metadata.is_file() {
+                total_size += metadata.len();
+            }
+        }
+
+        Ok(total_size)
+    }
+
+    fn apply_retention_policies(
+        &self,
+        backup_dirs: &mut Vec<BackupDirMetadata>,
+    ) -> ParseResult<Vec<PathBuf>> {
+        let mut dirs_to_remove = Vec::new();
+
+        // Sort by modification time (oldest first)
+        backup_dirs.sort_by_key(|d| d.modified);
+
+        let now = std::time::SystemTime::now();
+
+        // Apply age-based retention policy
+        if self.config.backup_max_age_seconds > 0 {
+            let max_age = std::time::Duration::from_secs(self.config.backup_max_age_seconds);
+
+            backup_dirs.retain(|dir| {
+                if let Ok(age) = now.duration_since(dir.modified) {
+                    if age > max_age {
+                        dirs_to_remove.push(dir.path.clone());
+                        return false;
+                    }
+                }
+                true
+            });
+        }
+
+        // Apply count-based retention policy
+        if self.config.max_backup_retention > 0
+            && backup_dirs.len() > self.config.max_backup_retention
+        {
+            let excess_count = backup_dirs.len() - self.config.max_backup_retention;
+            for dir in backup_dirs.iter().take(excess_count) {
+                if !dirs_to_remove.contains(&dir.path) {
+                    dirs_to_remove.push(dir.path.clone());
+                }
+            }
+        }
+
+        Ok(dirs_to_remove)
+    }
+
+    fn remove_backup_directories(&self, dirs_to_remove: &[PathBuf]) -> ParseResult<(usize, u64)> {
+        let mut directories_removed = 0;
+        let mut space_reclaimed = 0u64;
+
+        for dir in dirs_to_remove {
+            let size = self.calculate_directory_size(dir)?;
+
+            std::fs::remove_dir_all(dir).map_err(|e| ParseError::SyntaxError {
+                message: format!("Failed to remove backup directory {}: {}", dir.display(), e),
+                location: 0,
+            })?;
+
+            directories_removed += 1;
+            space_reclaimed += size;
+        }
+
+        Ok((directories_removed, space_reclaimed))
     }
 
     fn perform_symbol_rename(
@@ -2275,6 +2480,183 @@ sub complex {
             assert!(result.is_err());
             let err_msg = format!("{:?}", result.unwrap_err());
             assert!(err_msg.contains("exceeds maximum file limit"));
+        }
+
+        // --- Backup cleanup tests ---
+
+        #[test]
+        fn test_cleanup_no_backups() {
+            let mut engine = RefactoringEngine::new().unwrap();
+            let result = engine.clear_history().unwrap();
+            assert_eq!(result.directories_removed, 0);
+            assert_eq!(result.space_reclaimed, 0);
+        }
+
+        #[test]
+        fn test_cleanup_backup_directories() {
+            use std::io::Write;
+
+            let mut engine = RefactoringEngine::new().unwrap();
+            engine.config.create_backups = true;
+
+            // Create a temp file to trigger backup creation
+            let mut file = tempfile::NamedTempFile::new().unwrap();
+            writeln!(file, "sub test {{ }}").unwrap();
+            let path = file.path().to_path_buf();
+
+            // Perform an operation to create a backup
+            let op = RefactoringType::SymbolRename {
+                old_name: "test".to_string(),
+                new_name: "renamed_test".to_string(),
+                scope: RefactoringScope::File(path.clone()),
+            };
+
+            let _ = engine.refactor(op, vec![path.clone()]);
+
+            // Verify backup was created
+            assert!(!engine.operation_history.is_empty());
+
+            // Clean up backups
+            let result = engine.clear_history().unwrap();
+
+            // Should have removed at least one directory
+            assert!(result.directories_removed >= 1);
+            assert_eq!(engine.operation_history.len(), 0);
+        }
+
+        #[test]
+        fn test_cleanup_respects_retention_count() {
+            use std::io::Write;
+
+            let mut config = RefactoringConfig::default();
+            config.create_backups = true;
+            config.max_backup_retention = 2;
+            config.backup_max_age_seconds = 0; // Disable age-based retention
+
+            let mut engine = RefactoringEngine::with_config(config).unwrap();
+
+            // Create multiple backups
+            for i in 0..4 {
+                let mut file = tempfile::NamedTempFile::new().unwrap();
+                writeln!(file, "sub test{} {{ }}", i).unwrap();
+                let path = file.path().to_path_buf();
+
+                let op = RefactoringType::SymbolRename {
+                    old_name: format!("test{}", i),
+                    new_name: format!("renamed_test{}", i),
+                    scope: RefactoringScope::File(path.clone()),
+                };
+
+                let _ = engine.refactor(op, vec![path]);
+                std::thread::sleep(std::time::Duration::from_millis(100)); // Ensure different timestamps
+            }
+
+            // Clean up with retention policy
+            let result = engine.clear_history().unwrap();
+
+            // Should have removed excess directories (4 created - 2 retained = 2 removed)
+            assert!(result.directories_removed >= 2);
+        }
+
+        #[test]
+        fn test_cleanup_respects_age_limit() {
+            use std::fs;
+
+            let backup_root = std::env::temp_dir().join("perl_refactor_backups");
+            let _ = fs::create_dir_all(&backup_root);
+
+            // Create an old backup directory manually
+            let old_backup = backup_root.join("refactor_1000_0");
+            let _ = fs::create_dir_all(&old_backup);
+
+            // Create a test file in the old backup
+            let test_file = old_backup.join("file_0.pl");
+            fs::write(&test_file, "sub old_backup { }").unwrap();
+
+            // Set the modification time to be old (this is platform-dependent)
+            // For testing, we'll verify that the cleanup logic runs without error
+
+            let mut config = RefactoringConfig::default();
+            config.backup_max_age_seconds = 1; // 1 second age limit
+
+            let mut engine = RefactoringEngine::with_config(config).unwrap();
+
+            // Wait to ensure backup is older than 1 second
+            std::thread::sleep(std::time::Duration::from_secs(2));
+
+            // Run cleanup
+            let result = engine.clear_history();
+            assert!(result.is_ok());
+
+            // The old backup should be cleaned up
+            let cleanup_result = result.unwrap();
+            assert!(cleanup_result.directories_removed >= 1);
+        }
+
+        #[test]
+        fn test_validate_backup_directory_structure() {
+            let engine = RefactoringEngine::new().unwrap();
+
+            let backup_root = std::env::temp_dir().join("perl_refactor_backups");
+            let _ = std::fs::create_dir_all(&backup_root);
+
+            // Valid backup directory
+            let valid_backup = backup_root.join("refactor_123_456");
+            let _ = std::fs::create_dir_all(&valid_backup);
+            assert!(engine.validate_backup_directory(&valid_backup).unwrap());
+
+            // Invalid backup directory (wrong prefix)
+            let invalid_backup = backup_root.join("invalid_backup");
+            let _ = std::fs::create_dir_all(&invalid_backup);
+            assert!(!engine.validate_backup_directory(&invalid_backup).unwrap());
+
+            // Cleanup
+            let _ = std::fs::remove_dir_all(&backup_root);
+        }
+
+        #[test]
+        fn test_calculate_directory_size() {
+            let engine = RefactoringEngine::new().unwrap();
+
+            let temp_dir = tempfile::tempdir().unwrap();
+            let dir_path = temp_dir.path().to_path_buf();
+
+            // Create test files with known sizes
+            let file1 = dir_path.join("file1.txt");
+            let file2 = dir_path.join("file2.txt");
+
+            std::fs::write(&file1, "hello").unwrap(); // 5 bytes
+            std::fs::write(&file2, "world!").unwrap(); // 6 bytes
+
+            let total_size = engine.calculate_directory_size(&dir_path).unwrap();
+            assert_eq!(total_size, 11);
+        }
+
+        #[test]
+        fn test_backup_cleanup_result_space_reclaimed() {
+            use std::io::Write;
+
+            let mut engine = RefactoringEngine::new().unwrap();
+            engine.config.create_backups = true;
+
+            // Create a file with known size
+            let mut file = tempfile::NamedTempFile::new().unwrap();
+            let test_content = "sub test { print 'hello world'; }";
+            write!(file, "{}", test_content).unwrap();
+            let path = file.path().to_path_buf();
+
+            // Perform operation to create backup
+            let op = RefactoringType::SymbolRename {
+                old_name: "test".to_string(),
+                new_name: "renamed_test".to_string(),
+                scope: RefactoringScope::File(path.clone()),
+            };
+
+            let _ = engine.refactor(op, vec![path]);
+
+            // Clean up and verify space was reclaimed
+            let result = engine.clear_history().unwrap();
+            assert!(result.space_reclaimed > 0);
         }
     }
 }

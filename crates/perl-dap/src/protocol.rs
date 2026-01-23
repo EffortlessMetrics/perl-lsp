@@ -225,3 +225,25 @@ pub struct LaunchRequestArguments {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stop_on_entry: Option<bool>,
 }
+
+// ============================================================================
+// Attach Request/Response Types
+// ============================================================================
+
+/// Arguments for attach request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachRequestArguments {
+    /// Process ID to attach to
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub process_id: Option<u32>,
+    /// Host to connect to (for TCP attachment)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+    /// Port number for TCP attachment
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+    /// Connection timeout in milliseconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout: Option<u32>,
+}

@@ -31,6 +31,11 @@ proptest = "1.9.0"
 default = []
 # Enable SIMD optimizations for string processing
 simd = []
+# Enable slow stress tests (regex fuzzing, etc.)
+slow_tests = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("slow_tests"))'] }
 
 [[bench]]
 name = "lexer_benchmarks"

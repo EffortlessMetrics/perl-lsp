@@ -119,7 +119,7 @@ impl Scope {
 
         // Now insert the variable
         let mut vars = self.variables.borrow_mut();
-        let inner = vars.entry(sigil.to_string()).or_insert_with(HashMap::new);
+        let inner = vars.entry(sigil.to_string()).or_default();
 
         let full_name = format!("{}{}", sigil, name);
         inner.insert(
@@ -192,7 +192,7 @@ enum ExtractedName<'a> {
 }
 
 impl<'a> ExtractedName<'a> {
-    fn to_string(&self) -> String {
+    fn as_string(&self) -> String {
         match self {
             ExtractedName::Parts(sigil, name) => format!("{}{}", sigil, name),
             ExtractedName::Full(s) => s.clone(),
@@ -263,7 +263,7 @@ impl ScopeAnalyzer {
             NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
                 let extracted = self.extract_variable_name(variable);
                 let (sigil, var_name_part) = extracted.parts();
-                let full_name = extracted.to_string(); // Only used for reporting issues if needed, sadly declaration still needs some allocs usually
+                let full_name = extracted.as_string(); // Only used for reporting issues if needed, sadly declaration still needs some allocs usually
 
                 let line = self.get_line_from_node(variable, code);
                 let is_our = declarator == "our";
@@ -291,10 +291,16 @@ impl ScopeAnalyzer {
                         range: (variable.location.start, variable.location.end),
                         description: match issue_kind {
                             IssueKind::VariableShadowing => {
-                                format!("Variable '{}' shadows a variable in outer scope", full_name)
+                                format!(
+                                    "Variable '{}' shadows a variable in outer scope",
+                                    full_name
+                                )
                             }
                             IssueKind::VariableRedeclaration => {
-                                format!("Variable '{}' is already declared in this scope", full_name)
+                                format!(
+                                    "Variable '{}' is already declared in this scope",
+                                    full_name
+                                )
                             }
                             _ => String::new(),
                         },
@@ -314,7 +320,7 @@ impl ScopeAnalyzer {
                 for variable in variables {
                     let extracted = self.extract_variable_name(variable);
                     let (sigil, var_name_part) = extracted.parts();
-                    let full_name = extracted.to_string();
+                    let full_name = extracted.as_string();
                     let line = self.get_line_from_node(variable, code);
 
                     if let Some(issue_kind) = scope.declare_variable_parts(
@@ -377,7 +383,13 @@ impl ScopeAnalyzer {
                             if !var_name.is_empty() {
                                 let (sigil, name) = split_variable_name(var_name);
                                 if !sigil.is_empty() {
-                                    scope.declare_variable_parts(sigil, name, node.location.start, true, true);
+                                    scope.declare_variable_parts(
+                                        sigil,
+                                        name,
+                                        node.location.start,
+                                        true,
+                                        true,
+                                    );
                                 }
                             }
                         }
@@ -588,7 +600,7 @@ impl ScopeAnalyzer {
                 for param in &params_to_check {
                     let extracted = self.extract_variable_name(param);
                     if !extracted.is_empty() {
-                        let full_name = extracted.to_string();
+                        let full_name = extracted.as_string();
                         let (sigil, name) = extracted.parts();
 
                         // Check for duplicate parameters
@@ -620,7 +632,13 @@ impl ScopeAnalyzer {
                         }
 
                         // Declare the parameter in subroutine scope
-                        sub_scope.declare_variable_parts(sigil, name, param.location.start, false, true); // Parameters are initialized
+                        sub_scope.declare_variable_parts(
+                            sigil,
+                            name,
+                            param.location.start,
+                            false,
+                            true,
+                        ); // Parameters are initialized
                         // Don't mark parameters as automatically used yet - track their actual usage
                     }
                 }
@@ -636,7 +654,7 @@ impl ScopeAnalyzer {
                             let extracted = self.extract_variable_name(param);
                             if !extracted.is_empty() {
                                 let (sigil, name) = extracted.parts();
-                                let full_name = extracted.to_string();
+                                let full_name = extracted.as_string();
 
                                 // Skip parameters starting with underscore (intentionally unused)
                                 if name.starts_with('_') {
