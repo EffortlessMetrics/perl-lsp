@@ -196,6 +196,11 @@
         "title": "Inline Variable",
         "category": "Perl Refactor",
         "icon": "$(replace)"
+      },
+      {
+        "command": "perl-lsp.statusMenu",
+        "title": "Status Menu",
+        "category": "Perl"
       }
     ],
     "menus": {

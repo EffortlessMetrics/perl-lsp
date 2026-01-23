@@ -5,7 +5,8 @@ import {
     LanguageClient,
     LanguageClientOptions,
     ServerOptions,
-    TransportKind
+    TransportKind,
+    State
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger } from './debugAdapter';
@@ -14,9 +15,15 @@ import { BinaryDownloader } from './downloader';
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
+let statusBarItem: vscode.StatusBarItem;
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
+
+    // Create status bar item
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    context.subscriptions.push(statusBarItem);
+    statusBarItem.command = 'perl-lsp.statusMenu';
     
     // Get the path to perl-lsp
     const serverPath = await getServerPath(context);
@@ -62,6 +69,10 @@ export async function activate(context: vscode.ExtensionContext) {
         clientOptions
     );
 
+    // Update status bar based on client state
+    client.onDidChangeState(() => updateStatusBar());
+    updateStatusBar();
+
     // Start the client
     await client.start();
     
@@ -91,10 +102,60 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         });
     });
+
+    const statusMenuCommand = vscode.commands.registerCommand('perl-lsp.statusMenu', async () => {
+        const items = [
+            { label: '$(refresh) Restart Server', description: 'Restart the Perl Language Server', command: 'perl-lsp.restart' },
+            { label: '$(output) Show Output', description: 'Show the Perl Language Server output channel', command: 'perl.showOutputChannel' },
+            { label: '$(info) Show Version', description: 'Show the Perl Language Server version', command: 'perl-lsp.showVersion' },
+            { label: '$(settings-gear) Open Settings', description: 'Configure Perl Language Server', command: 'workbench.action.openSettings', args: ['perl-lsp'] }
+        ];
+
+        const selection = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Perl Language Server Status'
+        });
+
+        if (selection) {
+            if (selection.command === 'perl.showOutputChannel') {
+                outputChannel.show();
+            } else if (selection.args) {
+                vscode.commands.executeCommand(selection.command, ...selection.args);
+            } else {
+                vscode.commands.executeCommand(selection.command);
+            }
+        }
+    });
     
-    context.subscriptions.push(restartCommand, showOutputCommand, showVersionCommand);
+    context.subscriptions.push(restartCommand, showOutputCommand, showVersionCommand, statusMenuCommand);
     
     outputChannel.appendLine('Perl Language Server started successfully');
+}
+
+function updateStatusBar() {
+    if (!client) {
+        statusBarItem.hide();
+        return;
+    }
+
+    switch (client.state) {
+        case State.Running:
+            statusBarItem.text = '$(check) Perl LSP';
+            statusBarItem.tooltip = 'Perl Language Server is running';
+            statusBarItem.show();
+            break;
+        case State.Starting:
+            statusBarItem.text = '$(sync~spin) Perl LSP';
+            statusBarItem.tooltip = 'Perl Language Server is starting...';
+            statusBarItem.show();
+            break;
+        case State.Stopped:
+            statusBarItem.text = '$(error) Perl LSP';
+            statusBarItem.tooltip = 'Perl Language Server is stopped';
+            statusBarItem.show();
+            break;
+        default:
+            statusBarItem.hide();
+    }
 }
 
 export async function deactivate() {
