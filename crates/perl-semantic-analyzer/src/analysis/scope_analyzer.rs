@@ -78,18 +78,30 @@ struct Variable {
 
 #[derive(Debug)]
 struct Scope {
-    // Outer key: sigil, Inner key: name
-    variables: RefCell<HashMap<String, HashMap<String, Rc<Variable>>>>,
+    // Array of maps indexed by sigil_to_index
+    // 0: $, 1: @, 2: %, 3: &, 4: *, 5: other
+    variables: RefCell<[HashMap<String, Rc<Variable>>; 6]>,
     parent: Option<Rc<Scope>>,
+}
+
+fn sigil_to_index(sigil: &str) -> usize {
+    match sigil {
+        "$" => 0,
+        "@" => 1,
+        "%" => 2,
+        "&" => 3,
+        "*" => 4,
+        _ => 5,
+    }
 }
 
 impl Scope {
     fn new() -> Self {
-        Self { variables: RefCell::new(HashMap::new()), parent: None }
+        Self { variables: RefCell::new(Default::default()), parent: None }
     }
 
     fn with_parent(parent: Rc<Scope>) -> Self {
-        Self { variables: RefCell::new(HashMap::new()), parent: Some(parent) }
+        Self { variables: RefCell::new(Default::default()), parent: Some(parent) }
     }
 
     fn declare_variable_parts(
@@ -100,13 +112,13 @@ impl Scope {
         is_our: bool,
         is_initialized: bool,
     ) -> Option<IssueKind> {
+        let idx = sigil_to_index(sigil);
+
         // First check if already declared in this scope
         {
             let vars = self.variables.borrow();
-            if let Some(inner) = vars.get(sigil) {
-                if inner.contains_key(name) {
-                    return Some(IssueKind::VariableRedeclaration);
-                }
+            if vars[idx].contains_key(name) {
+                return Some(IssueKind::VariableRedeclaration);
             }
         }
 
@@ -119,7 +131,8 @@ impl Scope {
 
         // Now insert the variable
         let mut vars = self.variables.borrow_mut();
-        let inner = vars.entry(sigil.to_string()).or_default();
+        // No allocation for sigil key here!
+        let inner = &mut vars[idx];
 
         let full_name = format!("{}{}", sigil, name);
         inner.insert(
@@ -137,10 +150,9 @@ impl Scope {
     }
 
     fn lookup_variable_parts(&self, sigil: &str, name: &str) -> Option<Rc<Variable>> {
-        if let Some(inner) = self.variables.borrow().get(sigil) {
-            if let Some(var) = inner.get(name) {
-                return Some(var.clone());
-            }
+        let idx = sigil_to_index(sigil);
+        if let Some(var) = self.variables.borrow()[idx].get(name) {
+            return Some(var.clone());
         }
         self.parent.as_ref()?.lookup_variable_parts(sigil, name)
     }
@@ -163,7 +175,7 @@ impl Scope {
     fn get_unused_variables(&self) -> Vec<(String, usize)> {
         let mut unused = Vec::new();
 
-        for inner in self.variables.borrow().values() {
+        for inner in self.variables.borrow().iter() {
             for var in inner.values() {
                 if !*var.is_used.borrow() && !var.is_our {
                     unused.push((var.name.clone(), var.line));
@@ -263,7 +275,6 @@ impl ScopeAnalyzer {
             NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
                 let extracted = self.extract_variable_name(variable);
                 let (sigil, var_name_part) = extracted.parts();
-                let full_name = extracted.as_string(); // Only used for reporting issues if needed, sadly declaration still needs some allocs usually
 
                 let line = self.get_line_from_node(variable, code);
                 let is_our = declarator == "our";
@@ -284,6 +295,7 @@ impl ScopeAnalyzer {
                     is_our,
                     is_initialized,
                 ) {
+                    let full_name = extracted.as_string();
                     issues.push(ScopeIssue {
                         kind: issue_kind,
                         variable_name: full_name.clone(),
@@ -320,7 +332,6 @@ impl ScopeAnalyzer {
                 for variable in variables {
                     let extracted = self.extract_variable_name(variable);
                     let (sigil, var_name_part) = extracted.parts();
-                    let full_name = extracted.as_string();
                     let line = self.get_line_from_node(variable, code);
 
                     if let Some(issue_kind) = scope.declare_variable_parts(
@@ -330,6 +341,7 @@ impl ScopeAnalyzer {
                         is_our,
                         is_initialized,
                     ) {
+                        let full_name = extracted.as_string();
                         issues.push(ScopeIssue {
                             kind: issue_kind,
                             variable_name: full_name.clone(),
