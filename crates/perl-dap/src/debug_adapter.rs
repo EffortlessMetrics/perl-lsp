@@ -1155,18 +1155,28 @@ impl DebugAdapter {
 
                 let condition = bp_req.get("condition").and_then(|c| c.as_str());
                 let mut success = false;
+                let mut validation_error = None;
 
-                if let Some(ref mut session) =
-                    *lock_or_recover(&self.session, "debug_adapter.session")
-                    && let Some(stdin) = session.process.stdin.as_mut()
-                {
-                    let cmd = if let Some(cond) = condition {
-                        format!("b {} {}\n", line, cond)
-                    } else {
-                        format!("b {}\n", line)
-                    };
+                // Security: Reject conditions with newlines to prevent command injection
+                if let Some(cond) = condition {
+                    if cond.contains('\n') || cond.contains('\r') {
+                        validation_error = Some("Condition cannot contain newlines".to_string());
+                    }
+                }
 
-                    success = stdin.write_all(cmd.as_bytes()).is_ok() && stdin.flush().is_ok();
+                if validation_error.is_none() {
+                    if let Some(ref mut session) =
+                        *lock_or_recover(&self.session, "debug_adapter.session")
+                        && let Some(stdin) = session.process.stdin.as_mut()
+                    {
+                        let cmd = if let Some(cond) = condition {
+                            format!("b {} {}\n", line, cond)
+                        } else {
+                            format!("b {}\n", line)
+                        };
+
+                        success = stdin.write_all(cmd.as_bytes()).is_ok() && stdin.flush().is_ok();
+                    }
                 }
 
                 let breakpoint = Breakpoint {
@@ -1174,7 +1184,9 @@ impl DebugAdapter {
                     verified: success && has_session,
                     line,
                     column: None,
-                    message: if !success && has_session {
+                    message: if let Some(err) = validation_error {
+                        Some(err)
+                    } else if !success && has_session {
                         Some("Failed to set breakpoint".to_string())
                     } else if !has_session {
                         Some("No active debug session".to_string())
