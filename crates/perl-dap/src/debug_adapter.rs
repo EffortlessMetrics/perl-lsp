@@ -36,6 +36,7 @@ static STACK_FRAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 #[allow(dead_code)] // Reserved for future variable parsing enhancements
 static VARIABLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static ERROR_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static DANGEROUS_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 
 fn context_re() -> Option<&'static Regex> {
     CONTEXT_RE
@@ -71,6 +72,42 @@ fn error_re() -> Option<&'static Regex> {
     ERROR_RE
         .get_or_init(|| {
             Regex::new(r"^(?:.*?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)|Syntax error|Can't locate|Global symbol).*$")
+        })
+        .as_ref()
+        .ok()
+}
+
+fn dangerous_ops_re() -> Option<&'static Regex> {
+    DANGEROUS_OPS_RE
+        .get_or_init(|| {
+            // Dangerous operations that can mutate state, perform I/O, or execute code
+            // Categories:
+            //   - State mutation: push, pop, shift, unshift, splice, delete, undef
+            //   - Process control: system, exec, fork, exit, dump, kill, alarm, sleep, wait, waitpid
+            //   - I/O: qx, readpipe, syscall, open, close, print, say, printf, sysread, syswrite
+            //   - Filesystem: mkdir, rmdir, unlink, rename, chdir, chmod, chown, chroot, truncate, symlink, link
+            //   - Code loading: eval, require, do (file)
+            //   - Tie/untie: can execute arbitrary code via FETCH/STORE
+            //   - Network: socket, connect, bind, listen, accept, send, recv
+            let ops = [
+                // State mutation
+                "push", "pop", "shift", "unshift", "splice", "delete", "undef",
+                // Process control
+                "system", "exec", "fork", "exit", "dump", "kill", "alarm", "sleep", "wait", "waitpid",
+                // I/O
+                "qx", "readpipe", "syscall", "open", "close", "print", "say", "printf", "sysread", "syswrite",
+                // Filesystem
+                "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown", "chroot", "truncate", "symlink", "link",
+                // Code loading/execution
+                "eval", "require", "do",
+                // Tie mechanism (can execute arbitrary code)
+                "tie", "untie",
+                // Network
+                "socket", "connect", "bind", "listen", "accept", "send", "recv",
+            ];
+            // Build pattern: \b(op1|op2|...)\b
+            let pattern = format!(r"\b(?:{})\b", ops.join("|"));
+            Regex::new(&pattern)
         })
         .as_ref()
         .ok()
@@ -1540,9 +1577,142 @@ impl DebugAdapter {
     }
 }
 
+/// Check if a position in a string is inside single quotes
+/// (conservative: only tracks single-quoted string literals)
+fn is_in_single_quotes(s: &str, idx: usize) -> bool {
+    let mut in_sq = false;
+    let mut escaped = false;
+
+    for (i, ch) in s.char_indices() {
+        if i >= idx {
+            break;
+        }
+        if in_sq {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '\'' {
+                in_sq = false;
+            }
+        } else if ch == '\'' {
+            in_sq = true;
+        }
+    }
+
+    in_sq
+}
+
+/// Check if the match is CORE:: or CORE::GLOBAL:: qualified (must block these)
+fn is_core_qualified(s: &str, op_start: usize) -> bool {
+    let bytes = s.as_bytes();
+
+    // Must have :: immediately before op
+    if op_start < 2 || bytes[op_start - 1] != b':' || bytes[op_start - 2] != b':' {
+        return false;
+    }
+
+    // Extract the identifier right before that ::
+    let end = op_start - 2;
+    let mut start = end;
+    while start > 0 {
+        let b = bytes[start - 1];
+        if b.is_ascii_alphanumeric() || b == b'_' {
+            start -= 1;
+        } else {
+            break;
+        }
+    }
+    let seg = &s[start..end];
+    if seg == "CORE" {
+        return true;
+    }
+    if seg != "GLOBAL" {
+        return false;
+    }
+
+    // If GLOBAL, require CORE::GLOBAL::op
+    if start < 2 || bytes[start - 1] != b':' || bytes[start - 2] != b':' {
+        return false;
+    }
+    let end2 = start - 2;
+    let mut start2 = end2;
+    while start2 > 0 {
+        let b = bytes[start2 - 1];
+        if b.is_ascii_alphanumeric() || b == b'_' {
+            start2 -= 1;
+        } else {
+            break;
+        }
+    }
+    &s[start2..end2] == "CORE"
+}
+
+/// Check if the match is a method call (->print)
+fn is_method_call(s: &str, op_start: usize) -> bool {
+    let bytes = s.as_bytes();
+    op_start >= 2 && bytes[op_start - 1] == b'>' && bytes[op_start - 2] == b'-'
+}
+
+/// Check if the match is a sigil-prefixed identifier ($print, @say, %exit, *dump)
+fn is_sigil_prefixed_identifier(s: &str, op_start: usize) -> bool {
+    let bytes = s.as_bytes();
+    if op_start == 0 {
+        return false;
+    }
+    matches!(bytes[op_start - 1], b'$' | b'@' | b'%' | b'*')
+}
+
+/// Check if the match is a simple braced scalar variable ${print}
+/// Does NOT skip ${print()} or ${print + 1}
+fn is_simple_braced_scalar_var(s: &str, op_start: usize, op_end: usize) -> bool {
+    let bytes = s.as_bytes();
+
+    // Scan left for `${` (allow whitespace between)
+    let mut i = op_start;
+    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+        i -= 1;
+    }
+    if i < 1 || bytes[i - 1] != b'{' {
+        return false;
+    }
+    i -= 1;
+    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+        i -= 1;
+    }
+    if i < 1 || bytes[i - 1] != b'$' {
+        return false;
+    }
+
+    // Scan right for `}` (allow whitespace between)
+    let mut j = op_end;
+    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+        j += 1;
+    }
+    j < bytes.len() && bytes[j] == b'}'
+}
+
+/// Check if the match is package-qualified (Foo::print) but not CORE::
+fn is_package_qualified_not_core(s: &str, op_start: usize) -> bool {
+    let bytes = s.as_bytes();
+    if op_start < 2 || bytes[op_start - 1] != b':' || bytes[op_start - 2] != b':' {
+        return false;
+    }
+    // It's qualified, but we need to check it's not CORE::
+    !is_core_qualified(s, op_start)
+}
+
 /// Validate that an expression is safe for evaluation (non-mutating)
 ///
 /// AC10.2: Safe evaluation mode validates expressions don't have side effects
+///
+/// This function uses a pre-compiled regex for performance and includes
+/// context-aware filtering to reduce false positives for:
+/// - Sigil-prefixed identifiers ($print, @say, %exit)
+/// - Simple braced scalar variables ${print}
+/// - Method calls ($obj->print)
+/// - Package-qualified names (Foo::print) unless CORE::
+/// - Single-quoted string literals ('print')
 fn validate_safe_expression(expression: &str) -> Option<String> {
     // Check for assignment operators
     let assignment_ops = [
@@ -1560,42 +1730,43 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
         }
     }
 
-    // Check for mutating operations and dangerous builtins
-    // Categories:
-    //   - State mutation: push, pop, shift, unshift, splice, delete, undef
-    //   - Process control: system, exec, fork, exit, dump, kill, alarm, sleep, wait, waitpid
-    //   - I/O: qx, readpipe, syscall, open, close, print, say, printf, sysread, syswrite
-    //   - Filesystem: mkdir, rmdir, unlink, rename, chdir, chmod, chown, chroot, truncate, symlink, link
-    //   - Code loading: eval, require, do (file)
-    //   - Tie/untie: can execute arbitrary code via FETCH/STORE
-    //   - Network: socket, connect, bind, listen, accept, send, recv
-    let mutating_ops = [
-        // State mutation
-        "push", "pop", "shift", "unshift", "splice", "delete", "undef",
-        // Process control
-        "system", "exec", "fork", "exit", "dump", "kill", "alarm", "sleep", "wait", "waitpid",
-        // I/O
-        "qx", "readpipe", "syscall", "open", "close", "print", "say", "printf", "sysread", "syswrite",
-        // Filesystem
-        "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown", "chroot", "truncate", "symlink", "link",
-        // Code loading/execution
-        "eval", "require", "do",
-        // Tie mechanism (can execute arbitrary code)
-        "tie", "untie",
-        // Network
-        "socket", "connect", "bind", "listen", "accept", "send", "recv",
-    ];
+    // Check for mutating operations using pre-compiled regex
+    if let Some(re) = dangerous_ops_re() {
+        for mat in re.find_iter(expression) {
+            let op = mat.as_str();
+            let start = mat.start();
+            let end = mat.end();
 
-    for op in &mutating_ops {
-        // Simple word boundary check for function calls
-        let pattern = format!("\\b{}\\b", regex::escape(op));
-        if let Ok(re) = Regex::new(&pattern) {
-            if re.is_match(expression) {
-                return Some(format!(
-                    "Safe evaluation mode: potentially mutating operation '{}' not allowed (use allowSideEffects: true)",
-                    op
-                ));
+            // Allow harmless occurrences in single-quoted literals
+            if is_in_single_quotes(expression, start) {
+                continue;
             }
+
+            // Allow sigil-prefixed identifiers ($print, @say, %exit, *printf)
+            if is_sigil_prefixed_identifier(expression, start) {
+                continue;
+            }
+
+            // Allow ${print} (simple scalar braced variable form)
+            if is_simple_braced_scalar_var(expression, start, end) {
+                continue;
+            }
+
+            // Allow method-name occurrences ($obj->print)
+            if is_method_call(expression, start) {
+                continue;
+            }
+
+            // Allow package-qualified names unless it's CORE::
+            if is_package_qualified_not_core(expression, start) {
+                continue;
+            }
+
+            // Block: either bare op or CORE:: qualified
+            return Some(format!(
+                "Safe evaluation mode: potentially mutating operation '{}' not allowed (use allowSideEffects: true)",
+                op
+            ));
         }
     }
 
@@ -2044,5 +2215,74 @@ mod tests {
             _ => panic!("Expected response"),
         }
         Ok(())
+    }
+
+    // Tests for safe_eval false-positive filtering
+    #[test]
+    fn safe_eval_allows_identifiers_named_like_ops() {
+        // These should NOT be blocked - they're identifiers, not builtins
+        let allowed = [
+            "$print",           // scalar variable
+            "@say",             // array variable
+            "%exit",            // hash variable
+            "*printf",          // glob
+            "${print}",         // braced scalar variable
+            "${ print }",       // braced with spaces
+            "'print'",          // single-quoted string
+            "$obj->print",      // method call
+            "Foo::print",       // package-qualified
+            "My::Module::exit", // deeply qualified
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "unexpected block for {expr:?}: {err:?}");
+        }
+    }
+
+    #[test]
+    fn safe_eval_still_blocks_real_ops() {
+        // These MUST be blocked - they're actual dangerous operations
+        let blocked = [
+            "print",
+            "print $x",
+            "say 'hello'",
+            "exit",
+            "exit 0",
+            "eval '$x'",
+            "eval { }",
+            "system 'ls'",
+            "exec '/bin/sh'",
+            "fork",
+            "kill 9, $$",
+            "CORE::print $x",
+            "CORE::GLOBAL::exit",
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn safe_eval_blocks_new_dangerous_ops() {
+        // Verify the extended deny-list works
+        let blocked = [
+            "eval '$code'",
+            "kill 9, $pid",
+            "exit 1",
+            "dump",
+            "fork",
+            "chroot '/tmp'",
+            "print STDERR 'x'",
+            "say 'hello'",
+            "printf '%s', $x",
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expected block for {expr:?}");
+        }
     }
 }
