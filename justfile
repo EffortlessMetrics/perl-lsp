@@ -31,6 +31,28 @@ ci-gate-msrv:
     @echo "🚪 Running fast merge gate on MSRV (Rust 1.89)..."
     @RUSTUP_TOOLCHAIN=1.89.0 just ci-gate
 
+# Low-memory merge gate - for constrained environments (WSL, CI runners, low-RAM)
+# Forces single-threaded builds/tests to prevent OOM crashes
+# Key fixes: unset RUSTC_WRAPPER (not empty), --no-deps on clippy
+ci-gate-low-mem:
+    @echo "🚪 Running low-memory merge gate (sequential, single-threaded)..."
+    @echo "   Using CARGO_BUILD_JOBS=1, RUST_TEST_THREADS=1, RUSTC_WRAPPER unset"
+    @env -u RUSTC_WRAPPER CARGO_BUILD_JOBS=1 RUST_TEST_THREADS=1 PROPTEST_CASES=32 \
+        sh -c 'just ci-workflow-audit && \
+        just ci-check-no-nested-lock && \
+        just ci-format && \
+        just ci-docs-check && \
+        echo "🔍 Running clippy (single-threaded, no-deps)..." && \
+        cargo clippy --workspace --lib --locked --no-deps -j1 -- -D warnings -A missing_docs && \
+        cargo clippy --workspace --bins --locked --no-deps -j1 -- -D clippy::unwrap_used -D clippy::expect_used && \
+        echo "🧪 Running library tests (single-threaded)..." && \
+        cargo test --workspace --lib --locked -j1 -- --test-threads=1 && \
+        just ci-policy && \
+        just ci-lsp-def && \
+        just ci-parser-features-check && \
+        just ci-features-invariants'
+    @echo "✅ Low-memory merge gate passed!"
+
 # Full CI on MSRV (~10-20 min) - proves 1.89 compatibility for releases
 ci-full-msrv:
     @echo "🚀 Running full CI on MSRV (Rust 1.89)..."
@@ -122,6 +144,21 @@ ci-test-lib:
     cargo test --workspace --lib --locked
     @echo "✅ Library tests passed"
 
+# Targeted parser/DAP verification (low-memory, for heredoc/breakpoint changes)
+# Key fixes: unset RUSTC_WRAPPER (not empty), --no-deps on clippy, targeted tests
+ci-test-parser-dap:
+    @echo "🎯 Running targeted parser/DAP tests (single-threaded)..."
+    @env -u RUSTC_WRAPPER CARGO_BUILD_JOBS=1 RUST_TEST_THREADS=1 \
+        sh -c 'echo "📦 Building perl-parser-core..." && \
+        cargo build -p perl-parser-core --lib -j1 && \
+        echo "🧪 Running perl-parser heredoc tests..." && \
+        cargo test -p perl-parser -j1 -- --test-threads=1 heredoc && \
+        echo "🧪 Running DAP breakpoint tests..." && \
+        cargo test -p perl-dap --test dap_breakpoint_matrix_tests -j1 -- --test-threads=1 && \
+        echo "🔍 Running clippy on affected crates (no-deps)..." && \
+        cargo clippy -p perl-parser-core -p perl-parser -p perl-dap --lib --no-deps -j1 -- -D warnings'
+    @echo "✅ Parser/DAP tests passed"
+
 # LSP integration tests (with adaptive threading)
 ci-test-lsp:
     @echo "🔌 Running LSP integration tests..."
@@ -131,7 +168,7 @@ ci-test-lsp:
 # LSP semantic definition tests (semantic-aware go-to-definition)
 ci-lsp-def:
     @echo "🔎 Running LSP semantic definition tests..."
-    RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp --test semantic_definition -- --test-threads=1
     @echo "✅ LSP semantic definition tests passed"
 
@@ -151,6 +188,47 @@ ci-test-mutation:
 ci-cost-estimate:
     @echo "💰 Estimating CI costs (essential jobs: ~$0.06-0.08 per PR)"
     @just ci-local
+
+# ============================================================================
+# Low-Memory Debugging Commands
+# ============================================================================
+
+# Trace a command with /usr/bin/time -v to capture Max RSS (peak memory)
+# Usage: just trace 'cargo clippy -p perl-parser --no-deps -j1 -- -D warnings'
+trace cmd:
+    @mkdir -p target/ci-trace
+    @bash -c 'set -euo pipefail; \
+      log=target/ci-trace/trace-$(date +%Y%m%d-%H%M%S).log; \
+      echo "CMD: {{cmd}}" | tee -a "$$log"; \
+      /usr/bin/time -v {{cmd}} 2>&1 | tee -a "$$log"; \
+      echo "---" | tee -a "$$log"; \
+      echo "Log: $$log"'
+
+# Trace each low-mem step individually to find memory hotspots
+trace-lowmem-steps:
+    @echo "🔬 Tracing low-memory steps individually..."
+    @mkdir -p target/ci-trace
+    @echo "Step 1: format check"
+    @just trace 'cargo fmt --check --all'
+    @echo "Step 2: clippy lib (no-deps)"
+    @just trace 'env -u RUSTC_WRAPPER cargo clippy --workspace --lib --locked --no-deps -j1 -- -D warnings -A missing_docs'
+    @echo "Step 3: clippy bins (no-deps)"
+    @just trace 'env -u RUSTC_WRAPPER cargo clippy --workspace --bins --locked --no-deps -j1 -- -D clippy::unwrap_used -D clippy::expect_used'
+    @echo "Step 4: tests lib"
+    @just trace 'env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 cargo test --workspace --lib --locked -j1 -- --test-threads=1'
+    @echo "📊 Check target/ci-trace/ for Max RSS values"
+
+# Full parser/DAP tests (not just heredoc-targeted) with low-memory settings
+ci-test-parser-dap-full:
+    @echo "🎯 Running full parser/DAP tests (single-threaded)..."
+    @env -u RUSTC_WRAPPER CARGO_BUILD_JOBS=1 RUST_TEST_THREADS=1 \
+        sh -c 'echo "🧪 Running all perl-parser lib tests..." && \
+        cargo test -p perl-parser --lib -j1 -- --test-threads=1 && \
+        echo "🧪 Running all perl-dap tests..." && \
+        cargo test -p perl-dap -j1 -- --test-threads=1 && \
+        echo "🔍 Running clippy on affected crates (no-deps)..." && \
+        cargo clippy -p perl-parser-core -p perl-parser -p perl-dap --lib --no-deps -j1 -- -D warnings'
+    @echo "✅ Full Parser/DAP tests passed"
 
 # ============================================================================
 # Development Commands

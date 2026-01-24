@@ -251,6 +251,7 @@ impl LspServer {
     ///     Box::new(output)
     /// );
     /// ```
+    #[allow(clippy::boxed_local)] // reader is intentionally unused for API compatibility
     pub fn with_io<R, W>(reader: Box<R>, writer: Box<W>) -> Self
     where
         R: Read + Send + 'static,

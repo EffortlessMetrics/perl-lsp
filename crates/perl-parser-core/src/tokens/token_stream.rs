@@ -453,11 +453,22 @@ impl<'a> TokenStream<'a> {
         // If we have a peeked token, return it and shift the peek chain down
 
         if let Some(token) = self.peeked.take() {
-            self.peeked = self.peeked_second.take();
-            self.peeked_second = self.peeked_third.take();
+            // Make EOF sticky - if we're returning EOF, put it back in the peek buffer
+            // so future peeks still see EOF instead of getting an error
+            if token.kind == TokenKind::Eof {
+                self.peeked = Some(token.clone());
+            } else {
+                self.peeked = self.peeked_second.take();
+                self.peeked_second = self.peeked_third.take();
+            }
             Ok(token)
         } else {
-            self.next_token()
+            let token = self.next_token()?;
+            // Make EOF sticky for fresh tokens too
+            if token.kind == TokenKind::Eof {
+                self.peeked = Some(token.clone());
+            }
+            Ok(token)
         }
     }
 

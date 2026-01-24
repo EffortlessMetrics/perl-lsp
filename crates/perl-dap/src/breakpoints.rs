@@ -69,28 +69,23 @@ fn has_only_comments_in_range(node: &Node, start: usize, end: usize) -> bool {
     }
 }
 
-/// Check if a byte offset is inside a heredoc interior
+/// Check if a byte offset is inside a heredoc interior (body content)
 fn is_inside_heredoc_interior(node: &Node, byte_offset: usize) -> bool {
-    // Check if offset is within this node
-    if byte_offset < node.location.start || byte_offset >= node.location.end {
-        // Check children
-        return match &node.kind {
-            NodeKind::Program { statements } => {
-                statements.iter().any(|s| is_inside_heredoc_interior(s, byte_offset))
-            }
-            NodeKind::Heredoc { .. } => {
-                // The heredoc node itself - offset is in range
-                true
-            }
-            _ => {
-                // Recursively check other node types with children
-                false
-            }
-        };
+    // Check if this is a heredoc with a body span containing the offset
+    if let NodeKind::Heredoc { body_span: Some(span), .. } = &node.kind {
+        if byte_offset >= span.start && byte_offset < span.end {
+            return true;
+        }
     }
 
-    // Node contains the offset, check if it's a heredoc
-    matches!(node.kind, NodeKind::Heredoc { .. })
+    // Recursively check all children
+    let mut found = false;
+    node.for_each_child(|child| {
+        if !found && is_inside_heredoc_interior(child, byte_offset) {
+            found = true;
+        }
+    });
+    found
 }
 
 /// Validate a breakpoint against the AST
@@ -128,15 +123,16 @@ fn validate_breakpoint_line(source: &str, line: i64) -> (bool, Option<String>) {
         rope.len_bytes()
     };
 
-    // Validation 1: Comment or blank line
-    if is_comment_or_blank_line(&ast, line_start, line_end, source) {
-        return (false, Some("Breakpoint set on comment or blank line".to_string()));
-    }
-
-    // Validation 2: Inside heredoc interior
-    // Check the start of the line
+    // Validation 1: Inside heredoc interior
+    // Check BEFORE comment/blank check because heredoc interior lines have no AST nodes
+    // and would otherwise be incorrectly classified as blank/comment lines
     if is_inside_heredoc_interior(&ast, line_start) {
         return (false, Some("Breakpoint set inside heredoc content".to_string()));
+    }
+
+    // Validation 2: Comment or blank line
+    if is_comment_or_blank_line(&ast, line_start, line_end, source) {
+        return (false, Some("Breakpoint set on comment or blank line".to_string()));
     }
 
     // Breakpoint is valid
@@ -395,8 +391,7 @@ print "done\n";
 my $final = process($x);
 print "result: $final\n";
 "#;
-        file.write_all(perl_code.as_bytes())
-            .expect("Failed to write test Perl content");
+        file.write_all(perl_code.as_bytes()).expect("Failed to write test Perl content");
         file.flush().expect("Failed to flush temp file");
         let path = file.path().to_string_lossy().to_string();
         (file, path)
@@ -414,10 +409,7 @@ print "result: $final\n";
         let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
-            source: Source {
-                path: Some(source_path.clone()),
-                name: Some("script.pl".to_string()),
-            },
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![
                 SourceBreakpoint { line: 10, column: None, condition: None },
                 SourceBreakpoint {
@@ -446,10 +438,7 @@ print "result: $final\n";
 
         // Set initial breakpoints
         let args1 = SetBreakpointsArguments {
-            source: Source {
-                path: Some(source_path.clone()),
-                name: Some("script.pl".to_string()),
-            },
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![SourceBreakpoint { line: 10, column: None, condition: None }]),
             source_modified: None,
         };
@@ -457,10 +446,7 @@ print "result: $final\n";
 
         // Replace with new breakpoints
         let args2 = SetBreakpointsArguments {
-            source: Source {
-                path: Some(source_path.clone()),
-                name: Some("script.pl".to_string()),
-            },
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![
                 SourceBreakpoint { line: 20, column: None, condition: None },
                 SourceBreakpoint { line: 26, column: None, condition: None },
@@ -484,10 +470,7 @@ print "result: $final\n";
         let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
-            source: Source {
-                path: Some(source_path),
-                name: Some("script.pl".to_string()),
-            },
+            source: Source { path: Some(source_path), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![
                 SourceBreakpoint { line: 10, column: None, condition: None },
                 SourceBreakpoint { line: 20, column: None, condition: None },
@@ -506,10 +489,7 @@ print "result: $final\n";
         let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
-            source: Source {
-                path: Some(source_path),
-                name: Some("script.pl".to_string()),
-            },
+            source: Source { path: Some(source_path), name: Some("script.pl".to_string()) },
             // Use lines within our 30-line test file, but out of order
             breakpoints: Some(vec![
                 SourceBreakpoint { line: 25, column: None, condition: None },

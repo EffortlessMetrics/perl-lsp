@@ -4,7 +4,7 @@ use perl_parser::ast::{Node, NodeKind};
 /// Depth-first traversal using for_each_child_mut to collect all heredoc nodes
 fn collect_heredocs(node: &mut Node, out: &mut Vec<(String, String, bool, bool)>) {
     // Check if current node is a heredoc and collect its data
-    if let NodeKind::Heredoc { delimiter, content, interpolated, indented } = &node.kind {
+    if let NodeKind::Heredoc { delimiter, content, interpolated, indented, .. } = &node.kind {
         out.push((delimiter.clone(), content.clone(), *interpolated, *indented));
     }
 

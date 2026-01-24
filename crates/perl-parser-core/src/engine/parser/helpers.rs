@@ -339,8 +339,15 @@ impl<'a> Parser<'a> {
         while !self.tokens.is_eof() && skipped < 100 {
             // Check if we're at a sync point
             if self.is_sync_point() {
-                // If we're at a semicolon, consume it
-                if matches!(self.peek_kind(), Some(TokenKind::Semicolon)) {
+                // Consume tokens that would cause infinite loops if left unconsumed.
+                // Semicolon: standard statement terminator, safe to skip.
+                // RightBrace: orphan closing brace at top level must be consumed
+                //             to prevent parse_program from looping forever.
+                // Both are valid sync points but need to be consumed for progress.
+                if matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::Semicolon) | Some(TokenKind::RightBrace)
+                ) {
                     let _ = self.consume_token();
                 }
                 return true;

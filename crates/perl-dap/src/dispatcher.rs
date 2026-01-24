@@ -361,8 +361,7 @@ print "done\n";
 my $final = process($x);
 print "result: $final\n";
 "#;
-        file.write_all(perl_code.as_bytes())
-            .expect("Failed to write test Perl content");
+        file.write_all(perl_code.as_bytes()).expect("Failed to write test Perl content");
         file.flush().expect("Failed to flush temp file");
         let path = file.path().to_string_lossy().to_string();
         (file, path)

@@ -372,12 +372,15 @@ impl<'a> Parser<'a> {
                 self.consume_token()?; // consume (
                 let mut args = vec![];
 
-                while self.peek_kind() != Some(TokenKind::RightParen) {
+                // EOF guard to prevent infinite loop on truncated input
+                while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
                     args.push(self.parse_expression()?);
 
                     if self.peek_kind() == Some(TokenKind::Comma) {
                         self.consume_token()?; // consume comma
-                    } else if self.peek_kind() != Some(TokenKind::RightParen) {
+                    } else if self.peek_kind() != Some(TokenKind::RightParen)
+                        && !self.tokens.is_eof()
+                    {
                         return Err(ParseError::syntax(
                             "Expected comma or right parenthesis",
                             self.current_position(),

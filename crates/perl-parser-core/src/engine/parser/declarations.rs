@@ -660,8 +660,8 @@ impl<'a> Parser<'a> {
         } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.consume_token()?; // consume (
 
-            // Parse import list
-            while self.peek_kind() != Some(TokenKind::RightParen) {
+            // Parse import list (with EOF guard to prevent infinite loop on truncated input)
+            while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
                 if self.peek_kind() == Some(TokenKind::String) {
                     args.push(self.consume_token()?.text);
                 } else if self.peek_kind() == Some(TokenKind::Identifier) {
@@ -862,8 +862,8 @@ impl<'a> Parser<'a> {
         } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.consume_token()?; // consume (
 
-            // Parse argument list
-            while self.peek_kind() != Some(TokenKind::RightParen) {
+            // Parse argument list (with EOF guard to prevent infinite loop on truncated input)
+            while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
                 if self.peek_kind() == Some(TokenKind::String) {
                     args.push(self.consume_token()?.text);
                 } else if self.peek_kind() == Some(TokenKind::Identifier) {
