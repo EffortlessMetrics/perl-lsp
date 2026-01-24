@@ -1562,7 +1562,7 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
     let mutating_ops = [
         "push", "pop", "shift", "unshift", "splice", "delete", "undef", "system", "exec", "qx",
         "readpipe", "syscall", "open", "close", "mkdir", "rmdir", "unlink", "rename", "chdir",
-        "chmod", "chown",
+        "chmod", "chown", "eval", "exit", "dump", "fork", "chroot", "print", "say", "printf",
     ];
 
     for op in &mutating_ops {
