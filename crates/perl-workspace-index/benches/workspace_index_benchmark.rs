@@ -175,8 +175,8 @@ fn bench_initial_index_small_workspace(c: &mut Criterion) {
         b.iter_batched(
             || {
                 // Setup: create a temporary workspace with 5 files
-                let temp_dir = TempDir::new()
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                let temp_dir =
+                    TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
                 let base_path = temp_dir.path();
 
                 // Create 5 different Perl files
@@ -226,8 +226,8 @@ fn bench_initial_index_medium_workspace(c: &mut Criterion) {
     c.bench_function("initial index medium workspace (10 files)", |b| {
         b.iter_batched(
             || {
-                let temp_dir = TempDir::new()
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                let temp_dir =
+                    TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
                 let base_path = temp_dir.path();
 
                 // Create 10 files by duplicating samples with variations
@@ -278,8 +278,8 @@ fn bench_incremental_update(c: &mut Criterion) {
         b.iter_batched(
             || {
                 // Setup: create and index a workspace
-                let temp_dir = TempDir::new()
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                let temp_dir =
+                    TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
                 let base_path = temp_dir.path();
 
                 fs::write(base_path.join("module1.pm"), SAMPLE_MODULE)
@@ -395,8 +395,7 @@ sub new_method {  # New method added
 /// due to hash table indexing.
 fn bench_symbol_lookup(c: &mut Criterion) {
     // Setup: create an indexed workspace once for all iterations
-    let temp_dir = TempDir::new()
-        .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+    let temp_dir = TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
     let base_path = temp_dir.path();
 
     fs::write(base_path.join("module1.pm"), SAMPLE_MODULE)
@@ -447,8 +446,7 @@ fn bench_symbol_lookup(c: &mut Criterion) {
 /// Benchmark find_references (cross-file reference lookup)
 fn bench_find_references(c: &mut Criterion) {
     // Setup: create an indexed workspace
-    let temp_dir = TempDir::new()
-        .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+    let temp_dir = TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
     let base_path = temp_dir.path();
 
     fs::write(base_path.join("module1.pm"), SAMPLE_MODULE)
@@ -494,8 +492,7 @@ fn bench_find_references(c: &mut Criterion) {
 /// Benchmark workspace symbol search (fuzzy matching)
 fn bench_workspace_symbol_search(c: &mut Criterion) {
     // Setup: create an indexed workspace
-    let temp_dir = TempDir::new()
-        .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+    let temp_dir = TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
     let base_path = temp_dir.path();
 
     // Create multiple files with various symbols
@@ -548,8 +545,8 @@ fn bench_file_removal_and_reindex(c: &mut Criterion) {
         b.iter_batched(
             || {
                 // Setup: create and index a workspace
-                let temp_dir = TempDir::new()
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                let temp_dir =
+                    TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
                 let base_path = temp_dir.path();
 
                 fs::write(base_path.join("module1.pm"), SAMPLE_MODULE)
@@ -676,8 +673,8 @@ fn bench_early_exit_optimization(c: &mut Criterion) {
     c.bench_function("early exit content hash check", |b| {
         b.iter_batched(
             || {
-                let temp_dir = TempDir::new()
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                let temp_dir =
+                    TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
                 let base_path = temp_dir.path();
                 fs::write(base_path.join("module1.pm"), SAMPLE_MODULE)
                     .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));

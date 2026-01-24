@@ -489,7 +489,9 @@ pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
 
     // Also check if the left token is a contextual token that loses meaning when isolated
     let left_alone = lex_core_spans(&left.text);
-    if left_alone.len() != 1 || left_alone.first().map_or(true, |t| t.text != left.text || t.kind != left.kind) {
+    if left_alone.len() != 1
+        || left_alone.first().map_or(true, |t| t.text != left.text || t.kind != left.kind)
+    {
         // The left token behaves differently when lexed alone vs in context
         return false;
     }

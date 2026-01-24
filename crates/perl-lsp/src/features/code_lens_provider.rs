@@ -249,7 +249,9 @@ sub test_another {
             // Check for run test lenses
             let run_test_lenses: Vec<_> = lenses
                 .iter()
-                .filter(|l| l.command.as_ref().map(|c| c.command == "perl.runTest").unwrap_or(false))
+                .filter(|l| {
+                    l.command.as_ref().map(|c| c.command == "perl.runTest").unwrap_or(false)
+                })
                 .collect();
             assert_eq!(run_test_lenses.len(), 2); // test_basic and test_another
         }

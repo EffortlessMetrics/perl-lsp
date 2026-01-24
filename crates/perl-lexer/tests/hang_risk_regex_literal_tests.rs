@@ -57,7 +57,8 @@ fn lexer_regex_literal_character_classes() -> TestResult {
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
-        let tok = lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
+        let tok =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
 
         assert!(
             matches!(tok.token_type, TokenType::RegexMatch),
@@ -88,7 +89,8 @@ fn lexer_regex_literal_quantifiers() -> TestResult {
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
-        let tok = lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
+        let tok =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
 
         assert!(
             matches!(tok.token_type, TokenType::RegexMatch),
@@ -116,7 +118,8 @@ fn lexer_regex_literal_capture_groups() -> TestResult {
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
-        let tok = lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
+        let tok =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
 
         assert!(
             matches!(tok.token_type, TokenType::RegexMatch),
@@ -178,7 +181,8 @@ fn lexer_regex_literal_lookahead_assertions() -> TestResult {
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
-        let tok = lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
+        let tok =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
 
         assert!(
             matches!(tok.token_type, TokenType::RegexMatch),
@@ -203,7 +207,8 @@ fn lexer_regex_literal_lookbehind_assertions() -> TestResult {
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
-        let tok = lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
+        let tok =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
 
         assert!(
             matches!(tok.token_type, TokenType::RegexMatch),
@@ -232,7 +237,8 @@ fn lexer_regex_literal_modifiers() -> TestResult {
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
-        let tok = lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
+        let tok =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
 
         assert!(
             matches!(tok.token_type, TokenType::RegexMatch),
@@ -263,7 +269,8 @@ fn lexer_regex_literal_various_delimiters() -> TestResult {
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
-        let tok = lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
+        let tok =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
 
         assert!(
             matches!(tok.token_type, TokenType::RegexMatch),
@@ -290,7 +297,8 @@ fn lexer_regex_literal_nested_delimiters() -> TestResult {
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
-        let tok = lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
+        let tok =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
 
         assert!(
             matches!(tok.token_type, TokenType::RegexMatch),
@@ -367,14 +375,15 @@ fn lexer_regex_literal_unicode_patterns() -> TestResult {
     let test_cases = vec![
         "/cafe/",
         "/hello/",
-        "/test/",    // simple patterns
+        "/test/",         // simple patterns
         r"/\x{263A}/",    // Unicode escape
         r"/\N{SNOWMAN}/", // Named Unicode
     ];
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
-        let tok = lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
+        let tok =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
 
         assert!(
             matches!(tok.token_type, TokenType::RegexMatch),
@@ -497,7 +506,8 @@ fn lexer_regex_literal_escaped_delimiter() -> TestResult {
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
-        let tok = lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
+        let tok =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
 
         assert!(
             matches!(tok.token_type, TokenType::RegexMatch),
@@ -518,7 +528,8 @@ fn lexer_regex_literal_alternation() -> TestResult {
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
-        let tok = lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
+        let tok =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
 
         assert!(
             matches!(tok.token_type, TokenType::RegexMatch),
@@ -547,7 +558,8 @@ fn lexer_regex_literal_anchors() -> TestResult {
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
-        let tok = lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
+        let tok =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for '{}'", code))?;
 
         assert!(
             matches!(tok.token_type, TokenType::RegexMatch),

@@ -43,7 +43,7 @@ process_data($items);
                 new_text: "process".to_string(),
             };
             match apply_edits(&mut state, &[edit]) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => panic!("bench iteration: apply_edits failed: {e}"),
             }
             black_box(&state.ast);
@@ -114,7 +114,7 @@ print "$x $y $z\n";
                 },
             ];
             match apply_edits(&mut state, &edits) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => panic!("bench iteration: apply_edits failed: {e}"),
             }
             black_box(&state.ast);
@@ -139,7 +139,7 @@ fn bench_incremental_document_single_edit(c: &mut Criterion) {
             |mut doc| {
                 let edit = IncrementalEdit::new(start, end, "43".to_string());
                 match doc.apply_edit(edit) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(e) => panic!("bench iteration: apply_edit failed: {e}"),
                 }
                 black_box(doc.metrics.nodes_reused);
@@ -171,7 +171,7 @@ fn bench_incremental_document_multiple_edits(c: &mut Criterion) {
                 edits.add(IncrementalEdit::new(pos_a, pos_a + 2, "15".to_string()));
                 edits.add(IncrementalEdit::new(pos_b, pos_b + 2, "25".to_string()));
                 match doc.apply_edits(&edits) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(e) => panic!("bench iteration: apply_edits failed: {e}"),
                 }
                 black_box(doc.metrics.nodes_reused);

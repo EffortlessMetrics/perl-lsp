@@ -200,7 +200,10 @@ fn main() -> Result<()> {
                     match SystemTime::now().duration_since(UNIX_EPOCH) {
                         Ok(duration) => duration.as_secs(),
                         Err(e) => {
-                            eprintln!("Warning: system time appears to be before UNIX_EPOCH: {}", e);
+                            eprintln!(
+                                "Warning: system time appears to be before UNIX_EPOCH: {}",
+                                e
+                            );
                             0
                         }
                     }

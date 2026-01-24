@@ -152,7 +152,11 @@ mod tests {
     use std::sync::Arc;
     use url::Url;
 
-    fn index_text(idx: &WorkspaceIndex, uri: &str, text: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn index_text(
+        idx: &WorkspaceIndex,
+        uri: &str,
+        text: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let url = Url::parse(uri)?;
         idx.index_file(url, text.to_string())?;
         Ok(())

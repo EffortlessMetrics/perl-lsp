@@ -1052,7 +1052,8 @@ print "Value: $variable\n";
         );
 
         // Should detect missing 'use strict' and 'use warnings'
-        let violations = result_value["violations"].as_array().ok_or("expected violations array")?;
+        let violations =
+            result_value["violations"].as_array().ok_or("expected violations array")?;
         assert!(!violations.is_empty(), "Should detect policy violations");
 
         // Check for specific violations
@@ -1095,7 +1096,10 @@ print "Value: $variable\n";
         let result_value = result?;
         assert_eq!(result_value["status"], "error", "Should report error status");
         assert!(
-            result_value["error"].as_str().ok_or("expected error string")?.contains("File not found"),
+            result_value["error"]
+                .as_str()
+                .ok_or("expected error string")?
+                .contains("File not found"),
             "Should indicate file not found"
         );
         Ok(())
@@ -1223,7 +1227,8 @@ print "Value: $variable\n";
     }
 
     #[test]
-    fn test_parameter_validation_missing_subroutine_name() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_parameter_validation_missing_subroutine_name() -> Result<(), Box<dyn std::error::Error>>
+    {
         let provider = ExecuteCommandProvider::new();
 
         // Create a dummy file
@@ -1388,7 +1393,10 @@ print "Value: $variable\n";
         let result_value = result?;
         assert_eq!(result_value["status"], "error", "Should report error status");
         assert!(
-            result_value["error"].as_str().ok_or("expected error string")?.contains("File not found"),
+            result_value["error"]
+                .as_str()
+                .ok_or("expected error string")?
+                .contains("File not found"),
             "Should indicate file not found"
         );
         assert_eq!(result_value["analyzerUsed"], "none", "Should indicate no analyzer used");
@@ -1591,7 +1599,8 @@ print "Value: $variable\n";
         let result_value = result?;
 
         // Verify that line/column arithmetic is correct
-        let violations = result_value["violations"].as_array().ok_or("expected violations array")?;
+        let violations =
+            result_value["violations"].as_array().ok_or("expected violations array")?;
         for violation in violations {
             let line = violation["line"].as_u64().ok_or("expected line number")?;
             let column = violation["column"].as_u64().ok_or("expected column number")?;
@@ -1731,7 +1740,10 @@ print "Value: $variable\n";
         let result_value = result?;
         assert_eq!(result_value["status"], "error", "Should detect missing file");
         assert!(
-            result_value["error"].as_str().ok_or("expected error string")?.contains("File not found"),
+            result_value["error"]
+                .as_str()
+                .ok_or("expected error string")?
+                .contains("File not found"),
             "Should indicate file not found"
         );
 

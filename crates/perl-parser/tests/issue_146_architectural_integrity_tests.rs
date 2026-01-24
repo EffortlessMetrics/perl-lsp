@@ -111,13 +111,11 @@ mod integration_tests {
     /// Full compilation test for entire perl-parser crate
     #[test]
     fn test_full_crate_compilation() {
-        let output = match Command::new("cargo")
-            .args(["build", "--package", "perl-parser"])
-            .output()
-        {
-            Ok(o) => o,
-            Err(e) => panic!("Failed to run cargo build: {}", e),
-        };
+        let output =
+            match Command::new("cargo").args(["build", "--package", "perl-parser"]).output() {
+                Ok(o) => o,
+                Err(e) => panic!("Failed to run cargo build: {}", e),
+            };
 
         assert!(
             output.status.success(),
