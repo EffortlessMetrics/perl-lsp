@@ -76,13 +76,24 @@ struct Variable {
     is_initialized: RefCell<bool>,
 }
 
+/// Convert a Perl sigil to an array index for fast variable lookup.
+///
+/// Sigil indices:
+/// - `$` (scalar): 0
+/// - `@` (array): 1
+/// - `%` (hash): 2
+/// - `&` (subroutine): 3
+/// - `*` (glob): 4
+/// - Other: 5 (fallback)
+#[inline]
 fn sigil_to_index(sigil: &str) -> usize {
-    match sigil {
-        "$" => 0,
-        "@" => 1,
-        "%" => 2,
-        "&" => 3,
-        "*" => 4,
+    // Use first byte for fast comparison - sigils are always single ASCII chars
+    match sigil.as_bytes().first() {
+        Some(b'$') => 0,
+        Some(b'@') => 1,
+        Some(b'%') => 2,
+        Some(b'&') => 3,
+        Some(b'*') => 4,
         _ => 5,
     }
 }
