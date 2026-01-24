@@ -285,26 +285,28 @@ impl ScopeAnalyzer {
                 ) {
                     // Optimization: Only allocate full name string when we actually have an issue to report
                     let full_name = extracted.as_string();
+                    // Build description first (borrows full_name), then move full_name into struct
+                    let description = match issue_kind {
+                        IssueKind::VariableShadowing => {
+                            format!(
+                                "Variable '{}' shadows a variable in outer scope",
+                                full_name
+                            )
+                        }
+                        IssueKind::VariableRedeclaration => {
+                            format!(
+                                "Variable '{}' is already declared in this scope",
+                                full_name
+                            )
+                        }
+                        _ => String::new(),
+                    };
                     issues.push(ScopeIssue {
                         kind: issue_kind,
-                        variable_name: full_name.clone(),
+                        variable_name: full_name,
                         line,
                         range: (variable.location.start, variable.location.end),
-                        description: match issue_kind {
-                            IssueKind::VariableShadowing => {
-                                format!(
-                                    "Variable '{}' shadows a variable in outer scope",
-                                    full_name
-                                )
-                            }
-                            IssueKind::VariableRedeclaration => {
-                                format!(
-                                    "Variable '{}' is already declared in this scope",
-                                    full_name
-                                )
-                            }
-                            _ => String::new(),
-                        },
+                        description,
                     });
                 }
             }
@@ -332,26 +334,28 @@ impl ScopeAnalyzer {
                     ) {
                         // Optimization: Only allocate full name string when we actually have an issue to report
                         let full_name = extracted.as_string();
+                        // Build description first (borrows full_name), then move full_name into struct
+                        let description = match issue_kind {
+                            IssueKind::VariableShadowing => {
+                                format!(
+                                    "Variable '{}' shadows a variable in outer scope",
+                                    full_name
+                                )
+                            }
+                            IssueKind::VariableRedeclaration => {
+                                format!(
+                                    "Variable '{}' is already declared in this scope",
+                                    full_name
+                                )
+                            }
+                            _ => String::new(),
+                        };
                         issues.push(ScopeIssue {
                             kind: issue_kind,
-                            variable_name: full_name.clone(),
+                            variable_name: full_name,
                             line,
                             range: (variable.location.start, variable.location.end),
-                            description: match issue_kind {
-                                IssueKind::VariableShadowing => {
-                                    format!(
-                                        "Variable '{}' shadows a variable in outer scope",
-                                        full_name
-                                    )
-                                }
-                                IssueKind::VariableRedeclaration => {
-                                    format!(
-                                        "Variable '{}' is already declared in this scope",
-                                        full_name
-                                    )
-                                }
-                                _ => String::new(),
-                            },
+                            description,
                         });
                     }
                 }
