@@ -5,7 +5,8 @@ import {
     LanguageClient,
     LanguageClientOptions,
     ServerOptions,
-    TransportKind
+    TransportKind,
+    State
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger } from './debugAdapter';
@@ -62,6 +63,31 @@ export async function activate(context: vscode.ExtensionContext) {
         clientOptions
     );
 
+    // Create status bar item
+    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    statusBarItem.command = 'perl-lsp.showOutput';
+    context.subscriptions.push(statusBarItem);
+
+    client.onDidChangeState(event => {
+        switch (event.newState) {
+            case State.Running:
+                statusBarItem.text = '$(check) Perl LSP';
+                statusBarItem.tooltip = 'Perl Language Server is running';
+                statusBarItem.show();
+                break;
+            case State.Starting:
+                statusBarItem.text = '$(sync~spin) Perl LSP';
+                statusBarItem.tooltip = 'Perl Language Server is starting...';
+                statusBarItem.show();
+                break;
+            case State.Stopped:
+                statusBarItem.text = '$(error) Perl LSP';
+                statusBarItem.tooltip = 'Perl Language Server is stopped';
+                statusBarItem.show();
+                break;
+        }
+    });
+
     // Start the client
     await client.start();
     
@@ -77,7 +103,7 @@ export async function activate(context: vscode.ExtensionContext) {
         await restartServer(context);
     });
     
-    const showOutputCommand = vscode.commands.registerCommand('perl.showOutputChannel', () => {
+    const showOutputCommand = vscode.commands.registerCommand('perl-lsp.showOutput', () => {
         outputChannel.show();
     });
     
