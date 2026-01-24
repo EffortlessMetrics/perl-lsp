@@ -391,8 +391,7 @@ print "done\n";
 my $final = process($x);
 print "result: $final\n";
 "#;
-        file.write_all(perl_code.as_bytes())
-            .expect("Failed to write test Perl content");
+        file.write_all(perl_code.as_bytes()).expect("Failed to write test Perl content");
         file.flush().expect("Failed to flush temp file");
         let path = file.path().to_string_lossy().to_string();
         (file, path)
@@ -410,10 +409,7 @@ print "result: $final\n";
         let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
-            source: Source {
-                path: Some(source_path.clone()),
-                name: Some("script.pl".to_string()),
-            },
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![
                 SourceBreakpoint { line: 10, column: None, condition: None },
                 SourceBreakpoint {
@@ -442,10 +438,7 @@ print "result: $final\n";
 
         // Set initial breakpoints
         let args1 = SetBreakpointsArguments {
-            source: Source {
-                path: Some(source_path.clone()),
-                name: Some("script.pl".to_string()),
-            },
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![SourceBreakpoint { line: 10, column: None, condition: None }]),
             source_modified: None,
         };
@@ -453,10 +446,7 @@ print "result: $final\n";
 
         // Replace with new breakpoints
         let args2 = SetBreakpointsArguments {
-            source: Source {
-                path: Some(source_path.clone()),
-                name: Some("script.pl".to_string()),
-            },
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![
                 SourceBreakpoint { line: 20, column: None, condition: None },
                 SourceBreakpoint { line: 26, column: None, condition: None },
@@ -480,10 +470,7 @@ print "result: $final\n";
         let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
-            source: Source {
-                path: Some(source_path),
-                name: Some("script.pl".to_string()),
-            },
+            source: Source { path: Some(source_path), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![
                 SourceBreakpoint { line: 10, column: None, condition: None },
                 SourceBreakpoint { line: 20, column: None, condition: None },
@@ -502,10 +489,7 @@ print "result: $final\n";
         let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
-            source: Source {
-                path: Some(source_path),
-                name: Some("script.pl".to_string()),
-            },
+            source: Source { path: Some(source_path), name: Some("script.pl".to_string()) },
             // Use lines within our 30-line test file, but out of order
             breakpoints: Some(vec![
                 SourceBreakpoint { line: 25, column: None, condition: None },

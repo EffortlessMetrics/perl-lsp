@@ -13,7 +13,7 @@ pub(super) fn enhanced_cancelled_response(
     let provider_name =
         if let Some(context) = cleanup_context { &context.provider_type } else { token.provider() };
 
-    let method_name = provider_name.split('/').last().unwrap_or_default();
+    let method_name = provider_name.split('/').next_back().unwrap_or_default();
     let message = format!("Request cancelled - {} provider", method_name);
 
     let mut data = json!({
