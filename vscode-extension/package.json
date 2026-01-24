@@ -168,6 +168,12 @@
         "icon": "$(info)"
       },
       {
+        "command": "perl-lsp.showStatusMenu",
+        "title": "Show Status Menu",
+        "category": "Perl",
+        "icon": "$(settings-gear)"
+      },
+      {
         "command": "perl-lsp.organizeImports",
         "title": "Organize Use Statements",
         "category": "Perl",
@@ -200,6 +206,10 @@
     ],
     "menus": {
       "commandPalette": [
+        {
+          "command": "perl-lsp.showStatusMenu",
+          "when": "editorLangId == perl"
+        },
         {
           "command": "perl-lsp.restart",
           "when": "editorLangId == perl"
