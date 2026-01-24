@@ -247,11 +247,11 @@ impl LspServer {
     /// let output = Vec::new();
     ///
     /// let server = LspServer::with_io(
-    ///     Box::new(input),
+    ///     input,
     ///     Box::new(output)
     /// );
     /// ```
-    pub fn with_io<R, W>(reader: Box<R>, writer: Box<W>) -> Self
+    pub fn with_io<R, W>(reader: R, writer: Box<W>) -> Self
     where
         R: Read + Send + 'static,
         W: Write + Send + 'static,
