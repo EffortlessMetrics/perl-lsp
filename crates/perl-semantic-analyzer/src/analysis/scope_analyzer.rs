@@ -78,18 +78,39 @@ struct Variable {
 
 #[derive(Debug)]
 struct Scope {
-    // Outer key: sigil, Inner key: name
-    variables: RefCell<HashMap<String, HashMap<String, Rc<Variable>>>>,
+    // Array indexed by sigil_to_index.
+    // 0: $, 1: @, 2: %, 3: &, 4: *, 5: other
+    variables: RefCell<[HashMap<String, Rc<Variable>>; 6]>,
     parent: Option<Rc<Scope>>,
+}
+
+fn sigil_to_index(sigil: &str) -> usize {
+    if sigil.is_empty() {
+        return 5;
+    }
+    match sigil.as_bytes()[0] {
+        b'$' => 0,
+        b'@' => 1,
+        b'%' => 2,
+        b'&' => 3,
+        b'*' => 4,
+        _ => 5,
+    }
 }
 
 impl Scope {
     fn new() -> Self {
-        Self { variables: RefCell::new(HashMap::new()), parent: None }
+        Self {
+            variables: RefCell::new(std::array::from_fn(|_| HashMap::new())),
+            parent: None,
+        }
     }
 
     fn with_parent(parent: Rc<Scope>) -> Self {
-        Self { variables: RefCell::new(HashMap::new()), parent: Some(parent) }
+        Self {
+            variables: RefCell::new(std::array::from_fn(|_| HashMap::new())),
+            parent: Some(parent),
+        }
     }
 
     fn declare_variable_parts(
@@ -100,13 +121,14 @@ impl Scope {
         is_our: bool,
         is_initialized: bool,
     ) -> Option<IssueKind> {
+        let index = sigil_to_index(sigil);
+
         // First check if already declared in this scope
         {
             let vars = self.variables.borrow();
-            if let Some(inner) = vars.get(sigil) {
-                if inner.contains_key(name) {
-                    return Some(IssueKind::VariableRedeclaration);
-                }
+            let inner = &vars[index];
+            if inner.contains_key(name) {
+                return Some(IssueKind::VariableRedeclaration);
             }
         }
 
@@ -119,7 +141,7 @@ impl Scope {
 
         // Now insert the variable
         let mut vars = self.variables.borrow_mut();
-        let inner = vars.entry(sigil.to_string()).or_default();
+        let inner = &mut vars[index];
 
         let full_name = format!("{}{}", sigil, name);
         inner.insert(
@@ -137,7 +159,10 @@ impl Scope {
     }
 
     fn lookup_variable_parts(&self, sigil: &str, name: &str) -> Option<Rc<Variable>> {
-        if let Some(inner) = self.variables.borrow().get(sigil) {
+        let index = sigil_to_index(sigil);
+        {
+            let vars = self.variables.borrow();
+            let inner = &vars[index];
             if let Some(var) = inner.get(name) {
                 return Some(var.clone());
             }
@@ -163,7 +188,7 @@ impl Scope {
     fn get_unused_variables(&self) -> Vec<(String, usize)> {
         let mut unused = Vec::new();
 
-        for inner in self.variables.borrow().values() {
+        for inner in self.variables.borrow().iter() {
             for var in inner.values() {
                 if !*var.is_used.borrow() && !var.is_our {
                     unused.push((var.name.clone(), var.line));
