@@ -123,6 +123,10 @@ name = "incremental_benchmark"
 harness = false
 required-features = ["incremental"]
 
+[[bench]]
+name = "scope_benchmark"
+harness = false
+
 [[example]]
 name = "test_incremental_v2"
 required-features = ["incremental"]
