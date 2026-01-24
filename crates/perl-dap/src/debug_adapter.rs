@@ -1560,8 +1560,9 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
 
     // Check for mutating operations
     let mutating_ops = [
-        "push", "pop", "shift", "unshift", "splice", "delete", "undef", "system", "exec", "open",
-        "close", "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown",
+        "push", "pop", "shift", "unshift", "splice", "delete", "undef", "system", "exec", "qx",
+        "readpipe", "syscall", "open", "close", "mkdir", "rmdir", "unlink", "rename", "chdir",
+        "chmod", "chown",
     ];
 
     for op in &mutating_ops {
@@ -1581,6 +1582,14 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
     if expression.contains("++") || expression.contains("--") {
         return Some(
             "Safe evaluation mode: increment/decrement operators not allowed (use allowSideEffects: true)"
+                .to_string(),
+        );
+    }
+
+    // Check for backticks (shell execution)
+    if expression.contains('`') {
+        return Some(
+            "Safe evaluation mode: backticks (shell execution) not allowed (use allowSideEffects: true)"
                 .to_string(),
         );
     }
