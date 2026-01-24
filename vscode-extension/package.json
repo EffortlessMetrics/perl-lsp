@@ -263,6 +263,16 @@
         "command": "perl-lsp.organizeImports",
         "key": "shift+alt+o",
         "when": "editorTextFocus && editorLangId == perl"
+      },
+      {
+        "command": "perl-lsp.runTests",
+        "key": "shift+alt+t",
+        "when": "editorTextFocus && editorLangId == perl"
+      },
+      {
+        "command": "perl-lsp.restart",
+        "key": "shift+alt+r",
+        "when": "editorTextFocus && editorLangId == perl"
       }
     ],
     "snippets": [
