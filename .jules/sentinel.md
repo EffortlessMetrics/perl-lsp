@@ -12,3 +12,16 @@
 **Vulnerability:** The `perl-lsp.showVersion` command in `vscode-extension` used `exec` with a user-configurable `serverPath` string. If an attacker controlled this setting (e.g., via workspace settings), they could inject shell commands.
 **Learning:** In Node.js, `exec` spawns a shell (`/bin/sh` or `cmd.exe`) and parses the command string, making it vulnerable to injection if any part of the string is untrusted. `execFile` spawns the executable directly without a shell.
 **Prevention:** Always use `execFile` (or `spawn`) instead of `exec` when invoking binaries where arguments or paths might be influenced by user input. Avoid string interpolation for shell commands.
+
+## 2026-01-24 - Incomplete Safe Evaluation Blocklist
+**Vulnerability:** The `perl-dap` safe evaluation mode blocklist was missing several dangerous Perl operations across multiple categories:
+- Code loading: `eval`, `require`, `do`
+- Process control: `kill`, `exit`, `dump`, `fork`, `alarm`, `sleep`, `wait`, `waitpid`
+- I/O: `print`, `say`, `printf`, `sysread`, `syswrite`
+- Filesystem: `chroot`, `truncate`, `symlink`, `link`
+- Tie mechanism: `tie`, `untie` (can execute arbitrary code via FETCH/STORE)
+- Network: `socket`, `connect`, `bind`, `listen`, `accept`, `send`, `recv`
+
+Users hovering over expressions containing these keywords could accidentally trigger dangerous operations even when `allowSideEffects: false`.
+**Learning:** Safe evaluation blocklists must cover ALL categories of dangerous operations. Partial coverage creates a false sense of security. Perl's `tie` mechanism is particularly insidious as it can execute arbitrary code on variable access.
+**Prevention:** Maintain a categorized blocklist with clear documentation of why each operation is blocked. Test each blocked operation explicitly with regression tests.
