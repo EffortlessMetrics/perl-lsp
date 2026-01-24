@@ -103,25 +103,54 @@ fn test_evaluate_rejects_carriage_returns() {
 
 /// Comprehensive test for all unsafe operations that must be blocked in safe evaluation mode.
 /// These operations can cause:
-/// - Code execution (eval)
-/// - Process control issues (kill, exit, dump, fork)
-/// - I/O side effects (print, say, printf)
-/// - Filesystem escape (chroot)
+/// - Code execution (eval, require, do)
+/// - Process control issues (kill, exit, dump, fork, alarm, sleep, wait, waitpid)
+/// - I/O side effects (print, say, printf, sysread, syswrite)
+/// - Filesystem modification (chroot, truncate, symlink, link)
+/// - Network operations (socket, connect, bind, listen, accept, send, recv)
+/// - Arbitrary code via tie mechanism (tie, untie)
 #[test]
 fn test_evaluate_blocks_dangerous_operations() {
     let mut adapter = DebugAdapter::new();
 
     // Map of operation -> example expression that uses it
+    // Coverage: all categories of dangerous operations
     let dangerous_ops = [
+        // Code execution
         ("eval", "eval('1+1')"),
+        ("require", "require 'File.pm'"),
+        ("do", "do 'script.pl'"),
+        // Process control
         ("kill", "kill 9, $$"),
         ("exit", "exit(0)"),
         ("dump", "dump"),
         ("fork", "fork"),
-        ("chroot", "chroot('/tmp')"),
+        ("alarm", "alarm(60)"),
+        ("sleep", "sleep(1)"),
+        ("wait", "wait"),
+        ("waitpid", "waitpid(-1, 0)"),
+        // I/O
         ("print", "print 'side effect'"),
         ("say", "say 'side effect'"),
         ("printf", "printf '%s', 'effect'"),
+        ("sysread", "sysread(FH, $buf, 100)"),
+        ("syswrite", "syswrite(FH, 'data')"),
+        // Filesystem
+        ("chroot", "chroot('/tmp')"),
+        ("truncate", "truncate('file', 0)"),
+        ("symlink", "symlink('old', 'new')"),
+        ("link", "link('old', 'new')"),
+        // Tie mechanism
+        ("tie", "tie %hash, 'Tie::Hash'"),
+        ("untie", "untie %hash"),
+        // Network
+        ("socket", "socket(S, PF_INET, SOCK_STREAM, 0)"),
+        ("connect", "connect(S, $addr)"),
+        ("bind", "bind(S, $addr)"),
+        ("listen", "listen(S, 5)"),
+        ("accept", "accept(C, S)"),
+        ("send", "send(S, 'data', 0)"),
+        ("recv", "recv(S, $buf, 100, 0)"),
     ];
 
     let mut failures = Vec::new();

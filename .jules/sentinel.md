@@ -14,6 +14,14 @@
 **Prevention:** Always use `execFile` (or `spawn`) instead of `exec` when invoking binaries where arguments or paths might be influenced by user input. Avoid string interpolation for shell commands.
 
 ## 2026-01-24 - Incomplete Safe Evaluation Blocklist
-**Vulnerability:** The `perl-dap` safe evaluation mode blocklist was missing several dangerous Perl operations: `eval` (code execution), `kill` (signal handling), `exit`/`dump` (process termination DoS), `fork` (process spawning), `chroot` (filesystem escape), and `print`/`say`/`printf` (I/O side effects). Users hovering over expressions containing these keywords could accidentally trigger dangerous operations even when `allowSideEffects: false`.
-**Learning:** Safe evaluation blocklists must cover ALL categories of dangerous operations: code execution, process control, I/O, and filesystem manipulation. Partial coverage creates a false sense of security.
+**Vulnerability:** The `perl-dap` safe evaluation mode blocklist was missing several dangerous Perl operations across multiple categories:
+- Code loading: `eval`, `require`, `do`
+- Process control: `kill`, `exit`, `dump`, `fork`, `alarm`, `sleep`, `wait`, `waitpid`
+- I/O: `print`, `say`, `printf`, `sysread`, `syswrite`
+- Filesystem: `chroot`, `truncate`, `symlink`, `link`
+- Tie mechanism: `tie`, `untie` (can execute arbitrary code via FETCH/STORE)
+- Network: `socket`, `connect`, `bind`, `listen`, `accept`, `send`, `recv`
+
+Users hovering over expressions containing these keywords could accidentally trigger dangerous operations even when `allowSideEffects: false`.
+**Learning:** Safe evaluation blocklists must cover ALL categories of dangerous operations. Partial coverage creates a false sense of security. Perl's `tie` mechanism is particularly insidious as it can execute arbitrary code on variable access.
 **Prevention:** Maintain a categorized blocklist with clear documentation of why each operation is blocked. Test each blocked operation explicitly with regression tests.

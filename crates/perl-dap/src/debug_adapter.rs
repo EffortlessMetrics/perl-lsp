@@ -1563,15 +1563,27 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
     // Check for mutating operations and dangerous builtins
     // Categories:
     //   - State mutation: push, pop, shift, unshift, splice, delete, undef
-    //   - Process control: system, exec, fork, exit, dump, kill
-    //   - I/O: qx, readpipe, syscall, open, close, print, say, printf
-    //   - Filesystem: mkdir, rmdir, unlink, rename, chdir, chmod, chown, chroot
-    //   - Code execution: eval
+    //   - Process control: system, exec, fork, exit, dump, kill, alarm, sleep, wait, waitpid
+    //   - I/O: qx, readpipe, syscall, open, close, print, say, printf, sysread, syswrite
+    //   - Filesystem: mkdir, rmdir, unlink, rename, chdir, chmod, chown, chroot, truncate, symlink, link
+    //   - Code loading: eval, require, do (file)
+    //   - Tie/untie: can execute arbitrary code via FETCH/STORE
+    //   - Network: socket, connect, bind, listen, accept, send, recv
     let mutating_ops = [
-        "push", "pop", "shift", "unshift", "splice", "delete", "undef", "system", "exec", "qx",
-        "readpipe", "syscall", "open", "close", "mkdir", "rmdir", "unlink", "rename", "chdir",
-        "chmod", "chown", "eval", "kill", "exit", "dump", "chroot", "fork", "print", "say",
-        "printf",
+        // State mutation
+        "push", "pop", "shift", "unshift", "splice", "delete", "undef",
+        // Process control
+        "system", "exec", "fork", "exit", "dump", "kill", "alarm", "sleep", "wait", "waitpid",
+        // I/O
+        "qx", "readpipe", "syscall", "open", "close", "print", "say", "printf", "sysread", "syswrite",
+        // Filesystem
+        "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown", "chroot", "truncate", "symlink", "link",
+        // Code loading/execution
+        "eval", "require", "do",
+        // Tie mechanism (can execute arbitrary code)
+        "tie", "untie",
+        // Network
+        "socket", "connect", "bind", "listen", "accept", "send", "recv",
     ];
 
     for op in &mutating_ops {
