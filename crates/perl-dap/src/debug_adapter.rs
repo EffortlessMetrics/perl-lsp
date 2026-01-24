@@ -93,16 +93,14 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 // State mutation
                 "push", "pop", "shift", "unshift", "splice", "delete", "undef",
                 // Process control
-                "system", "exec", "fork", "exit", "dump", "kill", "alarm", "sleep", "wait", "waitpid",
-                // I/O
-                "qx", "readpipe", "syscall", "open", "close", "print", "say", "printf", "sysread", "syswrite",
-                // Filesystem
-                "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown", "chroot", "truncate", "symlink", "link",
-                // Code loading/execution
-                "eval", "require", "do",
-                // Tie mechanism (can execute arbitrary code)
-                "tie", "untie",
-                // Network
+                "system", "exec", "fork", "exit", "dump", "kill", "alarm", "sleep", "wait",
+                "waitpid", // I/O
+                "qx", "readpipe", "syscall", "open", "close", "print", "say", "printf", "sysread",
+                "syswrite", // Filesystem
+                "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown", "chroot",
+                "truncate", "symlink", "link", // Code loading/execution
+                "eval", "require", "do", // Tie mechanism (can execute arbitrary code)
+                "tie", "untie", // Network
                 "socket", "connect", "bind", "listen", "accept", "send", "recv",
             ];
             // Build pattern: \b(op1|op2|...)\b
