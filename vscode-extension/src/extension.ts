@@ -63,27 +63,30 @@ export async function activate(context: vscode.ExtensionContext) {
         clientOptions
     );
 
-    // Create status bar item
+    // Create status bar item - show immediately with starting state
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'perl-lsp.showOutput';
+    statusBarItem.text = '$(sync~spin) Perl LSP';
+    statusBarItem.tooltip = 'Perl Language Server is starting... (click to show output)';
+    statusBarItem.show();
     context.subscriptions.push(statusBarItem);
 
     client.onDidChangeState(event => {
         switch (event.newState) {
             case State.Running:
                 statusBarItem.text = '$(check) Perl LSP';
-                statusBarItem.tooltip = 'Perl Language Server is running';
-                statusBarItem.show();
+                statusBarItem.tooltip = 'Perl Language Server is running (click to show output)';
+                statusBarItem.backgroundColor = undefined;
                 break;
             case State.Starting:
                 statusBarItem.text = '$(sync~spin) Perl LSP';
-                statusBarItem.tooltip = 'Perl Language Server is starting...';
-                statusBarItem.show();
+                statusBarItem.tooltip = 'Perl Language Server is starting... (click to show output)';
+                statusBarItem.backgroundColor = undefined;
                 break;
             case State.Stopped:
                 statusBarItem.text = '$(error) Perl LSP';
-                statusBarItem.tooltip = 'Perl Language Server is stopped';
-                statusBarItem.show();
+                statusBarItem.tooltip = 'Perl Language Server is stopped (click to show output)';
+                statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
                 break;
         }
     });
