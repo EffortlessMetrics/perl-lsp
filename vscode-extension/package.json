@@ -168,6 +168,12 @@
         "icon": "$(info)"
       },
       {
+        "command": "perl-lsp.showOutput",
+        "title": "Show Output Channel",
+        "category": "Perl",
+        "icon": "$(output)"
+      },
+      {
         "command": "perl-lsp.organizeImports",
         "title": "Organize Use Statements",
         "category": "Perl",
@@ -202,6 +208,10 @@
       "commandPalette": [
         {
           "command": "perl-lsp.restart",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.showOutput",
           "when": "editorLangId == perl"
         },
         {
