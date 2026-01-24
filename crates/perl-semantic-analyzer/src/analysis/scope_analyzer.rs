@@ -263,7 +263,9 @@ impl ScopeAnalyzer {
             NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
                 let extracted = self.extract_variable_name(variable);
                 let (sigil, var_name_part) = extracted.parts();
-                let full_name = extracted.as_string(); // Only used for reporting issues if needed, sadly declaration still needs some allocs usually
+
+                // Allocation deferred until issue reporting
+                // let full_name = extracted.as_string();
 
                 let line = self.get_line_from_node(variable, code);
                 let is_our = declarator == "our";
@@ -284,6 +286,7 @@ impl ScopeAnalyzer {
                     is_our,
                     is_initialized,
                 ) {
+                    let full_name = extracted.as_string();
                     issues.push(ScopeIssue {
                         kind: issue_kind,
                         variable_name: full_name.clone(),
@@ -320,7 +323,8 @@ impl ScopeAnalyzer {
                 for variable in variables {
                     let extracted = self.extract_variable_name(variable);
                     let (sigil, var_name_part) = extracted.parts();
-                    let full_name = extracted.as_string();
+                    // Allocation deferred
+                    // let full_name = extracted.as_string();
                     let line = self.get_line_from_node(variable, code);
 
                     if let Some(issue_kind) = scope.declare_variable_parts(
@@ -330,6 +334,7 @@ impl ScopeAnalyzer {
                         is_our,
                         is_initialized,
                     ) {
+                        let full_name = extracted.as_string();
                         issues.push(ScopeIssue {
                             kind: issue_kind,
                             variable_name: full_name.clone(),
