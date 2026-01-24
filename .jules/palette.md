@@ -5,3 +5,7 @@
 ## 2026-01-24 - Keyboard Shortcuts for High-Frequency Actions
 **Learning:** High-frequency actions like "Run Tests" often lack default keybindings in extensions, forcing users to break flow and use the mouse or command palette. Adding standard shortcuts (e.g., `Shift+Alt+T`) significantly reduces friction for power users.
 **Action:** Always audit the "commands" list for high-frequency actions and propose consistent keybindings if missing.
+**Added keybindings:**
+- `Shift+Alt+O` - Organize imports
+- `Shift+Alt+T` - Run tests
+- `Shift+Alt+R` - Restart language server
