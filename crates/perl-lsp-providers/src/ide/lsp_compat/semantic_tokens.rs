@@ -406,10 +406,7 @@ mod tests {
     #[test]
     fn test_remove_overlapping_tokens_basic() {
         // No overlap
-        let input = vec![
-            tok(0, 0, 5, 0, 0),
-            tok(0, 6, 5, 0, 0),
-        ];
+        let input = vec![tok(0, 0, 5, 0, 0), tok(0, 6, 5, 0, 0)];
         let result = remove_overlapping_tokens(input.clone());
         assert_eq!(result, input);
     }
@@ -418,10 +415,7 @@ mod tests {
     fn test_remove_overlapping_tokens_touching() {
         // Touching is NOT overlap
         // [0, 5) and [5, 10)
-        let input = vec![
-            tok(0, 0, 5, 0, 0),
-            tok(0, 5, 5, 0, 0),
-        ];
+        let input = vec![tok(0, 0, 5, 0, 0), tok(0, 5, 5, 0, 0)];
         let result = remove_overlapping_tokens(input.clone());
         assert_eq!(result, input);
     }
@@ -431,10 +425,7 @@ mod tests {
         // Outer [0, 10), Inner [2, 5)
         // Inner length 3 < Outer length 10
         // Expect Outer kept
-        let input = vec![
-            tok(0, 0, 10, 0, 0),
-            tok(0, 2, 3, 1, 0),
-        ];
+        let input = vec![tok(0, 0, 10, 0, 0), tok(0, 2, 3, 1, 0)];
         // Sorted: Outer, Inner
         let result = remove_overlapping_tokens(input);
         assert_eq!(result.len(), 1);
@@ -446,10 +437,7 @@ mod tests {
         // Functionally: A [0, 5), B [0, 10)
         // Sorted: A, B
         // Expect B (longer) replaces A
-        let input = vec![
-            tok(0, 0, 5, 0, 0),
-            tok(0, 0, 10, 1, 0),
-        ];
+        let input = vec![tok(0, 0, 5, 0, 0), tok(0, 0, 10, 1, 0)];
         let result = remove_overlapping_tokens(input);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], tok(0, 0, 10, 1, 0));
@@ -461,10 +449,7 @@ mod tests {
         // B [4, 10) len 6
         // Overlap at 4. B is longer.
         // Expect A replaced by B.
-        let input = vec![
-            tok(0, 0, 5, 0, 0),
-            tok(0, 4, 6, 1, 0),
-        ];
+        let input = vec![tok(0, 0, 5, 0, 0), tok(0, 4, 6, 1, 0)];
         let result = remove_overlapping_tokens(input);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], tok(0, 4, 6, 1, 0));
@@ -476,10 +461,7 @@ mod tests {
         // B [8, 15) len 7
         // Overlap at 8. A is longer.
         // Expect A kept, B dropped.
-        let input = vec![
-            tok(0, 0, 10, 0, 0),
-            tok(0, 8, 7, 1, 0),
-        ];
+        let input = vec![tok(0, 0, 10, 0, 0), tok(0, 8, 7, 1, 0)];
         let result = remove_overlapping_tokens(input);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], tok(0, 0, 10, 0, 0));
@@ -490,10 +472,7 @@ mod tests {
         // A [0, 5) len 5
         // B [0, 5) len 5
         // Expect A kept (first one)
-        let input = vec![
-            tok(0, 0, 5, 1, 0),
-            tok(0, 0, 5, 2, 0),
-        ];
+        let input = vec![tok(0, 0, 5, 1, 0), tok(0, 0, 5, 2, 0)];
         let result = remove_overlapping_tokens(input.clone());
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], tok(0, 0, 5, 1, 0));
@@ -501,10 +480,7 @@ mod tests {
 
     #[test]
     fn test_remove_overlapping_tokens_different_lines() {
-         let input = vec![
-            tok(0, 0, 5, 0, 0),
-            tok(1, 0, 5, 0, 0),
-        ];
+        let input = vec![tok(0, 0, 5, 0, 0), tok(1, 0, 5, 0, 0)];
         let result = remove_overlapping_tokens(input.clone());
         assert_eq!(result, input);
     }
