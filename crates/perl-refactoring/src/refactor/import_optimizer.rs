@@ -794,21 +794,35 @@ print "First: " . first { $_ > 3 } @nums;
 
         assert_eq!(analysis.imports.len(), 2);
 
-        let list_util = analysis.imports.iter().find(|i| i.module == "List::Util").ok_or("List::Util import not found")?;
+        let list_util = analysis
+            .imports
+            .iter()
+            .find(|i| i.module == "List::Util")
+            .ok_or("List::Util import not found")?;
         assert_eq!(list_util.symbols, vec!["first", "max", "min", "sum"]);
 
-        let scalar_util = analysis.imports.iter().find(|i| i.module == "Scalar::Util").ok_or("Scalar::Util import not found")?;
+        let scalar_util = analysis
+            .imports
+            .iter()
+            .find(|i| i.module == "Scalar::Util")
+            .ok_or("Scalar::Util import not found")?;
         assert_eq!(scalar_util.symbols, vec!["blessed", "reftype"]);
 
         // Should detect unused symbols in both modules
         assert_eq!(analysis.unused_imports.len(), 2);
 
-        let list_util_unused =
-            analysis.unused_imports.iter().find(|u| u.module == "List::Util").ok_or("List::Util unused imports not found")?;
+        let list_util_unused = analysis
+            .unused_imports
+            .iter()
+            .find(|u| u.module == "List::Util")
+            .ok_or("List::Util unused imports not found")?;
         assert_eq!(list_util_unused.symbols, vec!["min"]);
 
-        let scalar_util_unused =
-            analysis.unused_imports.iter().find(|u| u.module == "Scalar::Util").ok_or("Scalar::Util unused imports not found")?;
+        let scalar_util_unused = analysis
+            .unused_imports
+            .iter()
+            .find(|u| u.module == "Scalar::Util")
+            .ok_or("Scalar::Util unused imports not found")?;
         assert_eq!(scalar_util_unused.symbols, vec!["blessed", "reftype"]);
         Ok(())
     }

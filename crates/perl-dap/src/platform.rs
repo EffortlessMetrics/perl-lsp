@@ -335,7 +335,9 @@ mod tests {
         let formatted = format_command_args(&args);
         assert_eq!(formatted.len(), 1);
         // Should be quoted
-        assert!(formatted.first().ok_or("Expected first element")?.contains("file with spaces.txt"));
+        assert!(
+            formatted.first().ok_or("Expected first element")?.contains("file with spaces.txt")
+        );
         Ok(())
     }
 

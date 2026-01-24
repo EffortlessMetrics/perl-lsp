@@ -4,7 +4,6 @@
 //! performance to detect regressions, validate consistency, and ensure quality.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-
 #![cfg(feature = "incremental")]
 
 mod support;

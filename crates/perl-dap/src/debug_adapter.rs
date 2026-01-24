@@ -1154,6 +1154,25 @@ impl DebugAdapter {
                 }
 
                 let condition = bp_req.get("condition").and_then(|c| c.as_str());
+
+                // Security: Reject conditions with newlines to prevent command injection
+                // The Perl debugger protocol is line-based, so a newline in a condition
+                // allows injecting arbitrary debugger commands.
+                if let Some(cond) = condition {
+                    if cond.contains('\n') || cond.contains('\r') {
+                        let breakpoint = Breakpoint {
+                            id: bp_id,
+                            verified: false,
+                            line,
+                            column: None,
+                            message: Some("Breakpoint condition cannot contain newlines".to_string()),
+                        };
+                        verified_breakpoints.push(breakpoint);
+                        bp_id += 1;
+                        continue;
+                    }
+                }
+
                 let mut success = false;
 
                 if let Some(ref mut session) =

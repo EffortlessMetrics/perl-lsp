@@ -143,7 +143,11 @@ EOF2
     // 2. my $y = <<EOF2; (lines 5-7)
     let block_stmt_count = count_block_statements(&root);
     assert!(block_stmt_count.is_some(), "Should find a block node in the AST");
-    assert_eq!(block_stmt_count.ok_or("No block found")?, 2, "Block should contain 2 separate heredoc statements");
+    assert_eq!(
+        block_stmt_count.ok_or("No block found")?,
+        2,
+        "Block should contain 2 separate heredoc statements"
+    );
     Ok(())
 }
 

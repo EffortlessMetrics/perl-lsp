@@ -1529,8 +1529,8 @@ mod tests {
             },
         );
 
-        let result = server
-            .handle_code_actions_pragmas(Some(json!({"textDocument": {"uri": uri}})));
+        let result =
+            server.handle_code_actions_pragmas(Some(json!({"textDocument": {"uri": uri}})));
         if let Ok(Some(result)) = result {
             if let Some(actions) = result.as_array() {
                 assert!(!actions.is_empty());
@@ -1561,7 +1561,9 @@ mod tests {
                 }
                 let server = LspServer::new();
                 let end = server.get_document_end_position(code);
-                if let (Some(line), Some(character)) = (end["line"].as_u64(), end["character"].as_u64()) {
+                if let (Some(line), Some(character)) =
+                    (end["line"].as_u64(), end["character"].as_u64())
+                {
                     assert_eq!(edits[0].range.end.line, line as u32);
                     assert_eq!(edits[0].range.end.character, character as u32);
                 }
