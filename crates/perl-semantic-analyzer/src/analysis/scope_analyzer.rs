@@ -288,16 +288,10 @@ impl ScopeAnalyzer {
                     // Build description first (borrows full_name), then move full_name into struct
                     let description = match issue_kind {
                         IssueKind::VariableShadowing => {
-                            format!(
-                                "Variable '{}' shadows a variable in outer scope",
-                                full_name
-                            )
+                            format!("Variable '{}' shadows a variable in outer scope", full_name)
                         }
                         IssueKind::VariableRedeclaration => {
-                            format!(
-                                "Variable '{}' is already declared in this scope",
-                                full_name
-                            )
+                            format!("Variable '{}' is already declared in this scope", full_name)
                         }
                         _ => String::new(),
                     };
