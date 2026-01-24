@@ -7,6 +7,209 @@ default:
     @just --list
 
 # ============================================================================
+# Tiered CI Execution (works locally via Nix and in GitHub Actions)
+# ============================================================================
+#
+# Tier hierarchy:
+#   pr-fast    -> Fastest checks for every PR iteration (~1-2 min)
+#   merge-gate -> Required before merge to master (~3-5 min)
+#   nightly    -> Scheduled comprehensive tests (~15-30 min)
+#
+# Usage:
+#   just pr-fast      # Quick PR validation
+#   just merge-gate   # Full pre-merge validation
+#   just ci-local     # Same as merge-gate, via Nix
+#   nix develop -c just ci-gate  # Canonical local gate
+
+# Helper to time a command and report duration
+[private]
+_timed name cmd:
+    @START=$$(date +%s); \
+    echo ">>> Starting {{name}}..."; \
+    {{cmd}}; \
+    RC=$$?; \
+    END=$$(date +%s); \
+    DURATION=$$((END - START)); \
+    if [ $$RC -eq 0 ]; then \
+        echo "<<< {{name}} completed in $${DURATION}s"; \
+    else \
+        echo "<<< {{name}} FAILED in $${DURATION}s (exit $$RC)"; \
+        exit $$RC; \
+    fi
+
+# Tier: PR-fast (required for every PR iteration, must be fast ~1-2 min)
+pr-fast: _check-tools-basic
+    @echo "=============================================="
+    @echo "  PR-FAST GATE (quick validation)"
+    @echo "=============================================="
+    @START=$$(date +%s); \
+    just _timed "fmt-check" "just fmt-check" && \
+    just _timed "clippy-core" "just clippy-core" && \
+    just _timed "test-core" "just test-core"; \
+    RC=$$?; \
+    END=$$(date +%s); \
+    echo ""; \
+    echo "=============================================="
+    @echo "  PR-fast gate complete (total: $$((END - START))s)"
+    @echo "=============================================="
+    @exit $$RC
+
+# Tier: Merge-gate (required before merge to master ~3-5 min)
+merge-gate: _check-tools-basic pr-fast
+    @echo "=============================================="
+    @echo "  MERGE GATE (full pre-merge validation)"
+    @echo "=============================================="
+    @START=$$(date +%s); \
+    just _timed "clippy-full" "just clippy-full" && \
+    just _timed "test-full" "just test-full" && \
+    just _timed "lsp-smoke" "just lsp-smoke" && \
+    just _timed "security-audit" "just security-audit" && \
+    just _timed "ci-policy" "just ci-policy" && \
+    just _timed "ci-lsp-def" "just ci-lsp-def" && \
+    just _timed "ci-parser-features-check" "just ci-parser-features-check" && \
+    just _timed "ci-features-invariants" "just ci-features-invariants"; \
+    RC=$$?; \
+    END=$$(date +%s); \
+    echo ""; \
+    echo "=============================================="
+    @if [ $$RC -eq 0 ]; then \
+        echo "  Merge gate PASSED (total: $$((END - START))s)"; \
+    else \
+        echo "  Merge gate FAILED (total: $$((END - START))s)"; \
+    fi
+    @echo "=============================================="
+    @exit $$RC
+
+# Tier: Nightly (scheduled, non-blocking comprehensive tests)
+nightly: merge-gate
+    @echo "=============================================="
+    @echo "  NIGHTLY GATE (comprehensive validation)"
+    @echo "=============================================="
+    @START=$$(date +%s); \
+    just _timed "mutation-subset" "just mutation-subset" && \
+    just _timed "fuzz-bounded" "just fuzz-bounded" && \
+    just _timed "benchmarks" "just benchmarks"; \
+    RC=$$?; \
+    END=$$(date +%s); \
+    echo ""; \
+    echo "=============================================="
+    @if [ $$RC -eq 0 ]; then \
+        echo "  Nightly gate PASSED (total: $$((END - START))s)"; \
+    else \
+        echo "  Nightly gate FAILED (total: $$((END - START))s)"; \
+    fi
+    @echo "=============================================="
+    @exit $$RC
+
+# ============================================================================
+# Individual Gate Targets
+# ============================================================================
+
+# Format check (fast fail)
+fmt-check:
+    @echo "Checking code formatting..."
+    cargo fmt --all -- --check
+    @echo "Format check passed"
+
+# Clippy core crates only (fast, for PR iterations)
+clippy-core:
+    @echo "Running clippy (core crates: perl-parser, perl-lexer)..."
+    cargo clippy -p perl-parser -p perl-lexer --locked -- -D warnings -A missing_docs
+    @echo "Clippy (core) passed"
+
+# Clippy full workspace (thorough, for merge gate)
+clippy-full:
+    @echo "Running clippy (full workspace)..."
+    cargo clippy --workspace --locked -- -D warnings -A missing_docs
+    cargo clippy --workspace --bins --locked --no-deps -- -D clippy::unwrap_used -D clippy::expect_used
+    @echo "Clippy (full) passed"
+
+# Test core crates only (fast, for PR iterations)
+test-core:
+    @echo "Running tests (core crates: perl-parser, perl-lexer)..."
+    cargo test -p perl-parser -p perl-lexer --lib --locked
+    @echo "Tests (core) passed"
+
+# Test full workspace (thorough, for merge gate)
+test-full:
+    @echo "Running tests (full workspace)..."
+    RUST_TEST_THREADS=2 cargo test --workspace --lib --locked
+    @echo "Tests (full) passed"
+
+# LSP smoke test (deterministic, single-threaded)
+lsp-smoke:
+    @echo "Running LSP smoke tests..."
+    cargo test -p perl-lsp --test cli_smoke --locked -- --test-threads=1
+    @echo "LSP smoke tests passed"
+
+# Security audit (non-blocking, warns on issues)
+security-audit:
+    @echo "Running security audit..."
+    @if command -v cargo-audit >/dev/null 2>&1; then \
+        cargo audit 2>&1 || echo "Audit warnings (non-blocking)"; \
+    else \
+        echo "SKIP: cargo-audit not installed (run: cargo install cargo-audit)"; \
+    fi
+
+# ============================================================================
+# Heavy Jobs (label-gated in CI, for nightly tier)
+# ============================================================================
+
+# Mutation testing subset (bounded, ~5-10 min)
+mutation-subset:
+    @echo "Running mutation testing (subset)..."
+    @if command -v cargo-mutants >/dev/null 2>&1; then \
+        cargo mutants --workspace -j 2 --timeout 60 2>&1 || echo "Mutation testing completed (some mutants may survive)"; \
+    else \
+        echo "SKIP: cargo-mutants not installed (run: cargo install cargo-mutants)"; \
+    fi
+
+# Bounded fuzz run (placeholder for future fuzz testing)
+fuzz-bounded:
+    @echo "Fuzz testing (placeholder)..."
+    @echo "  Future: cargo +nightly fuzz run parser_fuzz -- -max_total_time=60"
+    @echo "Fuzz testing skipped (not yet configured)"
+
+# Benchmarks (requires criterion) - legacy target, prefer 'just bench'
+benchmarks:
+    @echo "Running benchmarks..."
+    @mkdir -p benchmarks/results
+    @if cargo bench --workspace --locked --no-run 2>/dev/null; then \
+        cargo bench --workspace --locked -- --noplot 2>&1 | tee benchmarks/results/raw-output.txt || echo "Benchmark run completed"; \
+        echo ""; \
+        echo "For structured results, run: just bench"; \
+    else \
+        echo "SKIP: No benchmarks configured or build failed"; \
+    fi
+
+# ============================================================================
+# CI Aliases and Convenience Targets
+# ============================================================================
+
+# Canonical local gate via Nix (recommended for pre-push)
+ci-local:
+    @echo "Running ci-gate via Nix shell..."
+    @if command -v nix >/dev/null 2>&1; then \
+        nix develop -c just ci-gate; \
+    else \
+        echo "ERROR: Nix not found. Install Nix or run 'just ci-gate' directly."; \
+        echo "  Install Nix: https://nixos.org/download.html"; \
+        exit 1; \
+    fi
+
+# Tool availability check (basic tools for PR-fast)
+[private]
+_check-tools-basic:
+    @MISSING=""; \
+    if ! command -v cargo >/dev/null 2>&1; then MISSING="$$MISSING cargo"; fi; \
+    if ! command -v rustfmt >/dev/null 2>&1; then MISSING="$$MISSING rustfmt"; fi; \
+    if [ -n "$$MISSING" ]; then \
+        echo "ERROR: Missing required tools:$$MISSING"; \
+        echo "  Install Rust: https://rustup.rs"; \
+        exit 1; \
+    fi
+
+# ============================================================================
 # CI Validation Commands (Issue #211)
 # ============================================================================
 
@@ -73,24 +276,48 @@ ci-workflow-audit:
     @python3 scripts/ci-audit-workflows.py
 
 # Fast merge gate (~2-5 min) - REQUIRED for all merges
+# This is the canonical pre-push check (same as merge-gate with legacy checks)
 ci-gate:
-    @echo "🚪 Running fast merge gate..."
-    @just ci-workflow-audit
-    @just ci-check-no-nested-lock
-    @just ci-format
-    @just ci-docs-check
-    @just ci-clippy-lib
-    @just clippy-prod-no-unwrap
-    @just ci-test-lib
-    @just ci-policy
-    @just ci-lsp-def
-    @just ci-parser-features-check
-    @just ci-features-invariants
-    @echo "✅ Merge gate passed!"
+    @echo "Running fast merge gate..."
+    @START=$$(date +%s); \
+    just ci-workflow-audit && \
+    just ci-check-no-nested-lock && \
+    just ci-format && \
+    just ci-docs-check && \
+    just ci-clippy-lib && \
+    just clippy-prod-no-unwrap && \
+    just ci-test-lib && \
+    just ci-policy && \
+    just ci-lsp-def && \
+    just ci-parser-features-check && \
+    just ci-features-invariants; \
+    RC=$$?; \
+    END=$$(date +%s); \
+    echo ""; \
+    if [ $$RC -eq 0 ]; then \
+        echo "Merge gate passed! (total: $$((END - START))s)"; \
+    else \
+        echo "Merge gate FAILED (total: $$((END - START))s)"; \
+        exit $$RC; \
+    fi
 
 # Gate runner with receipt output (Issue #210)
-gates:
-    @echo "🧾 Running gate runner..."
+# Uses xtask gates for structured gate execution with receipt generation
+gates tier='merge-gate' *args='':
+    @echo "🧾 Running gate runner (tier: {{tier}})..."
+    cargo xtask gates --tier {{tier}} --receipt {{args}}
+
+# Run gates with JSON output (for CI)
+gates-json tier='merge-gate':
+    @cargo xtask gates --tier {{tier}} --format json --receipt
+
+# List available gates
+gates-list:
+    @cargo xtask gates --list
+
+# Run old shell-based gate runner (deprecated, kept for compatibility)
+gates-legacy:
+    @echo "🧾 Running legacy gate runner..."
     @bash scripts/run-gates.sh
 
 # Full CI pipeline (~10-20 min) - RECOMMENDED for large changes
@@ -104,8 +331,9 @@ ci-full:
     @just ci-docs
     @echo "✅ Full CI passed!"
 
-# Local CI parity with .github/workflows/ci.yml
-ci-local:
+# Local CI parity with .github/workflows/ci.yml (legacy alias)
+# Prefer: nix develop -c just ci-gate
+ci-local-full:
     @just ci-full
 
 # Format check (fast fail)
@@ -488,3 +716,144 @@ forensics-render pr format='full':
     @echo "📝 Rendering dossier for PR {{pr}} (format: {{format}})..."
     ./scripts/forensics/render-dossier.sh {{pr}} --format {{format}}
     @echo "✅ Rendering complete"
+
+# ============================================================================
+# Benchmark Infrastructure
+# ============================================================================
+# Run performance benchmarks with structured output.
+# See benchmarks/README.md for documentation.
+
+# Run all benchmarks
+bench:
+    @echo "📊 Running full benchmark suite..."
+    @mkdir -p benchmarks/results
+    ./benchmarks/scripts/run-benchmarks.sh --output benchmarks/results/latest.json
+    @echo ""
+    @echo "Results saved to benchmarks/results/latest.json"
+    @python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json
+
+# Quick smoke benchmarks (fast, ~30s)
+bench-quick:
+    @echo "⚡ Running quick benchmark smoke test..."
+    @mkdir -p benchmarks/results
+    ./benchmarks/scripts/run-benchmarks.sh --quick --output benchmarks/results/latest.json
+    @echo ""
+    @python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json --receipt
+
+# Compare current results against baseline
+bench-compare:
+    @echo "📈 Comparing against baseline..."
+    ./benchmarks/scripts/compare.sh
+
+# Compare with failure on regression (for CI)
+bench-compare-strict:
+    @echo "📈 Comparing against baseline (strict mode)..."
+    ./benchmarks/scripts/compare.sh --fail-on-regression
+
+# Save current results as a new baseline
+bench-baseline version='':
+    @echo "📝 Saving benchmark baseline..."
+    @mkdir -p benchmarks/baselines
+    @if [ -z "{{version}}" ]; then \
+        VERSION="v$(date +%Y%m%d)"; \
+    else \
+        VERSION="{{version}}"; \
+    fi; \
+    if [ ! -f benchmarks/results/latest.json ]; then \
+        echo "No results found. Running benchmarks first..."; \
+        just bench; \
+    fi; \
+    cp benchmarks/results/latest.json "benchmarks/baselines/$$VERSION.json"; \
+    echo "Baseline saved to benchmarks/baselines/$$VERSION.json"
+
+# Run parser benchmarks only
+bench-parser:
+    @echo "📊 Running parser benchmarks..."
+    ./benchmarks/scripts/run-benchmarks.sh --category parser
+
+# Run lexer benchmarks only
+bench-lexer:
+    @echo "📊 Running lexer benchmarks..."
+    ./benchmarks/scripts/run-benchmarks.sh --category lexer
+
+# Run LSP benchmarks only
+bench-lsp:
+    @echo "📊 Running LSP benchmarks..."
+    ./benchmarks/scripts/run-benchmarks.sh --category lsp
+
+# Run workspace index benchmarks only
+bench-index:
+    @echo "📊 Running workspace index benchmarks..."
+    ./benchmarks/scripts/run-benchmarks.sh --category index
+
+# Format benchmark results as receipt
+bench-receipt:
+    @echo "📋 Generating benchmark receipt..."
+    @python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json --receipt
+
+# Format benchmark results as markdown
+bench-markdown:
+    @echo "📋 Generating benchmark markdown..."
+    @python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json --markdown
+
+# ============================================================================
+# Technical Debt Tracking (Issue #XXX)
+# ============================================================================
+# Track flaky tests, known issues, and technical debt with budgets.
+# See .ci/debt-ledger.yaml for configuration.
+
+# Show current debt status report
+debt-report:
+    @echo "📊 Technical Debt Report"
+    @python3 scripts/debt-report.py
+
+# CI gate: fail if debt budget exceeded or quarantines expired
+debt-check:
+    @echo "🔍 Checking debt budget compliance..."
+    @python3 scripts/debt-report.py --check
+
+# Show only expired quarantines (quick check)
+debt-expired:
+    @python3 scripts/debt-report.py --expired
+
+# Output debt report as JSON (for receipt integration)
+debt-json:
+    @python3 scripts/debt-report.py --json
+
+# Add a flaky test to quarantine (interactive helper)
+debt-quarantine name issue days="14":
+    @echo "Adding {{name}} to quarantine for {{days}} days..."
+    @echo ""
+    @echo "To complete this action, add the following to .ci/debt-ledger.yaml"
+    @echo "under the 'flaky_tests:' section:"
+    @echo ""
+    @echo "  - name: \"{{name}}\""
+    @echo "    added: \"$(date -u +%Y-%m-%d)\""
+    @echo "    issue: \"{{issue}}\""
+    @echo "    tier: \"quarantine\""
+    @echo "    quarantine_days: {{days}}"
+    @echo "    expires: \"$(date -u -d '+{{days}} days' +%Y-%m-%d 2>/dev/null || date -v+{{days}}d -u +%Y-%m-%d)\""
+    @echo "    notes: \"<describe the failure pattern>\""
+    @echo ""
+    @echo "Then run: just debt-report"
+
+# Remove a test from quarantine (interactive helper)
+debt-unquarantine name:
+    @echo "To remove {{name}} from quarantine:"
+    @echo ""
+    @echo "1. Remove the entry from .ci/debt-ledger.yaml 'flaky_tests:' section"
+    @echo "2. Optionally add a 'resolved' entry to the 'history.resolved:' section:"
+    @echo ""
+    @echo "  - type: \"flaky_test\""
+    @echo "    name: \"{{name}}\""
+    @echo "    resolved: \"$(date -u +%Y-%m-%d)\""
+    @echo "    resolution: \"<describe the fix>\""
+    @echo "    pr: \"#XXX\""
+    @echo ""
+    @echo "3. Run: just debt-report"
+
+# Show debt summary suitable for PR comments
+debt-pr-summary:
+    @echo "## Technical Debt Status"
+    @echo ""
+    @python3 scripts/debt-report.py --json | python3 scripts/debt-pr-summary.py

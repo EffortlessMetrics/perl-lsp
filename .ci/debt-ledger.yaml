@@ -1,0 +1,274 @@
+# =============================================================================
+# Technical Debt Ledger
+# =============================================================================
+#
+# This file tracks technical debt, flaky tests, and known issues to allow
+# gates to be useful while acknowledging imperfection.
+#
+# Schema Version: 1
+# Last Updated: 2026-01-24
+#
+# Usage:
+#   - `just debt-report` - Show current debt status
+#   - `just debt-check`  - CI gate: fail if budget exceeded
+#
+# Related: .ci/gate-policy.yaml, scripts/debt-report.py
+#
+# =============================================================================
+
+schema_version: 1
+
+# =============================================================================
+# Budget Configuration
+# =============================================================================
+# Limits on how much debt is acceptable before requiring cleanup.
+
+budgets:
+  # Maximum number of quarantined tests (excluded from merge-gate)
+  max_quarantined_tests: 10
+
+  # Maximum number of known issues (accepted but tracked)
+  max_known_issues: 20
+
+  # Maximum technical debt items
+  max_technical_debt: 30
+
+  # Alert thresholds (percentage of budget before warning)
+  warning_threshold_percent: 80
+  critical_threshold_percent: 95
+
+# =============================================================================
+# Quarantined Tests
+# =============================================================================
+# Tests that are temporarily excluded from the merge-gate.
+# They still run and report (informational), but don't block merges.
+#
+# IMPORTANT: Quarantined tests have a shelf life. After quarantine_days,
+# they must either be fixed or have their quarantine explicitly renewed.
+#
+# Tiers:
+#   - quarantine: excluded from merge-gate, still runs
+#   - disabled:   completely skipped (use sparingly)
+#
+# To add a test to quarantine:
+#   1. Create an issue tracking the root cause
+#   2. Add entry below with issue reference
+#   3. Set appropriate quarantine duration
+#   4. Run `just debt-report` to verify
+
+flaky_tests: []
+  # Example entry:
+  # - name: "lsp::test_completion_timeout"
+  #   added: "2026-01-24"
+  #   issue: "#198"
+  #   tier: "quarantine"
+  #   quarantine_days: 14
+  #   expires: "2026-02-07"
+  #   owner: "maintainer-username"
+  #   notes: "Timing-dependent, needs server init fix"
+  #   failure_pattern: "timeout waiting for completion"
+  #   affected_platforms:
+  #     - "windows"
+  #     - "wsl"
+  #
+  # - name: "dap::test_breakpoint_race"
+  #   added: "2026-01-20"
+  #   issue: "#195"
+  #   tier: "quarantine"
+  #   quarantine_days: 7
+  #   expires: "2026-01-27"
+  #   owner: "maintainer-username"
+  #   notes: "Race condition in breakpoint resolution"
+  #   failure_pattern: "assertion failed: breakpoint.resolved"
+  #   affected_platforms:
+  #     - "all"
+
+# =============================================================================
+# Known Issues
+# =============================================================================
+# Issues that are acknowledged and tracked but not immediately fixed.
+# These don't fail gates but are reported in debt reports.
+#
+# Status values:
+#   - accepted:   Intentional, won't fix before target version
+#   - wontfix:    Not a bug or out of scope (rare)
+#   - deferred:   Will fix, but not blocking current work
+#   - monitoring: Watching for impact, may escalate
+
+known_issues: []
+  # Example entries:
+  # - name: "clippy::cognitive_complexity on parser.rs"
+  #   added: "2026-01-20"
+  #   issue: "#205"
+  #   status: "accepted"
+  #   category: "code_quality"
+  #   notes: "Complex but correct, refactor post-v1.0"
+  #   target_version: "v1.1"
+  #
+  # - name: "Slow first parse on large files"
+  #   added: "2026-01-15"
+  #   issue: "#189"
+  #   status: "deferred"
+  #   category: "performance"
+  #   notes: "Acceptable for current use cases, optimize later"
+  #   target_version: "v1.2"
+  #
+  # - name: "Unicode normalization edge case"
+  #   added: "2026-01-10"
+  #   issue: "#180"
+  #   status: "monitoring"
+  #   category: "correctness"
+  #   notes: "Rare edge case, no user reports yet"
+  #   target_version: null
+
+# =============================================================================
+# Technical Debt
+# =============================================================================
+# Architectural debt, code quality issues, and cleanup work.
+#
+# Priority values:
+#   - critical: Must fix before next major release
+#   - high:     Should fix in next few releases
+#   - medium:   Nice to have, opportunistic
+#   - low:      Cosmetic or minor improvement
+#
+# Categories:
+#   - architecture:   Design decisions that limit future work
+#   - error_handling: Unwrap/expect, poor error messages
+#   - testing:        Missing tests, flaky test infrastructure
+#   - performance:    Known slow paths
+#   - documentation:  Missing or outdated docs
+#   - security:       Non-critical security improvements
+#   - dependencies:   Outdated or problematic deps
+
+technical_debt:
+  - area: "error_handling"
+    description: "Some unwrap() calls remain in test helper code"
+    priority: "low"
+    target: "v1.1"
+    issue: null
+    added: "2026-01-24"
+    notes: "Test code uses #[allow] attributes, but should migrate to proper error handling"
+
+  - area: "testing"
+    description: "Ignored test baseline tracking via script"
+    priority: "medium"
+    target: "v1.0"
+    issue: null
+    added: "2026-01-24"
+    notes: "scripts/ignored-test-count.sh works but could be integrated with debt ledger"
+
+  - area: "documentation"
+    description: "Some public APIs missing doc comments"
+    priority: "medium"
+    target: "v1.0"
+    issue: "#197"
+    added: "2026-01-24"
+    notes: "Ratcheting baseline in place, working toward 100% coverage"
+
+# =============================================================================
+# Historical Records
+# =============================================================================
+# Closed debt items for trend tracking. Automatically populated by tooling.
+
+history:
+  # Week-by-week summary of debt changes
+  weekly_summaries: []
+    # Example:
+    # - week: "2026-W04"
+    #   quarantined_tests: 2
+    #   known_issues: 5
+    #   technical_debt: 8
+    #   added: 1
+    #   resolved: 3
+    #   notes: "Resolved DAP race condition issues"
+
+  # Resolved items (last 90 days, older archived)
+  resolved: []
+    # Example:
+    # - type: "flaky_test"
+    #   name: "lsp::test_init_race"
+    #   resolved: "2026-01-20"
+    #   resolution: "Fixed server initialization order"
+    #   pr: "#210"
+    #   days_in_quarantine: 7
+
+# =============================================================================
+# Gate Integration
+# =============================================================================
+# How this ledger integrates with CI gates.
+
+gate_integration:
+  # Path to gate policy for cross-referencing
+  policy_path: ".ci/gate-policy.yaml"
+
+  # Receipt path for debt status inclusion
+  receipt_path: "target/receipts/receipt.json"
+
+  # How quarantined tests are handled
+  quarantine_behavior:
+    # Run quarantined tests but don't fail on them
+    run_tests: true
+    report_results: true
+    fail_on_quarantine: false
+
+    # Auto-expire quarantines that exceed their duration
+    auto_expire: true
+
+    # Create issue when quarantine expires without resolution
+    create_expiry_issue: true
+
+  # PR comment behavior
+  pr_comments:
+    # Comment when debt budget is approached
+    warn_on_budget: true
+
+    # Show debt delta in PR comments
+    show_delta: true
+
+    # Include expired quarantines in comments
+    show_expired: true
+
+# =============================================================================
+# Alerting Configuration
+# =============================================================================
+# When and how to alert about debt levels.
+
+alerts:
+  # Channels to notify (placeholder for future integration)
+  channels: []
+    # - type: "github_issue"
+    #   template: "debt-alert-issue.md"
+    # - type: "slack"
+    #   webhook_var: "SLACK_DEBT_WEBHOOK"
+
+  # Conditions that trigger alerts
+  triggers:
+    - name: "budget_warning"
+      condition: "any_category >= warning_threshold_percent"
+      severity: "warning"
+
+    - name: "budget_critical"
+      condition: "any_category >= critical_threshold_percent"
+      severity: "critical"
+
+    - name: "quarantine_expiring"
+      condition: "quarantine_expires_within_days <= 3"
+      severity: "warning"
+
+    - name: "quarantine_expired"
+      condition: "quarantine_expired"
+      severity: "critical"
+
+# =============================================================================
+# Version History
+# =============================================================================
+
+version_history:
+  - version: "1.0.0"
+    date: "2026-01-24"
+    changes:
+      - "Initial debt ledger structure"
+      - "Budget configuration"
+      - "Quarantine mechanism"
+      - "Gate integration settings"

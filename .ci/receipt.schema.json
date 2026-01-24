@@ -1,0 +1,596 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/p5-lang/perl-lsp/schemas/receipt.schema.json",
+  "title": "CI Gate Receipt",
+  "description": "Machine-readable receipt for CI gate runs, supporting diffing, merge-blocking decisions, and historical tracking",
+  "type": "object",
+  "required": ["schema_version", "metadata", "gates", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Schema version for forward compatibility",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "examples": ["1.0.0"]
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "gates": {
+      "type": "array",
+      "description": "Array of gate execution results",
+      "items": {
+        "$ref": "#/$defs/gate_result"
+      },
+      "minItems": 0
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
+    "diff_config": {
+      "$ref": "#/$defs/diff_config"
+    }
+  },
+  "$defs": {
+    "metadata": {
+      "type": "object",
+      "description": "Execution context and environment information",
+      "required": ["timestamp", "git_sha", "git_branch", "toolchain", "platform", "environment"],
+      "additionalProperties": false,
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of receipt generation",
+          "examples": ["2026-01-24T15:30:00Z"]
+        },
+        "git_sha": {
+          "type": "string",
+          "description": "Full git commit SHA",
+          "pattern": "^[a-f0-9]{40}$|^UNVERIFIED$",
+          "examples": ["13c4d91c1234567890abcdef1234567890abcdef"]
+        },
+        "git_sha_short": {
+          "type": "string",
+          "description": "Short git commit SHA (7 chars)",
+          "pattern": "^[a-f0-9]{7}$|^UNVERIF$",
+          "examples": ["13c4d91"]
+        },
+        "git_branch": {
+          "type": "string",
+          "description": "Git branch name",
+          "examples": ["master", "feature/new-parser"]
+        },
+        "git_dirty": {
+          "type": "boolean",
+          "description": "Whether working tree has uncommitted changes",
+          "default": false
+        },
+        "toolchain": {
+          "$ref": "#/$defs/toolchain"
+        },
+        "platform": {
+          "$ref": "#/$defs/platform"
+        },
+        "environment": {
+          "$ref": "#/$defs/environment"
+        },
+        "trigger": {
+          "type": "string",
+          "description": "What triggered this run",
+          "enum": ["manual", "pre-push", "pre-commit", "ci-pr", "ci-merge", "ci-nightly", "ci-release"],
+          "default": "manual"
+        }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "description": "Toolchain version information",
+      "required": ["rustc_version"],
+      "additionalProperties": true,
+      "properties": {
+        "rustc_version": {
+          "type": "string",
+          "description": "rustc version string",
+          "examples": ["rustc 1.89.0 (stable-x86_64-unknown-linux-gnu)"]
+        },
+        "rustc_channel": {
+          "type": "string",
+          "description": "Rust release channel",
+          "enum": ["stable", "beta", "nightly"],
+          "examples": ["stable"]
+        },
+        "rustc_semver": {
+          "type": "string",
+          "description": "Semantic version of rustc",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9.]+)?$",
+          "examples": ["1.89.0"]
+        },
+        "cargo_version": {
+          "type": "string",
+          "description": "cargo version string",
+          "examples": ["cargo 1.89.0 (stable-x86_64-unknown-linux-gnu)"]
+        },
+        "node_version": {
+          "type": ["string", "null"],
+          "description": "Node.js version if applicable",
+          "examples": ["v20.10.0", null]
+        },
+        "nix_version": {
+          "type": ["string", "null"],
+          "description": "Nix version if running in nix develop",
+          "examples": ["nix (Nix) 2.18.1", null]
+        }
+      }
+    },
+    "platform": {
+      "type": "object",
+      "description": "Operating system and hardware info",
+      "required": ["os", "arch"],
+      "additionalProperties": true,
+      "properties": {
+        "os": {
+          "type": "string",
+          "description": "Operating system name",
+          "enum": ["linux", "darwin", "windows"],
+          "examples": ["linux"]
+        },
+        "os_version": {
+          "type": "string",
+          "description": "OS kernel/release version",
+          "examples": ["6.6.87.2-microsoft-standard-WSL2"]
+        },
+        "arch": {
+          "type": "string",
+          "description": "CPU architecture",
+          "enum": ["x86_64", "aarch64", "arm64"],
+          "examples": ["x86_64"]
+        },
+        "cpu_cores": {
+          "type": "integer",
+          "description": "Number of CPU cores available",
+          "minimum": 1,
+          "examples": [8]
+        },
+        "memory_gb": {
+          "type": "number",
+          "description": "Total system memory in GB",
+          "minimum": 0,
+          "examples": [16.0]
+        },
+        "is_wsl": {
+          "type": "boolean",
+          "description": "Whether running under Windows Subsystem for Linux",
+          "default": false
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "Execution environment context",
+      "required": ["type"],
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Environment type",
+          "enum": ["local", "ci"],
+          "examples": ["local"]
+        },
+        "ci_provider": {
+          "type": ["string", "null"],
+          "description": "CI provider name if type is ci",
+          "enum": ["github-actions", "gitlab-ci", "circleci", "jenkins", null],
+          "examples": ["github-actions", null]
+        },
+        "ci_run_id": {
+          "type": ["string", "null"],
+          "description": "CI run/job identifier",
+          "examples": ["12345678", null]
+        },
+        "ci_run_url": {
+          "type": ["string", "null"],
+          "format": "uri",
+          "description": "URL to CI run details",
+          "examples": ["https://github.com/p5-lang/perl-lsp/actions/runs/12345678", null]
+        },
+        "pr_number": {
+          "type": ["integer", "null"],
+          "description": "Pull request number if applicable",
+          "minimum": 1,
+          "examples": [523, null]
+        },
+        "nix_shell": {
+          "type": "boolean",
+          "description": "Whether running inside nix develop shell",
+          "default": false
+        }
+      }
+    },
+    "gate_result": {
+      "type": "object",
+      "description": "Result of a single gate execution",
+      "required": ["gate_name", "tier", "status", "duration_ms", "command"],
+      "additionalProperties": false,
+      "properties": {
+        "gate_name": {
+          "type": "string",
+          "description": "Unique identifier for the gate",
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "examples": ["fmt", "clippy", "unit_tests", "lsp_smoke"]
+        },
+        "tier": {
+          "type": "string",
+          "description": "Gate tier determining when it runs",
+          "enum": ["pr_fast", "merge_gate", "nightly", "release"],
+          "examples": ["pr_fast"]
+        },
+        "status": {
+          "type": "string",
+          "description": "Execution result status",
+          "enum": ["pass", "fail", "skip", "timeout", "error"],
+          "examples": ["pass"]
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether this gate blocks merging",
+          "default": true
+        },
+        "duration_ms": {
+          "type": "integer",
+          "description": "Execution duration in milliseconds",
+          "minimum": 0,
+          "examples": [1234]
+        },
+        "command": {
+          "type": "string",
+          "description": "Command that was executed",
+          "examples": ["cargo fmt --check --all"]
+        },
+        "exit_code": {
+          "type": ["integer", "null"],
+          "description": "Process exit code (null if timeout/error)",
+          "examples": [0, 1, null]
+        },
+        "output_summary": {
+          "type": ["string", "null"],
+          "description": "Truncated output summary (last N lines or error excerpt)",
+          "maxLength": 4096,
+          "examples": ["All 142 tests passed", null]
+        },
+        "log_path": {
+          "type": ["string", "null"],
+          "description": "Relative path to full log file",
+          "examples": ["logs/clippy.log", null]
+        },
+        "metrics": {
+          "$ref": "#/$defs/gate_metrics"
+        },
+        "artifacts": {
+          "type": "array",
+          "description": "Paths to artifacts produced by this gate",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["artifacts/coverage.json", "artifacts/test-results.xml"]]
+        }
+      }
+    },
+    "gate_metrics": {
+      "type": ["object", "null"],
+      "description": "Gate-specific metrics for detailed analysis",
+      "additionalProperties": true,
+      "properties": {
+        "tests_total": {
+          "type": "integer",
+          "description": "Total number of tests",
+          "minimum": 0
+        },
+        "tests_passed": {
+          "type": "integer",
+          "description": "Number of passing tests",
+          "minimum": 0
+        },
+        "tests_failed": {
+          "type": "integer",
+          "description": "Number of failing tests",
+          "minimum": 0
+        },
+        "tests_skipped": {
+          "type": "integer",
+          "description": "Number of skipped tests",
+          "minimum": 0
+        },
+        "tests_ignored": {
+          "type": "integer",
+          "description": "Number of ignored tests",
+          "minimum": 0
+        },
+        "warnings_count": {
+          "type": "integer",
+          "description": "Number of compiler/linter warnings",
+          "minimum": 0
+        },
+        "errors_count": {
+          "type": "integer",
+          "description": "Number of compiler/linter errors",
+          "minimum": 0
+        },
+        "coverage_percent": {
+          "type": "number",
+          "description": "Code coverage percentage",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "coverage_lines_covered": {
+          "type": "integer",
+          "description": "Number of lines covered",
+          "minimum": 0
+        },
+        "coverage_lines_total": {
+          "type": "integer",
+          "description": "Total number of coverable lines",
+          "minimum": 0
+        },
+        "memory_peak_mb": {
+          "type": "number",
+          "description": "Peak memory usage in MB",
+          "minimum": 0
+        },
+        "files_checked": {
+          "type": "integer",
+          "description": "Number of files checked/processed",
+          "minimum": 0
+        },
+        "parse_success_count": {
+          "type": "integer",
+          "description": "Number of files successfully parsed",
+          "minimum": 0
+        },
+        "parse_failure_count": {
+          "type": "integer",
+          "description": "Number of files that failed to parse",
+          "minimum": 0
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "Aggregate summary of all gates",
+      "required": ["total_gates", "passed", "failed", "skipped", "total_duration_ms", "overall_status"],
+      "additionalProperties": false,
+      "properties": {
+        "total_gates": {
+          "type": "integer",
+          "description": "Total number of gates executed",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "description": "Number of gates that passed",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "description": "Number of gates that failed",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "integer",
+          "description": "Number of gates that were skipped",
+          "minimum": 0
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Number of gates that timed out",
+          "minimum": 0,
+          "default": 0
+        },
+        "error": {
+          "type": "integer",
+          "description": "Number of gates with execution errors",
+          "minimum": 0,
+          "default": 0
+        },
+        "total_duration_ms": {
+          "type": "integer",
+          "description": "Total wall-clock duration in milliseconds",
+          "minimum": 0
+        },
+        "tier_results": {
+          "type": "object",
+          "description": "Breakdown of results by tier",
+          "additionalProperties": false,
+          "properties": {
+            "pr_fast": {
+              "$ref": "#/$defs/tier_summary"
+            },
+            "merge_gate": {
+              "$ref": "#/$defs/tier_summary"
+            },
+            "nightly": {
+              "$ref": "#/$defs/tier_summary"
+            },
+            "release": {
+              "$ref": "#/$defs/tier_summary"
+            }
+          }
+        },
+        "overall_status": {
+          "type": "string",
+          "description": "Overall result for merge-blocking decision",
+          "enum": ["pass", "fail", "partial"],
+          "examples": ["pass"]
+        },
+        "blocking_failures": {
+          "type": "array",
+          "description": "List of required gates that failed",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["clippy", "unit_tests"]]
+        },
+        "aggregate_metrics": {
+          "$ref": "#/$defs/aggregate_metrics"
+        },
+        "debt_status": {
+          "$ref": "#/$defs/debt_status"
+        }
+      }
+    },
+    "debt_status": {
+      "type": ["object", "null"],
+      "description": "Technical debt tracking status from debt ledger",
+      "additionalProperties": false,
+      "properties": {
+        "overall_status": {
+          "type": "string",
+          "description": "Overall debt health status",
+          "enum": ["ok", "warning", "critical"]
+        },
+        "quarantined_tests": {
+          "type": "object",
+          "properties": {
+            "count": { "type": "integer", "minimum": 0 },
+            "budget": { "type": "integer", "minimum": 0 },
+            "percent": { "type": "number", "minimum": 0, "maximum": 100 },
+            "status": { "type": "string", "enum": ["ok", "warning", "critical"] },
+            "expired": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "known_issues": {
+          "type": "object",
+          "properties": {
+            "count": { "type": "integer", "minimum": 0 },
+            "budget": { "type": "integer", "minimum": 0 },
+            "percent": { "type": "number", "minimum": 0, "maximum": 100 },
+            "status": { "type": "string", "enum": ["ok", "warning", "critical"] }
+          }
+        },
+        "technical_debt": {
+          "type": "object",
+          "properties": {
+            "count": { "type": "integer", "minimum": 0 },
+            "budget": { "type": "integer", "minimum": 0 },
+            "percent": { "type": "number", "minimum": 0, "maximum": 100 },
+            "status": { "type": "string", "enum": ["ok", "warning", "critical"] }
+          }
+        },
+        "expired_quarantines": {
+          "type": "array",
+          "description": "List of expired quarantine names requiring attention",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "tier_summary": {
+      "type": "object",
+      "description": "Summary for a specific tier",
+      "additionalProperties": false,
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "aggregate_metrics": {
+      "type": ["object", "null"],
+      "description": "Aggregated metrics across all gates",
+      "additionalProperties": true,
+      "properties": {
+        "total_tests": {
+          "type": "integer",
+          "description": "Total tests across all test gates",
+          "minimum": 0
+        },
+        "total_tests_passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_tests_failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_warnings": {
+          "type": "integer",
+          "description": "Total warnings across all lint gates",
+          "minimum": 0
+        },
+        "max_memory_mb": {
+          "type": "number",
+          "description": "Peak memory across all gates",
+          "minimum": 0
+        }
+      }
+    },
+    "diff_config": {
+      "type": "object",
+      "description": "Configuration for comparing receipts across runs",
+      "additionalProperties": false,
+      "properties": {
+        "comparable_fields": {
+          "type": "array",
+          "description": "Fields that should be compared across runs",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "gates[*].gate_name",
+            "gates[*].status",
+            "gates[*].metrics",
+            "summary.overall_status",
+            "summary.passed",
+            "summary.failed",
+            "summary.aggregate_metrics"
+          ]
+        },
+        "ignored_fields": {
+          "type": "array",
+          "description": "Fields to ignore when comparing (timestamps, paths, etc.)",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "metadata.timestamp",
+            "metadata.git_sha",
+            "metadata.git_sha_short",
+            "metadata.environment.ci_run_id",
+            "metadata.environment.ci_run_url",
+            "gates[*].duration_ms",
+            "gates[*].log_path",
+            "gates[*].output_summary",
+            "summary.total_duration_ms"
+          ]
+        },
+        "threshold_fields": {
+          "type": "object",
+          "description": "Fields with acceptable delta thresholds",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {
+            "gates[*].metrics.coverage_percent": 0.5,
+            "gates[*].metrics.memory_peak_mb": 50
+          }
+        }
+      }
+    }
+  }
+}
