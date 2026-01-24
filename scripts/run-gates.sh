@@ -80,6 +80,27 @@ for f in test-output.txt test-summary.json rustdoc.log doc-summary.json state.js
   fi
 done
 
+# Collect debt status for receipt
+debt_status=""
+if command -v python3 >/dev/null 2>&1 && [[ -f "$ROOT/scripts/debt-report.py" ]]; then
+  debt_status=$(python3 "$ROOT/scripts/debt-report.py" --json 2>/dev/null | python3 -c "
+import sys, json
+try:
+    r = json.load(sys.stdin)
+    s = r.get('summary', {})
+    out = {
+        'overall_status': s.get('overall_status', 'unknown'),
+        'quarantined_tests': s.get('quarantined_tests', {}),
+        'known_issues': s.get('known_issues', {}),
+        'technical_debt': s.get('technical_debt', {}),
+        'expired_quarantines': [x['name'] for x in r.get('details', {}).get('expired_quarantines', [])]
+    }
+    print(json.dumps(out))
+except Exception:
+    print('null')
+" 2>/dev/null || echo "null")
+fi
+
 receipt_path="$RECEIPTS_DIR/receipt.json"
 {
   echo "{"
@@ -131,7 +152,8 @@ receipt_path="$RECEIPTS_DIR/receipt.json"
     done
   fi
 
-  echo "  ]"
+  echo "  ],"
+  echo "  \"debt_status\": ${debt_status:-null}"
   echo "}"
 } > "$receipt_path"
 

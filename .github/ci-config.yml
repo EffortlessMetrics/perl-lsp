@@ -1,0 +1,203 @@
+# Shared CI Configuration for perl-lsp
+# This file documents shared configuration patterns used across workflows.
+# Note: YAML anchors don't work across files, so this serves as documentation
+# and a single source of truth for CI configuration values.
+
+# =============================================================================
+# Toolchain Configuration
+# =============================================================================
+toolchain:
+  # MSRV - Minimum Supported Rust Version (for OpenAI Codex compatibility)
+  msrv: '1.89.0'
+  # Default toolchain for most checks
+  default: '1.89.0'
+  # Toolchains tested in matrix builds
+  matrix:
+    - stable
+    - '1.89.0'
+    - beta
+    # Nightly only on Linux to catch regressions early
+    - nightly
+
+# =============================================================================
+# Operating System Matrix
+# =============================================================================
+os:
+  # Fast checks (single OS)
+  fast:
+    - ubuntu-latest
+  # Full checks (cross-platform)
+  full:
+    - ubuntu-latest
+    - windows-latest
+  # Comprehensive (all platforms)
+  all:
+    - ubuntu-latest
+    - windows-latest
+    - macos-latest
+
+# =============================================================================
+# Timeout Configuration (minutes)
+# =============================================================================
+timeouts:
+  # Quick validation checks
+  fast: 10
+  # Standard CI jobs
+  standard: 30
+  # Comprehensive/nightly jobs
+  comprehensive: 60
+  # Resource-intensive jobs (mutation, fuzz)
+  expensive: 120
+
+# =============================================================================
+# Environment Variables
+# =============================================================================
+env:
+  # Common to all jobs
+  common:
+    CARGO_TERM_COLOR: always
+    RUST_BACKTRACE: '1'
+    CARGO_INCREMENTAL: '0'
+
+  # Resource-constrained environments (CI runners, low-RAM)
+  low-memory:
+    CARGO_BUILD_JOBS: '1'
+    RUST_TEST_THREADS: '1'
+    # IMPORTANT: unset RUSTC_WRAPPER, don't set to empty
+    # Use: env -u RUSTC_WRAPPER cargo ...
+
+  # Standard CI parallelism
+  standard:
+    CARGO_BUILD_JOBS: '2'
+    RUST_TEST_THREADS: '2'
+
+  # Network resilience
+  network:
+    CARGO_NET_RETRY: '4'
+    CARGO_HTTP_MULTIPLEXING: 'false'
+
+  # Documentation builds
+  docs:
+    RUSTDOCFLAGS: '-D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls'
+
+# =============================================================================
+# Cache Configuration
+# =============================================================================
+cache:
+  # Key pattern: {os}-{toolchain}-{suffix}-{lockfile_hash}
+  # Example: Linux-1.89.0-merge-gate-abc123
+  shared-key: perl-lsp
+
+  # Suffixes for different job types
+  suffixes:
+    pr-fast: pr-fast
+    merge-gate: merge-gate
+    nightly: nightly
+    lsp-tests: lsp
+    coverage: coverage
+
+# =============================================================================
+# Tier Definitions
+# =============================================================================
+tiers:
+  # PR-fast: Quick validation for every PR iteration
+  pr-fast:
+    duration: '1-2 min'
+    checks:
+      - format
+      - clippy-core  # perl-parser, perl-lexer only
+      - test-core    # lib tests only
+    gate: false  # Not a merge blocker alone
+
+  # Merge-gate: Required before merge to master
+  merge-gate:
+    duration: '3-5 min'
+    checks:
+      - format
+      - clippy-full     # All workspace
+      - clippy-prod     # No unwrap/expect
+      - test-full       # All lib tests
+      - lsp-smoke       # Basic LSP functionality
+      - policy          # CI policy checks
+      - lsp-def         # Semantic definition tests
+      - parser-features # Feature baseline
+      - features-inv    # features.toml invariants
+    gate: true  # Merge blocker
+
+  # Nightly: Scheduled comprehensive tests
+  nightly:
+    duration: '15-30 min'
+    checks:
+      - (all merge-gate checks)
+      - security-audit
+      - documentation
+      - benchmarks
+      - mutation-subset  # Bounded mutation testing
+      - fuzz-bounded     # Bounded fuzzing (future)
+    gate: false  # Informational, not blocking
+
+# =============================================================================
+# Concurrency Configuration
+# =============================================================================
+concurrency:
+  # Standard pattern for most workflows
+  standard:
+    group: '${{ github.workflow }}-${{ github.ref }}'
+    cancel-in-progress: true
+
+  # For workflows that shouldn't cancel (e.g., releases)
+  no-cancel:
+    group: '${{ github.workflow }}-${{ github.ref }}'
+    cancel-in-progress: false
+
+# =============================================================================
+# Artifact Retention
+# =============================================================================
+artifacts:
+  # Gate receipts
+  receipts:
+    retention-days: 14
+
+  # Test logs on failure
+  test-logs:
+    retention-days: 7
+
+  # Coverage reports
+  coverage:
+    retention-days: 30
+
+  # Build artifacts (releases)
+  release:
+    retention-days: 90
+
+# =============================================================================
+# Label-gated Jobs
+# =============================================================================
+# These jobs only run when specific labels are present on PRs
+labels:
+  # Full LSP test suite
+  ci:lsp: 'Full LSP integration tests'
+
+  # Code coverage generation
+  ci:coverage: 'Generate coverage reports'
+
+  # Performance benchmarks
+  ci:bench: 'Run benchmarks'
+
+  # Strict quality checks
+  ci:strict: 'Pedantic clippy, semver checks'
+
+  # Mutation testing
+  ci:mutation: 'Mutation testing (expensive)'
+
+  # Test determinism verification
+  ci:determinism: 'Run tests multiple times'
+
+  # Security audit
+  ci:audit: 'Security vulnerability scan'
+
+  # Semver compatibility
+  ci:semver: 'API compatibility check'
+
+  # All tests
+  ci:all-tests: 'Comprehensive test suite'

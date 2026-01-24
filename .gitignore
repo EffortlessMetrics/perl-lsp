@@ -125,6 +125,10 @@ update-state.sh
 .base_sha
 benchmark_results_*.txt
 
+# Benchmark results (keep baselines, ignore temp results)
+benchmarks/results/
+!benchmarks/results/.gitkeep
+
 # Archive directories (keep organized)
 archive/
 

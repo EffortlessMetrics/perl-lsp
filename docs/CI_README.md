@@ -9,12 +9,15 @@ This directory contains all CI/CD documentation for perl-lsp. The project follow
 nix develop -c just ci-gate
 ```
 
+**New to local CI?** Start with **[LOCAL_CI.md](LOCAL_CI.md)** - a practical, example-heavy guide to running CI locally.
+
 ## Documentation Overview
 
 | Document | Purpose | Audience |
 |----------|---------|----------|
+| **[LOCAL_CI.md](LOCAL_CI.md)** | **Practical guide to running CI locally** | **All developers (start here)** |
+| [CI_LOCAL_VALIDATION.md](CI_LOCAL_VALIDATION.md) | Detailed local-first philosophy, architecture | Contributors |
 | [CI.md](CI.md) | GitHub Actions architecture, runner versions | DevOps, Contributors |
-| [CI_LOCAL_VALIDATION.md](CI_LOCAL_VALIDATION.md) | Local-first philosophy, `just ci-gate` workflow | All developers |
 | [CI_TEST_LANES.md](CI_TEST_LANES.md) | Test categorization (Core, LSP, etc.) | Contributors, Test authors |
 | [CI_HARDENING.md](CI_HARDENING.md) | Quality enforcement rules, Rust contracts | Contributors |
 | [CI_COST_TRACKING.md](CI_COST_TRACKING.md) | GitHub Actions budget, optimization | Maintainers |
@@ -22,15 +25,18 @@ nix develop -c just ci-gate
 
 ## Reading Order
 
-**For contributors:**
-1. [CI_LOCAL_VALIDATION.md](CI_LOCAL_VALIDATION.md) - Understand local-first workflow
+**For new contributors:**
+1. [LOCAL_CI.md](LOCAL_CI.md) - Practical guide (start here!)
 2. [CI_TEST_LANES.md](CI_TEST_LANES.md) - Know which tests run when
 3. [CI_HARDENING.md](CI_HARDENING.md) - Understand quality gates
 
+**For experienced contributors:**
+1. [CI_LOCAL_VALIDATION.md](CI_LOCAL_VALIDATION.md) - Detailed local-first philosophy
+2. [CI.md](CI.md) - GitHub Actions configuration
+
 **For maintainers:**
-1. [CI.md](CI.md) - GitHub Actions configuration
-2. [CI_COST_TRACKING.md](CI_COST_TRACKING.md) - Budget management
-3. [CI_AUDIT.md](CI_AUDIT.md) - Automated validation
+1. [CI_COST_TRACKING.md](CI_COST_TRACKING.md) - Budget management
+2. [CI_AUDIT.md](CI_AUDIT.md) - Automated validation
 
 ## Key Concepts
 
