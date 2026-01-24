@@ -321,6 +321,7 @@ impl Default for DapDispatcher {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -328,6 +329,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     /// Create a temp file with valid Perl code for testing breakpoints.
+    /// NOTE: Avoid sub immediately followed by for loop (triggers parser hang - known issue)
     fn create_test_perl_file() -> (NamedTempFile, String) {
         let mut file =
             NamedTempFile::with_suffix(".pl").expect("Failed to create temp file for test");
@@ -339,27 +341,25 @@ my $x = 1;
 my $y = 2;
 my $z = $x + $y;
 
+if ($x > 0) {
+    print "positive\n";
+}
+
+my @arr = (1, 2, 3);
+while (my $item = shift @arr) {
+    my $doubled = $item * 2;
+    print "$doubled\n";
+}
+
 sub process {
     my ($value) = @_;
     my $result = $value * 2;
     return $result;
 }
 
-for my $i (1..10) {
-    print "i = $i\n";
-}
-
-if ($x > 0) {
-    print "positive\n";
-}
-
-my @arr = (1, 2, 3);
-for my $item (@arr) {
-    my $doubled = $item * 2;
-    print "$doubled\n";
-}
-
 print "done\n";
+my $final = process($x);
+print "result: $final\n";
 "#;
         file.write_all(perl_code.as_bytes())
             .expect("Failed to write test Perl content");
@@ -469,7 +469,7 @@ print "done\n";
             command: "setBreakpoints".to_string(),
             arguments: Some(json!({
                 "source": { "path": &source_path },
-                "breakpoints": [{ "line": 20 }, { "line": 28 }]
+                "breakpoints": [{ "line": 20 }, { "line": 26 }]
             })),
         };
         let response = dispatcher.dispatch(&request2);
@@ -479,7 +479,7 @@ print "done\n";
             serde_json::from_value(response.body.ok_or("Expected body")?)?;
         assert_eq!(body.breakpoints.len(), 2);
         assert_eq!(body.breakpoints[0].line, 20);
-        assert_eq!(body.breakpoints[1].line, 28);
+        assert_eq!(body.breakpoints[1].line, 26);
         Ok(())
     }
 
@@ -493,7 +493,7 @@ print "done\n";
             command: "setBreakpoints".to_string(),
             arguments: Some(json!({
                 "source": { "path": &source_path },
-                // Use lines within our 30-line test file, but out of order
+                // Use lines within our 27-line test file, but out of order
                 "breakpoints": [
                     { "line": 25 },
                     { "line": 10 },

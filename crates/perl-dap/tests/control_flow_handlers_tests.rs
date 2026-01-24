@@ -272,7 +272,7 @@ fn test_sequential_control_flow_operations() {
     let mut adapter = DebugAdapter::new();
 
     // Execute a sequence of control flow operations
-    let operations = vec![
+    let operations = [
         ("continue", json!({"threadId": 1})),
         ("next", json!({"threadId": 1})),
         ("stepIn", json!({"threadId": 1})),
