@@ -494,9 +494,9 @@ if ($condition) {
                 |source| {
                     let new_source = source.replace("42", &format!("{}{}", 42, batch));
                     let pos = match source.find("42") {
-                    Some(p) => p,
-                    None => panic!("Test data should contain '42'"),
-                };
+                        Some(p) => p,
+                        None => panic!("Test data should contain '42'"),
+                    };
                     let new_len = new_source.len() - source.len() + 2;
                     let edit = Edit::new(
                         pos,

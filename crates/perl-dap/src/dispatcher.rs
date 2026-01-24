@@ -324,6 +324,49 @@ impl Default for DapDispatcher {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    /// Create a temp file with valid Perl code for testing breakpoints.
+    fn create_test_perl_file() -> (NamedTempFile, String) {
+        let mut file =
+            NamedTempFile::with_suffix(".pl").expect("Failed to create temp file for test");
+        let perl_code = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+
+my $x = 1;
+my $y = 2;
+my $z = $x + $y;
+
+sub process {
+    my ($value) = @_;
+    my $result = $value * 2;
+    return $result;
+}
+
+for my $i (1..10) {
+    print "i = $i\n";
+}
+
+if ($x > 0) {
+    print "positive\n";
+}
+
+my @arr = (1, 2, 3);
+for my $item (@arr) {
+    my $doubled = $item * 2;
+    print "$doubled\n";
+}
+
+print "done\n";
+"#;
+        file.write_all(perl_code.as_bytes())
+            .expect("Failed to write test Perl content");
+        file.flush().expect("Failed to flush temp file");
+        let path = file.path().to_string_lossy().to_string();
+        (file, path)
+    }
 
     #[test]
     fn test_dispatcher_new() {
@@ -367,6 +410,7 @@ mod tests {
 
     #[test]
     fn test_handle_set_breakpoints() -> Result<(), Box<dyn std::error::Error>> {
+        let (_file, source_path) = create_test_perl_file();
         let dispatcher = DapDispatcher::new();
         let request = Request {
             seq: 2,
@@ -374,7 +418,7 @@ mod tests {
             command: "setBreakpoints".to_string(),
             arguments: Some(json!({
                 "source": {
-                    "path": "/workspace/script.pl",
+                    "path": source_path,
                     "name": "script.pl"
                 },
                 "breakpoints": [
@@ -403,6 +447,7 @@ mod tests {
 
     #[test]
     fn test_handle_set_breakpoints_replace_semantics() -> Result<(), Box<dyn std::error::Error>> {
+        let (_file, source_path) = create_test_perl_file();
         let dispatcher = DapDispatcher::new();
 
         // Set initial breakpoints
@@ -411,7 +456,7 @@ mod tests {
             msg_type: "request".to_string(),
             command: "setBreakpoints".to_string(),
             arguments: Some(json!({
-                "source": { "path": "/workspace/script.pl" },
+                "source": { "path": &source_path },
                 "breakpoints": [{ "line": 10 }]
             })),
         };
@@ -423,8 +468,8 @@ mod tests {
             msg_type: "request".to_string(),
             command: "setBreakpoints".to_string(),
             arguments: Some(json!({
-                "source": { "path": "/workspace/script.pl" },
-                "breakpoints": [{ "line": 20 }, { "line": 30 }]
+                "source": { "path": &source_path },
+                "breakpoints": [{ "line": 20 }, { "line": 28 }]
             })),
         };
         let response = dispatcher.dispatch(&request2);
@@ -434,23 +479,25 @@ mod tests {
             serde_json::from_value(response.body.ok_or("Expected body")?)?;
         assert_eq!(body.breakpoints.len(), 2);
         assert_eq!(body.breakpoints[0].line, 20);
-        assert_eq!(body.breakpoints[1].line, 30);
+        assert_eq!(body.breakpoints[1].line, 28);
         Ok(())
     }
 
     #[test]
     fn test_handle_set_breakpoints_preserves_order() -> Result<(), Box<dyn std::error::Error>> {
+        let (_file, source_path) = create_test_perl_file();
         let dispatcher = DapDispatcher::new();
         let request = Request {
             seq: 2,
             msg_type: "request".to_string(),
             command: "setBreakpoints".to_string(),
             arguments: Some(json!({
-                "source": { "path": "/workspace/script.pl" },
+                "source": { "path": &source_path },
+                // Use lines within our 30-line test file, but out of order
                 "breakpoints": [
-                    { "line": 100 },
-                    { "line": 50 },
-                    { "line": 75 }
+                    { "line": 25 },
+                    { "line": 10 },
+                    { "line": 15 }
                 ]
             })),
         };
@@ -462,9 +509,9 @@ mod tests {
             serde_json::from_value(response.body.ok_or("Expected body")?)?;
 
         // Order must match request
-        assert_eq!(body.breakpoints[0].line, 100);
-        assert_eq!(body.breakpoints[1].line, 50);
-        assert_eq!(body.breakpoints[2].line, 75);
+        assert_eq!(body.breakpoints[0].line, 25);
+        assert_eq!(body.breakpoints[1].line, 10);
+        assert_eq!(body.breakpoints[2].line, 15);
         Ok(())
     }
 

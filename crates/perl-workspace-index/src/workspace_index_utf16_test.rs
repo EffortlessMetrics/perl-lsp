@@ -9,7 +9,7 @@
 #[cfg(test)]
 mod tests {
     use crate::workspace_index::{SymbolKind, WorkspaceIndex};
-    use anyhow::{anyhow, Result};
+    use anyhow::{Result, anyhow};
 
     #[test]
     fn test_utf16_positions_with_emoji() -> Result<()> {
@@ -96,7 +96,8 @@ my $世 = 3;  # CJK at column 3, takes 1 UTF-16 unit
         let symbols = index.file_symbols(uri);
 
         // Check each variable's position
-        let var_a = symbols.iter().find(|s| s.name == "$a").ok_or_else(|| anyhow!("Should find $a"))?;
+        let var_a =
+            symbols.iter().find(|s| s.name == "$a").ok_or_else(|| anyhow!("Should find $a"))?;
         assert_eq!(var_a.range.start.column, 3); // "my " = 3 units
 
         let var_emoji = symbols
@@ -105,8 +106,10 @@ my $世 = 3;  # CJK at column 3, takes 1 UTF-16 unit
             .ok_or_else(|| anyhow!("Should find emoji variable"))?;
         assert_eq!(var_emoji.range.start.column, 3); // "my " = 3 units
 
-        let var_cjk =
-            symbols.iter().find(|s| s.name == "$世").ok_or_else(|| anyhow!("Should find CJK variable"))?;
+        let var_cjk = symbols
+            .iter()
+            .find(|s| s.name == "$世")
+            .ok_or_else(|| anyhow!("Should find CJK variable"))?;
         assert_eq!(var_cjk.range.start.column, 3); // "my " = 3 units
 
         Ok(())

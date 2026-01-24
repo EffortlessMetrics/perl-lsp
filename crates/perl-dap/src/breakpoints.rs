@@ -356,6 +356,51 @@ impl Default for BreakpointStore {
 mod tests {
     use super::*;
     use crate::protocol::{SetBreakpointsArguments, Source, SourceBreakpoint};
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    /// Create a temp file with valid Perl code for testing breakpoints.
+    /// Returns the temp file (keeps it alive) and its path.
+    fn create_test_perl_file() -> (NamedTempFile, String) {
+        let mut file =
+            NamedTempFile::with_suffix(".pl").expect("Failed to create temp file for test");
+        // Create 30 lines of valid Perl code for breakpoint testing
+        let perl_code = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+
+my $x = 1;
+my $y = 2;
+my $z = $x + $y;
+
+sub process {
+    my ($value) = @_;
+    my $result = $value * 2;
+    return $result;
+}
+
+for my $i (1..10) {
+    print "i = $i\n";
+}
+
+if ($x > 0) {
+    print "positive\n";
+}
+
+my @arr = (1, 2, 3);
+for my $item (@arr) {
+    my $doubled = $item * 2;
+    print "$doubled\n";
+}
+
+print "done\n";
+"#;
+        file.write_all(perl_code.as_bytes())
+            .expect("Failed to write test Perl content");
+        file.flush().expect("Failed to flush temp file");
+        let path = file.path().to_string_lossy().to_string();
+        (file, path)
+    }
 
     #[test]
     fn test_breakpoint_store_new() {
@@ -366,10 +411,11 @@ mod tests {
 
     #[test]
     fn test_set_breakpoints_creates_records() {
+        let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
             source: Source {
-                path: Some("/workspace/script.pl".to_string()),
+                path: Some(source_path.clone()),
                 name: Some("script.pl".to_string()),
             },
             breakpoints: Some(vec![
@@ -395,13 +441,13 @@ mod tests {
 
     #[test]
     fn test_set_breakpoints_replace_semantics() {
+        let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
-        let source_path = "/workspace/script.pl";
 
         // Set initial breakpoints
         let args1 = SetBreakpointsArguments {
             source: Source {
-                path: Some(source_path.to_string()),
+                path: Some(source_path.clone()),
                 name: Some("script.pl".to_string()),
             },
             breakpoints: Some(vec![SourceBreakpoint { line: 10, column: None, condition: None }]),
@@ -412,12 +458,12 @@ mod tests {
         // Replace with new breakpoints
         let args2 = SetBreakpointsArguments {
             source: Source {
-                path: Some(source_path.to_string()),
+                path: Some(source_path.clone()),
                 name: Some("script.pl".to_string()),
             },
             breakpoints: Some(vec![
                 SourceBreakpoint { line: 20, column: None, condition: None },
-                SourceBreakpoint { line: 30, column: None, condition: None },
+                SourceBreakpoint { line: 28, column: None, condition: None },
             ]),
             source_modified: None,
         };
@@ -426,19 +472,20 @@ mod tests {
         // Should have only the new breakpoints
         assert_eq!(breakpoints.len(), 2);
         assert_eq!(breakpoints[0].line, 20);
-        assert_eq!(breakpoints[1].line, 30);
+        assert_eq!(breakpoints[1].line, 28);
 
         // Verify stored breakpoints
-        let stored = store.get_breakpoints(source_path);
+        let stored = store.get_breakpoints(&source_path);
         assert_eq!(stored.len(), 2);
     }
 
     #[test]
     fn test_set_breakpoints_unique_ids() {
+        let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
             source: Source {
-                path: Some("/workspace/script.pl".to_string()),
+                path: Some(source_path),
                 name: Some("script.pl".to_string()),
             },
             breakpoints: Some(vec![
@@ -456,16 +503,18 @@ mod tests {
 
     #[test]
     fn test_set_breakpoints_preserves_order() {
+        let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
             source: Source {
-                path: Some("/workspace/script.pl".to_string()),
+                path: Some(source_path),
                 name: Some("script.pl".to_string()),
             },
+            // Use lines within our 30-line test file, but out of order
             breakpoints: Some(vec![
-                SourceBreakpoint { line: 100, column: None, condition: None },
-                SourceBreakpoint { line: 50, column: None, condition: None },
-                SourceBreakpoint { line: 75, column: None, condition: None },
+                SourceBreakpoint { line: 25, column: None, condition: None },
+                SourceBreakpoint { line: 10, column: None, condition: None },
+                SourceBreakpoint { line: 15, column: None, condition: None },
             ]),
             source_modified: None,
         };
@@ -473,9 +522,9 @@ mod tests {
         let breakpoints = store.set_breakpoints(&args);
 
         // Order must match request (not sorted by line number)
-        assert_eq!(breakpoints[0].line, 100);
-        assert_eq!(breakpoints[1].line, 50);
-        assert_eq!(breakpoints[2].line, 75);
+        assert_eq!(breakpoints[0].line, 25);
+        assert_eq!(breakpoints[1].line, 10);
+        assert_eq!(breakpoints[2].line, 15);
     }
 
     #[test]

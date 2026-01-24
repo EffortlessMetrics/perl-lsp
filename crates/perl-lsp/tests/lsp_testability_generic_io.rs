@@ -4,8 +4,8 @@
 //! Validates that LspServer can accept generic Read/Write trait objects
 //! and handle protocol edge cases without requiring real stdin/stdout.
 
-use perl_lsp::LspServer;
 use parking_lot::Mutex;
+use perl_lsp::LspServer;
 use serde_json::json;
 use std::io::{Cursor, Write};
 use std::sync::Arc;

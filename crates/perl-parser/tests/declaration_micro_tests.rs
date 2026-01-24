@@ -21,7 +21,10 @@ mod declaration_micro_tests {
 
     fn parse_and_get_provider(
         code: &str,
-    ) -> Result<(DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>), Box<dyn std::error::Error>> {
+    ) -> Result<
+        (DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>),
+        Box<dyn std::error::Error>,
+    > {
         let mut parser = Parser::new(code);
         let ast = parser.parse()?;
         let ast_arc = Arc::new(ast);
@@ -174,7 +177,10 @@ mod constant_advanced_tests {
 
     fn parse_and_get_provider(
         code: &str,
-    ) -> Result<(DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>), Box<dyn std::error::Error>> {
+    ) -> Result<
+        (DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>),
+        Box<dyn std::error::Error>,
+    > {
         let mut parser = Parser::new(code);
         let ast = parser.parse()?;
         let ast_arc = Arc::new(ast);
@@ -302,7 +308,10 @@ mod qw_variants_tests {
 
     fn parse_and_get_provider(
         code: &str,
-    ) -> Result<(DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>), Box<dyn std::error::Error>> {
+    ) -> Result<
+        (DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>),
+        Box<dyn std::error::Error>,
+    > {
         let mut parser = Parser::new(code);
         let ast = parser.parse()?;
         let ast_arc = Arc::new(ast);
@@ -363,7 +372,10 @@ mod parser_extras_tests {
 
     fn parse_and_get_provider(
         code: &str,
-    ) -> Result<(DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>), Box<dyn std::error::Error>> {
+    ) -> Result<
+        (DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>),
+        Box<dyn std::error::Error>,
+    > {
         let mut parser = Parser::new(code);
         let ast = parser.parse()?;
         let ast_arc = Arc::new(ast);
