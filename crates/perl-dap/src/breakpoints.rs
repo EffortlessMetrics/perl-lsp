@@ -69,28 +69,23 @@ fn has_only_comments_in_range(node: &Node, start: usize, end: usize) -> bool {
     }
 }
 
-/// Check if a byte offset is inside a heredoc interior
+/// Check if a byte offset is inside a heredoc interior (body content)
 fn is_inside_heredoc_interior(node: &Node, byte_offset: usize) -> bool {
-    // Check if offset is within this node
-    if byte_offset < node.location.start || byte_offset >= node.location.end {
-        // Check children
-        return match &node.kind {
-            NodeKind::Program { statements } => {
-                statements.iter().any(|s| is_inside_heredoc_interior(s, byte_offset))
-            }
-            NodeKind::Heredoc { .. } => {
-                // The heredoc node itself - offset is in range
-                true
-            }
-            _ => {
-                // Recursively check other node types with children
-                false
-            }
-        };
+    // Check if this is a heredoc with a body span containing the offset
+    if let NodeKind::Heredoc { body_span: Some(span), .. } = &node.kind {
+        if byte_offset >= span.start && byte_offset < span.end {
+            return true;
+        }
     }
 
-    // Node contains the offset, check if it's a heredoc
-    matches!(node.kind, NodeKind::Heredoc { .. })
+    // Recursively check all children
+    let mut found = false;
+    node.for_each_child(|child| {
+        if !found && is_inside_heredoc_interior(child, byte_offset) {
+            found = true;
+        }
+    });
+    found
 }
 
 /// Validate a breakpoint against the AST
@@ -128,15 +123,16 @@ fn validate_breakpoint_line(source: &str, line: i64) -> (bool, Option<String>) {
         rope.len_bytes()
     };
 
-    // Validation 1: Comment or blank line
-    if is_comment_or_blank_line(&ast, line_start, line_end, source) {
-        return (false, Some("Breakpoint set on comment or blank line".to_string()));
-    }
-
-    // Validation 2: Inside heredoc interior
-    // Check the start of the line
+    // Validation 1: Inside heredoc interior
+    // Check BEFORE comment/blank check because heredoc interior lines have no AST nodes
+    // and would otherwise be incorrectly classified as blank/comment lines
     if is_inside_heredoc_interior(&ast, line_start) {
         return (false, Some("Breakpoint set inside heredoc content".to_string()));
+    }
+
+    // Validation 2: Comment or blank line
+    if is_comment_or_blank_line(&ast, line_start, line_end, source) {
+        return (false, Some("Breakpoint set on comment or blank line".to_string()));
     }
 
     // Breakpoint is valid

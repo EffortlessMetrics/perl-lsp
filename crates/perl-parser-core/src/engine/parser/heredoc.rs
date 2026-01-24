@@ -142,7 +142,7 @@ impl<'a> Parser<'a> {
 
         if node_matches {
             // Try to attach at this node
-            if let NodeKind::Heredoc { content, .. } = &mut node.kind {
+            if let NodeKind::Heredoc { content, body_span, .. } = &mut node.kind {
                 // Reify the body bytes from src_bytes using the collector's segments
                 let mut s = String::new();
                 for (i, seg) in body.segments.iter().enumerate() {
@@ -157,6 +157,17 @@ impl<'a> Parser<'a> {
                     }
                 }
                 *content = s;
+
+                // Store body span for breakpoint detection
+                *body_span = if body.full_span.start < body.full_span.end {
+                    Some(SourceLocation {
+                        start: body.full_span.start,
+                        end: body.full_span.end,
+                    })
+                } else {
+                    None // Empty heredoc
+                };
+
                 return true;
             }
         }

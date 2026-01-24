@@ -236,6 +236,7 @@ impl<'a> Parser<'a> {
                         content: String::new(), // Placeholder until drain_pending_heredocs
                         interpolated,
                         indented,
+                        body_span: None, // Populated by drain_pending_heredocs
                     },
                     SourceLocation { start, end },
                 ))

@@ -271,7 +271,7 @@ impl Node {
                 }
             }
 
-            NodeKind::Heredoc { delimiter, content, interpolated, indented } => {
+            NodeKind::Heredoc { delimiter, content, interpolated, indented, .. } => {
                 let type_str = if *indented {
                     if *interpolated { "heredoc_indented_interpolated" } else { "heredoc_indented" }
                 } else if *interpolated {
@@ -1312,6 +1312,8 @@ pub enum NodeKind {
         interpolated: bool,
         /// Whether leading whitespace is stripped (<<~ form)
         indented: bool,
+        /// Body span for breakpoint detection (populated by drain_pending_heredocs)
+        body_span: Option<SourceLocation>,
     },
 
     /// Array literal expression: `(1, 2, 3)` or `[1, 2, 3]`
