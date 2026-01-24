@@ -82,8 +82,8 @@ export async function activate(context: vscode.ExtensionContext) {
     });
     
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
-        const { execFile } = require('child_process');
-        execFile(serverPath, ['--version'], (error: any, stdout: string, stderr: string) => {
+        const { exec } = require('child_process');
+        exec(`${serverPath} --version`, (error: any, stdout: string, stderr: string) => {
             if (error) {
                 vscode.window.showErrorMessage(`Failed to get version: ${error.message}`);
             } else {
