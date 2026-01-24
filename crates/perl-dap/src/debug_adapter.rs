@@ -1560,11 +1560,18 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
         }
     }
 
-    // Check for mutating operations
+    // Check for mutating operations and dangerous builtins
+    // Categories:
+    //   - State mutation: push, pop, shift, unshift, splice, delete, undef
+    //   - Process control: system, exec, fork, exit, dump, kill
+    //   - I/O: qx, readpipe, syscall, open, close, print, say, printf
+    //   - Filesystem: mkdir, rmdir, unlink, rename, chdir, chmod, chown, chroot
+    //   - Code execution: eval
     let mutating_ops = [
         "push", "pop", "shift", "unshift", "splice", "delete", "undef", "system", "exec", "qx",
         "readpipe", "syscall", "open", "close", "mkdir", "rmdir", "unlink", "rename", "chdir",
-        "chmod", "chown",
+        "chmod", "chown", "eval", "kill", "exit", "dump", "chroot", "fork", "print", "say",
+        "printf",
     ];
 
     for op in &mutating_ops {
