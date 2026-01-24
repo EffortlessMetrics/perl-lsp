@@ -299,5 +299,13 @@
             "}"
         ],
         "description": "Setter method"
+    },
+    "Data::Dumper Debug": {
+        "prefix": "dumper",
+        "body": [
+            "use Data::Dumper;",
+            "warn Dumper(\\$${1:variable});"
+        ],
+        "description": "Debug print variable with Data::Dumper"
     }
 }
