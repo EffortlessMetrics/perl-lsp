@@ -100,3 +100,153 @@ fn test_evaluate_rejects_carriage_returns() {
         _ => panic!("Expected Response"),
     }
 }
+
+#[test]
+fn test_evaluate_detects_unsafe_eval() {
+    let mut adapter = DebugAdapter::new();
+
+    // Expression with eval (innocuous content to ensure eval itself is caught)
+    let args = json!({
+        "expression": "eval '1+1'",
+        "allowSideEffects": false
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Evaluate should fail for eval in safe mode");
+            let msg = message.expect("Should have error message");
+            assert!(
+                msg.contains("Safe evaluation mode: potentially mutating operation 'eval'"),
+                "Should specifically mention eval. Got: {}", msg
+            );
+        }
+        _ => panic!("Expected Response"),
+    }
+}
+
+#[test]
+fn test_evaluate_detects_unsafe_kill() {
+    let mut adapter = DebugAdapter::new();
+
+    // Expression with kill
+    let args = json!({
+        "expression": "kill 9, $$",
+        "allowSideEffects": false
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Evaluate should fail for kill in safe mode");
+            let msg = message.expect("Should have error message");
+            assert!(
+                msg.contains("Safe evaluation mode: potentially mutating operation 'kill'"),
+                "Should specifically mention kill. Got: {}", msg
+            );
+        }
+        _ => panic!("Expected Response"),
+    }
+}
+
+#[test]
+fn test_evaluate_detects_unsafe_exit() {
+    let mut adapter = DebugAdapter::new();
+
+    // Expression with exit
+    let args = json!({
+        "expression": "exit(1)",
+        "allowSideEffects": false
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Evaluate should fail for exit in safe mode");
+            let msg = message.expect("Should have error message");
+            assert!(
+                msg.contains("Safe evaluation mode: potentially mutating operation 'exit'"),
+                "Should specifically mention exit. Got: {}", msg
+            );
+        }
+        _ => panic!("Expected Response"),
+    }
+}
+
+#[test]
+fn test_evaluate_detects_unsafe_dump() {
+    let mut adapter = DebugAdapter::new();
+
+    // Expression with dump
+    let args = json!({
+        "expression": "dump",
+        "allowSideEffects": false
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Evaluate should fail for dump in safe mode");
+            let msg = message.expect("Should have error message");
+            assert!(
+                msg.contains("Safe evaluation mode: potentially mutating operation 'dump'"),
+                "Should specifically mention dump. Got: {}", msg
+            );
+        }
+        _ => panic!("Expected Response"),
+    }
+}
+
+#[test]
+fn test_evaluate_detects_unsafe_fork() {
+    let mut adapter = DebugAdapter::new();
+
+    // Expression with fork
+    let args = json!({
+        "expression": "fork",
+        "allowSideEffects": false
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Evaluate should fail for fork in safe mode");
+            let msg = message.expect("Should have error message");
+            assert!(
+                msg.contains("Safe evaluation mode: potentially mutating operation 'fork'"),
+                "Should specifically mention fork. Got: {}", msg
+            );
+        }
+        _ => panic!("Expected Response"),
+    }
+}
+
+#[test]
+fn test_evaluate_detects_unsafe_chroot() {
+    let mut adapter = DebugAdapter::new();
+
+    // Expression with chroot
+    let args = json!({
+        "expression": "chroot '/'",
+        "allowSideEffects": false
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Evaluate should fail for chroot in safe mode");
+            let msg = message.expect("Should have error message");
+            assert!(
+                msg.contains("Safe evaluation mode: potentially mutating operation 'chroot'"),
+                "Should specifically mention chroot. Got: {}", msg
+            );
+        }
+        _ => panic!("Expected Response"),
+    }
+}
