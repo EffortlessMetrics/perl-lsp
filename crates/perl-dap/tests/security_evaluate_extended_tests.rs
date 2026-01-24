@@ -16,7 +16,7 @@ fn test_evaluate_blocks_unsafe_ops() {
         "chroot('/tmp')",
         "print 'side effect'",
         "say 'side effect'",
-        "printf 'side effect'"
+        "printf 'side effect'",
     ];
 
     let mut failed_ops = Vec::new();
@@ -30,14 +30,17 @@ fn test_evaluate_blocks_unsafe_ops() {
         let response = adapter.handle_request(1, "evaluate", Some(args));
 
         match response {
-            DapMessage::Response { message, .. } => {
+            DapMessage::Response { success, message, .. } => {
                 let msg = message.unwrap_or_default();
 
-                // If it contains "Safe evaluation mode", it IS blocked.
-                if msg.contains("Safe evaluation mode") {
-                    println!("Verified operation '{}' is blocked. Msg: {}", op, msg);
+                // Blocked = success is false AND message mentions safe mode
+                if !success && msg.contains("Safe evaluation mode") {
+                    println!("✓ Operation '{}' is blocked", op);
                 } else {
-                    println!("FAILED: Operation '{}' was NOT blocked. Msg: {}", op, msg);
+                    println!(
+                        "✗ Operation '{}' was NOT blocked (success={}, msg={})",
+                        op, success, msg
+                    );
                     failed_ops.push(op);
                 }
             }

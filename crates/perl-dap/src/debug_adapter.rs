@@ -1165,7 +1165,9 @@ impl DebugAdapter {
                             verified: false,
                             line,
                             column: None,
-                            message: Some("Breakpoint condition cannot contain newlines".to_string()),
+                            message: Some(
+                                "Breakpoint condition cannot contain newlines".to_string(),
+                            ),
                         };
                         verified_breakpoints.push(breakpoint);
                         bp_id += 1;
