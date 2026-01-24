@@ -16,24 +16,41 @@
 //! ## Test Coverage
 //!
 //! - Server initialization and capability advertisement
-//! - Document lifecycle (open, change, diagnostics)
-//! - Core language features (hover, completion, definition)
+//! - Document lifecycle (open, change)
+//! - Core language features (hover, completion, definition, references)
+//! - Document symbols and workspace symbols
+//! - Folding ranges
+//! - Error handling (unknown methods, non-existent documents)
 //! - Graceful shutdown
 //!
 //! ## Execution
 //!
 //! ```bash
-//! # Run the smoke tests
-//! cargo test -p perl-lsp --test lsp_smoke
+//! # Run the smoke tests (recommended: single-threaded for clean output)
+//! cargo test -p perl-lsp --test lsp_smoke -- --test-threads=1
 //!
-//! # Run with verbose output
-//! cargo test -p perl-lsp --test lsp_smoke -- --nocapture
+//! # Check if tests pass (exit code 0 = success)
+//! cargo test -p perl-lsp --test lsp_smoke -- --test-threads=1; echo "Exit: $?"
+//!
+//! # Run with verbose output (note: server notifications may mix with test output)
+//! cargo test -p perl-lsp --test lsp_smoke -- --test-threads=1 --nocapture
 //! ```
 //!
 //! ## CI Integration
 //!
 //! These tests are designed to complete in under 30 seconds total and produce
 //! deterministic results suitable for merge-gate automation.
+//!
+//! **Note**: Test output may include LSP server notifications (JSON-RPC messages)
+//! that appear interleaved with test results. This is expected behavior since
+//! the server writes to stdout by default. The important metric is the exit code:
+//! - Exit code 0 = all tests passed
+//! - Exit code 1 = one or more tests failed
+//!
+//! Example CI check:
+//! ```bash
+//! cargo test -p perl-lsp --test lsp_smoke -- --test-threads=1 || exit 1
+//! ```
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -78,12 +95,13 @@ sub greet {
 1;
 "#;
 
-/// Script with intentional missing pragmas
-const FIXTURE_NO_STRICT: &str = r#"#!/usr/bin/env perl
-# Missing 'use strict' and 'use warnings'
-my $x = 42;
-print $x;
-"#;
+// Note: FIXTURE_NO_STRICT was removed - not currently used by smoke tests
+// If needed for diagnostics testing, can be restored:
+// const FIXTURE_NO_STRICT: &str = r#"#!/usr/bin/env perl
+// # Missing 'use strict' and 'use warnings'
+// my $x = 42;
+// print $x;
+// "#;
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -95,6 +113,10 @@ fn create_server() -> LspServer {
 }
 
 /// Send an initialize request and return the result
+///
+/// NOTE: Does NOT send `initialized` notification to avoid triggering
+/// workspace indexing and stdout notifications that interfere with test output.
+/// For tests that need full initialization, use `initialize_server_full()`.
 fn initialize_server(server: &mut LspServer) -> Value {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -121,6 +143,14 @@ fn initialize_server(server: &mut LspServer) -> Value {
     let response = server.handle_request(request).expect("Initialize should return response");
     assert!(response.error.is_none(), "Initialize should not return error");
 
+    response.result.unwrap()
+}
+
+/// Send initialize request AND initialized notification
+/// Use when you need full server functionality including workspace indexing
+fn initialize_server_full(server: &mut LspServer) -> Value {
+    let result = initialize_server(server);
+
     // Send initialized notification
     let initialized = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -130,7 +160,7 @@ fn initialize_server(server: &mut LspServer) -> Value {
     };
     server.handle_request(initialized);
 
-    response.result.unwrap()
+    result
 }
 
 /// Open a document in the server
@@ -240,7 +270,7 @@ fn smoke_server_initialization_and_capabilities() {
 #[test]
 fn smoke_double_initialization_rejected() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
 
     // Try to initialize again
     let request = JsonRpcRequest {
@@ -271,7 +301,7 @@ fn smoke_double_initialization_rejected() {
 #[test]
 fn smoke_document_open() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
 
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
@@ -291,7 +321,7 @@ fn smoke_document_open() {
 #[test]
 fn smoke_document_change() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
 
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
@@ -331,7 +361,7 @@ fn smoke_document_change() {
 #[test]
 fn smoke_hover_response_structure() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(&mut server, 20, "textDocument/hover", json!({
@@ -358,7 +388,7 @@ fn smoke_hover_response_structure() {
 #[test]
 fn smoke_hover_on_subroutine() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(&mut server, 21, "textDocument/hover", json!({
@@ -379,7 +409,7 @@ fn smoke_hover_on_subroutine() {
 #[test]
 fn smoke_completion_returns_items() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(&mut server, 30, "textDocument/completion", json!({
@@ -415,7 +445,7 @@ fn smoke_completion_returns_items() {
 #[test]
 fn smoke_completion_builtins() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
 
     // Open a file with partial builtin
     open_document(&mut server, "file:///builtin.pl", "pri");
@@ -456,7 +486,7 @@ fn smoke_completion_builtins() {
 #[test]
 fn smoke_definition_returns_locations() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     // Request definition for say_hello call
@@ -501,7 +531,7 @@ fn smoke_definition_returns_locations() {
 #[test]
 fn smoke_document_symbols() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(&mut server, 50, "textDocument/documentSymbol", json!({
@@ -548,7 +578,7 @@ fn smoke_document_symbols() {
 #[test]
 fn smoke_find_references() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(&mut server, 60, "textDocument/references", json!({
@@ -579,7 +609,7 @@ fn smoke_find_references() {
 #[test]
 fn smoke_folding_ranges() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(&mut server, 70, "textDocument/foldingRange", json!({
@@ -607,7 +637,7 @@ fn smoke_folding_ranges() {
 #[test]
 fn smoke_workspace_symbols() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
     open_document(&mut server, "file:///module.pm", FIXTURE_MODULE);
 
@@ -637,7 +667,7 @@ fn smoke_workspace_symbols() {
 #[test]
 fn smoke_unknown_method_error() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
 
     let result = send_request(&mut server, 90, "textDocument/unknownMethod", json!({
         "textDocument": { "uri": "file:///test.pl" }
@@ -660,7 +690,7 @@ fn smoke_unknown_method_error() {
 #[test]
 fn smoke_nonexistent_document() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
 
     // Don't open any document, just request hover
     let result = send_request(&mut server, 92, "textDocument/hover", json!({
@@ -682,7 +712,7 @@ fn smoke_nonexistent_document() {
 #[test]
 fn smoke_graceful_shutdown() {
     let mut server = create_server();
-    let _ = initialize_server(&mut server);
+    let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     // Make some requests
