@@ -89,7 +89,8 @@ fn collect_one(src: &[u8], mut off: usize, hd: &PendingHeredoc) -> (HeredocConte
     let mut after_terminator_off = off;
     let mut found = false;
 
-    while off <= src.len() {
+    // Note: Use < not <= to avoid infinite loop at EOF (next_line_bounds returns same offset at EOF)
+    while off < src.len() {
         let (ls, le, next) = next_line_bounds(src, off);
         let line = &src[ls..le];
 
