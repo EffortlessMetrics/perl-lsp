@@ -382,6 +382,13 @@ fn test_branch_reset_complexity() {
     let mut parser = Parser::new(&pattern);
     let result = parser.parse();
     
+    // Parser might recover, so check either result is Err or errors list has the error
+    if let Err(e) = result {
+        assert!(e.to_string().contains("Too many branches"), "Error was: {}", e);
+    } else {
+        let errors = parser.errors();
+        assert!(!errors.is_empty(), "Should have recorded errors for excessive branches");
+        let found = errors.iter().any(|e| e.to_string().contains("Too many branches"));
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
 }
