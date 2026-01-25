@@ -197,7 +197,9 @@ impl Scope {
         }
     }
 
-    fn for_each_unused_variable<F>(&self, mut f: F)
+    /// Iterate over unused variables that should be reported as diagnostics.
+    /// Filters out underscore-prefixed variables (intentionally unused) before allocation.
+    fn for_each_reportable_unused_variable<F>(&self, mut f: F)
     where
         F: FnMut(String, usize),
     {
@@ -771,7 +773,7 @@ impl ScopeAnalyzer {
         issues: &mut Vec<ScopeIssue>,
         code: &str,
     ) {
-        scope.for_each_unused_variable(|var_name, offset| {
+        scope.for_each_reportable_unused_variable(|var_name, offset| {
             let start = offset.min(code.len());
             let end = (start + var_name.len()).min(code.len());
             issues.push(ScopeIssue {
