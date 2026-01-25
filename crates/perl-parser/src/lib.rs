@@ -415,7 +415,7 @@ pub use analysis::type_inference;
 pub use builtins::builtin_signatures;
 pub use builtins::builtin_signatures_phf;
 pub use ide::lsp_compat::code_actions;
-pub use ide::lsp_compat::code_actions_enhanced;
+pub use ide::lsp_compat::code_actions::EnhancedCodeActionsProvider;
 pub use ide::lsp_compat::code_actions_pragmas;
 /// LSP code actions provider for automated refactoring and fixes.
 pub use ide::lsp_compat::code_actions_provider;

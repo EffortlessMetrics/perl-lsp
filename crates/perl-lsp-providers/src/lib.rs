@@ -16,7 +16,6 @@
 //! Provider usage depends on specific IDE and tooling module implementations.
 
 #![deny(unsafe_code)]
-#![deny(unreachable_pub)]
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]

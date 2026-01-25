@@ -4,7 +4,8 @@
 //! runtime LSP implementation lives in the `perl-lsp` crate.
 
 pub mod code_actions;
-pub mod code_actions_enhanced;
+// code_actions_enhanced is now a submodule of code_actions
+pub use code_actions::EnhancedCodeActionsProvider;
 pub mod code_actions_pragmas;
 pub mod code_actions_provider;
 pub mod code_lens_provider;
