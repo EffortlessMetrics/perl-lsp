@@ -312,5 +312,69 @@
         "prefix": "dd",
         "body": "warn Dumper(${1:\\$variable});",
         "description": "Quick Data::Dumper warn (assumes 'use Data::Dumper' already present)"
+    },
+    "Test File": {
+        "prefix": "test",
+        "body": [
+            "use strict;",
+            "use warnings;",
+            "use Test::More;",
+            "",
+            "${0:# tests here}",
+            "",
+            "done_testing();"
+        ],
+        "description": "Start a new test file with Test::More"
+    },
+    "Test Ok": {
+        "prefix": "ok",
+        "body": [
+            "ok(${1:$got}, '${2:test description}');"
+        ],
+        "description": "Simple boolean test"
+    },
+    "Test Is": {
+        "prefix": "is",
+        "body": [
+            "is(${1:$got}, ${2:$expected}, '${3:test description}');"
+        ],
+        "description": "Test if two values are equal"
+    },
+    "Test Like": {
+        "prefix": "like",
+        "body": [
+            "like(${1:$got}, qr/${2:pattern}/, '${3:test description}');"
+        ],
+        "description": "Test if value matches regex"
+    },
+    "Test Unlike": {
+        "prefix": "unlike",
+        "body": [
+            "unlike(${1:$got}, qr/${2:pattern}/, '${3:test description}');"
+        ],
+        "description": "Test if value does not match regex"
+    },
+    "Test Subtest": {
+        "prefix": "subtest",
+        "body": [
+            "subtest '${1:group name}' => sub {",
+            "    ${0}",
+            "};"
+        ],
+        "description": "Group tests in a subtest"
+    },
+    "Test Diag": {
+        "prefix": "diag",
+        "body": [
+            "diag('${1:message}');"
+        ],
+        "description": "Print diagnostic message"
+    },
+    "Done Testing": {
+        "prefix": "done",
+        "body": [
+            "done_testing();"
+        ],
+        "description": "End test file"
     }
 }
