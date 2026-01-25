@@ -1651,12 +1651,6 @@ fn is_core_qualified(s: &str, op_start: usize) -> bool {
     &s[start2..end2] == "CORE"
 }
 
-/// Check if the match is a method call (->print)
-fn is_method_call(s: &str, op_start: usize) -> bool {
-    let bytes = s.as_bytes();
-    op_start >= 2 && bytes[op_start - 1] == b'>' && bytes[op_start - 2] == b'-'
-}
-
 /// Check if the match is a sigil-prefixed identifier ($print, @say, %exit, *dump)
 fn is_sigil_prefixed_identifier(s: &str, op_start: usize) -> bool {
     let bytes = s.as_bytes();
@@ -1752,11 +1746,6 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
 
             // Allow ${print} (simple scalar braced variable form)
             if is_simple_braced_scalar_var(expression, start, end) {
-                continue;
-            }
-
-            // Allow method-name occurrences ($obj->print)
-            if is_method_call(expression, start) {
                 continue;
             }
 
@@ -2232,7 +2221,6 @@ mod tests {
             "${print}",         // braced scalar variable
             "${ print }",       // braced with spaces
             "'print'",          // single-quoted string
-            "$obj->print",      // method call
             "Foo::print",       // package-qualified
             "My::Module::exit", // deeply qualified
         ];
@@ -2260,6 +2248,8 @@ mod tests {
             "kill 9, $$",
             "CORE::print $x",
             "CORE::GLOBAL::exit",
+            "$obj->print",
+            "$obj->system('ls')",
         ];
 
         for expr in blocked {
