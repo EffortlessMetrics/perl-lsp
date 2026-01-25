@@ -30,3 +30,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The `BinaryDownloader` in `vscode-extension` used `exec` with constructed command strings to extract archives (`tar`, `unzip`). Maliciously crafted filenames or paths (e.g., from an internal repo or if the release tag was compromised) could inject shell commands.
 **Learning:** File manipulation operations involving external tools (`tar`, `unzip`, `git`) are frequent targets for injection if paths are interpolated into command strings.
 **Prevention:** Use `execFile` with argument arrays for all external tool invocations. Never interpolate paths into shell commands.
+
+## 2026-05-27 - Method Call Bypass in Safe Evaluation Mode
+**Vulnerability:** The `perl-dap` safe evaluation mode explicitly allowed dangerous operations (like `system`, `exec`, `unlink`) if they were invoked as method calls (e.g., `$obj->system('rm -rf /')`), bypassing the security check.
+**Learning:** Heuristics that exempt certain syntactic patterns (like method calls) from security checks can introduce critical vulnerabilities. In this case, the assumption that method calls were "safe" or "different enough" from built-in functions was incorrect for security purposes.
+**Prevention:** In security-critical validation logic, avoid exceptions based on syntax unless absolutely necessary and proven safe. If an operation name is dangerous, it should likely be blocked regardless of how it is invoked (function vs method).
