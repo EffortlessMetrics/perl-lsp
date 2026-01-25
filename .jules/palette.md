@@ -13,3 +13,8 @@
 ## 2026-01-25 - Snippets for Standard Libraries
 **Learning:** Adding snippets for standard testing libraries (like `Test::More`) significantly reduces boilerplate and encourages best practices (testing) with minimal effort.
 **Action:** When working on language extensions, check for missing snippets for core libraries that users use frequently (tests, logging, common data structures).
+
+## 2026-01-25 - The "Broken Promise" UX Pattern
+**Learning:** UI elements (like commands in the palette or context menus) that exist in `package.json` but lack implementation in code create a "Broken Promise" – users see the option, click it, and nothing happens. This is worse than the feature not existing at all.
+**Action:** When auditing extensions, verify that every command contributed in `package.json` is actually registered in `extension.ts` or the relevant activation script.
+**Fixed:** Implemented `perl-lsp.runTests` which was visible but broken.
