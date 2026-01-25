@@ -13,6 +13,7 @@ concurrency:
 
 jobs:
   validate-docs:
+    timeout-minutes: 15
     if: |
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'ci:docs-truth')

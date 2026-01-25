@@ -21,10 +21,11 @@ jobs:
   quality:
     name: Quality Gates
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: |
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'ci:strict')
-    
+
     steps:
     - uses: actions/checkout@v4
 
@@ -143,12 +144,13 @@ jobs:
   semver:
     name: Semver Compatibility
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
       contains(github.event.pull_request.labels.*.name, 'ci:semver'))
     continue-on-error: true  # Non-blocking for now
-    
+
     steps:
     - uses: actions/checkout@v4
       with:
@@ -169,6 +171,7 @@ jobs:
   doc-hygiene:
     name: Documentation Hygiene
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: |
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'ci:strict')
