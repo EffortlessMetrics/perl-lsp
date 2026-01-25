@@ -9,3 +9,7 @@
 - `Shift+Alt+O` - Organize imports
 - `Shift+Alt+T` - Run tests
 - `Shift+Alt+R` - Restart language server
+
+## 2026-01-25 - Snippets for Standard Libraries
+**Learning:** Adding snippets for standard testing libraries (like `Test::More`) significantly reduces boilerplate and encourages best practices (testing) with minimal effort.
+**Action:** When working on language extensions, check for missing snippets for core libraries that users use frequently (tests, logging, common data structures).

@@ -312,5 +312,76 @@
         "prefix": "dd",
         "body": "warn Dumper(${1:\\$variable});",
         "description": "Quick Data::Dumper warn (assumes 'use Data::Dumper' already present)"
+    },
+    "Test File": {
+        "prefix": "tm-test",
+        "body": [
+            "use strict;",
+            "use warnings;",
+            "use Test::More;",
+            "",
+            "${0:# tests here}",
+            "",
+            "done_testing();"
+        ],
+        "description": "Start a new test file with Test::More"
+    },
+    "Test Ok": {
+        "prefix": "tm-ok",
+        "body": [
+            "ok(${1:$got}, '${2:test description}');"
+        ],
+        "description": "Simple boolean test (Test::More)"
+    },
+    "Test Is": {
+        "prefix": "tm-is",
+        "body": [
+            "is(${1:$got}, ${2:$expected}, '${3:test description}');"
+        ],
+        "description": "Test if two values are equal (Test::More)"
+    },
+    "Test Isnt": {
+        "prefix": "tm-isnt",
+        "body": [
+            "isnt(${1:$got}, ${2:$expected}, '${3:test description}');"
+        ],
+        "description": "Test if two values are not equal (Test::More)"
+    },
+    "Test Like": {
+        "prefix": "tm-like",
+        "body": [
+            "like(${1:$got}, qr/${2:pattern}/, '${3:test description}');"
+        ],
+        "description": "Test if value matches regex (Test::More)"
+    },
+    "Test Unlike": {
+        "prefix": "tm-unlike",
+        "body": [
+            "unlike(${1:$got}, qr/${2:pattern}/, '${3:test description}');"
+        ],
+        "description": "Test if value does not match regex (Test::More)"
+    },
+    "Test Subtest": {
+        "prefix": "tm-subtest",
+        "body": [
+            "subtest '${1:group name}' => sub {",
+            "    ${0}",
+            "};"
+        ],
+        "description": "Group tests in a subtest (Test::More)"
+    },
+    "Test Diag": {
+        "prefix": "tm-diag",
+        "body": [
+            "diag('${1:message}');"
+        ],
+        "description": "Print diagnostic message (Test::More)"
+    },
+    "Done Testing": {
+        "prefix": "tm-done",
+        "body": [
+            "done_testing();"
+        ],
+        "description": "End test file (Test::More)"
     }
 }
