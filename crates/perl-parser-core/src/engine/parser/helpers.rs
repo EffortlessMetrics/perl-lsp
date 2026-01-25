@@ -175,6 +175,21 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Check if a module is a source filter (security risk)
+    fn is_filter_module(module: &str) -> bool {
+        matches!(
+            module,
+            "Filter"
+                | "Filter::Util::Call"
+                | "Filter::Simple"
+                | "Filter::cpp"
+                | "Filter::exec"
+                | "Filter::sh"
+                | "Filter::tee"
+                | "Filter::decrypt"
+        )
+    }
+
     /// Check if a token kind is a binary operator that couldn't start an expression argument.
     fn is_binary_operator(kind: TokenKind) -> bool {
         matches!(

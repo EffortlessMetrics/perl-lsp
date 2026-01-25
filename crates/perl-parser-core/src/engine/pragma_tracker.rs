@@ -69,7 +69,7 @@ impl PragmaTracker {
         ranges: &mut Vec<(Range<usize>, PragmaState)>,
     ) {
         match &node.kind {
-            NodeKind::Use { module, args } => {
+            NodeKind::Use { module, args, .. } => {
                 // Handle use statements
                 match module.as_str() {
                     "strict" => {
@@ -108,7 +108,7 @@ impl PragmaTracker {
                     _ => {}
                 }
             }
-            NodeKind::No { module, args } => {
+            NodeKind::No { module, args, .. } => {
                 // Handle no statements
                 match module.as_str() {
                     "strict" => {

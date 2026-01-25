@@ -224,3 +224,24 @@ fn test_unicode_property_complexity() {
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
 }
+
+#[test]
+fn test_source_filter_detection() {
+    // Known filter
+    let code = "use Filter::Util::Call;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok());
+    let ast = result.unwrap();
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("(risk:filter)"), "Should detect filter usage in: {}", sexp);
+
+    // Safe module
+    let code_safe = "use strict;";
+    let mut parser_safe = Parser::new(code_safe);
+    let result_safe = parser_safe.parse();
+    assert!(result_safe.is_ok());
+    let ast_safe = result_safe.unwrap();
+    let sexp_safe = ast_safe.to_sexp();
+    assert!(!sexp_safe.contains("(risk:filter)"), "Should not flag strict as filter in: {}", sexp_safe);
+}

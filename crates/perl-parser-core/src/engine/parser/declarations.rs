@@ -689,7 +689,8 @@ impl<'a> Parser<'a> {
         // Don't consume semicolon here - let parse_statement handle it uniformly
 
         let end = self.previous_position();
-        Ok(Node::new(NodeKind::Use { module, args }, SourceLocation { start, end }))
+        let has_filter_risk = Self::is_filter_module(&module);
+        Ok(Node::new(NodeKind::Use { module, args, has_filter_risk }, SourceLocation { start, end }))
     }
 
     /// Parse special block (AUTOLOAD, DESTROY, etc.)
@@ -891,7 +892,8 @@ impl<'a> Parser<'a> {
         // Don't consume semicolon here - let parse_statement handle it uniformly
 
         let end = self.previous_position();
-        Ok(Node::new(NodeKind::No { module, args }, SourceLocation { start, end }))
+        let has_filter_risk = Self::is_filter_module(&module);
+        Ok(Node::new(NodeKind::No { module, args, has_filter_risk }, SourceLocation { start, end }))
     }
 
 }

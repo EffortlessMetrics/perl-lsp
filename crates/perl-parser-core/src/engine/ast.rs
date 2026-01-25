@@ -605,21 +605,23 @@ impl Node {
                 }
             }
 
-            NodeKind::Use { module, args } => {
+            NodeKind::Use { module, args, has_filter_risk } => {
+                let risk_marker = if *has_filter_risk { " (risk:filter)" } else { "" };
                 if args.is_empty() {
-                    format!("(use {})", module)
+                    format!("(use {}{})", module, risk_marker)
                 } else {
                     let args_str = args.join(" ");
-                    format!("(use {} ({}))", module, args_str)
+                    format!("(use {} ({}){})", module, args_str, risk_marker)
                 }
             }
 
-            NodeKind::No { module, args } => {
+            NodeKind::No { module, args, has_filter_risk } => {
+                let risk_marker = if *has_filter_risk { " (risk:filter)" } else { "" };
                 if args.is_empty() {
-                    format!("(no {})", module)
+                    format!("(no {}{})", module, risk_marker)
                 } else {
                     let args_str = args.join(" ");
-                    format!("(no {} ({}))", module, args_str)
+                    format!("(no {} ({}){})", module, args_str, risk_marker)
                 }
             }
 
@@ -1640,6 +1642,8 @@ pub enum NodeKind {
         module: String,
         /// Import arguments (symbols to import)
         args: Vec<String>,
+        /// Whether this module is a known source filter (security risk)
+        has_filter_risk: bool,
     },
 
     /// No statement for disabling features: `no strict;`
@@ -1648,6 +1652,8 @@ pub enum NodeKind {
         module: String,
         /// Arguments for the no statement
         args: Vec<String>,
+        /// Whether this module is a known source filter (security risk)
+        has_filter_risk: bool,
     },
 
     /// Phase block for compile/runtime hooks: `BEGIN`, `END`, `CHECK`, `INIT`, `UNITCHECK`
