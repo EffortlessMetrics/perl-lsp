@@ -1707,9 +1707,11 @@ fn is_package_qualified_not_core(s: &str, op_start: usize) -> bool {
 /// context-aware filtering to reduce false positives for:
 /// - Sigil-prefixed identifiers ($print, @say, %exit)
 /// - Simple braced scalar variables ${print}
-/// - Method calls ($obj->print)
 /// - Package-qualified names (Foo::print) unless CORE::
 /// - Single-quoted string literals ('print')
+///
+/// Note: Method calls ($obj->print) are intentionally NOT exempted because
+/// dangerous operations remain dangerous regardless of invocation syntax.
 fn validate_safe_expression(expression: &str) -> Option<String> {
     // Check for assignment operators
     let assignment_ops = [
