@@ -20,8 +20,8 @@ impl<'a> Parser<'a> {
             match stmt_result {
                 Ok(stmt) => statements.push(stmt),
                 Err(e) => {
-                    // Don't recover from recursion limit - propagate immediately
-                    if matches!(e, ParseError::RecursionLimit) {
+                    // Don't recover from recursion/nesting limits - propagate immediately
+                    if matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }) {
                         return Err(e);
                     }
 

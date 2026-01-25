@@ -946,12 +946,16 @@ impl<'a> PerlLexer<'a> {
                     delim
                 }
                 _ => {
-                    // Empty label (e.g. <<;)
-                    String::new()
+                    // Not a valid heredoc delimiter - reset position and return None
+                    // This allows << to be parsed as bitshift operator (e.g., 1 << 2)
+                    self.position = start;
+                    return None;
                 }
             }
         } else {
-            String::new()
+            // No delimiter found - reset position and return None
+            self.position = start;
+            return None;
         };
 
         // For now, return a placeholder token

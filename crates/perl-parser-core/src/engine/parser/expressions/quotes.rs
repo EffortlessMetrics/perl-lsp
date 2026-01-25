@@ -192,12 +192,10 @@ impl<'a> Parser<'a> {
             }
             "qr" => {
                 // Regular expression
-                // Validate regex complexity
-                crate::engine::regex_validator::RegexValidator::new()
-                    .validate(&content, start)?;
-
-                let has_embedded_code = crate::engine::regex_validator::RegexValidator::new()
-                    .detects_code_execution(&content);
+                // Validate regex complexity and check for embedded code
+                let validator = crate::engine::regex_validator::RegexValidator::new();
+                validator.validate(&content, start)?;
+                let has_embedded_code = validator.detects_code_execution(&content);
 
                 Ok(Node::new(
                     NodeKind::Regex {
@@ -218,12 +216,10 @@ impl<'a> Parser<'a> {
             }
             "m" => {
                 // Match operator with pattern
-                // Validate regex complexity
-                crate::engine::regex_validator::RegexValidator::new()
-                    .validate(&content, start)?;
-
-                let has_embedded_code = crate::engine::regex_validator::RegexValidator::new()
-                    .detects_code_execution(&content);
+                // Validate regex complexity and check for embedded code
+                let validator = crate::engine::regex_validator::RegexValidator::new();
+                validator.validate(&content, start)?;
+                let has_embedded_code = validator.detects_code_execution(&content);
 
                 let mut modifiers = String::new();
                 while let Ok(token) = self.tokens.peek() {

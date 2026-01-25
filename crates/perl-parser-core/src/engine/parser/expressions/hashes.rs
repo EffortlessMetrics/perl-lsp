@@ -58,8 +58,8 @@ impl<'a> Parser<'a> {
         let first_expr = match self.parse_expression() {
             Ok(expr) => expr,
             Err(e) => {
-                // Propagate RecursionLimit immediately - don't try alternative parse
-                if matches!(e, ParseError::RecursionLimit) {
+                // Propagate recursion/nesting limits immediately - don't try alternative parse
+                if matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }) {
                     return Err(e);
                 }
                 // If we can't parse an expression, parse as block statements
