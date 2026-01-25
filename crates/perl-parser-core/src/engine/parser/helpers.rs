@@ -42,7 +42,10 @@ impl<'a> Parser<'a> {
         self.recursion_depth += 1;
         // Fast path: avoid expensive comparisons in the common case
         if self.recursion_depth > MAX_RECURSION_DEPTH {
-            return Err(ParseError::RecursionLimit);
+            return Err(ParseError::NestingTooDeep {
+                depth: self.recursion_depth,
+                max_depth: MAX_RECURSION_DEPTH,
+            });
         }
         Ok(())
     }
@@ -172,6 +175,21 @@ impl<'a> Parser<'a> {
                 | "fork"
                 | "wait"
                 | "dump"
+        )
+    }
+
+    /// Check if a module is a source filter (security risk)
+    fn is_filter_module(module: &str) -> bool {
+        matches!(
+            module,
+            "Filter"
+                | "Filter::Util::Call"
+                | "Filter::Simple"
+                | "Filter::cpp"
+                | "Filter::exec"
+                | "Filter::sh"
+                | "Filter::tee"
+                | "Filter::decrypt"
         )
     }
 

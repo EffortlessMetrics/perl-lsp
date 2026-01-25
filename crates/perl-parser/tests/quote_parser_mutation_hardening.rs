@@ -31,7 +31,7 @@ fn test_extract_regex_parts_edge_cases() {
     ];
 
     for (input, expected) in test_cases {
-        let (pattern, modifiers) = extract_regex_parts(input);
+        let (pattern, _body, modifiers) = extract_regex_parts(input);
         assert_eq!(
             (pattern.as_str(), modifiers.as_str()),
             expected,
@@ -46,24 +46,24 @@ fn test_extract_regex_parts_edge_cases() {
 #[test]
 fn test_extract_regex_parts_length_boundary_conditions() {
     // Test length checks that could be mutated from > to < or >= to ==
-    let result = extract_regex_parts("m");
+    let (pattern, _body, modifiers) = extract_regex_parts("m");
     assert_eq!(
-        result,
-        ("mm".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("mm", ""),
         "Single 'm' should return mm - kills BinaryOperator mutation > to <"
     );
 
-    let result = extract_regex_parts("mx");
+    let (pattern, _body, modifiers) = extract_regex_parts("mx");
     assert_eq!(
-        result,
-        ("mxm".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("mxm", ""),
         "Two chars 'mx' should extract 'mxm' - kills length check mutations"
     );
 
-    let result = extract_regex_parts("malpha");
+    let (pattern, _body, modifiers) = extract_regex_parts("malpha");
     assert_eq!(
-        result,
-        ("malpham".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("malpham", ""),
         "m followed by alphabetic should extract content - kills && to || mutation"
     );
 }
@@ -73,24 +73,24 @@ fn test_extract_regex_parts_length_boundary_conditions() {
 #[test]
 fn test_extract_regex_parts_alphabetic_detection() {
     // Test that alphabetic characters after 'm' are handled
-    let result = extract_regex_parts("ma");
+    let (pattern, _body, modifiers) = extract_regex_parts("ma");
     assert_eq!(
-        result,
-        ("mam".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("mam", ""),
         "m followed by alphabetic 'a' should return mam - kills ! operator removal"
     );
 
-    let result = extract_regex_parts("mz");
+    let (pattern, _body, modifiers) = extract_regex_parts("mz");
     assert_eq!(
-        result,
-        ("mzm".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("mzm", ""),
         "m followed by alphabetic 'z' should return mzm - kills ! operator removal"
     );
 
-    let result = extract_regex_parts("m/");
+    let (pattern, _body, modifiers) = extract_regex_parts("m/");
     assert_eq!(
-        result,
-        ("//".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("//", ""),
         "m followed by non-alphabetic '/' should extract - kills ! operator removal"
     );
 }
@@ -256,9 +256,9 @@ fn test_closing_delimiter_via_regex() {
     ];
 
     for (input, expected) in test_cases {
-        let result = extract_regex_parts(input);
+        let (pattern, _body, modifiers) = extract_regex_parts(input);
         assert_eq!(
-            (result.0.as_str(), result.1.as_str()),
+            (pattern.as_str(), modifiers.as_str()),
             expected,
             "Delimiter mapping test for {}",
             input
@@ -389,7 +389,7 @@ fn test_extract_modifiers_properties() {
 #[test]
 fn test_quote_parser_integration() {
     // Test that regex parsing works end-to-end
-    let (pattern, modifiers) = extract_regex_parts("qr{test.*}i");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr{test.*}i");
     assert_eq!(pattern, "{test.*}", "Integration: regex pattern extraction");
     assert_eq!(modifiers, "i", "Integration: regex modifier extraction");
 
@@ -434,7 +434,7 @@ fn test_quote_parser_error_boundaries() {
 #[test]
 fn test_quote_parser_utf8_safety() {
     // Test with Unicode characters
-    let (pattern, modifiers) = extract_regex_parts("qr/🦀test🦀/i");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr/🦀test🦀/i");
     assert_eq!(
         (pattern.as_str(), modifiers.as_str()),
         ("/🦀test🦀/", "i"),

@@ -601,7 +601,7 @@ impl<'a> DeclarationProvider<'a> {
         const_name: &str,
         constants: &mut Vec<&'b Node>,
     ) {
-        if let NodeKind::Use { module, args } = &node.kind {
+        if let NodeKind::Use { module, args, .. } = &node.kind {
             if module == "constant" {
                 // Strip leading options like -strict, -nonstrict, -force
                 let stripped_args = self.strip_constant_options(args);

@@ -31,6 +31,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_hash_or_block_inner(&mut self, _expect_block: bool) -> ParseResult<Node> {
+        self.check_recursion()?;
         let start_token = self.tokens.next()?; // consume {
         let start = start_token.start;
 
@@ -42,6 +43,7 @@ impl<'a> Parser<'a> {
 
             // For empty braces, default to hash (correct for most functions)
             // Functions like sort/map/grep have special handling that creates blocks
+            self.exit_recursion();
             return Ok(Node::new(
                 NodeKind::HashLiteral { pairs: Vec::new() },
                 SourceLocation { start, end },
@@ -56,8 +58,8 @@ impl<'a> Parser<'a> {
         let first_expr = match self.parse_expression() {
             Ok(expr) => expr,
             Err(e) => {
-                // Propagate RecursionLimit immediately - don't try alternative parse
-                if matches!(e, ParseError::RecursionLimit) {
+                // Propagate recursion/nesting limits immediately - don't try alternative parse
+                if matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }) {
                     return Err(e);
                 }
                 // If we can't parse an expression, parse as block statements
@@ -69,6 +71,7 @@ impl<'a> Parser<'a> {
                 self.expect(TokenKind::RightBrace)?;
                 let end = self.previous_position();
 
+                self.exit_recursion();
                 return Ok(Node::new(
                     NodeKind::Block { statements },
                     SourceLocation { start, end },
@@ -92,6 +95,7 @@ impl<'a> Parser<'a> {
                         pairs.push((elements[i].clone(), elements[i + 1].clone()));
                     }
 
+                    self.exit_recursion();
                     return Ok(Node::new(
                         NodeKind::HashLiteral { pairs },
                         SourceLocation { start, end },
@@ -102,10 +106,12 @@ impl<'a> Parser<'a> {
             // If the expression is already a HashLiteral, return it directly
             // This happens when parse_comma creates a HashLiteral from key => value pairs
             if matches!(first_expr.kind, NodeKind::HashLiteral { .. }) {
+                self.exit_recursion();
                 return Ok(first_expr);
             }
 
             // Otherwise it's a block with a single expression
+            self.exit_recursion();
             return Ok(Node::new(
                 NodeKind::Block { statements: vec![first_expr] },
                 SourceLocation { start, end },
@@ -207,6 +213,7 @@ impl<'a> Parser<'a> {
             self.expect(TokenKind::RightBrace)?;
             let end = self.previous_position();
 
+            self.exit_recursion();
             Ok(Node::new(NodeKind::HashLiteral { pairs }, SourceLocation { start, end }))
         } else {
             // Not a hash - parse as block
@@ -215,6 +222,7 @@ impl<'a> Parser<'a> {
                 self.tokens.next()?; // consume }
                 let end = self.previous_position();
 
+                self.exit_recursion();
                 return Ok(Node::new(
                     NodeKind::Block { statements: vec![first_expr] },
                     SourceLocation { start, end },
@@ -236,6 +244,7 @@ impl<'a> Parser<'a> {
             self.expect(TokenKind::RightBrace)?;
             let end = self.previous_position();
 
+            self.exit_recursion();
             Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
         }
     }

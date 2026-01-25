@@ -5,7 +5,7 @@
 use std::borrow::Cow;
 ///
 /// Extract pattern and modifiers from a regex-like token (qr, m, or bare //)
-pub fn extract_regex_parts(text: &str) -> (String, String) {
+pub fn extract_regex_parts(text: &str) -> (String, String, String) {
     // Handle different prefixes
     let content = if let Some(stripped) = text.strip_prefix("qr") {
         stripped
@@ -21,7 +21,7 @@ pub fn extract_regex_parts(text: &str) -> (String, String) {
     // Get delimiter - content must be non-empty to have a delimiter
     let delimiter = match content.chars().next() {
         Some(d) => d,
-        None => return (String::new(), String::new()),
+        None => return (String::new(), String::new(), String::new()),
     };
     let closing = get_closing_delimiter(delimiter);
 
@@ -31,7 +31,7 @@ pub fn extract_regex_parts(text: &str) -> (String, String) {
     // Include delimiters in the pattern string for compatibility
     let pattern = format!("{}{}{}", delimiter, body, closing);
 
-    (pattern, modifiers.to_string())
+    (pattern, body, modifiers.to_string())
 }
 
 /// Error type for substitution operator parsing failures

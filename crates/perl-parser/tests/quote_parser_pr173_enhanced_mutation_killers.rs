@@ -22,13 +22,13 @@ use perl_parser::quote_parser::*;
 fn test_kill_extract_regex_parts_string_new_mutations() {
     // Test case 1: Empty qr without delimiter returns empty strings - validate this behavior
     // This validates the correct empty behavior and kills mutations that would return non-empty
-    let (pattern, modifiers) = extract_regex_parts("qr");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr");
     assert_eq!(pattern, "", "Pattern should be empty string for incomplete 'qr'");
     assert_eq!(modifiers, "", "Modifiers should be empty for incomplete qr");
 
     // Test case 2: Single 'm' character handling - critical boundary case
     // Kills mutations where String::new() is returned instead of proper parsing
-    let (pattern, modifiers) = extract_regex_parts("m");
+    let (pattern, _body, modifiers) = extract_regex_parts("m");
     assert_ne!(
         pattern, "",
         "Pattern should not be empty for single 'm' - kills String::new() FnValue mutation"
@@ -38,20 +38,20 @@ fn test_kill_extract_regex_parts_string_new_mutations() {
 
     // Test case 3: Edge case with 'm' followed by alphabetic character
     // Targets specific boolean logic where character detection could be mutated
-    let (pattern, modifiers) = extract_regex_parts("ma");
+    let (pattern, _body, modifiers) = extract_regex_parts("ma");
     assert_ne!(pattern, "", "Pattern must not be empty - kills String::new() return mutation");
     assert_eq!(pattern, "mam", "Expected 'mam' pattern for 'ma' input");
     assert_eq!(modifiers, "", "No modifiers expected for 'ma'");
 
     // Test case 4: Boundary between valid and invalid regex patterns
     // This specifically tests the boundary where text.len() > 1 conditions could be mutated
-    let (pattern, modifiers) = extract_regex_parts("m/");
+    let (pattern, _body, modifiers) = extract_regex_parts("m/");
     assert_ne!(pattern, "", "Non-empty pattern required - kills String::new() mutation");
     assert_eq!(pattern, "//", "Pattern should be '//' for 'm/' input");
     assert_eq!(modifiers, "", "No modifiers for 'm/' input");
 
     // Test case 5: Complex regex with multiple components - ensures no String::new() returns
-    let (pattern, modifiers) = extract_regex_parts("qr{test.*}ims");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr{test.*}ims");
     assert_ne!(
         pattern, "",
         "Complex pattern must not be empty - kills String::new() FnValue mutation"
@@ -208,7 +208,7 @@ fn test_kill_match_guard_closing_delimiter_mutations() {
     );
 
     // Test case 4: Regex with closing delimiter in content
-    let (pattern, modifiers) = extract_regex_parts("m/test\\/regex/i");
+    let (pattern, _body, modifiers) = extract_regex_parts("m/test\\/regex/i");
     assert_eq!(
         pattern, "/test\\/regex/",
         "Regex with escaped delimiter failed - kills match guard mutations"
@@ -235,25 +235,25 @@ fn test_kill_match_guard_closing_delimiter_mutations() {
 fn test_kill_unary_operator_mutations() {
     // Test case 1: Alphabetic character detection where ! could be removed
     // !text.chars().nth(1).unwrap().is_alphabetic() mutations
-    let (pattern, modifiers) = extract_regex_parts("ma");
+    let (pattern, _body, modifiers) = extract_regex_parts("ma");
     assert_eq!(pattern, "mam", "Alphabetic detection failed - kills ! operator removal mutation");
     assert_eq!(modifiers, "", "No modifiers expected for 'ma'");
 
     // Test case 2: Non-alphabetic character that should be processed differently
-    let (pattern, modifiers) = extract_regex_parts("m/");
+    let (pattern, _body, modifiers) = extract_regex_parts("m/");
     assert_eq!(pattern, "//", "Non-alphabetic processing failed - validates ! operator integrity");
     assert_eq!(modifiers, "", "No modifiers for 'm/'");
 
     // Test case 3: Edge case with numeric character after 'm'
-    let (pattern, _modifiers) = extract_regex_parts("m1");
+    let (pattern, _body, _modifiers) = extract_regex_parts("m1");
     assert_eq!(pattern, "11", "Numeric character handling failed - kills ! operator mutations");
 
     // Test case 4: Special character handling
-    let (pattern, _modifiers) = extract_regex_parts("m#");
+    let (pattern, _body, _modifiers) = extract_regex_parts("m#");
     assert_eq!(pattern, "##", "Special character processing failed - validates ! operator logic");
 
     // Test case 5: Unicode character boundary testing
-    let (pattern, _modifiers) = extract_regex_parts("mα");
+    let (pattern, _body, _modifiers) = extract_regex_parts("mα");
     assert_eq!(pattern, "mαm", "Unicode alphabetic failed - kills ! operator removal for unicode");
 }
 
@@ -297,7 +297,7 @@ fn test_kill_arithmetic_position_mutations() {
     );
 
     // Test case 4: Regex with multiple delimiter styles testing position arithmetic
-    let (pattern, modifiers) = extract_regex_parts("qr<test<inner>content>ims");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr<test<inner>content>ims");
     assert_eq!(
         pattern, "<test<inner>content>",
         "Nested angle brackets failed - kills position arithmetic mutations"
@@ -370,7 +370,7 @@ fn test_kill_comprehensive_mutation_combinations() {
                 description, input
             );
         } else if input.starts_with("qr") || input.starts_with("m") {
-            let (pattern, modifiers) = extract_regex_parts(input);
+            let (pattern, _body, modifiers) = extract_regex_parts(input);
             assert_eq!(pattern, expected_pattern, "Pattern failed for {}: {}", description, input);
             assert_eq!(
                 modifiers, expected_replacement,

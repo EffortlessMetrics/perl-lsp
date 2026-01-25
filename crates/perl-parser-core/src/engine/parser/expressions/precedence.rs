@@ -415,7 +415,7 @@ impl<'a> Parser<'a> {
                     // Special handling for match operators with substitution/transliteration
                     if matches!(op_token.kind, TokenKind::Match | TokenKind::NotMatch) {
                         // Check if right side is already a substitution or transliteration
-                        if let NodeKind::Substitution { pattern, replacement, modifiers, .. } =
+                        if let NodeKind::Substitution { pattern, replacement, modifiers, has_embedded_code, .. } =
                             &right.kind
                         {
                             // Update the expression in the substitution
@@ -425,6 +425,7 @@ impl<'a> Parser<'a> {
                                     pattern: pattern.clone(),
                                     replacement: replacement.clone(),
                                     modifiers: modifiers.clone(),
+                                    has_embedded_code: *has_embedded_code,
                                 },
                                 SourceLocation { start, end },
                             );
@@ -442,7 +443,7 @@ impl<'a> Parser<'a> {
                                 },
                                 SourceLocation { start, end },
                             );
-                        } else if let NodeKind::Regex { pattern, replacement, modifiers } =
+                        } else if let NodeKind::Regex { pattern, replacement, modifiers, has_embedded_code } =
                             &right.kind
                         {
                             if let Some(replacement) = replacement {
@@ -457,6 +458,7 @@ impl<'a> Parser<'a> {
                                         pattern: pat,
                                         replacement: replacement.clone(),
                                         modifiers: modifiers.clone(),
+                                        has_embedded_code: *has_embedded_code,
                                     },
                                     SourceLocation { start, end },
                                 );
@@ -466,6 +468,7 @@ impl<'a> Parser<'a> {
                                         expr: Box::new(expr),
                                         pattern: pattern.clone(),
                                         modifiers: modifiers.clone(),
+                                        has_embedded_code: *has_embedded_code,
                                     },
                                     SourceLocation { start, end },
                                 );

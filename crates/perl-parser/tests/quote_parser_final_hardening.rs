@@ -25,7 +25,7 @@ mod final_function_return_kills {
         ];
 
         for (input, (expected_pattern, expected_mods)) in cases {
-            let (actual_pattern, actual_mods) = extract_regex_parts(input);
+            let (actual_pattern, _body, actual_mods) = extract_regex_parts(input);
 
             // Explicit assertions to kill the mutation
             assert_ne!(actual_pattern, "", "Pattern should not be String::new() for '{}'", input);
@@ -45,7 +45,7 @@ mod final_function_return_kills {
         ];
 
         for (input, (expected_pattern, expected_mods)) in cases {
-            let (actual_pattern, actual_mods) = extract_regex_parts(input);
+            let (actual_pattern, _body, actual_mods) = extract_regex_parts(input);
 
             // Kill the specific mutation
             assert_ne!(actual_pattern, "xyzzy", "Pattern should not be 'xyzzy' for '{}'", input);
@@ -132,14 +132,14 @@ mod final_arithmetic_kills {
     fn test_kill_length_greater_than_to_greater_equal_mutation() {
         // Specific boundary case where > vs >= matters
         let boundary_input = "mx"; // len() = 2
-        let (pattern, _modifiers) = extract_regex_parts(boundary_input);
+        let (pattern, _body, _modifiers) = extract_regex_parts(boundary_input);
 
         // With > 1: len()=2 > 1 is true, so check alphabetic
         // With >= 1: len()=2 >= 1 is true, so check alphabetic (same result)
         // Need a different approach - test with len()=1
 
         let single_char = "m"; // len() = 1
-        let (pattern_single, _) = extract_regex_parts(single_char);
+        let (pattern_single, _body, _) = extract_regex_parts(single_char);
 
         // With > 1: len()=1 > 1 is false, should use text directly -> "mm"
         // With >= 1: len()=1 >= 1 is true, would try other logic
@@ -189,7 +189,7 @@ mod final_boolean_logic_kills {
         // Need case where one condition is false:
         // starts_with('m')=true, len()>1=false, !is_alphabetic()=N/A
         let single_m = "m";
-        let (pattern, _) = extract_regex_parts(single_m);
+        let (pattern, _body, _) = extract_regex_parts(single_m);
 
         // With &&: true && false = false, so use text directly
         // With ||: true || false = true, so would try [1..] and panic/error
@@ -197,7 +197,7 @@ mod final_boolean_logic_kills {
 
         // Case: starts_with('m')=true, len()>1=true, !is_alphabetic()=false
         let m_alpha = "ma";
-        let (pattern_alpha, _) = extract_regex_parts(m_alpha);
+        let (pattern_alpha, _body, _) = extract_regex_parts(m_alpha);
 
         // With &&: true && true && false = false, use text directly
         // With ||: true || true || false = true, would try [1..]
@@ -268,7 +268,7 @@ mod final_match_arm_kills {
         ];
 
         for (input, (expected_pattern, expected_mods)) in regex_cases {
-            let (actual_pattern, actual_mods) = extract_regex_parts(input);
+            let (actual_pattern, _body, actual_mods) = extract_regex_parts(input);
             assert_eq!(actual_pattern, expected_pattern, "Regex delimiter {} should work", input);
             assert_eq!(actual_mods, expected_mods, "Regex modifiers for {}", input);
         }
@@ -304,7 +304,7 @@ fn debug_actual_behavior() {
     let regex_cases = vec!["qr/test/i", "m/pattern/"];
 
     for input in regex_cases {
-        let (pattern, mods) = extract_regex_parts(input);
+        let (pattern, _body, mods) = extract_regex_parts(input);
         println!("{} -> pattern:'{}', mods:'{}'", input, pattern, mods);
     }
 }

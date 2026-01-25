@@ -222,28 +222,28 @@ fn test_kill_length_comparison_mutation_regex() {
     // Case 1: Length exactly 1 - should not strip 'm' prefix
     // Original: "m".len() > 1 = false (don't strip)
     // Mutated:  "m".len() < 1 = false (don't strip) - same result but test boundary
-    let (pattern, modifiers) = extract_regex_parts("m");
+    let (pattern, _body, modifiers) = extract_regex_parts("m");
     assert_eq!(pattern, "mm", "Single 'm' should not strip prefix - tests > vs < boundary");
     assert_eq!(modifiers, "", "Single 'm' modifiers - tests > vs < boundary");
 
     // Case 2: Length exactly 2 with alphabetic - should not strip 'm' prefix
     // Original: "ma".len() > 1 = true, but followed by alphabetic so don't strip
     // Mutated:  "ma".len() < 1 = false (wrong branch) - would affect logic
-    let (pattern, modifiers) = extract_regex_parts("ma");
+    let (pattern, _body, modifiers) = extract_regex_parts("ma");
     assert_eq!(pattern, "mam", "Two chars with alphabetic - kills > to < mutation");
     assert_eq!(modifiers, "", "Alphabetic after m - kills > to < mutation");
 
     // Case 3: Length exactly 2 with non-alphabetic - should strip 'm' prefix
     // Original: "m/".len() > 1 = true, not alphabetic so strip
     // Mutated:  "m/".len() < 1 = false (wrong branch) - would not strip
-    let (pattern, modifiers) = extract_regex_parts("m/test/");
+    let (pattern, _body, modifiers) = extract_regex_parts("m/test/");
     assert_eq!(pattern, "/test/", "Two chars with non-alphabetic - kills > to < mutation");
     assert_eq!(modifiers, "", "Non-alphabetic after m - kills > to < mutation");
 
     // Case 4: Empty string
     // Original: "".len() > 1 = false
     // Mutated:  "".len() < 1 = true (wrong result) - would affect empty string handling
-    let (pattern, modifiers) = extract_regex_parts("");
+    let (pattern, _body, modifiers) = extract_regex_parts("");
     assert_eq!(pattern, "", "Empty string handling - kills > to < mutation");
     assert_eq!(modifiers, "", "Empty string modifiers - kills > to < mutation");
 }
@@ -295,28 +295,28 @@ fn test_kill_logical_and_to_or_mutation_regex() {
     // Case 1: All conditions true - should strip 'm'
     // Original: true && true && true = true (strip 'm')
     // Mutated:  true || true || true = true (same result but need to verify correct behavior)
-    let (pattern, modifiers) = extract_regex_parts("m/test/");
+    let (pattern, _body, modifiers) = extract_regex_parts("m/test/");
     assert_eq!(pattern, "/test/", "All conditions true - kills && to || mutation");
     assert_eq!(modifiers, "", "All conditions true modifiers - kills && to || mutation");
 
     // Case 2: First condition false - should not strip
     // Original: false && ... = false (don't strip)
     // Mutated:  false || ... = depends on other conditions (could be different)
-    let (pattern, modifiers) = extract_regex_parts("x/test/");
+    let (pattern, _body, modifiers) = extract_regex_parts("x/test/");
     assert_eq!(pattern, "x/test/x", "First condition false - kills && to || mutation");
     assert_eq!(modifiers, "", "First condition false modifiers - kills && to || mutation");
 
     // Case 3: First two conditions true, third false - should not strip
     // Original: true && true && false = false (don't strip)
     // Mutated:  true || true || false = true (would strip incorrectly)
-    let (pattern, modifiers) = extract_regex_parts("ma");
+    let (pattern, _body, modifiers) = extract_regex_parts("ma");
     assert_eq!(pattern, "mam", "Third condition false - kills && to || mutation");
     assert_eq!(modifiers, "", "Third condition false modifiers - kills && to || mutation");
 
     // Case 4: First condition true, second false - should not strip
     // Original: true && false && ... = false (don't strip)
     // Mutated:  true || false || ... = depends on third condition
-    let (pattern, modifiers) = extract_regex_parts("m");
+    let (pattern, _body, modifiers) = extract_regex_parts("m");
     assert_eq!(pattern, "mm", "Second condition false - kills && to || mutation");
     assert_eq!(modifiers, "", "Second condition false modifiers - kills && to || mutation");
 
@@ -329,7 +329,7 @@ fn test_kill_logical_and_to_or_mutation_regex() {
     ];
 
     for (input, expected_pattern) in alphabetic_cases {
-        let (pattern, modifiers) = extract_regex_parts(input);
+        let (pattern, _body, modifiers) = extract_regex_parts(input);
         assert_eq!(
             pattern, expected_pattern,
             "Alphabetic test for {} - kills && to || mutation",
@@ -391,7 +391,7 @@ fn test_kill_return_value_hardcoded_mutations() {
     assert_eq!(modifiers, "gi", "Modifiers should match input");
 
     // Test extract_regex_parts return value mutations
-    let (pattern, modifiers) = extract_regex_parts("qr{regex}ig");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr{regex}ig");
     assert_ne!(
         pattern, "xyzzy",
         "Regex pattern should not be hardcoded xyzzy - kills return value mutation"

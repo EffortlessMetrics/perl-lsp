@@ -729,7 +729,7 @@ impl LspServer {
 
         fn find(node: &crate::ast::Node, name: &str) -> Option<String> {
             match &node.kind {
-                NodeKind::Use { module, args } => {
+                NodeKind::Use { module, args, .. } => {
                     for arg in args {
                         if arg == name {
                             return Some(module.clone());

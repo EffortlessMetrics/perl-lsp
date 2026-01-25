@@ -71,9 +71,15 @@ impl<'a> Parser<'a> {
 
             TokenKind::Regex => {
                 let token = self.tokens.next()?;
-                let (pattern, modifiers) = quote_parser::extract_regex_parts(&token.text);
+                let (pattern, body, modifiers) = quote_parser::extract_regex_parts(&token.text);
+
+                // Validate regex complexity and check for embedded code
+                let validator = crate::engine::regex_validator::RegexValidator::new();
+                validator.validate(&body, token.start)?;
+                let has_embedded_code = validator.detects_code_execution(&body);
+
                 Ok(Node::new(
-                    NodeKind::Regex { pattern, replacement: None, modifiers },
+                    NodeKind::Regex { pattern, replacement: None, modifiers, has_embedded_code },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -178,6 +184,11 @@ impl<'a> Parser<'a> {
                         },
                     )?;
 
+                // Validate regex complexity and check for embedded code
+                let validator = crate::engine::regex_validator::RegexValidator::new();
+                validator.validate(&pattern, token.start)?;
+                let has_embedded_code = validator.detects_code_execution(&pattern);
+
                 // Substitution as a standalone expression (will be used with =~ later)
                 Ok(Node::new(
                     NodeKind::Substitution {
@@ -188,6 +199,7 @@ impl<'a> Parser<'a> {
                         pattern,
                         replacement,
                         modifiers,
+                        has_embedded_code,
                     },
                     SourceLocation { start: token.start, end: token.end },
                 ))
@@ -220,7 +232,7 @@ impl<'a> Parser<'a> {
                 let end = start_token.end;
 
                 // Parse heredoc delimiter from the token text
-                let (delimiter, interpolated, indented) = parse_heredoc_delimiter(text);
+                let (delimiter, interpolated, indented, command) = parse_heredoc_delimiter(text);
 
                 // Map interpolation to QuoteKind (check original text for quote style)
                 let quote = map_heredoc_quote_kind(text, interpolated);
@@ -236,6 +248,7 @@ impl<'a> Parser<'a> {
                         content: String::new(), // Placeholder until drain_pending_heredocs
                         interpolated,
                         indented,
+                        command,
                         body_span: None, // Populated by drain_pending_heredocs
                     },
                     SourceLocation { start, end },

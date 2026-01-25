@@ -62,18 +62,18 @@ fn test_kill_arithmetic_boundary_mutations_position_tracking() {
 fn test_kill_boolean_logic_mutations_operator_precedence() {
     // Test line 12:9: text.len() > 1 && !text.chars().nth(1).unwrap().is_alphabetic()
     // && to || mutation would cause wrong behavior for 'm' followed by alphabetic chars
-    let (pattern, modifiers) = extract_regex_parts("ma");
+    let (pattern, _body, modifiers) = extract_regex_parts("ma");
     assert_eq!(
         pattern, "mam",
         "m followed by alphabetic 'a' - kills && to || mutation at line 12:9"
     );
     assert_eq!(modifiers, "", "No modifiers for 'ma'");
 
-    let (pattern, modifiers) = extract_regex_parts("mz");
+    let (pattern, _body, modifiers) = extract_regex_parts("mz");
     assert_eq!(pattern, "mzm", "m followed by alphabetic 'z' - ensures && logic preserved");
     assert_eq!(modifiers, "", "No modifiers for 'mz'");
 
-    let (pattern, modifiers) = extract_regex_parts("m/test/i");
+    let (pattern, _body, modifiers) = extract_regex_parts("m/test/i");
     assert_eq!(pattern, "/test/", "m followed by non-alphabetic '/' should extract properly");
     assert_eq!(modifiers, "i", "Modifiers preserved with non-alphabetic delimiter");
 
@@ -102,15 +102,15 @@ fn test_kill_boolean_logic_mutations_operator_precedence() {
 fn test_kill_function_return_value_mutations() {
     // Test line 9:5: extract_regex_parts return value mutations
     // Mutations: (String::new(), String::new()) vs ("xyzzy".into(), String::new())
-    let (pattern, modifiers) = extract_regex_parts("");
+    let (pattern, _body, modifiers) = extract_regex_parts("");
     assert_eq!(pattern, "", "Empty input should return empty pattern, not 'xyzzy'");
     assert_eq!(modifiers, "", "Empty input should return empty modifiers, not any string");
 
-    let (pattern, modifiers) = extract_regex_parts("qr");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr");
     assert_eq!(pattern, "", "qr without delimiter should return empty pattern, not 'xyzzy'");
     assert_eq!(modifiers, "", "qr without delimiter should return empty modifiers");
 
-    let (pattern, modifiers) = extract_regex_parts("qr/test/i");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr/test/i");
     assert_eq!(pattern, "/test/", "Valid regex should return proper pattern, not empty or 'xyzzy'");
     assert_eq!(modifiers, "i", "Valid regex should return proper modifiers, not empty or 'xyzzy'");
 
@@ -201,7 +201,7 @@ fn test_kill_delimiter_mapping_deletion_angle_brackets() {
     assert_eq!(replacement, "new", "Angle bracket closing delimiter mapping");
 
     // Test angle brackets in regex contexts
-    let (pattern, modifiers) = extract_regex_parts("qr<test.*>");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr<test.*>");
     assert_eq!(pattern, "<test.*>", "Angle bracket regex pattern - ensures '<' mapping preserved");
     assert_eq!(modifiers, "", "Angle bracket regex modifiers");
 
@@ -297,7 +297,7 @@ fn test_kill_complex_mutation_interactions() {
     assert_eq!(modifiers, "cd", "Valid transliteration modifiers");
 
     // Test regex with complex parsing
-    let (pattern, modifiers) = extract_regex_parts("qr{test\\{nested\\}end}gimsx");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr{test\\{nested\\}end}gimsx");
     assert_eq!(pattern, "{test\\{nested\\}end}", "Complex regex pattern with nested escapes");
     assert_eq!(modifiers, "gimsx", "Full modifier set");
 
@@ -314,7 +314,7 @@ fn test_kill_complex_mutation_interactions() {
 #[test]
 fn test_kill_mutations_comprehensive_edge_cases() {
     // Empty input edge cases (function return mutations)
-    let (pattern, modifiers) = extract_regex_parts("");
+    let (pattern, _body, modifiers) = extract_regex_parts("");
     assert_eq!((pattern, modifiers), ("".to_string(), "".to_string()), "Empty regex input");
 
     let (pattern, replacement, modifiers) = extract_substitution_parts("");
@@ -373,7 +373,7 @@ fn test_kill_mutations_comprehensive_edge_cases() {
 #[test]
 fn test_kill_mutations_invariant_properties() {
     // Property: All functions should handle empty input gracefully (return mutations)
-    assert_eq!(extract_regex_parts(""), ("".to_string(), "".to_string()));
+    assert_eq!(extract_regex_parts(""), ("".to_string(), "".to_string(), "".to_string()));
     assert_eq!(extract_substitution_parts(""), ("".to_string(), "".to_string(), "".to_string()));
     assert_eq!(extract_transliteration_parts(""), ("".to_string(), "".to_string(), "".to_string()));
 

@@ -906,6 +906,27 @@ impl<'a> PerlLexer<'a> {
                     }
                     delim
                 }
+                Some('`') if !backslashed => {
+                    // Backtick delimiter
+                    text.push('`');
+                    self.advance();
+                    let mut delim = String::new();
+                    while self.position < self.input.len() {
+                        if let Some(ch) = self.current_char() {
+                            if ch == '`' {
+                                text.push('`');
+                                self.advance();
+                                break;
+                            }
+                            delim.push(ch);
+                            text.push(ch);
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    delim
+                }
                 Some(c) if is_perl_identifier_start(c) => {
                     // Bare word delimiter
                     let mut delim = String::new();
@@ -924,9 +945,16 @@ impl<'a> PerlLexer<'a> {
                     }
                     delim
                 }
-                _ => return None,
+                _ => {
+                    // Not a valid heredoc delimiter - reset position and return None
+                    // This allows << to be parsed as bitshift operator (e.g., 1 << 2)
+                    self.position = start;
+                    return None;
+                }
             }
         } else {
+            // No delimiter found - reset position and return None
+            self.position = start;
             return None;
         };
 

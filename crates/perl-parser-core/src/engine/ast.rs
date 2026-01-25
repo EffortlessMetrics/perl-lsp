@@ -271,8 +271,10 @@ impl Node {
                 }
             }
 
-            NodeKind::Heredoc { delimiter, content, interpolated, indented, .. } => {
-                let type_str = if *indented {
+            NodeKind::Heredoc { delimiter, content, interpolated, indented, command, .. } => {
+                let type_str = if *command {
+                    "heredoc_command"
+                } else if *indented {
                     if *interpolated { "heredoc_indented_interpolated" } else { "heredoc_indented" }
                 } else if *interpolated {
                     "heredoc_interpolated"
@@ -569,21 +571,31 @@ impl Node {
                 format!("(indirect_call {} {} ({}))", method, object.to_sexp(), args_str)
             }
 
-            NodeKind::Regex { pattern, replacement, modifiers } => {
-                format!("(regex {:?} {:?} {:?})", pattern, replacement, modifiers)
+            NodeKind::Regex { pattern, replacement, modifiers, has_embedded_code } => {
+                let risk_marker = if *has_embedded_code { " (risk:code)" } else { "" };
+                format!("(regex {:?} {:?} {:?}{})", pattern, replacement, modifiers, risk_marker)
             }
 
-            NodeKind::Match { expr, pattern, modifiers } => {
-                format!("(match {} (regex {:?} {:?}))", expr.to_sexp(), pattern, modifiers)
-            }
-
-            NodeKind::Substitution { expr, pattern, replacement, modifiers } => {
+            NodeKind::Match { expr, pattern, modifiers, has_embedded_code } => {
+                let risk_marker = if *has_embedded_code { " (risk:code)" } else { "" };
                 format!(
-                    "(substitution {} {:?} {:?} {:?})",
+                    "(match {} (regex {:?} {:?}{}))",
+                    expr.to_sexp(),
+                    pattern,
+                    modifiers,
+                    risk_marker
+                )
+            }
+
+            NodeKind::Substitution { expr, pattern, replacement, modifiers, has_embedded_code } => {
+                let risk_marker = if *has_embedded_code { " (risk:code)" } else { "" };
+                format!(
+                    "(substitution {} {:?} {:?} {:?}{})",
                     expr.to_sexp(),
                     pattern,
                     replacement,
-                    modifiers
+                    modifiers,
+                    risk_marker
                 )
             }
 
@@ -605,21 +617,23 @@ impl Node {
                 }
             }
 
-            NodeKind::Use { module, args } => {
+            NodeKind::Use { module, args, has_filter_risk } => {
+                let risk_marker = if *has_filter_risk { " (risk:filter)" } else { "" };
                 if args.is_empty() {
-                    format!("(use {})", module)
+                    format!("(use {}{})", module, risk_marker)
                 } else {
                     let args_str = args.join(" ");
-                    format!("(use {} ({}))", module, args_str)
+                    format!("(use {} ({}){})", module, args_str, risk_marker)
                 }
             }
 
-            NodeKind::No { module, args } => {
+            NodeKind::No { module, args, has_filter_risk } => {
+                let risk_marker = if *has_filter_risk { " (risk:filter)" } else { "" };
                 if args.is_empty() {
-                    format!("(no {})", module)
+                    format!("(no {}{})", module, risk_marker)
                 } else {
                     let args_str = args.join(" ");
-                    format!("(no {} ({}))", module, args_str)
+                    format!("(no {} ({}){})", module, args_str, risk_marker)
                 }
             }
 
@@ -1312,6 +1326,8 @@ pub enum NodeKind {
         interpolated: bool,
         /// Whether leading whitespace is stripped (<<~ form)
         indented: bool,
+        /// Whether this is a command execution heredoc (<<`EOF`)
+        command: bool,
         /// Body span for breakpoint detection (populated by drain_pending_heredocs)
         body_span: Option<SourceLocation>,
     },
@@ -1570,6 +1586,8 @@ pub enum NodeKind {
         replacement: Option<String>,
         /// Regex modifiers (i, m, s, x, g, etc.)
         modifiers: String,
+        /// Whether the regex contains embedded code `(?{...})`
+        has_embedded_code: bool,
     },
 
     /// Match operation: `$str =~ /pattern/modifiers`
@@ -1580,6 +1598,8 @@ pub enum NodeKind {
         pattern: String,
         /// Match modifiers
         modifiers: String,
+        /// Whether the regex contains embedded code `(?{...})`
+        has_embedded_code: bool,
     },
 
     /// Substitution operation: `$str =~ s/pattern/replacement/modifiers`
@@ -1592,6 +1612,8 @@ pub enum NodeKind {
         replacement: String,
         /// Substitution modifiers (g, e, r, etc.)
         modifiers: String,
+        /// Whether the regex contains embedded code `(?{...})`
+        has_embedded_code: bool,
     },
 
     /// Transliteration operation: `$str =~ tr/search/replace/` or `y///`
@@ -1640,6 +1662,8 @@ pub enum NodeKind {
         module: String,
         /// Import arguments (symbols to import)
         args: Vec<String>,
+        /// Whether this module is a known source filter (security risk)
+        has_filter_risk: bool,
     },
 
     /// No statement for disabling features: `no strict;`
@@ -1648,6 +1672,8 @@ pub enum NodeKind {
         module: String,
         /// Arguments for the no statement
         args: Vec<String>,
+        /// Whether this module is a known source filter (security risk)
+        has_filter_risk: bool,
     },
 
     /// Phase block for compile/runtime hooks: `BEGIN`, `END`, `CHECK`, `INIT`, `UNITCHECK`

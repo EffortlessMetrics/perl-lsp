@@ -32,18 +32,27 @@ impl<'a> Parser<'a> {
 
         // Collect content until closing delimiter
         let mut content = String::new();
-        let mut depth = 1;
-
+        
         // For regex operators (m, s), we need to preserve the exact pattern
         let preserve_exact_content = matches!(op, "m" | "s" | "qr");
 
-        while depth > 0 && !self.tokens.is_eof() {
-            // Check token kind first
-            let token_kind = self.peek_kind();
+        // Stack-based matching for balanced delimiters
+        // For non-balanced, we just look for the closing delimiter
+        if matches!(delim_char, '{' | '[' | '(' | '<') {
+            let mut depth = 1;
+            let max_depth = 50; // Limit nesting depth to prevent timeouts
+            
+            while depth > 0 && !self.tokens.is_eof() {
+                let token_kind = self.peek_kind();
+                
+                // Check if we hit recursion limit
+                if depth > max_depth {
+                    return Err(ParseError::syntax(
+                        format!("Quote delimiter nesting too deep (exceeded {})", max_depth), 
+                        self.current_position()
+                    ));
+                }
 
-            // Check for matching delimiter tokens
-            if matches!(delim_char, '{' | '[' | '(' | '<') {
-                // Handle bracket-based delimiters
                 match (delim_char, token_kind) {
                     ('{', Some(TokenKind::LeftBrace)) => {
                         self.consume_token()?;
@@ -102,8 +111,11 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
-            } else {
-                // For non-bracket delimiters, just look for the closing delimiter
+            }
+        } else {
+            // For non-balanced delimiters, just scan for the closing char
+            // This avoids recursion entirely
+            while !self.tokens.is_eof() {
                 let token = self.consume_token()?;
                 if token.text.contains(close_delim) {
                     let pos = token.text.find(close_delim).ok_or_else(|| {
@@ -180,28 +192,17 @@ impl<'a> Parser<'a> {
             }
             "qr" => {
                 // Regular expression
-                let mut modifiers = String::new();
-                while let Ok(token) = self.tokens.peek() {
-                    if token.kind == TokenKind::Identifier && token.text.len() == 1 {
-                        let ch = token.text.chars().next().ok_or_else(|| {
-                            ParseError::syntax("Empty identifier token", token.start)
-                        })?;
-                        if ch.is_ascii_alphabetic() {
-                            modifiers.push(ch);
-                            self.tokens.next()?;
-                        } else {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                end = self.previous_position();
+                // Validate regex complexity and check for embedded code
+                let validator = crate::engine::regex_validator::RegexValidator::new();
+                validator.validate(&content, start)?;
+                let has_embedded_code = validator.detects_code_execution(&content);
+
                 Ok(Node::new(
                     NodeKind::Regex {
                         pattern: format!("{}{}{}", opening_delim, content, closing_delim),
                         replacement: None,
                         modifiers,
+                        has_embedded_code,
                     },
                     SourceLocation { start, end },
                 ))
@@ -215,6 +216,11 @@ impl<'a> Parser<'a> {
             }
             "m" => {
                 // Match operator with pattern
+                // Validate regex complexity and check for embedded code
+                let validator = crate::engine::regex_validator::RegexValidator::new();
+                validator.validate(&content, start)?;
+                let has_embedded_code = validator.detects_code_execution(&content);
+
                 let mut modifiers = String::new();
                 while let Ok(token) = self.tokens.peek() {
                     if token.kind == TokenKind::Identifier && token.text.len() == 1 {
@@ -237,6 +243,7 @@ impl<'a> Parser<'a> {
                         pattern: format!("{}{}{}", opening_delim, content, closing_delim),
                         replacement: None,
                         modifiers,
+                        has_embedded_code,
                     },
                     SourceLocation { start, end },
                 ))

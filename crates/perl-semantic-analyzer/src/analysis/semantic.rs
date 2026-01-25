@@ -693,7 +693,7 @@ impl SemanticAnalyzer {
                 });
             }
 
-            NodeKind::Regex { .. } | NodeKind::Match { .. } => {
+            NodeKind::Regex { .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::Regex,
@@ -701,20 +701,19 @@ impl SemanticAnalyzer {
                 });
             }
 
-            NodeKind::Substitution { expr, pattern: _, replacement: _, modifiers: _ } => {
-                // Handle substitution operator: $text =~ s/pattern/replacement/modifiers
-                // Add token for the operator itself
+            NodeKind::Match { expr, .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
-                    token_type: SemanticTokenType::Operator,
+                    token_type: SemanticTokenType::Regex,
                     modifiers: vec![],
                 });
-
-                // Analyze the expression being operated on (usually a variable)
                 self.analyze_node(expr, scope_id);
-
-                // Note: pattern and replacement are strings, not AST nodes,
-                // so we don't need to walk them for variables
+            }
+            NodeKind::Substitution { expr, .. } => {
+                self.analyze_node(expr, scope_id);
+            }
+            NodeKind::Transliteration { expr, .. } => {
+                self.analyze_node(expr, scope_id);
             }
 
             NodeKind::LabeledStatement { label: _, statement } => {
@@ -989,7 +988,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Use { module, args } => {
+            NodeKind::Use { module, args, .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: SourceLocation {
                         start: node.location.start,
@@ -1012,7 +1011,7 @@ impl SemanticAnalyzer {
                 self.analyze_string_args(node, args, args_start);
             }
 
-            NodeKind::No { module, args } => {
+            NodeKind::No { module, args, .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: SourceLocation {
                         start: node.location.start,

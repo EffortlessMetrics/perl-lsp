@@ -1009,7 +1009,7 @@ impl LspServer {
                 }
             }
 
-            NodeKind::Use { module, args: _ } => {
+            NodeKind::Use { module, .. } => {
                 if symbol_kind == "package" && module == symbol_name {
                     count += 1;
                 }

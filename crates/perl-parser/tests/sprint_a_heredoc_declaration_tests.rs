@@ -58,10 +58,9 @@ EOF
     let sexp = parse_to_sexp(input);
 
     // Verify heredoc declaration is present in AST
-    // TODO: Once heredoc parsing is implemented, validate specific AST structure
     assert!(
-        sexp.contains("EOF") || !sexp.is_empty(),
-        "Expected heredoc declaration to be recognized, got: {}",
+        sexp.contains("(heredoc_interpolated \"EOF\" \"content here\")"),
+        "Expected heredoc declaration with label EOF and content, got: {}",
         sexp
     );
 }
@@ -76,10 +75,17 @@ fn test_heredoc_decl_bare_label_alphanumeric() {
         vec!["<<END_OF_DATA", "<<EOF123", "<<SQL_QUERY", "<<HTML_CONTENT", "<<DATA_2024"];
 
     for label_decl in test_cases {
-        let input = format!("my $x = {};\ncontent\n{}\n", label_decl, &label_decl[2..]);
+        let label = &label_decl[2..];
+        let input = format!("my $x = {};\ncontent\n{}\n", label_decl, label);
         parse_and_verify_success(&input, "test_heredoc_decl_bare_label_alphanumeric");
 
-        // TODO: Validate AST contains correct heredoc label identifier
+        let sexp = parse_to_sexp(&input);
+        assert!(
+            sexp.contains(&format!("(heredoc_interpolated \"{}\"", label)),
+            "AST should contain heredoc label {}: {}",
+            label,
+            sexp
+        );
     }
 }
 
@@ -100,10 +106,10 @@ EOF
     parse_and_verify_success(input, "test_heredoc_decl_double_quoted_label");
     let sexp = parse_to_sexp(input);
 
-    // TODO: Validate AST indicates interpolation is enabled for this heredoc
+    // Validate AST indicates interpolation is enabled for this heredoc
     assert!(
-        sexp.contains("EOF") || !sexp.is_empty(),
-        "Expected double-quoted heredoc declaration, got: {}",
+        sexp.contains("(heredoc_interpolated \"EOF\""),
+        "Expected double-quoted heredoc to have interpolated flag, got: {}",
         sexp
     );
 }
@@ -121,7 +127,17 @@ LINE
 "#;
     parse_and_verify_success(input, "test_heredoc_decl_double_quoted_label_with_escapes");
 
-    // TODO: Validate that escaped characters in label are correctly parsed
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"END\\nLINE\" \"content here\\nEND\\nLINE\")"),
+        "Expected label with newline and content, got: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("(UNKNOWN_REST)"),
+        "Should contain UNKNOWN_REST due to escape handling: {}",
+        sexp
+    );
 }
 
 // ============================================================================
@@ -141,10 +157,10 @@ EOF
     parse_and_verify_success(input, "test_heredoc_decl_single_quoted_label");
     let sexp = parse_to_sexp(input);
 
-    // TODO: Validate AST indicates interpolation is disabled for this heredoc
+    // Validate AST indicates interpolation is disabled for this heredoc
     assert!(
-        sexp.contains("EOF") || !sexp.is_empty(),
-        "Expected single-quoted heredoc declaration, got: {}",
+        sexp.contains("(heredoc \"EOF\""),
+        "Expected single-quoted heredoc to NOT have interpolated flag in name, got: {}",
         sexp
     );
 }
@@ -181,10 +197,10 @@ EOF
     parse_and_verify_success(input, "test_heredoc_decl_backtick_label");
     let sexp = parse_to_sexp(input);
 
-    // TODO: Validate AST indicates command execution for this heredoc
+    // Validate AST indicates command execution for this heredoc
     assert!(
-        sexp.contains("EOF") || !sexp.is_empty(),
-        "Expected backtick heredoc declaration, got: {}",
+        sexp.contains("(heredoc_command \"EOF\""),
+        "Expected backtick heredoc to have command flag, got: {}",
         sexp
     );
 }
@@ -201,7 +217,12 @@ CMD
 "#;
     parse_and_verify_success(input, "test_heredoc_decl_backtick_label_with_vars");
 
-    // TODO: Validate interpolation is enabled for backtick heredocs
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains("(heredoc_command \"CMD\""),
+        "Backtick heredoc should have command flag: {}",
+        sexp
+    );
 }
 
 // ============================================================================
@@ -220,7 +241,15 @@ END	TAB
 "#;
     parse_and_verify_success(input, "test_heredoc_decl_label_with_escapes");
 
-    // TODO: Validate that tab escape sequence is correctly processed
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains(
+            "(heredoc_interpolated \"END\\tTAB\" \"content with tab in label\\nEND\\tTAB\")"
+        ),
+        "Expected label with tab and content, got: {}",
+        sexp
+    );
+    assert!(sexp.contains("(UNKNOWN_REST)"), "Should contain UNKNOWN_REST: {}", sexp);
 }
 
 /// Tests feature spec: Sprint A Issue #183 - backslash escapes in labels
@@ -235,7 +264,13 @@ END\SLASH
 "#;
     parse_and_verify_success(input, "test_heredoc_decl_label_backslash_escapes");
 
-    // TODO: Validate backslash escape processing in label
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"END\\\\SLASH\" \"content here\")"),
+        "Expected label with backslash and content, got: {}",
+        sexp
+    );
+    assert!(sexp.contains("(UNKNOWN_REST)"), "Should contain UNKNOWN_REST: {}", sexp);
 }
 
 // ============================================================================
@@ -251,7 +286,12 @@ fn test_heredoc_decl_crlf_line_endings() {
     let input = "my $x = <<EOF;\r\ncontent line 1\r\ncontent line 2\r\nEOF\r\n";
     parse_and_verify_success(input, "test_heredoc_decl_crlf_line_endings");
 
-    // TODO: Validate that CRLF line endings are correctly recognized
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"EOF\" \"content line 1\\ncontent line 2\")"),
+        "CRLF heredoc content mismatch: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - mixed line endings
@@ -263,7 +303,12 @@ fn test_heredoc_decl_mixed_line_endings() {
     let input = "my $x = <<EOF;\ncontent with LF\r\nEOF\r\n";
     parse_and_verify_success(input, "test_heredoc_decl_mixed_line_endings");
 
-    // TODO: Validate mixed line ending handling
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"EOF\" \"content with LF\")"),
+        "Mixed line ending content mismatch: {}",
+        sexp
+    );
 }
 
 // ============================================================================
@@ -284,9 +329,13 @@ EOF
     parse_and_verify_success(input, "test_heredoc_decl_exact_terminator_not_contains");
     let sexp = parse_to_sexp(input);
 
-    // TODO: Validate that "contains EOF" line is treated as body content,
+    // Validate that "contains EOF" line is treated as body content,
     // not as terminator
-    assert!(!sexp.is_empty(), "Expected heredoc with embedded label in body, got: {}", sexp);
+    assert!(
+        sexp.contains("This line contains EOF but is not the terminator"),
+        "Embedded label should be in content: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - terminator with leading whitespace
@@ -301,8 +350,13 @@ content
 "#;
     parse_and_verify_success(input, "test_heredoc_decl_terminator_whitespace_invalid");
 
-    // TODO: Validate that "  EOF" is NOT recognized as terminator
-    // (heredoc should remain open or produce error)
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"EOF\" \"content\")")
+            && sexp.contains("(UNKNOWN_REST)"),
+        "Leading whitespace label should trigger UNKNOWN_REST if not terminated: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - case-sensitive terminator matching
@@ -316,7 +370,12 @@ EOF
 "#;
     parse_and_verify_success(input, "test_heredoc_decl_terminator_case_sensitive");
 
-    // TODO: Validate that lowercase 'eof' is not recognized as terminator
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains("eof should not terminate"),
+        "Case-different label should be part of content: {}",
+        sexp
+    );
 }
 
 // ============================================================================
@@ -358,16 +417,13 @@ fn test_heredoc_decl_empty_label() {
     let mut parser = Parser::new(input);
     let result = parser.parse();
 
-    // TODO: Validate behavior for empty heredoc label
-    // Perl allows this with empty string terminator
-    match result {
-        Ok(_) => {
-            // Parser may accept empty label
-        }
-        Err(_) => {
-            // Parser may reject empty label
-        }
-    }
+    assert!(result.is_ok(), "Empty label (<<;) should be accepted");
+    let sexp = result.unwrap().to_sexp();
+    assert!(
+        sexp.contains("(heredoc_interpolated \"\" \"content\")"),
+        "Empty label missing in AST: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - malformed label with invalid chars
@@ -384,16 +440,7 @@ EOF WITH SPACES
     let mut parser = Parser::new(input);
     let result = parser.parse();
 
-    // TODO: Validate that invalid characters in label are detected
-    // Perl allows spaces in quoted labels
-    match result {
-        Ok(_) => {
-            // Parser may accept spaces in quoted labels
-        }
-        Err(_) => {
-            // Parser may have stricter validation
-        }
-    }
+    assert!(result.is_ok(), "Quoted label with spaces should be accepted");
 }
 
 // ============================================================================
@@ -415,11 +462,16 @@ SECOND
     parse_and_verify_success(input, "test_heredoc_decl_multiple_on_single_line");
     let sexp = parse_to_sexp(input);
 
-    // TODO: Validate that both heredoc declarations are recognized
+    // Validate that both heredoc declarations are recognized
     // and bodies are associated correctly in FIFO order
     assert!(
-        sexp.contains("FIRST") || sexp.contains("SECOND") || !sexp.is_empty(),
-        "Expected multiple heredoc declarations, got: {}",
+        sexp.contains("(heredoc_interpolated \"FIRST\" \"body of first\")"),
+        "Missing first heredoc: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("(heredoc_interpolated \"SECOND\" \"body of second\")"),
+        "Missing second heredoc: {}",
         sexp
     );
 }
@@ -440,8 +492,22 @@ LITERAL
 "#;
     parse_and_verify_success(input, "test_heredoc_decl_multiple_mixed_styles");
 
-    // TODO: Validate that different quoting styles are correctly recognized
-    // for each heredoc declaration
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"EOF\" \"unquoted body\")"),
+        "Missing EOF heredoc: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("(heredoc_interpolated \"QUOTED\" \"quoted body\")"),
+        "Missing QUOTED heredoc: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("(heredoc \"LITERAL\" \"literal body\")"),
+        "Missing LITERAL heredoc: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - nested heredoc declarations
@@ -458,7 +524,17 @@ B
 "#;
     parse_and_verify_success(input, "test_heredoc_decl_nested_in_expression");
 
-    // TODO: Validate heredoc declarations within function call arguments
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"A\" \"first content\")"),
+        "Missing A heredoc: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("(heredoc_interpolated \"B\" \"second content\")"),
+        "Missing B heredoc: {}",
+        sexp
+    );
 }
 
 // ============================================================================
@@ -478,7 +554,14 @@ fn test_heredoc_decl_indented_style() {
 "#;
     parse_and_verify_success(input, "test_heredoc_decl_indented_style");
 
-    // TODO: Validate that <<~ is recognized as indented heredoc declaration
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains(
+            "(heredoc_indented_interpolated \"EOF\" \"  indented content\\n  more indented\")"
+        ),
+        "Indented heredoc mismatch: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - heredoc in assignment chain
@@ -495,7 +578,17 @@ B
 "#;
     parse_and_verify_success(input, "test_heredoc_decl_in_assignment_chain");
 
-    // TODO: Validate heredoc declarations in list assignment context
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"A\" \"first value\")"),
+        "Missing A in list: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("(heredoc_interpolated \"B\" \"second value\")"),
+        "Missing B in list: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - heredoc with empty body
@@ -509,7 +602,8 @@ EOF
 "#;
     parse_and_verify_success(input, "test_heredoc_decl_empty_body");
 
-    // TODO: Validate that empty heredoc body is correctly handled
+    let sexp = parse_to_sexp(input);
+    assert!(sexp.contains("(heredoc_interpolated \"EOF\" \"\")"), "Empty body mismatch: {}", sexp);
 }
 
 /// Tests feature spec: Sprint A Issue #183 - heredoc label max length
@@ -522,7 +616,12 @@ fn test_heredoc_decl_long_label() {
     let input = format!("my $x = <<{};\ncontent\n{}\n", long_label, long_label);
     parse_and_verify_success(&input, "test_heredoc_decl_long_label");
 
-    // TODO: Validate that long labels are handled efficiently
+    let sexp = parse_to_sexp(&input);
+    assert!(
+        sexp.contains(&format!("(heredoc_interpolated \"{}\"", long_label)),
+        "Long label missing: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - unicode in heredoc labels
@@ -537,5 +636,10 @@ content here
 "#;
     parse_and_verify_success(input, "test_heredoc_decl_unicode_label");
 
-    // TODO: Validate Unicode label support with proper UTF-8 handling
+    let sexp = parse_to_sexp(input);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"データ\""),
+        "Unicode label missing or incorrect: {}",
+        sexp
+    );
 }

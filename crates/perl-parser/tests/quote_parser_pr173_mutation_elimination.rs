@@ -110,7 +110,7 @@ fn test_kill_bracket_delimiter_matcharm_deletion() {
     assert_eq!(modifiers, "g", "Bracket modifiers");
 
     // Test bracket delimiters in regex
-    let (pattern, modifiers) = extract_regex_parts("qr[test]i");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr[test]i");
     assert_eq!(pattern, "[test]", "Regex bracket pattern - kills bracket match arm deletion");
     assert_eq!(modifiers, "i", "Regex bracket modifiers");
 
@@ -144,7 +144,7 @@ fn test_kill_brace_delimiter_matcharm_deletion() {
     assert_eq!(modifiers, "gi", "Brace modifiers");
 
     // Test brace delimiters in regex
-    let (pattern, modifiers) = extract_regex_parts("qr{test.*}i");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr{test.*}i");
     assert_eq!(pattern, "{test.*}", "Regex brace pattern - kills brace match arm deletion");
     assert_eq!(modifiers, "i", "Regex brace modifiers");
 
@@ -179,18 +179,18 @@ fn test_kill_boolean_logic_and_to_or_mutations() {
     // Mutated:  text.starts_with('m') || text.len() > 1 && !alphabetic
 
     // Test case where text.starts_with('m') is true but other conditions matter
-    let result = extract_regex_parts("ma"); // starts with 'm', len > 1, but 'a' is alphabetic
+    let (pattern, _body, modifiers) = extract_regex_parts("ma"); // starts with 'm', len > 1, but 'a' is alphabetic
     assert_eq!(
-        result,
-        ("mam".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("mam", ""),
         "Alphabetic after 'm' should be handled correctly - kills && to || mutation in regex"
     );
 
     // Test case where text.starts_with('m') is false (gets doubled based on actual behavior)
-    let result = extract_regex_parts("xa");
+    let (pattern, _body, modifiers) = extract_regex_parts("xa");
     assert_eq!(
-        result,
-        ("xax".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("xax", ""),
         "Non-m prefix should be handled as bare regex - validates && logic (gets doubled)"
     );
 
@@ -220,18 +220,18 @@ fn test_kill_boolean_logic_edge_cases() {
     // Additional edge cases to ensure boolean logic mutations are caught
 
     // Test boundary case for regex with single character
-    let result = extract_regex_parts("m");
+    let (pattern, _body, modifiers) = extract_regex_parts("m");
     assert_eq!(
-        result,
-        ("mm".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("mm", ""),
         "Single 'm' character - kills length/alphabetic boolean logic mutations"
     );
 
     // Test regex with exactly 2 characters, alphabetic second
-    let result = extract_regex_parts("mz");
+    let (pattern, _body, modifiers) = extract_regex_parts("mz");
     assert_eq!(
-        result,
-        ("mzm".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("mzm", ""),
         "Two char with alphabetic - validates complex boolean logic"
     );
 
@@ -359,7 +359,7 @@ fn test_kill_function_return_value_mutations() {
     // Mutant #23: line 9:5 - with (String::new(), String::new())
 
     // Test regex return values against hardcoded mutations
-    let (pattern, modifiers) = extract_regex_parts("qr/test/i");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr/test/i");
     assert_ne!(
         pattern, "xyzzy",
         "Pattern should not be 'xyzzy' - kills hardcoded pattern mutations"
@@ -374,7 +374,7 @@ fn test_kill_function_return_value_mutations() {
     assert_eq!(modifiers, "i", "Modifiers should be 'i' - kills empty and hardcoded mutations");
 
     // Test empty input case to verify it doesn't match hardcoded returns
-    let (pattern, modifiers) = extract_regex_parts("");
+    let (pattern, _body, modifiers) = extract_regex_parts("");
     assert_eq!(
         pattern, "",
         "Empty pattern for empty input - validates against non-empty hardcoded"
@@ -414,7 +414,7 @@ fn test_kill_function_return_mutations_comprehensive() {
                 input
             );
         } else if input.starts_with("qr") || input.starts_with("m") || input.starts_with("/") {
-            let (pattern, modifiers) = extract_regex_parts(input);
+            let (pattern, _body, modifiers) = extract_regex_parts(input);
             assert_ne!(pattern, "xyzzy", "Pattern never 'xyzzy' for input: {}", input);
             assert_ne!(modifiers, "xyzzy", "Modifiers never 'xyzzy' for input: {}", input);
             assert_eq!(
@@ -437,18 +437,18 @@ fn test_kill_operator_mutations() {
     // This affects whether content after 'm' is treated as a delimiter
 
     // Test with alphabetic character after 'm' (should be treated specially)
-    let result = extract_regex_parts("ma");
+    let (pattern, _body, modifiers) = extract_regex_parts("ma");
     assert_eq!(
-        result,
-        ("mam".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("mam", ""),
         "Alphabetic after 'm' - kills ! deletion mutation"
     );
 
     // Test with non-alphabetic character after 'm' (normal delimiter)
-    let result = extract_regex_parts("m/test/");
+    let (pattern, _body, modifiers) = extract_regex_parts("m/test/");
     assert_eq!(
-        result,
-        ("/test/".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("/test/", ""),
         "Non-alphabetic after 'm' - validates ! operator importance"
     );
 
@@ -471,18 +471,26 @@ fn test_kill_operator_mutations() {
     // This affects length checking for 'm' prefix handling
 
     // Test with exactly length 1 (boundary case)
-    let result = extract_regex_parts("m");
-    assert_eq!(result, ("mm".to_string(), "".to_string()), "Single 'm' - kills > to == mutation");
+    let (pattern, _body, modifiers) = extract_regex_parts("m");
+    assert_eq!(
+        (pattern.as_str(), modifiers.as_str()),
+        ("mm", ""),
+        "Single 'm' - kills > to == mutation"
+    );
 
     // Test with length > 1
-    let result = extract_regex_parts("m/");
-    assert_eq!(result, ("//".to_string(), "".to_string()), "Length > 1 - validates > comparison");
+    let (pattern, _body, modifiers) = extract_regex_parts("m/");
+    assert_eq!(
+        (pattern.as_str(), modifiers.as_str()),
+        ("//", ""),
+        "Length > 1 - validates > comparison"
+    );
 
     // Test with length exactly 2 (edge case for > vs ==)
-    let result = extract_regex_parts("m#");
+    let (pattern, _body, modifiers) = extract_regex_parts("m#");
     assert_eq!(
-        result,
-        ("##".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("##", ""),
         "Length exactly 2 - kills > to == boundary mutation"
     );
 }
@@ -492,33 +500,33 @@ fn test_kill_operator_mutations_edge_cases() {
     // Additional edge cases for operator mutations
 
     // Test boundary case for length comparison
-    let result = extract_regex_parts("");
+    let (pattern, _body, modifiers) = extract_regex_parts("");
     assert_eq!(
-        result,
-        ("".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("", ""),
         "Empty string - validates length > comparison edge case"
     );
 
     // Test single character non-m input (gets doubled based on actual behavior)
-    let result = extract_regex_parts("x");
+    let (pattern, _body, modifiers) = extract_regex_parts("x");
     assert_eq!(
-        result,
-        ("xx".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("xx", ""),
         "Single non-m char - validates operator logic (gets doubled)"
     );
 
     // Test alphabetic detection with edge characters
-    let result = extract_regex_parts("mA"); // uppercase alphabetic
+    let (pattern, _body, modifiers) = extract_regex_parts("mA"); // uppercase alphabetic
     assert_eq!(
-        result,
-        ("mAm".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("mAm", ""),
         "Uppercase alphabetic - kills ! operator mutation"
     );
 
-    let result = extract_regex_parts("mz"); // lowercase alphabetic
+    let (pattern, _body, modifiers) = extract_regex_parts("mz"); // lowercase alphabetic
     assert_eq!(
-        result,
-        ("mzm".to_string(), "".to_string()),
+        (pattern.as_str(), modifiers.as_str()),
+        ("mzm", ""),
         "Lowercase alphabetic - validates ! operator importance"
     );
 
@@ -558,7 +566,7 @@ fn test_comprehensive_mutation_elimination_integration() {
     assert_eq!(modifiers, "cd", "Valid transliteration modifiers - kills multiple mutation types");
 
     // Regex with length boundary and alphabetic detection
-    let (pattern, modifiers) = extract_regex_parts("qr<test\\<regex\\>>imsxg");
+    let (pattern, _body, modifiers) = extract_regex_parts("qr<test\\<regex\\>>imsxg");
     assert_eq!(
         pattern, "<test\\<regex\\>>",
         "Angle bracket regex - integrates operator and delimiter mutations"
