@@ -943,6 +943,19 @@ impl ScopeAnalyzer {
 
 /// Check if a variable is a built-in Perl global variable
 fn is_builtin_global(sigil: &str, name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+
+    // Fast path: most user variables are lowercase.
+    // Builtins are almost always uppercase, punctuation, or digits.
+    // Exceptions: $a, $b
+    let first = name.as_bytes()[0];
+    if first.is_ascii_lowercase() {
+        // Only 'a' and 'b' are built-in globals among lowercase starting names
+        return name == "a" || name == "b";
+    }
+
     match (sigil, name) {
         // Special variables
         ("$", "_") | ("@", "_") | ("%", "_") | ("$", "!") | ("$", "@") | ("$", "?") | ("$", "^")

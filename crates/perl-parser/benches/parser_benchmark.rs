@@ -4,7 +4,7 @@
 //! architecture and enables comparison with other implementations.
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use perl_parser::Parser;
+use perl_parser::{Parser, ScopeAnalyzer, PragmaState};
 use std::hint::black_box;
 
 const SIMPLE_SCRIPT: &str = r#"
@@ -136,11 +136,25 @@ fn benchmark_isolated_components(c: &mut Criterion) {
     // This would require exposing more internals, so we skip for now
 }
 
+fn benchmark_scope_analysis(c: &mut Criterion) {
+    c.bench_function("scope_analysis", |b| {
+        let mut parser = Parser::new(COMPLEX_SCRIPT);
+        let ast = parser.parse().unwrap();
+        let analyzer = ScopeAnalyzer::new();
+        let pragma_map: Vec<(std::ops::Range<usize>, PragmaState)> = vec![];
+
+        b.iter(|| {
+            let _ = analyzer.analyze(black_box(&ast), black_box(COMPLEX_SCRIPT), black_box(&pragma_map));
+        });
+    });
+}
+
 criterion_group!(
     benches,
     benchmark_simple_parsing,
     benchmark_complex_parsing,
     benchmark_ast_generation,
-    benchmark_isolated_components
+    benchmark_isolated_components,
+    benchmark_scope_analysis
 );
 criterion_main!(benches);
