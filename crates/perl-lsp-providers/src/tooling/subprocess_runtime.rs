@@ -156,7 +156,7 @@ impl SubprocessRuntime for OsSubprocessRuntime {
 /// This implementation allows tests to define expected command invocations
 /// and their responses without actually executing subprocesses.
 #[cfg(test)]
-#[allow(clippy::expect_used)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 pub mod mock {
     use super::*;
     use std::sync::{Arc, Mutex};

@@ -1,5 +1,4 @@
 #[allow(dead_code)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 #[allow(unused_imports)] // Used by macros
 use proptest::prelude::*;
 use std::collections::HashSet;

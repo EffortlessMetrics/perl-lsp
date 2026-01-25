@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 /// Behavioral tests for LSP functionality
 /// These tests verify actual functionality, not just response shapes
 /// They ensure the wired infrastructure produces real results

@@ -436,6 +436,7 @@ pub fn find_by_flag<'a>(sections: &'a [Section], flag: &str) -> Vec<&'a Section>
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use std::fs;

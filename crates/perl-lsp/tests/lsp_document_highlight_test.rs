@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Real tests for Document Highlight feature
 //! Tests that the LSP server correctly highlights all occurrences of a symbol
 

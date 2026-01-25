@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::process::{Command, Stdio};

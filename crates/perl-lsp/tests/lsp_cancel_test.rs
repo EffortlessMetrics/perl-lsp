@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Tests for $/cancelRequest notification
 //! Phase 1 Stabilization: Deterministic cancellation tests with stable harness
 

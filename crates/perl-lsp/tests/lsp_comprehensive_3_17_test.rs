@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive LSP 3.17 API Contract Tests
 //!
 //! This test suite validates full compliance with the Language Server Protocol 3.17 specification.

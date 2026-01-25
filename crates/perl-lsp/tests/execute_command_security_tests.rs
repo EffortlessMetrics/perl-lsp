@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Security regression tests for executeCommand.
 //!
 //! These tests verify that command injection vulnerabilities in run_test_sub,

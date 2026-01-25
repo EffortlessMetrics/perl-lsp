@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive slash ambiguity tests for division vs regex disambiguation
 //!
 //! Tests feature spec: ROADMAP.md#known-gaps-hang-bounds-risks

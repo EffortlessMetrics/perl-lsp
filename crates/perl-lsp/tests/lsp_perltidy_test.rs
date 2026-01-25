@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 #![cfg(test)]
 
 use perl_lsp::{JsonRpcRequest, LspServer};

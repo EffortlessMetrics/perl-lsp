@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Binary version regression test
 //!
 //! This test ensures that the LSP server binary being tested matches the

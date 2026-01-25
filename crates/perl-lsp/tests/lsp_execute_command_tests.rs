@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Tests for LSP execute command functionality
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;

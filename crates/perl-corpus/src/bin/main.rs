@@ -1,4 +1,5 @@
 #![allow(clippy::pedantic)] // Binary tool - focus on core clippy lints only
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Workspace Resolution Regression Tests
 //!
 //! Validates the deterministic module resolution precedence order:

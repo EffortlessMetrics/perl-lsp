@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use perl_lsp::features::completion::{CompletionItemKind, CompletionProvider};
 use perl_parser::Parser;
 use serial_test::serial;

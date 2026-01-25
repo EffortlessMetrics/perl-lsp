@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! LSP Color Detection Tests
 //!
 //! Tests for textDocument/documentColor and textDocument/colorPresentation

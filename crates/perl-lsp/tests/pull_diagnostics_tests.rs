@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use lsp_types::DocumentDiagnosticReport;
 use perl_lsp::features::diagnostics::PullDiagnosticsProvider;
 

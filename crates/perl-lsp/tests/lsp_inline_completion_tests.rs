@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Tests for LSP inline completion support
 
 use perl_lsp::{JsonRpcRequest, LspServer};

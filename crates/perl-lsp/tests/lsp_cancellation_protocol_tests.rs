@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive test suite for LSP Cancellation Protocol Compliance
 //! Tests AC1-AC5: Enhanced $/cancelRequest processing with provider integration
 //!

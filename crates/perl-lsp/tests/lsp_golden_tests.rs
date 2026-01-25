@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Golden fixture tests for LSP functionality
 //!
 //! These tests use fixture files to ensure consistent behavior across releases

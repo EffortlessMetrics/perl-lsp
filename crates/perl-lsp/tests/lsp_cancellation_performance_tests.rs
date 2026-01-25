@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive LSP Cancellation Performance Validation Test Suite
 //! Tests AC12: Quantitative performance requirements for enhanced cancellation system
 //!

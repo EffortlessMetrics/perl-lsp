@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Property-based tests for `qw/.../` expressions
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]

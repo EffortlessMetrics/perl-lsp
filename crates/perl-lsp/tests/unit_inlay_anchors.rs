@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Unit tests for inlay hint anchor logic (public LSP surface only).
 //! We assert that specific labels (e.g., `FILEHANDLE:`/`ARRAY:`/`hash`)
 //! are placed exactly at the token we expect.

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! LSP Virtual Content Tests
 //!
 //! Tests for workspace/textDocumentContent LSP 3.18 feature

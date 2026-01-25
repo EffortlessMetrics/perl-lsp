@@ -2995,6 +2995,7 @@ impl Checkpointable for PerlLexer<'_> {
 mod test_format_debug;
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 

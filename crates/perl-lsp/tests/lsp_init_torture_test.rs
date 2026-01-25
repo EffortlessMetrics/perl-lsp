@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Init Torture Test
 //!
 //! This test rapidly cycles through LSP initialization sequences to detect

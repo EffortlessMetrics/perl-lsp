@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Missing LSP User Stories - High Priority Tests
 //!
 //! This file contains tests for critical user stories that are not yet covered

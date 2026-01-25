@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Public API mutation hardening tests for executeCommand implementation (PR #170)
 //!
 //! This test suite targets the 29 surviving mutants from mutation testing through the public API

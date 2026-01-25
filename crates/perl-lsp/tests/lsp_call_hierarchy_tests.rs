@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive LSP integration tests for Call Hierarchy feature
 //!
 //! Tests feature spec: LSP_IMPLEMENTATION_GUIDE.md#call-hierarchy

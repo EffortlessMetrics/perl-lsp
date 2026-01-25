@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Window & Progress API Contract Tests for LSP 3.17
 //!
 //! Tests window notifications, progress reporting, and work done progress per LSP 3.17 spec.

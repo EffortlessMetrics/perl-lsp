@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! End-to-end tests for LSP user stories
 //!
 //! Each test represents a complete user story, simulating real-world usage patterns
