@@ -271,9 +271,22 @@ impl Node {
                 }
             }
 
-            NodeKind::Heredoc { delimiter, content, interpolated, indented, .. } => {
-                let type_str = if *indented {
-                    if *interpolated { "heredoc_indented_interpolated" } else { "heredoc_indented" }
+            NodeKind::Heredoc {
+                delimiter,
+                content,
+                interpolated,
+                indented,
+                command,
+                ..
+            } => {
+                let type_str = if *command {
+                    "heredoc_command"
+                } else if *indented {
+                    if *interpolated {
+                        "heredoc_indented_interpolated"
+                    } else {
+                        "heredoc_indented"
+                    }
                 } else if *interpolated {
                     "heredoc_interpolated"
                 } else {
@@ -1318,6 +1331,8 @@ pub enum NodeKind {
         interpolated: bool,
         /// Whether leading whitespace is stripped (<<~ form)
         indented: bool,
+        /// Whether this is a command execution heredoc (<<`EOF`)
+        command: bool,
         /// Body span for breakpoint detection (populated by drain_pending_heredocs)
         body_span: Option<SourceLocation>,
     },

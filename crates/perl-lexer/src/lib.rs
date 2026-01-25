@@ -906,6 +906,27 @@ impl<'a> PerlLexer<'a> {
                     }
                     delim
                 }
+                Some('`') if !backslashed => {
+                    // Backtick delimiter
+                    text.push('`');
+                    self.advance();
+                    let mut delim = String::new();
+                    while self.position < self.input.len() {
+                        if let Some(ch) = self.current_char() {
+                            if ch == '`' {
+                                text.push('`');
+                                self.advance();
+                                break;
+                            }
+                            delim.push(ch);
+                            text.push(ch);
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    delim
+                }
                 Some(c) if is_perl_identifier_start(c) => {
                     // Bare word delimiter
                     let mut delim = String::new();
@@ -924,10 +945,13 @@ impl<'a> PerlLexer<'a> {
                     }
                     delim
                 }
-                _ => return None,
+                _ => {
+                    // Empty label (e.g. <<;)
+                    String::new()
+                }
             }
         } else {
-            return None;
+            String::new()
         };
 
         // For now, return a placeholder token

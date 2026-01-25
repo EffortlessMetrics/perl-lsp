@@ -17,8 +17,8 @@ fn after_line_break(src: &[u8], mut off: usize) -> usize {
     off
 }
 
-/// Parse heredoc delimiter from a string like "<<EOF", "<<'EOF'", "<<~EOF"
-fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool) {
+/// Parse heredoc delimiter from a string like "<<EOF", "<<'EOF'", "<<~EOF", "<<`EOF`"
+fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool, bool) {
     let mut chars = s.chars();
 
     // Skip <<
@@ -35,20 +35,28 @@ fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool) {
 
     let rest = chars.as_str().trim();
 
-    // Check quoting to determine interpolation
-    let (delimiter, interpolated) =
+    // Check for empty label (<<; or <<\n)
+    if rest.is_empty() || rest.starts_with(';') {
+        return ("", true, indented, false);
+    }
+
+    // Check quoting to determine interpolation and command execution
+    let (delimiter, interpolated, command) =
         if rest.starts_with('"') && rest.ends_with('"') && rest.len() >= 2 {
             // Double-quoted: interpolated
-            (&rest[1..rest.len() - 1], true)
+            (&rest[1..rest.len() - 1], true, false)
         } else if rest.starts_with('\'') && rest.ends_with('\'') && rest.len() >= 2 {
             // Single-quoted: not interpolated
-            (&rest[1..rest.len() - 1], false)
+            (&rest[1..rest.len() - 1], false, false)
+        } else if rest.starts_with('`') && rest.ends_with('`') && rest.len() >= 2 {
+            // Backtick: interpolated, command execution
+            (&rest[1..rest.len() - 1], true, true)
         } else {
             // Bare word: interpolated
-            (rest, true)
+            (rest, true, false)
         };
 
-    (delimiter, interpolated, indented)
+    (delimiter, interpolated, indented, command)
 }
 
 /// Map heredoc delimiter text to collector QuoteKind (Sprint A Day 4)
@@ -60,6 +68,8 @@ fn map_heredoc_quote_kind(text: &str, _interpolated: bool) -> heredoc_collector:
         heredoc_collector::QuoteKind::Single
     } else if rest.starts_with('"') && rest.ends_with('"') {
         heredoc_collector::QuoteKind::Double
+    } else if rest.starts_with('`') && rest.ends_with('`') {
+        heredoc_collector::QuoteKind::Backtick
     } else {
         // Bare word (unquoted)
         heredoc_collector::QuoteKind::Unquoted

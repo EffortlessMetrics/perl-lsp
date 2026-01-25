@@ -236,7 +236,7 @@ impl<'a> Parser<'a> {
                 let end = start_token.end;
 
                 // Parse heredoc delimiter from the token text
-                let (delimiter, interpolated, indented) = parse_heredoc_delimiter(text);
+                let (delimiter, interpolated, indented, command) = parse_heredoc_delimiter(text);
 
                 // Map interpolation to QuoteKind (check original text for quote style)
                 let quote = map_heredoc_quote_kind(text, interpolated);
@@ -252,6 +252,7 @@ impl<'a> Parser<'a> {
                         content: String::new(), // Placeholder until drain_pending_heredocs
                         interpolated,
                         indented,
+                        command,
                         body_span: None, // Populated by drain_pending_heredocs
                     },
                     SourceLocation { start, end },

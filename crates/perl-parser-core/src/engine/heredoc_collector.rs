@@ -19,6 +19,8 @@ pub enum QuoteKind {
     Single,
     /// Double-quoted (e.g., `<<"EOF"`), interpolates variables and escapes.
     Double,
+    /// Backtick (e.g., `<<`EOF``), command execution.
+    Backtick,
 }
 
 /// Declaration info captured at parse time.
