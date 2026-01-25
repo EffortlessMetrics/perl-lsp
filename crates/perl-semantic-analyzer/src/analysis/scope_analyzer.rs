@@ -145,10 +145,7 @@ impl Scope {
 
         // Now insert the variable
         let mut vars = self.variables.borrow_mut();
-        if vars[idx].is_none() {
-            vars[idx] = Some(FxHashMap::default());
-        }
-        let inner = vars[idx].as_mut().unwrap();
+        let inner = vars[idx].get_or_insert_with(FxHashMap::default);
 
         let full_name = format!("{}{}", sigil, name);
         inner.insert(
