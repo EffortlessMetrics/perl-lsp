@@ -80,8 +80,8 @@ next_statement = { "next" ~ label? ~ semicolon? }
 redo_statement = { "redo" ~ label? ~ semicolon? }
 continue_statement = { "continue" ~ semicolon? }
 
-tie_statement = { "tie" ~ variable ~ "," ~ expression ~ ("," ~ expression)* ~ semicolon? }
-untie_statement = { "untie" ~ variable ~ semicolon? }
+tie_statement = { "tie" ~ expression ~ "," ~ expression ~ ("," ~ expression)* ~ semicolon? }
+untie_statement = { "untie" ~ expression ~ semicolon? }
 tied_statement = { "tied" ~ "(" ~ variable ~ ")" ~ semicolon? }
 
 labeled_block = { label ~ "{" ~ statements? ~ "}" }
@@ -410,7 +410,8 @@ increment = { "++" }
 decrement = { "--" }
 
 primary_expression = {
-    class_method_call
+    variable_declaration
+    | class_method_call
     | user_function_call
     | qualified_name_or_identifier
     | literal
@@ -866,7 +867,7 @@ heredoc_escaped = { "\\" ~ bare_heredoc_delimiter }
 bare_heredoc_delimiter = @{ (ASCII_ALPHANUMERIC | "_")+ }
 
 glob = { "<" ~ glob_pattern ~ ">" }
-glob_pattern = @{ (!">'" ~ ANY)* }
+glob_pattern = @{ (!">" ~ ANY)* }
 
 readline = { "<" ~ filehandle? ~ ">" }
 

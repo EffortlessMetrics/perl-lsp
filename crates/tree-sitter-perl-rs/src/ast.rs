@@ -144,6 +144,20 @@ impl Node {
                 )
             }
 
+            NodeKind::Tie { variable, package, args } => {
+                let arg_list = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
+                format!(
+                    "(tie {} (package {}) (args {}))",
+                    variable.to_sexp(),
+                    package.to_sexp(),
+                    arg_list
+                )
+            }
+
+            NodeKind::Untie { variable } => {
+                format!("(untie {})", variable.to_sexp())
+            }
+
             NodeKind::Assignment { left, op, right } => {
                 let op_str = match op {
                     TokenType::Equal => "=",
@@ -407,6 +421,16 @@ pub enum NodeKind {
         variable: Box<Node>,
         list: Box<Node>,
         body: Box<Node>,
+    },
+
+    Tie {
+        variable: Box<Node>,
+        package: Box<Node>,
+        args: Vec<Node>,
+    },
+
+    Untie {
+        variable: Box<Node>,
     },
 
     // Expressions

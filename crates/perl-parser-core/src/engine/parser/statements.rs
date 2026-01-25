@@ -236,7 +236,7 @@ impl<'a> Parser<'a> {
         if let Ok(token) = self.tokens.peek() {
             match token.text.as_ref() {
                 "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" | "open"
-                | "tie" | "printf" | "close" | "pipe" | "sysopen" | "sysread" | "syswrite"
+                | "printf" | "close" | "pipe" | "sysopen" | "sysread" | "syswrite"
                 | "truncate" | "fcntl" | "ioctl" | "flock" | "seek" | "tell" | "select"
                 | "binmode" | "exec" | "system" | "bless" | "ref" | "defined" | "undef"
                 | "keys" | "values" | "each" | "delete" | "exists" | "push" | "pop" | "shift"
@@ -282,11 +282,10 @@ impl<'a> Parser<'a> {
                             let mut args = vec![];
 
                             // Parse first argument
-                            // Special handling for open/pipe/socket/tie which can take my $var as first arg
+                            // Special handling for open/pipe/socket which can take my $var as first arg
                             if (func_name == "open"
                                 || func_name == "pipe"
-                                || func_name == "socket"
-                                || func_name == "tie")
+                                || func_name == "socket")
                                 && self.peek_kind() == Some(TokenKind::My)
                             {
                                 args.push(self.parse_variable_declaration()?);
@@ -298,48 +297,56 @@ impl<'a> Parser<'a> {
                             } else {
                                 // For builtins, don't parse word operators as part of arguments
                                 // Word operators should be handled at statement level
-                                args.push(self.parse_assignment()?);
+                                args.push(self.parse_expression()?);
                             }
 
                             // Parse remaining arguments
-                            // For map/grep/sort, parse list arguments without requiring commas
-                            if matches!(func_name.as_str(), "map" | "grep" | "sort") {
-                                // Parse list arguments until statement boundary
-                                while !Self::is_statement_terminator(self.peek_kind())
-                                    && !self.is_statement_modifier_keyword()
-                                {
-                                    // Skip optional comma
-                                    if self.peek_kind() == Some(TokenKind::Comma) {
-                                        self.consume_token()?;
-                                    }
-                                    args.push(self.parse_assignment()?);
-                                }
-                            } else {
-                                // For other functions, require commas between arguments
-                                while self.peek_kind() == Some(TokenKind::Comma) {
-                                    self.consume_token()?; // consume comma
-
-                                    // Check if we hit a statement modifier
-                                    match self.peek_kind() {
-                                        Some(TokenKind::If)
-                                        | Some(TokenKind::Unless)
-                                        | Some(TokenKind::While)
-                                        | Some(TokenKind::Until)
-                                        | Some(TokenKind::For)
-                                        | Some(TokenKind::Foreach) => break,
-                                        _ => args.push(self.parse_assignment()?),
-                                    }
-                                }
+                            while self.peek_kind() == Some(TokenKind::Comma) {
+                                self.consume_token()?; // consume ,
+                                args.push(self.parse_expression()?);
                             }
 
-                            let end = args.last().map(|a| a.location.end).unwrap_or(start);
-
+                            let end = self.previous_position();
                             Ok(Node::new(
                                 NodeKind::FunctionCall { name: func_name, args },
                                 SourceLocation { start, end },
                             ))
                         }
                     }
+                }
+                "tie" => {
+                    let start = token.start;
+                    self.consume_token()?; // consume tie
+                    self.mark_not_stmt_start();
+
+                    let variable = Box::new(self.parse_expression()?);
+                    self.expect(TokenKind::Comma)?;
+                    let package = Box::new(self.parse_expression()?);
+
+                    let mut args = vec![];
+                    while self.peek_kind() == Some(TokenKind::Comma) {
+                        self.consume_token()?; // consume ,
+                        args.push(self.parse_expression()?);
+                    }
+
+                    let end = self.previous_position();
+                    Ok(Node::new(
+                        NodeKind::Tie { variable, package, args },
+                        SourceLocation { start, end },
+                    ))
+                }
+                "untie" => {
+                    let start = token.start;
+                    self.consume_token()?; // consume untie
+                    self.mark_not_stmt_start();
+
+                    let variable = Box::new(self.parse_expression()?);
+
+                    let end = self.previous_position();
+                    Ok(Node::new(
+                        NodeKind::Untie { variable },
+                        SourceLocation { start, end },
+                    ))
                 }
                 "new" => {
                     // Check for indirect constructor syntax

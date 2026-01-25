@@ -349,13 +349,23 @@ impl Node {
             }
 
             NodeKind::While { condition, body, continue_block } => {
-                let mut result = format!("(while {} {})", condition.to_sexp(), body.to_sexp());
+                let mut s = format!("(while {} {})", self.node_to_sexp(condition), self.node_to_sexp(body));
                 if let Some(cont) = continue_block {
-                    result.push_str(&format!(" (continue {})", cont.to_sexp()));
+                    s.push_str(&format!(" (continue {})", self.node_to_sexp(cont)));
                 }
-                result
+                s
             }
-
+            NodeKind::Tie { variable, package, args } => {
+                let mut s = format!("(tie {} {}", self.node_to_sexp(variable), self.node_to_sexp(package));
+                for arg in args {
+                    s.push_str(&format!(" {}", self.node_to_sexp(arg)));
+                }
+                s.push(')');
+                s
+            }
+            NodeKind::Untie { variable } => {
+                format!("(untie {})", self.node_to_sexp(variable))
+            }
             NodeKind::For { init, condition, update, body, continue_block } => {
                 let init_str =
                     init.as_ref().map(|i| i.to_sexp()).unwrap_or_else(|| "()".to_string());
@@ -1404,6 +1414,22 @@ pub enum NodeKind {
         continue_block: Option<Box<Node>>,
     },
 
+    /// Tie operation for binding variables to objects: `tie %hash, 'Package', @args`
+    Tie {
+        /// Variable being tied
+        variable: Box<Node>,
+        /// Class/package name to tie to
+        package: Box<Node>,
+        /// Arguments passed to TIE* method
+        args: Vec<Node>,
+    },
+
+    /// Untie operation for unbinding variables: `untie %hash`
+    Untie {
+        /// Variable being untied
+        variable: Box<Node>,
+    },
+
     /// C-style for loop: `for (init; cond; update) { ... }`
     For {
         /// Initialization expression
@@ -1726,6 +1752,83 @@ pub enum NodeKind {
     ///
     /// Used when recursion or token limits are hit to preserve already-parsed content.
     UnknownRest,
+}
+
+impl NodeKind {
+    /// Get the name of this NodeKind as a static string
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            NodeKind::Program { .. } => "Program",
+            NodeKind::VariableDeclaration { .. } => "VariableDeclaration",
+            NodeKind::VariableListDeclaration { .. } => "VariableListDeclaration",
+            NodeKind::Variable { .. } => "Variable",
+            NodeKind::VariableWithAttributes { .. } => "VariableWithAttributes",
+            NodeKind::Assignment { .. } => "Assignment",
+            NodeKind::Binary { .. } => "Binary",
+            NodeKind::Ternary { .. } => "Ternary",
+            NodeKind::Unary { .. } => "Unary",
+            NodeKind::Diamond => "Diamond",
+            NodeKind::Ellipsis => "Ellipsis",
+            NodeKind::Undef => "Undef",
+            NodeKind::Readline { .. } => "Readline",
+            NodeKind::Glob { .. } => "Glob",
+            NodeKind::Number { .. } => "Number",
+            NodeKind::String { .. } => "String",
+            NodeKind::Heredoc { .. } => "Heredoc",
+            NodeKind::ArrayLiteral { .. } => "ArrayLiteral",
+            NodeKind::HashLiteral { .. } => "HashLiteral",
+            NodeKind::Block { .. } => "Block",
+            NodeKind::Eval { .. } => "Eval",
+            NodeKind::Do { .. } => "Do",
+            NodeKind::Try { .. } => "Try",
+            NodeKind::If { .. } => "If",
+            NodeKind::LabeledStatement { .. } => "LabeledStatement",
+            NodeKind::While { .. } => "While",
+            NodeKind::Tie { .. } => "Tie",
+            NodeKind::Untie { .. } => "Untie",
+            NodeKind::For { .. } => "For",
+            NodeKind::Foreach { .. } => "Foreach",
+            NodeKind::Given { .. } => "Given",
+            NodeKind::When { .. } => "When",
+            NodeKind::Default { .. } => "Default",
+            NodeKind::StatementModifier { .. } => "StatementModifier",
+            NodeKind::Subroutine { .. } => "Subroutine",
+            NodeKind::Prototype { .. } => "Prototype",
+            NodeKind::Signature { .. } => "Signature",
+            NodeKind::MandatoryParameter { .. } => "MandatoryParameter",
+            NodeKind::OptionalParameter { .. } => "OptionalParameter",
+            NodeKind::SlurpyParameter { .. } => "SlurpyParameter",
+            NodeKind::NamedParameter { .. } => "NamedParameter",
+            NodeKind::Method { .. } => "Method",
+            NodeKind::Return { .. } => "Return",
+            NodeKind::MethodCall { .. } => "MethodCall",
+            NodeKind::FunctionCall { .. } => "FunctionCall",
+            NodeKind::IndirectCall { .. } => "IndirectCall",
+            NodeKind::Regex { .. } => "Regex",
+            NodeKind::Match { .. } => "Match",
+            NodeKind::Substitution { .. } => "Substitution",
+            NodeKind::Transliteration { .. } => "Transliteration",
+            NodeKind::Package { .. } => "Package",
+            NodeKind::Use { .. } => "Use",
+            NodeKind::No { .. } => "No",
+            NodeKind::PhaseBlock { .. } => "PhaseBlock",
+            NodeKind::DataSection { .. } => "DataSection",
+            NodeKind::Class { .. } => "Class",
+            NodeKind::Format { .. } => "Format",
+            NodeKind::Identifier { .. } => "Identifier",
+            NodeKind::Error { .. } => "Error",
+            NodeKind::UnknownRest => "UnknownRest",
+        }
+    }
+}
+
+/// Represents a single node in the Abstract Syntax Tree (AST).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Node {
+    /// The specific type of Perl construct this node represents
+    pub kind: NodeKind,
+    /// The location of this node in the source code
+    pub location: SourceLocation,
 }
 
 /// Format unary operator for S-expression output
