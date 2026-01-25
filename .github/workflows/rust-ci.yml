@@ -15,7 +15,8 @@ jobs:
   test:
     name: Rust Tests
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
+
     steps:
     - uses: actions/checkout@v4
     
@@ -61,7 +62,8 @@ jobs:
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 15
+
     steps:
     - uses: actions/checkout@v4
     
@@ -79,7 +81,8 @@ jobs:
   security:
     name: Security Audit
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 15
+
     steps:
     - uses: actions/checkout@v4
     
@@ -92,6 +95,7 @@ jobs:
   build-matrix:
     name: Build Matrix
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -119,8 +123,9 @@ jobs:
   performance:
     name: Performance Check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+
     steps:
     - uses: actions/checkout@v4
     
@@ -136,7 +141,8 @@ jobs:
   documentation:
     name: Documentation
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 15
+
     steps:
     - uses: actions/checkout@v4
     
@@ -152,9 +158,10 @@ jobs:
   publish:
     name: Publish to crates.io
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.ref, 'refs/tags/')
     needs: [test, lint, security, documentation]
-    
+
     steps:
     - uses: actions/checkout@v4
     

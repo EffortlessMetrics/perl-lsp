@@ -16,6 +16,7 @@ env:
 
 jobs:
   test:
+    timeout-minutes: 45
     if: |
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'ci:tests')
@@ -202,6 +203,7 @@ jobs:
       continue-on-error: true
 
   clippy:
+    timeout-minutes: 20
     if: |
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'ci:tests')
@@ -237,6 +239,7 @@ jobs:
       continue-on-error: true  # Don't fail on warnings yet
 
   format:
+    timeout-minutes: 10
     if: |
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'ci:tests')

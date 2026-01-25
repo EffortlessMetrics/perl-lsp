@@ -30,6 +30,7 @@ env:
 jobs:
   benchmark:
     name: Performance Benchmarks
+    timeout-minutes: 45
     if: |
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
@@ -123,6 +124,7 @@ jobs:
 
   parser-benchmarks:
     name: Parser Benchmarks
+    timeout-minutes: 30
     if: |
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
@@ -161,6 +163,7 @@ jobs:
 
   lexer-benchmarks:
     name: Lexer Benchmarks
+    timeout-minutes: 30
     if: |
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
@@ -199,6 +202,7 @@ jobs:
 
   lsp-benchmarks:
     name: LSP Benchmarks
+    timeout-minutes: 30
     if: |
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
@@ -237,6 +241,7 @@ jobs:
 
   index-benchmarks:
     name: Workspace Index Benchmarks
+    timeout-minutes: 30
     if: |
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
@@ -275,6 +280,7 @@ jobs:
 
   memory-profile:
     name: Memory Usage Profile
+    timeout-minutes: 30
     if: |
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
@@ -354,6 +360,7 @@ jobs:
 
   summary:
     name: Benchmark Summary
+    timeout-minutes: 10
     needs: [benchmark, parser-benchmarks, lexer-benchmarks, lsp-benchmarks, index-benchmarks]
     if: always()
     runs-on: ubuntu-latest
