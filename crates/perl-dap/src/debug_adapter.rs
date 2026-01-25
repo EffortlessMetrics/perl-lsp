@@ -37,6 +37,7 @@ static STACK_FRAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static VARIABLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static ERROR_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static DANGEROUS_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static REGEX_MUTATION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 
 fn context_re() -> Option<&'static Regex> {
     CONTEXT_RE
@@ -90,6 +91,7 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
             //   - Tie/untie: can execute arbitrary code via FETCH/STORE
             //   - Network: socket, connect, bind, listen, accept, send, recv, shutdown
             //   - IPC: msg*, sem*, shm*
+            // Note: s/tr/y regex mutation operators handled separately via regex_mutation_re()
             let ops = [
                 // State mutation
                 "push", "pop", "shift", "unshift", "splice", "delete", "undef", "srand",
@@ -114,6 +116,28 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
         })
         .as_ref()
         .ok()
+}
+
+/// Regex to match mutating regex operators (s///, tr///, y///)
+/// Matches s, tr, y followed by a delimiter character
+fn regex_mutation_re() -> Option<&'static Regex> {
+    REGEX_MUTATION_RE
+        .get_or_init(|| {
+            // Match s, tr, y followed by a delimiter character (not alphanumeric/underscore/whitespace)
+            // Common delimiters: / # | ! { [ ( ' "
+            // Note: We filter out escape sequences like \s manually after matching
+            Regex::new(r"\b(?:s|tr|y)[^\w\s]")
+        })
+        .as_ref()
+        .ok()
+}
+
+/// Check if the match is an escape sequence (preceded by backslash)
+fn is_escape_sequence(s: &str, match_start: usize) -> bool {
+    if match_start == 0 {
+        return false;
+    }
+    s.as_bytes()[match_start - 1] == b'\\'
 }
 
 /// DAP server that handles debug sessions
@@ -1764,6 +1788,27 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
         }
     }
 
+    // Check for regex mutation operators (s///, tr///, y///)
+    // Handled separately to avoid false positives with escape sequences like \s in /\s+/
+    if let Some(re) = regex_mutation_re() {
+        if let Some(mat) = re.find(expression) {
+            let op = mat.as_str();
+            let start = mat.start();
+
+            // Allow sigil-prefixed identifiers ($s, $tr, $y)
+            if is_sigil_prefixed_identifier(expression, start) {
+                // It's a variable, allow it
+            } else if is_escape_sequence(expression, start) {
+                // It's an escape sequence like \s or \y, allow it
+            } else {
+                return Some(format!(
+                    "Safe evaluation mode: regex mutation operator '{}' not allowed (use allowSideEffects: true)",
+                    op.trim()
+                ));
+            }
+        }
+    }
+
     // Check for increment/decrement operators
     if expression.contains("++") || expression.contains("--") {
         return Some(
@@ -2257,6 +2302,45 @@ mod tests {
         for expr in blocked {
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_mutating_regex_ops() {
+        let blocked = [
+            "$x =~ s/a/b/",
+            "s/a/b/",
+            "$x =~ tr/a/b/",
+            "tr/a/b/",
+            "y/a/b/",
+            "$x =~ y/a/b/", // Bound y/// form
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_allows_regex_literals_with_escape_sequences() {
+        // These should NOT be blocked - they're regex patterns or identifiers, not mutations
+        // Note: Patterns using =~ are blocked by the assignment check (pre-existing behavior)
+        // so we test patterns without =~ here
+        let allowed = [
+            r#"/\s+/"#,            // \s in regex literal (no binding operator)
+            r#"/string/"#,         // match containing 's'
+            r#"/tricky/"#,         // match containing 'tr'
+            r#"/yay/"#,            // match containing 'y'
+            r#"$s"#,               // variable named $s
+            r#"$tr"#,              // variable named $tr
+            r#"$y"#,               // variable named $y
+            r#"qr/\s+/"#,          // compiled regex with \s
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "unexpected block for {expr:?}: {err:?}");
         }
     }
 
