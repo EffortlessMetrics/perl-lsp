@@ -31,7 +31,7 @@ fn fuzz_extract_regex_parts_stress_test() {
 
         prop_assert!(result.is_ok(), "extract_regex_parts panicked on input: {:?}", input);
 
-        if let Ok((pattern, modifiers)) = result {
+        if let Ok((pattern, _body, modifiers)) = result {
             // AST invariant: results should be valid UTF-8 strings
             prop_assert!(
                 pattern.is_ascii() || std::str::from_utf8(pattern.as_bytes()).is_ok(),
@@ -289,7 +289,7 @@ fn fuzz_quote_parser_extreme_stress() {
         // Test extract_regex_parts
         let result = std::panic::catch_unwind(|| extract_regex_parts(&input));
         prop_assert!(result.is_ok(), "extract_regex_parts panicked on extreme input: {:?}", input);
-        if let Ok((output1, output2)) = result {
+        if let Ok((output1, output2, output3)) = result {
             prop_assert!(
                 output1.len() <= input.len() * 10,
                 "extract_regex_parts produced oversized output: length {} vs input length {}",
@@ -300,6 +300,12 @@ fn fuzz_quote_parser_extreme_stress() {
                 output2.len() <= input.len() * 10,
                 "extract_regex_parts produced oversized output: length {} vs input length {}",
                 output2.len(),
+                input.len()
+            );
+            prop_assert!(
+                output3.len() <= input.len() * 10,
+                "extract_regex_parts produced oversized output: length {} vs input length {}",
+                output3.len(),
                 input.len()
             );
         }

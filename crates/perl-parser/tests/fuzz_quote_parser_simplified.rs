@@ -16,7 +16,7 @@ proptest! {
     ) {
         // Core invariant: function should never panic
         // Let proptest handle panics naturally for better shrinking
-        let (pattern, modifiers) = extract_regex_parts(&input);
+        let (pattern, _body, modifiers) = extract_regex_parts(&input);
         {
             // Memory safety: outputs shouldn't be unreasonably large
             prop_assert!(pattern.len() <= input.len() * 5,

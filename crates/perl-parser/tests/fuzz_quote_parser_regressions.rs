@@ -23,7 +23,7 @@ fn test_regex_parts_delimiter_edge_cases() {
     ];
 
     for (input, expected) in test_cases {
-        let (pattern, modifiers) = extract_regex_parts(input);
+        let (pattern, _body, modifiers) = extract_regex_parts(input);
         assert_eq!(
             (pattern.as_str(), modifiers.as_str()),
             expected,

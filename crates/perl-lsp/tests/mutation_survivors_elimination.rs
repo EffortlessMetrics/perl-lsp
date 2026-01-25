@@ -81,7 +81,7 @@ mod utf8_boundary_arithmetic {
         ];
 
         for (input, (expected_pattern, expected_mods)) in regex_boundary_cases {
-            let (pattern, modifiers) = extract_regex_parts(input);
+            let (pattern, _, modifiers) = extract_regex_parts(input);
             assert_eq!(
                 pattern, expected_pattern,
                 "Length boundary check failed for pattern '{}'",
@@ -542,7 +542,7 @@ mod property_based_mutation_tests {
 
         for input in test_inputs {
             // Test all quote parser functions
-            let (regex_pattern, regex_mods) = extract_regex_parts(input);
+            let (regex_pattern, _, regex_mods) = extract_regex_parts(input);
             let (sub_pattern, sub_replacement, sub_mods) = extract_substitution_parts(input);
             let (tr_search, tr_replace, tr_mods) = extract_transliteration_parts(input);
 

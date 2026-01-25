@@ -35,6 +35,7 @@ mod moniker_export_import_tests {
             NodeKind::Use {
                 module: module.to_string(),
                 args: args.iter().map(|s| s.to_string()).collect(),
+                has_filter_risk: false,
             },
             SourceLocation { start: 0, end: 0 },
         )
@@ -173,7 +174,7 @@ package MyModule;
 
             if let NodeKind::Program { statements } = &program.kind {
                 assert_eq!(statements.len(), 1, "Expected 1 statement for {}", module_name);
-                if let NodeKind::Use { module, args } = &statements[0].kind {
+                if let NodeKind::Use { module, args, .. } = &statements[0].kind {
                     assert_eq!(module, module_name, "Module name mismatch");
                     assert_eq!(args.len(), 1, "Expected 1 arg for {}", module_name);
                     assert!(
@@ -198,7 +199,7 @@ package MyModule;
         let program = create_program_with_uses(vec![use_node]);
 
         if let NodeKind::Program { statements } = &program.kind
-            && let NodeKind::Use { module, args } = &statements[0].kind
+            && let NodeKind::Use { module, args, .. } = &statements[0].kind
         {
             assert_eq!(module, "strict");
             assert!(args.is_empty());
@@ -295,7 +296,7 @@ package MyModule;
 
         // Verify the exact symbol "first" would be found
         if let NodeKind::Program { statements } = &program.kind
-            && let NodeKind::Use { module, args } = &statements[0].kind
+            && let NodeKind::Use { module, args, .. } = &statements[0].kind
         {
             assert_eq!(module, "List::Util");
             // The find_import_source logic would split on whitespace

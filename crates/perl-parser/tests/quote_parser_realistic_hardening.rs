@@ -23,7 +23,7 @@ mod realistic_function_return_kills {
         ];
 
         for (input, expected_pattern, expected_mods) in regex_cases {
-            let (actual_pattern, actual_mods) = extract_regex_parts(input);
+            let (actual_pattern, _body, actual_mods) = extract_regex_parts(input);
 
             // Kill the "xyzzy" mutations
             assert_ne!(actual_pattern, "xyzzy", "Pattern should not be 'xyzzy' for '{}'", input);
@@ -86,7 +86,7 @@ mod realistic_arithmetic_kills {
     fn test_kill_greater_than_to_greater_equal_boundary() {
         // Test exact boundary where > vs >= matters
         let single_char = "m"; // length = 1
-        let (pattern, _) = extract_regex_parts(single_char);
+        let (pattern, _body, _) = extract_regex_parts(single_char);
 
         // With > 1: length 1 > 1 is false, use text directly
         // With >= 1: length 1 >= 1 is true, different behavior
@@ -94,7 +94,7 @@ mod realistic_arithmetic_kills {
 
         // Test just over boundary
         let two_chars = "m/"; // length = 2, non-alphabetic second char
-        let (pattern2, _) = extract_regex_parts(two_chars);
+        let (pattern2, _body, _) = extract_regex_parts(two_chars);
         assert_eq!(pattern2, "//", "Two chars with non-alpha should work");
     }
 
@@ -126,14 +126,14 @@ mod realistic_boolean_logic_kills {
 
         // Case where second condition is false: len() = 1
         let case1 = "m"; // starts_with('m')=true, len()>1=false
-        let (pattern1, _) = extract_regex_parts(case1);
+        let (pattern1, _body, _) = extract_regex_parts(case1);
         // With &&: true && false && _ = false (use text directly)
         // With ||: true || false || _ = true (different behavior)
         assert_eq!(pattern1, "mm", "Single 'm' should work with && logic");
 
         // Case where third condition is false: alphabetic second char
         let case2 = "ma"; // starts_with('m')=true, len()>1=true, !is_alphabetic('a')=false
-        let (pattern2, _) = extract_regex_parts(case2);
+        let (pattern2, _body, _) = extract_regex_parts(case2);
         // With &&: true && true && false = false (use text directly)
         // With ||: true || true || false = true (different behavior)
         assert_eq!(pattern2, "mam", "Alphabetic second char should work with && logic");
@@ -171,7 +171,7 @@ mod realistic_control_flow_kills {
             vec!["qr(test)", "qr[test]", "qr{test}", "qr<test>", "qr/test/", "qr#test#"];
 
         for input in test_cases {
-            let (actual_pattern, actual_mods) = extract_regex_parts(input);
+            let (actual_pattern, _body, actual_mods) = extract_regex_parts(input);
             // Just ensure it doesn't crash and produces some output
             assert!(!actual_pattern.is_empty(), "Pattern should not be empty for {}", input);
 
@@ -205,7 +205,7 @@ fn test_comprehensive_realistic_mutation_coverage() {
     ];
 
     for (input, expected_pattern, expected_mods) in regex_tests {
-        let (pattern, mods) = extract_regex_parts(input);
+        let (pattern, _body, mods) = extract_regex_parts(input);
         assert_eq!(pattern, expected_pattern, "Regex pattern for {}", input);
         assert_eq!(mods, expected_mods, "Regex modifiers for {}", input);
 

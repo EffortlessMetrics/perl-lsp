@@ -65,7 +65,7 @@ fn test_delimiter_boundary_length_mutations() {
 
     for (input, expected_pattern) in boundary_cases {
         if input.starts_with('m') {
-            let (pattern, _) = extract_regex_parts(input);
+            let (pattern, _, _) = extract_regex_parts(input);
             assert_eq!(
                 pattern, expected_pattern,
                 "Length boundary mutation affects regex: '{}'",
@@ -208,7 +208,7 @@ fn test_function_return_mutations() {
 
     for input in test_inputs {
         // Test all quote parser functions don't return sentinel "xyzzy"
-        let (regex_pattern, regex_mods) = extract_regex_parts(input);
+        let (regex_pattern, _, regex_mods) = extract_regex_parts(input);
         let (sub_pattern, sub_replacement, sub_mods) = extract_substitution_parts(input);
         let (tr_search, tr_replace, tr_mods) = extract_transliteration_parts(input);
 

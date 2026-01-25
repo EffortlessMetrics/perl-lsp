@@ -18,7 +18,7 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 
     // Check if 'use strict' and 'use warnings' are present
     walk_node(node, &mut |n| {
-        if let NodeKind::Use { module, args: _ } = &n.kind {
+        if let NodeKind::Use { module, .. } = &n.kind {
             if module == "strict" {
                 has_strict = true;
             } else if module == "warnings" {

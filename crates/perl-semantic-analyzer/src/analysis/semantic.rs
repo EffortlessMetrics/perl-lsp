@@ -693,7 +693,7 @@ impl SemanticAnalyzer {
                 });
             }
 
-            NodeKind::Regex { .. } | NodeKind::Match { .. } => {
+            NodeKind::Regex { .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::Regex,
@@ -702,6 +702,11 @@ impl SemanticAnalyzer {
             }
 
             NodeKind::Match { expr, .. } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Regex,
+                    modifiers: vec![],
+                });
                 self.analyze_node(expr, scope_id);
             }
             NodeKind::Substitution { expr, .. } => {

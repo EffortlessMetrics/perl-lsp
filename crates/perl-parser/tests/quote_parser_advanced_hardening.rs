@@ -28,7 +28,7 @@ mod function_return_hardening {
         ];
 
         for (input, (expected_pattern, expected_mods)) in cases {
-            let (actual_pattern, actual_mods) = extract_regex_parts(input);
+            let (actual_pattern, _body, actual_mods) = extract_regex_parts(input);
 
             // Explicitly check pattern is NOT "xyzzy" - kills FnValue mutation
             assert_ne!(
@@ -123,7 +123,7 @@ mod arithmetic_boundary_hardening {
     fn test_length_boundary_check_mutations() {
         // Test exact boundary case where len() == 1
         let boundary_input = "m"; // len() = 1
-        let (pattern, modifiers) = extract_regex_parts(boundary_input);
+        let (pattern, _body, modifiers) = extract_regex_parts(boundary_input);
 
         // With correct > check: len()=1 > 1 is false, so should use text directly
         // With mutated >= check: len()=1 >= 1 is true, so would try to slice [1..]
@@ -132,13 +132,13 @@ mod arithmetic_boundary_hardening {
 
         // Test just over boundary
         let over_boundary = "mx"; // len() = 2
-        let (pattern, _modifiers) = extract_regex_parts(over_boundary);
+        let (pattern, _body, _modifiers) = extract_regex_parts(over_boundary);
         // This should detect alphabetic 'x' and return text directly
         assert_eq!(pattern, "mxm", "Two char 'mx' should be handled correctly");
 
         // Test well over boundary
         let well_over = "m/test/"; // len() = 7
-        let (pattern, _modifiers) = extract_regex_parts(well_over);
+        let (pattern, _body, _modifiers) = extract_regex_parts(well_over);
         assert_eq!(pattern, "/test/", "Multi char should extract pattern correctly");
     }
 
@@ -350,7 +350,7 @@ mod property_hardening {
 
         for input in test_inputs {
             // Test regex parts
-            let (pattern, modifiers) = extract_regex_parts(input);
+            let (pattern, _body, modifiers) = extract_regex_parts(input);
             assert_ne!(
                 pattern, "xyzzy",
                 "extract_regex_parts pattern should never be 'xyzzy' for '{}'",

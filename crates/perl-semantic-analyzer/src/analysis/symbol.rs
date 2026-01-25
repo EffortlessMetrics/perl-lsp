@@ -727,9 +727,6 @@ impl SymbolExtractor {
             // Leaf nodes - no children to visit
             NodeKind::Number { .. }
             | NodeKind::Heredoc { .. }
-            | NodeKind::Regex { .. }
-            | NodeKind::Substitution { .. }
-            | NodeKind::Transliteration { .. }
             | NodeKind::Undef
             | NodeKind::Diamond
             | NodeKind::Ellipsis
