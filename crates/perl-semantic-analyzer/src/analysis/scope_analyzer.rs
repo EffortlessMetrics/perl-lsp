@@ -167,7 +167,11 @@ impl Scope {
             }),
         );
 
-        if shadows { Some(IssueKind::VariableShadowing) } else { None }
+        if shadows {
+            Some(IssueKind::VariableShadowing)
+        } else {
+            None
+        }
     }
 
     fn lookup_variable_parts(&self, sigil: &str, name: &str) -> Option<Rc<Variable>> {
@@ -673,7 +677,7 @@ impl ScopeAnalyzer {
                             false,
                             true,
                         ); // Parameters are initialized
-                        // Don't mark parameters as automatically used yet - track their actual usage
+                           // Don't mark parameters as automatically used yet - track their actual usage
                     }
                 }
 
