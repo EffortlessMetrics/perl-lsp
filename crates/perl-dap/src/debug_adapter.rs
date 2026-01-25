@@ -1651,12 +1651,6 @@ fn is_core_qualified(s: &str, op_start: usize) -> bool {
     &s[start2..end2] == "CORE"
 }
 
-/// Check if the match is a method call (->print)
-fn is_method_call(s: &str, op_start: usize) -> bool {
-    let bytes = s.as_bytes();
-    op_start >= 2 && bytes[op_start - 1] == b'>' && bytes[op_start - 2] == b'-'
-}
-
 /// Check if the match is a sigil-prefixed identifier ($print, @say, %exit, *dump)
 fn is_sigil_prefixed_identifier(s: &str, op_start: usize) -> bool {
     let bytes = s.as_bytes();
@@ -1713,9 +1707,11 @@ fn is_package_qualified_not_core(s: &str, op_start: usize) -> bool {
 /// context-aware filtering to reduce false positives for:
 /// - Sigil-prefixed identifiers ($print, @say, %exit)
 /// - Simple braced scalar variables ${print}
-/// - Method calls ($obj->print)
 /// - Package-qualified names (Foo::print) unless CORE::
 /// - Single-quoted string literals ('print')
+///
+/// Note: Method calls ($obj->print) are intentionally NOT exempted because
+/// dangerous operations remain dangerous regardless of invocation syntax.
 fn validate_safe_expression(expression: &str) -> Option<String> {
     // Check for assignment operators
     let assignment_ops = [
@@ -1752,11 +1748,6 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
 
             // Allow ${print} (simple scalar braced variable form)
             if is_simple_braced_scalar_var(expression, start, end) {
-                continue;
-            }
-
-            // Allow method-name occurrences ($obj->print)
-            if is_method_call(expression, start) {
                 continue;
             }
 
@@ -2232,7 +2223,6 @@ mod tests {
             "${print}",         // braced scalar variable
             "${ print }",       // braced with spaces
             "'print'",          // single-quoted string
-            "$obj->print",      // method call
             "Foo::print",       // package-qualified
             "My::Module::exit", // deeply qualified
         ];
@@ -2260,6 +2250,8 @@ mod tests {
             "kill 9, $$",
             "CORE::print $x",
             "CORE::GLOBAL::exit",
+            "$obj->print",
+            "$obj->system('ls')",
         ];
 
         for expr in blocked {
