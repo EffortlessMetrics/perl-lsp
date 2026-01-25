@@ -9,3 +9,7 @@ This journal tracks critical performance learnings for the `tree-sitter-perl-rs`
 ## 2024-05-22 - [Initial Setup]
 **Learning:** Performance benchmarks are available in `crates/perl-parser/benches/`. The `ast_to_sexp` benchmark currently emits many parse errors, which might noise up the results.
 **Action:** When running benchmarks, ensure valid input or filter out known noisy benchmarks if they obscure the target optimization.
+
+## 2026-01-23 - [Iterator Callback vs Vector Allocation]
+**Learning:** Returning `Vec<String>` from hot loops (like unused variable collection in `ScopeAnalyzer`) forces allocation even for items that will be immediately filtered out. Using an iterator pattern or callback (`for_each_unused_variable`) allows filtering *before* allocation.
+**Action:** Prefer passing closures to inner scopes/loops instead of collecting results into temporary vectors, especially when filtering logic is available in the caller.

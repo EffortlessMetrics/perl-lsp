@@ -197,21 +197,24 @@ impl Scope {
         }
     }
 
-    fn get_unused_variables(&self) -> Vec<(String, usize)> {
-        let mut unused = Vec::new();
-
+    fn for_each_unused_variable<F>(&self, mut f: F)
+    where
+        F: FnMut(String, usize),
+    {
         for (idx, inner_opt) in self.variables.borrow().iter().enumerate() {
             if let Some(inner) = inner_opt {
                 for (name, var) in inner {
                     if !*var.is_used.borrow() && !var.is_our {
+                        // Optimization: Check for underscore prefix before allocation
+                        if name.starts_with('_') {
+                            continue;
+                        }
                         let full_name = format!("{}{}", index_to_sigil(idx), name);
-                        unused.push((full_name, var.line));
+                        f(full_name, var.line);
                     }
                 }
             }
         }
-
-        unused
     }
 }
 
@@ -768,14 +771,7 @@ impl ScopeAnalyzer {
         issues: &mut Vec<ScopeIssue>,
         code: &str,
     ) {
-        for (var_name, offset) in scope.get_unused_variables() {
-            // Skip variables starting with underscore (intentionally unused)
-            // Need to check the name part, not the sigil.
-            // var_name is full name.
-            let (_, name) = split_variable_name(&var_name);
-            if name.starts_with('_') {
-                continue;
-            }
+        scope.for_each_unused_variable(|var_name, offset| {
             let start = offset.min(code.len());
             let end = (start + var_name.len()).min(code.len());
             issues.push(ScopeIssue {
@@ -785,7 +781,7 @@ impl ScopeAnalyzer {
                 range: (start, end),
                 description: format!("Variable '{}' is declared but never used", var_name),
             });
-        }
+        });
     }
 
     fn extract_variable_name<'a>(&self, node: &'a Node) -> ExtractedName<'a> {
