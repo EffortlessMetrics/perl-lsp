@@ -248,11 +248,12 @@ sub test {
         let result = parser.parse();
 
         if should_have_diagnostic {
-            // For syntax errors, the parser should fail
-            // For undefined variables with 'use strict', the parser succeeds but diagnostics are generated
-            // Since we're now properly publishing diagnostics, the test framework should receive them
+            // For syntax errors, the parser may return Err or Ok with errors recorded.
+            // With error recovery, the parser often returns Ok(ast) and stores errors
+            // in parser.errors() for later reporting.
             if name == "syntax_error" {
-                assert!(result.is_err(), "Expected parse error for {}", name);
+                let has_errors = result.is_err() || !parser.errors().is_empty();
+                assert!(has_errors, "Expected parse error for {}", name);
             } else {
                 // For undefined variables, parsing succeeds but diagnostics are published
                 assert!(result.is_ok(), "Expected successful parse for {}", name);
