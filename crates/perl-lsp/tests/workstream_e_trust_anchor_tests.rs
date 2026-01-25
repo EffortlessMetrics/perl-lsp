@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Workstream E: Test Hardening (Trust Anchor)
 //!
 //! This module contains small, brutal regression tests to prevent regressions in:
@@ -35,6 +34,7 @@ mod degraded_mode_tests {
     }
 
     /// Helper to open a test document
+    #[allow(clippy::unwrap_used)]
     fn open_test_document(srv: &LspServer, uri: &str, content: &str) {
         srv.test_handle_did_open(Some(json!({
             "textDocument": {
@@ -51,6 +51,7 @@ mod degraded_mode_tests {
     // =========================================================================
     #[test]
     #[serial]
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     fn test_workspace_symbol_building_state_returns_open_doc_partials() {
         // SAFETY: Test runs single-threaded with #[serial]
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
@@ -89,6 +90,7 @@ sub another_function { }
     // =========================================================================
     #[test]
     #[serial]
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     fn test_references_degraded_mode_same_file_fallback() {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
@@ -128,6 +130,7 @@ $counter = $counter + 1;
     // =========================================================================
     #[test]
     #[serial]
+    #[allow(clippy::unwrap_used)]
     fn test_completion_returns_results_in_building_state() {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
@@ -170,6 +173,7 @@ sub main {
     // =========================================================================
     #[test]
     #[serial]
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     fn test_definition_same_file_fallback() {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
@@ -202,8 +206,8 @@ greet("World");
             );
 
             // Verify it points to the definition line (line 1)
-            if !defs.is_empty() {
-                let line = defs[0]["range"]["start"]["line"].as_u64();
+            if let Some(first) = defs.first() {
+                let line = first["range"]["start"]["line"].as_u64();
                 assert_eq!(line, Some(1), "Should find definition on line 1");
             }
         }
@@ -214,6 +218,7 @@ greet("World");
     // =========================================================================
     #[test]
     #[serial]
+    #[allow(clippy::unwrap_used)]
     fn test_hover_works_in_building_state() {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
@@ -249,6 +254,7 @@ sub add {
     // =========================================================================
     #[test]
     #[serial]
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     fn test_document_symbols_always_works() {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
@@ -307,6 +313,7 @@ mod caps_enforcement_tests {
         LspServer::with_output(output)
     }
 
+    #[allow(clippy::unwrap_used)]
     fn open_test_document(srv: &LspServer, uri: &str, content: &str) {
         srv.test_handle_did_open(Some(json!({
             "textDocument": {
@@ -323,6 +330,7 @@ mod caps_enforcement_tests {
     // =========================================================================
     #[test]
     #[serial]
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     fn test_workspace_symbol_respects_cap() {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
@@ -360,6 +368,7 @@ mod caps_enforcement_tests {
     // =========================================================================
     #[test]
     #[serial]
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     fn test_references_respects_cap() {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
@@ -394,6 +403,7 @@ mod caps_enforcement_tests {
     // =========================================================================
     #[test]
     #[serial]
+    #[allow(clippy::unwrap_used)]
     fn test_completion_respects_cap() {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
@@ -452,6 +462,7 @@ mod deadline_enforcement_tests {
         LspServer::with_output(output)
     }
 
+    #[allow(clippy::unwrap_used)]
     fn open_test_document(srv: &LspServer, uri: &str, content: &str) {
         srv.test_handle_did_open(Some(json!({
             "textDocument": {
@@ -502,6 +513,7 @@ mod deadline_enforcement_tests {
     // =========================================================================
     #[test]
     #[serial]
+    #[allow(clippy::unwrap_used)]
     fn test_workspace_symbols_early_exit_returns_partial() {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
@@ -586,6 +598,7 @@ mod windows_uri_path_tests {
         LspServer::with_output(output)
     }
 
+    #[allow(clippy::unwrap_used)]
     fn open_test_document(srv: &LspServer, uri: &str, content: &str) {
         srv.test_handle_did_open(Some(json!({
             "textDocument": {
@@ -682,6 +695,7 @@ mod windows_uri_path_tests {
     // Test: URI to filesystem path conversion (Windows-style)
     // =========================================================================
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn test_uri_to_fs_path_windows_style() {
         // Test that Windows-style URIs can be converted
         // Note: This will behave differently on Windows vs Unix
@@ -708,6 +722,7 @@ mod windows_uri_path_tests {
     // Test: fs_path_to_uri handles various path formats
     // =========================================================================
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn test_fs_path_to_uri_formats() {
         // Unix-style path
         let result = fs_path_to_uri("/tmp/test.pl");
@@ -731,6 +746,7 @@ mod windows_uri_path_tests {
     // =========================================================================
     #[test]
     #[serial]
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     fn test_module_resolution_mixed_slashes() {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
@@ -863,6 +879,7 @@ mod workspace_index_unit_tests {
     // Test: Resource limits trigger degradation
     // =========================================================================
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn test_max_files_limit_triggers_degradation() {
         let limits = IndexResourceLimits {
             max_files: 2, // Very low for testing
@@ -890,6 +907,7 @@ mod workspace_index_unit_tests {
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn test_max_symbols_limit_triggers_degradation() {
         let limits = IndexResourceLimits {
             max_total_symbols: 5, // Very low for testing

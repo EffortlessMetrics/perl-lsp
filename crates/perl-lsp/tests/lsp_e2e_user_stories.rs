@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! End-to-end tests for LSP user stories
 //!
 //! Each test represents a complete user story, simulating real-world usage patterns
@@ -15,6 +14,8 @@ use support::test_helpers::{
     assert_call_hierarchy_items, assert_code_actions_available, assert_completion_has_items,
     assert_hover_has_text, assert_references_found,
 };
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Helper to create a test LSP server instance
 fn create_test_server() -> LspServer {
@@ -175,7 +176,7 @@ sub calculate {
 // so that I can write code faster and discover available functions.
 
 #[test]
-fn test_user_story_code_completion() {
+fn test_user_story_code_completion() -> TestResult {
     let mut server = create_test_server();
     initialize_server(&mut server);
 
@@ -206,10 +207,10 @@ $
     );
 
     assert!(result.is_some());
-    let completions = result.unwrap();
+    let completions = result.ok_or("Expected completion result")?;
     assert!(completions["items"].is_array());
 
-    let items = completions["items"].as_array().unwrap();
+    let items = completions["items"].as_array().ok_or("Expected items array")?;
     assert!(items.iter().any(|item| item["label"] == "$user_name"));
     assert!(items.iter().any(|item| item["label"] == "$user_age"));
 
@@ -235,9 +236,11 @@ pri  # Developer is typing 'print'
     );
 
     assert!(result.is_some());
-    let completions = result.unwrap();
-    let items = completions["items"].as_array().unwrap();
+    let completions = result.ok_or("Expected completion result")?;
+    let items = completions["items"].as_array().ok_or("Expected items array")?;
     assert!(items.iter().any(|item| item["label"] == "print"));
+
+    Ok(())
 }
 
 // ==================== USER STORY 3: GO TO DEFINITION ====================
@@ -245,7 +248,7 @@ pri  # Developer is typing 'print'
 // so that I can understand the code better.
 
 #[test]
-fn test_user_story_go_to_definition() {
+fn test_user_story_go_to_definition() -> TestResult {
     let mut server = create_test_server();
     initialize_server(&mut server);
 
@@ -287,18 +290,20 @@ my $user = create_user("Bob", "bob@example.com");
     );
 
     assert!(result.is_some());
-    let locations = result.unwrap();
+    let locations = result.ok_or("Expected definition result")?;
     assert!(locations.is_array());
 
-    let locs = locations.as_array().unwrap();
+    let locs = locations.as_array().ok_or("Expected locations array")?;
     // Accept empty results for mock responses
     if locs.is_empty() {
         eprintln!("Note: Got empty definition results (likely mock response)");
-        return; // Skip detailed checks for mock responses
+        return Ok(()); // Skip detailed checks for mock responses
     }
 
     // Should point to line 3 where create_user is defined
     assert_eq!(locs[0]["range"]["start"]["line"], 3);
+
+    Ok(())
 }
 
 // ==================== USER STORY 4: FIND ALL REFERENCES ====================
@@ -306,7 +311,7 @@ my $user = create_user("Bob", "bob@example.com");
 // so that I can safely refactor my code.
 
 #[test]
-fn test_user_story_find_references() {
+fn test_user_story_find_references() -> TestResult {
     let mut server = create_test_server();
     initialize_server(&mut server);
 
@@ -347,14 +352,14 @@ print "Using config: $config_file\n";
     );
 
     assert!(result.is_some());
-    let references = result.unwrap();
+    let references = result.ok_or("Expected references result")?;
     assert!(references.is_array());
 
-    let refs = references.as_array().unwrap();
+    let refs = references.as_array().ok_or("Expected references array")?;
     // Accept empty results for mock responses
     if refs.is_empty() {
         eprintln!("Note: Got empty references results (likely mock response)");
-        return; // Skip detailed checks for mock responses
+        return Ok(()); // Skip detailed checks for mock responses
     }
     // We expect 5 references total: 1 declaration + 4 uses
     // Note: We modified the test to use || instead of 'or' due to parser limitations
@@ -365,6 +370,8 @@ print "Using config: $config_file\n";
     // 4. Use in backup string: "$config_file.bak"
     // 5. Use in print: "Using config: $config_file\n"
     assert_eq!(refs.len(), 5, "Expected 5 references (1 declaration + 4 uses)");
+
+    Ok(())
 }
 
 // ==================== USER STORY 5: HOVER INFORMATION ====================
@@ -372,7 +379,7 @@ print "Using config: $config_file\n";
 // so that I can understand functions without leaving my editor.
 
 #[test]
-fn test_user_story_hover_information() {
+fn test_user_story_hover_information() -> TestResult {
     let mut server = create_test_server();
     initialize_server(&mut server);
 
@@ -401,8 +408,10 @@ my $total = sum(@numbers);  # Developer hovers over 'sum'
     );
 
     assert!(result.is_some());
-    let hover = result.unwrap();
+    let hover = result.ok_or("Expected hover result")?;
     assert!(hover["contents"].is_object() || hover["contents"].is_string());
+
+    Ok(())
 }
 
 // ==================== USER STORY 6: DOCUMENT SYMBOLS (OUTLINE) ====================
@@ -410,7 +419,7 @@ my $total = sum(@numbers);  # Developer hovers over 'sum'
 // so that I can quickly navigate large files.
 
 #[test]
-fn test_user_story_document_symbols() {
+fn test_user_story_document_symbols() -> TestResult {
     let mut server = create_test_server();
     initialize_server(&mut server);
 
@@ -454,10 +463,10 @@ sub render_response {
     );
 
     assert!(result.is_some());
-    let symbols = result.unwrap();
+    let symbols = result.ok_or("Expected document symbols result")?;
     assert!(symbols.is_array());
 
-    let syms = symbols.as_array().unwrap();
+    let syms = symbols.as_array().ok_or("Expected symbols array")?;
 
     // Document symbols may be hierarchical - collect all names recursively
     fn collect_names(symbol: &Value, names: &mut Vec<String>) {
@@ -481,6 +490,8 @@ sub render_response {
     assert!(all_names.contains(&"new".to_string()));
     assert!(all_names.contains(&"process_request".to_string()));
     assert!(all_names.contains(&"render_response".to_string()));
+
+    Ok(())
 }
 
 // ==================== USER STORY 7: SIGNATURE HELP ====================
@@ -488,7 +499,7 @@ sub render_response {
 // so that I know what parameters to provide.
 
 #[test]
-fn test_user_story_signature_help() {
+fn test_user_story_signature_help() -> TestResult {
     let mut server = create_test_server();
     initialize_server(&mut server);
 
@@ -516,22 +527,24 @@ my $result = substr($text, 6, );  # <- cursor is here after comma
     );
 
     assert!(result.is_some());
-    let sig_help = result.unwrap();
+    let sig_help = result.ok_or("Expected signature help result")?;
 
     // Verify we got signature information
     assert!(sig_help["signatures"].is_array());
-    let signatures = sig_help["signatures"].as_array().unwrap();
+    let signatures = sig_help["signatures"].as_array().ok_or("Expected signatures array")?;
     assert!(!signatures.is_empty());
 
     // Check that we have the substr signature
     let signature = &signatures[0];
-    assert!(signature["label"].as_str().unwrap().contains("substr"));
+    assert!(signature["label"].as_str().ok_or("Expected label string")?.contains("substr"));
 
     // Check we have parameters
     assert!(signature["parameters"].is_array());
 
     // Check the active parameter is set correctly (should be 2 for LENGTH parameter)
-    assert_eq!(sig_help["activeParameter"].as_u64().unwrap(), 2);
+    assert_eq!(sig_help["activeParameter"].as_u64().ok_or("Expected activeParameter")?, 2);
+
+    Ok(())
 }
 
 // ==================== USER STORY 8: RENAME SYMBOL ====================
@@ -539,7 +552,7 @@ my $result = substr($text, 6, );  # <- cursor is here after comma
 // so that I can refactor safely without manual find-and-replace.
 
 #[test]
-fn test_user_story_rename_symbol() {
+fn test_user_story_rename_symbol() -> TestResult {
     let mut server = create_test_server();
     initialize_server(&mut server);
 
@@ -581,7 +594,7 @@ print "Total: $sum\n";
     );
 
     assert!(result.is_some());
-    let edits = result.unwrap();
+    let edits = result.ok_or("Expected rename result")?;
 
     // Check if it's a WorkspaceEdit with changes or documentChanges
     if let Some(changes) = edits.get("changes") {
@@ -593,6 +606,8 @@ print "Total: $sum\n";
         assert!(document_changes.is_array());
     }
     // Note: Empty response is valid when no symbols can be renamed
+
+    Ok(())
 }
 
 // ==================== USER STORY 9: CODE ACTIONS (QUICK FIXES) ====================
@@ -600,7 +615,7 @@ print "Total: $sum\n";
 // so that I can improve my code with a single click.
 
 #[test]
-fn test_user_story_code_actions() {
+fn test_user_story_code_actions() -> TestResult {
     let mut server = create_test_server();
     initialize_server(&mut server);
 
@@ -644,14 +659,16 @@ sub process {
     );
 
     assert!(result.is_some());
-    let actions = result.unwrap();
+    let actions = result.ok_or("Expected code actions result")?;
     assert!(actions.is_array());
 
     // Should offer to change = to == (if code actions are provided)
-    let acts = actions.as_array().unwrap();
+    let acts = actions.as_array().ok_or("Expected actions array")?;
     // Code actions may be empty if the diagnostic provider doesn't detect this specific issue
     // Just verify we got a valid response
     assert!(acts.is_empty() || !acts.is_empty());
+
+    Ok(())
 }
 
 // ==================== USER STORY 10: INCREMENTAL PARSING ====================
@@ -659,7 +676,7 @@ sub process {
 // so that the IDE features remain responsive as I type.
 
 #[test]
-fn test_user_story_incremental_parsing() {
+fn test_user_story_incremental_parsing() -> TestResult {
     let mut server = create_test_server();
     initialize_server(&mut server);
 
@@ -689,8 +706,8 @@ fn test_user_story_incremental_parsing() {
     );
 
     assert!(result.is_some());
-    let symbols = result.unwrap();
-    let syms = symbols.as_array().unwrap();
+    let symbols = result.ok_or("Expected document symbols result")?;
+    let syms = symbols.as_array().ok_or("Expected symbols array")?;
 
     // Collect all symbol names recursively
     fn collect_names_incremental(symbol: &Value, names: &mut Vec<String>) {
@@ -719,13 +736,15 @@ fn test_user_story_incremental_parsing() {
     // Should find the renamed function
     assert!(all_names.iter().any(|n| n == "function_fifty"));
     assert!(!all_names.iter().any(|n| n == "function_50"));
+
+    Ok(())
 }
 
 // ==================== INTEGRATION TEST: COMPLETE WORKFLOW ====================
 // This test simulates a complete development workflow using multiple LSP features together
 
 #[test]
-fn test_complete_development_workflow() {
+fn test_complete_development_workflow() -> TestResult {
     let mut server = create_test_server();
     initialize_server(&mut server);
 
@@ -767,13 +786,13 @@ print "Result: $result\n";
     );
 
     assert!(symbols_result.is_some());
-    let symbols = symbols_result.unwrap();
+    let symbols = symbols_result.ok_or("Expected workspace symbols result")?;
     assert!(symbols.is_array());
 
-    let symbol_array = symbols.as_array().unwrap();
+    let symbol_array = symbols.as_array().ok_or("Expected symbols array")?;
     if symbol_array.is_empty() {
         eprintln!("Note: Got empty workspace symbols (likely mock response)");
-        return; // Skip detailed checks for mock responses
+        return Ok(()); // Skip detailed checks for mock responses
     }
 
     // Step 4: Developer would navigate to the add function definition
@@ -820,6 +839,7 @@ sub multiply {
 
     // This workflow demonstrates how multiple LSP features work together
     // to provide a smooth development experience
+    Ok(())
 }
 
 // ==================== USER STORY 11: DEBUGGING WORKFLOW ====================
@@ -939,7 +959,7 @@ print Dumper($results);
 // between module definitions and their usage across files.
 
 #[test]
-fn test_user_story_module_navigation() {
+fn test_user_story_module_navigation() -> TestResult {
     let mut server = create_test_server();
     initialize_server(&mut server);
 
@@ -1027,18 +1047,17 @@ sub fetch_all {
     );
 
     if let Some(symbols) = workspace_symbols {
-        let arr = symbols.as_array().expect("workspace symbols should be array");
+        let arr = symbols.as_array().ok_or("workspace symbols should be array")?;
         // Module search might return empty if not in workspace
         if !arr.is_empty() {
             let has_database = arr.iter().any(|s| {
-                s.get("name")
-                    .and_then(|n| n.as_str())
-                    .map(|n| n.contains("Database"))
-                    .unwrap_or(false)
+                s.get("name").and_then(|n| n.as_str()).is_some_and(|n| n.contains("Database"))
             });
             assert!(has_database, "Should find Database-related symbols");
         }
     }
+
+    Ok(())
 }
 
 // ==================== USER STORY 13: CODE REVIEW WORKFLOW ====================
@@ -1281,7 +1300,7 @@ sub process_data {
 // and suggestions for improvements.
 
 #[test]
-fn test_user_story_performance_optimization() {
+fn test_user_story_performance_optimization() -> TestResult {
     let mut server = create_test_server();
     initialize_server(&mut server);
 
@@ -1294,26 +1313,26 @@ use Benchmark qw(timethese);
 sub process_large_dataset {
     my ($data) = @_;
     my @results;
-    
+
     # Inefficient: multiple passes over data
     foreach my $item (@$data) {
         if ($item->{type} eq 'A') {
             push @results, transform_a($item);
         }
     }
-    
+
     foreach my $item (@$data) {
         if ($item->{type} eq 'B') {
             push @results, transform_b($item);
         }
     }
-    
+
     # Inefficient: repeated regex compilation
     foreach my $result (@results) {
         $result->{name} =~ s/\s+/_/g;
         $result->{desc} =~ s/\s+/_/g;
     }
-    
+
     return \@results;
 }
 
@@ -1322,7 +1341,7 @@ sub process_large_dataset_optimized {
     my ($data) = @_;
     my @results;
     my $space_regex = qr/\s+/;
-    
+
     # Single pass over data
     foreach my $item (@$data) {
         if ($item->{type} eq 'A') {
@@ -1331,13 +1350,13 @@ sub process_large_dataset_optimized {
             push @results, transform_b($item);
         }
     }
-    
+
     # Pre-compiled regex
     foreach my $result (@results) {
         $result->{name} =~ s/$space_regex/_/g;
         $result->{desc} =~ s/$space_regex/_/g;
     }
-    
+
     return \@results;
 }
 
@@ -1359,7 +1378,7 @@ sub transform_b { return $_[0] }
     );
 
     if let Some(lens) = code_lens {
-        let lenses = lens.as_array().expect("code lens should be array");
+        let lenses = lens.as_array().ok_or("code lens should be array")?;
         // Code lens might be empty if not implemented for this code pattern
         for l in lenses {
             assert!(l.get("range").is_some(), "Code lens must have range");
@@ -1387,4 +1406,6 @@ sub transform_b { return $_[0] }
     if let Some(acts) = actions {
         assert_code_actions_available(&Some(acts));
     }
+
+    Ok(())
 }

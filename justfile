@@ -286,6 +286,7 @@ ci-gate:
     just ci-docs-check && \
     just ci-clippy-lib && \
     just clippy-prod-no-unwrap && \
+    just clippy-no-unwrap-all && \
     just ci-test-lib && \
     just ci-policy && \
     just ci-lsp-def && \
@@ -358,6 +359,11 @@ ci-clippy-lib:
 clippy-prod-no-unwrap:
     @echo "🔒 Enforcing no unwrap/expect in production code..."
     cargo clippy --workspace --lib --bins --no-deps -- -D clippy::unwrap_used -D clippy::expect_used
+
+# Clippy NO UNWRAP ALL gate - enforces zero unwrap/expect everywhere
+clippy-no-unwrap-all:
+    @echo "🔒 Enforcing no unwrap/expect everywhere (including tests)..."
+    cargo clippy --workspace --all-targets -- -D clippy::unwrap_used -D clippy::expect_used
     @echo "✅ Production code is panic-safe (no unwrap/expect)"
 
 # Core tests (fast, essential)

@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Enhanced test scaffolding for LSP executeCommand functionality (Issue #145)
 //!
 //! Tests feature spec: SPEC_145_LSP_EXECUTE_COMMAND_AND_CODE_ACTIONS.md
@@ -16,6 +15,8 @@ use std::time::Duration;
 
 mod support;
 use support::lsp_harness::{LspHarness, TempWorkspace};
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 // ======================== Enhanced Test Fixtures ========================
 
@@ -55,38 +56,34 @@ my @array = (1, 2, 3;
 }
 
 /// Create enhanced test server with better error handling validation
-fn create_enhanced_execute_command_server() -> (LspHarness, TempWorkspace) {
-    let workspace = TempWorkspace::new().expect("Failed to create temp workspace");
+fn create_enhanced_execute_command_server()
+-> Result<(LspHarness, TempWorkspace), Box<dyn std::error::Error>> {
+    let workspace = TempWorkspace::new()?;
 
     // Write test files to workspace
     workspace
-        .write("syntax_errors.pl", enhanced_execute_command_fixtures::SYNTAX_ERROR_WITH_CONTEXT)
-        .expect("Failed to write syntax errors file");
-    workspace
-        .write("empty_file.pl", enhanced_execute_command_fixtures::EMPTY_FILE)
-        .expect("Failed to write empty file");
-    workspace
-        .write("comments_only.pl", enhanced_execute_command_fixtures::COMMENTS_ONLY_FILE)
-        .expect("Failed to write comments only file");
+        .write("syntax_errors.pl", enhanced_execute_command_fixtures::SYNTAX_ERROR_WITH_CONTEXT)?;
+    workspace.write("empty_file.pl", enhanced_execute_command_fixtures::EMPTY_FILE)?;
+    workspace.write("comments_only.pl", enhanced_execute_command_fixtures::COMMENTS_ONLY_FILE)?;
 
     let harness = LspHarness::new_raw();
 
     // Return uninitialized harness so tests can call initialize_default() themselves
-    (harness, workspace)
+    Ok((harness, workspace))
 }
 
 // ======================== AC1: Enhanced Server Capabilities Testing ========================
 
 #[test]
 // AC1:executeCommand - Enhanced server capabilities validation with LSP 3.17+ compliance
-fn test_enhanced_execute_command_server_capabilities() {
-    let (mut harness, _workspace) = create_enhanced_execute_command_server();
+fn test_enhanced_execute_command_server_capabilities() -> TestResult {
+    let (mut harness, _workspace) = create_enhanced_execute_command_server()?;
 
     // Get server capabilities with detailed validation
-    let init_result = harness.initialize_default().expect("Server should initialize successfully");
+    let init_result = harness.initialize_default()?;
 
     let capabilities =
-        init_result.get("capabilities").expect("Initialize result should contain capabilities");
+        init_result.get("capabilities").ok_or("Initialize result should contain capabilities")?;
 
     // AC1: Verify executeCommandProvider is advertised with proper structure
     assert!(
@@ -109,7 +106,7 @@ fn test_enhanced_execute_command_server_capabilities() {
 
     let commands = execute_command_provider["commands"]
         .as_array()
-        .expect("Commands should be an array per LSP specification");
+        .ok_or("Commands should be an array per LSP specification")?;
 
     // AC1: Verify all required commands are supported per Issue #145
     let expected_commands = vec![
@@ -134,12 +131,14 @@ fn test_enhanced_execute_command_server_capabilities() {
     for cmd in commands {
         assert!(cmd.is_string(), "All commands should be strings per LSP specification");
     }
+
+    Ok(())
 }
 
 #[test]
 // AC1:executeCommand - Protocol compliance validation with enhanced error handling
-fn test_enhanced_execute_command_protocol_compliance() {
-    let (mut harness, _workspace) = create_enhanced_execute_command_server();
+fn test_enhanced_execute_command_protocol_compliance() -> TestResult {
+    let (mut harness, _workspace) = create_enhanced_execute_command_server()?;
 
     // AC4: Test invalid command with proper error structure
     let invalid_result = harness.request_with_timeout(
@@ -180,38 +179,34 @@ fn test_enhanced_execute_command_protocol_compliance() {
         malformed_result.is_ok() || malformed_result.is_err(),
         "Should handle malformed requests gracefully"
     );
+
+    Ok(())
 }
 
 // ======================== AC2: Enhanced perl.runCritic Testing ========================
 
 #[test]
 // AC2:runCritic - Enhanced syntax error handling with proper response structure
-fn test_enhanced_perl_run_critic_syntax_error_handling() {
-    let (mut harness, workspace) = create_enhanced_execute_command_server();
+fn test_enhanced_perl_run_critic_syntax_error_handling() -> TestResult {
+    let (mut harness, workspace) = create_enhanced_execute_command_server()?;
 
     // Initialize server with workspace
-    harness
-        .initialize_with_root(&workspace.root_uri, None)
-        .expect("Server should initialize successfully");
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     // Open documents for testing
-    harness
-        .open_document(
-            &workspace.uri("syntax_errors.pl"),
-            enhanced_execute_command_fixtures::SYNTAX_ERROR_WITH_CONTEXT,
-        )
-        .expect("Failed to open syntax errors file");
+    harness.open_document(
+        &workspace.uri("syntax_errors.pl"),
+        enhanced_execute_command_fixtures::SYNTAX_ERROR_WITH_CONTEXT,
+    )?;
 
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("syntax_errors.pl")]
-            }),
-            Duration::from_secs(3),
-        )
-        .expect("perl.runCritic should handle syntax errors gracefully");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("syntax_errors.pl")]
+        }),
+        Duration::from_secs(3),
+    )?;
 
     // AC2: Validate response structure per specification
     assert!(
@@ -241,46 +236,42 @@ fn test_enhanced_perl_run_critic_syntax_error_handling() {
     );
 
     // AC2: Validate analyzer fallback indication
-    let analyzer_used = result["analyzerUsed"].as_str().expect("Should indicate analyzer type");
+    let analyzer_used = result["analyzerUsed"].as_str().ok_or("Should indicate analyzer type")?;
     assert!(
         analyzer_used == "builtin" || analyzer_used == "external",
         "Should use either 'builtin' or 'external' analyzer per dual strategy"
     );
+
+    Ok(())
 }
 
 #[test]
 // AC2:runCritic - Enhanced empty file handling with edge case validation
-fn test_enhanced_empty_file_handling() {
-    let (mut harness, workspace) = create_enhanced_execute_command_server();
+fn test_enhanced_empty_file_handling() -> TestResult {
+    let (mut harness, workspace) = create_enhanced_execute_command_server()?;
 
     // Initialize server with workspace
-    harness
-        .initialize_with_root(&workspace.root_uri, None)
-        .expect("Server should initialize successfully");
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     // Open empty file for testing
-    harness
-        .open_document(
-            &workspace.uri("empty_file.pl"),
-            enhanced_execute_command_fixtures::EMPTY_FILE,
-        )
-        .expect("Failed to open empty file");
+    harness.open_document(
+        &workspace.uri("empty_file.pl"),
+        enhanced_execute_command_fixtures::EMPTY_FILE,
+    )?;
 
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("empty_file.pl")]
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Should handle empty files gracefully");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("empty_file.pl")]
+        }),
+        Duration::from_secs(2),
+    )?;
 
     // AC4: Edge case - empty files should succeed with minimal violations
     assert_eq!(result["status"], "success", "Empty files should be handled successfully");
 
-    let violations = result["violations"].as_array().expect("Should return violations array");
+    let violations = result["violations"].as_array().ok_or("Should return violations array")?;
 
     // Empty files might have basic violations (missing pragmas)
     assert!(
@@ -288,11 +279,13 @@ fn test_enhanced_empty_file_handling() {
         "Empty files should have minimal violations, got: {}",
         violations.len()
     );
+
+    Ok(())
 }
 
 #[test]
 // AC2:runCritic - Performance validation with revolutionary threading preservation
-fn test_enhanced_performance_validation() {
+fn test_enhanced_performance_validation() -> TestResult {
     // Create large file content for performance testing
     let violations_content = "my $var = 42;\nprint \"$var\\n\";\n".repeat(50);
     let large_file_content = format!(
@@ -302,12 +295,9 @@ fn test_enhanced_performance_validation() {
     );
 
     let (mut harness, workspace) =
-        LspHarness::with_workspace(&[("large_performance.pl", &large_file_content)])
-            .expect("Failed to create performance test workspace");
+        LspHarness::with_workspace(&[("large_performance.pl", &large_file_content)])?;
 
-    harness
-        .open_document(&workspace.uri("large_performance.pl"), &large_file_content)
-        .expect("Failed to open large performance file");
+    harness.open_document(&workspace.uri("large_performance.pl"), &large_file_content)?;
 
     // AC5: Revolutionary performance preservation - adaptive timeout
     let thread_count =
@@ -323,16 +313,14 @@ fn test_enhanced_performance_validation() {
 
     let start_time = std::time::Instant::now();
 
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("large_performance.pl")]
-            }),
-            Duration::from_secs(timeout_secs), // Adaptive timeout
-        )
-        .expect("perl.runCritic should complete within timeout for large files");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("large_performance.pl")]
+        }),
+        Duration::from_secs(timeout_secs), // Adaptive timeout
+    )?;
 
     let duration = start_time.elapsed();
 
@@ -348,8 +336,10 @@ fn test_enhanced_performance_validation() {
     assert_eq!(result["status"], "success", "Should succeed for large files");
 
     // Should detect violations but complete quickly
-    let violations = result["violations"].as_array().expect("Should return violations");
+    let violations = result["violations"].as_array().ok_or("Should return violations")?;
     assert!(!violations.is_empty(), "Should detect violations in large file");
+
+    Ok(())
 }
 
 // ======================== AC4: Enhanced Protocol Compliance ========================
@@ -357,9 +347,9 @@ fn test_enhanced_performance_validation() {
 #[cfg(feature = "stress-tests")]
 #[test]
 // AC4:protocolCompliance - URI handling with comprehensive validation
-fn test_enhanced_uri_handling() {
-    let (mut harness, workspace) = create_enhanced_execute_command_server();
-    harness.initialize_default().expect("Server should initialize successfully");
+fn test_enhanced_uri_handling() -> TestResult {
+    let (mut harness, workspace) = create_enhanced_execute_command_server()?;
+    harness.initialize_default()?;
 
     // Test various URI formats
     let test_cases = vec![
@@ -407,14 +397,16 @@ fn test_enhanced_uri_handling() {
             }
         }
     }
+
+    Ok(())
 }
 
 #[cfg(feature = "stress-tests")]
 #[test]
 // AC4:protocolCompliance - Concurrent request handling validation
-fn test_enhanced_concurrent_handling() {
-    let (mut harness, workspace) = create_enhanced_execute_command_server();
-    harness.initialize_default().expect("Server should initialize successfully");
+fn test_enhanced_concurrent_handling() -> TestResult {
+    let (mut harness, workspace) = create_enhanced_execute_command_server()?;
+    harness.initialize_default()?;
 
     // AC4: Test concurrent requests with different files
     let requests = vec![
@@ -451,6 +443,8 @@ fn test_enhanced_concurrent_handling() {
             );
         }
     }
+
+    Ok(())
 }
 
 // ======================== Revolutionary Performance Integration ========================
@@ -458,9 +452,9 @@ fn test_enhanced_concurrent_handling() {
 #[cfg(feature = "stress-tests")]
 #[test]
 // AC5:performance - Thread-aware timeout scaling validation
-fn test_revolutionary_performance_integration() {
-    let (mut harness, workspace) = create_enhanced_execute_command_server();
-    harness.initialize_default().expect("Server should initialize successfully");
+fn test_revolutionary_performance_integration() -> TestResult {
+    let (mut harness, workspace) = create_enhanced_execute_command_server()?;
+    harness.initialize_default()?;
 
     // AC5: Revolutionary performance with thread-aware scaling
     let thread_count =
@@ -475,16 +469,14 @@ fn test_revolutionary_performance_integration() {
 
     let start_time = std::time::Instant::now();
 
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("comments_only.pl")]
-            }),
-            Duration::from_secs(timeout_secs),
-        )
-        .expect("Revolutionary performance: command should complete quickly");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("comments_only.pl")]
+        }),
+        Duration::from_secs(timeout_secs),
+    )?;
 
     let duration = start_time.elapsed();
 
@@ -498,4 +490,6 @@ fn test_revolutionary_performance_integration() {
     );
 
     assert_eq!(result["status"], "success", "Revolutionary performance: should succeed");
+
+    Ok(())
 }

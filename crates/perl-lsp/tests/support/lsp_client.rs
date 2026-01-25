@@ -96,9 +96,7 @@ impl LspClient {
         }
 
         // Get content length (case-insensitive)
-        let content_length: usize = match headers
-            .get("content-length")
-            .and_then(|s| s.parse().ok())
+        let content_length: usize = match headers.get("content-length").and_then(|s| s.parse().ok())
         {
             Some(len) => len,
             None => panic!("Missing or invalid Content-Length header in LSP response"),

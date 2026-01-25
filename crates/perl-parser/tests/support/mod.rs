@@ -199,10 +199,7 @@ pub fn assert_completion_has_items(v: &Option<Value>) {
             } else if let Some(obj) = comp.as_object() {
                 match obj.get("items").and_then(|v| v.as_array()) {
                     Some(arr) => arr,
-                    None => panic!(
-                        "Completion object must have items array, got: {:?}",
-                        obj
-                    ),
+                    None => panic!("Completion object must have items array, got: {:?}", obj),
                 }
             } else {
                 panic!("Completion response must be array or object with items, got: {:?}", comp);

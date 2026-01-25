@@ -3,6 +3,8 @@
 use perl_lsp::features::signature_help::SignatureHelpProvider;
 use perl_parser::Parser;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 #[test]
 fn test_builtin_count_threshold() {
     use perl_parser::builtins::builtin_signatures::create_builtin_signatures;
@@ -17,8 +19,8 @@ fn test_builtin_count_threshold() {
 }
 
 #[test]
-fn test_comprehensive_builtin_coverage() {
-    let ast = Parser::new("").parse().unwrap();
+fn test_comprehensive_builtin_coverage() -> TestResult {
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     // Test that we have signatures for all major built-in functions
@@ -199,16 +201,18 @@ fn test_comprehensive_builtin_coverage() {
     }
 
     assert!(missing.is_empty(), "Missing signatures for: {:?}", missing);
+    Ok(())
 }
 
 #[test]
-fn test_string_function_signatures() {
-    let ast = Parser::new("").parse().unwrap();
+fn test_string_function_signatures() -> TestResult {
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     // Test chomp signature
     let code = "chomp(";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help =
+        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for chomp")?;
     assert!(!help.signatures.is_empty());
     let sig = &help.signatures[0];
     assert!(sig.label.contains("chomp"));
@@ -216,127 +220,154 @@ fn test_string_function_signatures() {
 
     // Test substr with multiple parameters
     let code = "substr($str, 5, ";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help =
+        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for substr")?;
     assert_eq!(help.active_parameter, Some(2)); // Third parameter
+    Ok(())
 }
 
 #[test]
-fn test_io_function_signatures() {
-    let ast = Parser::new("").parse().unwrap();
+fn test_io_function_signatures() -> TestResult {
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     // Test say (Perl 5.10+)
     let code = "say(";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help =
+        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for say")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("say"));
 
     // Test sysread
     let code = "sysread($fh, $buf, ";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help =
+        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for sysread")?;
     assert_eq!(help.active_parameter, Some(2));
+    Ok(())
 }
 
 #[test]
-fn test_math_function_signatures() {
-    let ast = Parser::new("").parse().unwrap();
+fn test_math_function_signatures() -> TestResult {
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     // Test atan2 which takes two parameters
     let code = "atan2($y, ";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help =
+        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for atan2")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("atan2"));
     assert_eq!(help.active_parameter, Some(1));
+    Ok(())
 }
 
 #[test]
-fn test_socket_function_signatures() {
-    let ast = Parser::new("").parse().unwrap();
+fn test_socket_function_signatures() -> TestResult {
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     // Test socket function
     let code = "socket($sock, $domain, ";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help =
+        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for socket")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("socket"));
+    Ok(())
 }
 
 #[test]
-fn test_tied_variable_signatures() {
-    let ast = Parser::new("").parse().unwrap();
+fn test_tied_variable_signatures() -> TestResult {
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     // Test tie function
     let code = "tie(%hash, 'Tie::File', ";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help =
+        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for tie")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("tie"));
+    Ok(())
 }
 
 #[test]
-fn test_socketpair_signature() {
-    let ast = Parser::new("").parse().unwrap();
+fn test_socketpair_signature() -> TestResult {
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     // Test socketpair function
     let code = "socketpair($sock1, $sock2, ";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for socketpair")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("socketpair"));
     assert_eq!(help.active_parameter, Some(2));
+    Ok(())
 }
 
 #[test]
-fn test_network_function_signatures() {
-    let ast = Parser::new("").parse().unwrap();
+fn test_network_function_signatures() -> TestResult {
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     // Test gethostbyname
     let code = "gethostbyname(";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for gethostbyname")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("gethostbyname"));
 
     // Test getservbyname
     let code = "getservbyname('http', ";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for getservbyname")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("getservbyname"));
+    Ok(())
 }
 
 #[test]
-fn test_io_control_function_signatures() {
-    let ast = Parser::new("").parse().unwrap();
+fn test_io_control_function_signatures() -> TestResult {
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     // Test pipe
     let code = "pipe($read, ";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help =
+        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for pipe")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("pipe"));
 
     // Test flock
     let code = "flock($fh, ";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help =
+        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for flock")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("flock"));
+    Ok(())
 }
 
 #[test]
-fn test_user_group_function_signatures() {
-    let ast = Parser::new("").parse().unwrap();
+fn test_user_group_function_signatures() -> TestResult {
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     // Test getpwnam
     let code = "getpwnam(";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for getpwnam")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("getpwnam"));
 
     // Test getgrnam
     let code = "getgrnam(";
-    let help = provider.get_signature_help(code, code.len() - 1).unwrap();
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for getgrnam")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("getgrnam"));
+    Ok(())
 }

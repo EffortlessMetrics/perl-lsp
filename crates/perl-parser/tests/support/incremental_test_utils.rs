@@ -19,11 +19,7 @@ impl IncrementalTestUtils {
     pub fn create_value_edit(source: &str, old_value: &str, new_value: &str) -> (String, Edit) {
         let pos = match source.find(old_value) {
             Some(p) => p,
-            None => panic!(
-                "Could not find '{}' in source. Source content: {}",
-                old_value,
-                source
-            ),
+            None => panic!("Could not find '{}' in source. Source content: {}", old_value, source),
         };
         let end_pos = pos + old_value.len();
         let new_end = pos + new_value.len();
@@ -93,9 +89,7 @@ impl IncrementalTestUtils {
             if let Err(e) = parser.parse(initial_source) {
                 panic!(
                     "Failed to parse initial source in iteration {}: {} (source: {})",
-                    i,
-                    e,
-                    initial_source
+                    i, e, initial_source
                 );
             }
             let initial_time = start.elapsed();

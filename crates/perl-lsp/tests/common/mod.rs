@@ -272,9 +272,8 @@ pub fn start_lsp_server() -> LspServer {
         None => panic!("stderr should be piped after spawn"),
     };
     let echo = std::env::var_os("LSP_TEST_ECHO_STDERR").is_some();
-    let _stderr_thread = match std::thread::Builder::new()
-        .name("lsp-stderr-drain".into())
-        .spawn(move || {
+    let _stderr_thread =
+        match std::thread::Builder::new().name("lsp-stderr-drain".into()).spawn(move || {
             let mut r = BufReader::new(stderr);
             let mut line = String::new();
             while r.read_line(&mut line).unwrap_or(0) > 0 {
@@ -283,11 +282,10 @@ pub fn start_lsp_server() -> LspServer {
                 }
                 line.clear();
             }
-        })
-    {
-        Ok(handle) => handle,
-        Err(e) => panic!("Failed to spawn stderr drain thread: {e}"),
-    };
+        }) {
+            Ok(handle) => handle,
+            Err(e) => panic!("Failed to spawn stderr drain thread: {e}"),
+        };
 
     // -------- stdout LSP reader thread --------
     let stdout = match process.stdout.take() {
@@ -296,9 +294,8 @@ pub fn start_lsp_server() -> LspServer {
     };
     let (tx, rx) = mpsc::channel::<Value>();
     let debug_reader = std::env::var_os("LSP_TEST_DEBUG_READER").is_some();
-    let _stdout_thread = match std::thread::Builder::new()
-        .name("lsp-stdout-reader".into())
-        .spawn(move || {
+    let _stdout_thread =
+        match std::thread::Builder::new().name("lsp-stdout-reader".into()).spawn(move || {
             let mut r = BufReader::new(stdout);
             if debug_reader {
                 eprintln!("[reader] Thread started");
@@ -357,11 +354,10 @@ pub fn start_lsp_server() -> LspServer {
                     let _ = tx.send(val);
                 }
             }
-        })
-    {
-        Ok(handle) => handle,
-        Err(e) => panic!("Failed to spawn stdout reader thread: {e}"),
-    };
+        }) {
+            Ok(handle) => handle,
+            Err(e) => panic!("Failed to spawn stdout reader thread: {e}"),
+        };
 
     let server = LspServer {
         process,
@@ -417,7 +413,11 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
         }
         v => match read_response_matching(server, v, default_timeout()) {
             Some(resp) => resp,
-            None => error_response_for_request(Some(id.clone()), ERR_TEST_TIMEOUT, "test harness timeout"),
+            None => error_response_for_request(
+                Some(id.clone()),
+                ERR_TEST_TIMEOUT,
+                "test harness timeout",
+            ),
         },
     }
 }

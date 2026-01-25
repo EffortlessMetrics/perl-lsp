@@ -3,6 +3,8 @@ mod support;
 use serde_json::{Value, json};
 use support::lsp_harness::LspHarness;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 /// Test helper to get declaration result
 fn get_declaration(
     harness: &mut LspHarness,
@@ -23,35 +25,32 @@ fn get_declaration(
 }
 
 #[test]
-
-fn test_variable_declaration_same_block() {
+fn test_variable_declaration_same_block() -> TestResult {
     let mut harness = LspHarness::new();
-    harness
-        .initialize(Some(json!({
-            "capabilities": {
-                "textDocument": {
-                    "declaration": {
-                        "linkSupport": true
-                    }
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "declaration": {
+                    "linkSupport": true
                 }
             }
-        })))
-        .unwrap();
+        }
+    })))?;
 
     let uri = "file:///test.pl";
     let content = r#"my $x = 1;
 $x++;
 print $x;"#;
 
-    harness.open(uri, content).unwrap();
+    harness.open(uri, content)?;
 
     // Click on $x on line 1 (character 0)
     let result = get_declaration(&mut harness, uri, 1, 0);
     assert!(result.is_some());
 
-    let locations = result.unwrap();
+    let locations = result.ok_or("Expected declaration result")?;
     assert!(locations.is_array());
-    let locations = locations.as_array().unwrap();
+    let locations = locations.as_array().ok_or("Expected locations array")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 0
@@ -65,25 +64,24 @@ print $x;"#;
         // It's a LocationLink
         assert_eq!(target_range["start"]["line"], 0);
     } else {
-        panic!("Unknown location format: {:?}", location);
+        return Err(format!("Unknown location format: {:?}", location).into());
     }
+
+    Ok(())
 }
 
 #[test]
-
-fn test_variable_shadowing() {
+fn test_variable_shadowing() -> TestResult {
     let mut harness = LspHarness::new();
-    harness
-        .initialize(Some(json!({
-            "capabilities": {
-                "textDocument": {
-                    "declaration": {
-                        "linkSupport": true
-                    }
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "declaration": {
+                    "linkSupport": true
                 }
             }
-        })))
-        .unwrap();
+        }
+    })))?;
 
     let uri = "file:///test.pl";
     let content = r#"my $x = 1;
@@ -93,15 +91,15 @@ fn test_variable_shadowing() {
 }
 print $x;  # Should resolve to outer $x"#;
 
-    harness.open(uri, content).unwrap();
+    harness.open(uri, content)?;
 
     // Click on inner $x usage (line 3, character 10)
     let result = get_declaration(&mut harness, uri, 3, 10);
     assert!(result.is_some());
 
-    let locations = result.unwrap();
+    let locations = result.ok_or("Expected declaration result for inner $x")?;
     assert!(locations.is_array());
-    let locations = locations.as_array().unwrap();
+    let locations = locations.as_array().ok_or("Expected locations array for inner $x")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 2 (inner declaration)
@@ -111,16 +109,16 @@ print $x;  # Should resolve to outer $x"#;
     } else if let Some(target_range) = location.get("targetRange") {
         assert_eq!(target_range["start"]["line"], 2);
     } else {
-        panic!("Unknown location format: {:?}", location);
+        return Err(format!("Unknown location format for inner $x: {:?}", location).into());
     }
 
     // Click on outer $x usage (line 5, character 6)
     let result = get_declaration(&mut harness, uri, 5, 6);
     assert!(result.is_some());
 
-    let locations = result.unwrap();
+    let locations = result.ok_or("Expected declaration result for outer $x")?;
     assert!(locations.is_array());
-    let locations = locations.as_array().unwrap();
+    let locations = locations.as_array().ok_or("Expected locations array for outer $x")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 0 (outer declaration)
@@ -130,25 +128,24 @@ print $x;  # Should resolve to outer $x"#;
     } else if let Some(target_range) = location.get("targetRange") {
         assert_eq!(target_range["start"]["line"], 0);
     } else {
-        panic!("Unknown location format: {:?}", location);
+        return Err(format!("Unknown location format for outer $x: {:?}", location).into());
     }
+
+    Ok(())
 }
 
 #[test]
-
-fn test_subroutine_declaration() {
+fn test_subroutine_declaration() -> TestResult {
     let mut harness = LspHarness::new();
-    harness
-        .initialize(Some(json!({
-            "capabilities": {
-                "textDocument": {
-                    "declaration": {
-                        "linkSupport": true
-                    }
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "declaration": {
+                    "linkSupport": true
                 }
             }
-        })))
-        .unwrap();
+        }
+    })))?;
 
     let uri = "file:///test.pl";
     let content = r#"sub foo {
@@ -157,15 +154,15 @@ fn test_subroutine_declaration() {
 
 my $result = foo();"#;
 
-    harness.open(uri, content).unwrap();
+    harness.open(uri, content)?;
 
     // Click on foo() call (line 4, character 13)
     let result = get_declaration(&mut harness, uri, 4, 13);
     assert!(result.is_some());
 
-    let locations = result.unwrap();
+    let locations = result.ok_or("Expected declaration result for subroutine")?;
     assert!(locations.is_array());
-    let locations = locations.as_array().unwrap();
+    let locations = locations.as_array().ok_or("Expected locations array for subroutine")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 0 (sub declaration)
@@ -175,25 +172,24 @@ my $result = foo();"#;
     } else if let Some(target_range) = location.get("targetRange") {
         assert_eq!(target_range["start"]["line"], 0);
     } else {
-        panic!("Unknown location format: {:?}", location);
+        return Err(format!("Unknown location format for subroutine: {:?}", location).into());
     }
+
+    Ok(())
 }
 
 #[test]
-
-fn test_cross_package_subroutine() {
+fn test_cross_package_subroutine() -> TestResult {
     let mut harness = LspHarness::new();
-    harness
-        .initialize(Some(json!({
-            "capabilities": {
-                "textDocument": {
-                    "declaration": {
-                        "linkSupport": true
-                    }
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "declaration": {
+                    "linkSupport": true
                 }
             }
-        })))
-        .unwrap();
+        }
+    })))?;
 
     let uri = "file:///test.pl";
     let content = r#"package Foo;
@@ -204,15 +200,16 @@ sub bar {
 package main;
 my $result = Foo::bar();"#;
 
-    harness.open(uri, content).unwrap();
+    harness.open(uri, content)?;
 
     // Click on Foo::bar() call (line 6, character 13)
     let result = get_declaration(&mut harness, uri, 6, 18);
     assert!(result.is_some());
 
-    let locations = result.unwrap();
+    let locations = result.ok_or("Expected declaration result for cross-package subroutine")?;
     assert!(locations.is_array());
-    let locations = locations.as_array().unwrap();
+    let locations =
+        locations.as_array().ok_or("Expected locations array for cross-package subroutine")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 1 (sub bar in package Foo)
@@ -222,39 +219,42 @@ my $result = Foo::bar();"#;
     } else if let Some(target_range) = location.get("targetRange") {
         assert_eq!(target_range["start"]["line"], 1);
     } else {
-        panic!("Unknown location format: {:?}", location);
+        return Err(format!(
+            "Unknown location format for cross-package subroutine: {:?}",
+            location
+        )
+        .into());
     }
+
+    Ok(())
 }
 
 #[test]
-
-fn test_constant_declaration() {
+fn test_constant_declaration() -> TestResult {
     let mut harness = LspHarness::new();
-    harness
-        .initialize(Some(json!({
-            "capabilities": {
-                "textDocument": {
-                    "declaration": {
-                        "linkSupport": true
-                    }
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "declaration": {
+                    "linkSupport": true
                 }
             }
-        })))
-        .unwrap();
+        }
+    })))?;
 
     let uri = "file:///test.pl";
     let content = r#"use constant FOO => 42;
 my $x = FOO;"#;
 
-    harness.open(uri, content).unwrap();
+    harness.open(uri, content)?;
 
     // Click on FOO usage (line 1, character 8)
     let result = get_declaration(&mut harness, uri, 1, 8);
     assert!(result.is_some());
 
-    let locations = result.unwrap();
+    let locations = result.ok_or("Expected declaration result for constant")?;
     assert!(locations.is_array());
-    let locations = locations.as_array().unwrap();
+    let locations = locations.as_array().ok_or("Expected locations array for constant")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 0 (constant declaration)
@@ -264,40 +264,39 @@ my $x = FOO;"#;
     } else if let Some(target_range) = location.get("targetRange") {
         assert_eq!(target_range["start"]["line"], 0);
     } else {
-        panic!("Unknown location format: {:?}", location);
+        return Err(format!("Unknown location format for constant: {:?}", location).into());
     }
+
+    Ok(())
 }
 
 #[test]
-
-fn test_unicode_variable_name() {
+fn test_unicode_variable_name() -> TestResult {
     let mut harness = LspHarness::new();
-    harness
-        .initialize(Some(json!({
-            "capabilities": {
-                "textDocument": {
-                    "declaration": {
-                        "linkSupport": true
-                    }
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "declaration": {
+                    "linkSupport": true
                 }
             }
-        })))
-        .unwrap();
+        }
+    })))?;
 
     let uri = "file:///test.pl";
     let content = r#"my $π = 3.14159;
 print $π;"#;
 
-    harness.open(uri, content).unwrap();
+    harness.open(uri, content)?;
 
     // Click on $π usage (line 1, character 6)
     // Note: π is 2 UTF-16 code units
     let result = get_declaration(&mut harness, uri, 1, 6);
     assert!(result.is_some());
 
-    let locations = result.unwrap();
+    let locations = result.ok_or("Expected declaration result for unicode variable")?;
     assert!(locations.is_array());
-    let locations = locations.as_array().unwrap();
+    let locations = locations.as_array().ok_or("Expected locations array for unicode variable")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 0 (declaration)
@@ -307,6 +306,8 @@ print $π;"#;
     } else if let Some(target_range) = location.get("targetRange") {
         assert_eq!(target_range["start"]["line"], 0);
     } else {
-        panic!("Unknown location format: {:?}", location);
+        return Err(format!("Unknown location format for unicode variable: {:?}", location).into());
     }
+
+    Ok(())
 }

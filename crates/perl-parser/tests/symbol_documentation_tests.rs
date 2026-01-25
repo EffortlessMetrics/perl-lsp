@@ -200,13 +200,15 @@ class MyClass {
     let extractor = SymbolExtractor::new_with_source(src);
     let table = extractor.extract(&ast);
 
-    let do_something_symbols = table.symbols.get("do_something").ok_or("symbol do_something not found")?;
+    let do_something_symbols =
+        table.symbols.get("do_something").ok_or("symbol do_something not found")?;
     assert_eq!(
         do_something_symbols[0].documentation.as_deref(),
         Some("This method does something\nwith multiple parameters")
     );
 
-    let simple_symbols = table.symbols.get("simple_method").ok_or("symbol simple_method not found")?;
+    let simple_symbols =
+        table.symbols.get("simple_method").ok_or("symbol simple_method not found")?;
     assert_eq!(
         simple_symbols[0].documentation.as_deref(),
         Some("Another method with no parameters")
@@ -265,8 +267,10 @@ fn performance_with_large_comment_blocks() -> TestResult {
     // Should complete within reasonable time (< 10ms even for large comment blocks)
     assert!(duration.as_millis() < 10, "Comment extraction took too long: {:?}", duration);
 
-    let symbols =
-        table.symbols.get("large_comment_function").ok_or("symbol large_comment_function not found")?;
+    let symbols = table
+        .symbols
+        .get("large_comment_function")
+        .ok_or("symbol large_comment_function not found")?;
     assert!(symbols[0].documentation.is_some());
 
     // Check that all 100 lines are captured
@@ -352,7 +356,13 @@ fn edge_case_non_ascii_whitespace() -> TestResult {
 
     // Should handle non-ASCII whitespace properly
     assert!(symbols[0].documentation.is_some());
-    assert!(symbols[0].documentation.as_ref().ok_or("documentation is None")?.contains("Comment with various whitespace"));
+    assert!(
+        symbols[0]
+            .documentation
+            .as_ref()
+            .ok_or("documentation is None")?
+            .contains("Comment with various whitespace")
+    );
     Ok(())
 }
 

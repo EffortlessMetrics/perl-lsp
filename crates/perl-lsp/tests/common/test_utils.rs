@@ -320,9 +320,9 @@ pub mod assertions {
             None => panic!("Expected diagnostic items array, got: {response:?}"),
         };
 
-        let found = items.iter().any(|item| {
-            item["message"].as_str().is_some_and(|msg| msg.contains(expected_message))
-        });
+        let found = items
+            .iter()
+            .any(|item| item["message"].as_str().is_some_and(|msg| msg.contains(expected_message)));
 
         assert!(found, "Expected diagnostic containing '{}', got: {:?}", expected_message, items);
     }

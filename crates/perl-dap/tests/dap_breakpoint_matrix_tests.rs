@@ -23,7 +23,11 @@ fn create_test_file_and_set_breakpoints(
     temp_file.flush()?;
 
     // Get the file path
-    let path = temp_file.path().to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert path to string"))?.to_string();
+    let path = temp_file
+        .path()
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("Failed to convert path to string"))?
+        .to_string();
 
     // Create breakpoint store
     let store = BreakpointStore::new();
@@ -61,7 +65,10 @@ my $x = 42;
 
     assert_eq!(breakpoints.len(), 1);
     assert!(!breakpoints[0].verified, "Breakpoint on comment line should be unverified");
-    let message = breakpoints[0].message.as_ref().ok_or_else(|| anyhow::anyhow!("Expected breakpoint message"))?;
+    let message = breakpoints[0]
+        .message
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Expected breakpoint message"))?;
     assert!(message.contains("comment"));
 
     Ok(())
@@ -79,7 +86,10 @@ my $y = 100;
 
     assert_eq!(breakpoints.len(), 1);
     assert!(!breakpoints[0].verified, "Breakpoint on blank line should be unverified");
-    let message = breakpoints[0].message.as_ref().ok_or_else(|| anyhow::anyhow!("Expected breakpoint message"))?;
+    let message = breakpoints[0]
+        .message
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Expected breakpoint message"))?;
     assert!(message.contains("blank"));
 
     Ok(())
@@ -118,11 +128,17 @@ my $x = 42;
 
     // Lines 2 and 3 are inside heredoc - should be unverified
     assert!(!breakpoints[0].verified, "Breakpoint inside heredoc should be unverified");
-    let message_0 = breakpoints[0].message.as_ref().ok_or_else(|| anyhow::anyhow!("Expected breakpoint message for line 2"))?;
+    let message_0 = breakpoints[0]
+        .message
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Expected breakpoint message for line 2"))?;
     assert!(message_0.contains("heredoc"));
 
     assert!(!breakpoints[1].verified, "Breakpoint inside heredoc should be unverified");
-    let message_1 = breakpoints[1].message.as_ref().ok_or_else(|| anyhow::anyhow!("Expected breakpoint message for line 3"))?;
+    let message_1 = breakpoints[1]
+        .message
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Expected breakpoint message for line 3"))?;
     assert!(message_1.contains("heredoc"));
 
     // Line 5 is executable code - should be verified
@@ -212,7 +228,11 @@ my $y = 100;
     let mut temp_file = NamedTempFile::new()?;
     temp_file.write_all(source.as_bytes())?;
     temp_file.flush()?;
-    let path = temp_file.path().to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert path to string"))?.to_string();
+    let path = temp_file
+        .path()
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("Failed to convert path to string"))?
+        .to_string();
 
     let store = BreakpointStore::new();
 
@@ -264,7 +284,10 @@ fn test_breakpoint_file_not_found() -> Result<()> {
 
     assert_eq!(breakpoints.len(), 1);
     assert!(!breakpoints[0].verified, "Breakpoint on nonexistent file should be unverified");
-    let message = breakpoints[0].message.as_ref().ok_or_else(|| anyhow::anyhow!("Expected breakpoint message"))?;
+    let message = breakpoints[0]
+        .message
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Expected breakpoint message"))?;
     assert!(message.contains("Unable to read"));
 
     Ok(())

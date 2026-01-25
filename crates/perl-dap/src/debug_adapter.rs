@@ -2328,14 +2328,14 @@ mod tests {
         // Note: Patterns using =~ are blocked by the assignment check (pre-existing behavior)
         // so we test patterns without =~ here
         let allowed = [
-            r#"/\s+/"#,            // \s in regex literal (no binding operator)
-            r#"/string/"#,         // match containing 's'
-            r#"/tricky/"#,         // match containing 'tr'
-            r#"/yay/"#,            // match containing 'y'
-            r#"$s"#,               // variable named $s
-            r#"$tr"#,              // variable named $tr
-            r#"$y"#,               // variable named $y
-            r#"qr/\s+/"#,          // compiled regex with \s
+            r#"/\s+/"#,    // \s in regex literal (no binding operator)
+            r#"/string/"#, // match containing 's'
+            r#"/tricky/"#, // match containing 'tr'
+            r#"/yay/"#,    // match containing 'y'
+            r#"$s"#,       // variable named $s
+            r#"$tr"#,      // variable named $tr
+            r#"$y"#,       // variable named $y
+            r#"qr/\s+/"#,  // compiled regex with \s
         ];
 
         for expr in allowed {

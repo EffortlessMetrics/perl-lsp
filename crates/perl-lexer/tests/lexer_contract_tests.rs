@@ -159,7 +159,8 @@ fn sigil_brace_is_not_identifier() -> TestResult {
         let b = lx.next_token().ok_or_else(|| format!("Expected second token for '{}'", s))?;
 
         // First token should be the sigil
-        let sigil_char = s.chars().next().ok_or_else(|| format!("Expected sigil char in '{}'", s))?;
+        let sigil_char =
+            s.chars().next().ok_or_else(|| format!("Expected sigil char in '{}'", s))?;
         assert!(
             matches!(a.token_type, TokenType::Identifier(ref id) if id.as_ref() == sigil_char.to_string()),
             "First token of '{}' should be sigil '{}', got {:?}",

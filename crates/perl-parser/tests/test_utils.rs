@@ -303,10 +303,9 @@ pub mod assertions {
     pub fn assert_has_diagnostic(response: &Value, expected_message: &str) {
         let items = match response["result"]["items"].as_array() {
             Some(arr) => arr,
-            None => panic!(
-                "Expected diagnostic items array in response, got: {:?}",
-                response["result"]
-            ),
+            None => {
+                panic!("Expected diagnostic items array in response, got: {:?}", response["result"])
+            }
         };
 
         let found = items.iter().any(|item| {
@@ -507,7 +506,9 @@ fn read_response(child: &mut Child) -> Value {
         .find(|line| line.starts_with("Content-Length:"))
         .and_then(|line| line.split(':').nth(1))
         .and_then(|len| len.trim().parse().ok())
-        .unwrap_or_else(|| panic!("Content-Length header not found in response headers: {}", headers));
+        .unwrap_or_else(|| {
+            panic!("Content-Length header not found in response headers: {}", headers)
+        });
 
     // Read content
     let mut content = vec![0; content_length];

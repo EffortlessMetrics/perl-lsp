@@ -12,7 +12,9 @@ use tempfile::tempdir;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Create a test Perl script with specific content
-fn create_edge_case_script(content: &str) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+fn create_edge_case_script(
+    content: &str,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     let dir = tempdir()?;
     let script_path = dir.path().join("edge_case.pl");
     write(&script_path, content)?;
@@ -81,7 +83,10 @@ say "Done";
         DapMessage::Response { success, body, .. } => {
             assert!(success);
             let body = body.ok_or("Expected body in response")?;
-            let breakpoints = body.get("breakpoints").and_then(|b| b.as_array()).ok_or("Expected breakpoints array")?;
+            let breakpoints = body
+                .get("breakpoints")
+                .and_then(|b| b.as_array())
+                .ok_or("Expected breakpoints array")?;
             assert_eq!(breakpoints.len(), 3);
 
             // All breakpoints should be present (verified depends on session)
@@ -160,7 +165,10 @@ fn test_dap_variables_complex_scopes() -> TestResult {
                 assert_eq!(command, "variables");
                 if success {
                     let body = body.ok_or("Expected body in successful response")?;
-                    let variables = body.get("variables").and_then(|v| v.as_array()).ok_or("Expected variables array")?;
+                    let variables = body
+                        .get("variables")
+                        .and_then(|v| v.as_array())
+                        .ok_or("Expected variables array")?;
                     // Should return some variables for valid references
                     if var_ref == 1 {
                         assert!(!variables.is_empty(), "Local scope should have default variables");
@@ -172,7 +180,11 @@ fn test_dap_variables_complex_scopes() -> TestResult {
                     }
                 }
             }
-            _ => return Err(format!("Expected variables response for reference: {}", var_ref).into()),
+            _ => {
+                return Err(
+                    format!("Expected variables response for reference: {}", var_ref).into()
+                );
+            }
         }
     }
     Ok(())
@@ -198,7 +210,10 @@ fn test_dap_stack_trace_edge_cases() -> TestResult {
                 assert_eq!(command, "stackTrace");
                 if success {
                     let body = body.ok_or("Expected body in successful response")?;
-                    let frames = body.get("stackFrames").and_then(|f| f.as_array()).ok_or("Expected stackFrames array")?;
+                    let frames = body
+                        .get("stackFrames")
+                        .and_then(|f| f.as_array())
+                        .ok_or("Expected stackFrames array")?;
                     let total = body.get("totalFrames").and_then(|t| t.as_u64()).unwrap_or(0);
 
                     // Without active session, should return empty
@@ -235,7 +250,10 @@ fn test_dap_scopes_edge_cases() -> TestResult {
                 assert_eq!(command, "scopes");
                 if success {
                     let body = body.ok_or("Expected body in successful response")?;
-                    let scopes = body.get("scopes").and_then(|s| s.as_array()).ok_or("Expected scopes array")?;
+                    let scopes = body
+                        .get("scopes")
+                        .and_then(|s| s.as_array())
+                        .ok_or("Expected scopes array")?;
 
                     // Should return at least one scope (Local) for any valid frame
                     if frame_id > 0 {
@@ -245,7 +263,10 @@ fn test_dap_scopes_edge_cases() -> TestResult {
                         let scope = &scopes[0];
                         assert!(scope.get("name").is_some());
                         assert!(scope.get("variablesReference").is_some());
-                        let scope_name = scope.get("name").and_then(|n| n.as_str()).ok_or("Expected scope name")?;
+                        let scope_name = scope
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .ok_or("Expected scope name")?;
                         assert_eq!(scope_name, "Local");
                     }
                 }
@@ -320,9 +341,17 @@ fn test_dap_malformed_requests() -> TestResult {
                 // Most should fail with helpful error messages
                 if !success {
                     if let Some(msg) = message {
-                        assert!(!msg.is_empty(), "Error message should not be empty for {}", command);
+                        assert!(
+                            !msg.is_empty(),
+                            "Error message should not be empty for {}",
+                            command
+                        );
                     } else {
-                        return Err(format!("Failed request should have error message for {}", command).into());
+                        return Err(format!(
+                            "Failed request should have error message for {}",
+                            command
+                        )
+                        .into());
                     }
                 }
             }

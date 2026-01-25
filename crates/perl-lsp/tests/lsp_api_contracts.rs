@@ -4,7 +4,6 @@
 //! and properly validates all inputs/outputs according to the LSP specification.
 
 #![allow(clippy::collapsible_if)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -12,6 +11,8 @@ use std::time::{Duration, Instant};
 
 mod support;
 use support::lsp_harness::LspHarness;
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 // ======================== HELPER FUNCTIONS ========================
 
@@ -27,34 +28,32 @@ fn is_location(v: &Value) -> bool {
     v.get("uri").and_then(|u| u.as_str()).is_some() && v.get("range").is_some_and(is_range)
 }
 
-fn open_doc(harness: &mut LspHarness, text: &str) -> String {
+fn open_doc(harness: &mut LspHarness, text: &str) -> Result<String, Box<dyn std::error::Error>> {
     let uri = "file:///test.pl";
-    harness.open(uri, text).expect("open");
-    uri.to_string()
+    harness.open(uri, text)?;
+    Ok(uri.to_string())
 }
 
 // ======================== INITIALIZATION CONTRACT ========================
 
 #[test]
-fn test_initialization_contract() {
+fn test_initialization_contract() -> TestResult {
     let mut harness = LspHarness::new();
 
     // Initialize with minimal capabilities
-    let response = harness
-        .initialize(Some(json!({
-            "textDocument": {},
-            "workspace": {}
-        })))
-        .expect("initialize");
+    let response = harness.initialize(Some(json!({
+        "textDocument": {},
+        "workspace": {}
+    })))?;
 
     // The harness returns the 'result' field directly, which contains 'capabilities'
-    let caps = response.get("capabilities").expect("initialize response must have capabilities");
+    let caps = response.get("capabilities").ok_or("initialize response must have capabilities")?;
 
     // CRITICAL CONTRACT: Must have these exact trigger characters
     let triggers = caps
         .pointer("/completionProvider/triggerCharacters")
         .and_then(|v| v.as_array())
-        .expect("completionProvider.triggerCharacters must be an array");
+        .ok_or("completionProvider.triggerCharacters must be an array")?;
 
     let trigger_set: HashSet<_> = triggers.iter().filter_map(|v| v.as_str()).collect();
 
@@ -82,21 +81,21 @@ fn test_initialization_contract() {
             assert_eq!(num, 1, "textDocumentSync must be 1 (full sync)");
         }
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_minimal_client_initialization() {
+fn test_minimal_client_initialization() -> TestResult {
     let mut harness = LspHarness::new();
 
     // Minimal client with no dynamic registration or advanced features
-    let response = harness
-        .initialize(Some(json!({
-            "textDocument": {},
-            "workspace": {}
-        })))
-        .expect("initialize");
+    let response = harness.initialize(Some(json!({
+        "textDocument": {},
+        "workspace": {}
+    })))?;
 
-    let caps = response.get("capabilities").expect("capabilities");
+    let caps = response.get("capabilities").ok_or("capabilities")?;
 
     // Server should still advertise basic features
     assert!(caps.get("textDocumentSync").is_some());
@@ -105,18 +104,22 @@ fn test_minimal_client_initialization() {
     assert!(caps.get("definitionProvider").is_some());
 
     // Verify triggers are still correct for minimal client
-    let triggers =
-        caps.pointer("/completionProvider/triggerCharacters").and_then(|v| v.as_array()).unwrap();
+    let triggers = caps
+        .pointer("/completionProvider/triggerCharacters")
+        .and_then(|v| v.as_array())
+        .ok_or("triggerCharacters")?;
     assert_eq!(triggers.len(), 4);
     assert!(triggers.iter().any(|t| t == "->"));
+
+    Ok(())
 }
 
 #[test]
-fn test_double_initialization_rejected() {
+fn test_double_initialization_rejected() -> TestResult {
     let mut harness = LspHarness::new();
 
     // First initialization should succeed
-    let first = harness.initialize(None).expect("first init");
+    let first = harness.initialize(None)?;
     assert!(first.get("capabilities").is_some());
 
     // Second initialization should be rejected with LSP error
@@ -134,26 +137,26 @@ fn test_double_initialization_rejected() {
             msg
         );
     }
+
+    Ok(())
 }
 
 // ======================== REQUEST/RESPONSE SHAPE CONTRACTS ========================
 
 #[test]
-fn test_completion_response_shape() {
+fn test_completion_response_shape() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
-    harness.open("file:///test.pl", "my $var = 1; $v").expect("open");
+    harness.open("file:///test.pl", "my $var = 1; $v")?;
 
-    let response = harness
-        .request(
-            "textDocument/completion",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "position": { "line": 0, "character": 14 }
-            }),
-        )
-        .expect("completion");
+    let response = harness.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 0, "character": 14 }
+        }),
+    )?;
 
     // Response must be array or CompletionList
     let items = if let Some(arr) = response.as_array() {
@@ -161,12 +164,18 @@ fn test_completion_response_shape() {
         arr
     } else if let Some(list) = response.as_object() {
         // CompletionList with items field
-        list.get("items").and_then(|v| v.as_array()).expect("CompletionList must have items array")
+        list.get("items")
+            .and_then(|v| v.as_array())
+            .ok_or("CompletionList must have items array")?
     } else if response.is_null() {
         // Null is acceptable for no completions
-        return;
+        return Ok(());
     } else {
-        panic!("Completion must return array, CompletionList, or null, got: {:?}", response);
+        return Err(format!(
+            "Completion must return array, CompletionList, or null, got: {:?}",
+            response
+        )
+        .into());
     };
 
     // If we have items, verify at least one has required fields
@@ -177,14 +186,16 @@ fn test_completion_response_shape() {
             "CompletionItem must have string label"
         );
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_hover_response_shape() {
+fn test_hover_response_shape() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
-    harness.open("file:///test.pl", "sub test { } test();").expect("open");
+    harness.open("file:///test.pl", "sub test { } test();")?;
 
     let response = harness.request(
         "textDocument/hover",
@@ -198,11 +209,12 @@ fn test_hover_response_shape() {
     if let Ok(hover) = response {
         if !hover.is_null() {
             // Check for contents field (required by LSP)
-            let contents = hover.get("contents").expect("Hover must have contents field");
+            let contents = hover.get("contents").ok_or("Hover must have contents field")?;
 
             // Contents can be string, MarkupContent, or MarkedString[]
             if contents.is_string() {
-                assert!(!contents.as_str().unwrap().is_empty());
+                let text = contents.as_str().ok_or("string contents")?;
+                assert!(!text.is_empty());
             } else if let Some(obj) = contents.as_object() {
                 // MarkupContent with kind and value
                 assert!(
@@ -213,18 +225,20 @@ fn test_hover_response_shape() {
                 // MarkedString[]
                 assert!(!arr.is_empty());
             } else {
-                panic!("Invalid hover contents format: {:?}", contents);
+                return Err(format!("Invalid hover contents format: {:?}", contents).into());
             }
         }
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_document_highlight_contract() {
+fn test_document_highlight_contract() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
-    let uri = open_doc(&mut harness, r#"my $x = 1; $x++; print $x;"#);
+    let uri = open_doc(&mut harness, r#"my $x = 1; $x++; print $x;"#)?;
 
     let response = harness.request(
         "textDocument/documentHighlight",
@@ -256,14 +270,16 @@ fn test_document_highlight_contract() {
             );
         }
     }
+
+    Ok(())
 }
 
 // ======================== ERROR HANDLING CONTRACTS ========================
 
 #[test]
-fn test_error_response_contract() {
+fn test_error_response_contract() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Request on non-existent document might return null or error
     let response = harness.request(
@@ -278,14 +294,12 @@ fn test_error_response_contract() {
     match response {
         Ok(result) => {
             // Null or empty result is valid for non-existent document
+            let is_empty_array = result.is_array() && result.as_array().ok_or("array")?.is_empty();
+            let is_empty_list = result.is_object()
+                && result.get("items").and_then(|v| v.as_array()).is_some_and(|a| a.is_empty());
+
             assert!(
-                result.is_null()
-                    || (result.is_array() && result.as_array().unwrap().is_empty())
-                    || (result.is_object()
-                        && result
-                            .get("items")
-                            .and_then(|v| v.as_array())
-                            .is_some_and(|a| a.is_empty())),
+                result.is_null() || is_empty_array || is_empty_list,
                 "Expected null or empty result for non-existent document"
             );
         }
@@ -294,25 +308,25 @@ fn test_error_response_contract() {
             assert!(!msg.is_empty(), "Error message should not be empty");
         }
     }
+
+    Ok(())
 }
 
 // ======================== WORKSPACE OPERATIONS ========================
 
 #[test]
-fn test_workspace_folders_contract() {
+fn test_workspace_folders_contract() -> TestResult {
     let mut harness = LspHarness::new();
 
     // Initialize with workspace folders capability
-    let response = harness
-        .initialize(Some(json!({
-            "workspace": {
-                "workspaceFolders": true
-            },
-            "textDocument": {}
-        })))
-        .expect("init");
+    let response = harness.initialize(Some(json!({
+        "workspace": {
+            "workspaceFolders": true
+        },
+        "textDocument": {}
+    })))?;
 
-    let caps = response.get("capabilities").expect("capabilities");
+    let caps = response.get("capabilities").ok_or("capabilities")?;
 
     // Only send workspace folder changes if server explicitly supports it
     // and won't trigger reverse requests
@@ -326,8 +340,8 @@ fn test_workspace_folders_contract() {
     // to verify the server accepts the capability
 
     // Server should work with documents in different workspace paths
-    harness.open("file:///workspace/test.pl", "print 1;").expect("open");
-    harness.open("file:///workspace2/test.pl", "print 2;").expect("open");
+    harness.open("file:///workspace/test.pl", "print 1;")?;
+    harness.open("file:///workspace2/test.pl", "print 2;")?;
 
     // Both documents should be queryable
     let response1 = harness.request(
@@ -345,17 +359,19 @@ fn test_workspace_folders_contract() {
         }),
     );
     assert!(response2.is_ok(), "Should handle second workspace");
+
+    Ok(())
 }
 
 // ======================== VERSION AND EDIT CONTRACTS ========================
 
 #[test]
-fn test_apply_edit_with_version() {
+fn test_apply_edit_with_version() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     let uri = "file:///test.pl";
-    harness.open(uri, "say 1;\n").expect("open");
+    harness.open(uri, "say 1;\n")?;
 
     // Note: workspace/applyEdit is a client capability
     // We test version handling via didChange instead
@@ -393,20 +409,22 @@ fn test_apply_edit_with_version() {
     );
 
     assert!(response.is_ok(), "Server must handle version conflicts gracefully");
+
+    Ok(())
 }
 
 // ======================== PERFORMANCE CONTRACTS ========================
 
 #[test]
-fn test_bounded_definition_timeout() {
+fn test_bounded_definition_timeout() -> TestResult {
     // This test verifies that module resolution completes quickly
     // even when the module doesn't exist. We've improved the timeout
     // handling but the test harness itself may block.
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
-    let uri = open_doc(&mut harness, r#"My::Missing::Module->new()"#);
+    let uri = open_doc(&mut harness, r#"My::Missing::Module->new()"#)?;
 
     let start = Instant::now();
     let response = harness.request_with_timeout(
@@ -424,17 +442,17 @@ fn test_bounded_definition_timeout() {
 
     // Result should be null or empty array
     if let Ok(result) = response {
-        assert!(
-            result.is_null() || (result.is_array() && result.as_array().unwrap().is_empty()),
-            "Missing module should return null or empty"
-        );
+        let is_empty_array = result.is_array() && result.as_array().ok_or("array")?.is_empty();
+        assert!(result.is_null() || is_empty_array, "Missing module should return null or empty");
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_large_file_responsiveness() {
+fn test_large_file_responsiveness() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Create a moderately large file
     let mut content = String::new();
@@ -443,67 +461,65 @@ fn test_large_file_responsiveness() {
     }
 
     let uri = "file:///large.pl";
-    harness.open(uri, &content).expect("open");
+    harness.open(uri, &content)?;
 
     // Request should complete in reasonable time
-    let (_, duration) = harness
-        .timed_request(
-            "textDocument/documentSymbol",
-            json!({
-                "textDocument": { "uri": uri }
-            }),
-        )
-        .expect("symbols");
+    let (_, duration) = harness.timed_request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
 
     assert!(
         duration < Duration::from_millis(1000),
         "Large file processing took too long: {:?}",
         duration
     );
+
+    Ok(())
 }
 
 // ======================== PROPERTY-BASED CONTRACTS ========================
 
 #[test]
-fn test_idempotent_operations() {
+fn test_idempotent_operations() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     let uri = "file:///test.pl";
     let text = "my $x = 1;";
 
     // Opening same document multiple times should be idempotent
-    harness.open(uri, text).expect("open");
-    harness.open(uri, text).expect("open");
+    harness.open(uri, text)?;
+    harness.open(uri, text)?;
 
-    let response1 = harness
-        .request(
-            "textDocument/documentSymbol",
-            json!({
-                "textDocument": { "uri": uri }
-            }),
-        )
-        .expect("symbols 1");
+    let response1 = harness.request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
 
-    harness.open(uri, text).expect("open");
+    harness.open(uri, text)?;
 
-    let response2 = harness
-        .request(
-            "textDocument/documentSymbol",
-            json!({
-                "textDocument": { "uri": uri }
-            }),
-        )
-        .expect("symbols 2");
+    let response2 = harness.request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
 
     // Results should be identical
     assert_eq!(response1, response2, "Idempotent operations must produce same results");
+
+    Ok(())
 }
 
 #[test]
-fn test_uri_validation_contract() {
+fn test_uri_validation_contract() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Valid URIs that must be accepted
     let valid_uris = vec![
@@ -514,7 +530,7 @@ fn test_uri_validation_contract() {
     ];
 
     for uri in valid_uris {
-        harness.open(uri, "print 'test'").expect("open");
+        harness.open(uri, "print 'test'")?;
 
         let response = harness.request(
             "textDocument/documentSymbol",
@@ -525,40 +541,42 @@ fn test_uri_validation_contract() {
 
         assert!(response.is_ok(), "Must accept valid URI: {}", uri);
     }
+
+    Ok(())
 }
 
 // ======================== BACKWARDS COMPATIBILITY ========================
 
 #[test]
-fn test_legacy_client_support() {
+fn test_legacy_client_support() -> TestResult {
     let mut harness = LspHarness::new();
 
     // Old-style initialization without modern capabilities
-    let response = harness
-        .initialize(Some(json!({
-            "textDocument": {
-                // No completion, hover, or other modern capabilities
-            }
-        })))
-        .expect("init");
+    let response = harness.initialize(Some(json!({
+        "textDocument": {
+            // No completion, hover, or other modern capabilities
+        }
+    })))?;
 
     // Server should still work with minimal capabilities
-    let caps = response.get("capabilities").expect("capabilities");
+    let caps = response.get("capabilities").ok_or("capabilities")?;
     assert!(caps.get("textDocumentSync").is_some());
 
     // Basic operations should still work
-    harness.open("file:///test.pl", "print 1;").expect("open");
+    harness.open("file:///test.pl", "print 1;")?;
+
+    Ok(())
 }
 
 #[test]
-fn test_no_stdout_leak() {
+fn test_no_stdout_leak() -> TestResult {
     // This test would need special harness support to capture raw stdout
     // For now, we just verify the server doesn't panic on normal operations
     let mut harness = LspHarness::new();
 
     // Multiple operations that might trigger stdout writes
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "print 'test';").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "print 'test';")?;
     harness
         .request(
             "textDocument/completion",
@@ -570,4 +588,6 @@ fn test_no_stdout_leak() {
         .ok();
 
     // If we got here without panics, basic stdout handling is working
+
+    Ok(())
 }

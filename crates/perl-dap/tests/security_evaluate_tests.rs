@@ -189,7 +189,8 @@ fn test_evaluate_blocks_dangerous_operations() -> TestResult {
         return Err(format!(
             "The following dangerous operations were NOT blocked in safe mode:\n{}",
             failures.join("\n")
-        ).into());
+        )
+        .into());
     }
 
     Ok(())

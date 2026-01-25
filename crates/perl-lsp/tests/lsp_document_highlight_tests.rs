@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive LSP integration tests for Document Highlight feature
 //!
 //! Tests feature spec: LSP_IMPLEMENTATION_GUIDE.md#document-highlight
@@ -31,12 +30,14 @@ mod support;
 use serde_json::json;
 use support::lsp_harness::LspHarness;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 /// Tests feature spec: references.rs#basic-variable-highlighting
 ///
 /// Validates that basic variable highlighting returns all occurrences of a scalar
 /// variable within the document with proper Read/Write distinction.
 #[test]
-fn test_basic_variable_highlighting() {
+fn test_basic_variable_highlighting() -> TestResult {
     let doc = r#"
 my $count = 0;
 $count = $count + 1;
@@ -46,8 +47,8 @@ $count++;
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///test.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
 
     let result = harness
         .request(
@@ -61,13 +62,13 @@ $count++;
 
     assert!(result.is_array(), "documentHighlight should return an array");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
     assert!(!highlights.is_empty(), "Should find highlights for $count variable");
 
     // Verify structure of returned highlights
     for highlight in highlights {
         assert!(highlight.get("range").is_some(), "Each highlight must have a range");
-        let range = highlight.get("range").unwrap();
+        let range = highlight.get("range").ok_or("Expected range in highlight")?;
         assert!(
             range.get("start").is_some() && range.get("end").is_some(),
             "Range must have start and end positions"
@@ -75,7 +76,7 @@ $count++;
 
         // Kind should be present (1=Text, 2=Read, 3=Write)
         if let Some(kind) = highlight.get("kind") {
-            let kind_val = kind.as_u64().unwrap();
+            let kind_val = kind.as_u64().ok_or("Expected u64 for kind")?;
             assert!(
                 (1..=3).contains(&kind_val),
                 "DocumentHighlightKind must be 1 (Text), 2 (Read), or 3 (Write), got {}",
@@ -90,13 +91,15 @@ $count++;
         "Should find at least 5 occurrences of $count, found {}",
         highlights.len()
     );
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#subroutine-highlighting
 ///
 /// Validates that subroutine highlighting finds both the definition and all call sites.
 #[test]
-fn test_subroutine_name_highlighting() {
+fn test_subroutine_name_highlighting() -> TestResult {
     let doc = r#"
 sub calculate {
     my ($x, $y) = @_;
@@ -109,8 +112,8 @@ calculate(1, 2);
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///calc.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///calc.pl", doc)?;
 
     let result = harness
         .request(
@@ -124,7 +127,7 @@ calculate(1, 2);
 
     assert!(result.is_array(), "Should return array for subroutine highlights");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find the sub definition and all three call sites
     assert!(
@@ -135,9 +138,9 @@ calculate(1, 2);
 
     // Verify all highlights have valid ranges
     for highlight in highlights {
-        let range = highlight.get("range").unwrap();
-        let start = range.get("start").unwrap();
-        let end = range.get("end").unwrap();
+        let range = highlight.get("range").ok_or("Expected range in highlight")?;
+        let start = range.get("start").ok_or("Expected start position")?;
+        let end = range.get("end").ok_or("Expected end position")?;
 
         assert!(
             start.get("line").and_then(|l| l.as_u64()).is_some(),
@@ -156,13 +159,15 @@ calculate(1, 2);
             "End position should have valid character offset"
         );
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#package-name-highlighting
 ///
 /// Validates highlighting of package names across declarations and uses.
 #[test]
-fn test_package_name_highlighting() {
+fn test_package_name_highlighting() -> TestResult {
     let doc = r#"
 package MyModule;
 
@@ -182,8 +187,8 @@ my $other = MyModule->new();
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///module.pm", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///module.pm", doc)?;
 
     let result = harness
         .request(
@@ -197,28 +202,25 @@ my $other = MyModule->new();
 
     assert!(result.is_array(), "Should return array for package name highlights");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Implementation may vary - accept any result as long as structure is valid
     // The key test is that the API works correctly
     for highlight in highlights {
         assert!(highlight.get("range").is_some(), "Each highlight must have a range");
-        assert!(
-            highlight.get("range").unwrap().get("start").is_some(),
-            "Range must have start position"
-        );
-        assert!(
-            highlight.get("range").unwrap().get("end").is_some(),
-            "Range must have end position"
-        );
+        let range = highlight.get("range").ok_or("Expected range in highlight")?;
+        assert!(range.get("start").is_some(), "Range must have start position");
+        assert!(range.get("end").is_some(), "Range must have end position");
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#no-highlights-found
 ///
 /// Validates that cursor on whitespace or comments returns empty array.
 #[test]
-fn test_no_highlights_found_on_whitespace() {
+fn test_no_highlights_found_on_whitespace() -> TestResult {
     let doc = r#"
 # This is a comment
 my $variable = 42;
@@ -227,8 +229,8 @@ print $variable;
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///test.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
 
     // Test on comment
     let result = harness
@@ -242,7 +244,7 @@ print $variable;
         .unwrap_or(json!(null));
 
     assert!(result.is_array(), "Should return array even for non-symbol positions");
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
     assert_eq!(highlights.len(), 0, "Should return empty array for comment positions");
 
     // Test on whitespace line
@@ -257,15 +259,17 @@ print $variable;
         .unwrap_or(json!(null));
 
     assert!(result.is_array(), "Should return array for whitespace positions");
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
     assert_eq!(highlights.len(), 0, "Should return empty array for whitespace positions");
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#read-write-distinction
 ///
 /// Validates that highlights properly distinguish between Read and Write access patterns.
 #[test]
-fn test_multiple_occurrences_with_read_write_distinction() {
+fn test_multiple_occurrences_with_read_write_distinction() -> TestResult {
     let doc = r#"
 my $counter = 0;          # Write (declaration/initialization)
 $counter = 10;            # Write (assignment)
@@ -277,8 +281,8 @@ return $counter;          # Read (return value)
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///test.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
 
     let result = harness
         .request(
@@ -292,7 +296,7 @@ return $counter;          # Read (return value)
 
     assert!(result.is_array(), "Should return array of highlights");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
     assert!(
         highlights.len() >= 7,
         "Should find at least 7 occurrences of $counter, found {}",
@@ -310,7 +314,7 @@ return $counter;          # Read (return value)
                 1 => has_text = true,  // Text
                 2 => has_read = true,  // Read
                 3 => has_write = true, // Write
-                _ => panic!("Invalid DocumentHighlightKind: {}", kind),
+                _ => return Err(format!("Invalid DocumentHighlightKind: {}", kind).into()),
             }
         }
     }
@@ -327,13 +331,15 @@ return $counter;          # Read (return value)
         assert!(has_read || has_text, "Should have Read highlights for usage contexts");
         assert!(has_write || has_text, "Should have Write highlights for assignment contexts");
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#unicode-identifiers
 ///
 /// Validates document highlight handling with Unicode variable and function names.
 #[test]
-fn test_unicode_identifiers() {
+fn test_unicode_identifiers() -> TestResult {
     let doc = r#"
 package Café;
 
@@ -354,8 +360,8 @@ my $total = Σ(1, 2, 3);
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///unicode.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///unicode.pl", doc)?;
 
     // Test highlighting Unicode function name
     let result = harness
@@ -370,12 +376,12 @@ my $total = Σ(1, 2, 3);
 
     assert!(result.is_array(), "Should successfully handle Unicode function names");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find at least the definition and the call
     // Implementation may vary - accept any valid result
     for highlight in highlights {
-        let range = highlight.get("range").unwrap();
+        let range = highlight.get("range").ok_or("Expected range in highlight")?;
         assert!(
             range.get("start").is_some() && range.get("end").is_some(),
             "Unicode highlights must have valid ranges"
@@ -393,13 +399,15 @@ my $total = Σ(1, 2, 3);
         assert!(start_line < 100, "Line number should be reasonable for Unicode content");
         assert!(start_char < 1000, "Character offset should be reasonable for Unicode content");
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#method-call-highlighting
 ///
 /// Validates highlighting of method calls in object-oriented code.
 #[test]
-fn test_method_call_highlighting() {
+fn test_method_call_highlighting() -> TestResult {
     let doc = r#"
 package Logger;
 
@@ -422,8 +430,8 @@ $logger->log("Done");
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///logger.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///logger.pl", doc)?;
 
     let result = harness
         .request(
@@ -437,20 +445,22 @@ $logger->log("Done");
 
     assert!(result.is_array(), "Should return array for method highlights");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find the method definition and all call sites
     // Implementation may vary - accept any valid result
     for highlight in highlights {
         assert!(highlight.get("range").is_some(), "Each highlight must have a range");
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#lexical-scope-awareness
 ///
 /// Validates that highlighting respects lexical scoping rules.
 #[test]
-fn test_lexical_scope_awareness() {
+fn test_lexical_scope_awareness() -> TestResult {
     let doc = r#"
 my $outer = 10;
 
@@ -465,8 +475,8 @@ my $result = process();
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///scope.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///scope.pl", doc)?;
 
     // Test highlighting $inner - should only find occurrences within the function
     let result = harness
@@ -481,7 +491,7 @@ my $result = process();
 
     assert!(result.is_array(), "Should return array for scoped variable");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find 3 occurrences of $inner (declaration, print, return) but NOT $outer
     assert!(
@@ -492,7 +502,7 @@ my $result = process();
 
     // Verify all highlights are within the function scope (lines 4-6)
     for highlight in highlights {
-        let range = highlight.get("range").unwrap();
+        let range = highlight.get("range").ok_or("Expected range in highlight")?;
         let line = range.get("start").and_then(|s| s.get("line")).and_then(|l| l.as_u64());
 
         if let Some(line_num) = line {
@@ -503,13 +513,15 @@ my $result = process();
             );
         }
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#array-hash-highlighting
 ///
 /// Validates highlighting of array and hash variables.
 #[test]
-fn test_array_and_hash_highlighting() {
+fn test_array_and_hash_highlighting() -> TestResult {
     let doc = r#"
 my @items = (1, 2, 3);
 push @items, 4;
@@ -522,8 +534,8 @@ my $debug = $config{debug};
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///arrays.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///arrays.pl", doc)?;
 
     // Test highlighting @items
     let result = harness
@@ -538,7 +550,7 @@ my $debug = $config{debug};
 
     assert!(result.is_array(), "Should return array for array variable highlights");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
     assert!(
         highlights.len() >= 4,
         "Should find at least 4 occurrences of @items, found {}",
@@ -558,24 +570,26 @@ my $debug = $config{debug};
 
     assert!(result.is_array(), "Should return array for hash variable highlights");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
     assert!(
         highlights.len() >= 3,
         "Should find at least 3 occurrences of %config, found {}",
         highlights.len()
     );
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#crlf-handling
 ///
 /// Validates document highlight position calculation with CRLF line endings.
 #[test]
-fn test_crlf_line_endings() {
+fn test_crlf_line_endings() -> TestResult {
     let doc = "my $var = 1;\r\n$var = 2;\r\nprint $var;\r\nmy $result = $var * 3;\r\n";
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///crlf.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///crlf.pl", doc)?;
 
     let result = harness
         .request(
@@ -589,7 +603,7 @@ fn test_crlf_line_endings() {
 
     assert!(result.is_array(), "Should handle CRLF line endings correctly");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
     assert!(
         highlights.len() >= 4,
         "Should find all occurrences of $var with CRLF endings, found {}",
@@ -598,7 +612,7 @@ fn test_crlf_line_endings() {
 
     // Verify positions are reasonable (no negative or extreme values)
     for highlight in highlights {
-        let range = highlight.get("range").unwrap();
+        let range = highlight.get("range").ok_or("Expected range in highlight")?;
         let start_line = range
             .get("start")
             .and_then(|s| s.get("line"))
@@ -613,13 +627,15 @@ fn test_crlf_line_endings() {
         assert!(start_line < 10, "Line number should be reasonable: {}", start_line);
         assert!(start_char < 100, "Character offset should be reasonable: {}", start_char);
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#malformed-code-handling
 ///
 /// Validates graceful degradation with syntax errors.
 #[test]
-fn test_malformed_code_graceful_handling() {
+fn test_malformed_code_graceful_handling() -> TestResult {
     let doc = r#"
 my $valid = 42;
 my $broken = @_;  # Syntax error
@@ -630,8 +646,8 @@ print $valid;
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///broken.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///broken.pl", doc)?;
 
     let result = harness
         .request(
@@ -646,23 +662,25 @@ print $valid;
     // Should not crash, return array even if partially parsed
     assert!(result.is_array(), "Should handle malformed code gracefully");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find at least some occurrences of $valid despite syntax errors
     // Implementation may vary based on error recovery capabilities
     for highlight in highlights {
         assert!(highlight.get("range").is_some(), "Each highlight must have a range");
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#empty-file-handling
 ///
 /// Validates graceful handling of empty files.
 #[test]
-fn test_empty_file_handling() {
+fn test_empty_file_handling() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///empty.pl", "").unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///empty.pl", "")?;
 
     let result = harness
         .request(
@@ -676,15 +694,17 @@ fn test_empty_file_handling() {
 
     assert!(result.is_array(), "Should return array for empty file");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
     assert_eq!(highlights.len(), 0, "Should return empty array for empty file");
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#global-variable-highlighting
 ///
 /// Validates highlighting of global variables (package variables).
 #[test]
-fn test_global_variable_highlighting() {
+fn test_global_variable_highlighting() -> TestResult {
     let doc = r#"
 package MyModule;
 
@@ -702,8 +722,8 @@ print "Module version: $MyModule::VERSION\n";
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///globals.pm", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///globals.pm", doc)?;
 
     let result = harness
         .request(
@@ -717,20 +737,22 @@ print "Module version: $MyModule::VERSION\n";
 
     assert!(result.is_array(), "Should return array for global variable highlights");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find multiple occurrences of $VERSION
     // Implementation may vary based on qualified name handling
     for highlight in highlights {
         assert!(highlight.get("range").is_some(), "Each highlight must have a range");
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#position-accuracy
 ///
 /// Validates that highlight positions accurately correspond to symbol occurrences.
 #[test]
-fn test_position_accuracy() {
+fn test_position_accuracy() -> TestResult {
     let doc = r#"my $first = 1;
 my $second = 2;
 my $third = 3;
@@ -739,8 +761,8 @@ my $result = $second * 2;
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///positions.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///positions.pl", doc)?;
 
     let result = harness
         .request(
@@ -752,7 +774,7 @@ my $result = $second * 2;
         )
         .unwrap_or(json!(null));
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find 3 occurrences of $second (declaration, print, calculation)
     assert!(
@@ -763,7 +785,7 @@ my $result = $second * 2;
 
     // Verify that all highlights are on the correct variable ($second, not $first or $third)
     for highlight in highlights {
-        let range = highlight.get("range").unwrap();
+        let range = highlight.get("range").ok_or("Expected range in highlight")?;
         let line = range.get("start").and_then(|s| s.get("line")).and_then(|l| l.as_u64());
 
         if let Some(line_num) = line {
@@ -775,13 +797,15 @@ my $result = $second * 2;
             );
         }
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#nested-subroutines
 ///
 /// Validates highlighting with nested subroutine scopes.
 #[test]
-fn test_nested_subroutines() {
+fn test_nested_subroutines() -> TestResult {
     let doc = r#"
 sub outer {
     my $x = 10;
@@ -798,8 +822,8 @@ my $result = outer();
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///nested.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///nested.pl", doc)?;
 
     // Test highlighting $x - should find declaration and usage in inner sub
     let result = harness
@@ -814,7 +838,7 @@ my $result = outer();
 
     assert!(result.is_array(), "Should return array for nested scope variable");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find $x in both outer and inner contexts
     assert!(
@@ -822,13 +846,15 @@ my $result = outer();
         "Should find at least 2 occurrences of $x (declaration and usage in inner sub), found {}",
         highlights.len()
     );
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#qualified-name-highlighting
 ///
 /// Validates highlighting of fully qualified subroutine names.
 #[test]
-fn test_qualified_name_highlighting() {
+fn test_qualified_name_highlighting() -> TestResult {
     let doc = r#"
 package Utils;
 
@@ -850,8 +876,8 @@ my $formatted = Utils::format_string("world");
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///qualified.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///qualified.pl", doc)?;
 
     let result = harness
         .request(
@@ -865,20 +891,22 @@ my $formatted = Utils::format_string("world");
 
     assert!(result.is_array(), "Should return array for qualified name highlights");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find definition and both qualified calls
     // Implementation may vary based on qualified name handling
     for highlight in highlights {
         assert!(highlight.get("range").is_some(), "Each highlight must have a range");
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#regex-variable-highlighting
 ///
 /// Validates highlighting of special variables like $1, $2, etc. in regex contexts.
 #[test]
-fn test_regex_capture_variable_highlighting() {
+fn test_regex_capture_variable_highlighting() -> TestResult {
     let doc = r#"
 my $text = "Hello World";
 
@@ -890,8 +918,8 @@ if ($text =~ /(\w+)\s+(\w+)/) {
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///regex.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///regex.pl", doc)?;
 
     // Test highlighting $1
     let result = harness
@@ -906,22 +934,24 @@ if ($text =~ /(\w+)\s+(\w+)/) {
 
     assert!(result.is_array(), "Should return array for regex capture variable highlights");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find both uses of $1 (or may not support special variables yet)
     // Accept any valid result
     for highlight in highlights {
         assert!(highlight.get("range").is_some(), "Each highlight must have a range");
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#capability-advertisement
 ///
 /// Validates that document highlight capability is advertised in server capabilities.
 #[test]
-fn test_document_highlight_capability_advertised() {
+fn test_document_highlight_capability_advertised() -> TestResult {
     let mut harness = LspHarness::new();
-    let init_response = harness.initialize(None).expect("Failed to initialize");
+    let init_response = harness.initialize(None)?;
 
     let capabilities = &init_response["capabilities"];
 
@@ -938,13 +968,15 @@ fn test_document_highlight_capability_advertised() {
             provider
         );
     }
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#performance-large-file
 ///
 /// Validates performance with large files containing many variables.
 #[test]
-fn test_large_file_performance() {
+fn test_large_file_performance() -> TestResult {
     // Generate a large file with many variable occurrences
     let mut doc = String::from("my $target = 0;\n");
     for i in 0..500 {
@@ -953,8 +985,8 @@ fn test_large_file_performance() {
     doc.push_str("print $target;\n");
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///large.pl", &doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///large.pl", &doc)?;
 
     let start = std::time::Instant::now();
     let result = harness
@@ -970,7 +1002,7 @@ fn test_large_file_performance() {
 
     assert!(result.is_array(), "Should handle large files");
 
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find at least 501 occurrences of $target (declaration + 500 uses)
     assert!(
@@ -985,13 +1017,15 @@ fn test_large_file_performance() {
         "Large file document highlight should complete within 5 seconds, took {:?}",
         elapsed
     );
+
+    Ok(())
 }
 
 /// Tests feature spec: references.rs#builtin-variable-highlighting
 ///
 /// Validates highlighting of Perl builtin variables like $_, $@, $!, etc.
 #[test]
-fn test_builtin_variable_highlighting() {
+fn test_builtin_variable_highlighting() -> TestResult {
     let doc = r#"
 for my $item (@array) {
     print $_;
@@ -1006,8 +1040,8 @@ if ($@) {
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///builtins.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///builtins.pl", doc)?;
 
     // Test highlighting $_ (default variable)
     let result = harness
@@ -1024,8 +1058,10 @@ if ($@) {
 
     // Implementation may or may not support builtin variables
     // Accept any valid result
-    let highlights = result.as_array().unwrap();
+    let highlights = result.as_array().ok_or("Expected array result")?;
     for highlight in highlights {
         assert!(highlight.get("range").is_some(), "Each highlight must have a range");
     }
+
+    Ok(())
 }

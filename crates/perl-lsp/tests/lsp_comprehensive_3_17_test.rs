@@ -434,19 +434,17 @@ fn test_completion_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "print $")?;
 
-    let response = harness
-        .request(
-            "textDocument/completion",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "position": { "line": 0, "character": 7 },
-                "context": {
-                    "triggerKind": 1,  // Invoked
-                    "triggerCharacter": "$"
-                }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 0, "character": 7 },
+            "context": {
+                "triggerKind": 1,  // Invoked
+                "triggerCharacter": "$"
+            }
+        }),
+    )?;
 
     // Response can be array or CompletionList
     assert!(response.is_array() || (response.is_object() && response.get("items").is_some()));
@@ -459,16 +457,14 @@ fn test_hover_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "print 'hello'")?;
 
-    let response = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "position": { "line": 0, "character": 0 },
-                "workDoneToken": "hover-1"  // optional progress token
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 0, "character": 0 },
+            "workDoneToken": "hover-1"  // optional progress token
+        }),
+    )?;
 
     if !response.is_null() {
         assert!(
@@ -486,21 +482,19 @@ fn test_signature_help_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "substr(")?;
 
-    let response = harness
-        .request(
-            "textDocument/signatureHelp",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "position": { "line": 0, "character": 7 },
-                "context": {
-                    "triggerKind": 1,  // Invoked
-                    "triggerCharacter": "(",
-                    "isRetrigger": false,
-                    "activeSignatureHelp": null
-                }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/signatureHelp",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 0, "character": 7 },
+            "context": {
+                "triggerKind": 1,  // Invoked
+                "triggerCharacter": "(",
+                "isRetrigger": false,
+                "activeSignatureHelp": null
+            }
+        }),
+    )?;
 
     if !response.is_null() {
         assert!(response["signatures"].is_array());
@@ -514,15 +508,13 @@ fn test_declaration_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "my $x = 1;\n$x")?;
 
-    let response = harness
-        .request(
-            "textDocument/declaration",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "position": { "line": 1, "character": 0 }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/declaration",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 1, "character": 0 }
+        }),
+    )?;
 
     // Can be Location, Location[], LocationLink[], or null
     assert!(response.is_null() || response.is_object() || response.is_array());
@@ -535,15 +527,13 @@ fn test_definition_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "sub test {}\ntest()")?;
 
-    let response = harness
-        .request(
-            "textDocument/definition",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "position": { "line": 1, "character": 0 }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 1, "character": 0 }
+        }),
+    )?;
 
     // Can be Location, Location[], LocationLink[], or null
     assert!(response.is_null() || response.is_object() || response.is_array());
@@ -602,9 +592,10 @@ fn test_implementation_3_17() -> TestResult {
     let supported =
         caps.get("implementationProvider").is_some() && !caps["implementationProvider"].is_null();
 
-    harness
-        .open("file:///test.pl", "package Base;\nsub method {}\npackage Derived;\nuse base 'Base';")
-        ?;
+    harness.open(
+        "file:///test.pl",
+        "package Base;\nsub method {}\npackage Derived;\nuse base 'Base';",
+    )?;
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -642,18 +633,16 @@ fn test_references_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "my $x = 1;\n$x++;\nprint $x;")?;
 
-    let response = harness
-        .request(
-            "textDocument/references",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "position": { "line": 0, "character": 4 },
-                "context": {
-                    "includeDeclaration": true
-                }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 0, "character": 4 },
+            "context": {
+                "includeDeclaration": true
+            }
+        }),
+    )?;
 
     assert!(response.is_null() || response.is_array());
     Ok(())
@@ -665,15 +654,13 @@ fn test_document_highlight_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "my $x = 1;\n$x = 2;\nprint $x;")?;
 
-    let response = harness
-        .request(
-            "textDocument/documentHighlight",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "position": { "line": 0, "character": 4 }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 0, "character": 4 }
+        }),
+    )?;
 
     assert!(response.is_null() || response.is_array());
     Ok(())
@@ -685,14 +672,12 @@ fn test_document_symbol_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "package Foo;\nsub bar {}\nmy $var = 1;")?;
 
-    let response = harness
-        .request(
-            "textDocument/documentSymbol",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" }
+        }),
+    )?;
 
     assert!(response.is_null() || response.is_array());
     Ok(())
@@ -704,23 +689,21 @@ fn test_code_action_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "$undefined")?;
 
-    let response = harness
-        .request(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "range": {
-                    "start": { "line": 0, "character": 0 },
-                    "end": { "line": 0, "character": 10 }
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["quickfix", "refactor"],
-                    "triggerKind": 1  // Invoked
-                }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 0, "character": 10 }
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["quickfix", "refactor"],
+                "triggerKind": 1  // Invoked
+            }
+        }),
+    )?;
 
     assert!(response.is_null() || response.is_array());
     Ok(())
@@ -754,14 +737,12 @@ fn test_code_lens_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "sub test {}\ntest();")?;
 
-    let response = harness
-        .request(
-            "textDocument/codeLens",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/codeLens",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" }
+        }),
+    )?;
 
     assert!(response.is_null() || response.is_array());
     Ok(())
@@ -773,14 +754,12 @@ fn test_document_link_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "use strict;\nuse Data::Dumper;")?;
 
-    let response = harness
-        .request(
-            "textDocument/documentLink",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/documentLink",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" }
+        }),
+    )?;
 
     assert!(response.is_null() || response.is_array());
     Ok(())
@@ -887,20 +866,18 @@ fn test_on_type_formatting_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "if (1) {")?;
 
-    let response = harness
-        .request(
-            "textDocument/onTypeFormatting",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "position": { "line": 0, "character": 8 },
-                "ch": "{",
-                "options": {
-                    "tabSize": 4,
-                    "insertSpaces": true
-                }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/onTypeFormatting",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 0, "character": 8 },
+            "ch": "{",
+            "options": {
+                "tabSize": 4,
+                "insertSpaces": true
+            }
+        }),
+    )?;
 
     assert!(response.is_null() || response.is_array());
     Ok(())
@@ -912,16 +889,14 @@ fn test_rename_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "my $old = 1;\n$old++;")?;
 
-    let response = harness
-        .request(
-            "textDocument/rename",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "position": { "line": 0, "character": 4 },
-                "newName": "new"
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 0, "character": 4 },
+            "newName": "new"
+        }),
+    )?;
 
     assert!(response.is_null() || response.is_object());
     Ok(())
@@ -933,15 +908,13 @@ fn test_prepare_rename_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "my $var = 1;")?;
 
-    let response = harness
-        .request(
-            "textDocument/prepareRename",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "position": { "line": 0, "character": 4 }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/prepareRename",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 0, "character": 4 }
+        }),
+    )?;
 
     // Can be Range, {range, placeholder}, {defaultBehavior}, or null
     assert!(response.is_null() || response.is_object() || response.is_array());
@@ -954,14 +927,12 @@ fn test_folding_range_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "sub test {\n    my $x = 1;\n    return $x;\n}")?;
 
-    let response = harness
-        .request(
-            "textDocument/foldingRange",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" }
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/foldingRange",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" }
+        }),
+    )?;
 
     assert!(response.is_null() || response.is_array());
     Ok(())
@@ -973,17 +944,15 @@ fn test_selection_range_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "if ($x) { print $x; }")?;
 
-    let response = harness
-        .request(
-            "textDocument/selectionRange",
-            json!({
-                "textDocument": { "uri": "file:///test.pl" },
-                "positions": [
-                    { "line": 0, "character": 10 }
-                ]
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "textDocument/selectionRange",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "positions": [
+                { "line": 0, "character": 10 }
+            ]
+        }),
+    )?;
 
     assert!(response.is_null() || response.is_array());
     Ok(())
@@ -1113,9 +1082,7 @@ fn test_incoming_calls_3_17() -> TestResult {
 fn test_prepare_type_hierarchy_3_17() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
-    harness
-        .open("file:///test.pl", "package Base;\npackage Derived;\nuse base 'Base';")
-        ?;
+    harness.open("file:///test.pl", "package Base;\npackage Derived;\nuse base 'Base';")?;
 
     let response = harness.request(
         "textDocument/prepareTypeHierarchy",
@@ -1296,15 +1263,13 @@ fn test_workspace_symbol_3_17() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
 
-    let response = harness
-        .request(
-            "workspace/symbol",
-            json!({
-                "query": "test",
-                "workDoneToken": "symbol-1"
-            }),
-        )
-        ?;
+    let response = harness.request(
+        "workspace/symbol",
+        json!({
+            "query": "test",
+            "workDoneToken": "symbol-1"
+        }),
+    )?;
 
     assert!(response.is_null() || response.is_array());
     Ok(())
@@ -1962,5 +1927,3 @@ fn test_full_lsp_3_17_compliance() -> TestResult {
     assert!(methods.len() >= 89, "LSP 3.17 defines 91 methods, with some optional");
     Ok(())
 }
-
-

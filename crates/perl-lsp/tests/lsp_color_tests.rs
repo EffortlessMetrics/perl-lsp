@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! LSP Color Detection Tests
 //!
 //! Tests for textDocument/documentColor and textDocument/colorPresentation
@@ -9,6 +8,8 @@ use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 /// Helper to send a request and get result
 fn send_request(server: &mut LspServer, method: &str, params: Value) -> Result<Value, String> {
     let request = JsonRpcRequest {
@@ -18,7 +19,8 @@ fn send_request(server: &mut LspServer, method: &str, params: Value) -> Result<V
         params: Some(params),
     };
 
-    let response = server.handle_request(request).expect("Should get response");
+    let response =
+        server.handle_request(request).ok_or_else(|| "Failed to get response".to_string())?;
     if let Some(error) = response.error {
         return Err(error.message);
     }
@@ -80,7 +82,7 @@ fn setup_color_server() -> LspServer {
 }
 
 #[test]
-fn lsp_color_detect_hex_colors() {
+fn lsp_color_detect_hex_colors() -> TestResult {
     let mut server = setup_color_server();
 
     let result = send_request(
@@ -91,10 +93,9 @@ fn lsp_color_detect_hex_colors() {
                 "uri": "file:///test/colors.pl"
             }
         }),
-    )
-    .unwrap();
+    )?;
 
-    let color_array = result.as_array().expect("Should be an array");
+    let color_array = result.as_array().ok_or("Result should be an array")?;
 
     // Should detect at least the hex colors in comments
     // We expect: #FF0000, #00FF00, #0000FFAA, #F00, #ABCDEF, #123456
@@ -106,17 +107,23 @@ fn lsp_color_detect_hex_colors() {
 
     // Verify first color (#FF0000 - red)
     let first_color = &color_array[0];
-    assert!(first_color["color"]["red"].as_f64().unwrap() > 0.99);
-    assert!(first_color["color"]["green"].as_f64().unwrap() < 0.01);
-    assert!(first_color["color"]["blue"].as_f64().unwrap() < 0.01);
+    let red = first_color["color"]["red"].as_f64().ok_or("Red value should be a number")?;
+    let green = first_color["color"]["green"].as_f64().ok_or("Green value should be a number")?;
+    let blue = first_color["color"]["blue"].as_f64().ok_or("Blue value should be a number")?;
+
+    assert!(red > 0.99);
+    assert!(green < 0.01);
+    assert!(blue < 0.01);
 
     // Verify range information exists
     assert!(first_color["range"]["start"]["line"].is_number());
     assert!(first_color["range"]["start"]["character"].is_number());
+
+    Ok(())
 }
 
 #[test]
-fn lsp_color_detect_ansi_colors() {
+fn lsp_color_detect_ansi_colors() -> TestResult {
     let mut server = setup_color_server();
 
     let result = send_request(
@@ -127,10 +134,9 @@ fn lsp_color_detect_ansi_colors() {
                 "uri": "file:///test/colors.pl"
             }
         }),
-    )
-    .unwrap();
+    )?;
 
-    let color_array = result.as_array().expect("Should be an array");
+    let color_array = result.as_array().ok_or("Result should be an array")?;
 
     // Should detect ANSI color codes: \e[31m and \e[32m
     // Find ANSI colors in the results (they appear on lines 5-6)
@@ -143,10 +149,12 @@ fn lsp_color_detect_ansi_colors() {
         .collect();
 
     assert!(!ansi_colors.is_empty(), "Should detect at least one ANSI color");
+
+    Ok(())
 }
 
 #[test]
-fn lsp_color_presentation_hex() {
+fn lsp_color_presentation_hex() -> TestResult {
     let mut server = setup_color_server();
 
     // Test color presentation for pure red
@@ -168,10 +176,9 @@ fn lsp_color_presentation_hex() {
                 "end": {"line": 1, "character": 23}
             }
         }),
-    )
-    .unwrap();
+    )?;
 
-    let pres_array = result.as_array().expect("Should be an array");
+    let pres_array = result.as_array().ok_or("Result should be an array")?;
 
     // Should provide multiple presentation formats
     assert!(pres_array.len() >= 3, "Should provide at least 3 presentation formats");
@@ -183,10 +190,12 @@ fn lsp_color_presentation_hex() {
     assert!(labels.iter().any(|l| l.starts_with('#')), "Should have hex format");
     assert!(labels.iter().any(|l| l.starts_with("rgb(")), "Should have RGB format");
     assert!(labels.iter().any(|l| l.starts_with("hsl(")), "Should have HSL format");
+
+    Ok(())
 }
 
 #[test]
-fn lsp_color_presentation_with_alpha() {
+fn lsp_color_presentation_with_alpha() -> TestResult {
     let mut server = setup_color_server();
 
     // Test color presentation with alpha channel
@@ -208,10 +217,9 @@ fn lsp_color_presentation_with_alpha() {
                 "end": {"line": 3, "character": 29}
             }
         }),
-    )
-    .unwrap();
+    )?;
 
-    let pres_array = result.as_array().expect("Should be an array");
+    let pres_array = result.as_array().ok_or("Result should be an array")?;
 
     let labels: Vec<String> =
         pres_array.iter().filter_map(|p| p["label"].as_str().map(String::from)).collect();
@@ -221,10 +229,12 @@ fn lsp_color_presentation_with_alpha() {
         labels.iter().any(|l| l.contains("rgba") || (l.len() == 9 && l.starts_with('#'))),
         "Should have RGBA or 8-digit hex format"
     );
+
+    Ok(())
 }
 
 #[test]
-fn lsp_color_empty_document() {
+fn lsp_color_empty_document() -> TestResult {
     let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
     let mut server = LspServer::with_output(output);
 
@@ -273,11 +283,12 @@ fn lsp_color_empty_document() {
                 "uri": "file:///test/empty.pl"
             }
         }),
-    )
-    .unwrap();
+    )?;
 
-    let color_array = result.as_array().expect("Should be an array");
+    let color_array = result.as_array().ok_or("Result should be an array")?;
     assert_eq!(color_array.len(), 0, "Empty document should have no colors");
+
+    Ok(())
 }
 
 #[test]
@@ -300,7 +311,7 @@ fn lsp_color_invalid_params() {
 }
 
 #[test]
-fn lsp_color_round_trip() {
+fn lsp_color_round_trip() -> TestResult {
     let mut server = setup_color_server();
 
     // Get colors from document
@@ -312,10 +323,9 @@ fn lsp_color_round_trip() {
                 "uri": "file:///test/colors.pl"
             }
         }),
-    )
-    .unwrap();
+    )?;
 
-    let colors = detected.as_array().expect("Should be an array");
+    let colors = detected.as_array().ok_or("Detected colors should be an array")?;
 
     if let Some(first_color) = colors.first() {
         // Use detected color to get presentations
@@ -329,12 +339,13 @@ fn lsp_color_round_trip() {
                 "color": first_color["color"],
                 "range": first_color["range"]
             }),
-        )
-        .unwrap();
+        )?;
 
-        let pres_array = presentations.as_array().unwrap();
+        let pres_array = presentations.as_array().ok_or("Presentations should be an array")?;
         assert!(!pres_array.is_empty(), "Should have at least one presentation");
     }
+
+    Ok(())
 }
 
 /// Test that color positions are correct with non-ASCII prefix (UTF-16 boundary safety)
@@ -343,7 +354,7 @@ fn lsp_color_round_trip() {
 /// but Rust uses UTF-8. Multi-byte characters before a color token could cause
 /// position misalignment if conversion isn't done correctly.
 #[test]
-fn lsp_color_utf16_position_with_non_ascii_prefix() {
+fn lsp_color_utf16_position_with_non_ascii_prefix() -> TestResult {
     let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
     let mut server = LspServer::with_output(output);
 
@@ -397,10 +408,9 @@ fn lsp_color_utf16_position_with_non_ascii_prefix() {
                 "uri": "file:///test/utf16_colors.pl"
             }
         }),
-    )
-    .unwrap();
+    )?;
 
-    let color_array = result.as_array().expect("Should be an array");
+    let color_array = result.as_array().ok_or("Result should be an array")?;
 
     // Should detect both colors
     assert!(
@@ -421,4 +431,6 @@ fn lsp_color_utf16_position_with_non_ascii_prefix() {
     let first_color = &color_array[0];
     let red = first_color["color"]["red"].as_f64().unwrap_or(0.0);
     assert!(red > 0.5, "First color should have significant red component");
+
+    Ok(())
 }

@@ -33,11 +33,21 @@ x();
         unused.entry(u.module.clone()).or_default().extend(u.symbols.clone());
     }
     assert_eq!(
-        unused.get("Foo").ok_or("Missing Foo in unused")?.iter().cloned().collect::<std::collections::BTreeSet<_>>(),
+        unused
+            .get("Foo")
+            .ok_or("Missing Foo in unused")?
+            .iter()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>(),
         ["b".to_string(), "c".to_string()].into_iter().collect()
     );
     assert_eq!(
-        unused.get("Bar").ok_or("Missing Bar in unused")?.iter().cloned().collect::<std::collections::BTreeSet<_>>(),
+        unused
+            .get("Bar")
+            .ok_or("Missing Bar in unused")?
+            .iter()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>(),
         ["y".to_string()].into_iter().collect()
     );
 
@@ -111,8 +121,15 @@ print Dumper($val);
         unused_symbols.insert(unused.module.clone(), unused.symbols.clone());
     }
 
-    assert!(unused_symbols.get("List::Util").ok_or("Missing List::Util")?.contains(&"min".to_string()));
-    assert!(unused_symbols.get("Scalar::Util").ok_or("Missing Scalar::Util")?.contains(&"blessed".to_string()));
+    assert!(
+        unused_symbols.get("List::Util").ok_or("Missing List::Util")?.contains(&"min".to_string())
+    );
+    assert!(
+        unused_symbols
+            .get("Scalar::Util")
+            .ok_or("Missing Scalar::Util")?
+            .contains(&"blessed".to_string())
+    );
 
     // Generate optimized imports
     let optimized = optimizer.generate_optimized_imports(&analysis);

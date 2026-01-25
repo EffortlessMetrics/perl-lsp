@@ -184,9 +184,7 @@ pub fn assert_call_hierarchy_items(v: &Option<Value>, expected_name: Option<&str
                 // Check for expected name if provided
                 if let Some(name) = expected_name {
                     let found = items.iter().any(|item| {
-                        item.get("name")
-                            .and_then(|n| n.as_str())
-                            .is_some_and(|n| n == name)
+                        item.get("name").and_then(|n| n.as_str()).is_some_and(|n| n == name)
                     });
                     assert!(found, "call hierarchy should contain '{}'", name);
                 }
@@ -211,18 +209,12 @@ pub fn assert_folding_ranges_valid(v: &Option<Value>) {
                     None => panic!("folding range must be object: {range:?}"),
                 };
 
-                let start = match obj
-                    .get("startLine")
-                    .and_then(|v| v.as_u64())
-                {
+                let start = match obj.get("startLine").and_then(|v| v.as_u64()) {
                     Some(n) => n,
                     None => panic!("folding range must have startLine: {obj:?}"),
                 };
 
-                let end = match obj
-                    .get("endLine")
-                    .and_then(|v| v.as_u64())
-                {
+                let end = match obj.get("endLine").and_then(|v| v.as_u64()) {
                     Some(n) => n,
                     None => panic!("folding range must have endLine: {obj:?}"),
                 };

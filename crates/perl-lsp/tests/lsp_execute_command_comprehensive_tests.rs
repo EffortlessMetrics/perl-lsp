@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive tests for LSP executeCommand functionality
 //!
 //! Tests feature spec: SPEC_145_LSP_EXECUTE_COMMAND_AND_CODE_ACTIONS.md
@@ -12,6 +11,8 @@ use std::time::Duration;
 
 mod support;
 use support::lsp_harness::{LspHarness, TempWorkspace};
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 // Test fixtures for executeCommand testing
 mod execute_command_fixtures {
@@ -87,35 +88,29 @@ print "This won't compile"
 }
 
 /// Create test server with executeCommand-focused workspace
-fn create_execute_command_server() -> (LspHarness, TempWorkspace) {
+fn create_execute_command_server() -> Result<(LspHarness, TempWorkspace), Box<dyn std::error::Error>>
+{
     let (mut harness, workspace) = LspHarness::with_workspace(&[
         ("violations.pl", execute_command_fixtures::POLICY_VIOLATIONS_FILE),
         ("good_practices.pl", execute_command_fixtures::GOOD_PRACTICES_FILE),
         ("syntax_error.pl", execute_command_fixtures::SYNTAX_ERROR_FILE),
-    ])
-    .expect("Failed to create executeCommand test workspace");
+    ])?;
 
     // Initialize documents
-    harness
-        .open_document(
-            &workspace.uri("violations.pl"),
-            execute_command_fixtures::POLICY_VIOLATIONS_FILE,
-        )
-        .expect("Failed to open violations file");
+    harness.open_document(
+        &workspace.uri("violations.pl"),
+        execute_command_fixtures::POLICY_VIOLATIONS_FILE,
+    )?;
 
-    harness
-        .open_document(
-            &workspace.uri("good_practices.pl"),
-            execute_command_fixtures::GOOD_PRACTICES_FILE,
-        )
-        .expect("Failed to open good practices file");
+    harness.open_document(
+        &workspace.uri("good_practices.pl"),
+        execute_command_fixtures::GOOD_PRACTICES_FILE,
+    )?;
 
-    harness
-        .open_document(
-            &workspace.uri("syntax_error.pl"),
-            execute_command_fixtures::SYNTAX_ERROR_FILE,
-        )
-        .expect("Failed to open syntax error file");
+    harness.open_document(
+        &workspace.uri("syntax_error.pl"),
+        execute_command_fixtures::SYNTAX_ERROR_FILE,
+    )?;
 
     // Trigger processing and wait for idle
     harness.did_save(&workspace.uri("violations.pl")).ok();
@@ -124,22 +119,22 @@ fn create_execute_command_server() -> (LspHarness, TempWorkspace) {
 
     harness.wait_for_idle(Duration::from_millis(1000));
 
-    (harness, workspace)
+    Ok((harness, workspace))
 }
 
 // ======================== AC1: Complete executeCommand LSP Method Implementation ========================
 
 #[test]
 // AC1:executeCommand - Complete executeCommand LSP method implementation
-fn test_execute_command_server_capabilities() {
+fn test_execute_command_server_capabilities() -> TestResult {
     // Create a fresh harness without initialization to test capabilities
     let mut harness = LspHarness::new_raw();
 
     // Initialize the server to get capabilities
-    let init_result = harness.initialize_default().expect("Server should initialize successfully");
+    let init_result = harness.initialize_default()?;
 
     let capabilities =
-        init_result.get("capabilities").expect("Initialize result should contain capabilities");
+        init_result.get("capabilities").ok_or("Initialize result should contain capabilities")?;
 
     // Verify executeCommandProvider is advertised
     assert!(
@@ -154,7 +149,7 @@ fn test_execute_command_server_capabilities() {
     );
 
     let commands =
-        execute_command_provider["commands"].as_array().expect("Commands should be an array");
+        execute_command_provider["commands"].as_array().ok_or("Commands should be an array")?;
 
     // Verify all required commands are supported
     let expected_commands = vec![
@@ -173,12 +168,14 @@ fn test_execute_command_server_capabilities() {
             expected_command
         );
     }
+
+    Ok(())
 }
 
 #[test]
 // AC1:executeCommand - Protocol compliance with error handling
-fn test_execute_command_protocol_compliance() {
-    let (mut harness, _workspace) = create_execute_command_server();
+fn test_execute_command_protocol_compliance() -> TestResult {
+    let (mut harness, _workspace) = create_execute_command_server()?;
 
     // Test invalid command
     let invalid_result = harness.request_with_timeout(
@@ -192,7 +189,8 @@ fn test_execute_command_protocol_compliance() {
 
     // Should return error for invalid command
     assert!(
-        invalid_result.is_err() || invalid_result.as_ref().unwrap().get("error").is_some(),
+        invalid_result.is_err()
+            || invalid_result.as_ref().ok().and_then(|r| r.get("error")).is_some(),
         "Invalid command should return error response"
     );
 
@@ -217,12 +215,14 @@ fn test_execute_command_protocol_compliance() {
             "Should return InvalidParams error code (-32602)"
         );
     }
+
+    Ok(())
 }
 
 #[test]
 // AC1:executeCommand - Command parameter validation
-fn test_execute_command_parameter_validation() {
-    let (mut harness, _workspace) = create_execute_command_server();
+fn test_execute_command_parameter_validation() -> TestResult {
+    let (mut harness, _workspace) = create_execute_command_server()?;
 
     // Test perl.runCritic with invalid URI
     let invalid_uri_result = harness.request_with_timeout(
@@ -247,26 +247,26 @@ fn test_execute_command_parameter_validation() {
     );
 
     assert!(nonexistent_result.is_ok(), "Should handle non-existent files gracefully");
+
+    Ok(())
 }
 
 // ======================== AC2: perl.runCritic Command Integration ========================
 
 #[test]
 // AC2:runCritic - perl.runCritic with external perlcritic (if available)
-fn test_perl_run_critic_external_tool() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_perl_run_critic_external_tool() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
     // Execute perl.runCritic on violations file
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("violations.pl")]
-            }),
-            Duration::from_secs(5), // Extended timeout for external tool
-        )
-        .expect("perl.runCritic command should execute successfully");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("violations.pl")]
+        }),
+        Duration::from_secs(5), // Extended timeout for external tool
+    )?;
 
     // Verify response structure
     assert!(result.get("status").is_some(), "Response should have status field");
@@ -277,7 +277,7 @@ fn test_perl_run_critic_external_tool() {
     );
 
     // Verify violations were detected
-    let violations = result["violations"].as_array().expect("Violations should be an array");
+    let violations = result["violations"].as_array().ok_or("Violations should be an array")?;
 
     assert!(!violations.is_empty(), "Should detect policy violations");
 
@@ -298,29 +298,29 @@ fn test_perl_run_critic_external_tool() {
 
     assert!(has_strict_violation, "Should detect missing 'use strict'");
     assert!(has_warnings_violation, "Should detect missing 'use warnings'");
+
+    Ok(())
 }
 
 #[test]
 // AC2:runCritic - Built-in analyzer fallback when external tool unavailable
-fn test_perl_run_critic_builtin_analyzer() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_perl_run_critic_builtin_analyzer() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
     // Test with good practices file (fewer violations expected)
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("good_practices.pl")]
-            }),
-            Duration::from_secs(3),
-        )
-        .expect("perl.runCritic should work with built-in analyzer");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("good_practices.pl")]
+        }),
+        Duration::from_secs(3),
+    )?;
 
     // Verify response structure
     assert_eq!(result["status"].as_str(), Some("success"), "Should report success");
 
-    let violations = result["violations"].as_array().expect("Should return violations array");
+    let violations = result["violations"].as_array().ok_or("Should return violations array")?;
 
     // Good practices file should have fewer violations
     assert!(
@@ -328,23 +328,23 @@ fn test_perl_run_critic_builtin_analyzer() {
         "Good practices file should have fewer violations, got: {}",
         violations.len()
     );
+
+    Ok(())
 }
 
 #[test]
 // AC2:runCritic - Error handling for malformed Perl code
-fn test_perl_run_critic_syntax_error_handling() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_perl_run_critic_syntax_error_handling() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("syntax_error.pl")]
-            }),
-            Duration::from_secs(3),
-        )
-        .expect("perl.runCritic should handle syntax errors gracefully");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("syntax_error.pl")]
+        }),
+        Duration::from_secs(3),
+    )?;
 
     // Should still return a valid response even with syntax errors
     assert!(result.get("status").is_some(), "Should have status even with syntax errors");
@@ -358,11 +358,13 @@ fn test_perl_run_critic_syntax_error_handling() {
         has_violations || has_errors,
         "Should report syntax issues either as violations or errors"
     );
+
+    Ok(())
 }
 
 #[test]
 // AC2:runCritic - Performance validation for large files
-fn test_perl_run_critic_performance() {
+fn test_perl_run_critic_performance() -> TestResult {
     let large_file_content = format!(
         "#!/usr/bin/perl\n{}\n{}",
         "# Large file with many lines\n".repeat(100),
@@ -370,27 +372,22 @@ fn test_perl_run_critic_performance() {
     );
 
     let (mut harness, workspace) =
-        LspHarness::with_workspace(&[("large_file.pl", &large_file_content)])
-            .expect("Failed to create large file workspace");
+        LspHarness::with_workspace(&[("large_file.pl", &large_file_content)])?;
 
-    harness
-        .open_document(&workspace.uri("large_file.pl"), &large_file_content)
-        .expect("Failed to open large file");
+    harness.open_document(&workspace.uri("large_file.pl"), &large_file_content)?;
 
     harness.wait_for_idle(Duration::from_millis(500));
 
     let start_time = std::time::Instant::now();
 
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("large_file.pl")]
-            }),
-            Duration::from_secs(10), // Generous timeout for performance test
-        )
-        .expect("perl.runCritic should complete within timeout for large files");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("large_file.pl")]
+        }),
+        Duration::from_secs(10), // Generous timeout for performance test
+    )?;
 
     let duration = start_time.elapsed();
 
@@ -402,14 +399,16 @@ fn test_perl_run_critic_performance() {
     );
 
     assert_eq!(result["status"].as_str(), Some("success"), "Should succeed for large files");
+
+    Ok(())
 }
 
 // ======================== AC1 Additional: Existing executeCommand Validation ========================
 
 #[test]
 // AC1:executeCommand - Existing commands backward compatibility
-fn test_existing_execute_commands() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_existing_execute_commands() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
     // Test perl.runTests command
     let run_tests_result = harness.request_with_timeout(
@@ -435,12 +434,14 @@ fn test_existing_execute_commands() {
     );
 
     assert!(run_file_result.is_ok(), "perl.runFile should not error");
+
+    Ok(())
 }
 
 #[test]
 // AC1:executeCommand - Command execution timeout handling
-fn test_execute_command_timeout_handling() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_execute_command_timeout_handling() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
     // Test command with very short timeout
     let result = harness.request_with_timeout(
@@ -462,33 +463,32 @@ fn test_execute_command_timeout_handling() {
             // The important thing is it doesn't hang indefinitely
         }
     }
+
+    Ok(())
 }
 
 // ======================== Error Handling and Edge Cases ========================
 
 #[test]
 // Test empty file handling
-fn test_execute_command_empty_file() {
-    let (mut harness, workspace) = LspHarness::with_workspace(&[("empty.pl", "")])
-        .expect("Failed to create empty file workspace");
+fn test_execute_command_empty_file() -> TestResult {
+    let (mut harness, workspace) = LspHarness::with_workspace(&[("empty.pl", "")])?;
 
-    harness.open_document(&workspace.uri("empty.pl"), "").expect("Failed to open empty file");
+    harness.open_document(&workspace.uri("empty.pl"), "")?;
 
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("empty.pl")]
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Should handle empty files gracefully");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("empty.pl")]
+        }),
+        Duration::from_secs(2),
+    )?;
 
     assert_eq!(result["status"].as_str(), Some("success"), "Should succeed for empty files");
 
     // Empty file should have minimal violations (maybe missing strict/warnings)
-    let violations = result["violations"].as_array().expect("Should return violations array");
+    let violations = result["violations"].as_array().ok_or("Should return violations array")?;
     assert!(
         violations.len() <= 3,
         "Empty file should have minimal violations, got: {}",
@@ -500,11 +500,13 @@ fn test_execute_command_empty_file() {
         result.get("analyzerUsed").is_some(),
         "Should indicate analyzer used even for empty files"
     );
+
+    Ok(())
 }
 
 #[test]
 // Test built-in analyzer policy coverage
-fn test_builtin_analyzer_policy_coverage() {
+fn test_builtin_analyzer_policy_coverage() -> TestResult {
     // Test each known policy individually
     let test_cases = vec![
         ("missing_strict.pl", "#!/usr/bin/perl\nprint 'no strict';\n", "RequireUseStrict"),
@@ -517,29 +519,24 @@ fn test_builtin_analyzer_policy_coverage() {
     ];
 
     for (filename, content, expected_violation) in test_cases {
-        let (mut harness, workspace) = LspHarness::with_workspace(&[(filename, content)])
-            .expect("Failed to create policy test workspace");
+        let (mut harness, workspace) = LspHarness::with_workspace(&[(filename, content)])?;
 
-        harness
-            .open_document(&workspace.uri(filename), content)
-            .expect("Failed to open policy test file");
+        harness.open_document(&workspace.uri(filename), content)?;
 
         harness.wait_for_idle(Duration::from_millis(200));
 
-        let result = harness
-            .request_with_timeout(
-                "workspace/executeCommand",
-                json!({
-                    "command": "perl.runCritic",
-                    "arguments": [workspace.uri(filename)]
-                }),
-                Duration::from_secs(3),
-            )
-            .expect("Policy test should complete");
+        let result = harness.request_with_timeout(
+            "workspace/executeCommand",
+            json!({
+                "command": "perl.runCritic",
+                "arguments": [workspace.uri(filename)]
+            }),
+            Duration::from_secs(3),
+        )?;
 
         assert_eq!(result["status"].as_str(), Some("success"), "Policy test should succeed");
 
-        let violations = result["violations"].as_array().expect("Should return violations");
+        let violations = result["violations"].as_array().ok_or("Should return violations")?;
 
         if expected_violation == "clean" {
             // File with both strict and warnings should have minimal violations
@@ -552,26 +549,26 @@ fn test_builtin_analyzer_policy_coverage() {
             assert!(has_expected, "Should detect {} violation in {}", expected_violation, filename);
         }
     }
+
+    Ok(())
 }
 
 #[test]
 // Test external tool timeout and fallback behavior
-fn test_external_tool_timeout_handling() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_external_tool_timeout_handling() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
     // Test with a request that might take time
     let start_time = std::time::Instant::now();
 
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("violations.pl")]
-            }),
-            Duration::from_secs(30), // Long timeout to see natural completion
-        )
-        .expect("Should complete within reasonable time");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("violations.pl")]
+        }),
+        Duration::from_secs(30), // Long timeout to see natural completion
+    )?;
 
     let duration = start_time.elapsed();
 
@@ -591,29 +588,29 @@ fn test_external_tool_timeout_handling() {
         "Should indicate valid analyzer type, got: {}",
         analyzer_used
     );
+
+    Ok(())
 }
 
 // ======================== Performance and Memory Validation ========================
 
 #[test]
 // Test memory usage patterns with repeated operations
-fn test_memory_usage_patterns() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_memory_usage_patterns() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
     // Run multiple analysis operations to check for memory leaks
     let initial_memory = get_approximate_memory_usage();
 
-    for i in 0..10 {
-        let result = harness
-            .request_with_timeout(
-                "workspace/executeCommand",
-                json!({
-                    "command": "perl.runCritic",
-                    "arguments": [workspace.uri("violations.pl")]
-                }),
-                Duration::from_secs(3),
-            )
-            .unwrap_or_else(|_| panic!("Analysis {} should succeed", i));
+    for _i in 0..10 {
+        let result = harness.request_with_timeout(
+            "workspace/executeCommand",
+            json!({
+                "command": "perl.runCritic",
+                "arguments": [workspace.uri("violations.pl")]
+            }),
+            Duration::from_secs(3),
+        )?;
 
         assert_eq!(result["status"].as_str(), Some("success"), "Each analysis should succeed");
 
@@ -630,6 +627,8 @@ fn test_memory_usage_patterns() {
     // This is a rough check - actual memory management varies by system
     // The important thing is that it doesn't crash or grow unbounded
     assert!(memory_growth < 50_000_000, "Memory growth should be reasonable");
+
+    Ok(())
 }
 
 // Helper function to get approximate memory usage
@@ -641,20 +640,18 @@ fn get_approximate_memory_usage() -> usize {
 
 #[test]
 // Test error recovery and state consistency
-fn test_error_recovery_state_consistency() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_error_recovery_state_consistency() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
     // First, ensure normal operation works
-    let good_result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("good_practices.pl")]
-            }),
-            Duration::from_secs(3),
-        )
-        .expect("Initial good request should work");
+    let good_result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("good_practices.pl")]
+        }),
+        Duration::from_secs(3),
+    )?;
 
     assert_eq!(good_result["status"].as_str(), Some("success"), "Initial request should succeed");
 
@@ -669,16 +666,14 @@ fn test_error_recovery_state_consistency() {
     ); // Don't assert - this might succeed or fail gracefully
 
     // Verify that subsequent good operations still work (state not corrupted)
-    let recovery_result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("good_practices.pl")]
-            }),
-            Duration::from_secs(3),
-        )
-        .expect("Recovery request should work after error");
+    let recovery_result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("good_practices.pl")]
+        }),
+        Duration::from_secs(3),
+    )?;
 
     assert_eq!(recovery_result["status"].as_str(), Some("success"), "Should recover from errors");
 
@@ -688,14 +683,16 @@ fn test_error_recovery_state_consistency() {
         recovery_result["violations"].as_array().map(|v| v.len()),
         "Results should be consistent after error recovery"
     );
+
+    Ok(())
 }
 
 // ======================== Final Integration Validation ========================
 
 #[test]
 // Test complete workflow integration
-fn test_complete_workflow_integration() {
-    let (_harness, _workspace) = create_execute_command_server();
+fn test_complete_workflow_integration() -> TestResult {
+    let (_harness, _workspace) = create_execute_command_server()?;
 
     // Test the complete workflow: open -> analyze -> results
     let workflow_content = r#"#!/usr/bin/perl
@@ -714,26 +711,21 @@ print "Result: $result\n";
 
     // Create and analyze file
     let (mut workflow_harness, workflow_workspace) =
-        LspHarness::with_workspace(&[("workflow.pl", workflow_content)])
-            .expect("Failed to create workflow workspace");
+        LspHarness::with_workspace(&[("workflow.pl", workflow_content)])?;
 
-    workflow_harness
-        .open_document(&workflow_workspace.uri("workflow.pl"), workflow_content)
-        .expect("Failed to open workflow file");
+    workflow_harness.open_document(&workflow_workspace.uri("workflow.pl"), workflow_content)?;
 
     workflow_harness.wait_for_idle(Duration::from_millis(300));
 
     // Execute analysis
-    let analysis_result = workflow_harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workflow_workspace.uri("workflow.pl")]
-            }),
-            Duration::from_secs(4),
-        )
-        .expect("Workflow analysis should complete");
+    let analysis_result = workflow_harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workflow_workspace.uri("workflow.pl")]
+        }),
+        Duration::from_secs(4),
+    )?;
 
     // Verify complete response structure
     assert_eq!(analysis_result["status"].as_str(), Some("success"), "Workflow should succeed");
@@ -741,7 +733,7 @@ print "Result: $result\n";
     assert!(analysis_result.get("analyzerUsed").is_some(), "Should indicate analyzer used");
 
     let violations =
-        analysis_result["violations"].as_array().expect("Should have violations array");
+        analysis_result["violations"].as_array().ok_or("Should have violations array")?;
 
     // Should detect the missing warnings
     let has_warnings_violation = violations.iter().any(|v| {
@@ -755,16 +747,14 @@ print "Result: $result\n";
 
     // Verify response timing is reasonable
     let start_time = std::time::Instant::now();
-    let _repeat_result = workflow_harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workflow_workspace.uri("workflow.pl")]
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Repeat analysis should be fast");
+    let _repeat_result = workflow_harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workflow_workspace.uri("workflow.pl")]
+        }),
+        Duration::from_secs(2),
+    )?;
 
     let repeat_duration = start_time.elapsed();
     assert!(
@@ -772,12 +762,14 @@ print "Result: $result\n";
         "Repeat analysis should be fast (caching), took: {:?}",
         repeat_duration
     );
+
+    Ok(())
 }
 
 #[test]
 // Test concurrent executeCommand requests
-fn test_concurrent_execute_commands() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_concurrent_execute_commands() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
     // Note: This is a simplified concurrency test
     // Real concurrent testing would require more sophisticated async handling
@@ -803,13 +795,15 @@ fn test_concurrent_execute_commands() {
     // Both requests should succeed
     assert!(result1.is_ok(), "First concurrent request should succeed");
     assert!(result2.is_ok(), "Second concurrent request should succeed");
+
+    Ok(())
 }
 
 // ======================== Advanced Edge Cases and Hardening ========================
 
 #[test]
 // Test complex Perl syntax edge cases with built-in analyzer
-fn test_builtin_analyzer_complex_perl_syntax() {
+fn test_builtin_analyzer_complex_perl_syntax() -> TestResult {
     let complex_perl_content = r#"#!/usr/bin/perl
 # Complex Perl syntax for parser edge cases
 use strict;
@@ -871,41 +865,38 @@ sub AUTOLOAD {
 "#;
 
     let (mut harness, workspace) =
-        LspHarness::with_workspace(&[("complex_syntax.pl", complex_perl_content)])
-            .expect("Failed to create complex syntax workspace");
+        LspHarness::with_workspace(&[("complex_syntax.pl", complex_perl_content)])?;
 
-    harness
-        .open_document(&workspace.uri("complex_syntax.pl"), complex_perl_content)
-        .expect("Failed to open complex syntax file");
+    harness.open_document(&workspace.uri("complex_syntax.pl"), complex_perl_content)?;
 
     harness.wait_for_idle(Duration::from_millis(500));
 
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("complex_syntax.pl")]
-            }),
-            Duration::from_secs(5),
-        )
-        .expect("Should handle complex Perl syntax without panics");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("complex_syntax.pl")]
+        }),
+        Duration::from_secs(5),
+    )?;
 
     // Should successfully analyze without crashes
     assert_eq!(result["status"].as_str(), Some("success"), "Should succeed with complex syntax");
 
-    let violations = result["violations"].as_array().expect("Should return violations array");
+    let violations = result["violations"].as_array().ok_or("Should return violations array")?;
 
     // Should have detected some issues but not crashed
     assert!(
         !violations.is_empty() || violations.is_empty(),
         "Should return violations array even for complex syntax"
     );
+
+    Ok(())
 }
 
 #[test]
 // Test UTF-8 and Unicode handling in built-in analyzer
-fn test_builtin_analyzer_unicode_handling() {
+fn test_builtin_analyzer_unicode_handling() -> TestResult {
     let unicode_perl_content = r#"#!/usr/bin/perl
 use strict;
 use warnings;
@@ -939,30 +930,25 @@ print "Length: " . length($unicode_heredoc);
 "#;
 
     let (mut harness, workspace) =
-        LspHarness::with_workspace(&[("unicode_test.pl", unicode_perl_content)])
-            .expect("Failed to create Unicode test workspace");
+        LspHarness::with_workspace(&[("unicode_test.pl", unicode_perl_content)])?;
 
-    harness
-        .open_document(&workspace.uri("unicode_test.pl"), unicode_perl_content)
-        .expect("Failed to open Unicode test file");
+    harness.open_document(&workspace.uri("unicode_test.pl"), unicode_perl_content)?;
 
     harness.wait_for_idle(Duration::from_millis(500));
 
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("unicode_test.pl")]
-            }),
-            Duration::from_secs(3),
-        )
-        .expect("Should handle Unicode content correctly");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("unicode_test.pl")]
+        }),
+        Duration::from_secs(3),
+    )?;
 
     assert_eq!(result["status"].as_str(), Some("success"), "Should handle Unicode gracefully");
 
     // Should properly handle UTF-8 boundaries and position mapping
-    let violations = result["violations"].as_array().expect("Should return violations");
+    let violations = result["violations"].as_array().ok_or("Should return violations")?;
 
     // Validate that position information is accurate for Unicode content
     for violation in violations {
@@ -972,11 +958,13 @@ print "Length: " . length($unicode_heredoc);
             assert!(range.get("end").is_some(), "Should have valid end position");
         }
     }
+
+    Ok(())
 }
 
 #[test]
 // Test malformed and syntactically complex Perl edge cases
-fn test_malformed_perl_resilience() {
+fn test_malformed_perl_resilience() -> TestResult {
     let malformed_content = r#"#!/usr/bin/perl
 # Deliberately malformed Perl to test parser resilience
 
@@ -1019,25 +1007,20 @@ sub test {
 "#;
 
     let (mut harness, workspace) =
-        LspHarness::with_workspace(&[("malformed.pl", malformed_content)])
-            .expect("Failed to create malformed test workspace");
+        LspHarness::with_workspace(&[("malformed.pl", malformed_content)])?;
 
-    harness
-        .open_document(&workspace.uri("malformed.pl"), malformed_content)
-        .expect("Failed to open malformed file");
+    harness.open_document(&workspace.uri("malformed.pl"), malformed_content)?;
 
     harness.wait_for_idle(Duration::from_millis(500));
 
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("malformed.pl")]
-            }),
-            Duration::from_secs(4),
-        )
-        .expect("Should handle malformed Perl gracefully without crashing");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("malformed.pl")]
+        }),
+        Duration::from_secs(4),
+    )?;
 
     // Should handle malformed code without panicking
     assert!(result.get("status").is_some(), "Should return status even for malformed code");
@@ -1045,40 +1028,38 @@ sub test {
     // Either reports success with many violations or reports parsing errors
     let status = result["status"].as_str().unwrap_or("");
     assert!(status == "success" || status == "error", "Should have valid status");
+
+    Ok(())
 }
 
 #[test]
 // Test dual analyzer strategy robustness
-fn test_dual_analyzer_strategy_fallback() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_dual_analyzer_strategy_fallback() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
     // First, try to determine which analyzer would be used normally
-    let baseline_result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("violations.pl")]
-            }),
-            Duration::from_secs(3),
-        )
-        .expect("Initial analysis should work");
+    let baseline_result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("violations.pl")]
+        }),
+        Duration::from_secs(3),
+    )?;
 
     let baseline_analyzer = baseline_result["analyzerUsed"].as_str().unwrap_or("unknown");
 
     // Test multiple rapid requests to check consistency
     let mut results = Vec::new();
     for _ in 0..3 {
-        let result = harness
-            .request_with_timeout(
-                "workspace/executeCommand",
-                json!({
-                    "command": "perl.runCritic",
-                    "arguments": [workspace.uri("violations.pl")]
-                }),
-                Duration::from_secs(2),
-            )
-            .expect("Repeated analysis should work");
+        let result = harness.request_with_timeout(
+            "workspace/executeCommand",
+            json!({
+                "command": "perl.runCritic",
+                "arguments": [workspace.uri("violations.pl")]
+            }),
+            Duration::from_secs(2),
+        )?;
         results.push(result);
 
         // Small delay between requests
@@ -1096,11 +1077,13 @@ fn test_dual_analyzer_strategy_fallback() {
             "Analyzer should be consistent across requests"
         );
     }
+
+    Ok(())
 }
 
 #[test]
 // Test resource exhaustion scenarios
-fn test_resource_exhaustion_resilience() {
+fn test_resource_exhaustion_resilience() -> TestResult {
     // Create a very large file to test memory and processing limits
     let mut large_content = String::with_capacity(50000);
     large_content.push_str("#!/usr/bin/perl\n\n"); // Intentionally omit pragmas to trigger violations
@@ -1114,27 +1097,22 @@ fn test_resource_exhaustion_resilience() {
     }
 
     let (mut harness, workspace) =
-        LspHarness::with_workspace(&[("large_resource_test.pl", &large_content)])
-            .expect("Failed to create large file workspace");
+        LspHarness::with_workspace(&[("large_resource_test.pl", &large_content)])?;
 
-    harness
-        .open_document(&workspace.uri("large_resource_test.pl"), &large_content)
-        .expect("Failed to open large file");
+    harness.open_document(&workspace.uri("large_resource_test.pl"), &large_content)?;
 
     harness.wait_for_idle(Duration::from_millis(1000));
 
     let start_time = std::time::Instant::now();
 
-    let result = harness
-        .request_with_timeout(
-            "workspace/executeCommand",
-            json!({
-                "command": "perl.runCritic",
-                "arguments": [workspace.uri("large_resource_test.pl")]
-            }),
-            Duration::from_secs(15), // Extended timeout for large file
-        )
-        .expect("Should handle large files without running out of resources");
+    let result = harness.request_with_timeout(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.runCritic",
+            "arguments": [workspace.uri("large_resource_test.pl")]
+        }),
+        Duration::from_secs(15), // Extended timeout for large file
+    )?;
 
     let duration = start_time.elapsed();
 
@@ -1148,18 +1126,20 @@ fn test_resource_exhaustion_resilience() {
     assert_eq!(result["status"].as_str(), Some("success"), "Should succeed for large files");
 
     // Built-in analyzer should find violations (missing use strict and use warnings)
-    let violations = result["violations"].as_array().expect("Should return violations");
+    let violations = result["violations"].as_array().ok_or("Should return violations")?;
     assert!(
         !violations.is_empty(),
         "Built-in analyzer should find at least one violation (missing pragmas), found: {}",
         violations.len()
     );
+
+    Ok(())
 }
 
 #[test]
 // Test concurrent requests stress testing
-fn test_concurrent_execute_command_stress() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_concurrent_execute_command_stress() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
     // Test multiple rapid-fire requests
     let files = [
@@ -1206,12 +1186,14 @@ fn test_concurrent_execute_command_stress() {
 
     // At least some requests should succeed even under stress
     assert!(success_count >= 3, "At least half the requests should succeed under stress");
+
+    Ok(())
 }
 
 #[test]
 // Test security - path traversal prevention
-fn test_path_traversal_security() {
-    let (mut harness, _workspace) = create_execute_command_server();
+fn test_path_traversal_security() -> TestResult {
+    let (mut harness, _workspace) = create_execute_command_server()?;
 
     // Test various path traversal attempts
     let malicious_paths = vec![
@@ -1247,12 +1229,14 @@ fn test_path_traversal_security() {
             }
         }
     }
+
+    Ok(())
 }
 
 #[test]
 // Test JSON-RPC protocol compliance under edge cases
-fn test_json_rpc_protocol_edge_cases() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_json_rpc_protocol_edge_cases() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
     // Test malformed JSON-RPC requests
     let malformed_requests = [
@@ -1306,12 +1290,14 @@ fn test_json_rpc_protocol_edge_cases() {
             }
         }
     }
+
+    Ok(())
 }
 
 #[test]
 // Test adaptive threading behavior validation
-fn test_adaptive_threading_behavior() {
-    let (mut harness, workspace) = create_execute_command_server();
+fn test_adaptive_threading_behavior() -> TestResult {
+    let (mut harness, workspace) = create_execute_command_server()?;
 
     // Test behavior under different threading constraints
     let original_threads = std::env::var("RUST_TEST_THREADS").unwrap_or_default();
@@ -1324,16 +1310,14 @@ fn test_adaptive_threading_behavior() {
 
         let start_time = std::time::Instant::now();
 
-        let result = harness
-            .request_with_timeout(
-                "workspace/executeCommand",
-                json!({
-                    "command": "perl.runCritic",
-                    "arguments": [workspace.uri("violations.pl")]
-                }),
-                Duration::from_secs(10), // Generous timeout for adaptive behavior
-            )
-            .expect("Should work under different thread constraints");
+        let result = harness.request_with_timeout(
+            "workspace/executeCommand",
+            json!({
+                "command": "perl.runCritic",
+                "arguments": [workspace.uri("violations.pl")]
+            }),
+            Duration::from_secs(10), // Generous timeout for adaptive behavior
+        )?;
 
         let duration = start_time.elapsed();
 
@@ -1361,4 +1345,6 @@ fn test_adaptive_threading_behavior() {
             std::env::set_var("RUST_TEST_THREADS", original_threads);
         }
     }
+
+    Ok(())
 }

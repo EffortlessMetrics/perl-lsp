@@ -394,7 +394,7 @@ mod semantic_phase2_tests {
     use perl_parser::semantic::{SemanticAnalyzer, SemanticTokenType};
     use perl_parser::symbol::SymbolKind;
 
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     #[test]
     fn test_method_call_semantic() -> TestResult {
@@ -415,8 +415,8 @@ my $result = $obj->get_value();
             tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Method)).collect();
 
         assert!(method_tokens.len() >= 3, "Should have tokens for new, process, get_value");
-    Ok(())
-}
+        Ok(())
+    }
 
     #[test]
     fn test_reference_dereference_semantic() -> TestResult {
@@ -438,8 +438,8 @@ my $value = $$ref;
         assert!(!symbols.find_symbol("scalar", 0, SymbolKind::scalar()).is_empty());
         assert!(!symbols.find_symbol("ref", 0, SymbolKind::scalar()).is_empty());
         assert!(!symbols.find_symbol("value", 0, SymbolKind::scalar()).is_empty());
-    Ok(())
-}
+        Ok(())
+    }
 
     #[test]
     fn test_use_require_semantic() -> TestResult {
@@ -463,8 +463,8 @@ require Exporter;
             .collect();
 
         assert!(!ns_tokens.is_empty(), "Should have namespace tokens for modules");
-    Ok(())
-}
+        Ok(())
+    }
 
     #[test]
     fn test_given_when_semantic() -> TestResult {
@@ -483,8 +483,8 @@ given ($value) {
 
         let tokens = analyzer.semantic_tokens();
         assert!(!tokens.is_empty(), "Should generate tokens for given/when");
-    Ok(())
-}
+        Ok(())
+    }
 
     #[test]
     fn test_control_flow_keywords_semantic() -> TestResult {
@@ -505,8 +505,8 @@ sub process {
 
         let tokens = analyzer.semantic_tokens();
         assert!(!tokens.is_empty(), "Should generate tokens for control flow");
-    Ok(())
-}
+        Ok(())
+    }
 
     // Phase 3 tests (also under semantic-phase2 feature for simplicity)
     #[test]
@@ -522,8 +522,8 @@ print "$_\n" while <>;
 
         let tokens = analyzer.semantic_tokens();
         assert!(!tokens.is_empty(), "Should generate tokens for postfix loops");
-    Ok(())
-}
+        Ok(())
+    }
 
     #[test]
     fn test_file_test_semantic() -> TestResult {
@@ -539,8 +539,8 @@ my $readable = -r $filename;
 
         let tokens = analyzer.semantic_tokens();
         assert!(!tokens.is_empty(), "Should generate tokens for file tests");
-    Ok(())
-}
+        Ok(())
+    }
 }
 
 // ============================================================================

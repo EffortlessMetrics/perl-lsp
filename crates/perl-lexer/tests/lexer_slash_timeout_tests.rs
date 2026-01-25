@@ -236,7 +236,8 @@ fn test_regex_in_conditional() -> TestResult {
         let mut lexer = PerlLexer::new(code);
         lexer.next_token(); // keyword
         lexer.next_token(); // (
-        let token = lexer.next_token().ok_or_else(|| format!("Expected regex token for: {}", code))?;
+        let token =
+            lexer.next_token().ok_or_else(|| format!("Expected regex token for: {}", code))?;
         assert_eq!(token.token_type, TokenType::RegexMatch, "Failed for: {}", code);
     }
     Ok(())
