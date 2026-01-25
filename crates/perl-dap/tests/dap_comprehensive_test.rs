@@ -1,11 +1,11 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_dap::{DapMessage, DebugAdapter};
 use serde_json::json;
 use std::fs::write;
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
 use tempfile::tempdir;
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Helper to wait for a specific DAP event
 fn wait_for_event(
@@ -30,11 +30,11 @@ fn wait_for_event(
 }
 
 /// Helper to create a test Perl script
-fn create_test_script(content: &str) -> std::path::PathBuf {
-    let dir = tempdir().unwrap();
+fn create_test_script(content: &str) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
     let script_path = dir.path().join("test.pl");
-    write(&script_path, content).unwrap();
-    script_path
+    write(&script_path, content)?;
+    Ok(script_path)
 }
 
 #[test]
@@ -435,11 +435,11 @@ fn test_sequence_number_increment() {
 }
 
 #[test]
-fn test_dap_full_session_lifecycle() {
+fn test_dap_full_session_lifecycle() -> TestResult {
     // Skip if perl is not available
     if std::process::Command::new("perl").arg("--version").output().is_err() {
         eprintln!("Skipping DAP lifecycle test - perl not available");
-        return;
+        return Ok(());
     }
 
     let script_content = r#"use strict;
@@ -451,7 +451,7 @@ my $result = $x + $y;
 print "Result: $result\n";
 "#;
 
-    let script_path = create_test_script(script_content);
+    let script_path = create_test_script(script_content)?;
     let mut adapter = DebugAdapter::new();
     let (tx, rx) = channel();
     adapter.set_event_sender(tx);
@@ -474,7 +474,7 @@ print "Result: $result\n";
 
     // Launch - this may fail if system doesn't support Perl debugging
     let launch_args = json!({
-        "program": script_path.to_str().unwrap(),
+        "program": script_path.to_str().ok_or("Failed to convert path to string")?,
         "args": [],
         "stopOnEntry": true
     });
@@ -499,7 +499,7 @@ print "Result: $result\n";
 
     // Set breakpoints - should work even without active session
     let bp_args = json!({
-        "source": {"path": script_path.to_str().unwrap()},
+        "source": {"path": script_path.to_str().ok_or("Failed to convert path to string")?},
         "breakpoints": [{"line": 5}]
     });
     let bp_response = adapter.handle_request(4, "setBreakpoints", Some(bp_args));
@@ -550,4 +550,5 @@ print "Result: $result\n";
     }
 
     eprintln!("DAP lifecycle test completed successfully");
+    Ok(())
 }

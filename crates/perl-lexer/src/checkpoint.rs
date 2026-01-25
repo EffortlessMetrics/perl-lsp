@@ -222,7 +222,6 @@ impl CheckpointCache {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 
@@ -267,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn test_checkpoint_cache() {
+    fn test_checkpoint_cache() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let mut cache = CheckpointCache::new(3);
 
         // Add checkpoints
@@ -280,7 +279,8 @@ mod tests {
         assert_eq!(cache.checkpoints.len(), 3);
 
         // Find nearest before position 25
-        let cp = cache.find_before(25).unwrap();
+        let cp = cache.find_before(25).ok_or("Expected checkpoint before position 25")?;
         assert_eq!(cp.position, 20);
+        Ok(())
     }
 }

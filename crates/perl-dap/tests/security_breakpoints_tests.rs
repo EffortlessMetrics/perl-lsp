@@ -2,13 +2,13 @@
 //!
 //! Tests for preventing protocol injection vulnerabilities in breakpoint conditions.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::json;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 #[test]
-fn test_set_breakpoints_rejects_newlines_in_condition() {
+fn test_set_breakpoints_rejects_newlines_in_condition() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Construct arguments with a malicious condition containing a newline
@@ -30,11 +30,11 @@ fn test_set_breakpoints_rejects_newlines_in_condition() {
         DapMessage::Response { success, body, .. } => {
             assert!(success, "Request should succeed (even if breakpoint is not verified)");
 
-            let body = body.expect("Response should have body");
+            let body = body.ok_or("Response should have body")?;
             let breakpoints = body
                 .get("breakpoints")
                 .and_then(|b| b.as_array())
-                .expect("Body should have breakpoints array");
+                .ok_or("Body should have breakpoints array")?;
 
             assert_eq!(breakpoints.len(), 1);
             let bp = &breakpoints[0];
@@ -54,12 +54,13 @@ fn test_set_breakpoints_rejects_newlines_in_condition() {
                 "Condition with newline was not rejected by validation logic (Risk of protocol injection)"
             );
         }
-        _ => panic!("Expected Response message"),
+        _ => return Err("Expected Response message".into()),
     }
+    Ok(())
 }
 
 #[test]
-fn test_set_breakpoints_rejects_carriage_returns_in_condition() {
+fn test_set_breakpoints_rejects_carriage_returns_in_condition() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Test with carriage return (Windows-style line ending attack)
@@ -79,11 +80,11 @@ fn test_set_breakpoints_rejects_carriage_returns_in_condition() {
         DapMessage::Response { success, body, .. } => {
             assert!(success, "Request should succeed (even if breakpoint is not verified)");
 
-            let body = body.expect("Response should have body");
+            let body = body.ok_or("Response should have body")?;
             let breakpoints = body
                 .get("breakpoints")
                 .and_then(|b| b.as_array())
-                .expect("Body should have breakpoints array");
+                .ok_or("Body should have breakpoints array")?;
 
             assert_eq!(breakpoints.len(), 1);
             let bp = &breakpoints[0];
@@ -97,6 +98,7 @@ fn test_set_breakpoints_rejects_carriage_returns_in_condition() {
                 "Condition with carriage return was not rejected"
             );
         }
-        _ => panic!("Expected Response message"),
+        _ => return Err("Expected Response message".into()),
     }
+    Ok(())
 }

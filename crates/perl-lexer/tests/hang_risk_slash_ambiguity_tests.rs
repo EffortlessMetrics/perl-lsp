@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive slash ambiguity tests for division vs regex disambiguation
 //!
 //! Tests feature spec: ROADMAP.md#known-gaps-hang-bounds-risks
@@ -462,24 +461,19 @@ fn lexer_slash_ambiguity_division_after_postfix_op() {
         // So we'll just look for the division operator after a variable token
         let mut found_var = false;
         let mut found_div = false;
-        loop {
-            match lexer.next_token() {
-                Some(tok) => {
-                    // Mark when we've seen the variable
-                    if tok.text.as_ref() == "$x" {
-                        found_var = true;
-                    }
-                    // Look for division after the variable
-                    if found_var && matches!(tok.token_type, TokenType::Division) {
-                        found_div = true;
-                        break;
-                    }
-                    // Stop at EOF
-                    if matches!(tok.token_type, TokenType::EOF) {
-                        break;
-                    }
-                }
-                None => break,
+        while let Some(tok) = lexer.next_token() {
+            // Mark when we've seen the variable
+            if tok.text.as_ref() == "$x" {
+                found_var = true;
+            }
+            // Look for division after the variable
+            if found_var && matches!(tok.token_type, TokenType::Division) {
+                found_div = true;
+                break;
+            }
+            // Stop at EOF
+            if matches!(tok.token_type, TokenType::EOF) {
+                break;
             }
         }
 
@@ -601,16 +595,11 @@ fn lexer_slash_ambiguity_no_hang_on_pathological_input() {
         let mut lexer = PerlLexer::new(&code_arc);
         let mut tokens = Vec::new();
 
-        loop {
-            match lexer.next_token() {
-                Some(tok) => {
-                    let is_eof = matches!(tok.token_type, TokenType::EOF);
-                    tokens.push(tok);
-                    if is_eof {
-                        break;
-                    }
-                }
-                None => break,
+        while let Some(tok) = lexer.next_token() {
+            let is_eof = matches!(tok.token_type, TokenType::EOF);
+            tokens.push(tok);
+            if is_eof {
+                break;
             }
         }
 

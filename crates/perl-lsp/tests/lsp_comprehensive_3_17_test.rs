@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive LSP 3.17 API Contract Tests
 //!
 //! This test suite validates full compliance with the Language Server Protocol 3.17 specification.
@@ -14,10 +13,12 @@ mod support;
 use serde_json::json;
 use support::lsp_harness::LspHarness;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 // ==================== LIFECYCLE CONTRACTS ====================
 
 #[test]
-fn test_initialize_contract_3_17() {
+fn test_initialize_contract_3_17() -> TestResult {
     let mut harness = LspHarness::new();
 
     // Full 3.17 initialization with all capabilities
@@ -304,7 +305,7 @@ fn test_initialize_contract_3_17() {
                 "name": "Test Workspace"
             }
         ]
-    }))).expect("initialize");
+    })))?;
 
     // Validate server response structure
     assert!(result.is_object());
@@ -314,7 +315,7 @@ fn test_initialize_contract_3_17() {
     // Check position encoding (3.17)
     if let Some(encoding) = capabilities.get("positionEncoding") {
         assert!(encoding.is_string());
-        let enc = encoding.as_str().unwrap();
+        let enc = encoding.as_str().ok_or("encoding not a string")?;
         assert!(["utf-8", "utf-16", "utf-32"].contains(&enc));
     }
 
@@ -325,12 +326,13 @@ fn test_initialize_contract_3_17() {
             assert!(version.is_string());
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_initialized_notification() {
+fn test_initialized_notification() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Send initialized notification - no response expected
     harness.notify("initialized", json!({}));
@@ -346,14 +348,15 @@ fn test_initialized_notification() {
 
     // Should get a valid response (even if null)
     assert!(response.is_ok() || response.is_err());
+    Ok(())
 }
 
 // ==================== TEXT SYNCHRONIZATION ====================
 
 #[test]
-fn test_text_document_sync_full() {
+fn test_text_document_sync_full() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // didOpen
     harness.notify(
@@ -420,15 +423,16 @@ fn test_text_document_sync_full() {
             "textDocument": { "uri": "file:///test.pl" }
         }),
     );
+    Ok(())
 }
 
 // ==================== LANGUAGE FEATURES ====================
 
 #[test]
-fn test_completion_3_17() {
+fn test_completion_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "print $").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "print $")?;
 
     let response = harness
         .request(
@@ -442,17 +446,18 @@ fn test_completion_3_17() {
                 }
             }),
         )
-        .expect("completion");
+        ?;
 
     // Response can be array or CompletionList
     assert!(response.is_array() || (response.is_object() && response.get("items").is_some()));
+    Ok(())
 }
 
 #[test]
-fn test_hover_3_17() {
+fn test_hover_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "print 'hello'").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "print 'hello'")?;
 
     let response = harness
         .request(
@@ -463,7 +468,7 @@ fn test_hover_3_17() {
                 "workDoneToken": "hover-1"  // optional progress token
             }),
         )
-        .expect("hover");
+        ?;
 
     if !response.is_null() {
         assert!(
@@ -472,13 +477,14 @@ fn test_hover_3_17() {
                 || response["contents"].is_array()
         );
     }
+    Ok(())
 }
 
 #[test]
-fn test_signature_help_3_17() {
+fn test_signature_help_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "substr(").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "substr(")?;
 
     let response = harness
         .request(
@@ -494,18 +500,19 @@ fn test_signature_help_3_17() {
                 }
             }),
         )
-        .expect("signature");
+        ?;
 
     if !response.is_null() {
         assert!(response["signatures"].is_array());
     }
+    Ok(())
 }
 
 #[test]
-fn test_declaration_3_17() {
+fn test_declaration_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "my $x = 1;\n$x").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "my $x = 1;\n$x")?;
 
     let response = harness
         .request(
@@ -515,17 +522,18 @@ fn test_declaration_3_17() {
                 "position": { "line": 1, "character": 0 }
             }),
         )
-        .expect("declaration");
+        ?;
 
     // Can be Location, Location[], LocationLink[], or null
     assert!(response.is_null() || response.is_object() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_definition_3_17() {
+fn test_definition_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "sub test {}\ntest()").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "sub test {}\ntest()")?;
 
     let response = harness
         .request(
@@ -535,23 +543,24 @@ fn test_definition_3_17() {
                 "position": { "line": 1, "character": 0 }
             }),
         )
-        .expect("definition");
+        ?;
 
     // Can be Location, Location[], LocationLink[], or null
     assert!(response.is_null() || response.is_object() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_type_definition_3_17() {
+fn test_type_definition_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    let init_response = harness.initialize(None).expect("init");
+    let init_response = harness.initialize(None)?;
     let caps = &init_response["capabilities"];
 
     // Check if server advertises typeDefinition support
     let supported =
         caps.get("typeDefinitionProvider").is_some() && !caps["typeDefinitionProvider"].is_null();
 
-    harness.open("file:///test.pl", "my $obj = bless {}, 'MyClass'").expect("open");
+    harness.open("file:///test.pl", "my $obj = bless {}, 'MyClass'")?;
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -573,19 +582,20 @@ fn test_type_definition_3_17() {
     } else {
         // If not supported, should return an error (MethodNotFound or InternalError)
         assert!(response.get("error").is_some(), "Expected error when not advertised");
-        let error_code = response["error"]["code"].as_i64().unwrap();
+        let error_code = response["error"]["code"].as_i64().ok_or("error code not i64")?;
         assert!(
             error_code == -32601 || error_code == -32603,
             "Expected MethodNotFound (-32601) or InternalError (-32603), got {}",
             error_code
         );
     }
+    Ok(())
 }
 
 #[test]
-fn test_implementation_3_17() {
+fn test_implementation_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    let init_response = harness.initialize(None).expect("init");
+    let init_response = harness.initialize(None)?;
     let caps = &init_response["capabilities"];
 
     // Check if server advertises implementation support
@@ -594,7 +604,7 @@ fn test_implementation_3_17() {
 
     harness
         .open("file:///test.pl", "package Base;\nsub method {}\npackage Derived;\nuse base 'Base';")
-        .expect("open");
+        ?;
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -616,20 +626,21 @@ fn test_implementation_3_17() {
     } else {
         // If not supported, should return an error (MethodNotFound or InternalError)
         assert!(response.get("error").is_some(), "Expected error when not advertised");
-        let error_code = response["error"]["code"].as_i64().unwrap();
+        let error_code = response["error"]["code"].as_i64().ok_or("error code not i64")?;
         assert!(
             error_code == -32601 || error_code == -32603,
             "Expected MethodNotFound (-32601) or InternalError (-32603), got {}",
             error_code
         );
     }
+    Ok(())
 }
 
 #[test]
-fn test_references_3_17() {
+fn test_references_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "my $x = 1;\n$x++;\nprint $x;").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "my $x = 1;\n$x++;\nprint $x;")?;
 
     let response = harness
         .request(
@@ -642,16 +653,17 @@ fn test_references_3_17() {
                 }
             }),
         )
-        .expect("references");
+        ?;
 
     assert!(response.is_null() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_document_highlight_3_17() {
+fn test_document_highlight_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "my $x = 1;\n$x = 2;\nprint $x;").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "my $x = 1;\n$x = 2;\nprint $x;")?;
 
     let response = harness
         .request(
@@ -661,16 +673,17 @@ fn test_document_highlight_3_17() {
                 "position": { "line": 0, "character": 4 }
             }),
         )
-        .expect("highlights");
+        ?;
 
     assert!(response.is_null() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_document_symbol_3_17() {
+fn test_document_symbol_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "package Foo;\nsub bar {}\nmy $var = 1;").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "package Foo;\nsub bar {}\nmy $var = 1;")?;
 
     let response = harness
         .request(
@@ -679,16 +692,17 @@ fn test_document_symbol_3_17() {
                 "textDocument": { "uri": "file:///test.pl" }
             }),
         )
-        .expect("symbols");
+        ?;
 
     assert!(response.is_null() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_code_action_3_17() {
+fn test_code_action_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "$undefined").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "$undefined")?;
 
     let response = harness
         .request(
@@ -706,15 +720,16 @@ fn test_code_action_3_17() {
                 }
             }),
         )
-        .expect("code_actions");
+        ?;
 
     assert!(response.is_null() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_code_action_resolve_3_17() {
+fn test_code_action_resolve_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Mock code action to resolve
     let response = harness.request(
@@ -730,13 +745,14 @@ fn test_code_action_resolve_3_17() {
     if let Ok(action) = response {
         assert!(action["title"].is_string());
     }
+    Ok(())
 }
 
 #[test]
-fn test_code_lens_3_17() {
+fn test_code_lens_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "sub test {}\ntest();").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "sub test {}\ntest();")?;
 
     let response = harness
         .request(
@@ -745,16 +761,17 @@ fn test_code_lens_3_17() {
                 "textDocument": { "uri": "file:///test.pl" }
             }),
         )
-        .expect("code_lens");
+        ?;
 
     assert!(response.is_null() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_document_link_3_17() {
+fn test_document_link_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "use strict;\nuse Data::Dumper;").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "use strict;\nuse Data::Dumper;")?;
 
     let response = harness
         .request(
@@ -763,16 +780,17 @@ fn test_document_link_3_17() {
                 "textDocument": { "uri": "file:///test.pl" }
             }),
         )
-        .expect("links");
+        ?;
 
     assert!(response.is_null() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_document_color_3_17() {
+fn test_document_color_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.css", ".class { color: #FF0000; }").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.css", ".class { color: #FF0000; }")?;
 
     // May not be supported for Perl
     let response = harness.request(
@@ -785,13 +803,14 @@ fn test_document_color_3_17() {
     if let Ok(colors) = response {
         assert!(colors.is_null() || colors.is_array());
     }
+    Ok(())
 }
 
 #[test]
-fn test_formatting_3_17() {
+fn test_formatting_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "my$x=1;print$x;").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "my$x=1;print$x;")?;
 
     let response = harness.request(
         "textDocument/formatting",
@@ -821,13 +840,14 @@ fn test_formatting_3_17() {
             );
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_range_formatting_3_17() {
+fn test_range_formatting_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "my$x=1;\nprint$x;").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "my$x=1;\nprint$x;")?;
 
     let response = harness.request(
         "textDocument/rangeFormatting",
@@ -858,13 +878,14 @@ fn test_range_formatting_3_17() {
             );
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_on_type_formatting_3_17() {
+fn test_on_type_formatting_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "if (1) {").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "if (1) {")?;
 
     let response = harness
         .request(
@@ -879,16 +900,17 @@ fn test_on_type_formatting_3_17() {
                 }
             }),
         )
-        .expect("on_type_formatting");
+        ?;
 
     assert!(response.is_null() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_rename_3_17() {
+fn test_rename_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "my $old = 1;\n$old++;").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "my $old = 1;\n$old++;")?;
 
     let response = harness
         .request(
@@ -899,16 +921,17 @@ fn test_rename_3_17() {
                 "newName": "new"
             }),
         )
-        .expect("rename");
+        ?;
 
     assert!(response.is_null() || response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_prepare_rename_3_17() {
+fn test_prepare_rename_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "my $var = 1;").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "my $var = 1;")?;
 
     let response = harness
         .request(
@@ -918,17 +941,18 @@ fn test_prepare_rename_3_17() {
                 "position": { "line": 0, "character": 4 }
             }),
         )
-        .expect("prepare_rename");
+        ?;
 
     // Can be Range, {range, placeholder}, {defaultBehavior}, or null
     assert!(response.is_null() || response.is_object() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_folding_range_3_17() {
+fn test_folding_range_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "sub test {\n    my $x = 1;\n    return $x;\n}").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "sub test {\n    my $x = 1;\n    return $x;\n}")?;
 
     let response = harness
         .request(
@@ -937,16 +961,17 @@ fn test_folding_range_3_17() {
                 "textDocument": { "uri": "file:///test.pl" }
             }),
         )
-        .expect("folding");
+        ?;
 
     assert!(response.is_null() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_selection_range_3_17() {
+fn test_selection_range_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "if ($x) { print $x; }").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "if ($x) { print $x; }")?;
 
     let response = harness
         .request(
@@ -958,16 +983,17 @@ fn test_selection_range_3_17() {
                 ]
             }),
         )
-        .expect("selection_range");
+        ?;
 
     assert!(response.is_null() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_linked_editing_range_3_17() {
+fn test_linked_editing_range_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "<div></div>").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "<div></div>")?;
 
     let response = harness.request(
         "textDocument/linkedEditingRange",
@@ -980,15 +1006,16 @@ fn test_linked_editing_range_3_17() {
     if let Ok(ranges) = response {
         assert!(ranges.is_null() || (ranges.is_object() && ranges["ranges"].is_array()));
     }
+    Ok(())
 }
 
 // ==================== SEMANTIC TOKENS (3.16+) ====================
 
 #[test]
-fn test_semantic_tokens_full_3_17() {
+fn test_semantic_tokens_full_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "package Foo;\nsub bar { my $var = 1; }").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "package Foo;\nsub bar { my $var = 1; }")?;
 
     let response = harness.request(
         "textDocument/semanticTokens/full",
@@ -1002,13 +1029,14 @@ fn test_semantic_tokens_full_3_17() {
             assert!(tokens["data"].is_array());
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_semantic_tokens_range_3_17() {
+fn test_semantic_tokens_range_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "my $x = 1;\nmy $y = 2;").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "my $x = 1;\nmy $y = 2;")?;
 
     let response = harness.request(
         "textDocument/semanticTokens/range",
@@ -1024,15 +1052,16 @@ fn test_semantic_tokens_range_3_17() {
     if let Ok(tokens) = response {
         assert!(tokens.is_null() || tokens["data"].is_array());
     }
+    Ok(())
 }
 
 // ==================== CALL HIERARCHY (3.16+) ====================
 
 #[test]
-fn test_prepare_call_hierarchy_3_17() {
+fn test_prepare_call_hierarchy_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "sub test { helper(); }\nsub helper {}").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "sub test { helper(); }\nsub helper {}")?;
 
     let response = harness.request(
         "textDocument/prepareCallHierarchy",
@@ -1045,12 +1074,13 @@ fn test_prepare_call_hierarchy_3_17() {
     if let Ok(items) = response {
         assert!(items.is_null() || items.is_array());
     }
+    Ok(())
 }
 
 #[test]
-fn test_incoming_calls_3_17() {
+fn test_incoming_calls_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     let response = harness.request(
         "callHierarchy/incomingCalls",
@@ -1074,17 +1104,18 @@ fn test_incoming_calls_3_17() {
     if let Ok(calls) = response {
         assert!(calls.is_null() || calls.is_array());
     }
+    Ok(())
 }
 
 // ==================== TYPE HIERARCHY (3.17) ====================
 
 #[test]
-fn test_prepare_type_hierarchy_3_17() {
+fn test_prepare_type_hierarchy_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
     harness
         .open("file:///test.pl", "package Base;\npackage Derived;\nuse base 'Base';")
-        .expect("open");
+        ?;
 
     let response = harness.request(
         "textDocument/prepareTypeHierarchy",
@@ -1097,12 +1128,13 @@ fn test_prepare_type_hierarchy_3_17() {
     if let Ok(items) = response {
         assert!(items.is_null() || items.is_array());
     }
+    Ok(())
 }
 
 #[test]
-fn test_type_hierarchy_supertypes_3_17() {
+fn test_type_hierarchy_supertypes_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     let response = harness.request(
         "typeHierarchy/supertypes",
@@ -1126,15 +1158,16 @@ fn test_type_hierarchy_supertypes_3_17() {
     if let Ok(types) = response {
         assert!(types.is_null() || types.is_array());
     }
+    Ok(())
 }
 
 // ==================== INLAY HINTS (3.17) ====================
 
 #[test]
-fn test_inlay_hint_3_17() {
+fn test_inlay_hint_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "substr($str, 0, 5)").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "substr($str, 0, 5)")?;
 
     let response = harness.request(
         "textDocument/inlayHint",
@@ -1150,15 +1183,16 @@ fn test_inlay_hint_3_17() {
     if let Ok(hints) = response {
         assert!(hints.is_null() || hints.is_array());
     }
+    Ok(())
 }
 
 // ==================== INLINE VALUES (3.17) ====================
 
 #[test]
-fn test_inline_value_3_17() {
+fn test_inline_value_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "my $x = 42;\nprint $x;").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "my $x = 42;\nprint $x;")?;
 
     let response = harness.request(
         "textDocument/inlineValue",
@@ -1181,15 +1215,16 @@ fn test_inline_value_3_17() {
     if let Ok(values) = response {
         assert!(values.is_null() || values.is_array());
     }
+    Ok(())
 }
 
 // ==================== MONIKER (3.16+) ====================
 
 #[test]
-fn test_moniker_3_17() {
+fn test_moniker_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "package Foo::Bar;\nsub test {}").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "package Foo::Bar;\nsub test {}")?;
 
     let response = harness.request(
         "textDocument/moniker",
@@ -1202,15 +1237,16 @@ fn test_moniker_3_17() {
     if let Ok(monikers) = response {
         assert!(monikers.is_null() || monikers.is_array());
     }
+    Ok(())
 }
 
 // ==================== DIAGNOSTICS PULL MODEL (3.17) ====================
 
 #[test]
-fn test_diagnostic_pull_3_17() {
+fn test_diagnostic_pull_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "$undefined").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "$undefined")?;
 
     let response = harness.request(
         "textDocument/diagnostic",
@@ -1229,12 +1265,13 @@ fn test_diagnostic_pull_3_17() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_workspace_diagnostic_3_17() {
+fn test_workspace_diagnostic_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     let response = harness.request(
         "workspace/diagnostic",
@@ -1249,14 +1286,15 @@ fn test_workspace_diagnostic_3_17() {
     if let Ok(report) = response {
         assert!(report.is_null() || report.is_object());
     }
+    Ok(())
 }
 
 // ==================== WORKSPACE FEATURES ====================
 
 #[test]
-fn test_workspace_symbol_3_17() {
+fn test_workspace_symbol_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     let response = harness
         .request(
@@ -1266,15 +1304,16 @@ fn test_workspace_symbol_3_17() {
                 "workDoneToken": "symbol-1"
             }),
         )
-        .expect("workspace_symbols");
+        ?;
 
     assert!(response.is_null() || response.is_array());
+    Ok(())
 }
 
 #[test]
-fn test_workspace_symbol_resolve_3_17() {
+fn test_workspace_symbol_resolve_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Mock workspace symbol to resolve
     let response = harness.request(
@@ -1291,12 +1330,13 @@ fn test_workspace_symbol_resolve_3_17() {
     if let Ok(symbol) = response {
         assert!(symbol["name"].is_string());
     }
+    Ok(())
 }
 
 #[test]
-fn test_execute_command_3_17() {
+fn test_execute_command_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     let response = harness.request(
         "workspace/executeCommand",
@@ -1314,12 +1354,13 @@ fn test_execute_command_3_17() {
     if let Ok(_result) = response {
         // Result can be any value
     }
+    Ok(())
 }
 
 #[test]
-fn test_workspace_folders_3_17() {
+fn test_workspace_folders_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Notify of workspace folder changes
     harness.notify(
@@ -1336,12 +1377,13 @@ fn test_workspace_folders_3_17() {
 
     // Server can also request current folders (if needed)
     // This would be a server->client request, so we skip it in tests
+    Ok(())
 }
 
 #[test]
-fn test_file_operations_3_17() {
+fn test_file_operations_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // willCreateFiles
     let response = harness.request(
@@ -1414,12 +1456,13 @@ fn test_file_operations_3_17() {
             ]
         }),
     );
+    Ok(())
 }
 
 #[test]
-fn test_watched_files_3_17() {
+fn test_watched_files_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     harness.notify(
         "workspace/didChangeWatchedFiles",
@@ -1431,12 +1474,13 @@ fn test_watched_files_3_17() {
             ]
         }),
     );
+    Ok(())
 }
 
 // ==================== WINDOW FEATURES ====================
 
 #[test]
-fn test_show_message_3_17() {
+fn test_show_message_3_17() -> TestResult {
     // Server->client, so we can't test directly
     // But we document the contract here
 
@@ -1446,34 +1490,38 @@ fn test_show_message_3_17() {
     // window/showMessageRequest
     // { "type": 1-4, "message": "string", "actions": [{"title": "string"}] }
     // Response: MessageActionItem | null
+    Ok(())
 }
 
 #[test]
-fn test_show_document_3_17() {
+fn test_show_document_3_17() -> TestResult {
     // Server->client request (3.16+)
     // Params: { uri, external?, takeFocus?, selection? }
     // Response: { success: boolean }
+    Ok(())
 }
 
 #[test]
-fn test_log_message_3_17() {
+fn test_log_message_3_17() -> TestResult {
     // Server->client notification
     // { "type": 1-4, "message": "string" }
+    Ok(())
 }
 
 #[test]
-fn test_work_done_progress_3_17() {
+fn test_work_done_progress_3_17() -> TestResult {
     // window/workDoneProgress/create (server->client)
     // $/progress notifications
     // window/workDoneProgress/cancel (client->server)
+    Ok(())
 }
 
 // ==================== MISCELLANEOUS ====================
 
 #[test]
-fn test_cancel_request_3_17() {
+fn test_cancel_request_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Send a request then immediately cancel it
     // In real scenario, this would be async
@@ -1483,12 +1531,13 @@ fn test_cancel_request_3_17() {
             "id": 999
         }),
     );
+    Ok(())
 }
 
 #[test]
-fn test_progress_3_17() {
+fn test_progress_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Progress notifications can flow either way
     harness.notify(
@@ -1526,12 +1575,13 @@ fn test_progress_3_17() {
             }
         }),
     );
+    Ok(())
 }
 
 #[test]
-fn test_set_trace_3_17() {
+fn test_set_trace_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     harness.notify(
         "$/setTrace",
@@ -1539,39 +1589,43 @@ fn test_set_trace_3_17() {
             "value": "verbose"  // off | messages | verbose
         }),
     );
+    Ok(())
 }
 
 #[test]
-fn test_log_trace_3_17() {
+fn test_log_trace_3_17() -> TestResult {
     // Server->client notification when tracing is on
     // { "message": "string", "verbose"?: "string" }
+    Ok(())
 }
 
 #[test]
-fn test_telemetry_3_17() {
+fn test_telemetry_3_17() -> TestResult {
     // Server->client notification
     // params: any
+    Ok(())
 }
 
 // ==================== SHUTDOWN & EXIT ====================
 
 #[test]
-fn test_shutdown_exit_3_17() {
+fn test_shutdown_exit_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Shutdown request
-    let response = harness.request("shutdown", json!(null)).expect("shutdown");
+    let response = harness.request("shutdown", json!(null))?;
     assert!(response.is_null());
 
     // Exit notification
     harness.notify("exit", json!(null));
+    Ok(())
 }
 
 // ==================== ERROR CODES ====================
 
 #[test]
-fn test_error_codes_3_17() {
+fn test_error_codes_3_17() -> TestResult {
     // Standard JSON-RPC error codes
     const _PARSE_ERROR: i32 = -32700;
     #[allow(dead_code)]
@@ -1599,12 +1653,13 @@ fn test_error_codes_3_17() {
     // REQUEST_CANCELLED = -32800
     // SERVER_CANCELLED = -32802 (LSP 3.17)
     // REQUEST_FAILED = -32803
+    Ok(())
 }
 
 // ==================== PRE-INITIALIZE BEHAVIOR ====================
 
 #[test]
-fn test_inbound_before_initialize_contract() {
+fn test_inbound_before_initialize_contract() -> TestResult {
     // Requests before initialize must return -32002 ServerNotInitialized
     // Notifications must be dropped (except exit)
 
@@ -1621,14 +1676,15 @@ fn test_inbound_before_initialize_contract() {
 
     // Notification before initialize -> drop silently
     // harness.notify("workspace/didChangeConfiguration", json!({"settings":{}}));
+    Ok(())
 }
 
 // ==================== $-PREFIXED MESSAGES ====================
 
 #[test]
-fn test_dollar_prefixed_request_method_not_found() {
+fn test_dollar_prefixed_request_method_not_found() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Requests with methods starting with $/ must return -32601 MethodNotFound
     // (unless explicitly implemented like $/cancelRequest)
@@ -1638,14 +1694,15 @@ fn test_dollar_prefixed_request_method_not_found() {
     //     "jsonrpc":"2.0","id":1,"method":"$/unknownRequest","params":{}
     // }));
     // assert_eq!(resp["error"]["code"], -32601);
+    Ok(())
 }
 
 // ==================== NOTEBOOK SUPPORT (3.17) ====================
 
 #[test]
-fn test_notebook_document_3_17() {
+fn test_notebook_document_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // didOpen notebook
     harness.notify(
@@ -1731,34 +1788,36 @@ fn test_notebook_document_3_17() {
             ]
         }),
     );
+    Ok(())
 }
 
 // ==================== PARTIAL RESULT STREAMING ====================
 
 #[test]
-fn test_partial_result_streaming_contract() {
+fn test_partial_result_streaming_contract() -> TestResult {
     // When using partialResultToken, the entire payload is streamed via $/progress
     // and the final response must be empty (e.g., [] for arrays)
 
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "sub a{}\nsub b{}\nsub c{}").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "sub a{}\nsub b{}\nsub c{}")?;
 
     // Request with partialResultToken
     // The test would verify that:
     // 1. Partial results come via $/progress
     // 2. Final response is empty array/null
+    Ok(())
 }
 
 // ==================== COMPLIANCE VALIDATION ====================
 
 #[test]
-fn test_full_lsp_3_17_compliance() {
+fn test_full_lsp_3_17_compliance() -> TestResult {
     // This test validates that all required LSP 3.17 methods are handled
     // Note: Some methods are optional based on server capabilities
 
     let mut harness = LspHarness::new();
-    let init_response = harness.initialize(None).expect("init");
+    let init_response = harness.initialize(None)?;
     let caps = &init_response["capabilities"];
 
     // Check which optional features are supported
@@ -1901,4 +1960,7 @@ fn test_full_lsp_3_17_compliance() {
     // Note: we still list all 91 methods in the vec for documentation,
     // but some are optional based on server capabilities
     assert!(methods.len() >= 89, "LSP 3.17 defines 91 methods, with some optional");
+    Ok(())
 }
+
+

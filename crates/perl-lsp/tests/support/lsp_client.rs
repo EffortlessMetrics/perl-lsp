@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -32,9 +31,16 @@ impl LspClient {
             cmd.env(key, value);
         }
 
-        let mut child = cmd.spawn().expect("Failed to start LSP server");
+        let mut child = match cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => panic!("Failed to start LSP server '{bin}': {e}"),
+        };
 
-        let reader = BufReader::new(child.stdout.take().expect("Failed to get stdout"));
+        let stdout = match child.stdout.take() {
+            Some(s) => s,
+            None => panic!("Failed to get stdout from LSP server process"),
+        };
+        let reader = BufReader::new(stdout);
 
         let mut client = Self { child, reader, buf: Vec::new(), next_id: 1 };
 
@@ -65,7 +71,12 @@ impl LspClient {
 
         loop {
             line.clear();
-            if self.reader.read_line(&mut line).expect("Failed to read line") == 0 {
+            let bytes_read = match self.reader.read_line(&mut line) {
+                Ok(n) => n,
+                Err(e) => panic!("Failed to read line from LSP server: {e}"),
+            };
+
+            if bytes_read == 0 {
                 panic!("LSP server closed stdout unexpectedly");
             }
 
@@ -85,16 +96,27 @@ impl LspClient {
         }
 
         // Get content length (case-insensitive)
-        let content_length: usize = headers
+        let content_length: usize = match headers
             .get("content-length")
             .and_then(|s| s.parse().ok())
-            .expect("Missing or invalid Content-Length header");
+        {
+            Some(len) => len,
+            None => panic!("Missing or invalid Content-Length header in LSP response"),
+        };
 
         // Read the message body
         let mut body = vec![0u8; content_length];
-        self.reader.read_exact(&mut body).expect("Failed to read body");
+        if let Err(e) = self.reader.read_exact(&mut body) {
+            panic!("Failed to read {content_length} bytes from LSP server: {e}");
+        }
 
-        serde_json::from_slice(&body).expect("Failed to parse JSON")
+        match serde_json::from_slice(&body) {
+            Ok(v) => v,
+            Err(e) => {
+                let preview = String::from_utf8_lossy(&body);
+                panic!("Failed to parse JSON from LSP server: {e}\nBody: {preview}");
+            }
+        }
     }
 
     /// Receive messages until we get one with the specified id
