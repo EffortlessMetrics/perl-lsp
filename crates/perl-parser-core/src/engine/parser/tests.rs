@@ -266,3 +266,28 @@ fn test_regex_code_execution_detection() {
     let sexp_safe = ast_safe.to_sexp();
     assert!(!sexp_safe.contains("(risk:code)"), "Should not flag safe regex in: {}", sexp_safe);
 }
+
+#[test]
+fn test_branch_reset_complexity() {
+    // 51 branches (max is 50)
+    let mut pattern = String::from("qr/(?|");
+    for i in 0..51 {
+        pattern.push_str(&format!("(a{})|", i));
+    }
+    // Remove last pipe
+    pattern.pop(); 
+    pattern.push_str(")/");
+    
+    let mut parser = Parser::new(&pattern);
+    let result = parser.parse();
+    
+    // Parser might recover, so check either result is Err or errors list has the error
+    if let Err(e) = result {
+        assert!(e.to_string().contains("Too many branches"), "Error was: {}", e);
+    } else {
+        let errors = parser.errors();
+        assert!(!errors.is_empty(), "Should have recorded errors for excessive branches");
+        let found = errors.iter().any(|e| e.to_string().contains("Too many branches"));
+        assert!(found, "Should have found specific error in: {:?}", errors);
+    }
+}

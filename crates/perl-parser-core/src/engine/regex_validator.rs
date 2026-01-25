@@ -52,8 +52,8 @@ impl RegexValidator {
 
     fn check_complexity(&self, pattern: &str, start_pos: usize) -> Result<(), ParseError> {
         let mut chars = pattern.char_indices().peekable();
-        // Stack stores whether the current group is a lookbehind group
-        let mut stack: Vec<bool> = Vec::new();
+        // Stack stores the type of the current group
+        let mut stack: Vec<GroupType> = Vec::new();
         let mut unicode_property_count = 0;
         
         while let Some((idx, ch)) = chars.next() {
@@ -86,7 +86,7 @@ impl RegexValidator {
                     }
                 }
                 '(' => {
-                    let mut is_lookbehind = false;
+                    let mut group_type = GroupType::Normal;
                     
                     // Check for extension syntax (?...)
                     if let Some((_, '?')) = chars.peek() {
@@ -99,25 +99,51 @@ impl RegexValidator {
                             // Check for = or ! (lookbehind)
                             if matches!(chars.peek(), Some((_, '=')) | Some((_, '!'))) {
                                 chars.next(); // consume = or !
-                                is_lookbehind = true;
+                                group_type = GroupType::Lookbehind;
                             }
                             // Otherwise it's likely a named capture (?<name>...) or condition (?<...)
-                            // which we treat as a normal group (not lookbehind)
+                            // which we treat as a normal group
+                        } else if let Some((_, '|')) = chars.peek() {
+                            chars.next(); // consume |
+                            group_type = GroupType::BranchReset { branch_count: 1 };
                         }
                     }
                     
-                    if is_lookbehind {
-                        // Calculate current lookbehind depth (number of true values in stack)
-                        let lookbehind_depth = stack.iter().filter(|&&x| x).count();
-                        if lookbehind_depth >= self.max_nesting {
-                             return Err(ParseError::syntax(
-                                "Regex lookbehind nesting too deep",
+                    match group_type {
+                        GroupType::Lookbehind => {
+                            // Calculate current lookbehind depth
+                            let lookbehind_depth = stack.iter().filter(|g| matches!(g, GroupType::Lookbehind)).count();
+                            if lookbehind_depth >= self.max_nesting {
+                                    return Err(ParseError::syntax(
+                                    "Regex lookbehind nesting too deep",
+                                    start_pos + idx
+                                ));
+                            }
+                        }
+                        GroupType::BranchReset { .. } => {
+                            // Calculate current branch reset nesting
+                            let reset_depth = stack.iter().filter(|g| matches!(g, GroupType::BranchReset { .. })).count();
+                            if reset_depth >= self.max_nesting { // Use same nesting limit for now
+                                return Err(ParseError::syntax(
+                                    "Regex branch reset nesting too deep",
+                                    start_pos + idx
+                                ));
+                            }
+                        }
+                        _ => {}
+                    }
+                    stack.push(group_type);
+                }
+                '|' => {
+                    // Check if we are in a branch reset group
+                    if let Some(GroupType::BranchReset { branch_count }) = stack.last_mut() {
+                        *branch_count += 1;
+                        if *branch_count > 50 { // Max 50 branches
+                            return Err(ParseError::syntax(
+                                "Too many branches in branch reset group (max 50)",
                                 start_pos + idx
                             ));
                         }
-                        stack.push(true);
-                    } else {
-                        stack.push(false);
                     }
                 }
                 ')' => {
@@ -127,11 +153,9 @@ impl RegexValidator {
                     // Skip character class [ ... ]
                     // Need to handle escaping inside []
                     while let Some((_, c)) = chars.next() {
-                        if c == '\\'
-                         {
+                        if c == '\\' {
                             chars.next();
-                        } else if c == ']'
-                         {
+                        } else if c == ']' {
                             break;
                         }
                     }
@@ -142,6 +166,12 @@ impl RegexValidator {
         
         Ok(())
     }
+}
+
+enum GroupType {
+    Normal,
+    Lookbehind,
+    BranchReset { branch_count: usize },
 }
 
 impl Default for RegexValidator {
