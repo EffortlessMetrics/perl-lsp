@@ -4,7 +4,7 @@
 //! architecture and enables comparison with other implementations.
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use perl_parser::Parser;
+use perl_parser::{Parser, ScopeAnalyzer};
 use std::hint::black_box;
 
 const SIMPLE_SCRIPT: &str = r#"
@@ -136,11 +136,39 @@ fn benchmark_isolated_components(c: &mut Criterion) {
     // This would require exposing more internals, so we skip for now
 }
 
+fn benchmark_scope_analysis(c: &mut Criterion) {
+    c.bench_function("scope_analysis", |b| {
+        let mut parser = Parser::new(COMPLEX_SCRIPT);
+        match parser.parse() {
+            Ok(ast) => {
+                let analyzer = ScopeAnalyzer::new();
+                let pragma_map = vec![];
+
+                b.iter(|| {
+                    analyzer.analyze(black_box(&ast), black_box(COMPLEX_SCRIPT), black_box(&pragma_map));
+                });
+            }
+            Err(e) => {
+                eprintln!("Warning: Parse error in scope_analysis benchmark: {:?}", e);
+                b.iter(|| {
+                    // Fallback benchmark with minimal script
+                    let mut fallback_parser = Parser::new("my $x = 1;");
+                    if let Ok(fallback_ast) = fallback_parser.parse() {
+                        let analyzer = ScopeAnalyzer::new();
+                        analyzer.analyze(black_box(&fallback_ast), black_box("my $x = 1;"), black_box(&vec![]));
+                    }
+                });
+            }
+        }
+    });
+}
+
 criterion_group!(
     benches,
     benchmark_simple_parsing,
     benchmark_complex_parsing,
     benchmark_ast_generation,
-    benchmark_isolated_components
+    benchmark_isolated_components,
+    benchmark_scope_analysis
 );
 criterion_main!(benches);
