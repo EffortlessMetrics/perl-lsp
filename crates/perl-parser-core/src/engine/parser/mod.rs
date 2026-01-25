@@ -231,3 +231,5 @@ include!("expressions/quotes.rs");
 mod tests;
 #[cfg(test)]
 mod indirect_call_tests;
+#[cfg(test)]
+mod hash_vs_block_tests;
