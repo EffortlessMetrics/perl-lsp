@@ -1,5 +1,4 @@
 #![allow(dead_code)] // This is a utility module used by other tests
-#![allow(clippy::unwrap_used, clippy::expect_used)] // Test utilities can use unwrap/expect
 
 /// Test utilities and helpers for LSP testing
 /// Provides common functionality to reduce code duplication
@@ -67,18 +66,26 @@ impl TestServerBuilder {
                 .map(|path| json!({ "uri": format!("file://{}", path), "name": path }))
                 .collect();
 
-            let mut params = init_params.as_object().unwrap().clone();
-            params.insert("workspaceFolders".to_string(), folders.into());
+            match init_params.as_object() {
+                Some(obj) => {
+                    let mut params = obj.clone();
+                    params.insert("workspaceFolders".to_string(), folders.into());
 
-            send_request(
-                &mut server.process,
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "initialize",
-                    "params": params
-                }),
-            );
+                    send_request(
+                        &mut server.process,
+                        json!({
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "initialize",
+                            "params": params
+                        }),
+                    );
+                }
+                None => panic!(
+                    "Initialization parameters must be a JSON object, got: {:?}",
+                    init_params
+                ),
+            }
         } else {
             send_request(
                 &mut server.process,
@@ -294,8 +301,13 @@ pub mod assertions {
 
     /// Assert that diagnostics contain expected error
     pub fn assert_has_diagnostic(response: &Value, expected_message: &str) {
-        let items =
-            response["result"]["items"].as_array().expect("Expected diagnostic items array");
+        let items = match response["result"]["items"].as_array() {
+            Some(arr) => arr,
+            None => panic!(
+                "Expected diagnostic items array in response, got: {:?}",
+                response["result"]
+            ),
+        };
 
         let found = items.iter().any(|item| {
             item["message"].as_str().map(|msg| msg.contains(expected_message)).unwrap_or(false)
@@ -306,7 +318,10 @@ pub mod assertions {
 
     /// Assert symbol count
     pub fn assert_symbol_count(response: &Value, expected_count: usize) {
-        let symbols = response["result"].as_array().expect("Expected symbols array");
+        let symbols = match response["result"].as_array() {
+            Some(arr) => arr,
+            None => panic!("Expected symbols array in response, got: {:?}", response["result"]),
+        };
         assert_eq!(
             symbols.len(),
             expected_count,
@@ -422,25 +437,40 @@ pub mod generators {
 
 // Helper to start server from Child process
 fn start_lsp_server() -> TestServer {
-    let process = Command::new("cargo")
+    let process = match Command::new("cargo")
         .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-        .expect("Failed to start LSP server");
+    {
+        Ok(proc) => proc,
+        Err(e) => panic!("Failed to start LSP server: {}", e),
+    };
 
     TestServer { process }
 }
 
 // Send request to server via JSON-RPC
 fn send_request(child: &mut Child, request: Value) {
-    let request_str = serde_json::to_string(&request).unwrap();
+    let request_str = match serde_json::to_string(&request) {
+        Ok(s) => s,
+        Err(e) => panic!("Failed to serialize request to JSON: {}", e),
+    };
     let length = request_str.len();
 
-    let stdin = child.stdin.as_mut().unwrap();
-    write!(stdin, "Content-Length: {}\r\n\r\n{}", length, request_str).unwrap();
-    stdin.flush().unwrap();
+    let stdin = match child.stdin.as_mut() {
+        Some(s) => s,
+        None => panic!("Child process stdin not available"),
+    };
+
+    if let Err(e) = write!(stdin, "Content-Length: {}\r\n\r\n{}", length, request_str) {
+        panic!("Failed to write request to LSP server stdin: {}", e);
+    }
+
+    if let Err(e) = stdin.flush() {
+        panic!("Failed to flush request to LSP server stdin: {}", e);
+    }
 }
 
 // Send notification to server
@@ -450,18 +480,25 @@ fn send_notification(child: &mut Child, notification: Value) {
 
 // Read response from server
 fn read_response(child: &mut Child) -> Value {
-    let stdout = child.stdout.as_mut().unwrap();
+    let stdout = match child.stdout.as_mut() {
+        Some(s) => s,
+        None => panic!("Child process stdout not available"),
+    };
     let mut reader = BufReader::new(stdout);
 
     // Read headers
     let mut headers = String::new();
     loop {
         let mut line = String::new();
-        reader.read_line(&mut line).unwrap();
-        if line == "\r\n" {
-            break;
+        match reader.read_line(&mut line) {
+            Ok(_) => {
+                if line == "\r\n" {
+                    break;
+                }
+                headers.push_str(&line);
+            }
+            Err(e) => panic!("Failed to read headers from LSP server: {}", e),
         }
-        headers.push_str(&line);
     }
 
     // Parse content length
@@ -470,12 +507,21 @@ fn read_response(child: &mut Child) -> Value {
         .find(|line| line.starts_with("Content-Length:"))
         .and_then(|line| line.split(':').nth(1))
         .and_then(|len| len.trim().parse().ok())
-        .unwrap_or(0);
+        .unwrap_or_else(|| panic!("Content-Length header not found in response headers: {}", headers));
 
     // Read content
     let mut content = vec![0; content_length];
     use std::io::Read;
-    reader.read_exact(&mut content).unwrap();
+    if let Err(e) = reader.read_exact(&mut content) {
+        panic!("Failed to read {} bytes of content from LSP server: {}", content_length, e);
+    }
 
-    serde_json::from_slice(&content).unwrap()
+    match serde_json::from_slice(&content) {
+        Ok(v) => v,
+        Err(e) => panic!(
+            "Failed to parse JSON response from LSP server: {} (content: {})",
+            e,
+            String::from_utf8_lossy(&content)
+        ),
+    }
 }
