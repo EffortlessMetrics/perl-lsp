@@ -352,13 +352,38 @@ fn test_branch_reset_complexity() {
     let mut parser = Parser::new(&pattern);
     let result = parser.parse();
     
+        assert!(found, "Should have found specific error in: {:?}", errors);
+    }
+}
+
+#[test]
+fn test_catastrophic_backtracking_detection() {
+    // Nested quantifiers (a+)+
+    let code = r#"qr/(a+)+/;"#;
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    
     // Parser might recover, so check either result is Err or errors list has the error
     if let Err(e) = result {
-        assert!(e.to_string().contains("Too many branches"), "Error was: {}", e);
+        assert!(e.to_string().contains("catastrophic backtracking"), "Error was: {}", e);
     } else {
         let errors = parser.errors();
-        assert!(!errors.is_empty(), "Should have recorded errors for excessive branches");
-        let found = errors.iter().any(|e| e.to_string().contains("Too many branches"));
+        assert!(!errors.is_empty(), "Should have recorded errors for nested quantifiers");
+        let found = errors.iter().any(|e| e.to_string().contains("catastrophic backtracking"));
+        assert!(found, "Should have found specific error in: {:?}", errors);
+    }
+    
+    // Another case: (a*)*
+    let code2 = r#"qr/(a*)*b/;"#;
+    let mut parser2 = Parser::new(code2);
+    let result2 = parser2.parse();
+    
+    if let Err(e) = result2 {
+        assert!(e.to_string().contains("catastrophic backtracking"), "Error was: {}", e);
+    } else {
+        let errors = parser2.errors();
+        assert!(!errors.is_empty(), "Should have recorded errors for nested quantifiers");
+        let found = errors.iter().any(|e| e.to_string().contains("catastrophic backtracking"));
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
 }

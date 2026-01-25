@@ -50,7 +50,82 @@ impl RegexValidator {
         false
     }
 
+    /// Check for nested quantifiers that can cause catastrophic backtracking
+    /// e.g. (a+)+, (a*)*, (a?)*
+    pub fn detect_nested_quantifiers(&self, pattern: &str) -> bool {
+        // This is a heuristic check for nested quantifiers
+        // It looks for a quantifier character following a group that ends with a quantifier
+        // e.g. ")+" in "...)+" 
+        // Real implementation would need a full regex parser, but this heuristic 
+        // covers common cases like (a+)+
+        
+        let mut chars = pattern.char_indices().peekable();
+        let mut group_stack = Vec::new();
+        
+        // Track the last significant character index and its type
+        // Type: 0=other, 1=quantifier, 2=group_end
+        let mut last_type = 0;
+        
+        while let Some((_, ch)) = chars.next() {
+            match ch {
+                '\\' => {
+                    chars.next(); // skip escaped
+                    last_type = 0;
+                }
+                '(' => {
+                    // Check if non-capturing or other special group
+                    if let Some((_, '?')) = chars.peek() {
+                        // Special group, might be safe or not
+                        // For now we just track it as a group start
+                    }
+                    group_stack.push(false); // false = no quantifier inside yet
+                    last_type = 0;
+                }
+                ')' => {
+                    if let Some(has_quantifier) = group_stack.pop() {
+                        if has_quantifier {
+                            last_type = 2; // group end with internal quantifier
+                        } else {
+                            last_type = 0;
+                        }
+                    }
+                }
+                '+' | '*' | '?' | '{' => {
+                    // If we just closed a group that had a quantifier inside, 
+                    // and now we see another quantifier, that's a nested quantifier!
+                    if last_type == 2 {
+                        // Check if it's really a quantifier or literal {
+                        if ch == '{' {
+                            // Only count as quantifier if it looks like {n} or {n,m}
+                            // peek ahead... (simplified for now)
+                            return true; // Assume { is quantifier for safety heuristic
+                        } else {
+                            return true;
+                        }
+                    }
+                    
+                    // Mark current group as having a quantifier
+                    if let Some(last) = group_stack.last_mut() {
+                        *last = true;
+                    }
+                    last_type = 1;
+                }
+                _ => {
+                    last_type = 0;
+                }
+            }
+        }
+        false
+    }
+
     fn check_complexity(&self, pattern: &str, start_pos: usize) -> Result<(), ParseError> {
+        if self.detect_nested_quantifiers(pattern) {
+            return Err(ParseError::syntax(
+                "Potential catastrophic backtracking detected (nested quantifiers)",
+                start_pos
+            ));
+        }
+
         let mut chars = pattern.char_indices().peekable();
         // Stack stores the type of the current group
         let mut stack: Vec<GroupType> = Vec::new();
