@@ -34,9 +34,7 @@ use perl_parser::{
 };
 
 use crate::call_hierarchy_provider::CallHierarchyProvider;
-use crate::cancellation::{
-    GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, ProviderCleanupContext,
-};
+use crate::cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken};
 
 // Import LSP providers from features (these moved from perl-parser to perl-lsp)
 use crate::features::{
@@ -64,7 +62,6 @@ use crate::{
     protocol::{
         CONTENT_MODIFIED, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, REQUEST_CANCELLED,
         cancelled_response_with_method, document_not_found_error, enhanced_error,
-        request_cancelled_error, server_cancelled_error,
     },
     state::{
         ClientCapabilities, DocumentState, ServerConfig, WorkspaceConfig,
@@ -89,7 +86,6 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicI64, AtomicU32, Ordering},
 };
-use std::time::{Duration, Instant};
 use url::Url;
 
 use crate::util::uri::parse_uri;

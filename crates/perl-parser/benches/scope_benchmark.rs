@@ -1,6 +1,6 @@
 #![allow(clippy::expect_used)]
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use perl_parser::{Parser, ScopeAnalyzer};
 use std::hint::black_box;
 

@@ -89,7 +89,7 @@ pub use self::items::{CompletionItem, CompletionItemKind};
 
 use perl_parser_core::ast::Node;
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
-use perl_workspace_index::workspace_index::{SymbolKind as WsSymbolKind, WorkspaceIndex};
+use perl_workspace_index::workspace_index::WorkspaceIndex;
 use std::sync::Arc;
 
 /// Completion provider

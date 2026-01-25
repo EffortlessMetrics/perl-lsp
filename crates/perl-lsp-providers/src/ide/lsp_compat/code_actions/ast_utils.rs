@@ -32,7 +32,7 @@ pub fn find_function_insert_position(source: &str) -> usize {
 
 /// Find node at the given range
 #[allow(clippy::only_used_in_recursion)]
-pub fn find_node_at_range<'a>(node: &'a Node, range: (usize, usize)) -> Option<&'a Node> {
+pub fn find_node_at_range(node: &Node, range: (usize, usize)) -> Option<&Node> {
     // Check if this node contains the range
     if node.location.start <= range.0 && node.location.end >= range.1 {
         // Check children for more specific match based on node kind

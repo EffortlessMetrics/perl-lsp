@@ -7,6 +7,8 @@ use std::path::{Component, Path, PathBuf};
 
 /// Add file path completions with comprehensive security and performance safeguards
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)] // Kept for API completeness; callers may use _with_cancellation directly
+#[allow(clippy::too_many_arguments)] // Intentional: dependency injection for security callbacks
 pub(crate) fn add_file_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
@@ -34,6 +36,7 @@ pub(crate) fn add_file_completions(
 
 /// Add file path completions with comprehensive security and performance safeguards
 #[cfg(target_arch = "wasm32")]
+#[allow(dead_code)] // Kept for API completeness; callers may use _with_cancellation directly
 pub(crate) fn add_file_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
@@ -51,6 +54,7 @@ pub(crate) fn add_file_completions(
 
 /// Add file path completions with cancellation support
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(clippy::too_many_arguments)] // Intentional: dependency injection for security callbacks
 pub(crate) fn add_file_completions_with_cancellation(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,

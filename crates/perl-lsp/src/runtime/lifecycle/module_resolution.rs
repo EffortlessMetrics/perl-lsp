@@ -5,7 +5,6 @@
 use super::super::*;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use url::Url;
 
 impl LspServer {
     /// Enhanced module path resolver using workspace configuration
