@@ -69,7 +69,6 @@ pub struct ScopeIssue {
 
 #[derive(Debug)]
 struct Variable {
-    name: String,
     line: usize,
     is_used: RefCell<bool>,
     is_our: bool,
@@ -95,6 +94,19 @@ fn sigil_to_index(sigil: &str) -> usize {
         Some(b'&') => 3,
         Some(b'*') => 4,
         _ => 5,
+    }
+}
+
+/// Convert an array index back to a Perl sigil.
+#[inline]
+fn index_to_sigil(index: usize) -> &'static str {
+    match index {
+        0 => "$",
+        1 => "@",
+        2 => "%",
+        3 => "&",
+        4 => "*",
+        _ => "",
     }
 }
 
@@ -145,11 +157,9 @@ impl Scope {
         let mut vars = self.variables.borrow_mut();
         let inner = &mut vars[idx];
 
-        let full_name = format!("{}{}", sigil, name);
         inner.insert(
             name.to_string(),
             Rc::new(Variable {
-                name: full_name,
                 line,
                 is_used: RefCell::new(is_our), // 'our' variables are considered used
                 is_our,
@@ -186,10 +196,11 @@ impl Scope {
     fn get_unused_variables(&self) -> Vec<(String, usize)> {
         let mut unused = Vec::new();
 
-        for inner in self.variables.borrow().iter() {
-            for var in inner.values() {
+        for (idx, inner) in self.variables.borrow().iter().enumerate() {
+            for (name, var) in inner {
                 if !*var.is_used.borrow() && !var.is_our {
-                    unused.push((var.name.clone(), var.line));
+                    let full_name = format!("{}{}", index_to_sigil(idx), name);
+                    unused.push((full_name, var.line));
                 }
             }
         }
@@ -943,6 +954,15 @@ impl ScopeAnalyzer {
 
 /// Check if a variable is a built-in Perl global variable
 fn is_builtin_global(sigil: &str, name: &str) -> bool {
+    // Fast path: most user variables start with lowercase and are not built-ins
+    // Exception: $a and $b are built-in sort variables
+    if !name.is_empty() {
+        let first = name.as_bytes()[0];
+        if first.is_ascii_lowercase() && name != "a" && name != "b" {
+            return false;
+        }
+    }
+
     match (sigil, name) {
         // Special variables
         ("$", "_") | ("@", "_") | ("%", "_") | ("$", "!") | ("$", "@") | ("$", "?") | ("$", "^")
