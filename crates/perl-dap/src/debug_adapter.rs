@@ -4,11 +4,11 @@
 //! to enable debugging support in VSCode and other DAP-compatible editors.
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
 
@@ -82,26 +82,31 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
         .get_or_init(|| {
             // Dangerous operations that can mutate state, perform I/O, or execute code
             // Categories:
-            //   - State mutation: push, pop, shift, unshift, splice, delete, undef
+            //   - State mutation: push, pop, shift, unshift, splice, delete, undef, srand
             //   - Process control: system, exec, fork, exit, dump, kill, alarm, sleep, wait, waitpid
-            //   - I/O: qx, readpipe, syscall, open, close, print, say, printf, sysread, syswrite
+            //   - I/O: qx, readpipe, syscall, open, close, print, say, printf, sysread, syswrite, glob, readline, ioctl, fcntl, flock, select, dbmopen, dbmclose
             //   - Filesystem: mkdir, rmdir, unlink, rename, chdir, chmod, chown, chroot, truncate, symlink, link
             //   - Code loading: eval, require, do (file)
             //   - Tie/untie: can execute arbitrary code via FETCH/STORE
-            //   - Network: socket, connect, bind, listen, accept, send, recv
+            //   - Network: socket, connect, bind, listen, accept, send, recv, shutdown
+            //   - IPC: msg*, sem*, shm*
             let ops = [
                 // State mutation
-                "push", "pop", "shift", "unshift", "splice", "delete", "undef",
+                "push", "pop", "shift", "unshift", "splice", "delete", "undef", "srand",
                 // Process control
                 "system", "exec", "fork", "exit", "dump", "kill", "alarm", "sleep", "wait",
                 "waitpid", // I/O
                 "qx", "readpipe", "syscall", "open", "close", "print", "say", "printf", "sysread",
-                "syswrite", // Filesystem
+                "syswrite", "glob", "readline", "ioctl", "fcntl", "flock", "select", "dbmopen",
+                "dbmclose", // Filesystem
                 "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown", "chroot",
                 "truncate", "symlink", "link", // Code loading/execution
                 "eval", "require", "do", // Tie mechanism (can execute arbitrary code)
                 "tie", "untie", // Network
-                "socket", "connect", "bind", "listen", "accept", "send", "recv",
+                "socket", "connect", "bind", "listen", "accept", "send", "recv", "shutdown",
+                // IPC
+                "msgget", "msgsnd", "msgrcv", "msgctl", "semget", "semop", "semctl", "shmget",
+                "shmat", "shmdt", "shmctl",
             ];
             // Build pattern: \b(op1|op2|...)\b
             let pattern = format!(r"\b(?:{})\b", ops.join("|"));
@@ -2276,6 +2281,26 @@ mod tests {
             "print STDERR 'x'",
             "say 'hello'",
             "printf '%s', $x",
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn safe_eval_blocks_extended_ops_v2() {
+        // Verify the even more extended deny-list works (glob, readline, IPC, etc.)
+        let blocked = [
+            "glob '*'",
+            "readline $fh",
+            "ioctl $fh, 1, 1",
+            "srand",
+            "dbmopen %h, 'file', 0666",
+            "shmget $key, 10, 0666",
+            "select $r, $w, $e, 0",
+            "shutdown $socket, 2",
         ];
 
         for expr in blocked {
