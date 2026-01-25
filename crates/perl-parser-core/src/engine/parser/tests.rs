@@ -187,3 +187,40 @@ fn test_regex_complexity_failure() {
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
 }
+
+#[test]
+fn test_unicode_property_valid() {
+    // 50 properties (limit is 50, so this should pass)
+    let mut pattern = String::from("qr/");
+    for i in 0..50 {
+        pattern.push_str(&format!("\\p{{Prop{}}}", i));
+    }
+    pattern.push('/');
+    
+    let mut parser = Parser::new(&pattern);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Should accept 50 Unicode properties");
+}
+
+#[test]
+fn test_unicode_property_complexity() {
+    // 51 properties (max is 50)
+    let mut pattern = String::from("qr/");
+    for i in 0..51 {
+        pattern.push_str(&format!("\\p{{Prop{}}}", i));
+    }
+    pattern.push('/');
+    
+    let mut parser = Parser::new(&pattern);
+    let result = parser.parse();
+    
+    // Parser might recover, so check either result is Err or errors list has the error
+    if let Err(e) = result {
+        assert!(e.to_string().contains("Too many Unicode properties"), "Error was: {}", e);
+    } else {
+        let errors = parser.errors();
+        assert!(!errors.is_empty(), "Should have recorded errors for excessive properties");
+        let found = errors.iter().any(|e| e.to_string().contains("Too many Unicode properties"));
+        assert!(found, "Should have found specific error in: {:?}", errors);
+    }
+}

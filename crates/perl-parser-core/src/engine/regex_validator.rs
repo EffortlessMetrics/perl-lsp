@@ -3,6 +3,7 @@ use crate::error::ParseError;
 /// Validator for Perl regular expressions to prevent security and performance issues
 pub struct RegexValidator {
     max_nesting: usize,
+    max_unicode_properties: usize,
 }
 
 impl RegexValidator {
@@ -11,24 +12,50 @@ impl RegexValidator {
         Self {
             // Default limits from issue #461
             max_nesting: 10,
+            // Limit from issue #460
+            max_unicode_properties: 50,
         }
     }
 
     /// Validate a regex pattern for potential performance or security risks
     pub fn validate(&self, pattern: &str, start_pos: usize) -> Result<(), ParseError> {
-        self.check_lookbehind_complexity(pattern, start_pos)
+        self.check_complexity(pattern, start_pos)
     }
 
-    fn check_lookbehind_complexity(&self, pattern: &str, start_pos: usize) -> Result<(), ParseError> {
+    fn check_complexity(&self, pattern: &str, start_pos: usize) -> Result<(), ParseError> {
         let mut chars = pattern.char_indices().peekable();
         // Stack stores whether the current group is a lookbehind group
         let mut stack: Vec<bool> = Vec::new();
+        let mut unicode_property_count = 0;
         
         while let Some((idx, ch)) = chars.next() {
             match ch {
                 '\\' => {
-                    // Skip escaped character
-                    chars.next();
+                    // Check for escaped character
+                    if let Some((_, next_char)) = chars.peek() {
+                        match next_char {
+                            'p' | 'P' => {
+                                // Unicode property start \p or \P
+                                // We consume the 'p'/'P'
+                                chars.next();
+                                
+                                // Check if it's followed by {
+                                if let Some((_, '{')) = chars.peek() {
+                                    unicode_property_count += 1;
+                                    if unicode_property_count > self.max_unicode_properties {
+                                        return Err(ParseError::syntax(
+                                            "Too many Unicode properties in regex (max 50)",
+                                            start_pos + idx
+                                        ));
+                                    }
+                                }
+                            }
+                            _ => {
+                                // Just skip other escaped chars
+                                chars.next();
+                            }
+                        }
+                    }
                 }
                 '(' => {
                     let mut is_lookbehind = false;
