@@ -315,10 +315,10 @@ fn test_syntax_highlighting(_test_dir: &Path) -> Result<()> {
     let mut wait_for_response = |id: u64| -> Result<serde_json::Value> {
         loop {
             let msg = read_msg()?;
-            if let Some(msg_id) = msg.get("id").and_then(|i| i.as_u64()) {
-                if msg_id == id {
-                    return Ok(msg);
-                }
+            if let Some(msg_id) = msg.get("id").and_then(|i| i.as_u64())
+                && msg_id == id
+            {
+                return Ok(msg);
             }
             // Log ignored message
             if let Some(method) = msg.get("method").and_then(|m| m.as_str()) {

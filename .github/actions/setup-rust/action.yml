@@ -1,0 +1,99 @@
+# Composite action for setting up Rust toolchain with caching
+# Usage:
+#   - uses: ./.github/actions/setup-rust
+#     with:
+#       toolchain: stable  # or '1.89.0', 'nightly', etc.
+#       components: rustfmt, clippy
+#       cache: true
+#       sccache: false
+
+name: 'Setup Rust'
+description: 'Sets up Rust toolchain with caching for perl-lsp CI'
+
+inputs:
+  toolchain:
+    description: 'Rust toolchain to install (stable, beta, nightly, or version like 1.89.0)'
+    required: false
+    default: 'stable'
+  components:
+    description: 'Additional components to install (comma-separated)'
+    required: false
+    default: 'rustfmt, clippy'
+  cache:
+    description: 'Enable cargo cache'
+    required: false
+    default: 'true'
+  cache-key-suffix:
+    description: 'Additional suffix for cache key differentiation'
+    required: false
+    default: ''
+  sccache:
+    description: 'Enable sccache for faster compilation'
+    required: false
+    default: 'false'
+  install-just:
+    description: 'Install just command runner'
+    required: false
+    default: 'false'
+  install-nextest:
+    description: 'Install cargo-nextest test runner'
+    required: false
+    default: 'false'
+
+outputs:
+  cache-hit:
+    description: 'Whether the cache was hit'
+    value: ${{ steps.cache.outputs.cache-hit }}
+  toolchain-version:
+    description: 'Actual toolchain version installed'
+    value: ${{ steps.toolchain.outputs.version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Rust toolchain
+      id: toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: ${{ inputs.toolchain }}
+        components: ${{ inputs.components }}
+
+    - name: Cache cargo dependencies
+      id: cache
+      if: inputs.cache == 'true'
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: ${{ runner.os }}-${{ inputs.toolchain }}-${{ inputs.cache-key-suffix }}-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
+        shared-key: 'perl-lsp'
+
+    - name: Install sccache
+      if: inputs.sccache == 'true'
+      uses: mozilla-actions/sccache-action@v0.0.4
+
+    - name: Configure sccache
+      if: inputs.sccache == 'true'
+      shell: bash
+      run: |
+        echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+        echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
+    - name: Install just
+      if: inputs.install-just == 'true'
+      uses: taiki-e/install-action@v2
+      with:
+        tool: just
+
+    - name: Install nextest
+      if: inputs.install-nextest == 'true'
+      uses: taiki-e/install-action@nextest
+
+    - name: Show toolchain info
+      shell: bash
+      run: |
+        echo "::group::Toolchain Information"
+        rustc --version
+        cargo --version
+        rustfmt --version 2>/dev/null || true
+        clippy-driver --version 2>/dev/null || true
+        echo "::endgroup::"

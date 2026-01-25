@@ -1,0 +1,144 @@
+# Composite action for uploading gate receipts as artifacts
+# Usage:
+#   - uses: ./.github/actions/upload-receipt
+#     with:
+#       receipt-path: target/receipts/receipt.json
+#       retention-days: 14
+
+name: 'Upload Gate Receipt'
+description: 'Uploads gate receipt and logs as workflow artifacts with summary'
+
+inputs:
+  receipt-path:
+    description: 'Path to receipt.json file'
+    required: false
+    default: 'target/receipts/receipt.json'
+  logs-path:
+    description: 'Path to gate logs directory'
+    required: false
+    default: 'target/receipts/logs'
+  artifacts-path:
+    description: 'Path to additional artifacts'
+    required: false
+    default: 'target/receipts/artifacts'
+  artifact-name:
+    description: 'Name for the uploaded artifact'
+    required: false
+    default: 'gate-receipt'
+  retention-days:
+    description: 'Number of days to retain the artifact'
+    required: false
+    default: '14'
+  generate-summary:
+    description: 'Generate GitHub step summary from receipt'
+    required: false
+    default: 'true'
+
+outputs:
+  artifact-url:
+    description: 'URL to the uploaded artifact'
+    value: ${{ steps.upload.outputs.artifact-url }}
+  receipt-exists:
+    description: 'Whether the receipt file exists'
+    value: ${{ steps.check.outputs.exists }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check receipt exists
+      id: check
+      shell: bash
+      run: |
+        if [ -f "${{ inputs.receipt-path }}" ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "Receipt found at ${{ inputs.receipt-path }}"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "::warning::Receipt not found at ${{ inputs.receipt-path }}"
+        fi
+
+    - name: Upload gate receipt
+      id: upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: |
+          ${{ inputs.receipt-path }}
+          ${{ inputs.logs-path }}/*.log
+          ${{ inputs.artifacts-path }}/*
+        if-no-files-found: warn
+        retention-days: ${{ inputs.retention-days }}
+
+    - name: Generate summary
+      if: inputs.generate-summary == 'true' && always()
+      shell: bash
+      run: |
+        python3 - <<'PY'
+        import json
+        import os
+        from pathlib import Path
+
+        receipt_path = Path("${{ inputs.receipt-path }}")
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+
+        if not summary_path:
+            raise SystemExit(0)
+
+        lines = ["### Gate Receipt", ""]
+
+        if not receipt_path.exists():
+            lines.append("> Receipt not found at `${{ inputs.receipt-path }}`")
+            Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+            raise SystemExit(0)
+
+        try:
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            lines.append(f"> Failed to parse receipt: {e}")
+            Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+            raise SystemExit(0)
+
+        # Header info
+        lines.append(f"**Generated**: {data.get('generated_at', 'unknown')}")
+        lines.append(f"**Commit**: `{data.get('commit', 'unknown')[:12]}`")
+
+        # Overall status
+        gates = data.get("gates", [])
+        passed = sum(1 for g in gates if g.get("status") == "passed")
+        failed = sum(1 for g in gates if g.get("status") == "failed")
+        total = len(gates)
+
+        if failed == 0:
+            lines.append(f"**Status**: All {passed}/{total} gates passed")
+        else:
+            lines.append(f"**Status**: {failed}/{total} gates failed")
+
+        lines.append("")
+
+        # Gate table
+        lines.append("| Gate | Status | Exit | Duration |")
+        lines.append("|------|--------|------|----------|")
+
+        for gate in gates:
+            name = gate.get("name", "unknown")
+            status = gate.get("status", "unknown")
+            exit_code = gate.get("exit_code", "?")
+            duration = gate.get("duration_seconds", "?")
+
+            # Status emoji
+            if status == "passed":
+                status_icon = "passed"
+            elif status == "failed":
+                status_icon = "**FAILED**"
+            else:
+                status_icon = status
+
+            lines.append(f"| {name} | {status_icon} | {exit_code} | {duration}s |")
+
+        # Total duration if available
+        if "total_duration_seconds" in data:
+            lines.append("")
+            lines.append(f"**Total duration**: {data['total_duration_seconds']}s")
+
+        Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+        PY

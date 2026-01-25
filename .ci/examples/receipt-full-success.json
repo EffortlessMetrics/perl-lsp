@@ -1,0 +1,286 @@
+{
+  "schema_version": "1.0.0",
+  "metadata": {
+    "timestamp": "2026-01-24T15:30:00Z",
+    "git_sha": "13c4d91c1234567890abcdef1234567890abcdef",
+    "git_sha_short": "13c4d91",
+    "git_branch": "master",
+    "git_dirty": false,
+    "toolchain": {
+      "rustc_version": "rustc 1.89.0 (a]34567890 2026-01-15)",
+      "rustc_channel": "stable",
+      "rustc_semver": "1.89.0",
+      "cargo_version": "cargo 1.89.0 (ab34567890 2026-01-15)",
+      "node_version": "v20.10.0",
+      "nix_version": "nix (Nix) 2.18.1"
+    },
+    "platform": {
+      "os": "linux",
+      "os_version": "6.6.87.2-microsoft-standard-WSL2",
+      "arch": "x86_64",
+      "cpu_cores": 8,
+      "memory_gb": 16.0,
+      "is_wsl": true
+    },
+    "environment": {
+      "type": "local",
+      "ci_provider": null,
+      "ci_run_id": null,
+      "ci_run_url": null,
+      "pr_number": null,
+      "nix_shell": true
+    },
+    "trigger": "pre-push"
+  },
+  "gates": [
+    {
+      "gate_name": "workflow-audit",
+      "tier": "pr_fast",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 850,
+      "command": "python3 scripts/ci-audit-workflows.py",
+      "exit_code": 0,
+      "output_summary": "All 21 workflows validated, 0 ungated expensive jobs found",
+      "log_path": "logs/workflow-audit.log",
+      "metrics": {
+        "files_checked": 21,
+        "warnings_count": 0
+      },
+      "artifacts": []
+    },
+    {
+      "gate_name": "check-nested-lock",
+      "tier": "pr_fast",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 120,
+      "command": "just ci-check-no-nested-lock",
+      "exit_code": 0,
+      "output_summary": "No nested lockfiles",
+      "log_path": "logs/check-nested-lock.log",
+      "metrics": null,
+      "artifacts": []
+    },
+    {
+      "gate_name": "fmt",
+      "tier": "pr_fast",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 2340,
+      "command": "cargo fmt --check --all",
+      "exit_code": 0,
+      "output_summary": null,
+      "log_path": "logs/fmt.log",
+      "metrics": {
+        "files_checked": 156
+      },
+      "artifacts": []
+    },
+    {
+      "gate_name": "docs-check",
+      "tier": "pr_fast",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 1560,
+      "command": "bash ci/check_missing_docs.sh",
+      "exit_code": 0,
+      "output_summary": "Missing docs baseline: 142 (limit: 150)",
+      "log_path": "logs/docs-check.log",
+      "metrics": {
+        "warnings_count": 142
+      },
+      "artifacts": []
+    },
+    {
+      "gate_name": "clippy-lib",
+      "tier": "merge_gate",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 45200,
+      "command": "cargo clippy --workspace --lib --locked -- -D warnings -A missing_docs",
+      "exit_code": 0,
+      "output_summary": "Checking perl-parser v0.9.0\nChecking perl-lsp v0.9.0\n    Finished",
+      "log_path": "logs/clippy-lib.log",
+      "metrics": {
+        "warnings_count": 0,
+        "errors_count": 0,
+        "memory_peak_mb": 1240.5
+      },
+      "artifacts": []
+    },
+    {
+      "gate_name": "clippy-prod-no-unwrap",
+      "tier": "merge_gate",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 38400,
+      "command": "cargo clippy --workspace --lib --bins --no-deps -- -D clippy::unwrap_used -D clippy::expect_used",
+      "exit_code": 0,
+      "output_summary": "Production code is panic-safe (no unwrap/expect)",
+      "log_path": "logs/clippy-prod-no-unwrap.log",
+      "metrics": {
+        "warnings_count": 0,
+        "errors_count": 0
+      },
+      "artifacts": []
+    },
+    {
+      "gate_name": "test-lib",
+      "tier": "merge_gate",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 125600,
+      "command": "cargo test --workspace --lib --locked",
+      "exit_code": 0,
+      "output_summary": "test result: ok. 847 passed; 0 failed; 23 ignored; 0 measured; 0 filtered out",
+      "log_path": "logs/test-lib.log",
+      "metrics": {
+        "tests_total": 870,
+        "tests_passed": 847,
+        "tests_failed": 0,
+        "tests_skipped": 0,
+        "tests_ignored": 23,
+        "memory_peak_mb": 890.2
+      },
+      "artifacts": ["artifacts/test-results.xml"]
+    },
+    {
+      "gate_name": "policy",
+      "tier": "merge_gate",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 3200,
+      "command": "just ci-policy",
+      "exit_code": 0,
+      "output_summary": "Policy checks passed",
+      "log_path": "logs/policy.log",
+      "metrics": null,
+      "artifacts": []
+    },
+    {
+      "gate_name": "lsp-def",
+      "tier": "merge_gate",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 28400,
+      "command": "cargo test -p perl-lsp --test semantic_definition -- --test-threads=1",
+      "exit_code": 0,
+      "output_summary": "test result: ok. 42 passed; 0 failed; 0 ignored",
+      "log_path": "logs/lsp-def.log",
+      "metrics": {
+        "tests_total": 42,
+        "tests_passed": 42,
+        "tests_failed": 0,
+        "tests_skipped": 0,
+        "tests_ignored": 0
+      },
+      "artifacts": []
+    },
+    {
+      "gate_name": "parser-features-check",
+      "tier": "merge_gate",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 4100,
+      "command": "bash ci/check_parse_errors.sh",
+      "exit_code": 0,
+      "output_summary": "Parse errors: 12 (baseline: 15)",
+      "log_path": "logs/parser-features-check.log",
+      "metrics": {
+        "parse_success_count": 1243,
+        "parse_failure_count": 12
+      },
+      "artifacts": []
+    },
+    {
+      "gate_name": "features-invariants",
+      "tier": "merge_gate",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 1800,
+      "command": "python3 scripts/check_features_invariants.py",
+      "exit_code": 0,
+      "output_summary": "All invariants satisfied: 47 GA features, 23 advertised features",
+      "log_path": "logs/features-invariants.log",
+      "metrics": {
+        "files_checked": 1
+      },
+      "artifacts": []
+    }
+  ],
+  "summary": {
+    "total_gates": 11,
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0,
+    "timeout": 0,
+    "error": 0,
+    "total_duration_ms": 251570,
+    "tier_results": {
+      "pr_fast": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0,
+        "duration_ms": 4870
+      },
+      "merge_gate": {
+        "total": 7,
+        "passed": 7,
+        "failed": 0,
+        "skipped": 0,
+        "duration_ms": 246700
+      },
+      "nightly": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "duration_ms": 0
+      },
+      "release": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "duration_ms": 0
+      }
+    },
+    "overall_status": "pass",
+    "blocking_failures": [],
+    "aggregate_metrics": {
+      "total_tests": 912,
+      "total_tests_passed": 889,
+      "total_tests_failed": 0,
+      "total_warnings": 142,
+      "max_memory_mb": 1240.5
+    }
+  },
+  "diff_config": {
+    "comparable_fields": [
+      "gates[*].gate_name",
+      "gates[*].status",
+      "gates[*].metrics",
+      "summary.overall_status",
+      "summary.passed",
+      "summary.failed",
+      "summary.aggregate_metrics"
+    ],
+    "ignored_fields": [
+      "metadata.timestamp",
+      "metadata.git_sha",
+      "metadata.git_sha_short",
+      "metadata.environment.ci_run_id",
+      "metadata.environment.ci_run_url",
+      "gates[*].duration_ms",
+      "gates[*].log_path",
+      "gates[*].output_summary",
+      "summary.total_duration_ms"
+    ],
+    "threshold_fields": {
+      "gates[*].metrics.coverage_percent": 0.5,
+      "gates[*].metrics.memory_peak_mb": 50
+    }
+  }
+}

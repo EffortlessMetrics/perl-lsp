@@ -10,6 +10,7 @@ use std::path::PathBuf;
 mod tasks;
 mod types;
 mod utils;
+use tasks::gates::{GateTier, OutputFormat};
 use tasks::*;
 use types::TestSuite;
 #[cfg(any(feature = "legacy", feature = "parser-tasks"))]
@@ -354,6 +355,52 @@ enum Commands {
 
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
+
+    /// Run CI gates with receipt generation
+    ///
+    /// Executes gates defined in .ci/gate-policy.yaml and generates
+    /// machine-readable receipts for tracking and comparison.
+    Gates {
+        /// Gate tier to run (default: merge-gate)
+        #[arg(long, short, value_enum, default_value = "merge-gate")]
+        tier: GateTier,
+
+        /// Run a specific gate by name
+        #[arg(long, short)]
+        gate: Option<String>,
+
+        /// List available gates without running them
+        #[arg(long, short)]
+        list: bool,
+
+        /// Output format (default: human)
+        #[arg(long, short, value_enum, default_value = "human")]
+        format: OutputFormat,
+
+        /// Emit receipt JSON (also writes to target/receipts/receipt.json)
+        #[arg(long, short)]
+        receipt: bool,
+
+        /// Path to write receipt (default: target/receipts/receipt.json)
+        #[arg(long)]
+        receipt_path: Option<PathBuf>,
+
+        /// Compare against a baseline receipt JSON
+        #[arg(long, short)]
+        diff: Option<PathBuf>,
+
+        /// Stop on first failure (fail-fast mode)
+        #[arg(long)]
+        fail_fast: bool,
+
+        /// Run gates in parallel where safe (experimental)
+        #[arg(long)]
+        parallel: bool,
+
+        /// Verbose output (include quarantined gates)
+        #[arg(long, short)]
+        verbose: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -453,5 +500,28 @@ fn main() -> Result<()> {
             FeaturesCommand::Report => features::report(),
         },
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
+        Commands::Gates {
+            tier,
+            gate,
+            list,
+            format,
+            receipt,
+            receipt_path,
+            diff,
+            fail_fast,
+            parallel,
+            verbose,
+        } => gates::run(gates::GateRunnerConfig {
+            tier,
+            gate_filter: gate,
+            output_format: format,
+            emit_receipt: receipt,
+            receipt_path,
+            diff_baseline: diff,
+            list_only: list,
+            fail_fast,
+            parallel,
+            verbose,
+        }),
     }
 }

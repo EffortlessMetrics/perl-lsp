@@ -1,0 +1,121 @@
+# Composite action for running standard Rust checks
+# Usage:
+#   - uses: ./.github/actions/rust-checks
+#     with:
+#       check-fmt: true
+#       check-clippy: true
+#       test: true
+#       test-args: '--workspace --lib'
+
+name: 'Rust Checks'
+description: 'Runs standard Rust format, lint, and test checks'
+
+inputs:
+  check-fmt:
+    description: 'Run cargo fmt --check'
+    required: false
+    default: 'true'
+  check-clippy:
+    description: 'Run cargo clippy'
+    required: false
+    default: 'true'
+  clippy-args:
+    description: 'Additional arguments for clippy'
+    required: false
+    default: '--workspace --lib --locked -- -D warnings -A missing_docs'
+  clippy-prod:
+    description: 'Run production clippy checks (deny unwrap/expect)'
+    required: false
+    default: 'false'
+  clippy-prod-args:
+    description: 'Arguments for production clippy checks'
+    required: false
+    default: '--workspace --lib --bins --no-deps -- -D clippy::unwrap_used -D clippy::expect_used'
+  test:
+    description: 'Run cargo test'
+    required: false
+    default: 'true'
+  test-args:
+    description: 'Additional arguments for test'
+    required: false
+    default: '--workspace --lib --locked'
+  test-threads:
+    description: 'Number of test threads (RUST_TEST_THREADS)'
+    required: false
+    default: ''
+  build-jobs:
+    description: 'Number of parallel build jobs (CARGO_BUILD_JOBS)'
+    required: false
+    default: ''
+  continue-on-clippy-error:
+    description: 'Continue even if clippy fails'
+    required: false
+    default: 'false'
+  continue-on-test-error:
+    description: 'Continue even if tests fail'
+    required: false
+    default: 'false'
+
+outputs:
+  fmt-status:
+    description: 'Format check exit code'
+    value: ${{ steps.fmt.outputs.status }}
+  clippy-status:
+    description: 'Clippy exit code'
+    value: ${{ steps.clippy.outputs.status }}
+  test-status:
+    description: 'Test exit code'
+    value: ${{ steps.test.outputs.status }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check formatting
+      id: fmt
+      if: inputs.check-fmt == 'true' && runner.os != 'Windows'
+      shell: bash
+      run: |
+        echo "::group::Format Check"
+        cargo fmt --all --check
+        echo "status=$?" >> $GITHUB_OUTPUT
+        echo "::endgroup::"
+
+    - name: Run clippy
+      id: clippy
+      if: inputs.check-clippy == 'true'
+      shell: bash
+      continue-on-error: ${{ inputs.continue-on-clippy-error == 'true' }}
+      env:
+        CARGO_BUILD_JOBS: ${{ inputs.build-jobs }}
+      run: |
+        echo "::group::Clippy Lint"
+        cargo clippy ${{ inputs.clippy-args }}
+        echo "status=$?" >> $GITHUB_OUTPUT
+        echo "::endgroup::"
+
+    - name: Run production clippy (no unwrap/expect)
+      id: clippy-prod
+      if: inputs.clippy-prod == 'true'
+      shell: bash
+      continue-on-error: ${{ inputs.continue-on-clippy-error == 'true' }}
+      env:
+        CARGO_BUILD_JOBS: ${{ inputs.build-jobs }}
+      run: |
+        echo "::group::Production Clippy (no unwrap/expect)"
+        cargo clippy ${{ inputs.clippy-prod-args }}
+        echo "::endgroup::"
+
+    - name: Run tests
+      id: test
+      if: inputs.test == 'true'
+      shell: bash
+      continue-on-error: ${{ inputs.continue-on-test-error == 'true' }}
+      env:
+        RUST_TEST_THREADS: ${{ inputs.test-threads }}
+        CARGO_BUILD_JOBS: ${{ inputs.build-jobs }}
+        RUST_BACKTRACE: '1'
+      run: |
+        echo "::group::Tests"
+        cargo test ${{ inputs.test-args }}
+        echo "status=$?" >> $GITHUB_OUTPUT
+        echo "::endgroup::"

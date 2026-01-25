@@ -1,0 +1,189 @@
+{
+  "metadata": {
+    "version": "0.9.0",
+    "date": "2026-01-24",
+    "note": "Placeholder baseline - run 'just bench' and compare to update with real values",
+    "machine": {
+      "model": "Placeholder",
+      "os": "Linux"
+    },
+    "rust": {
+      "version": "1.89.0"
+    },
+    "benchmark_framework": "Criterion.rs"
+  },
+  "benchmarks": {
+    "parser": {
+      "parse_simple_script": {
+        "description": "Basic Perl script with variables, conditionals, and functions",
+        "mean": {
+          "nanoseconds": 50000,
+          "microseconds": 50.0,
+          "confidence_interval": {
+            "lower": 48000,
+            "upper": 52000,
+            "confidence_level": 0.95
+          }
+        },
+        "target_range": "1-150us",
+        "meets_target": true
+      },
+      "parse_complex_script": {
+        "description": "OO Perl with packages, regex, and complex control flow",
+        "mean": {
+          "nanoseconds": 450000,
+          "microseconds": 450.0,
+          "confidence_interval": {
+            "lower": 430000,
+            "upper": 470000,
+            "confidence_level": 0.95
+          }
+        },
+        "target_range": "<1ms",
+        "meets_target": true
+      },
+      "ast_to_sexp": {
+        "description": "AST serialization performance",
+        "mean": {
+          "nanoseconds": 15000,
+          "microseconds": 15.0
+        }
+      },
+      "lexer_only": {
+        "description": "Isolated lexer performance",
+        "mean": {
+          "nanoseconds": 25000,
+          "microseconds": 25.0
+        }
+      }
+    },
+    "lexer": {
+      "simple_tokens": {
+        "description": "Basic tokenization",
+        "mean": {
+          "nanoseconds": 5000,
+          "microseconds": 5.0
+        }
+      },
+      "slash_disambiguation": {
+        "description": "Context-aware slash handling",
+        "mean": {
+          "nanoseconds": 12000,
+          "microseconds": 12.0
+        }
+      },
+      "string_interpolation": {
+        "description": "String interpolation parsing",
+        "mean": {
+          "nanoseconds": 8000,
+          "microseconds": 8.0
+        }
+      },
+      "large_file": {
+        "description": "1000-line file tokenization",
+        "mean": {
+          "nanoseconds": 5000000,
+          "microseconds": 5000,
+          "milliseconds": 5.0
+        },
+        "target_range": "<10ms",
+        "meets_target": true
+      }
+    },
+    "lsp": {
+      "rope_insertion": {
+        "description": "Rope-based text insertion",
+        "mean": {
+          "nanoseconds": 500000,
+          "microseconds": 500.0
+        },
+        "target_range": "<1ms",
+        "meets_target": true
+      },
+      "string_insertion": {
+        "description": "String-based text insertion (comparison)",
+        "mean": {
+          "nanoseconds": 2000000,
+          "microseconds": 2000,
+          "milliseconds": 2.0
+        }
+      },
+      "utf16_pos_to_byte": {
+        "description": "UTF-16 position to byte offset conversion",
+        "mean": {
+          "nanoseconds": 50000,
+          "microseconds": 50.0
+        },
+        "target_range": "<100us",
+        "meets_target": true
+      },
+      "multiple_small_edits": {
+        "description": "Multiple incremental edits",
+        "mean": {
+          "nanoseconds": 800000,
+          "microseconds": 800.0
+        },
+        "target_range": "<5ms",
+        "meets_target": true
+      }
+    },
+    "index": {
+      "initial_index_small_workspace": {
+        "description": "5-file workspace initial indexing",
+        "mean": {
+          "nanoseconds": 50000000,
+          "microseconds": 50000,
+          "milliseconds": 50.0
+        },
+        "target_range": "<100ms",
+        "meets_target": true
+      },
+      "initial_index_medium_workspace": {
+        "description": "10-file workspace initial indexing",
+        "mean": {
+          "nanoseconds": 100000000,
+          "microseconds": 100000,
+          "milliseconds": 100.0
+        },
+        "target_range": "<200ms",
+        "meets_target": true
+      },
+      "incremental_update_single_file": {
+        "description": "Single file incremental update",
+        "mean": {
+          "nanoseconds": 5000000,
+          "microseconds": 5000,
+          "milliseconds": 5.0
+        },
+        "target_range": "<10ms",
+        "meets_target": true
+      },
+      "symbol_lookup_by_name": {
+        "description": "O(1) hash table symbol lookup",
+        "mean": {
+          "nanoseconds": 500
+        },
+        "target_range": "<1us",
+        "meets_target": true
+      }
+    }
+  },
+  "performance_targets": {
+    "parser": {
+      "target": "1-150us parsing time",
+      "goal": "4-19x faster than legacy implementations"
+    },
+    "incremental_parsing": {
+      "target": "<1ms updates with 70-99% node reuse"
+    },
+    "lsp_operations": {
+      "keystroke_response": "<50ms",
+      "completion_popup": "<100ms",
+      "goto_definition": "<200ms"
+    },
+    "workspace": {
+      "initial_index": "<2s",
+      "incremental_update": "<50ms"
+    }
+  }
+}

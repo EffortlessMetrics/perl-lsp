@@ -1,0 +1,652 @@
+# =============================================================================
+# Gate Policy Configuration
+# =============================================================================
+#
+# This file defines all CI/CD gates, their enforcement levels, and execution
+# parameters. It serves as the single source of truth for what checks run
+# when and how strictly they are enforced.
+#
+# Schema Version: 1
+# Last Updated: 2026-01-24
+# Related: justfile (ci-gate, ci-full), .github/workflows/ci.yml
+#
+# =============================================================================
+
+schema_version: 1
+
+# =============================================================================
+# Global Settings
+# =============================================================================
+# These settings apply to all gates unless overridden at the gate level.
+
+global:
+  # Default timeout for any gate (5 minutes)
+  default_timeout_seconds: 300
+
+  # How long to retain artifacts from gate runs (7 days)
+  artifact_retention_days: 7
+
+  # Default retry behavior for transient failures
+  default_retry_count: 0
+
+  # Environment variables applied to all gates
+  environment:
+    CARGO_TERM_COLOR: always
+    RUST_BACKTRACE: "1"
+    # Ensure lockfile is honored for reproducibility
+    CARGO_LOCKED: "--locked"
+
+  # Toolchain requirements
+  toolchain:
+    # MSRV for the project (per rust-toolchain.toml)
+    msrv: "1.89.0"
+    # Required components
+    components:
+      - rustfmt
+      - clippy
+
+# =============================================================================
+# Tier Definitions
+# =============================================================================
+# Tiers define when gates run and their overall enforcement level.
+
+tiers:
+  # ---------------------------------------------------------------------------
+  # pr_fast: Required for every PR, must complete quickly
+  # ---------------------------------------------------------------------------
+  # Target: < 3 minutes
+  # Purpose: Catch obvious issues before review begins
+  # Enforcement: Hard fail - blocks PR from merging
+  pr_fast:
+    description: "Fast checks that run on every PR push"
+    target_duration_seconds: 180
+    enforcement: required
+    # These run on: pull_request to master/main
+    trigger:
+      - pull_request
+
+  # ---------------------------------------------------------------------------
+  # merge_gate: Required before merge to master
+  # ---------------------------------------------------------------------------
+  # Target: < 8 minutes
+  # Purpose: Full verification before code lands
+  # Enforcement: Hard fail - blocks merge
+  merge_gate:
+    description: "Full verification required before merging to master"
+    target_duration_seconds: 480
+    enforcement: required
+    # These run on: PR approval + merge queue, or manual dispatch
+    trigger:
+      - merge_queue
+      - workflow_dispatch
+
+  # ---------------------------------------------------------------------------
+  # nightly: Scheduled deep testing, non-blocking
+  # ---------------------------------------------------------------------------
+  # Target: < 60 minutes
+  # Purpose: Catch subtle issues, track metrics over time
+  # Enforcement: Informational - logged but doesn't block
+  nightly:
+    description: "Deep testing and metrics collection, runs on schedule"
+    target_duration_seconds: 3600
+    enforcement: informational
+    # These run on: daily schedule (3 AM UTC)
+    trigger:
+      - schedule: "0 3 * * *"
+
+# =============================================================================
+# Gate Definitions
+# =============================================================================
+# Each gate defines a single check with its configuration.
+
+gates:
+  # ===========================================================================
+  # Tier: pr_fast
+  # ===========================================================================
+  # Fast checks that run on every PR. Must be quick and reliable.
+
+  - name: fmt
+    tier: pr_fast
+    description: "Check code formatting with rustfmt"
+    required: true
+    command: cargo fmt --check --all
+    timeout_seconds: 60
+    retry_count: 0
+    budgets:
+      max_duration_ms: 30000
+    quarantine: false
+    tags:
+      - formatting
+      - style
+
+  - name: clippy_core
+    tier: pr_fast
+    description: "Clippy lints on core library crates (not full workspace)"
+    required: true
+    # Core crates only for speed; full workspace in merge_gate
+    command: >-
+      cargo clippy
+      -p perl-parser -p perl-lexer -p perl-parser-core
+      --lib --locked
+      -- -D warnings -A missing_docs
+    timeout_seconds: 180
+    retry_count: 0
+    budgets:
+      max_duration_ms: 120000
+      max_warnings: 0
+    quarantine: false
+    tags:
+      - lint
+      - clippy
+
+  - name: unit_core
+    tier: pr_fast
+    description: "Fast unit test subset for quick feedback"
+    required: true
+    # Library tests only, no integration tests
+    command: >-
+      cargo test
+      -p perl-parser -p perl-lexer -p perl-parser-core
+      --lib --locked
+      -- --test-threads=4
+    timeout_seconds: 180
+    retry_count: 1
+    budgets:
+      max_duration_ms: 150000
+    quarantine: false
+    tags:
+      - test
+      - unit
+
+  # ===========================================================================
+  # Tier: merge_gate
+  # ===========================================================================
+  # Full verification required before merging. Can be slower but must be thorough.
+
+  - name: clippy_full
+    tier: merge_gate
+    description: "Clippy lints on full workspace with strict settings"
+    required: true
+    command: >-
+      cargo clippy
+      --workspace --lib --locked
+      -- -D warnings -A missing_docs &&
+      cargo clippy
+      --workspace --bins --locked --no-deps
+      -- -D clippy::unwrap_used -D clippy::expect_used
+    timeout_seconds: 300
+    retry_count: 0
+    budgets:
+      max_duration_ms: 240000
+      max_warnings: 0
+    quarantine: false
+    tags:
+      - lint
+      - clippy
+      - strict
+
+  - name: unit_full
+    tier: merge_gate
+    description: "All workspace library tests"
+    required: true
+    command: cargo test --workspace --lib --locked
+    timeout_seconds: 300
+    retry_count: 1
+    budgets:
+      max_duration_ms: 240000
+    quarantine: false
+    tags:
+      - test
+      - unit
+      - workspace
+
+  - name: lsp_smoke
+    tier: merge_gate
+    description: "Deterministic LSP scenario test (semantic definitions)"
+    required: true
+    # Single-threaded for determinism
+    command: >-
+      env -u RUSTC_WRAPPER
+      RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1
+      cargo test -p perl-lsp --test semantic_definition --locked
+      -- --test-threads=1
+    timeout_seconds: 300
+    retry_count: 1
+    budgets:
+      max_duration_ms: 240000
+    quarantine: false
+    tags:
+      - test
+      - lsp
+      - integration
+      - deterministic
+
+  - name: security_audit
+    tier: merge_gate
+    description: "Check dependencies for known security vulnerabilities"
+    required: true
+    # cargo-audit must be installed; CI installs it if missing
+    command: cargo audit --deny warnings 2>/dev/null || cargo install cargo-audit --locked && cargo audit --deny warnings
+    timeout_seconds: 120
+    retry_count: 1
+    budgets:
+      max_duration_ms: 90000
+    quarantine: false
+    tags:
+      - security
+      - dependencies
+      - audit
+
+  - name: policy_checks
+    tier: merge_gate
+    description: "Enforce project policies (docs baseline, ExitStatus helper, features invariants)"
+    required: true
+    command: >-
+      ./.ci/scripts/check-from-raw.sh &&
+      python3 scripts/update-current-status.py --check &&
+      bash ci/check_missing_docs.sh &&
+      bash ci/check_parse_errors.sh &&
+      python3 scripts/check_features_invariants.py
+    timeout_seconds: 120
+    retry_count: 0
+    budgets:
+      max_duration_ms: 90000
+    quarantine: false
+    tags:
+      - policy
+      - docs
+      - invariants
+
+  - name: docs_build
+    tier: merge_gate
+    description: "Verify documentation builds without errors"
+    required: true
+    command: cargo doc -p perl-parser -p perl-lsp --no-deps --locked
+    timeout_seconds: 180
+    retry_count: 0
+    budgets:
+      max_duration_ms: 150000
+    quarantine: false
+    tags:
+      - docs
+      - build
+
+  - name: workflow_audit
+    tier: merge_gate
+    description: "Audit CI workflows for ungated expensive jobs"
+    required: true
+    command: python3 scripts/ci-audit-workflows.py
+    timeout_seconds: 60
+    retry_count: 0
+    budgets:
+      max_duration_ms: 30000
+    quarantine: false
+    tags:
+      - ci
+      - audit
+      - meta
+
+  - name: nested_lock_check
+    tier: merge_gate
+    description: "Ensure no nested Cargo.lock files exist (footgun prevention)"
+    required: true
+    command: >-
+      if find . -name 'Cargo.lock' -type f 2>/dev/null |
+         grep -v '^\./Cargo\.lock$' | grep -q .; then
+        echo "ERROR: Nested Cargo.lock detected!";
+        find . -name 'Cargo.lock' -type f | grep -v '^\./Cargo\.lock$';
+        exit 1;
+      fi
+    timeout_seconds: 30
+    retry_count: 0
+    budgets:
+      max_duration_ms: 10000
+    quarantine: false
+    tags:
+      - lockfile
+      - hygiene
+
+  # ===========================================================================
+  # Tier: nightly
+  # ===========================================================================
+  # Expensive checks that run on schedule. Non-blocking but tracked.
+
+  - name: mutation
+    tier: nightly
+    description: "Mutation testing subset to verify test quality"
+    required: false
+    # Limited timeout and package subset for bounded runtime
+    command: >-
+      cargo install cargo-mutants --locked 2>/dev/null || true;
+      cargo mutants
+      --package perl-parser-core
+      --timeout 60
+      --jobs 2
+      --no-shuffle
+      || true
+    timeout_seconds: 1800
+    retry_count: 0
+    budgets:
+      max_duration_ms: 1800000
+    quarantine: true
+    tags:
+      - mutation
+      - test-quality
+      - expensive
+
+  - name: fuzz
+    tier: nightly
+    description: "Bounded fuzzing runs for parser robustness"
+    required: false
+    # Property tests with high iteration count
+    command: >-
+      env PROPTEST_CASES=2048 PROPTEST_MAX_SHRINK_ITERS=1000
+      cargo test --locked -p perl-parser prop_ --release
+      -- --nocapture
+    timeout_seconds: 1800
+    retry_count: 0
+    budgets:
+      max_duration_ms: 1800000
+    quarantine: true
+    tags:
+      - fuzz
+      - proptest
+      - expensive
+
+  - name: benchmarks
+    tier: nightly
+    description: "Performance benchmarks for tracking regressions"
+    required: false
+    command: >-
+      cargo bench --locked -p perl-parser --bench parser_benchmark
+      -- --output-format bencher
+      | tee benchmark_output.txt
+    timeout_seconds: 900
+    retry_count: 0
+    budgets:
+      max_duration_ms: 900000
+    quarantine: true
+    artifacts:
+      - benchmark_output.txt
+      - target/criterion/**
+    tags:
+      - benchmark
+      - performance
+      - tracking
+
+  - name: full_matrix
+    tier: nightly
+    description: "All OS/toolchain combinations for compatibility"
+    required: false
+    # This is a matrix job; command represents one cell
+    # Actual matrix expansion happens in workflow definition
+    command: >-
+      cargo test --workspace --lib --locked
+    timeout_seconds: 1200
+    retry_count: 1
+    budgets:
+      max_duration_ms: 1200000
+    quarantine: true
+    matrix:
+      os:
+        - ubuntu-latest
+        - windows-latest
+        - macos-latest
+      toolchain:
+        - stable
+        - "1.89.0"  # MSRV
+        - beta
+    tags:
+      - matrix
+      - compatibility
+      - cross-platform
+
+  - name: coverage
+    tier: nightly
+    description: "Code coverage collection and reporting"
+    required: false
+    command: >-
+      cargo install cargo-llvm-cov --locked 2>/dev/null || true;
+      cargo llvm-cov -p perl-parser --tests --lcov --output-path lcov.info;
+      cargo llvm-cov report -p perl-parser
+    timeout_seconds: 900
+    retry_count: 0
+    budgets:
+      max_duration_ms: 900000
+    quarantine: true
+    artifacts:
+      - lcov.info
+    tags:
+      - coverage
+      - metrics
+      - tracking
+
+  - name: corpus_validation
+    tier: nightly
+    description: "Full corpus validation and coverage reporting"
+    required: false
+    command: >-
+      cargo run --locked -p xtask --no-default-features
+      -- corpus-audit --fresh --corpus-path .
+    timeout_seconds: 600
+    retry_count: 0
+    budgets:
+      max_duration_ms: 600000
+    quarantine: true
+    artifacts:
+      - corpus_audit_report.json
+    tags:
+      - corpus
+      - coverage
+      - tracking
+
+  - name: determinism_check
+    tier: nightly
+    description: "Verify test output is deterministic across runs"
+    required: false
+    # Run tests multiple times and compare output
+    command: >-
+      for i in 1 2 3; do
+        cargo test -p perl-parser --lib --locked 2>&1 |
+        sed -E 's/^Finished in .*//; s/^\s*Time:\s.*$//' > "run_${i}.log";
+      done;
+      diff -q run_1.log run_2.log && diff -q run_1.log run_3.log
+    timeout_seconds: 600
+    retry_count: 0
+    budgets:
+      max_duration_ms: 600000
+    quarantine: true
+    tags:
+      - determinism
+      - reproducibility
+      - quality
+
+# =============================================================================
+# Flake Management Policy
+# =============================================================================
+# How to handle flaky tests and transient failures.
+#
+# IMPORTANT: Quarantined tests are now tracked in .ci/debt-ledger.yaml
+# This section defines the policy; the ledger tracks the actual items.
+
+flake_policy:
+  # Number of automatic retries before marking as failed
+  max_retries: 2
+
+  # If a gate fails more than this many times in a week, auto-quarantine
+  auto_quarantine_threshold: 3
+
+  # How long a gate stays in quarantine before re-evaluation (days)
+  quarantine_duration_days: 7
+
+  # Path to the technical debt ledger (source of truth for quarantined items)
+  debt_ledger_path: ".ci/debt-ledger.yaml"
+
+  # Gates currently in quarantine are managed via debt-ledger.yaml
+  # Run `just debt-report` to see current quarantined tests
+  # Run `just debt-check` to verify budget compliance
+  quarantined_gates: []
+  # Note: This is populated dynamically from debt-ledger.yaml by tooling
+
+  # Known flaky test patterns (for reporting, not skipping)
+  known_flaky_patterns:
+    - pattern: "test_lsp_.*timeout"
+      reason: "Network-dependent LSP tests occasionally timeout"
+    - pattern: "prop_.*shrink"
+      reason: "Proptest shrinking can be non-deterministic"
+
+  # Debt budget enforcement in gates
+  debt_budget_enforcement:
+    # Fail merge-gate if debt budgets are exceeded
+    fail_on_budget_exceeded: true
+    # Fail merge-gate if quarantines are expired
+    fail_on_expired_quarantine: true
+    # Warn (but don't fail) when approaching budget
+    warn_on_warning_threshold: true
+
+# =============================================================================
+# Escape Hatch Documentation
+# =============================================================================
+# IMPORTANT: Escape hatches exist for emergencies only. Abuse will be tracked.
+
+escape_hatches:
+  # ---------------------------------------------------------------------------
+  # Bypass a specific gate (use sparingly!)
+  # ---------------------------------------------------------------------------
+  skip_gate:
+    description: |
+      To skip a specific gate in an emergency:
+
+      1. Add `[skip-gate:GATE_NAME]` to your commit message
+      2. The gate will be skipped BUT logged to audit trail
+      3. A GitHub issue will be auto-created to track the bypass
+
+      Example: `git commit -m "hotfix: critical bug [skip-gate:clippy_full]"`
+
+      Requirements:
+      - Must have maintainer approval (via PR review)
+      - Must create follow-up issue to address the root cause
+      - Bypass logged permanently in audit trail
+
+    allowed_gates:
+      # These gates CAN be bypassed in emergencies
+      - clippy_full
+      - security_audit
+      - docs_build
+      - policy_checks
+    never_skip:
+      # These gates can NEVER be bypassed
+      - fmt
+      - clippy_core
+      - unit_core
+      - unit_full
+
+  # ---------------------------------------------------------------------------
+  # Force merge despite failures
+  # ---------------------------------------------------------------------------
+  force_merge:
+    description: |
+      To force-merge despite gate failures:
+
+      1. Requires TWO maintainer approvals
+      2. Add `[force-merge]` to PR title
+      3. Document reason in PR description under `## Force Merge Justification`
+      4. All bypassed gates logged to audit trail
+      5. Auto-creates tracking issue for resolution
+
+      THIS SHOULD BE EXTREMELY RARE. Most emergencies can be handled by:
+      - Fixing the actual issue
+      - Using skip_gate for specific gates
+      - Deploying from a known-good commit
+
+  # ---------------------------------------------------------------------------
+  # Disable all gates (nuclear option)
+  # ---------------------------------------------------------------------------
+  disable_all:
+    description: |
+      To temporarily disable all gates (NUCLEAR OPTION):
+
+      1. Requires repository admin
+      2. Set repository variable: CI_GATES_DISABLED=true
+      3. Maximum duration: 24 hours (auto-reverts)
+      4. Sends alert to #oncall channel
+      5. Creates incident report
+
+      Use only for:
+      - Complete CI infrastructure failure
+      - Critical security patches that must deploy immediately
+      - GitHub Actions outage
+
+# =============================================================================
+# Audit and Reporting
+# =============================================================================
+
+audit:
+  # Where to store gate execution receipts
+  receipt_path: target/receipts/receipt.json
+
+  # Log directory for individual gate outputs
+  log_directory: target/receipts/logs
+
+  # How long to retain audit logs (days)
+  retention_days: 90
+
+  # Metrics to track over time
+  tracked_metrics:
+    - gate_duration_seconds
+    - gate_success_rate
+    - retry_frequency
+    - quarantine_entries
+    - escape_hatch_usage
+
+  # Alert thresholds
+  alerts:
+    # Alert if any gate regularly exceeds its budget
+    duration_budget_exceeded_percent: 150
+    # Alert if success rate drops below threshold
+    success_rate_threshold_percent: 95
+    # Alert if escape hatches used more than N times per month
+    escape_hatch_monthly_limit: 3
+
+# =============================================================================
+# Integration with CI Workflows
+# =============================================================================
+# Mapping between this policy and GitHub Actions workflows.
+
+workflow_integration:
+  # Primary workflow that consumes this policy
+  primary_workflow: .github/workflows/ci.yml
+
+  # How gates map to workflow jobs
+  job_mapping:
+    ci-gate:
+      gates:
+        - fmt
+        - clippy_core
+        - clippy_full
+        - unit_core
+        - unit_full
+        - lsp_smoke
+        - policy_checks
+        - workflow_audit
+        - nested_lock_check
+      # Note: security_audit and docs_build run in separate jobs for caching
+
+  # Environment variables set by workflows
+  workflow_env:
+    CI: "true"
+    GITHUB_ACTIONS: "true"
+
+# =============================================================================
+# Version History
+# =============================================================================
+# Track significant changes to this policy.
+
+version_history:
+  - version: "1.0.0"
+    date: "2026-01-24"
+    changes:
+      - "Initial gate policy definition"
+      - "Three-tier system: pr_fast, merge_gate, nightly"
+      - "Escape hatch documentation"
+      - "Flake management policy"

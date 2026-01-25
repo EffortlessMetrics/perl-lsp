@@ -238,6 +238,7 @@ jobs:
   coverage:
     name: Code Coverage
     runs-on: ubuntu-22.04
+    timeout-minutes: 45
     if: |
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'ci:coverage')
@@ -278,6 +279,7 @@ jobs:
 
   benchmark:
     name: Performance Benchmarks
+    timeout-minutes: 30
     if: |
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'ci:bench')

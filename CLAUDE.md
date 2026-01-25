@@ -69,6 +69,8 @@ cargo clippy --workspace --lib        # Lint libraries only (faster)
 just health                           # Show codebase metrics
 just status-check                     # Verify computed metrics are current
 bash scripts/ignored-test-count.sh    # Show ignored test counts
+just debt-report                      # Show technical debt status
+just debt-check                       # Verify debt budget compliance
 ```
 
 ## Development Workflow
@@ -102,6 +104,8 @@ CI is optional/opt-in. The repo is local-first by design.
 | Test corpus | `test_corpus/`, `tree-sitter-perl/test/corpus/` |
 | Documentation | `docs/` |
 | Features catalog | `features.toml` |
+| CI gate policy | `.ci/gate-policy.yaml` |
+| Technical debt ledger | `.ci/debt-ledger.yaml` |
 
 ## Architecture Patterns
 
@@ -133,6 +137,7 @@ RUSTC_WRAPPER=""        # Disable rustc wrapper
 - **[ROADMAP.md](docs/ROADMAP.md)** - Milestones and release planning
 - **[COMMANDS_REFERENCE.md](docs/COMMANDS_REFERENCE.md)** - Full command catalog
 - **[LSP_IMPLEMENTATION_GUIDE.md](docs/LSP_IMPLEMENTATION_GUIDE.md)** - Server architecture
+- **[DEBT_TRACKING.md](docs/DEBT_TRACKING.md)** - Technical debt and flaky test tracking
 - **[features.toml](features.toml)** - Canonical LSP capability definitions
 
 ## Coding Standards
