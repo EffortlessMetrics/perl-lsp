@@ -93,6 +93,7 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
             let ops = [
                 // State mutation
                 "push", "pop", "shift", "unshift", "splice", "delete", "undef", "srand",
+                "s", "tr", "y", // Regex mutation
                 // Process control
                 "system", "exec", "fork", "exit", "dump", "kill", "alarm", "sleep", "wait",
                 "waitpid", // I/O
@@ -2252,6 +2253,22 @@ mod tests {
             "CORE::GLOBAL::exit",
             "$obj->print",
             "$obj->system('ls')",
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_mutating_regex_ops() {
+        let blocked = [
+            "$x =~ s/a/b/",
+            "s/a/b/",
+            "$x =~ tr/a/b/",
+            "tr/a/b/",
+            "y/a/b/",
         ];
 
         for expr in blocked {
