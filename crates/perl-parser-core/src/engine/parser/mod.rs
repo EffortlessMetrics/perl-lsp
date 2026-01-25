@@ -229,3 +229,5 @@ include!("expressions/quotes.rs");
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod indirect_call_tests;
