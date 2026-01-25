@@ -94,13 +94,14 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
             // Note: s/tr/y regex mutation operators handled separately via regex_mutation_re()
             let ops = [
                 // State mutation
-                "push", "pop", "shift", "unshift", "splice", "delete", "undef", "srand",
-                // Process control
+                "push", "pop", "shift", "unshift", "splice", "delete", "undef", "srand", "bless",
+                "reset", // Process control
                 "system", "exec", "fork", "exit", "dump", "kill", "alarm", "sleep", "wait",
-                "waitpid", // I/O
+                "waitpid", "setpgrp", "setpriority", "umask", // I/O
                 "qx", "readpipe", "syscall", "open", "close", "print", "say", "printf", "sysread",
                 "syswrite", "glob", "readline", "ioctl", "fcntl", "flock", "select", "dbmopen",
-                "dbmclose", // Filesystem
+                "dbmclose", "binmode", "opendir", "closedir", "seek", "sysseek", "formline",
+                "write", // Filesystem
                 "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown", "chroot",
                 "truncate", "symlink", "link", // Code loading/execution
                 "eval", "require", "do", // Tie mechanism (can execute arbitrary code)
@@ -2377,6 +2378,30 @@ mod tests {
             "shmget $key, 10, 0666",
             "select $r, $w, $e, 0",
             "shutdown $socket, 2",
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn safe_eval_blocks_mutation_and_resource_ops() {
+        // Verify newly added mutation and resource management operations are blocked
+        let blocked = [
+            "bless $ref, 'Class'",
+            "reset 'a-z'",
+            "umask 0022",
+            "binmode $fh",
+            "opendir $dh, '.'",
+            "closedir $dh",
+            "seek $fh, 0, 0",
+            "sysseek $fh, 0, 0",
+            "setpgrp",
+            "setpriority 0, 0, 10",
+            "formline",
+            "write",
         ];
 
         for expr in blocked {
