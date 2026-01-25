@@ -105,6 +105,27 @@ export async function activate(context: vscode.ExtensionContext) {
     const restartCommand = vscode.commands.registerCommand('perl-lsp.restart', async () => {
         await restartServer(context);
     });
+
+    const runTestsCommand = vscode.commands.registerCommand('perl-lsp.runTests', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('No active Perl file to test');
+            return;
+        }
+
+        // Restrict to test files (.t, .pl) - .pm files are modules, not test scripts
+        const filePath = editor.document.uri.fsPath;
+        if (!filePath.endsWith('.t') && !filePath.endsWith('.pl')) {
+            vscode.window.showWarningMessage('Run Tests is only available for .t and .pl files');
+            return;
+        }
+
+        if (testAdapter) {
+            await testAdapter.runFileTests(editor.document.uri);
+        } else {
+            vscode.window.showWarningMessage('Test adapter is not available. It might still be initializing.');
+        }
+    });
     
     const showOutputCommand = vscode.commands.registerCommand('perl-lsp.showOutput', () => {
         outputChannel.show();
@@ -128,6 +149,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const items: MenuAction[] = [
             { label: '$(refresh) Restart Server', description: 'Restart the language server', command: 'perl-lsp.restart' },
+            { label: '$(beaker) Run Tests in Current File', description: 'Run tests for the active file', command: 'perl-lsp.runTests' },
             { label: '$(output) Show Output', description: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
             { label: '$(info) Show Version', description: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' }
         ];
@@ -141,7 +163,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
     
-    context.subscriptions.push(restartCommand, showOutputCommand, showVersionCommand, statusMenuCommand);
+    context.subscriptions.push(restartCommand, runTestsCommand, showOutputCommand, showVersionCommand, statusMenuCommand);
     
     outputChannel.appendLine('Perl Language Server started successfully');
 }

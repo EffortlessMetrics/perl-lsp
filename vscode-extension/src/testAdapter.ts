@@ -239,6 +239,23 @@ export class PerlTestAdapter {
         return undefined;
     }
 
+    public async runFileTests(uri: vscode.Uri) {
+        const fileId = uri.toString();
+        const fileItem = this.fileTestData.get(fileId);
+
+        if (fileItem) {
+            const request = new vscode.TestRunRequest([fileItem]);
+            const tokenSource = new vscode.CancellationTokenSource();
+            try {
+                await this.runTests(request, tokenSource.token);
+            } finally {
+                tokenSource.dispose();
+            }
+        } else {
+            vscode.window.showWarningMessage('No tests found in this file');
+        }
+    }
+
     dispose() {
         this.testController.dispose();
     }
