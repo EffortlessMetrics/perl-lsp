@@ -9,3 +9,8 @@
 - `Shift+Alt+O` - Organize imports
 - `Shift+Alt+T` - Run tests
 - `Shift+Alt+R` - Restart language server
+
+## 2026-02-27 - The "Broken Promise" UX Pattern
+**Learning:** UI elements (like commands in the palette or context menus) that exist in `package.json` but lack implementation in code create a "Broken Promise" – users see the option, click it, and nothing happens. This is worse than the feature not existing at all.
+**Action:** When auditing extensions, verify that every command contributed in `package.json` is actually registered in `extension.ts` or the relevant activation script.
+**Fixed:** Implemented `perl-lsp.runTests` which was visible but broken.
