@@ -284,6 +284,29 @@ fn test_heredoc_deep_nesting() {
 }
 
 #[test]
+fn test_multiple_heredocs_same_line() {
+    // Issue #440: Multiple heredocs on a single line
+    let code = "
+    my $a = <<'EOF1'; my $b = <<'EOF2';
+Content 1
+EOF1
+Content 2
+EOF2
+    ";
+    
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse multiple heredocs on same line");
+    
+    let ast = result.unwrap();
+    let sexp = ast.to_sexp();
+    
+    // Check that both contents were captured correctly
+    assert!(sexp.contains("Content 1"), "Missing content 1");
+    assert!(sexp.contains("Content 2"), "Missing content 2");
+}
+
+#[test]
 fn test_branch_reset_complexity() {
     // 51 branches (max is 50)
     let mut pattern = String::from("qr/(?|");
