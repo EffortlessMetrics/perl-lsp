@@ -268,6 +268,22 @@ fn test_regex_code_execution_detection() {
 }
 
 #[test]
+fn test_heredoc_deep_nesting() {
+    // Create a deeply nested expression ending with a heredoc
+    // $a[0][0]...[0] . <<EOF
+    // 5000 nesting levels might be enough to trigger stack overflow if recursive
+    let mut code = String::from("$a");
+    for _ in 0..5000 {
+        code.push_str("[0]");
+    }
+    code.push_str(" . <<EOF;\ncontent\nEOF");
+
+    let mut parser = Parser::new(&code);
+    let result = parser.parse();
+    assert!(result.is_ok());
+}
+
+#[test]
 fn test_branch_reset_complexity() {
     // 51 branches (max is 50)
     let mut pattern = String::from("qr/(?|");
