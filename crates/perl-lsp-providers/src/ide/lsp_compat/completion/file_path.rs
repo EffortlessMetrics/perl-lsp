@@ -1,9 +1,136 @@
 //! File path completion with security and performance safeguards
+//!
+//! This module provides secure file path completion for string literals in Perl code.
+//! It implements comprehensive security measures to prevent path traversal attacks
+//! while providing responsive, cancellation-aware filesystem traversal.
+//!
+//! # Security Model
+//!
+//! The completion system uses a defense-in-depth approach:
+//!
+//! 1. **Input sanitization**: Rejects null bytes, path traversal patterns (`../`),
+//!    absolute paths, and Windows drive letters
+//! 2. **Filesystem isolation**: Only traverses relative paths in safe directories
+//! 3. **Entry filtering**: Skips hidden files, system directories, and unsafe filenames
+//! 4. **Resource limits**: Caps traversal depth, entry count, and result count
+//!
+//! # Builder Pattern
+//!
+//! For cleaner API usage, callbacks can be bundled into a [`FilePathCallbacks`] struct:
+//!
+//! ```ignore
+//! use file_path::{FilePathCallbacks, add_file_completions_with_callbacks};
+//!
+//! // Use default secure callbacks
+//! let callbacks = FilePathCallbacks::default();
+//! add_file_completions_with_callbacks(&mut completions, &context, &callbacks, &|| false);
+//!
+//! // Or customize specific callbacks
+//! let callbacks = FilePathCallbacks::default()
+//!     .with_is_safe_filename(|name| name.ends_with(".pl"));
+//! ```
+//!
+//! # Performance Characteristics
+//!
+//! - **Max traversal depth**: 1 directory level
+//! - **Max results**: 50 completions
+//! - **Max entries examined**: 200 filesystem entries
+//! - **Symlink following**: Disabled for security
 
 use super::context::CompletionContext;
 use super::items::{CompletionItem, CompletionItemKind};
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::{Component, Path, PathBuf};
+
+/// Bundled callbacks for file path completion operations
+///
+/// This struct groups all security and filesystem callbacks into a single
+/// unit, reducing function argument counts and enabling builder-style
+/// configuration. Use [`FilePathCallbacks::default()`] for secure defaults.
+///
+/// # Example
+///
+/// ```ignore
+/// let callbacks = FilePathCallbacks::default();
+/// // Or with customization:
+/// let callbacks = FilePathCallbacks::default()
+///     .with_is_safe_filename(|name| !name.starts_with('.'));
+/// ```
+#[cfg(not(target_arch = "wasm32"))]
+pub struct FilePathCallbacks<'a> {
+    /// Sanitizes and validates input paths for security
+    pub sanitize_path: &'a dyn Fn(&str) -> Option<String>,
+    /// Splits path into directory and filename components
+    pub split_path_components: &'a dyn Fn(&str) -> (String, String),
+    /// Resolves and validates directory for safe traversal
+    pub resolve_safe_directory: &'a dyn Fn(&str) -> Option<PathBuf>,
+    /// Checks if a directory entry should be filtered out
+    pub is_hidden_or_forbidden: &'a dyn Fn(&walkdir::DirEntry) -> bool,
+    /// Validates filename for safety
+    pub is_safe_filename: &'a dyn Fn(&str) -> bool,
+    /// Builds the completion path string
+    pub build_completion_path: &'a dyn Fn(&str, &str, bool) -> String,
+    /// Gets metadata for file completion item
+    pub get_file_completion_metadata: &'a dyn Fn(&walkdir::DirEntry) -> (String, Option<String>),
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Default for FilePathCallbacks<'_> {
+    fn default() -> Self {
+        Self {
+            sanitize_path: &sanitize_path,
+            split_path_components: &split_path_components,
+            resolve_safe_directory: &resolve_safe_directory,
+            is_hidden_or_forbidden: &is_hidden_or_forbidden,
+            is_safe_filename: &is_safe_filename,
+            build_completion_path: &build_completion_path,
+            get_file_completion_metadata: &get_file_completion_metadata,
+        }
+    }
+}
+
+/// Add file path completions using bundled callbacks
+///
+/// This is the preferred API for file path completion, using the builder pattern
+/// to reduce argument count and improve readability.
+///
+/// # Arguments
+///
+/// * `completions` - Output vector for completion items
+/// * `context` - Completion context with prefix and position information
+/// * `callbacks` - Bundled security and filesystem callbacks
+/// * `is_cancelled` - Cancellation check callback for responsive editing
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn add_file_completions_with_callbacks(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    callbacks: &FilePathCallbacks<'_>,
+    is_cancelled: &dyn Fn() -> bool,
+) {
+    add_file_completions_with_cancellation(
+        completions,
+        context,
+        is_cancelled,
+        callbacks.sanitize_path,
+        callbacks.split_path_components,
+        callbacks.resolve_safe_directory,
+        callbacks.is_hidden_or_forbidden,
+        callbacks.is_safe_filename,
+        callbacks.build_completion_path,
+        callbacks.get_file_completion_metadata,
+    )
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn add_file_completions_with_callbacks(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    _callbacks: &(),
+    _is_cancelled: &dyn Fn() -> bool,
+) {
+    // File system traversal isn't available on wasm32 targets.
+    let _ = (completions, context);
+}
 
 /// Add file path completions with comprehensive security and performance safeguards
 #[cfg(not(target_arch = "wasm32"))]

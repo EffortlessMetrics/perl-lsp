@@ -570,6 +570,9 @@ impl CompletionProvider {
     }
 
     /// Add file path completions with cancellation support
+    ///
+    /// Uses the builder pattern via [`file_path::FilePathCallbacks`] to bundle
+    /// security callbacks, reducing argument count and improving maintainability.
     #[cfg(not(target_arch = "wasm32"))]
     fn add_file_completions_with_cancellation(
         &self,
@@ -577,17 +580,12 @@ impl CompletionProvider {
         context: &CompletionContext,
         is_cancelled: &dyn Fn() -> bool,
     ) {
-        file_path::add_file_completions_with_cancellation(
+        let callbacks = file_path::FilePathCallbacks::default();
+        file_path::add_file_completions_with_callbacks(
             completions,
             context,
+            &callbacks,
             is_cancelled,
-            file_path::sanitize_path,
-            file_path::split_path_components,
-            file_path::resolve_safe_directory,
-            file_path::is_hidden_or_forbidden,
-            file_path::is_safe_filename,
-            file_path::build_completion_path,
-            file_path::get_file_completion_metadata,
         );
     }
 
