@@ -22,6 +22,34 @@ impl RegexValidator {
         self.check_complexity(pattern, start_pos)
     }
 
+    /// Check if the pattern contains embedded code constructs (?{...}) or (??{...})
+    pub fn detects_code_execution(&self, pattern: &str) -> bool {
+        let mut chars = pattern.char_indices().peekable();
+        while let Some((_, ch)) = chars.next() {
+            if ch == '\\' {
+                chars.next(); // skip escaped
+                continue;
+            }
+            if ch == '(' {
+                if let Some((_, '?')) = chars.peek() {
+                    chars.next(); // consume ?
+                    // Check for { or ?{
+                    if let Some((_, next)) = chars.peek() {
+                        if *next == '{' {
+                            return true; // (?{
+                        } else if *next == '?' {
+                            chars.next(); // consume second ?
+                            if let Some((_, '{')) = chars.peek() {
+                                return true; // (??{
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
     fn check_complexity(&self, pattern: &str, start_pos: usize) -> Result<(), ParseError> {
         let mut chars = pattern.char_indices().peekable();
         // Stack stores whether the current group is a lookbehind group

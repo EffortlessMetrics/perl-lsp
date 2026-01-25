@@ -245,3 +245,24 @@ fn test_source_filter_detection() {
     let sexp_safe = ast_safe.to_sexp();
     assert!(!sexp_safe.contains("(risk:filter)"), "Should not flag strict as filter in: {}", sexp_safe);
 }
+
+#[test]
+fn test_regex_code_execution_detection() {
+    // Regex with code execution
+    let code = r#"my $re = qr/(?{ print "hi" })/;"#;
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok());
+    let ast = result.unwrap();
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("(risk:code)"), "Should detect regex code execution in: {}", sexp);
+
+    // Safe regex
+    let code_safe = r#"my $re = qr/hello/;"#;
+    let mut parser_safe = Parser::new(code_safe);
+    let result_safe = parser_safe.parse();
+    assert!(result_safe.is_ok());
+    let ast_safe = result_safe.unwrap();
+    let sexp_safe = ast_safe.to_sexp();
+    assert!(!sexp_safe.contains("(risk:code)"), "Should not flag safe regex in: {}", sexp_safe);
+}

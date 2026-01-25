@@ -569,21 +569,25 @@ impl Node {
                 format!("(indirect_call {} {} ({}))", method, object.to_sexp(), args_str)
             }
 
-            NodeKind::Regex { pattern, replacement, modifiers } => {
-                format!("(regex {:?} {:?} {:?})", pattern, replacement, modifiers)
+            NodeKind::Regex { pattern, replacement, modifiers, has_embedded_code } => {
+                let risk_marker = if *has_embedded_code { " (risk:code)" } else { "" };
+                format!("(regex {:?} {:?} {:?}{})", pattern, replacement, modifiers, risk_marker)
             }
 
-            NodeKind::Match { expr, pattern, modifiers } => {
-                format!("(match {} (regex {:?} {:?}))", expr.to_sexp(), pattern, modifiers)
+            NodeKind::Match { expr, pattern, modifiers, has_embedded_code } => {
+                let risk_marker = if *has_embedded_code { " (risk:code)" } else { "" };
+                format!("(match {} (regex {:?} {:?}{}))", expr.to_sexp(), pattern, modifiers, risk_marker)
             }
 
-            NodeKind::Substitution { expr, pattern, replacement, modifiers } => {
+            NodeKind::Substitution { expr, pattern, replacement, modifiers, has_embedded_code } => {
+                let risk_marker = if *has_embedded_code { " (risk:code)" } else { "" };
                 format!(
-                    "(substitution {} {:?} {:?} {:?})",
+                    "(substitution {} {:?} {:?} {:?}{})",
                     expr.to_sexp(),
                     pattern,
                     replacement,
-                    modifiers
+                    modifiers,
+                    risk_marker
                 )
             }
 
@@ -1572,6 +1576,8 @@ pub enum NodeKind {
         replacement: Option<String>,
         /// Regex modifiers (i, m, s, x, g, etc.)
         modifiers: String,
+        /// Whether the regex contains embedded code `(?{...})`
+        has_embedded_code: bool,
     },
 
     /// Match operation: `$str =~ /pattern/modifiers`
@@ -1582,6 +1588,8 @@ pub enum NodeKind {
         pattern: String,
         /// Match modifiers
         modifiers: String,
+        /// Whether the regex contains embedded code `(?{...})`
+        has_embedded_code: bool,
     },
 
     /// Substitution operation: `$str =~ s/pattern/replacement/modifiers`
@@ -1594,6 +1602,8 @@ pub enum NodeKind {
         replacement: String,
         /// Substitution modifiers (g, e, r, etc.)
         modifiers: String,
+        /// Whether the regex contains embedded code `(?{...})`
+        has_embedded_code: bool,
     },
 
     /// Transliteration operation: `$str =~ tr/search/replace/` or `y///`

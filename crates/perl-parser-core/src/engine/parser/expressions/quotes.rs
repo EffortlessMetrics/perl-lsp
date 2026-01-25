@@ -184,28 +184,15 @@ impl<'a> Parser<'a> {
                 crate::engine::regex_validator::RegexValidator::new()
                     .validate(&content, start)?;
 
-                let mut modifiers = String::new();
-                while let Ok(token) = self.tokens.peek() {
-                    if token.kind == TokenKind::Identifier && token.text.len() == 1 {
-                        let ch = token.text.chars().next().ok_or_else(|| {
-                            ParseError::syntax("Empty identifier token", token.start)
-                        })?;
-                        if ch.is_ascii_alphabetic() {
-                            modifiers.push(ch);
-                            self.tokens.next()?;
-                        } else {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                end = self.previous_position();
+                let has_embedded_code = crate::engine::regex_validator::RegexValidator::new()
+                    .detects_code_execution(&content);
+
                 Ok(Node::new(
                     NodeKind::Regex {
                         pattern: format!("{}{}{}", opening_delim, content, closing_delim),
                         replacement: None,
                         modifiers,
+                        has_embedded_code,
                     },
                     SourceLocation { start, end },
                 ))
@@ -222,6 +209,9 @@ impl<'a> Parser<'a> {
                 // Validate regex complexity
                 crate::engine::regex_validator::RegexValidator::new()
                     .validate(&content, start)?;
+
+                let has_embedded_code = crate::engine::regex_validator::RegexValidator::new()
+                    .detects_code_execution(&content);
 
                 let mut modifiers = String::new();
                 while let Ok(token) = self.tokens.peek() {
@@ -245,6 +235,7 @@ impl<'a> Parser<'a> {
                         pattern: format!("{}{}{}", opening_delim, content, closing_delim),
                         replacement: None,
                         modifiers,
+                        has_embedded_code,
                     },
                     SourceLocation { start, end },
                 ))

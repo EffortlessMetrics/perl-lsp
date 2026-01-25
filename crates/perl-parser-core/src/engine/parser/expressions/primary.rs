@@ -77,8 +77,11 @@ impl<'a> Parser<'a> {
                 crate::engine::regex_validator::RegexValidator::new()
                     .validate(&body, token.start)?;
 
+                let has_embedded_code = crate::engine::regex_validator::RegexValidator::new()
+                    .detects_code_execution(&body);
+
                 Ok(Node::new(
-                    NodeKind::Regex { pattern, replacement: None, modifiers },
+                    NodeKind::Regex { pattern, replacement: None, modifiers, has_embedded_code },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -187,6 +190,9 @@ impl<'a> Parser<'a> {
                 crate::engine::regex_validator::RegexValidator::new()
                     .validate(&pattern, token.start)?;
 
+                let has_embedded_code = crate::engine::regex_validator::RegexValidator::new()
+                    .detects_code_execution(&pattern);
+
                 // Substitution as a standalone expression (will be used with =~ later)
                 Ok(Node::new(
                     NodeKind::Substitution {
@@ -197,6 +203,7 @@ impl<'a> Parser<'a> {
                         pattern,
                         replacement,
                         modifiers,
+                        has_embedded_code,
                     },
                     SourceLocation { start: token.start, end: token.end },
                 ))
