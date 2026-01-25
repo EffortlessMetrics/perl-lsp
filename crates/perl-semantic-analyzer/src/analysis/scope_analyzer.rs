@@ -395,7 +395,7 @@ impl ScopeAnalyzer {
                 }
             }
 
-            NodeKind::Use { module, args } => {
+            NodeKind::Use { module, args, .. } => {
                 // Handle 'use vars' pragma for global variable declarations
                 if module == "vars" {
                     for arg in args {

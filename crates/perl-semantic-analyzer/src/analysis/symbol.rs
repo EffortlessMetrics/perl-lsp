@@ -600,9 +600,9 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::Use { module: _, args: _ } | NodeKind::No { module: _, args: _ } => {
-                // Use and No statements don't directly contain symbols we track
-                // (constants from use constant are handled differently)
+            NodeKind::Use { module: _, args: _, .. } | NodeKind::No { module: _, args: _, .. } => {
+                // We don't extract symbols from use/no statements directly
+                // (except for constants, which might be handled elsewhere)
             }
 
             NodeKind::PhaseBlock { phase: _, phase_span: _, block } => {
@@ -700,7 +700,15 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::Match { expr, pattern: _, modifiers: _ } => {
+            // Regex related nodes - we recurse into expression
+            NodeKind::Regex { .. } => {}
+            NodeKind::Match { expr, .. } => {
+                self.visit_node(expr);
+            }
+            NodeKind::Substitution { expr, .. } => {
+                self.visit_node(expr);
+            }
+            NodeKind::Transliteration { expr, .. } => {
                 self.visit_node(expr);
             }
 
