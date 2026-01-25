@@ -22,4 +22,5 @@ pub mod pragma_tracker;
 /// Parser for Perl quote and quote-like operators.
 pub mod quote_parser;
 /// Parser utilities and helpers.
+pub mod regex_validator;
 pub mod util;

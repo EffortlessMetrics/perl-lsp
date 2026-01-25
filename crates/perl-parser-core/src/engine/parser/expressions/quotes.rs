@@ -180,6 +180,10 @@ impl<'a> Parser<'a> {
             }
             "qr" => {
                 // Regular expression
+                // Validate regex complexity
+                crate::engine::regex_validator::RegexValidator::new()
+                    .validate(&content, start)?;
+
                 let mut modifiers = String::new();
                 while let Ok(token) = self.tokens.peek() {
                     if token.kind == TokenKind::Identifier && token.text.len() == 1 {
@@ -215,6 +219,10 @@ impl<'a> Parser<'a> {
             }
             "m" => {
                 // Match operator with pattern
+                // Validate regex complexity
+                crate::engine::regex_validator::RegexValidator::new()
+                    .validate(&content, start)?;
+
                 let mut modifiers = String::new();
                 while let Ok(token) = self.tokens.peek() {
                     if token.kind == TokenKind::Identifier && token.text.len() == 1 {

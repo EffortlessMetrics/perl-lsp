@@ -71,7 +71,12 @@ impl<'a> Parser<'a> {
 
             TokenKind::Regex => {
                 let token = self.tokens.next()?;
-                let (pattern, modifiers) = quote_parser::extract_regex_parts(&token.text);
+                let (pattern, body, modifiers) = quote_parser::extract_regex_parts(&token.text);
+
+                // Validate regex complexity
+                crate::engine::regex_validator::RegexValidator::new()
+                    .validate(&body, token.start)?;
+
                 Ok(Node::new(
                     NodeKind::Regex { pattern, replacement: None, modifiers },
                     SourceLocation { start: token.start, end: token.end },
@@ -177,6 +182,10 @@ impl<'a> Parser<'a> {
                             }
                         },
                     )?;
+
+                // Validate regex complexity
+                crate::engine::regex_validator::RegexValidator::new()
+                    .validate(&pattern, token.start)?;
 
                 // Substitution as a standalone expression (will be used with =~ later)
                 Ok(Node::new(

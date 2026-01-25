@@ -16,13 +16,17 @@ impl<'a> Parser<'a> {
             }
 
             // Parse statement with error recovery
-            match self.parse_statement() {
+            let stmt_result = self.parse_statement();
+            match stmt_result {
                 Ok(stmt) => statements.push(stmt),
                 Err(e) => {
                     // Don't recover from recursion limit - propagate immediately
                     if matches!(e, ParseError::RecursionLimit) {
                         return Err(e);
                     }
+
+                    // Record the actual error
+                    self.errors.push(e.clone());
 
                     // Create error node for failed statement
                     let error_location = self.current_position();

@@ -150,3 +150,40 @@ fn test_qualified_function_call() {
         }
     }
 }
+
+#[test]
+fn test_issue_461_variable_length_lookbehind() {
+    // Variable-length lookbehind
+    let code = r#"my $pattern = qr/(?<=\d{1,1000})\w+/;"#;
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse variable-length lookbehind");
+    
+    // Deeply nested lookbehind
+    let code_nested = r#"my $nested = qr/(?<=(?<=(?<=\d)\w+)\s+)\w+/;"#;
+    let mut parser_nested = Parser::new(code_nested);
+    let result_nested = parser_nested.parse();
+    assert!(result_nested.is_ok(), "Failed to parse nested lookbehind");
+    
+    // Check if the AST contains the regex pattern
+    let ast = result_nested.unwrap();
+    println!("Nested Lookbehind AST: {}", ast.to_sexp());
+}
+
+#[test]
+fn test_regex_complexity_failure() {
+    // 11 levels of nesting (max is 10)
+    let code = r#"qr/(?<=(?<=(?<=(?<=(?<=(?<=(?<=(?<=(?<=(?<=(?<=\d)))))))))))\w+/"#;
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    
+    // Parser might recover, so check either result is Err or errors list has the error
+    if let Err(e) = result {
+        assert!(e.to_string().contains("Regex lookbehind nesting too deep"), "Error was: {}", e);
+    } else {
+        let errors = parser.errors();
+        assert!(!errors.is_empty(), "Should have recorded errors for excessive nesting");
+        let found = errors.iter().any(|e| e.to_string().contains("Regex lookbehind nesting too deep"));
+        assert!(found, "Should have found specific error in: {:?}", errors);
+    }
+}
