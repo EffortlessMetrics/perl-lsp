@@ -8,7 +8,7 @@ import * as os from 'os';
 import { promisify } from 'util';
 import * as child_process from 'child_process';
 
-const exec = promisify(child_process.exec);
+const execFile = promisify(child_process.execFile);
 
 interface ReleaseAsset {
     name: string;
@@ -188,18 +188,23 @@ export class BinaryDownloader {
                 fs.mkdirSync(extractDir);
                 
                 // Choose extraction command based on file extension
-                let extractCmd: string;
+                let cmd: string;
+                let args: string[];
+
                 if (assetName.endsWith('.tar.xz')) {
-                    extractCmd = `tar -xJf "${archivePath}" -C "${extractDir}"`;
+                    cmd = 'tar';
+                    args = ['-xJf', archivePath, '-C', extractDir];
                 } else if (assetName.endsWith('.tar.gz')) {
-                    extractCmd = `tar -xzf "${archivePath}" -C "${extractDir}"`;
+                    cmd = 'tar';
+                    args = ['-xzf', archivePath, '-C', extractDir];
                 } else if (assetName.endsWith('.zip')) {
-                    extractCmd = `unzip -q "${archivePath}" -d "${extractDir}"`;
+                    cmd = 'unzip';
+                    args = ['-q', archivePath, '-d', extractDir];
                 } else {
                     throw new Error(`Unsupported archive format: ${assetName}`);
                 }
                 
-                await exec(extractCmd);
+                await execFile(cmd, args);
                 
                 // Find the binary
                 const binaryName = process.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp';

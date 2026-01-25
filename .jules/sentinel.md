@@ -25,3 +25,8 @@
 Users hovering over expressions containing these keywords could accidentally trigger dangerous operations even when `allowSideEffects: false`.
 **Learning:** Safe evaluation blocklists must cover ALL categories of dangerous operations. Partial coverage creates a false sense of security. Perl's `tie` mechanism is particularly insidious as it can execute arbitrary code on variable access.
 **Prevention:** Maintain a categorized blocklist with clear documentation of why each operation is blocked. Test each blocked operation explicitly with regression tests.
+
+## 2026-05-27 - Archive Extraction Command Injection
+**Vulnerability:** The `BinaryDownloader` in `vscode-extension` used `exec` with constructed command strings to extract archives (`tar`, `unzip`). Maliciously crafted filenames or paths (e.g., from an internal repo or if the release tag was compromised) could inject shell commands.
+**Learning:** File manipulation operations involving external tools (`tar`, `unzip`, `git`) are frequent targets for injection if paths are interpolated into command strings.
+**Prevention:** Use `execFile` with argument arrays for all external tool invocations. Never interpolate paths into shell commands.
