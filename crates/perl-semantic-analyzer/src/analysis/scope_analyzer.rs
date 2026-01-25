@@ -734,9 +734,9 @@ impl ScopeAnalyzer {
             _ => {
                 // Recursively analyze children
                 ancestors.push(node);
-                for child in node.children() {
+                node.for_each_child(|child| {
                     self.analyze_node(child, scope, ancestors, issues, code, pragma_map);
-                }
+                });
                 ancestors.pop();
             }
         }
@@ -755,9 +755,9 @@ impl ScopeAnalyzer {
             // For all other node types (parens, lists, etc.), recurse into children
             // to find any nested variables that should be marked as initialized
             _ => {
-                for child in node.children() {
+                node.for_each_child(|child| {
                     self.mark_initialized(child, scope);
-                }
+                });
             }
         }
     }
@@ -806,7 +806,14 @@ impl ScopeAnalyzer {
                 self.extract_variable_name(left)
             }
             _ => {
-                if let Some(child) = node.children().first() {
+                let mut first_child = None;
+                node.for_each_child(|child| {
+                    if first_child.is_none() {
+                        first_child = Some(child);
+                    }
+                });
+
+                if let Some(child) = first_child {
                     self.extract_variable_name(child)
                 } else {
                     ExtractedName::Full(String::new())
