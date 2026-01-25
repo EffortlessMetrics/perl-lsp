@@ -55,17 +55,17 @@ impl RegexValidator {
     pub fn detect_nested_quantifiers(&self, pattern: &str) -> bool {
         // This is a heuristic check for nested quantifiers
         // It looks for a quantifier character following a group that ends with a quantifier
-        // e.g. ")+" in "...)+" 
-        // Real implementation would need a full regex parser, but this heuristic 
+        // e.g. ")+" in "...)+"
+        // Real implementation would need a full regex parser, but this heuristic
         // covers common cases like (a+)+
-        
+
         let mut chars = pattern.char_indices().peekable();
         let mut group_stack = Vec::new();
-        
+
         // Track the last significant character index and its type
         // Type: 0=other, 1=quantifier, 2=group_end
         let mut last_type = 0;
-        
+
         while let Some((_, ch)) = chars.next() {
             match ch {
                 '\\' => {
@@ -91,7 +91,7 @@ impl RegexValidator {
                     }
                 }
                 '+' | '*' | '?' | '{' => {
-                    // If we just closed a group that had a quantifier inside, 
+                    // If we just closed a group that had a quantifier inside,
                     // and now we see another quantifier, that's a nested quantifier!
                     if last_type == 2 {
                         // Check if it's really a quantifier or literal {
@@ -103,7 +103,7 @@ impl RegexValidator {
                             return true;
                         }
                     }
-                    
+
                     // Mark current group as having a quantifier
                     if let Some(last) = group_stack.last_mut() {
                         *last = true;
@@ -122,7 +122,7 @@ impl RegexValidator {
         if self.detect_nested_quantifiers(pattern) {
             return Err(ParseError::syntax(
                 "Potential catastrophic backtracking detected (nested quantifiers)",
-                start_pos
+                start_pos,
             ));
         }
 
@@ -130,7 +130,7 @@ impl RegexValidator {
         // Stack stores the type of the current group
         let mut stack: Vec<GroupType> = Vec::new();
         let mut unicode_property_count = 0;
-        
+
         while let Some((idx, ch)) = chars.next() {
             match ch {
                 '\\' => {
@@ -141,14 +141,14 @@ impl RegexValidator {
                                 // Unicode property start \p or \P
                                 // We consume the 'p'/'P'
                                 chars.next();
-                                
+
                                 // Check if it's followed by {
                                 if let Some((_, '{')) = chars.peek() {
                                     unicode_property_count += 1;
                                     if unicode_property_count > self.max_unicode_properties {
                                         return Err(ParseError::syntax(
                                             "Too many Unicode properties in regex (max 50)",
-                                            start_pos + idx
+                                            start_pos + idx,
                                         ));
                                     }
                                 }
@@ -162,15 +162,15 @@ impl RegexValidator {
                 }
                 '(' => {
                     let mut group_type = GroupType::Normal;
-                    
+
                     // Check for extension syntax (?...)
                     if let Some((_, '?')) = chars.peek() {
                         chars.next(); // consume ?
-                        
+
                         // Check for < (lookbehind or named capture)
                         if let Some((_, '<')) = chars.peek() {
                             chars.next(); // consume <
-                            
+
                             // Check for = or ! (lookbehind)
                             if matches!(chars.peek(), Some((_, '=')) | Some((_, '!'))) {
                                 chars.next(); // consume = or !
@@ -183,25 +183,30 @@ impl RegexValidator {
                             group_type = GroupType::BranchReset { branch_count: 1 };
                         }
                     }
-                    
+
                     match group_type {
                         GroupType::Lookbehind => {
                             // Calculate current lookbehind depth
-                            let lookbehind_depth = stack.iter().filter(|g| matches!(g, GroupType::Lookbehind)).count();
+                            let lookbehind_depth =
+                                stack.iter().filter(|g| matches!(g, GroupType::Lookbehind)).count();
                             if lookbehind_depth >= self.max_nesting {
-                                    return Err(ParseError::syntax(
+                                return Err(ParseError::syntax(
                                     "Regex lookbehind nesting too deep",
-                                    start_pos + idx
+                                    start_pos + idx,
                                 ));
                             }
                         }
                         GroupType::BranchReset { .. } => {
                             // Calculate current branch reset nesting
-                            let reset_depth = stack.iter().filter(|g| matches!(g, GroupType::BranchReset { .. })).count();
-                            if reset_depth >= self.max_nesting { // Use same nesting limit for now
+                            let reset_depth = stack
+                                .iter()
+                                .filter(|g| matches!(g, GroupType::BranchReset { .. }))
+                                .count();
+                            if reset_depth >= self.max_nesting {
+                                // Use same nesting limit for now
                                 return Err(ParseError::syntax(
                                     "Regex branch reset nesting too deep",
-                                    start_pos + idx
+                                    start_pos + idx,
                                 ));
                             }
                         }
@@ -213,10 +218,11 @@ impl RegexValidator {
                     // Check if we are in a branch reset group
                     if let Some(GroupType::BranchReset { branch_count }) = stack.last_mut() {
                         *branch_count += 1;
-                        if *branch_count > 50 { // Max 50 branches
+                        if *branch_count > 50 {
+                            // Max 50 branches
                             return Err(ParseError::syntax(
                                 "Too many branches in branch reset group (max 50)",
-                                start_pos + idx
+                                start_pos + idx,
                             ));
                         }
                     }
@@ -238,7 +244,7 @@ impl RegexValidator {
                 _ => {}
             }
         }
-        
+
         Ok(())
     }
 }

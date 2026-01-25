@@ -133,7 +133,11 @@ LINE
         "Expected label with newline and content, got: {}",
         sexp
     );
-    assert!(sexp.contains("(UNKNOWN_REST)"), "Should contain UNKNOWN_REST due to escape handling: {}", sexp);
+    assert!(
+        sexp.contains("(UNKNOWN_REST)"),
+        "Should contain UNKNOWN_REST due to escape handling: {}",
+        sexp
+    );
 }
 
 // ============================================================================
@@ -239,7 +243,9 @@ END	TAB
 
     let sexp = parse_to_sexp(input);
     assert!(
-        sexp.contains("(heredoc_interpolated \"END\\tTAB\" \"content with tab in label\\nEND\\tTAB\")"),
+        sexp.contains(
+            "(heredoc_interpolated \"END\\tTAB\" \"content with tab in label\\nEND\\tTAB\")"
+        ),
         "Expected label with tab and content, got: {}",
         sexp
     );
@@ -346,7 +352,8 @@ content
 
     let sexp = parse_to_sexp(input);
     assert!(
-        sexp.contains("(heredoc_interpolated \"EOF\" \"content\")") && sexp.contains("(UNKNOWN_REST)"),
+        sexp.contains("(heredoc_interpolated \"EOF\" \"content\")")
+            && sexp.contains("(UNKNOWN_REST)"),
         "Leading whitespace label should trigger UNKNOWN_REST if not terminated: {}",
         sexp
     );
@@ -412,7 +419,11 @@ fn test_heredoc_decl_empty_label() {
 
     assert!(result.is_ok(), "Empty label (<<;) should be accepted");
     let sexp = result.unwrap().to_sexp();
-    assert!(sexp.contains("(heredoc_interpolated \"\" \"content\")"), "Empty label missing in AST: {}", sexp);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"\" \"content\")"),
+        "Empty label missing in AST: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - malformed label with invalid chars
@@ -482,9 +493,21 @@ LITERAL
     parse_and_verify_success(input, "test_heredoc_decl_multiple_mixed_styles");
 
     let sexp = parse_to_sexp(input);
-    assert!(sexp.contains("(heredoc_interpolated \"EOF\" \"unquoted body\")"), "Missing EOF heredoc: {}", sexp);
-    assert!(sexp.contains("(heredoc_interpolated \"QUOTED\" \"quoted body\")"), "Missing QUOTED heredoc: {}", sexp);
-    assert!(sexp.contains("(heredoc \"LITERAL\" \"literal body\")"), "Missing LITERAL heredoc: {}", sexp);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"EOF\" \"unquoted body\")"),
+        "Missing EOF heredoc: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("(heredoc_interpolated \"QUOTED\" \"quoted body\")"),
+        "Missing QUOTED heredoc: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("(heredoc \"LITERAL\" \"literal body\")"),
+        "Missing LITERAL heredoc: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - nested heredoc declarations
@@ -502,8 +525,16 @@ B
     parse_and_verify_success(input, "test_heredoc_decl_nested_in_expression");
 
     let sexp = parse_to_sexp(input);
-    assert!(sexp.contains("(heredoc_interpolated \"A\" \"first content\")"), "Missing A heredoc: {}", sexp);
-    assert!(sexp.contains("(heredoc_interpolated \"B\" \"second content\")"), "Missing B heredoc: {}", sexp);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"A\" \"first content\")"),
+        "Missing A heredoc: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("(heredoc_interpolated \"B\" \"second content\")"),
+        "Missing B heredoc: {}",
+        sexp
+    );
 }
 
 // ============================================================================
@@ -525,7 +556,9 @@ fn test_heredoc_decl_indented_style() {
 
     let sexp = parse_to_sexp(input);
     assert!(
-        sexp.contains("(heredoc_indented_interpolated \"EOF\" \"  indented content\\n  more indented\")"),
+        sexp.contains(
+            "(heredoc_indented_interpolated \"EOF\" \"  indented content\\n  more indented\")"
+        ),
         "Indented heredoc mismatch: {}",
         sexp
     );
@@ -546,8 +579,16 @@ B
     parse_and_verify_success(input, "test_heredoc_decl_in_assignment_chain");
 
     let sexp = parse_to_sexp(input);
-    assert!(sexp.contains("(heredoc_interpolated \"A\" \"first value\")"), "Missing A in list: {}", sexp);
-    assert!(sexp.contains("(heredoc_interpolated \"B\" \"second value\")"), "Missing B in list: {}", sexp);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"A\" \"first value\")"),
+        "Missing A in list: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("(heredoc_interpolated \"B\" \"second value\")"),
+        "Missing B in list: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - heredoc with empty body
@@ -576,7 +617,11 @@ fn test_heredoc_decl_long_label() {
     parse_and_verify_success(&input, "test_heredoc_decl_long_label");
 
     let sexp = parse_to_sexp(&input);
-    assert!(sexp.contains(&format!("(heredoc_interpolated \"{}\"", long_label)), "Long label missing: {}", sexp);
+    assert!(
+        sexp.contains(&format!("(heredoc_interpolated \"{}\"", long_label)),
+        "Long label missing: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - unicode in heredoc labels

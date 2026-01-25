@@ -472,11 +472,19 @@ fn test_kill_operator_mutations() {
 
     // Test with exactly length 1 (boundary case)
     let (pattern, _body, modifiers) = extract_regex_parts("m");
-    assert_eq!((pattern.as_str(), modifiers.as_str()), ("mm", ""), "Single 'm' - kills > to == mutation");
+    assert_eq!(
+        (pattern.as_str(), modifiers.as_str()),
+        ("mm", ""),
+        "Single 'm' - kills > to == mutation"
+    );
 
     // Test with length > 1
     let (pattern, _body, modifiers) = extract_regex_parts("m/");
-    assert_eq!((pattern.as_str(), modifiers.as_str()), ("//", ""), "Length > 1 - validates > comparison");
+    assert_eq!(
+        (pattern.as_str(), modifiers.as_str()),
+        ("//", ""),
+        "Length > 1 - validates > comparison"
+    );
 
     // Test with length exactly 2 (edge case for > vs ==)
     let (pattern, _body, modifiers) = extract_regex_parts("m#");

@@ -23,7 +23,7 @@ mod tests {
         let ast2 = result2.unwrap();
         let sexp2 = ast2.to_sexp();
         assert!(sexp2.contains("regex"), "Should be parsed as regex: {}", sexp2);
-        
+
         // Regex without =~ (e.g. as function argument or in void context)
         // /pattern/ matches $_
         let code_bare_regex = "/pattern/;";
@@ -44,7 +44,7 @@ mod tests {
         assert!(result.is_ok());
         let ast = result.unwrap();
         let sexp = ast.to_sexp();
-        
+
         // Should see two division operations
         // Format might be (binary_/ (binary_/ ... ) ...)
         assert!(sexp.matches("binary_/").count() >= 2, "Should be two divisions: {}", sexp);
@@ -61,7 +61,7 @@ mod tests {
         // /$x/ $y / $z / -> Regex, then variable, then division?
         // This is syntactically weird but let's see how we handle it.
         // Actually, typical case is s/$x/$y/ or just /$x/
-        
+
         let code = "/$x/";
         let mut parser = Parser::new(code);
         let result = parser.parse();
@@ -70,7 +70,7 @@ mod tests {
         let sexp = ast.to_sexp();
         assert!(sexp.contains("regex"), "Should be regex: {}", sexp);
     }
-    
+
     #[test]
     fn test_division_after_function() {
         // time / 60

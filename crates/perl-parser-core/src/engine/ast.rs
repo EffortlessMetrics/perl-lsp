@@ -271,22 +271,11 @@ impl Node {
                 }
             }
 
-            NodeKind::Heredoc {
-                delimiter,
-                content,
-                interpolated,
-                indented,
-                command,
-                ..
-            } => {
+            NodeKind::Heredoc { delimiter, content, interpolated, indented, command, .. } => {
                 let type_str = if *command {
                     "heredoc_command"
                 } else if *indented {
-                    if *interpolated {
-                        "heredoc_indented_interpolated"
-                    } else {
-                        "heredoc_indented"
-                    }
+                    if *interpolated { "heredoc_indented_interpolated" } else { "heredoc_indented" }
                 } else if *interpolated {
                     "heredoc_interpolated"
                 } else {
@@ -589,7 +578,13 @@ impl Node {
 
             NodeKind::Match { expr, pattern, modifiers, has_embedded_code } => {
                 let risk_marker = if *has_embedded_code { " (risk:code)" } else { "" };
-                format!("(match {} (regex {:?} {:?}{}))", expr.to_sexp(), pattern, modifiers, risk_marker)
+                format!(
+                    "(match {} (regex {:?} {:?}{}))",
+                    expr.to_sexp(),
+                    pattern,
+                    modifiers,
+                    risk_marker
+                )
             }
 
             NodeKind::Substitution { expr, pattern, replacement, modifiers, has_embedded_code } => {

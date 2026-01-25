@@ -145,7 +145,11 @@ fn benchmark_scope_analysis(c: &mut Criterion) {
                 let pragma_map = vec![];
 
                 b.iter(|| {
-                    analyzer.analyze(black_box(&ast), black_box(COMPLEX_SCRIPT), black_box(&pragma_map));
+                    analyzer.analyze(
+                        black_box(&ast),
+                        black_box(COMPLEX_SCRIPT),
+                        black_box(&pragma_map),
+                    );
                 });
             }
             Err(e) => {
@@ -155,7 +159,11 @@ fn benchmark_scope_analysis(c: &mut Criterion) {
                     let mut fallback_parser = Parser::new("my $x = 1;");
                     if let Ok(fallback_ast) = fallback_parser.parse() {
                         let analyzer = ScopeAnalyzer::new();
-                        analyzer.analyze(black_box(&fallback_ast), black_box("my $x = 1;"), black_box(&vec![]));
+                        analyzer.analyze(
+                            black_box(&fallback_ast),
+                            black_box("my $x = 1;"),
+                            black_box(&vec![]),
+                        );
                     }
                 });
             }

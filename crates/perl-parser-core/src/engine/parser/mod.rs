@@ -228,10 +228,10 @@ include!("expressions/hashes.rs");
 include!("expressions/quotes.rs");
 
 #[cfg(test)]
-mod tests;
+mod hash_vs_block_tests;
 #[cfg(test)]
 mod indirect_call_tests;
 #[cfg(test)]
-mod hash_vs_block_tests;
-#[cfg(test)]
 mod slash_ambiguity_tests;
+#[cfg(test)]
+mod tests;

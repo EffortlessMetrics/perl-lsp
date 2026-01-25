@@ -35,7 +35,7 @@ sub my_sub {
         assert!(result.is_ok());
         let ast = result.unwrap();
         let sexp = ast.to_sexp();
-        
+
         // In statement context, { ... } is a block.
         // If it contains key => value, it's a block with a hash inside or expression statement?
         // Actually, { key => value } in statement context is a block containing a statement.
@@ -44,7 +44,7 @@ sub my_sub {
         // This is a valid statement (expression statement with comma operator).
         // However, `+` is often used to disambiguate: `+{ key => value }` forces hash ref.
         // Without `+` or assignment, it's a block.
-        
+
         assert!(sexp.contains("(block"), "Should parse as block in statement context: {}", sexp);
     }
 
@@ -58,7 +58,7 @@ sub my_sub {
         let ast = result.unwrap();
         let sexp = ast.to_sexp();
         assert!(sexp.contains("(block"), "map should take a block: {}", sexp);
-        
+
         // map { key => value } @list - block returning list
         let code2 = "map { key => 'value' } @list;";
         let mut parser2 = Parser::new(code2);
@@ -66,6 +66,10 @@ sub my_sub {
         assert!(result2.is_ok());
         let ast2 = result2.unwrap();
         let sexp2 = ast2.to_sexp();
-        assert!(sexp2.contains("(block"), "map should take a block even with hash-like content: {}", sexp2);
+        assert!(
+            sexp2.contains("(block"),
+            "map should take a block even with hash-like content: {}",
+            sexp2
+        );
     }
 }
