@@ -40,8 +40,8 @@
 
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -101,18 +101,18 @@ fn sigil_to_index(sigil: &str) -> usize {
 #[derive(Debug)]
 struct Scope {
     // Outer key: sigil index, Inner key: name
-    variables: RefCell<[HashMap<String, Rc<Variable>>; 6]>,
+    variables: RefCell<[Option<FxHashMap<String, Rc<Variable>>>; 6]>,
     parent: Option<Rc<Scope>>,
 }
 
 impl Scope {
     fn new() -> Self {
-        let vars = std::array::from_fn(|_| HashMap::new());
+        let vars = std::array::from_fn(|_| None);
         Self { variables: RefCell::new(vars), parent: None }
     }
 
     fn with_parent(parent: Rc<Scope>) -> Self {
-        let vars = std::array::from_fn(|_| HashMap::new());
+        let vars = std::array::from_fn(|_| None);
         Self { variables: RefCell::new(vars), parent: Some(parent) }
     }
 
@@ -129,8 +129,10 @@ impl Scope {
         // First check if already declared in this scope
         {
             let vars = self.variables.borrow();
-            if vars[idx].contains_key(name) {
-                return Some(IssueKind::VariableRedeclaration);
+            if let Some(map) = &vars[idx] {
+                if map.contains_key(name) {
+                    return Some(IssueKind::VariableRedeclaration);
+                }
             }
         }
 
@@ -143,7 +145,10 @@ impl Scope {
 
         // Now insert the variable
         let mut vars = self.variables.borrow_mut();
-        let inner = &mut vars[idx];
+        if vars[idx].is_none() {
+            vars[idx] = Some(FxHashMap::default());
+        }
+        let inner = vars[idx].as_mut().unwrap();
 
         let full_name = format!("{}{}", sigil, name);
         inner.insert(
@@ -162,8 +167,10 @@ impl Scope {
 
     fn lookup_variable_parts(&self, sigil: &str, name: &str) -> Option<Rc<Variable>> {
         let idx = sigil_to_index(sigil);
-        if let Some(var) = self.variables.borrow()[idx].get(name) {
-            return Some(var.clone());
+        if let Some(map) = &self.variables.borrow()[idx] {
+            if let Some(var) = map.get(name) {
+                return Some(var.clone());
+            }
         }
         self.parent.as_ref()?.lookup_variable_parts(sigil, name)
     }
@@ -186,10 +193,12 @@ impl Scope {
     fn get_unused_variables(&self) -> Vec<(String, usize)> {
         let mut unused = Vec::new();
 
-        for inner in self.variables.borrow().iter() {
-            for var in inner.values() {
-                if !*var.is_used.borrow() && !var.is_our {
-                    unused.push((var.name.clone(), var.line));
+        for inner_opt in self.variables.borrow().iter() {
+            if let Some(inner) = inner_opt {
+                for var in inner.values() {
+                    if !*var.is_used.borrow() && !var.is_our {
+                        unused.push((var.name.clone(), var.line));
+                    }
                 }
             }
         }
