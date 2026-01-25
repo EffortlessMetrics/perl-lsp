@@ -533,6 +533,7 @@ pub fn tie_cases_by_tags_all(tags: &[&str]) -> Vec<&'static TieInterfaceCase> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use std::collections::HashSet;

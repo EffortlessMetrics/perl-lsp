@@ -105,6 +105,7 @@ pub fn qw_in_context() -> impl Strategy<Value = String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 
@@ -124,7 +125,10 @@ mod tests {
 
         #[test]
         fn identifiers_are_valid(id in identifier()) {
-            assert!(id.chars().next().unwrap().is_ascii_alphabetic() || id.starts_with('_'));
+            // Identifiers must not be empty (guaranteed by generator)
+            let first_char = id.chars().next()
+                .expect("BUG: identifier generator produced empty string");
+            assert!(first_char.is_ascii_alphabetic() || id.starts_with('_'));
             assert!(id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
         }
 

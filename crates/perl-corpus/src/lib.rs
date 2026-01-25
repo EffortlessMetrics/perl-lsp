@@ -299,8 +299,10 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
     let mut sections = Vec::new();
     let file_stem = path
         .file_stem()
-        .map(|stem| slugify_title(&stem.to_string_lossy()))
-        .filter(|stem| !stem.is_empty())
+        .and_then(|stem| {
+            let slug = slugify_title(&stem.to_string_lossy());
+            if slug.is_empty() { None } else { Some(slug) }
+        })
         .unwrap_or_else(|| "corpus".to_string());
     let mut auto_ids: HashMap<String, usize> = HashMap::new();
     let mut section_index = 0usize;
@@ -385,10 +387,13 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
         // Calculate line number (for error reporting)
         let line_num = text[..start].lines().count() + 1;
 
+        // Get file name, use empty OsStr if path has no file name component
+        let file_name = path.file_name().unwrap_or_default();
+
         sections.push(Section {
             id,
             title,
-            file: path.file_name().unwrap_or_default().to_string_lossy().into(),
+            file: file_name.to_string_lossy().into(),
             tags,
             perl,
             flags,

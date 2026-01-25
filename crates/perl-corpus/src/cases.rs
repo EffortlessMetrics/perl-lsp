@@ -1367,10 +1367,18 @@ impl EdgeCaseGenerator {
     }
 
     /// Sample a deterministic edge case by seed.
-    #[allow(clippy::expect_used)] // Static list is guaranteed non-empty at compile time
+    ///
+    /// # Panics
+    ///
+    /// Panics if the edge case list is empty (which should never happen as it's a static compile-time list).
     pub fn sample(seed: u64) -> &'static EdgeCase {
-        select_by_seed(edge_cases(), seed)
-            .unwrap_or_else(|| edge_cases().first().expect("edge case list is empty"))
+        select_by_seed(edge_cases(), seed).unwrap_or_else(|| {
+            // SAFETY: EDGE_CASES is a non-empty static list defined at compile time
+            match edge_cases().first() {
+                Some(case) => case,
+                None => panic!("BUG: edge case list is empty - this should never happen"),
+            }
+        })
     }
 
     /// Sample a deterministic edge case by tag.
@@ -1407,10 +1415,19 @@ pub fn find_complex_case(id: &str) -> Option<&'static ComplexDataStructureCase> 
 }
 
 /// Sample a deterministic complex data structure fixture by seed.
-#[allow(clippy::expect_used)] // Static list is guaranteed non-empty at compile time
+///
+/// # Panics
+///
+/// Panics if the complex case list is empty (which should never happen as it's a static compile-time list).
 pub fn sample_complex_case(seed: u64) -> &'static ComplexDataStructureCase {
     select_by_seed(complex_data_structure_cases(), seed).unwrap_or_else(|| {
-        complex_data_structure_cases().first().expect("complex case list is empty")
+        // SAFETY: COMPLEX_DATA_STRUCTURE_CASES is a non-empty static list defined at compile time
+        match complex_data_structure_cases().first() {
+            Some(case) => case,
+            None => {
+                panic!("BUG: complex case list is empty - this should never happen")
+            }
+        }
     })
 }
 
@@ -1470,7 +1487,7 @@ mod tests {
     #[test]
     fn edge_case_sample_by_tag_matches() {
         let case = EdgeCaseGenerator::sample_by_tag("regex", 3).expect("expected regex case");
-        assert!(case.tags.iter().any(|tag| *tag == "regex"));
+        assert!(case.tags.contains(&"regex"));
     }
 
     #[test]
