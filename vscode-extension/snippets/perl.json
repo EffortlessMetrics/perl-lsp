@@ -314,7 +314,7 @@
         "description": "Quick Data::Dumper warn (assumes 'use Data::Dumper' already present)"
     },
     "Test File": {
-        "prefix": "test",
+        "prefix": "tm-test",
         "body": [
             "use strict;",
             "use warnings;",
@@ -327,54 +327,61 @@
         "description": "Start a new test file with Test::More"
     },
     "Test Ok": {
-        "prefix": "ok",
+        "prefix": "tm-ok",
         "body": [
             "ok(${1:$got}, '${2:test description}');"
         ],
-        "description": "Simple boolean test"
+        "description": "Simple boolean test (Test::More)"
     },
     "Test Is": {
-        "prefix": "is",
+        "prefix": "tm-is",
         "body": [
             "is(${1:$got}, ${2:$expected}, '${3:test description}');"
         ],
-        "description": "Test if two values are equal"
+        "description": "Test if two values are equal (Test::More)"
+    },
+    "Test Isnt": {
+        "prefix": "tm-isnt",
+        "body": [
+            "isnt(${1:$got}, ${2:$expected}, '${3:test description}');"
+        ],
+        "description": "Test if two values are not equal (Test::More)"
     },
     "Test Like": {
-        "prefix": "like",
+        "prefix": "tm-like",
         "body": [
             "like(${1:$got}, qr/${2:pattern}/, '${3:test description}');"
         ],
-        "description": "Test if value matches regex"
+        "description": "Test if value matches regex (Test::More)"
     },
     "Test Unlike": {
-        "prefix": "unlike",
+        "prefix": "tm-unlike",
         "body": [
             "unlike(${1:$got}, qr/${2:pattern}/, '${3:test description}');"
         ],
-        "description": "Test if value does not match regex"
+        "description": "Test if value does not match regex (Test::More)"
     },
     "Test Subtest": {
-        "prefix": "subtest",
+        "prefix": "tm-subtest",
         "body": [
             "subtest '${1:group name}' => sub {",
             "    ${0}",
             "};"
         ],
-        "description": "Group tests in a subtest"
+        "description": "Group tests in a subtest (Test::More)"
     },
     "Test Diag": {
-        "prefix": "diag",
+        "prefix": "tm-diag",
         "body": [
             "diag('${1:message}');"
         ],
-        "description": "Print diagnostic message"
+        "description": "Print diagnostic message (Test::More)"
     },
     "Done Testing": {
-        "prefix": "done",
+        "prefix": "tm-done",
         "body": [
             "done_testing();"
         ],
-        "description": "End test file"
+        "description": "End test file (Test::More)"
     }
 }
