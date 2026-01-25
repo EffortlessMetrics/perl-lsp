@@ -113,8 +113,17 @@ export async function activate(context: vscode.ExtensionContext) {
             return;
         }
 
+        // Restrict to test files (.t, .pl) - .pm files are modules, not test scripts
+        const filePath = editor.document.uri.fsPath;
+        if (!filePath.endsWith('.t') && !filePath.endsWith('.pl')) {
+            vscode.window.showWarningMessage('Run Tests is only available for .t and .pl files');
+            return;
+        }
+
         if (testAdapter) {
             await testAdapter.runFileTests(editor.document.uri);
+        } else {
+            vscode.window.showWarningMessage('Test adapter is not available. It might still be initializing.');
         }
     });
     

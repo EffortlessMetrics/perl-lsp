@@ -246,7 +246,11 @@ export class PerlTestAdapter {
         if (fileItem) {
             const request = new vscode.TestRunRequest([fileItem]);
             const tokenSource = new vscode.CancellationTokenSource();
-            await this.runTests(request, tokenSource.token);
+            try {
+                await this.runTests(request, tokenSource.token);
+            } finally {
+                tokenSource.dispose();
+            }
         } else {
             vscode.window.showWarningMessage('No tests found in this file');
         }
