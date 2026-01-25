@@ -307,6 +307,38 @@ EOF2
 }
 
 #[test]
+fn test_deeply_nested_quotes() {
+    // 51 levels of nesting (max is 50)
+    let mut code = String::from("q{");
+    for _ in 0..51 {
+        code.push('{');
+    }
+    for _ in 0..51 {
+        code.push('}');
+    }
+    code.push('}');
+    
+    let mut parser = Parser::new(&code);
+    let result = parser.parse();
+    
+    // Should fail or error with nesting limit
+    if let Err(e) = result {
+        assert!(e.to_string().contains("nesting too deep"), "Error was: {}", e);
+    } else {
+        // If it didn't fail immediately, check recorded errors
+        let errors = parser.errors();
+        if errors.is_empty() {
+            // If no errors, maybe it parsed successfully but should have failed?
+            // Or maybe the depth wasn't enough.
+            // But we expect it to fail.
+            panic!("Should have failed due to excessive nesting");
+        }
+        let found = errors.iter().any(|e| e.to_string().contains("nesting too deep"));
+        assert!(found, "Should have found specific error in: {:?}", errors);
+    }
+}
+
+#[test]
 fn test_branch_reset_complexity() {
     // 51 branches (max is 50)
     let mut pattern = String::from("qr/(?|");
