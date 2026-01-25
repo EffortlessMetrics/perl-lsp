@@ -550,7 +550,7 @@ mod highlight_tests {
 
     use std::fs;
     use std::path::PathBuf;
-    use tree_sitter::{Query, QueryCursor};
+    use tree_sitter::{Query, QueryCursor, StreamingIterator};
 
     /// Expected token at a specific position
     #[derive(Debug, Clone)]
@@ -644,7 +644,8 @@ mod highlight_tests {
         let mut tokens = Vec::new();
         let source_bytes = source.as_bytes();
 
-        for match_result in cursor.matches(&query, tree.root_node(), source_bytes) {
+        let mut matches = cursor.matches(&query, tree.root_node(), source_bytes);
+        while let Some(match_result) = matches.next() {
             for capture in match_result.captures {
                 let capture_name = query.capture_names()[capture.index as usize].to_string();
                 let node = capture.node;

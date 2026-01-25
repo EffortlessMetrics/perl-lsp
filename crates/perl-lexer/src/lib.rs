@@ -180,6 +180,8 @@ struct HeredocSpec {
 const MAX_REGEX_BYTES: usize = 64 * 1024; // 64KB max for regex patterns
 const MAX_HEREDOC_BYTES: usize = 256 * 1024; // 256KB max for heredoc bodies
 const MAX_DELIM_NEST: usize = 128; // Max nesting depth for delimiters
+const MAX_HEREDOC_DEPTH: usize = 100; // Max nesting depth for heredocs
+const HEREDOC_TIMEOUT_MS: u64 = 5000; // 5 seconds timeout for heredoc parsing
 
 /// Configuration for the lexer
 #[derive(Debug, Clone)]
@@ -227,6 +229,8 @@ pub struct PerlLexer<'a> {
     current_quote_op: Option<quote_handler::QuoteOperatorInfo>,
     /// Track if EOF has been emitted to prevent infinite loops
     eof_emitted: bool,
+    /// Start time for timeout protection
+    start_time: std::time::Instant,
 }
 
 impl<'a> PerlLexer<'a> {
@@ -253,6 +257,7 @@ impl<'a> PerlLexer<'a> {
             emit_heredoc_body_tokens: false,
             current_quote_op: None,
             eof_emitted: false,
+            start_time: std::time::Instant::now(),
         }
     }
 
@@ -368,6 +373,18 @@ impl<'a> PerlLexer<'a> {
 
                     // Scan line by line looking for the terminator
                     while self.position < self.input.len() {
+                        // Timeout protection (Issue #443)
+                        if self.start_time.elapsed().as_millis() > HEREDOC_TIMEOUT_MS as u128 {
+                            self.pending_heredocs.remove(0);
+                            self.position = self.input.len();
+                            return Some(Token {
+                                token_type: TokenType::Error(Arc::from("Heredoc parsing timeout")),
+                                text: Arc::from(&self.input[body_start..]),
+                                start: body_start,
+                                end: self.input.len(),
+                            });
+                        }
+
                         // Budget cap for huge bodies - optimized check
                         if self.position - body_start > MAX_HEREDOC_BYTES {
                             // Remove the pending heredoc to avoid infinite loop
@@ -961,6 +978,16 @@ impl<'a> PerlLexer<'a> {
         // For now, return a placeholder token
         // The actual heredoc body would be parsed later when we encounter it
         self.mode = LexerMode::ExpectOperator;
+
+        // Recursion depth limit (Issue #443)
+        if self.pending_heredocs.len() >= MAX_HEREDOC_DEPTH {
+            return Some(Token {
+                token_type: TokenType::Error(Arc::from("Heredoc nesting too deep")),
+                text: Arc::from(text),
+                start,
+                end: self.position,
+            });
+        }
 
         // Queue the heredoc spec with its label
         self.pending_heredocs.push(HeredocSpec {

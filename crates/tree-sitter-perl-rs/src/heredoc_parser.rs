@@ -8,6 +8,10 @@
 use crate::statement_tracker::find_statement_end_line;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Instant;
+
+const MAX_HEREDOC_DEPTH: usize = 100;
+const HEREDOC_TIMEOUT_MS: u64 = 5000;
 
 /// Represents a heredoc declaration found during Phase 1
 #[derive(Debug, Clone)]
@@ -80,6 +84,7 @@ impl<'a> HeredocScanner<'a> {
 
     /// Internal scan implementation (shared by public scan() and test scan_for_test())
     fn do_scan(&mut self) -> (String, Vec<HeredocDeclaration>) {
+        let start_time = Instant::now();
         // First pass: find all heredocs and mark their content lines
         let lines: Vec<&str> = self.input.lines().collect();
         let mut declarations = Vec::new();
@@ -90,6 +95,11 @@ impl<'a> HeredocScanner<'a> {
         let mut temp_line = 1;
 
         while temp_position < chars.len() {
+            // Timeout protection (Issue #443)
+            if start_time.elapsed().as_millis() > HEREDOC_TIMEOUT_MS as u128 {
+                break;
+            }
+
             if temp_position + 1 < chars.len()
                 && chars[temp_position] == '<'
                 && chars[temp_position + 1] == '<'
@@ -102,6 +112,12 @@ impl<'a> HeredocScanner<'a> {
                 self.line_number = temp_line;
 
                 if let Some(mut decl) = self.parse_heredoc_declaration(&chars) {
+                    // Recursion depth limit (Issue #443)
+                    if declarations.len() >= MAX_HEREDOC_DEPTH {
+                        temp_position = saved_pos + 1;
+                        continue;
+                    }
+
                     // Store the actual positions for replacement
                     decl.declaration_pos = saved_pos;
                     decl.declaration_end = self.position;
@@ -319,6 +335,7 @@ impl<'a> HeredocCollector<'a> {
 
     /// Collect content for all heredoc declarations
     pub fn collect(&self, declarations: &mut Vec<HeredocDeclaration>) {
+        let start_time = Instant::now();
         // Map declaration line to heredocs declared on that line
         let mut line_to_heredocs: HashMap<usize, Vec<usize>> = HashMap::new();
 
@@ -328,6 +345,11 @@ impl<'a> HeredocCollector<'a> {
 
         // For each line with heredocs, collect content
         for (line_num, heredoc_indices) in line_to_heredocs {
+            // Timeout protection (Issue #443)
+            if start_time.elapsed().as_millis() > HEREDOC_TIMEOUT_MS as u128 {
+                break;
+            }
+
             // Find where the statement containing the heredoc actually ends
             let statement_end_line = find_statement_end_line(&self._input, line_num);
             // Heredoc content starts on the line after the statement ends
@@ -661,5 +683,18 @@ print $text;"#;
         assert_eq!(declarations[0].terminator, "EOF");
         // NOTE: Statement tracker heredoc-in-block handling was implemented in PRs #225, #226, #229.
         // This test validates the fix. If assertions fail, heredoc block support may have regressed.
+    }
+
+    #[test]
+    fn test_heredoc_scanner_depth_limit() {
+        let mut code = String::new();
+        for i in 0..110 {
+            code.push_str(&format!("my $h{} = <<EOF{};\n", i, i));
+        }
+        
+        let scanner = HeredocScanner::new(&code);
+        let (_processed, declarations) = scanner.scan();
+        
+        assert!(declarations.len() <= MAX_HEREDOC_DEPTH, "Declarations should be limited to MAX_HEREDOC_DEPTH");
     }
 }
