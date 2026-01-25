@@ -239,20 +239,13 @@ fn smoke_server_initialization_and_capabilities() {
         caps.get("textDocumentSync").is_some(),
         "textDocumentSync capability must be advertised"
     );
-    assert_eq!(
-        caps.get("hoverProvider"),
-        Some(&json!(true)),
-        "hoverProvider must be true"
-    );
+    assert_eq!(caps.get("hoverProvider"), Some(&json!(true)), "hoverProvider must be true");
     assert_eq!(
         caps.get("definitionProvider"),
         Some(&json!(true)),
         "definitionProvider must be true"
     );
-    assert!(
-        caps.get("completionProvider").is_some(),
-        "completionProvider must be advertised"
-    );
+    assert!(caps.get("completionProvider").is_some(), "completionProvider must be advertised");
     assert_eq!(
         caps.get("referencesProvider"),
         Some(&json!(true)),
@@ -285,10 +278,7 @@ fn smoke_double_initialization_rejected() {
     };
 
     let response = server.handle_request(request).expect("Should return response");
-    assert!(
-        response.error.is_some(),
-        "Second initialize should return error"
-    );
+    assert!(response.error.is_some(), "Second initialize should return error");
 
     shutdown_server(&mut server);
 }
@@ -306,10 +296,15 @@ fn smoke_document_open() {
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     // Verify document is tracked by requesting hover (should not fail)
-    let result = send_request(&mut server, 10, "textDocument/hover", json!({
-        "textDocument": { "uri": "file:///test.pl" },
-        "position": { "line": 0, "character": 0 }
-    }));
+    let result = send_request(
+        &mut server,
+        10,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 0, "character": 0 }
+        }),
+    );
 
     // Result can be null but should not error
     assert!(result.is_some(), "Hover should return a response (even if null)");
@@ -343,10 +338,15 @@ fn smoke_document_change() {
     server.handle_request(change_request);
 
     // Verify server still responds
-    let result = send_request(&mut server, 11, "textDocument/hover", json!({
-        "textDocument": { "uri": "file:///test.pl" },
-        "position": { "line": 4, "character": 5 }
-    }));
+    let result = send_request(
+        &mut server,
+        11,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 4, "character": 5 }
+        }),
+    );
 
     assert!(result.is_some(), "Server should still respond after document change");
 
@@ -364,10 +364,15 @@ fn smoke_hover_response_structure() {
     let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
-    let result = send_request(&mut server, 20, "textDocument/hover", json!({
-        "textDocument": { "uri": "file:///test.pl" },
-        "position": { "line": 4, "character": 5 }  // On $greeting
-    }));
+    let result = send_request(
+        &mut server,
+        20,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 4, "character": 5 }  // On $greeting
+        }),
+    );
 
     // Hover should return something (may be null for some positions)
     assert!(result.is_some(), "Hover should return a response");
@@ -391,10 +396,15 @@ fn smoke_hover_on_subroutine() {
     let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
-    let result = send_request(&mut server, 21, "textDocument/hover", json!({
-        "textDocument": { "uri": "file:///test.pl" },
-        "position": { "line": 6, "character": 6 }  // On "say_hello" definition
-    }));
+    let result = send_request(
+        &mut server,
+        21,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 6, "character": 6 }  // On "say_hello" definition
+        }),
+    );
 
     assert!(result.is_some(), "Hover on subroutine should return response");
 
@@ -412,10 +422,15 @@ fn smoke_completion_returns_items() {
     let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
-    let result = send_request(&mut server, 30, "textDocument/completion", json!({
-        "textDocument": { "uri": "file:///test.pl" },
-        "position": { "line": 11, "character": 10 }
-    }));
+    let result = send_request(
+        &mut server,
+        30,
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 11, "character": 10 }
+        }),
+    );
 
     assert!(result.is_some(), "Completion should return a response");
 
@@ -431,10 +446,7 @@ fn smoke_completion_returns_items() {
     if let Some(items) = items {
         if !items.is_empty() {
             // Verify structure of first item
-            assert!(
-                items[0].get("label").is_some(),
-                "Completion items must have label"
-            );
+            assert!(items[0].get("label").is_some(), "Completion items must have label");
         }
     }
 
@@ -450,10 +462,15 @@ fn smoke_completion_builtins() {
     // Open a file with partial builtin
     open_document(&mut server, "file:///builtin.pl", "pri");
 
-    let result = send_request(&mut server, 31, "textDocument/completion", json!({
-        "textDocument": { "uri": "file:///builtin.pl" },
-        "position": { "line": 0, "character": 3 }
-    }));
+    let result = send_request(
+        &mut server,
+        31,
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": "file:///builtin.pl" },
+            "position": { "line": 0, "character": 3 }
+        }),
+    );
 
     assert!(result.is_some(), "Completion should return a response for builtins");
 
@@ -467,10 +484,7 @@ fn smoke_completion_builtins() {
     // Should have at least 'print' in completions
     if let Some(items) = items {
         let has_print = items.iter().any(|item| {
-            item.get("label")
-                .and_then(|l| l.as_str())
-                .map(|s| s.contains("print"))
-                .unwrap_or(false)
+            item.get("label").and_then(|l| l.as_str()).map(|s| s.contains("print")).unwrap_or(false)
         });
         assert!(has_print, "Completion should include 'print' for 'pri' prefix");
     }
@@ -490,10 +504,15 @@ fn smoke_definition_returns_locations() {
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     // Request definition for say_hello call
-    let result = send_request(&mut server, 40, "textDocument/definition", json!({
-        "textDocument": { "uri": "file:///test.pl" },
-        "position": { "line": 11, "character": 14 }  // On say_hello call
-    }));
+    let result = send_request(
+        &mut server,
+        40,
+        "textDocument/definition",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 11, "character": 14 }  // On say_hello call
+        }),
+    );
 
     assert!(result.is_some(), "Definition should return a response");
 
@@ -503,20 +522,11 @@ fn smoke_definition_returns_locations() {
         if definition.is_array() {
             let locations = definition.as_array().unwrap();
             if !locations.is_empty() {
-                assert!(
-                    locations[0].get("uri").is_some(),
-                    "Location must have uri"
-                );
-                assert!(
-                    locations[0].get("range").is_some(),
-                    "Location must have range"
-                );
+                assert!(locations[0].get("uri").is_some(), "Location must have uri");
+                assert!(locations[0].get("range").is_some(), "Location must have range");
             }
         } else if definition.is_object() {
-            assert!(
-                definition.get("uri").is_some(),
-                "Location must have uri"
-            );
+            assert!(definition.get("uri").is_some(), "Location must have uri");
         }
     }
 
@@ -534,9 +544,14 @@ fn smoke_document_symbols() {
     let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
-    let result = send_request(&mut server, 50, "textDocument/documentSymbol", json!({
-        "textDocument": { "uri": "file:///test.pl" }
-    }));
+    let result = send_request(
+        &mut server,
+        50,
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" }
+        }),
+    );
 
     assert!(result.is_some(), "Document symbols should return a response");
 
@@ -556,10 +571,8 @@ fn smoke_document_symbols() {
     }
 
     // Check for expected symbol
-    let names: Vec<&str> = symbols_array
-        .iter()
-        .filter_map(|s| s.get("name").and_then(|n| n.as_str()))
-        .collect();
+    let names: Vec<&str> =
+        symbols_array.iter().filter_map(|s| s.get("name").and_then(|n| n.as_str())).collect();
 
     assert!(
         names.iter().any(|n| n.contains("say_hello")),
@@ -581,11 +594,16 @@ fn smoke_find_references() {
     let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
-    let result = send_request(&mut server, 60, "textDocument/references", json!({
-        "textDocument": { "uri": "file:///test.pl" },
-        "position": { "line": 4, "character": 5 },  // On $greeting
-        "context": { "includeDeclaration": true }
-    }));
+    let result = send_request(
+        &mut server,
+        60,
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 4, "character": 5 },  // On $greeting
+            "context": { "includeDeclaration": true }
+        }),
+    );
 
     assert!(result.is_some(), "References should return a response");
 
@@ -612,9 +630,14 @@ fn smoke_folding_ranges() {
     let _ = initialize_server_full(&mut server);
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
-    let result = send_request(&mut server, 70, "textDocument/foldingRange", json!({
-        "textDocument": { "uri": "file:///test.pl" }
-    }));
+    let result = send_request(
+        &mut server,
+        70,
+        "textDocument/foldingRange",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" }
+        }),
+    );
 
     assert!(result.is_some(), "Folding ranges should return a response");
 
@@ -641,9 +664,14 @@ fn smoke_workspace_symbols() {
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
     open_document(&mut server, "file:///module.pm", FIXTURE_MODULE);
 
-    let result = send_request(&mut server, 80, "workspace/symbol", json!({
-        "query": "greet"
-    }));
+    let result = send_request(
+        &mut server,
+        80,
+        "workspace/symbol",
+        json!({
+            "query": "greet"
+        }),
+    );
 
     assert!(result.is_some(), "Workspace symbols should return a response");
 
@@ -669,18 +697,28 @@ fn smoke_unknown_method_error() {
     let mut server = create_server();
     let _ = initialize_server_full(&mut server);
 
-    let result = send_request(&mut server, 90, "textDocument/unknownMethod", json!({
-        "textDocument": { "uri": "file:///test.pl" }
-    }));
+    let result = send_request(
+        &mut server,
+        90,
+        "textDocument/unknownMethod",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" }
+        }),
+    );
 
     // Should return None (error response)
     assert!(result.is_none(), "Unknown method should return error (None)");
 
     // Server should still be responsive
-    let hover_result = send_request(&mut server, 91, "textDocument/hover", json!({
-        "textDocument": { "uri": "file:///test.pl" },
-        "position": { "line": 0, "character": 0 }
-    }));
+    let hover_result = send_request(
+        &mut server,
+        91,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 0, "character": 0 }
+        }),
+    );
     assert!(hover_result.is_some(), "Server should still respond after error");
 
     shutdown_server(&mut server);
@@ -693,10 +731,15 @@ fn smoke_nonexistent_document() {
     let _ = initialize_server_full(&mut server);
 
     // Don't open any document, just request hover
-    let result = send_request(&mut server, 92, "textDocument/hover", json!({
-        "textDocument": { "uri": "file:///nonexistent.pl" },
-        "position": { "line": 0, "character": 0 }
-    }));
+    let result = send_request(
+        &mut server,
+        92,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": "file:///nonexistent.pl" },
+            "position": { "line": 0, "character": 0 }
+        }),
+    );
 
     // Should return something (null is acceptable)
     assert!(result.is_some(), "Should return response for non-existent document");
@@ -716,10 +759,15 @@ fn smoke_graceful_shutdown() {
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     // Make some requests
-    let _ = send_request(&mut server, 100, "textDocument/hover", json!({
-        "textDocument": { "uri": "file:///test.pl" },
-        "position": { "line": 0, "character": 0 }
-    }));
+    let _ = send_request(
+        &mut server,
+        100,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 0, "character": 0 }
+        }),
+    );
 
     // Shutdown
     let shutdown_request = JsonRpcRequest {
@@ -729,7 +777,8 @@ fn smoke_graceful_shutdown() {
         params: None,
     };
 
-    let response = server.handle_request(shutdown_request).expect("Shutdown should return response");
+    let response =
+        server.handle_request(shutdown_request).expect("Shutdown should return response");
     assert!(response.error.is_none(), "Shutdown should not return error");
 
     // Exit
