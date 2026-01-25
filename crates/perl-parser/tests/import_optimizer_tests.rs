@@ -4,8 +4,10 @@ use tempfile::NamedTempFile;
 
 use perl_parser::import_optimizer::ImportOptimizer;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 #[test]
-fn detects_unused_and_duplicate_imports() {
+fn detects_unused_and_duplicate_imports() -> TestResult {
     let code = r#"use Foo qw(a b);
 use Foo qw(c);
 use Bar qw(x y);
@@ -14,11 +16,11 @@ a();
 x();
 "#;
 
-    let mut file = NamedTempFile::new().unwrap();
-    write!(file, "{}", code).unwrap();
+    let mut file = NamedTempFile::new()?;
+    write!(file, "{}", code)?;
 
     let optimizer = ImportOptimizer::new();
-    let analysis = optimizer.analyze_file(file.path()).unwrap();
+    let analysis = optimizer.analyze_file(file.path())?;
 
     // One duplicate module (Foo)
     assert_eq!(analysis.duplicate_imports.len(), 1);
@@ -31,11 +33,11 @@ x();
         unused.entry(u.module.clone()).or_default().extend(u.symbols.clone());
     }
     assert_eq!(
-        unused.get("Foo").unwrap().iter().cloned().collect::<std::collections::BTreeSet<_>>(),
+        unused.get("Foo").ok_or("Missing Foo in unused")?.iter().cloned().collect::<std::collections::BTreeSet<_>>(),
         ["b".to_string(), "c".to_string()].into_iter().collect()
     );
     assert_eq!(
-        unused.get("Bar").unwrap().iter().cloned().collect::<std::collections::BTreeSet<_>>(),
+        unused.get("Bar").ok_or("Missing Bar in unused")?.iter().cloned().collect::<std::collections::BTreeSet<_>>(),
         ["y".to_string()].into_iter().collect()
     );
 
@@ -46,10 +48,11 @@ x();
     assert!(!optimized.contains("b"));
     assert!(!optimized.contains("c"));
     assert!(!optimized.contains("y"));
+    Ok(())
 }
 
 #[test]
-fn handles_bare_imports_without_symbols() {
+fn handles_bare_imports_without_symbols() -> TestResult {
     let code = r#"use strict;
 use warnings;
 use Data::Dumper;
@@ -57,11 +60,11 @@ use Data::Dumper;
 print "Hello\n";
 "#;
 
-    let mut file = NamedTempFile::new().unwrap();
-    write!(file, "{}", code).unwrap();
+    let mut file = NamedTempFile::new()?;
+    write!(file, "{}", code)?;
 
     let optimizer = ImportOptimizer::new();
-    let analysis = optimizer.analyze_file(file.path()).unwrap();
+    let analysis = optimizer.analyze_file(file.path())?;
 
     // Should find 3 imports
     assert_eq!(analysis.imports.len(), 3);
@@ -80,10 +83,11 @@ print "Hello\n";
     assert!(optimized.contains("use strict;"));
     assert!(optimized.contains("use warnings;"));
     assert!(optimized.contains("use Data::Dumper;"));
+    Ok(())
 }
 
 #[test]
-fn handles_mixed_imports_and_usage() {
+fn handles_mixed_imports_and_usage() -> TestResult {
     let code = r#"use List::Util qw(first max min);
 use Scalar::Util qw(blessed);
 use Data::Dumper qw(Dumper);
@@ -93,11 +97,11 @@ my $max_val = max(1, 2, 3);
 print Dumper($val);
 "#;
 
-    let mut file = NamedTempFile::new().unwrap();
-    write!(file, "{}", code).unwrap();
+    let mut file = NamedTempFile::new()?;
+    write!(file, "{}", code)?;
 
     let optimizer = ImportOptimizer::new();
-    let analysis = optimizer.analyze_file(file.path()).unwrap();
+    let analysis = optimizer.analyze_file(file.path())?;
 
     assert_eq!(analysis.imports.len(), 3);
 
@@ -107,8 +111,8 @@ print Dumper($val);
         unused_symbols.insert(unused.module.clone(), unused.symbols.clone());
     }
 
-    assert!(unused_symbols.get("List::Util").unwrap().contains(&"min".to_string()));
-    assert!(unused_symbols.get("Scalar::Util").unwrap().contains(&"blessed".to_string()));
+    assert!(unused_symbols.get("List::Util").ok_or("Missing List::Util")?.contains(&"min".to_string()));
+    assert!(unused_symbols.get("Scalar::Util").ok_or("Missing Scalar::Util")?.contains(&"blessed".to_string()));
 
     // Generate optimized imports
     let optimized = optimizer.generate_optimized_imports(&analysis);
@@ -116,21 +120,22 @@ print Dumper($val);
     assert!(optimized.contains("use Data::Dumper qw(Dumper);"));
     assert!(!optimized.contains("min"));
     assert!(!optimized.contains("blessed"));
+    Ok(())
 }
 
 #[test]
-fn handles_entirely_unused_imports() {
+fn handles_entirely_unused_imports() -> TestResult {
     let code = r#"use UnusedModule qw(unused_func);
 use AnotherUnused qw(another_func);
 
 print "No functions used\n";
 "#;
 
-    let mut file = NamedTempFile::new().unwrap();
-    write!(file, "{}", code).unwrap();
+    let mut file = NamedTempFile::new()?;
+    write!(file, "{}", code)?;
 
     let optimizer = ImportOptimizer::new();
-    let analysis = optimizer.analyze_file(file.path()).unwrap();
+    let analysis = optimizer.analyze_file(file.path())?;
 
     // Should detect 2 unused imports
     assert_eq!(analysis.unused_imports.len(), 2);
@@ -143,10 +148,11 @@ print "No functions used\n";
     // Generate optimized imports - should be empty since all are unused
     let optimized = optimizer.generate_optimized_imports(&analysis);
     assert!(optimized.trim().is_empty());
+    Ok(())
 }
 
 #[test]
-fn handles_complex_symbol_names_and_delimiters() {
+fn handles_complex_symbol_names_and_delimiters() -> TestResult {
     let code = r#"use Test::More qw( ok is like );
 use File::Spec qw( catfile  catdir );
 
@@ -154,11 +160,11 @@ ok(1, "test passes");
 my $file = catfile("a", "b");
 "#;
 
-    let mut file = NamedTempFile::new().unwrap();
-    write!(file, "{}", code).unwrap();
+    let mut file = NamedTempFile::new()?;
+    write!(file, "{}", code)?;
 
     let optimizer = ImportOptimizer::new();
-    let analysis = optimizer.analyze_file(file.path()).unwrap();
+    let analysis = optimizer.analyze_file(file.path())?;
 
     assert_eq!(analysis.imports.len(), 2);
 
@@ -175,17 +181,18 @@ my $file = catfile("a", "b");
     let optimized = optimizer.generate_optimized_imports(&analysis);
     assert!(optimized.contains("use Test::More qw(ok);"));
     assert!(optimized.contains("use File::Spec qw(catfile);"));
+    Ok(())
 }
 
 #[test]
-fn handles_empty_file() {
+fn handles_empty_file() -> TestResult {
     let code = "";
 
-    let mut file = NamedTempFile::new().unwrap();
-    write!(file, "{}", code).unwrap();
+    let mut file = NamedTempFile::new()?;
+    write!(file, "{}", code)?;
 
     let optimizer = ImportOptimizer::new();
-    let analysis = optimizer.analyze_file(file.path()).unwrap();
+    let analysis = optimizer.analyze_file(file.path())?;
 
     assert!(analysis.imports.is_empty());
     assert!(analysis.unused_imports.is_empty());
@@ -193,29 +200,31 @@ fn handles_empty_file() {
 
     let optimized = optimizer.generate_optimized_imports(&analysis);
     assert!(optimized.trim().is_empty());
+    Ok(())
 }
 
 #[test]
-fn handles_symbols_used_in_comments() {
+fn handles_symbols_used_in_comments() -> TestResult {
     let code = r#"use Test qw(func);
 
 # func is mentioned in comment but not actually used
 print "Hello\n";
 "#;
 
-    let mut file = NamedTempFile::new().unwrap();
-    write!(file, "{}", code).unwrap();
+    let mut file = NamedTempFile::new()?;
+    write!(file, "{}", code)?;
 
     let optimizer = ImportOptimizer::new();
-    let analysis = optimizer.analyze_file(file.path()).unwrap();
+    let analysis = optimizer.analyze_file(file.path())?;
 
     // Should detect 'func' as unused even though it's in comment
     assert_eq!(analysis.unused_imports.len(), 1);
     assert!(analysis.unused_imports[0].symbols.contains(&"func".to_string()));
+    Ok(())
 }
 
 #[test]
-fn preserves_order_in_optimized_output() {
+fn preserves_order_in_optimized_output() -> TestResult {
     let code = r#"use Zebra qw(z);
 use Alpha qw(a);
 use Beta qw(b);
@@ -225,11 +234,11 @@ b();
 z();
 "#;
 
-    let mut file = NamedTempFile::new().unwrap();
-    write!(file, "{}", code).unwrap();
+    let mut file = NamedTempFile::new()?;
+    write!(file, "{}", code)?;
 
     let optimizer = ImportOptimizer::new();
-    let analysis = optimizer.analyze_file(file.path()).unwrap();
+    let analysis = optimizer.analyze_file(file.path())?;
 
     let optimized = optimizer.generate_optimized_imports(&analysis);
 
@@ -238,4 +247,5 @@ z();
     assert!(lines[0].contains("Alpha"));
     assert!(lines[1].contains("Beta"));
     assert!(lines[2].contains("Zebra"));
+    Ok(())
 }
