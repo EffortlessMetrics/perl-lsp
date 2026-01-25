@@ -42,7 +42,10 @@ impl<'a> Parser<'a> {
         self.recursion_depth += 1;
         // Fast path: avoid expensive comparisons in the common case
         if self.recursion_depth > MAX_RECURSION_DEPTH {
-            return Err(ParseError::RecursionLimit);
+            return Err(ParseError::NestingTooDeep {
+                depth: self.recursion_depth,
+                max_depth: MAX_RECURSION_DEPTH,
+            });
         }
         Ok(())
     }

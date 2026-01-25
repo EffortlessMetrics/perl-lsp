@@ -392,6 +392,15 @@ pub enum ParseError {
         /// Specific error message describing regex syntax issue
         message: String,
     },
+
+    /// Nesting depth limit exceeded for recursive structures
+    #[error("Nesting depth limit exceeded: {depth} > {max_depth}")]
+    NestingTooDeep {
+        /// Current nesting depth
+        depth: usize,
+        /// Maximum allowed depth
+        max_depth: usize,
+    },
 }
 
 pub mod classifier;

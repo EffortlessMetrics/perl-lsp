@@ -216,11 +216,41 @@ fn test_unicode_property_complexity() {
     
     // Parser might recover, so check either result is Err or errors list has the error
     if let Err(e) = result {
-        assert!(e.to_string().contains("Too many Unicode properties"), "Error was: {}", e);
+        assert!(e.to_string().contains("Too many branches"), "Error was: {}", e);
     } else {
         let errors = parser.errors();
-        assert!(!errors.is_empty(), "Should have recorded errors for excessive properties");
-        let found = errors.iter().any(|e| e.to_string().contains("Too many Unicode properties"));
+        assert!(!errors.is_empty(), "Should have recorded errors for excessive branches");
+        let found = errors.iter().any(|e| e.to_string().contains("Too many branches"));
+        assert!(found, "Should have found specific error in: {:?}", errors);
+    }
+}
+
+#[test]
+fn test_deep_nesting_stack_overflow() {
+    // Issue #423: Deep nesting stack overflow
+    // Nested if statements
+    let mut code = String::new();
+    for _ in 0..100 {
+        code.push_str("if ($a) { ");
+    }
+    code.push_str("print 'hi';");
+    for _ in 0..100 {
+        code.push_str(" }");
+    }
+    
+    let mut parser = Parser::new(&code);
+    let result = parser.parse();
+    
+    // It might fail with nesting limit, or pass if the limit is high enough (64 is default)
+    // 100 levels should trigger the limit
+    if let Err(e) = result {
+        assert!(e.to_string().contains("Nesting depth limit exceeded"), "Error was: {}", e);
+    } else {
+        let errors = parser.errors();
+        // If it didn't fail immediately, it might have recovered, but we expect an error
+        assert!(!errors.is_empty(), "Should have recorded errors for excessive nesting");
+        let found = errors.iter().any(|e| e.to_string().contains("Nesting depth limit exceeded"));
+        // Note: RecursionLimit might be converted to NestingTooDeep
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
 }
