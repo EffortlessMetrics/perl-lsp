@@ -38,11 +38,24 @@ static VARIABLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static ERROR_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static DANGEROUS_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static REGEX_MUTATION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static ASSIGNMENT_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 
 fn context_re() -> Option<&'static Regex> {
     CONTEXT_RE
         .get_or_init(|| {
             Regex::new(r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+)(?:\))?:(?P<line2>\d+):?)")
+        })
+        .as_ref()
+        .ok()
+}
+
+/// Regex to match potential assignment operators (any sequence of operator chars)
+fn assignment_ops_re() -> Option<&'static Regex> {
+    ASSIGNMENT_OPS_RE
+        .get_or_init(|| {
+            // Match any sequence of operator characters to tokenize operators
+            // Escape '-' to avoid range interpretation, or place it at the end
+            Regex::new(r"([!~^&|+\-*/%=<>]+)")
         })
         .as_ref()
         .ok()
@@ -1779,19 +1792,29 @@ fn is_package_qualified_not_core(s: &str, op_start: usize) -> bool {
 /// Note: Method calls ($obj->print) are intentionally NOT exempted because
 /// dangerous operations remain dangerous regardless of invocation syntax.
 fn validate_safe_expression(expression: &str) -> Option<String> {
-    // Check for assignment operators
-    let assignment_ops = [
-        "=", "+=", "-=", "*=", "/=", "%=", "**=", ".=", "&=", "|=", "^=", "<<=", ">>=", "&&=",
-        "||=", "//=",
-    ];
-    for op in &assignment_ops {
-        // Look for assignment operators not in quoted strings (simple heuristic)
-        // This is a basic check - full parsing would be more robust
-        if expression.contains(op) {
-            return Some(format!(
-                "Safe evaluation mode: assignment operator '{}' not allowed (use allowSideEffects: true)",
-                op
-            ));
+    // Check for assignment operators using regex to properly handle multi-char ops
+    // This avoids false positives for comparison operators (e.g., == contains =)
+    if let Some(re) = assignment_ops_re() {
+        for mat in re.find_iter(expression) {
+            let op = mat.as_str();
+            let start = mat.start();
+
+            // Allow harmless occurrences in single-quoted literals
+            if is_in_single_quotes(expression, start) {
+                continue;
+            }
+
+            // Check if it's strictly an assignment operator
+            match op {
+                "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | ".=" | "&=" | "|=" | "^="
+                | "<<=" | ">>=" | "&&=" | "||=" | "//=" => {
+                    return Some(format!(
+                        "Safe evaluation mode: assignment operator '{}' not allowed (use allowSideEffects: true)",
+                        op
+                    ));
+                }
+                _ => {}
+            }
         }
     }
 
@@ -2488,3 +2511,64 @@ mod tests {
         }
     }
 }
+
+    #[test]
+    fn test_safe_eval_assignment_ops_precision() {
+        // These are comparison/binding operators (SAFE) but were previously blocked
+        // because they contain '='
+        let allowed = [
+            "$a == $b",
+            "$a != $b",
+            "$a <= $b",
+            "$a >= $b",
+            "$a <=> $b",
+            "$a =~ /regex/",
+            "$a !~ /regex/",
+            "$a ~~ $b", // Smart match
+            // Logical ops
+            "$a && $b",
+            "$a || $b",
+            "$a // $b",
+            // Bitwise ops
+            "$a & $b",
+            "$a | $b",
+            "$a ^ $b",
+            "$a << $b",
+            "$a >> $b",
+            // String repetition (not assignment)
+            "$a x 3",
+            // Range
+            "1..10",
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "unexpected block for {expr:?}: {err:?}");
+        }
+
+        // These are strict assignment operators (UNSAFE) and MUST be blocked
+        let blocked = [
+            "$a = 1",
+            "$a += 1",
+            "$a -= 1",
+            "$a *= 1",
+            "$a /= 1",
+            "$a %= 1",
+            "$a **= 1",
+            "$a .= 's'",
+            "$a &= 1",
+            "$a |= 1",
+            "$a ^= 1",
+            "$a <<= 1",
+            "$a >>= 1",
+            "$a &&= 1",
+            "$a ||= 1",
+            "$a //= 1",
+            "$a x= 3", // Repetition assignment
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
