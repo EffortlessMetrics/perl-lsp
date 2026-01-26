@@ -537,9 +537,11 @@ impl ScopeAnalyzer {
 
             NodeKind::Identifier { name } => {
                 // Check for barewords under strict mode, excluding hash keys
+                // Hybrid check: Fast path for immediate hash keys (depth 1), then known functions, then deep check
                 if strict_mode
+                    && !self.is_in_hash_key_context(node, ancestors, 1)
                     && !is_known_function(name)
-                    && !self.is_in_hash_key_context(node, ancestors)
+                    && !self.is_in_hash_key_context(node, ancestors, 10)
                 {
                     issues.push(ScopeIssue {
                         kind: IssueKind::UnquotedBareword,
@@ -874,7 +876,12 @@ impl ScopeAnalyzer {
     /// my @vals = @hash{key1, key2};          # key1, key2 are in hash key context
     /// print INVALID_BAREWORD;                # NOT in hash key context - should warn
     /// ```
-    fn is_in_hash_key_context(&self, node: &Node, ancestors: &[&Node]) -> bool {
+    fn is_in_hash_key_context(
+        &self,
+        node: &Node,
+        ancestors: &[&Node],
+        max_depth: usize,
+    ) -> bool {
         let mut current = node;
 
         // Traverse up the AST to find hash key contexts
@@ -882,9 +889,8 @@ impl ScopeAnalyzer {
         // Iterate ancestors in reverse (from immediate parent up)
         let len = ancestors.len();
 
-        // We limit depth to 10.
         for i in (0..len).rev() {
-            if len - i > 10 {
+            if len - i > max_depth {
                 break;
             }
 

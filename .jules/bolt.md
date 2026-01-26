@@ -13,3 +13,8 @@ This journal tracks critical performance learnings for the `tree-sitter-perl-rs`
 ## 2026-01-23 - [Iterator Callback vs Vector Allocation]
 **Learning:** Returning a temporary `Vec<_>` (e.g., `Vec<(String, usize)>`) from hot loops (like unused variable collection in `ScopeAnalyzer`) forces allocation even for items that will be immediately filtered out. Using an iterator pattern or callback (`for_each_reportable_unused_variable`) allows filtering *before* allocation.
 **Action:** Prefer passing closures to inner scopes/loops instead of collecting results into temporary vectors, especially when filtering logic is available in the caller.
+
+## 2024-05-22 - Optimizing ScopeAnalyzer Bareword Checks
+**Learning:** Optimizing tree traversals vs string matches requires balancing common cases.
+A simple swap to prioritize `is_known_function` (string match) over `is_in_hash_key_context` (tree traversal) slowed down benchmarks because checking the immediate parent (O(1) pointer access) for hash keys (`$hash{key}`) is faster than matching against a large list of built-ins.
+**Action:** Use a hybrid approach: Check immediate parent (depth 1) first (fastest), then check `is_known_function` (fast), then check deeper ancestors (slow). This handles both common cases (hash keys and built-in functions) efficiently.
