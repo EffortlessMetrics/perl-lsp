@@ -281,7 +281,7 @@ impl WorkspaceRefactor {
                     continue;
                 }
 
-                let mut idx = doc.line_index.clone();
+                let idx = doc.line_index.clone();
                 let mut pos = 0;
                 let _text_bytes = doc.text.as_bytes();
 
@@ -334,7 +334,7 @@ impl WorkspaceRefactor {
             let path = uri_to_fs_path(&loc.uri).ok_or_else(|| {
                 RefactorError::UriConversion(format!("Failed to convert URI to path: {}", loc.uri))
             })?;
-            if let Some(mut doc) = store.get(&loc.uri) {
+            if let Some(doc) = store.get(&loc.uri) {
                 if let (Some(start_off), Some(end_off)) = (
                     doc.line_index.position_to_offset(loc.range.start.line, loc.range.start.column),
                     doc.line_index.position_to_offset(loc.range.end.line, loc.range.end.column),
@@ -426,7 +426,7 @@ impl WorkspaceRefactor {
         let doc = store
             .get(&uri)
             .ok_or_else(|| RefactorError::DocumentNotIndexed(file_path.display().to_string()))?;
-        let mut idx = doc.line_index.clone();
+        let idx = doc.line_index.clone();
 
         // Determine byte offsets for lines
         let start_off = idx.position_to_offset(start_line as u32 - 1, 0).ok_or_else(|| {
@@ -587,7 +587,7 @@ impl WorkspaceRefactor {
         let doc = store
             .get(&uri)
             .ok_or_else(|| RefactorError::DocumentNotIndexed(from_file.display().to_string()))?;
-        let mut idx = doc.line_index.clone();
+        let idx = doc.line_index.clone();
         let start_off = idx
             .position_to_offset(sym.range.start.line, sym.range.start.column)
             .ok_or_else(|| RefactorError::InvalidPosition {
@@ -707,7 +707,7 @@ impl WorkspaceRefactor {
         let doc = store
             .get(&uri)
             .ok_or_else(|| RefactorError::DocumentNotIndexed(file_path.display().to_string()))?;
-        let mut idx = doc.line_index.clone();
+        let idx = doc.line_index.clone();
 
         // Naively find definition line (variable declaration with "my")
         let def_line_idx = doc
