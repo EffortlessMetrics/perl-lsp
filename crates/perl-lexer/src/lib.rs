@@ -115,9 +115,12 @@
 //! ```rust,no_run
 //! use perl_parser::Parser;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "sub hello { print qq{Hello, world!\\n}; }";
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().expect("Parse successful");
+//! let ast = parser.parse()?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! The parser automatically creates and manages a `PerlLexer` instance internally.
@@ -2998,47 +3001,51 @@ mod test_format_debug;
 mod tests {
     use super::*;
 
+    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
     #[test]
-    fn test_basic_tokens() {
+    fn test_basic_tokens() -> TestResult {
         let mut lexer = PerlLexer::new("my $x = 42;");
 
-        let token = lexer.next_token().unwrap();
+        let token = lexer.next_token().ok_or("Expected keyword token")?;
         assert_eq!(token.token_type, TokenType::Keyword(Arc::from("my")));
 
-        let token = lexer.next_token().unwrap();
+        let token = lexer.next_token().ok_or("Expected identifier token")?;
         assert!(matches!(token.token_type, TokenType::Identifier(_)));
 
-        let token = lexer.next_token().unwrap();
+        let token = lexer.next_token().ok_or("Expected operator token")?;
         assert!(matches!(token.token_type, TokenType::Operator(_)));
 
-        let token = lexer.next_token().unwrap();
+        let token = lexer.next_token().ok_or("Expected number token")?;
         assert!(matches!(token.token_type, TokenType::Number(_)));
 
-        let token = lexer.next_token().unwrap();
+        let token = lexer.next_token().ok_or("Expected semicolon token")?;
         assert_eq!(token.token_type, TokenType::Semicolon);
+        Ok(())
     }
 
     #[test]
-    fn test_slash_disambiguation() {
+    fn test_slash_disambiguation() -> TestResult {
         // Division
         let mut lexer = PerlLexer::new("10 / 2");
         lexer.next_token(); // 10
-        let token = lexer.next_token().unwrap();
+        let token = lexer.next_token().ok_or("Expected division token")?;
         assert_eq!(token.token_type, TokenType::Division);
 
         // Regex
         let mut lexer = PerlLexer::new("if (/pattern/)");
         lexer.next_token(); // if
         lexer.next_token(); // (
-        let token = lexer.next_token().unwrap();
+        let token = lexer.next_token().ok_or("Expected regex token")?;
         assert_eq!(token.token_type, TokenType::RegexMatch);
+        Ok(())
     }
 
     #[test]
-    fn test_percent_and_double_sigil_disambiguation() {
+    fn test_percent_and_double_sigil_disambiguation() -> TestResult {
         // Hash variable
         let mut lexer = PerlLexer::new("%hash");
-        let token = lexer.next_token().unwrap();
+        let token = lexer.next_token().ok_or("Expected hash identifier token")?;
         assert!(
             matches!(token.token_type, TokenType::Identifier(ref id) if id.as_ref() == "%hash")
         );
@@ -3046,29 +3053,31 @@ mod tests {
         // Modulo operator
         let mut lexer = PerlLexer::new("10 % 3");
         lexer.next_token(); // 10
-        let token = lexer.next_token().unwrap();
+        let token = lexer.next_token().ok_or("Expected modulo operator token")?;
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "%"));
+        Ok(())
     }
 
     #[test]
-    fn test_defined_or_and_exponent() {
+    fn test_defined_or_and_exponent() -> TestResult {
         // Defined-or operator
         let mut lexer = PerlLexer::new("$a // $b");
         lexer.next_token(); // $a
-        let token = lexer.next_token().unwrap();
+        let token = lexer.next_token().ok_or("Expected defined-or operator token")?;
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "//"));
 
         // Regex after =~ should still parse
         let mut lexer = PerlLexer::new("$x =~ //");
         lexer.next_token(); // $x
         lexer.next_token(); // =~
-        let token = lexer.next_token().unwrap();
+        let token = lexer.next_token().ok_or("Expected regex token")?;
         assert_eq!(token.token_type, TokenType::RegexMatch);
 
         // Exponent operator
         let mut lexer = PerlLexer::new("2 ** 3");
         lexer.next_token(); // 2
-        let token = lexer.next_token().unwrap();
+        let token = lexer.next_token().ok_or("Expected exponent operator token")?;
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "**"));
+        Ok(())
     }
 }

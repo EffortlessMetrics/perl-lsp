@@ -3,14 +3,13 @@ use perl_lsp::features::diagnostics::DiagnosticsProvider;
 use perl_parser::Parser;
 
 #[test]
-fn test_duplicate_parameter_code_actions() {
+fn test_duplicate_parameter_code_actions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"sub test($x, $y, $x) {
     print $x;
 }"#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -26,10 +25,11 @@ fn test_duplicate_parameter_code_actions() {
     assert!(duplicate_actions.len() >= 2);
     assert!(duplicate_actions.iter().any(|a| a.title.contains("Remove duplicate")));
     assert!(duplicate_actions.iter().any(|a| a.title.contains("Rename duplicate")));
+    Ok(())
 }
 
 #[test]
-fn test_parameter_shadowing_code_actions() {
+fn test_parameter_shadowing_code_actions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"my $data = 42;
 
 sub process($data) {
@@ -37,8 +37,7 @@ sub process($data) {
 }"#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -58,17 +57,17 @@ sub process($data) {
             .iter()
             .any(|a| a.title.contains("$p_data") || a.title.contains("$data_param"))
     );
+    Ok(())
 }
 
 #[test]
-fn test_unused_parameter_code_actions() {
+fn test_unused_parameter_code_actions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"sub calculate($x, $y, $unused) {
     return $x + $y;
 }"#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -82,17 +81,17 @@ fn test_unused_parameter_code_actions() {
     assert!(!unused_actions.is_empty());
     assert!(unused_actions.iter().any(|a| a.title.contains("$_unused")));
     assert!(unused_actions.iter().any(|a| a.title.contains("comment")));
+    Ok(())
 }
 
 #[cfg(feature = "lsp-extras")]
 #[test]
-fn test_bareword_code_actions() {
+fn test_bareword_code_actions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"use strict;
 print FOO;"#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -110,10 +109,11 @@ print FOO;"#;
     assert!(bareword_actions.iter().any(|a| a.title.contains("\"FOO\"")));
     // For uppercase barewords, should also offer filehandle declaration
     assert!(bareword_actions.iter().any(|a| a.title.contains("filehandle")));
+    Ok(())
 }
 
 #[test]
-fn test_multiple_parameter_issues() {
+fn test_multiple_parameter_issues() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"my $x = 1;
 my $y = 2;
 
@@ -122,8 +122,7 @@ sub test($x, $y, $x, $unused) {
 }"#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -134,17 +133,17 @@ sub test($x, $y, $x, $unused) {
     assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("duplicate-parameter")));
     assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("parameter-shadows-global")));
     assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("unused-parameter")));
+    Ok(())
 }
 
 #[cfg(feature = "lsp-extras")]
 #[test]
-fn test_bareword_filehandle_suggestion() {
+fn test_bareword_filehandle_suggestion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"use strict;
 print LOGFILE "Starting process";"#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -156,18 +155,19 @@ print LOGFILE "Starting process";"#;
         actions.iter().filter(|a| a.title.contains("filehandle")).collect();
 
     assert!(!filehandle_actions.is_empty());
-    assert!(filehandle_actions[0].edit.new_text.contains("open"));
+    let first_action = filehandle_actions.first().ok_or("No filehandle actions found")?;
+    assert!(first_action.edit.new_text.contains("open"));
+    Ok(())
 }
 
 #[test]
-fn test_edit_ranges_for_parameter_fixes() {
+fn test_edit_ranges_for_parameter_fixes() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"sub test($duplicate, $duplicate) {
     return $duplicate;
 }"#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -179,4 +179,5 @@ fn test_edit_ranges_for_parameter_fixes() {
         assert!(action.edit.range.0 <= action.edit.range.1);
         assert!(action.edit.range.1 <= source.len());
     }
+    Ok(())
 }

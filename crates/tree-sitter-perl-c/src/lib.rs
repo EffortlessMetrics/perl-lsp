@@ -24,7 +24,9 @@ pub fn language() -> Language {
 /// Create a new parser with C scanner
 pub fn create_parser() -> Parser {
     let mut parser = Parser::new();
-    parser.set_language(&language()).unwrap();
+    parser
+        .set_language(&language())
+        .unwrap_or_else(|e| panic!("Failed to set C-scanner language: {:?}", e));
     parser
 }
 
@@ -64,10 +66,11 @@ mod tests {
     }
 
     #[test]
-    fn test_basic_parsing() {
+    fn test_basic_parsing() -> Result<(), Box<dyn std::error::Error>> {
         let code = "my $var = 'hello';";
-        let tree = parse_perl_code(code).unwrap();
+        let tree = parse_perl_code(code)?;
         assert!(!tree.root_node().has_error());
+        Ok(())
     }
 
     #[test]

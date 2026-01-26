@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive LSP Cancellation Parser Integration Test Suite
 //! Tests AC6-AC8: Parser integration with incremental parsing and workspace indexing
 //!
@@ -523,7 +522,8 @@ fn create_cross_file_scenarios() -> Vec<CrossFileScenario> {
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#incremental-parsing-cancellation
 /// AC:6 - Incremental parsing cancellation with <1ms update preservation
 #[test]
-fn test_incremental_parsing_cancellation_preservation_ac6() {
+fn test_incremental_parsing_cancellation_preservation_ac6() -> Result<(), Box<dyn std::error::Error>>
+{
     let fixture = ParserIntegrationFixture::new();
 
     for scenario in &fixture.test_workspace.incremental_test_scenarios {
@@ -534,7 +534,7 @@ fn test_incremental_parsing_cancellation_preservation_ac6() {
         /*
         let mut parser = IncrementalParserWithCancellation::new();
         let content = fixture.get_test_file_content(&scenario.file_uri)
-            .expect("Test file should exist");
+            .ok_or("Test file should exist")?;
 
         // Create cancellation token for this test scenario
         let token = Arc::new(PerlLspCancellationToken::new(
@@ -573,14 +573,15 @@ fn test_incremental_parsing_cancellation_preservation_ac6() {
 
                 // Cancel early (during initial parsing phase)
                 thread::sleep(Duration::from_micros(50));
-                token.cancel_with_cleanup().expect("Early cancellation should succeed");
+                token.cancel_with_cleanup()?;
 
                 // Verify cancellation response
-                let result = parsing_handle.join().expect("Parsing thread should complete");
+                let result = parsing_handle.join()
+                    .map_err(|_| "Parsing thread should complete")?;
                 match result {
                     Err(CancellationError::RequestCancelled { .. }) => {
                         // Expected cancellation
-                        assert!(token.is_cancelled().unwrap());
+                        assert!(token.is_cancelled()?);
                     },
                     Ok(_) => {
                         // Fast parsing completed before cancellation - acceptable
@@ -604,7 +605,7 @@ fn test_incremental_parsing_cancellation_preservation_ac6() {
 
                 // Cancel during AST construction phase
                 thread::sleep(Duration::from_micros(200));
-                token.cancel_with_cleanup().expect("Mid cancellation should succeed");
+                token.cancel_with_cleanup()?;
 
                 // Verify checkpoint restoration if cancelled
                 if let Err(CancellationError::RequestCancelled { .. }) = parsing_result {
@@ -626,7 +627,7 @@ fn test_incremental_parsing_cancellation_preservation_ac6() {
                     let token_clone = token.clone();
                     move || {
                         thread::sleep(Duration::from_micros(800));
-                        token_clone.cancel_with_cleanup().expect("Late cancellation should succeed");
+                        let _ = token_clone.cancel_with_cleanup();
                     }
                 });
 
@@ -670,13 +671,15 @@ fn test_incremental_parsing_cancellation_preservation_ac6() {
 
     // Test establishes incremental parsing cancellation patterns
     // AC6 incremental parsing cancellation test scaffolding established
+    Ok(())
 }
 
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#checkpoint-manager
 /// AC:6 - Checkpoint-based incremental parsing with safe cancellation points
 #[cfg(feature = "stress-tests")]
 #[test]
-fn test_incremental_parsing_checkpoint_cancellation_ac6() {
+fn test_incremental_parsing_checkpoint_cancellation_ac6() -> Result<(), Box<dyn std::error::Error>>
+{
     // Enhanced constraint checking for parser integration cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
     let thread_count =
@@ -692,7 +695,7 @@ fn test_incremental_parsing_checkpoint_cancellation_ac6() {
         eprintln!(
             "Run with: RUST_TEST_THREADS=1 cargo test test_incremental_parsing_checkpoint_cancellation_ac6"
         );
-        return;
+        return Ok(());
     }
 
     // Skip in CI environments where LSP infrastructure may be unstable
@@ -701,7 +704,7 @@ fn test_incremental_parsing_checkpoint_cancellation_ac6() {
         || std::env::var("CONTINUOUS_INTEGRATION").is_ok()
     {
         eprintln!("Skipping parser integration cancellation test in CI environment for stability");
-        return;
+        return Ok(());
     }
 
     let fixture = ParserIntegrationFixture::new();
@@ -709,7 +712,7 @@ fn test_incremental_parsing_checkpoint_cancellation_ac6() {
     // Test checkpoint-based parsing with cancellation at various points
     let test_content = fixture
         .get_test_file_content("file:///lib/ExtendedModule.pm")
-        .expect("Extended module should exist");
+        .ok_or("Extended module should exist")?;
 
     // TODO: Uncomment when implementing checkpoint-based parsing
     /*
@@ -769,7 +772,7 @@ fn test_incremental_parsing_checkpoint_cancellation_ac6() {
         };
 
         thread::sleep(cancel_delay);
-        token.cancel_with_cleanup().expect("Checkpoint cancellation should succeed");
+        token.cancel_with_cleanup()?;
 
         let parsing_duration = parsing_start.elapsed();
 
@@ -811,6 +814,7 @@ fn test_incremental_parsing_checkpoint_cancellation_ac6() {
 
     println!("Checkpoint-based parsing test scaffolding established");
     // AC6 checkpoint-based incremental parsing test scaffolding completed
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -835,7 +839,7 @@ enum ParsingPhase {
 /// AC:7 - Workspace indexing interruption without corruption validation
 #[cfg(feature = "stress-tests")]
 #[test]
-fn test_workspace_indexing_cancellation_integrity_ac7() {
+fn test_workspace_indexing_cancellation_integrity_ac7() -> Result<(), Box<dyn std::error::Error>> {
     // Enhanced constraint checking for workspace indexing cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
     let thread_count =
@@ -851,7 +855,7 @@ fn test_workspace_indexing_cancellation_integrity_ac7() {
         eprintln!(
             "Run with: RUST_TEST_THREADS=1 cargo test test_workspace_indexing_cancellation_integrity_ac7"
         );
-        return;
+        return Ok(());
     }
 
     // Skip in CI environments where LSP infrastructure may be unstable
@@ -860,7 +864,7 @@ fn test_workspace_indexing_cancellation_integrity_ac7() {
         || std::env::var("CONTINUOUS_INTEGRATION").is_ok()
     {
         eprintln!("Skipping workspace indexing cancellation test in CI environment for stability");
-        return;
+        return Ok(());
     }
 
     let fixture = ParserIntegrationFixture::new();
@@ -889,7 +893,7 @@ fn test_workspace_indexing_cancellation_integrity_ac7() {
         let mut indexing_handles = Vec::new();
         for (file_index, file_uri) in scenario.file_uris.iter().enumerate() {
             let content = fixture.get_test_file_content(file_uri)
-                .expect("Test file should exist");
+                .ok_or("Test file should exist")?;
 
             let index_clone = Arc::clone(&workspace_index);
             let token_clone = Arc::clone(&token);
@@ -918,7 +922,7 @@ fn test_workspace_indexing_cancellation_integrity_ac7() {
         let cancellation_start = Instant::now();
 
         // Execute cancellation
-        token.cancel_with_cleanup().expect("Workspace indexing cancellation should succeed");
+        token.cancel_with_cleanup()?;
         let cancellation_latency = cancellation_start.elapsed();
 
         // Collect indexing results
@@ -999,13 +1003,14 @@ fn test_workspace_indexing_cancellation_integrity_ac7() {
 
     // Test establishes workspace indexing cancellation patterns with integrity preservation
     // AC7 workspace indexing cancellation test scaffolding established
+    Ok(())
 }
 
 /// Tests feature spec: LSP_CANCELLATION_INTEGRATION_SCHEMA.md#dual-indexing-cancellation
 /// AC:7 - Dual pattern indexing cancellation with atomic operations
 #[cfg(feature = "stress-tests")]
 #[test]
-fn test_dual_pattern_indexing_cancellation_ac7() {
+fn test_dual_pattern_indexing_cancellation_ac7() -> Result<(), Box<dyn std::error::Error>> {
     // Enhanced constraint checking for dual pattern indexing cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
     let thread_count =
@@ -1021,7 +1026,7 @@ fn test_dual_pattern_indexing_cancellation_ac7() {
         eprintln!(
             "Run with: RUST_TEST_THREADS=1 cargo test test_dual_pattern_indexing_cancellation_ac7"
         );
-        return;
+        return Ok(());
     }
 
     // Skip in CI environments where LSP infrastructure may be unstable
@@ -1032,7 +1037,7 @@ fn test_dual_pattern_indexing_cancellation_ac7() {
         eprintln!(
             "Skipping dual pattern indexing cancellation test in CI environment for stability"
         );
-        return;
+        return Ok(());
     }
 
     let fixture = ParserIntegrationFixture::new();
@@ -1040,7 +1045,7 @@ fn test_dual_pattern_indexing_cancellation_ac7() {
     // Test dual pattern indexing (qualified and bare function names) with cancellation
     let test_module = fixture
         .get_test_file_content("file:///lib/ExtendedModule.pm")
-        .expect("Extended module should exist");
+        .ok_or("Extended module should exist")?;
 
     // TODO: Uncomment when implementing dual pattern indexing cancellation
     /*
@@ -1093,10 +1098,10 @@ fn test_dual_pattern_indexing_cancellation_ac7() {
 
         // Cancel during indexing to test atomic operations
         thread::sleep(Duration::from_micros(200));
-        token.cancel_with_cleanup().expect("Dual pattern cancellation should succeed");
+        token.cancel_with_cleanup()?;
 
         let indexing_result = indexing_handle.join()
-            .expect("Dual pattern indexing thread should complete");
+            .map_err(|_| "Dual pattern indexing thread should complete")?;
 
         let indexing_duration = indexing_start.elapsed();
 
@@ -1153,6 +1158,7 @@ fn test_dual_pattern_indexing_cancellation_ac7() {
 
     println!("Dual pattern indexing cancellation test scaffolding established");
     // AC7 dual pattern indexing cancellation test scaffolding completed
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -1183,7 +1189,7 @@ impl MockLocation {
 /// Tests feature spec: LSP_CANCELLATION_INTEGRATION_SCHEMA.md#cross-file-navigation
 /// AC:8 - Cross-file reference resolution with graceful termination
 #[test]
-fn test_cross_file_reference_cancellation_ac8() {
+fn test_cross_file_reference_cancellation_ac8() -> Result<(), Box<dyn std::error::Error>> {
     // Enhanced constraint checking for cross-file reference cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
     let thread_count =
@@ -1199,7 +1205,7 @@ fn test_cross_file_reference_cancellation_ac8() {
         eprintln!(
             "Run with: RUST_TEST_THREADS=1 cargo test test_cross_file_reference_cancellation_ac8"
         );
-        return;
+        return Ok(());
     }
 
     // Skip in CI environments where LSP infrastructure may be unstable
@@ -1210,7 +1216,7 @@ fn test_cross_file_reference_cancellation_ac8() {
         eprintln!(
             "Skipping cross-file reference cancellation test in CI environment for stability"
         );
-        return;
+        return Ok(());
     }
 
     let fixture = ParserIntegrationFixture::new();
@@ -1276,11 +1282,10 @@ fn test_cross_file_reference_cancellation_ac8() {
                 Some(Duration::from_millis(100)),
             ));
 
-            tier_token.cancel_with_cleanup()
-                .expect("Cross-file navigation cancellation should succeed");
+            tier_token.cancel_with_cleanup()?;
 
             let resolution_result = resolution_handle.join()
-                .expect("Cross-file resolution thread should complete");
+                .map_err(|_| "Cross-file resolution thread should complete")?;
 
             let navigation_duration = navigation_start.elapsed();
 
@@ -1388,13 +1393,14 @@ fn test_cross_file_reference_cancellation_ac8() {
 
     // Test establishes cross-file reference resolution cancellation patterns
     // AC8 cross-file reference resolution cancellation test scaffolding established
+    Ok(())
 }
 
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#multi-tier-resolver
 /// AC:8 - Multi-tier resolver cancellation with fallback preservation
 #[cfg(feature = "stress-tests")]
 #[test]
-fn test_multi_tier_resolver_cancellation_ac8() {
+fn test_multi_tier_resolver_cancellation_ac8() -> Result<(), Box<dyn std::error::Error>> {
     // Enhanced constraint checking for multi-tier resolver cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
     let thread_count =
@@ -1410,7 +1416,7 @@ fn test_multi_tier_resolver_cancellation_ac8() {
         eprintln!(
             "Run with: RUST_TEST_THREADS=1 cargo test test_multi_tier_resolver_cancellation_ac8"
         );
-        return;
+        return Ok(());
     }
 
     // Skip in CI environments where LSP infrastructure may be unstable
@@ -1419,7 +1425,7 @@ fn test_multi_tier_resolver_cancellation_ac8() {
         || std::env::var("CONTINUOUS_INTEGRATION").is_ok()
     {
         eprintln!("Skipping multi-tier resolver cancellation test in CI environment for stability");
-        return;
+        return Ok(());
     }
 
     let fixture = ParserIntegrationFixture::new();
@@ -1492,10 +1498,10 @@ fn test_multi_tier_resolver_cancellation_ac8() {
         };
 
         thread::sleep(cancel_delay);
-        token.cancel_with_cleanup().expect("Multi-tier cancellation should succeed");
+        token.cancel_with_cleanup()?;
 
         let resolution_result = resolution_handle.join()
-            .expect("Multi-tier resolution thread should complete");
+            .map_err(|_| "Multi-tier resolution thread should complete")?;
 
         let resolution_duration = resolution_start.elapsed();
 
@@ -1568,7 +1574,8 @@ fn test_multi_tier_resolver_cancellation_ac8() {
     */
 
     // Test scaffolding validation
-    let main_content = fixture.get_test_file_content("file:///main.pl").unwrap();
+    let main_content =
+        fixture.get_test_file_content("file:///main.pl").ok_or("Main test file should exist")?;
     assert!(
         main_content.contains("ExtendedModule"),
         "Main file should reference ExtendedModule for multi-tier testing"
@@ -1576,6 +1583,7 @@ fn test_multi_tier_resolver_cancellation_ac8() {
 
     println!("Multi-tier resolver cancellation test scaffolding established");
     // AC8 multi-tier resolver cancellation test scaffolding completed
+    Ok(())
 }
 
 #[derive(Debug, Clone)]

@@ -285,16 +285,17 @@ impl EnhancedCodeActionsProvider {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+
 mod tests {
     use super::*;
     use crate::Parser;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_extract_variable() {
         let source = "my $x = length($string) + 10;";
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = EnhancedCodeActionsProvider::new(source.to_string());
         let actions = provider.get_enhanced_refactoring_actions(&ast, (8, 23)); // Select "length($string)"
@@ -316,7 +317,7 @@ mod tests {
     fn test_add_error_checking() {
         let source = "open my $fh, '<', 'file.txt';";
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = EnhancedCodeActionsProvider::new(source.to_string());
         let actions = provider.get_enhanced_refactoring_actions(&ast, (0, 30));
@@ -328,7 +329,7 @@ mod tests {
     fn test_convert_to_postfix() {
         let source = "if ($debug) { print \"Debug\\n\"; }";
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = EnhancedCodeActionsProvider::new(source.to_string());
         let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));

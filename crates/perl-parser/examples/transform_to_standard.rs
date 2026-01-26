@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Transform perl-parser S-expressions to standard Tree-sitter format
 //!
 //! This example shows how to transform our concise S-expression format

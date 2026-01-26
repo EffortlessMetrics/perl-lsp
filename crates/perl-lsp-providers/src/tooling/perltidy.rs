@@ -381,9 +381,17 @@ impl BuiltInFormatter {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+
 mod tests {
     use super::*;
+    use perl_tdd_support::{must, must_some};
+
+    fn must_err<T, E: std::fmt::Debug>(result: Result<T, E>) -> E {
+        match result {
+            Err(e) => e,
+            Ok(_) => panic!("Expected error, got Ok"),
+        }
+    }
 
     #[test]
     fn test_config_to_args() {
@@ -427,7 +435,7 @@ mod tests {
 
         let result = formatter.format("my $x=1;");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "my $x = 1;\n");
+        assert_eq!(must(result), "my $x = 1;\n");
 
         let invocations = runtime.invocations();
         assert_eq!(invocations.len(), 1);
@@ -452,7 +460,7 @@ mod tests {
         // Second call should use cache, not invoke runtime again
         let result2 = formatter.format("original");
         assert!(result2.is_ok());
-        assert_eq!(result1.unwrap(), result2.unwrap());
+        assert_eq!(must(result1), must(result2));
 
         // Only one invocation should have occurred
         assert_eq!(runtime.invocations().len(), 1);
@@ -470,7 +478,7 @@ mod tests {
 
         let result = formatter.format("invalid code");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("syntax error"));
+        assert!(must_err(result).contains("syntax error"));
     }
 
     #[test]
@@ -494,9 +502,9 @@ mod tests {
         assert!(invocations[0].args.contains(&"--".to_string()));
         // Ensure the separator comes before the file path
         let sep_pos =
-            invocations[0].args.iter().position(|a| a == "--").expect("Missing -- separator");
+            must_some(invocations[0].args.iter().position(|a| a == "--"));
         let file_pos =
-            invocations[0].args.iter().position(|a| a == "test.pl").expect("Missing file path");
+            must_some(invocations[0].args.iter().position(|a| a == "test.pl"));
         assert!(sep_pos < file_pos, "-- separator must come before file path");
     }
 }

@@ -7,6 +7,8 @@ use perl_lsp::{JsonRpcRequest, LspServer};
 use perl_parser::Parser;
 use serde_json::{Value, json};
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 /// Helper to create a test LSP server instance
 fn create_test_server() -> LspServer {
     LspServer::new()
@@ -36,7 +38,7 @@ fn send_initialized(server: &mut LspServer) {
 }
 
 #[test]
-fn test_lsp_initialization() {
+fn test_lsp_initialization() -> TestResult {
     let mut server = create_test_server();
 
     let params = json!({
@@ -48,7 +50,7 @@ fn test_lsp_initialization() {
     let result = send_request(&mut server, "initialize", Some(params));
     assert!(result.is_some());
 
-    let capabilities = result.unwrap();
+    let capabilities = result.ok_or("Failed to get initialization response")?;
     // TextDocumentSync can be either a number or an object
     assert!(
         capabilities["capabilities"]["textDocumentSync"].is_object()
@@ -65,13 +67,14 @@ fn test_lsp_initialization() {
         serde_json::Value::Object(obj) => {
             assert_eq!(obj["resolveProvider"], true);
         }
-        other => panic!("unexpected workspaceSymbolProvider: {:?}", other),
+        other => return Err(format!("unexpected workspaceSymbolProvider: {:?}", other).into()),
     }
     assert_eq!(capabilities["capabilities"]["codeLensProvider"]["resolveProvider"], true);
+    Ok(())
 }
 
 #[test]
-fn test_workspace_symbols_integration() {
+fn test_workspace_symbols_integration() -> TestResult {
     let mut server = create_test_server();
 
     // Initialize server
@@ -125,21 +128,25 @@ my $local_var = 456;
     );
 
     assert!(result.is_some());
-    let symbols = result.unwrap();
+    let symbols = result.ok_or("Failed to get workspace symbols")?;
     assert!(symbols.is_array());
 
-    let symbols_array = symbols.as_array().unwrap();
+    let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
     assert_eq!(symbols_array.len(), 2); // Should find my_function and another_function
 
     // Verify symbol details - we found the two functions
     // The order may vary, so just check that we have the right functions
-    let names: Vec<&str> = symbols_array.iter().map(|s| s["name"].as_str().unwrap()).collect();
+    let names: Vec<&str> = symbols_array
+        .iter()
+        .map(|s| s["name"].as_str().ok_or("Expected name string"))
+        .collect::<Result<Vec<_>, _>>()?;
     assert!(names.contains(&"my_function"));
     assert!(names.contains(&"another_function"));
+    Ok(())
 }
 
 #[test]
-fn test_code_lens_integration() {
+fn test_code_lens_integration() -> TestResult {
     let mut server = create_test_server();
 
     // Initialize server
@@ -197,10 +204,10 @@ sub TestPackage::test_method {
     );
 
     assert!(result.is_some());
-    let lenses = result.unwrap();
+    let lenses = result.ok_or("Failed to get code lenses")?;
     assert!(lenses.is_array());
 
-    let lenses_array = lenses.as_array().unwrap();
+    let lenses_array = lenses.as_array().ok_or("Expected lenses array")?;
 
     // Code lenses may be empty if parsing failed or no test functions found
     // Just check that we got a valid array response
@@ -217,10 +224,11 @@ sub TestPackage::test_method {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_code_lens_resolve() {
+fn test_code_lens_resolve() -> TestResult {
     let mut server = create_test_server();
 
     // Initialize server
@@ -249,13 +257,15 @@ fn test_code_lens_resolve() {
     let result = send_request(&mut server, "codeLens/resolve", Some(unresolved_lens));
     assert!(result.is_some());
 
-    let resolved = result.unwrap();
+    let resolved = result.ok_or("Failed to resolve code lens")?;
     assert!(resolved["command"].is_object());
-    assert!(resolved["command"]["title"].as_str().unwrap().contains("reference"));
+    let title = resolved["command"]["title"].as_str().ok_or("Expected title string")?;
+    assert!(title.contains("reference"));
+    Ok(())
 }
 
 #[test]
-fn test_multiple_documents() {
+fn test_multiple_documents() -> TestResult {
     let mut server = create_test_server();
 
     // Initialize server
@@ -317,8 +327,8 @@ sub function2 { }
     );
 
     assert!(result.is_some());
-    let symbols = result.unwrap();
-    let symbols_array = symbols.as_array().unwrap();
+    let symbols = result.ok_or("Failed to get workspace symbols")?;
+    let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
 
     // Should find packages Module1 and Module2 plus their functions
     // The search for "Module" matches both packages directly and functions via containerName
@@ -327,15 +337,16 @@ sub function2 { }
     let package_names: Vec<&str> = symbols_array
         .iter()
         .filter(|s| s["kind"] == 2) // Module kind
-        .map(|s| s["name"].as_str().unwrap())
-        .collect();
+        .map(|s| s["name"].as_str().ok_or("Expected name string"))
+        .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(package_names.len(), 2, "Should find exactly 2 packages");
     assert!(package_names.contains(&"Module1"));
     assert!(package_names.contains(&"Module2"));
+    Ok(())
 }
 
 #[test]
-fn test_document_updates() {
+fn test_document_updates() -> TestResult {
     let mut server = create_test_server();
 
     // Initialize server
@@ -389,31 +400,34 @@ fn test_document_updates() {
     );
 
     assert!(result.is_some());
-    let symbols = result.unwrap();
-    let symbols_array = symbols.as_array().unwrap();
+    let symbols = result.ok_or("Failed to get workspace symbols")?;
+    let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
 
     // Should find both new functions
     assert_eq!(symbols_array.len(), 2);
     assert_eq!(symbols_array[0]["name"], "new_function");
     assert_eq!(symbols_array[1]["name"], "another_new");
+    Ok(())
 }
 
 // Test removed - matches_query is private method
 
 #[test]
-fn test_shebang_detection() {
+fn test_shebang_detection() -> TestResult {
     // Test with shebang
     let code_with_shebang = "#!/usr/bin/perl\nprint 'hello';";
     let lens = get_shebang_lens(code_with_shebang);
     assert!(lens.is_some());
 
-    let lens = lens.unwrap();
-    assert_eq!(lens.command.as_ref().unwrap().title, "▶ Run Script");
+    let lens = lens.ok_or("Expected shebang lens")?;
+    let command = lens.command.as_ref().ok_or("Expected command in lens")?;
+    assert_eq!(command.title, "▶ Run Script");
 
     // Test without shebang
     let code_without = "print 'hello';";
     let lens = get_shebang_lens(code_without);
     assert!(lens.is_none());
+    Ok(())
 }
 
 #[test]
@@ -473,7 +487,7 @@ fn test_error_handling() {
 }
 
 #[test]
-fn test_semantic_tokens_full() {
+fn test_semantic_tokens_full() -> TestResult {
     let mut server = create_test_server();
 
     // Initialize server
@@ -527,19 +541,20 @@ process_data($obj, $global);
     );
 
     assert!(result.is_some());
-    let tokens = result.unwrap();
+    let tokens = result.ok_or("Failed to get semantic tokens")?;
 
     // Check that we got data array
     assert!(tokens["data"].is_array());
-    let data = tokens["data"].as_array().unwrap();
+    let data = tokens["data"].as_array().ok_or("Expected data array")?;
 
     // Should have tokens for package, modules, variables, functions
     // Each token is 5 elements: deltaLine, deltaStartChar, length, tokenType, tokenModifiers
     assert!(data.len() >= 25); // At least 5 tokens * 5 elements each
+    Ok(())
 }
 
 #[test]
-fn test_semantic_tokens_range() {
+fn test_semantic_tokens_range() -> TestResult {
     let mut server = create_test_server();
 
     // Initialize server
@@ -590,21 +605,22 @@ print $var3;
     );
 
     assert!(result.is_some());
-    let tokens = result.unwrap();
+    let tokens = result.ok_or("Failed to get semantic tokens")?;
 
     // Check that we got data array
     assert!(tokens["data"].is_array());
-    let data = tokens["data"].as_array().unwrap();
+    let data = tokens["data"].as_array().ok_or("Expected data array")?;
 
     // Should only have tokens from lines 1-3, not the print statements
     // Line 1: $var2 declaration
     // Line 2: $var3 declaration
     assert!(!data.is_empty());
     assert!(data.len() < 30); // Should not include all tokens
+    Ok(())
 }
 
 #[test]
-fn test_call_hierarchy_prepare() {
+fn test_call_hierarchy_prepare() -> TestResult {
     let mut server = create_test_server();
 
     // Initialize server
@@ -624,7 +640,7 @@ fn test_call_hierarchy_prepare() {
         .is_none()
     {
         eprintln!("call hierarchy not advertised; skipping test");
-        return;
+        return Ok(());
     }
     send_request(&mut server, "initialized", None);
 
@@ -672,20 +688,21 @@ sub process_data {
     );
 
     assert!(result.is_some());
-    let items = result.unwrap();
+    let items = result.ok_or("Failed to prepare call hierarchy")?;
 
     // Should return array with one item (the "main" function)
     assert!(items.is_array());
-    let items_array = items.as_array().unwrap();
+    let items_array = items.as_array().ok_or("Expected items array")?;
     assert_eq!(items_array.len(), 1);
 
     let main_item = &items_array[0];
     assert_eq!(main_item["name"], "main");
     assert_eq!(main_item["kind"], 12); // Function
+    Ok(())
 }
 
 #[test]
-fn test_call_hierarchy_incoming() {
+fn test_call_hierarchy_incoming() -> TestResult {
     let mut server = create_test_server();
 
     // Initialize server
@@ -705,7 +722,7 @@ fn test_call_hierarchy_incoming() {
         .is_none()
     {
         eprintln!("call hierarchy not advertised; skipping test");
-        return;
+        return Ok(());
     }
     send_request(&mut server, "initialized", None);
 
@@ -751,9 +768,9 @@ sub target_func {
         })),
     );
 
-    let prepare_value = prepare_result.unwrap();
-    let items = prepare_value.as_array().unwrap();
-    let target_item = &items[0];
+    let prepare_value = prepare_result.ok_or("Failed to prepare call hierarchy")?;
+    let items = prepare_value.as_array().ok_or("Expected items array")?;
+    let target_item = items.first().ok_or("Expected at least one item")?;
 
     // Get incoming calls
     let incoming_result = send_request(
@@ -765,22 +782,25 @@ sub target_func {
     );
 
     assert!(incoming_result.is_some());
-    let calls = incoming_result.unwrap();
+    let calls = incoming_result.ok_or("Failed to get incoming calls")?;
 
     // Should have 2 callers
     assert!(calls.is_array());
-    let calls_array = calls.as_array().unwrap();
+    let calls_array = calls.as_array().ok_or("Expected calls array")?;
     assert_eq!(calls_array.len(), 2);
 
     // Check caller names
-    let caller_names: Vec<&str> =
-        calls_array.iter().map(|c| c["from"]["name"].as_str().unwrap()).collect();
+    let caller_names: Vec<&str> = calls_array
+        .iter()
+        .map(|c| c["from"]["name"].as_str().ok_or("Expected caller name"))
+        .collect::<Result<Vec<_>, _>>()?;
     assert!(caller_names.contains(&"caller1"));
     assert!(caller_names.contains(&"caller2"));
+    Ok(())
 }
 
 #[test]
-fn test_call_hierarchy_outgoing() {
+fn test_call_hierarchy_outgoing() -> TestResult {
     let mut server = create_test_server();
 
     // Initialize server
@@ -800,7 +820,7 @@ fn test_call_hierarchy_outgoing() {
         .is_none()
     {
         eprintln!("call hierarchy not advertised; skipping test");
-        return;
+        return Ok(());
     }
     send_request(&mut server, "initialized", None);
 
@@ -843,9 +863,9 @@ sub helper {
         })),
     );
 
-    let prepare_value = prepare_result.unwrap();
-    let items = prepare_value.as_array().unwrap();
-    let main_item = &items[0];
+    let prepare_value = prepare_result.ok_or("Failed to prepare call hierarchy")?;
+    let items = prepare_value.as_array().ok_or("Expected items array")?;
+    let main_item = items.first().ok_or("Expected at least one item")?;
 
     // Get outgoing calls
     let outgoing_result = send_request(
@@ -857,23 +877,26 @@ sub helper {
     );
 
     assert!(outgoing_result.is_some());
-    let calls = outgoing_result.unwrap();
+    let calls = outgoing_result.ok_or("Failed to get outgoing calls")?;
 
     // Should have 3 calls
     assert!(calls.is_array());
-    let calls_array = calls.as_array().unwrap();
+    let calls_array = calls.as_array().ok_or("Expected calls array")?;
     assert_eq!(calls_array.len(), 3);
 
     // Check called function names
-    let called_names: Vec<&str> =
-        calls_array.iter().map(|c| c["to"]["name"].as_str().unwrap()).collect();
+    let called_names: Vec<&str> = calls_array
+        .iter()
+        .map(|c| c["to"]["name"].as_str().ok_or("Expected called function name"))
+        .collect::<Result<Vec<_>, _>>()?;
     assert!(called_names.contains(&"helper"));
     assert!(called_names.contains(&"process_data"));
     assert!(called_names.contains(&"method_call"));
+    Ok(())
 }
 
 #[test]
-fn test_inlay_hints() {
+fn test_inlay_hints() -> TestResult {
     let mut server = create_test_server();
 
     // Initialize server
@@ -925,11 +948,11 @@ my $hash = { key => "value" };
     );
 
     assert!(result.is_some());
-    let hints = result.unwrap();
+    let hints = result.ok_or("Failed to get inlay hints")?;
 
     // Should be an array of hints
     assert!(hints.is_array());
-    let hints_array = hints.as_array().unwrap();
+    let hints_array = hints.as_array().ok_or("Expected hints array")?;
 
     // Should have parameter hints and type hints
     assert!(!hints_array.is_empty());
@@ -947,10 +970,11 @@ my $hash = { key => "value" };
         .filter(|h| h["kind"] == 1) // Type
         .collect();
     assert!(type_hints.len() >= 2); // For $result and $hash
+    Ok(())
 }
 
 #[test]
-fn test_inlay_hints_range() {
+fn test_inlay_hints_range() -> TestResult {
     let mut server = create_test_server();
 
     // Initialize server
@@ -1000,15 +1024,16 @@ push(@array4, "value4");  # Line 4
     );
 
     assert!(result.is_some());
-    let hints = result.unwrap();
+    let hints = result.ok_or("Failed to get inlay hints")?;
 
     // Should be an array of hints
     assert!(hints.is_array());
-    let hints_array = hints.as_array().unwrap();
+    let hints_array = hints.as_array().ok_or("Expected hints array")?;
 
     // Should only have hints for lines 2-3
     for hint in hints_array {
-        let line = hint["position"]["line"].as_u64().unwrap();
+        let line = hint["position"]["line"].as_u64().ok_or("Expected line number")?;
         assert!((2..=3).contains(&line));
     }
+    Ok(())
 }

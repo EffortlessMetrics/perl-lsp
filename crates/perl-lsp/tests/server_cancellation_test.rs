@@ -1,10 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]
-fn server_side_cancellation_emits_err_server_cancelled() {
+fn server_side_cancellation_emits_err_server_cancelled() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -17,8 +15,7 @@ fn server_side_cancellation_emits_err_server_cancelled() {
                 "rootUri": null,
                 "capabilities": {}
             }
-        }))
-        .unwrap(),
+        }))?,
     );
     let _ = server.handle_request(
         serde_json::from_value::<JsonRpcRequest>(json!({
@@ -26,8 +23,7 @@ fn server_side_cancellation_emits_err_server_cancelled() {
             "id": 2,
             "method": "initialized",
             "params": {}
-        }))
-        .unwrap(),
+        }))?,
     );
 
     // Request slow operation with server-side timeout
@@ -37,11 +33,12 @@ fn server_side_cancellation_emits_err_server_cancelled() {
             "id": 3,
             "method": "$/test/slowOperation",
             "params": {"serverTimeoutMs": 200}
-        }))
-        .unwrap(),
+        }))?,
     );
 
-    let resp = response.expect("expected JSON-RPC response");
-    let err = resp.error.expect("expected error response");
+    let resp = response.ok_or("expected JSON-RPC response")?;
+    let err = resp.error.ok_or("expected error response")?;
     assert_eq!(err.code, -32802, "expected ERR_SERVER_CANCELLED");
+
+    Ok(())
 }

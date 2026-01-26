@@ -19,10 +19,11 @@
 //! use perl_parser::scope_analyzer::{ScopeAnalyzer, IssueKind};
 //! use perl_parser::{Parser, ast::Node};
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Analyze Perl script for scope issues
 //! let script = "my $var = 42; sub hello { print $var; }";
 //! let mut parser = Parser::new(script);
-//! let ast = parser.parse().unwrap();
+//! let ast = parser.parse()?;
 //!
 //! let analyzer = ScopeAnalyzer::new();
 //! let pragma_map = vec![];
@@ -36,6 +37,8 @@
 //!         _ => {}
 //!     }
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::ast::{Node, NodeKind};

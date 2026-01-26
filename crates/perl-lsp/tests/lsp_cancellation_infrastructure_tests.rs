@@ -13,7 +13,6 @@
 //! edge case coverage and performance monitoring integration.
 
 #![allow(unused_imports, dead_code)] // Scaffolding may have unused imports initially
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
@@ -190,7 +189,9 @@ impl ResourceMonitor {
     }
 
     fn get_resource_summary(&self) -> ResourceSummary {
-        let snapshots = self.memory_snapshots.lock().unwrap().clone();
+        let snapshots = self.memory_snapshots.lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default();
 
         ResourceSummary {
             memory_snapshots: snapshots,
@@ -289,7 +290,9 @@ impl ThreadSafetyMonitor {
     }
 
     fn get_thread_safety_report(&self) -> ThreadSafetyReport {
-        let operations = self.concurrent_operations.lock().unwrap().clone();
+        let operations = self.concurrent_operations.lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default();
         let race_conditions = self.data_race_counter.load(Ordering::Relaxed);
         let deadlocks = self.check_for_deadlocks();
 
@@ -1191,7 +1194,10 @@ fn test_concurrent_cancellation_thread_safety_ac10() {
                         }
 
                         {
-                            let mut resource_guard = resource_clone.write().unwrap();
+                            let mut resource_guard = match resource_clone.write() {
+                                Ok(g) => g,
+                                Err(e) => e.into_inner(),
+                            };
                             resource_guard.insert(resource_key, format!("value_{}_{}", thread_id, operation_id));
                         }
 
@@ -1267,7 +1273,10 @@ fn test_concurrent_cancellation_thread_safety_ac10() {
                scenario.thread_count * scenario.operations_per_thread, total_operations);
 
         // Validate shared resource consistency
-        let final_resource_state = shared_resource.read().unwrap();
+        let final_resource_state = match shared_resource.read() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
         let expected_entries = total_successful + total_cancelled; // Cancelled operations still insert
         assert!(final_resource_state.len() == expected_entries,
                "Shared resource should have {} entries, got {}",

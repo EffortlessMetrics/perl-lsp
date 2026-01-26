@@ -1,9 +1,9 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_parser::Parser;
 use perl_parser::workspace_index::WorkspaceIndex;
 use proptest::prelude::*;
 use rstest::*;
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[cfg(feature = "incremental")]
 use perl_parser::incremental_document::IncrementalDocument;
@@ -31,9 +31,9 @@ mod incremental_position_arithmetic_tests {
         #[case] start_byte: usize,
         #[case] old_end_byte: usize,
         #[case] _expected_within_size: bool,
-    ) {
+    ) -> TestResult {
         let source = "my $variable = 'some long string value that exceeds one hundred characters and should trigger the size check boundary condition properly in the incremental parser';";
-        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        let mut doc = IncrementalDocument::new(source.to_string())?;
 
         // Ensure valid byte positions
         let start = start_byte.min(source.len());
@@ -51,6 +51,7 @@ mod incremental_position_arithmetic_tests {
         // This indirectly tests is_single_token_edit which contains the mutant at line 232
         let result = doc.apply_edit(edit);
         assert!(result.is_ok(), "Edit should succeed regardless of size boundary");
+        Ok(())
     }
 
     /// Test position adjustment arithmetic that could overflow
@@ -60,9 +61,12 @@ mod incremental_position_arithmetic_tests {
     #[case(100, -50)] // Negative delta within bounds
     #[case(0, -1)] // Negative delta that could underflow
     #[case(usize::MAX - 1000, 500)] // Large position with positive delta
-    fn test_position_adjustment_edge_cases(#[case] initial_position: usize, #[case] delta: isize) {
+    fn test_position_adjustment_edge_cases(
+        #[case] initial_position: usize,
+        #[case] delta: isize,
+    ) -> TestResult {
         let source = "print 'test';";
-        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        let mut doc = IncrementalDocument::new(source.to_string())?;
 
         // Create an edit that would trigger position adjustment
         let edit = IncrementalEdit::with_positions(
@@ -83,14 +87,15 @@ mod incremental_position_arithmetic_tests {
         } else {
             assert!(result.is_ok(), "Valid position adjustments should succeed");
         }
+        Ok(())
     }
 
     /// Test edit application with extreme byte positions
     /// Targets line 89: apply_edit_to_source - byte position handling
     #[test]
-    fn test_extreme_byte_positions() {
+    fn test_extreme_byte_positions() -> TestResult {
         let source = "my $x = 'hello world';";
-        let mut doc = IncrementalDocument::new(source.to_string()).unwrap();
+        let mut doc = IncrementalDocument::new(source.to_string())?;
 
         // Test edit at the very end of the source
         let edit_at_end = IncrementalEdit::with_positions(
@@ -103,6 +108,7 @@ mod incremental_position_arithmetic_tests {
 
         let result = doc.apply_edit(edit_at_end);
         assert!(result.is_ok(), "Edit at end of source should succeed");
+        Ok(())
     }
 
     proptest! {
@@ -190,11 +196,12 @@ mod qualified_identifier_parsing_tests {
     fn test_delimiter_closing_logic(
         #[case] open_delim: &str,
         #[case] expected_close: Option<&str>,
-    ) {
+    ) -> TestResult {
         // We can't directly test the private closing_delim_for function,
         // so we test it indirectly through qw parsing
         if !open_delim.is_empty() && expected_close.is_some() {
-            let code = format!("qw{}test{}", open_delim, expected_close.unwrap());
+            let close = expected_close.ok_or("expected_close is None")?;
+            let code = format!("qw{}test{}", open_delim, close);
             let mut parser = Parser::new(&code);
             let result = parser.parse();
 
@@ -208,6 +215,7 @@ mod qualified_identifier_parsing_tests {
                 ),
             }
         }
+        Ok(())
     }
 
     /// Test version string parsing edge cases
@@ -245,7 +253,7 @@ mod workspace_eval_do_tests {
     /// Test eval and do block indexing coverage
     /// Targets line 1036: missing match arms for NodeKind::Eval and NodeKind::Do
     #[test]
-    fn test_eval_block_indexing() {
+    fn test_eval_block_indexing() -> TestResult {
         let source = r#"
             package TestPackage;
             sub function_in_eval {
@@ -257,20 +265,21 @@ mod workspace_eval_do_tests {
         "#;
 
         let mut parser = Parser::new(source);
-        let _ast = parser.parse().expect("Should parse eval block");
+        let _ast = parser.parse()?;
 
         // Test that eval blocks are properly indexed
         let index = WorkspaceIndex::new();
         let uri = "test://eval.pl";
-        index.index_file_str(uri, source).expect("Should index file");
+        index.index_file_str(uri, source)?;
 
         // Verify that functions within eval blocks are indexed
         let symbols = index.file_symbols(uri);
         assert!(!symbols.is_empty(), "Should index symbols from eval blocks");
+        Ok(())
     }
 
     #[test]
-    fn test_do_block_indexing() {
+    fn test_do_block_indexing() -> TestResult {
         let source = r#"
             package TestPackage;
             sub function_with_do {
@@ -282,16 +291,17 @@ mod workspace_eval_do_tests {
         "#;
 
         let mut parser = Parser::new(source);
-        let _ast = parser.parse().expect("Should parse do block");
+        let _ast = parser.parse()?;
 
         // Test that do blocks are properly indexed
         let index = WorkspaceIndex::new();
         let uri = "test://do.pl";
-        index.index_file_str(uri, source).expect("Should index file");
+        index.index_file_str(uri, source)?;
 
         // Verify that functions within do blocks are indexed
         let symbols = index.file_symbols(uri);
         assert!(!symbols.is_empty(), "Should index symbols from do blocks");
+        Ok(())
     }
 
     /// Test eval/do blocks with various content types
@@ -301,21 +311,22 @@ mod workspace_eval_do_tests {
     #[case("eval { sub nested_sub { } }", "eval_with_subroutine")]
     #[case("do { package Nested; }", "do_with_package")]
     #[case("eval { use strict; }", "eval_with_use")]
-    fn test_eval_do_content_indexing(#[case] code: &str, #[case] test_name: &str) {
+    fn test_eval_do_content_indexing(#[case] code: &str, #[case] test_name: &str) -> TestResult {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
         assert!(result.is_ok(), "Should parse {}: {:?}", test_name, result.err());
 
-        let _ast = result.unwrap();
+        let _ast = result?;
         let index = WorkspaceIndex::new();
         let uri = format!("test://{}.pl", test_name);
 
         // The key test: ensure eval/do blocks don't cause indexing to fail
-        index.index_file_str(&uri, code).expect("Should index file");
+        index.index_file_str(&uri, code)?;
 
         // Basic sanity check - we should be able to get symbols without panicking
         let _symbols = index.file_symbols(&uri);
+        Ok(())
     }
 
     proptest! {
@@ -507,9 +518,9 @@ mod parser_completeness_tests {
         #[case] open_delim: &str,
         #[case] expected_close: Option<&str>,
         #[case] should_work: bool,
-    ) {
+    ) -> TestResult {
         if expected_close.is_some() {
-            let close = expected_close.unwrap();
+            let close = expected_close.ok_or("expected_close is None")?;
             let test_cases = vec![
                 format!("qw{}test{}", open_delim, close),
                 format!("qx{}test{}", open_delim, close),
@@ -539,6 +550,7 @@ mod parser_completeness_tests {
                 }
             }
         }
+        Ok(())
     }
 
     /// Test qualified identifier completeness edge cases
@@ -646,7 +658,7 @@ mod ast_sexp_validation_tests {
     /// Test S-expression generation for various subroutine types
     /// Targets ast.rs line 541: name.is_none() condition handling
     #[test]
-    fn test_subroutine_sexp_name_handling() {
+    fn test_subroutine_sexp_name_handling() -> TestResult {
         let test_cases = vec![
             ("sub { print 'anonymous'; }", "anonymous_subroutine", true),
             ("sub named { print 'named'; }", "named_subroutine", false),
@@ -664,7 +676,7 @@ mod ast_sexp_validation_tests {
                 continue;
             }
 
-            let ast = result.unwrap();
+            let ast = result?;
             let sexp = ast.to_sexp();
             let sexp_inner = ast.to_sexp_inner();
 
@@ -694,6 +706,7 @@ mod ast_sexp_validation_tests {
                 println!("Named subroutine unwrapping test: {}", sexp_inner);
             }
         }
+        Ok(())
     }
 
     /// Test S-expression generation with various expression types
@@ -710,16 +723,19 @@ mod ast_sexp_validation_tests {
     #[case("map { $_ * 2 } @list;", "map_expression")]
     #[case("grep { $_ > 0 } @list;", "grep_expression")]
     #[case("sort { $a <=> $b } @list;", "sort_expression")]
-    fn test_expression_statement_sexp_generation(#[case] code: &str, #[case] test_name: &str) {
+    fn test_expression_statement_sexp_generation(
+        #[case] code: &str,
+        #[case] test_name: &str,
+    ) -> TestResult {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
         if result.is_err() {
             println!("Note: {} parsing not fully supported: {:?}", test_name, result.err());
-            return;
+            return Ok(());
         }
 
-        let ast = result.unwrap();
+        let ast = result?;
         let sexp = ast.to_sexp();
         let sexp_inner = ast.to_sexp_inner();
 
@@ -742,6 +758,7 @@ mod ast_sexp_validation_tests {
             "Invalid inner S-expression format: {}",
             sexp_inner
         );
+        Ok(())
     }
 
     /// Test error handling in S-expression generation with malformed AST
@@ -797,7 +814,7 @@ mod dual_indexing_pattern_tests {
 
     /// Test dual indexing pattern completeness for various function types
     #[test]
-    fn test_dual_indexing_function_patterns() {
+    fn test_dual_indexing_function_patterns() -> TestResult {
         let source_files = vec![
             ("test1.pl", "package TestPackage; sub test_function { } sub _private_function { }"),
             ("test2.pl", "package Another::Package; sub public_method { } sub CONSTANT { }"),
@@ -810,7 +827,7 @@ mod dual_indexing_pattern_tests {
         // Index all files
         for (filename, source) in &source_files {
             let uri = format!("test://{}", filename);
-            index.index_file_str(&uri, source).expect("Should index file");
+            index.index_file_str(&uri, source)?;
         }
 
         // Test dual pattern matching for various function reference patterns
@@ -834,16 +851,17 @@ mod dual_indexing_pattern_tests {
             // Test that we can find references using dual pattern matching
             // (implementation should check both qualified and bare forms)
             if symbol_name.contains("::") {
-                let bare_name = symbol_name.split("::").last().unwrap();
+                let bare_name = symbol_name.split("::").last().ok_or("split returned empty")?;
                 let bare_references = index.find_references(bare_name);
                 println!("  Bare name '{}': {} found", bare_name, bare_references.len());
             }
         }
+        Ok(())
     }
 
     /// Test workspace symbol search completeness
     #[test]
-    fn test_workspace_symbol_completeness() {
+    fn test_workspace_symbol_completeness() -> TestResult {
         let complex_source = r#"
             package Complex::Example;
             use strict;
@@ -887,7 +905,7 @@ mod dual_indexing_pattern_tests {
 
         let index = WorkspaceIndex::new();
         let uri = "test://complex.pl";
-        index.index_file_str(uri, complex_source).expect("Should index complex file");
+        index.index_file_str(uri, complex_source)?;
 
         // Test comprehensive symbol discovery
         let symbols = index.file_symbols(uri);
@@ -902,6 +920,7 @@ mod dual_indexing_pattern_tests {
 
         // Ensure we have reasonable symbol coverage
         assert!(symbols.len() >= 5, "Should find at least 5 symbols in complex file");
+        Ok(())
     }
 
     proptest! {
@@ -929,7 +948,7 @@ mod ast_node_validation_tests {
     /// Test S-expression generation for anonymous subroutines
     /// Targets line 541: name.is_none() condition in to_sexp_inner
     #[test]
-    fn test_anonymous_subroutine_sexp_generation() {
+    fn test_anonymous_subroutine_sexp_generation() -> TestResult {
         // Anonymous subroutine (name should be None)
         let code = "my $sub = sub { print 'anonymous'; };";
         let mut parser = Parser::new(code);
@@ -937,10 +956,10 @@ mod ast_node_validation_tests {
 
         if result.is_err() {
             println!("Note: Anonymous subroutine syntax might not be fully supported");
-            return;
+            return Ok(());
         }
 
-        let ast = result.unwrap();
+        let ast = result?;
 
         let sexp = ast.to_sexp();
         let sexp_inner = ast.to_sexp_inner();
@@ -954,14 +973,15 @@ mod ast_node_validation_tests {
         // The exact content may vary based on parser implementation
         println!("Anonymous subroutine sexp: {}", sexp);
         println!("Anonymous subroutine sexp_inner: {}", sexp_inner);
+        Ok(())
     }
 
     #[test]
-    fn test_named_subroutine_sexp_generation() {
+    fn test_named_subroutine_sexp_generation() -> TestResult {
         // Named subroutine (name should be Some)
         let code = "sub named_sub { print 'named'; }";
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("Should parse named subroutine");
+        let ast = parser.parse()?;
 
         let sexp = ast.to_sexp();
         let sexp_inner = ast.to_sexp_inner();
@@ -973,6 +993,7 @@ mod ast_node_validation_tests {
         // The exact content may vary based on parser implementation
         println!("Named subroutine sexp: {}", sexp);
         println!("Named subroutine sexp_inner: {}", sexp_inner);
+        Ok(())
     }
 
     /// Test various expression statement types to ensure proper unwrapping
@@ -983,13 +1004,16 @@ mod ast_node_validation_tests {
     #[case("func_call();", "function_call")]
     #[case("sub { };", "anonymous_subroutine")]
     #[case("sub named { };", "named_subroutine")]
-    fn test_expression_statement_unwrapping(#[case] code: &str, #[case] test_name: &str) {
+    fn test_expression_statement_unwrapping(
+        #[case] code: &str,
+        #[case] test_name: &str,
+    ) -> TestResult {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
         assert!(result.is_ok(), "Should parse {}: {:?}", test_name, result.err());
 
-        let ast = result.unwrap();
+        let ast = result?;
         let sexp = ast.to_sexp();
         let sexp_inner = ast.to_sexp_inner();
 
@@ -1004,6 +1028,7 @@ mod ast_node_validation_tests {
             println!("Anonymous subroutine sexp: {}", sexp);
             println!("Anonymous subroutine sexp_inner: {}", sexp_inner);
         }
+        Ok(())
     }
 
     /// Test error handling in S-expression generation
@@ -1047,10 +1072,9 @@ mod integration_mutation_tests {
 
     /// Test complex scenarios that exercise multiple mutation points
     #[test]
-    fn test_incremental_parsing_with_qualified_identifiers() {
+    fn test_incremental_parsing_with_qualified_identifiers() -> TestResult {
         let initial_source = "package Foo::Bar; sub test { }";
-        let mut doc =
-            IncrementalDocument::new(initial_source.to_string()).expect("Should create document");
+        let mut doc = IncrementalDocument::new(initial_source.to_string())?;
 
         // Edit that changes package name (tests both incremental and qualified parsing)
         let edit = IncrementalEdit::with_positions(
@@ -1063,11 +1087,12 @@ mod integration_mutation_tests {
 
         let result = doc.apply_edit(edit);
         assert!(result.is_ok(), "Should handle qualified identifier edit");
+        Ok(())
     }
 
     /// Test workspace indexing without triggering incremental parsing issues
     #[test]
-    fn test_workspace_indexing_with_simple_updates() {
+    fn test_workspace_indexing_with_simple_updates() -> TestResult {
         let source1 = "package Test; sub test_function { }";
         let source2 = "package Test; sub test_function { } sub another { }";
 
@@ -1075,12 +1100,12 @@ mod integration_mutation_tests {
         let uri = "test://integration.pl";
 
         // Initial indexing
-        index.index_file_str(uri, source1).expect("Should index initial file");
+        index.index_file_str(uri, source1)?;
         let initial_symbols = index.file_symbols(uri);
         println!("Initial symbols found: {}", initial_symbols.len());
 
         // Re-index with updated source (without using incremental parsing)
-        index.index_file_str(uri, source2).expect("Should index updated file");
+        index.index_file_str(uri, source2)?;
         let updated_symbols = index.file_symbols(uri);
         println!("Updated symbols found: {}", updated_symbols.len());
 
@@ -1091,6 +1116,7 @@ mod integration_mutation_tests {
             updated_symbols.len() >= initial_symbols.len(),
             "Should have at least as many symbols after update"
         );
+        Ok(())
     }
 
     /// Test that documents arithmetic underflow issue in incremental parsing
@@ -1101,7 +1127,10 @@ mod integration_mutation_tests {
         // This test documents a real bug in incremental_document.rs:356
         // where nodes_reused can be larger than count_nodes(), causing underflow
         let source = "package Test; sub test_function { }";
-        let mut doc = IncrementalDocument::new(source.to_string()).expect("Should create document");
+        let mut doc = match IncrementalDocument::new(source.to_string()) {
+            Ok(d) => d,
+            Err(e) => panic!("Should create document: {:?}", e),
+        };
 
         // This edit triggers the underflow bug - it's a legitimate bug to fix
         let edit = IncrementalEdit::with_positions(

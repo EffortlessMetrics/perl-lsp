@@ -45,8 +45,11 @@
 //! ```no_run
 //! use perl_lsp::LspServer;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut server = LspServer::new();
-//! server.run().expect("Server failed");
+//! server.run()?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! # Architecture
@@ -214,9 +217,10 @@
 //! use perl_parser::Parser;
 //! use perl_lsp::convert::to_lsp_diagnostic;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "my $x = 1;";
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().expect("Valid code");
+//! let ast = parser.parse()?;
 //!
 //! // Convert parser errors to LSP diagnostics
 //! let diagnostics: Vec<_> = parser.errors()

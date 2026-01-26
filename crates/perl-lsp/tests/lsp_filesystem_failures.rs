@@ -1,5 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use serde_json::json;
 use std::fs;
 #[cfg(unix)]
@@ -9,9 +7,11 @@ use url::Url;
 
 mod common;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 /// Convert a file path to a proper file:// URI (cross-platform)
-fn path_to_uri(path: &Path) -> String {
-    Url::from_file_path(path).expect("file path to URI").to_string()
+fn path_to_uri(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(Url::from_file_path(path).map_err(|_| "Failed to convert file path to URI")?.to_string())
 }
 use common::{initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
 
@@ -19,21 +19,21 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 /// Tests handling of permission errors, disk space, and I/O failures
 
 #[test]
-fn test_read_only_file() {
+fn test_read_only_file() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
     // Create a read-only file
     let temp_dir = std::env::temp_dir();
     let file_path = temp_dir.join(format!("readonly_{}.pl", std::process::id()));
-    fs::write(&file_path, "print 'readonly';").unwrap();
+    fs::write(&file_path, "print 'readonly';")?;
 
     // Make file read-only (cross-platform)
-    let mut perms = fs::metadata(&file_path).unwrap().permissions();
+    let mut perms = fs::metadata(&file_path)?.permissions();
     perms.set_readonly(true);
-    fs::set_permissions(&file_path, perms).unwrap();
+    fs::set_permissions(&file_path, perms)?;
 
-    let uri = path_to_uri(&file_path);
+    let uri = path_to_uri(&file_path)?;
 
     // Open read-only file (should work)
     send_notification(
@@ -66,7 +66,7 @@ fn test_read_only_file() {
     );
 
     // Verify file wasn't modified
-    let content = fs::read_to_string(&file_path).unwrap();
+    let content = fs::read_to_string(&file_path)?;
     assert_eq!(content, "print 'readonly';");
 
     // Cleanup: restore write permissions before deleting (required on Windows)
@@ -76,18 +76,20 @@ fn test_read_only_file() {
         let _ = fs::set_permissions(&file_path, perms);
     }
     let _ = fs::remove_file(&file_path);
+
+    Ok(())
 }
 
 #[test]
-fn test_directory_as_file() {
+fn test_directory_as_file() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
     let temp_dir = std::env::temp_dir();
     let dir_path = temp_dir.join(format!("dir_{}", std::process::id()));
-    fs::create_dir(&dir_path).unwrap();
+    fs::create_dir(&dir_path)?;
 
-    let uri = path_to_uri(&dir_path);
+    let uri = path_to_uri(&dir_path)?;
 
     // Try to open a directory as a file
     send_notification(
@@ -125,10 +127,12 @@ fn test_directory_as_file() {
 
     // Cleanup
     let _ = fs::remove_dir(&dir_path);
+
+    Ok(())
 }
 
 #[test]
-fn test_non_existent_file() {
+fn test_non_existent_file() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -166,16 +170,18 @@ fn test_non_existent_file() {
 
     let response = read_response(&mut server);
     assert!(response["result"].is_array() || response["result"].is_null());
+
+    Ok(())
 }
 
 #[test]
 #[cfg(unix)]
-fn test_permission_denied_directory() {
+fn test_permission_denied_directory() -> TestResult {
     // Skip test if running as root (no permission denied for root)
     // Check if we're root by trying to read a protected file
     if std::env::var("USER").unwrap_or_default() == "root" {
         eprintln!("Skipping permission-denied test when running as root.");
-        return;
+        return Ok(());
     }
 
     let mut server = start_lsp_server();
@@ -187,18 +193,18 @@ fn test_permission_denied_directory() {
 
     // Clean up any existing directory first
     let _ = fs::remove_dir_all(restricted_dir);
-    fs::create_dir(restricted_dir).unwrap();
+    fs::create_dir(restricted_dir)?;
 
     // Create file in directory
     let file_path = restricted_dir.join("file.pl");
-    fs::write(&file_path, "print 'test';").unwrap();
+    fs::write(&file_path, "print 'test';")?;
 
     // Remove read permission from directory
-    let mut perms = fs::metadata(restricted_dir).unwrap().permissions();
+    let mut perms = fs::metadata(restricted_dir)?.permissions();
     perms.set_mode(0o000);
-    fs::set_permissions(restricted_dir, perms.clone()).unwrap();
+    fs::set_permissions(restricted_dir, perms.clone())?;
 
-    let uri = path_to_uri(&file_path);
+    let uri = path_to_uri(&file_path)?;
 
     // Try to access file in restricted directory
     send_request(
@@ -216,13 +222,15 @@ fn test_permission_denied_directory() {
 
     // Restore permissions for cleanup
     perms.set_mode(0o755);
-    fs::set_permissions(restricted_dir, perms).unwrap();
+    fs::set_permissions(restricted_dir, perms)?;
 
     let response = read_response(&mut server);
     assert!(response.is_object());
 
     // Clean up directory
     let _ = fs::remove_dir_all(restricted_dir);
+
+    Ok(())
 }
 
 #[test]
@@ -234,7 +242,7 @@ fn test_permission_denied_directory() {
 
 #[test]
 #[cfg(unix)]
-fn test_symlink_loop() {
+fn test_symlink_loop() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -250,11 +258,11 @@ fn test_symlink_loop() {
     // Create symlink loop
     #[cfg(unix)]
     {
-        std::os::unix::fs::symlink(link2, link1).unwrap();
-        std::os::unix::fs::symlink(link1, link2).unwrap();
+        std::os::unix::fs::symlink(link2, link1)?;
+        std::os::unix::fs::symlink(link1, link2)?;
     }
 
-    let uri = path_to_uri(link1);
+    let uri = path_to_uri(link1)?;
 
     // Try to open symlink loop
     send_notification(
@@ -292,6 +300,8 @@ fn test_symlink_loop() {
     // Clean up symlinks
     let _ = fs::remove_file(link1);
     let _ = fs::remove_file(link2);
+
+    Ok(())
 }
 
 #[test]
@@ -302,7 +312,7 @@ fn test_symlink_loop() {
 }
 
 #[test]
-fn test_broken_symlink() {
+fn test_broken_symlink() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -311,18 +321,18 @@ fn test_broken_symlink() {
     let link = &temp_dir.join("link.pl");
 
     // Create file and symlink
-    fs::write(target, "print 'target';").unwrap();
+    fs::write(target, "print 'target';")?;
     // Remove any existing symlink first to make test idempotent
     let _ = fs::remove_file(link);
     #[cfg(unix)]
-    std::os::unix::fs::symlink(target, link).unwrap();
+    std::os::unix::fs::symlink(target, link)?;
     #[cfg(windows)]
-    std::os::windows::fs::symlink_file(target, link).unwrap();
+    std::os::windows::fs::symlink_file(target, link)?;
 
     // Delete target, leaving broken symlink
-    fs::remove_file(target).unwrap();
+    fs::remove_file(target)?;
 
-    let uri = path_to_uri(link);
+    let uri = path_to_uri(link)?;
 
     // Try to open broken symlink
     send_notification(
@@ -357,10 +367,12 @@ fn test_broken_symlink() {
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+
+    Ok(())
 }
 
 #[test]
-fn test_very_long_path() {
+fn test_very_long_path() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -403,10 +415,12 @@ fn test_very_long_path() {
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+
+    Ok(())
 }
 
 #[test]
-fn test_special_filename_characters() {
+fn test_special_filename_characters() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -456,29 +470,31 @@ fn test_special_filename_characters() {
 
         // Try to create file (may fail on some filesystems)
         if fs::write(file_path, "print 'special';").is_ok() {
-            let uri = path_to_uri(file_path);
-
-            send_notification(
-                &mut server,
-                json!({
-                    "jsonrpc": "2.0",
-                    "method": "textDocument/didOpen",
-                    "params": {
-                        "textDocument": {
-                            "uri": uri,
-                            "languageId": "perl",
-                            "version": 1,
-                            "text": "print 'special';"
+            if let Ok(uri) = path_to_uri(file_path) {
+                send_notification(
+                    &mut server,
+                    json!({
+                        "jsonrpc": "2.0",
+                        "method": "textDocument/didOpen",
+                        "params": {
+                            "textDocument": {
+                                "uri": uri,
+                                "languageId": "perl",
+                                "version": 1,
+                                "text": "print 'special';"
+                            }
                         }
-                    }
-                }),
-            );
+                    }),
+                );
+            }
         }
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_case_sensitive_filesystem() {
+fn test_case_sensitive_filesystem() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -486,18 +502,18 @@ fn test_case_sensitive_filesystem() {
     let file_lower = &temp_dir.join("test.pl");
     let file_upper = &temp_dir.join("TEST.pl");
 
-    fs::write(file_lower, "print 'lowercase';").unwrap();
+    fs::write(file_lower, "print 'lowercase';")?;
 
     // Check if filesystem is case-sensitive
     let is_case_sensitive = !file_upper.exists();
 
     if is_case_sensitive {
-        fs::write(file_upper, "print 'uppercase';").unwrap();
+        fs::write(file_upper, "print 'uppercase';")?;
     }
 
     // Open with different case
-    let uri_lower = path_to_uri(file_lower);
-    let uri_upper = path_to_uri(file_upper);
+    let uri_lower = path_to_uri(file_lower)?;
+    let uri_upper = path_to_uri(file_upper)?;
 
     send_notification(
         &mut server,
@@ -546,18 +562,20 @@ fn test_case_sensitive_filesystem() {
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+
+    Ok(())
 }
 
 #[test]
-fn test_file_deleted_while_open() {
+fn test_file_deleted_while_open() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
     let temp_dir = std::env::temp_dir();
     let file_path = &temp_dir.join("delete_me.pl");
-    fs::write(file_path, "print 'delete me';").unwrap();
+    fs::write(file_path, "print 'delete me';")?;
 
-    let uri = path_to_uri(file_path);
+    let uri = path_to_uri(file_path)?;
 
     // Open file
     send_notification(
@@ -577,7 +595,7 @@ fn test_file_deleted_while_open() {
     );
 
     // Delete file while it's open
-    fs::remove_file(file_path).unwrap();
+    fs::remove_file(file_path)?;
 
     // Try to perform operations on deleted file
     send_request(
@@ -608,18 +626,20 @@ fn test_file_deleted_while_open() {
             }
         }),
     );
+
+    Ok(())
 }
 
 #[test]
-fn test_file_modified_externally() {
+fn test_file_modified_externally() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
     let temp_dir = std::env::temp_dir();
     let file_path = &temp_dir.join("external.pl");
-    fs::write(file_path, "print 'original';").unwrap();
+    fs::write(file_path, "print 'original';")?;
 
-    let uri = path_to_uri(file_path);
+    let uri = path_to_uri(file_path)?;
 
     // Open file
     send_notification(
@@ -639,7 +659,7 @@ fn test_file_modified_externally() {
     );
 
     // Modify file externally
-    fs::write(file_path, "print 'modified externally';").unwrap();
+    fs::write(file_path, "print 'modified externally';")?;
 
     // Server state may be out of sync
     send_request(
@@ -674,15 +694,17 @@ fn test_file_modified_externally() {
             }
         }),
     );
+
+    Ok(())
 }
 
 #[test]
-fn test_workspace_folder_deleted() {
+fn test_workspace_folder_deleted() -> TestResult {
     let mut server = start_lsp_server();
 
     let temp_dir = std::env::temp_dir();
     let workspace_path = &temp_dir.to_path_buf();
-    let workspace_uri = path_to_uri(workspace_path);
+    let workspace_uri = path_to_uri(workspace_path)?;
 
     // Initialize with workspace folder
     let response = send_request(
@@ -752,18 +774,20 @@ fn test_workspace_folder_deleted() {
     // Should return an array (possibly empty) or null
     assert!(response.is_object());
     assert!(response["result"].is_array() || response["result"].is_null());
+
+    Ok(())
 }
 
 #[test]
-fn test_hidden_files() {
+fn test_hidden_files() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
     let temp_dir = std::env::temp_dir();
     let hidden_file = &temp_dir.join(".hidden.pl");
-    fs::write(hidden_file, "print 'hidden';").unwrap();
+    fs::write(hidden_file, "print 'hidden';")?;
 
-    let uri = path_to_uri(hidden_file);
+    let uri = path_to_uri(hidden_file)?;
 
     // Open hidden file
     send_notification(
@@ -797,10 +821,12 @@ fn test_hidden_files() {
 
     let response = read_response(&mut server);
     assert!(response["result"].is_array() || response["result"].is_null());
+
+    Ok(())
 }
 
 #[test]
-fn test_device_files() {
+fn test_device_files() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -810,29 +836,31 @@ fn test_device_files() {
     for device in device_files {
         let device_path = PathBuf::from(device);
         if device_path.exists() {
-            let uri = path_to_uri(&device_path);
-
-            send_notification(
-                &mut server,
-                json!({
-                    "jsonrpc": "2.0",
-                    "method": "textDocument/didOpen",
-                    "params": {
-                        "textDocument": {
-                            "uri": uri,
-                            "languageId": "perl",
-                            "version": 1,
-                            "text": ""
+            if let Ok(uri) = path_to_uri(&device_path) {
+                send_notification(
+                    &mut server,
+                    json!({
+                        "jsonrpc": "2.0",
+                        "method": "textDocument/didOpen",
+                        "params": {
+                            "textDocument": {
+                                "uri": uri,
+                                "languageId": "perl",
+                                "version": 1,
+                                "text": ""
+                            }
                         }
-                    }
-                }),
-            );
+                    }),
+                );
+            }
         }
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_fifo_pipe() {
+fn test_fifo_pipe() -> TestResult {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -843,7 +871,7 @@ fn test_fifo_pipe() {
     let _ = std::process::Command::new("mkfifo").arg(fifo_path).output();
 
     if fifo_path.exists() {
-        let uri = path_to_uri(fifo_path);
+        let uri = path_to_uri(fifo_path)?;
 
         // Try to open FIFO
         send_notification(
@@ -879,4 +907,6 @@ fn test_fifo_pipe() {
         let response = read_response(&mut server);
         assert!(response.is_object());
     }
+
+    Ok(())
 }

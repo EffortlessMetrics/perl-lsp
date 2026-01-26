@@ -11,6 +11,8 @@
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 fn setup_server() -> LspServer {
     let mut server = LspServer::new();
 
@@ -58,7 +60,7 @@ fn open_document(server: &mut LspServer, uri: &str, content: &str) {
 }
 
 #[test]
-fn test_document_symbols_basic() {
+fn test_document_symbols_basic() -> TestResult {
     let mut server = setup_server();
 
     let content = r#"
@@ -96,40 +98,47 @@ sub calculate {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
-    let result = response.result.unwrap();
+    let response = server.handle_request(request).ok_or("No response from server")?;
+    let result = response.result.ok_or("Missing result")?;
 
     // Check that we have symbols
     assert!(result.is_array());
-    let symbols = result.as_array().unwrap();
+    let symbols = result.as_array().ok_or("Result is not an array")?;
     assert!(!symbols.is_empty());
 
     // Check for package symbol
     let package_symbol = symbols.iter().find(|s| s["name"].as_str() == Some("MyModule"));
     assert!(package_symbol.is_some());
-    assert_eq!(package_symbol.unwrap()["kind"], 4); // Module
+    let package_symbol = package_symbol.ok_or("Package symbol not found")?;
+    assert_eq!(package_symbol["kind"], 4); // Module
 
     // Check for subroutine symbols
     let hello_sub = symbols.iter().find(|s| s["name"].as_str() == Some("hello"));
     assert!(hello_sub.is_some());
-    assert_eq!(hello_sub.unwrap()["kind"], 12); // Function
+    let hello_sub = hello_sub.ok_or("hello sub not found")?;
+    assert_eq!(hello_sub["kind"], 12); // Function
 
     let calc_sub = symbols.iter().find(|s| s["name"].as_str() == Some("calculate"));
     assert!(calc_sub.is_some());
-    assert_eq!(calc_sub.unwrap()["kind"], 12); // Function
+    let calc_sub = calc_sub.ok_or("calculate sub not found")?;
+    assert_eq!(calc_sub["kind"], 12); // Function
 
     // Check for variable symbols
     let global_var = symbols.iter().find(|s| s["name"].as_str() == Some("$global_var"));
     assert!(global_var.is_some());
-    assert_eq!(global_var.unwrap()["kind"], 13); // Variable
+    let global_var = global_var.ok_or("global_var not found")?;
+    assert_eq!(global_var["kind"], 13); // Variable
 
     let shared_array = symbols.iter().find(|s| s["name"].as_str() == Some("@shared_array"));
     assert!(shared_array.is_some());
-    assert_eq!(shared_array.unwrap()["kind"], 18); // Array
+    let shared_array = shared_array.ok_or("shared_array not found")?;
+    assert_eq!(shared_array["kind"], 18); // Array
+
+    Ok(())
 }
 
 #[test]
-fn test_document_symbols_nested() {
+fn test_document_symbols_nested() -> TestResult {
     let mut server = setup_server();
 
     let content = r#"
@@ -137,12 +146,12 @@ package Outer;
 
 sub parent_sub {
     my $parent_var = 10;
-    
+
     my $closure = sub {
         my $inner_var = 20;
         return $parent_var + $inner_var;
     };
-    
+
     return $closure;
 }
 
@@ -169,10 +178,10 @@ sub another_sub {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
-    let result = response.result.unwrap();
+    let response = server.handle_request(request).ok_or("No response from server")?;
+    let result = response.result.ok_or("Missing result")?;
 
-    let symbols = result.as_array().unwrap();
+    let symbols = result.as_array().ok_or("Result is not an array")?;
 
     // Check for both packages
     let outer_package = symbols.iter().find(|s| s["name"].as_str() == Some("Outer"));
@@ -187,10 +196,12 @@ sub another_sub {
 
     let another_sub = symbols.iter().find(|s| s["name"].as_str() == Some("another_sub"));
     assert!(another_sub.is_some());
+
+    Ok(())
 }
 
 #[test]
-fn test_document_symbols_empty_document() {
+fn test_document_symbols_empty_document() -> TestResult {
     let mut server = setup_server();
 
     open_document(&mut server, "file:///empty.pl", "");
@@ -206,17 +217,19 @@ fn test_document_symbols_empty_document() {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
-    let result = response.result.unwrap();
+    let response = server.handle_request(request).ok_or("No response from server")?;
+    let result = response.result.ok_or("Missing result")?;
 
     // Should return empty array for empty document
     assert!(result.is_array());
-    let symbols = result.as_array().unwrap();
+    let symbols = result.as_array().ok_or("Result is not an array")?;
     assert!(symbols.is_empty());
+
+    Ok(())
 }
 
 #[test]
-fn test_document_symbols_with_constants() {
+fn test_document_symbols_with_constants() -> TestResult {
     let mut server = setup_server();
 
     let content = r#"
@@ -245,19 +258,22 @@ sub area {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
-    let result = response.result.unwrap();
+    let response = server.handle_request(request).ok_or("No response from server")?;
+    let result = response.result.ok_or("Missing result")?;
 
-    let symbols = result.as_array().unwrap();
+    let symbols = result.as_array().ok_or("Result is not an array")?;
 
     // Check for function
     let area_sub = symbols.iter().find(|s| s["name"].as_str() == Some("area"));
     assert!(area_sub.is_some());
-    assert_eq!(area_sub.unwrap()["kind"], 12); // Function
+    let area_sub = area_sub.ok_or("area sub not found")?;
+    assert_eq!(area_sub["kind"], 12); // Function
+
+    Ok(())
 }
 
 #[test]
-fn test_document_symbols_with_labels() {
+fn test_document_symbols_with_labels() -> TestResult {
     let mut server = setup_server();
 
     let content = r#"
@@ -288,18 +304,20 @@ sub process {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
-    let result = response.result.unwrap();
+    let response = server.handle_request(request).ok_or("No response from server")?;
+    let result = response.result.ok_or("Missing result")?;
 
-    let symbols = result.as_array().unwrap();
+    let symbols = result.as_array().ok_or("Result is not an array")?;
 
     // Check for subroutine
     let process_sub = symbols.iter().find(|s| s["name"].as_str() == Some("process"));
     assert!(process_sub.is_some());
+
+    Ok(())
 }
 
 #[test]
-fn test_document_symbols_all_variable_types() {
+fn test_document_symbols_all_variable_types() -> TestResult {
     let mut server = setup_server();
 
     let content = r#"
@@ -328,25 +346,28 @@ state $persistent = 0;
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
-    let result = response.result.unwrap();
+    let response = server.handle_request(request).ok_or("No response from server")?;
+    let result = response.result.ok_or("Missing result")?;
 
-    let symbols = result.as_array().unwrap();
+    let symbols = result.as_array().ok_or("Result is not an array")?;
 
     // Check for scalar variables
     let scalar = symbols.iter().find(|s| s["name"].as_str() == Some("$scalar"));
     assert!(scalar.is_some());
-    assert_eq!(scalar.unwrap()["kind"], 13); // Variable
+    let scalar = scalar.ok_or("$scalar not found")?;
+    assert_eq!(scalar["kind"], 13); // Variable
 
     // Check for array variables
     let array = symbols.iter().find(|s| s["name"].as_str() == Some("@array"));
     assert!(array.is_some());
-    assert_eq!(array.unwrap()["kind"], 18); // Array
+    let array = array.ok_or("@array not found")?;
+    assert_eq!(array["kind"], 18); // Array
 
     // Check for hash variables
     let hash = symbols.iter().find(|s| s["name"].as_str() == Some("%hash"));
     assert!(hash.is_some());
-    assert_eq!(hash.unwrap()["kind"], 19); // Object (closest to hash)
+    let hash = hash.ok_or("%hash not found")?;
+    assert_eq!(hash["kind"], 19); // Object (closest to hash)
 
     // Check for shared variables
     let shared_scalar = symbols.iter().find(|s| s["name"].as_str() == Some("$shared_scalar"));
@@ -357,10 +378,12 @@ state $persistent = 0;
 
     let shared_hash = symbols.iter().find(|s| s["name"].as_str() == Some("%shared_hash"));
     assert!(shared_hash.is_some());
+
+    Ok(())
 }
 
 #[test]
-fn test_document_symbols_hierarchical_structure() {
+fn test_document_symbols_hierarchical_structure() -> TestResult {
     let mut server = setup_server();
 
     let content = r#"
@@ -370,7 +393,7 @@ my $package_var = 1;
 
 sub parent_method {
     my $method_var = 2;
-    
+
     if (1) {
         my $block_var = 3;
     }
@@ -396,10 +419,10 @@ sub child_method {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
-    let result = response.result.unwrap();
+    let response = server.handle_request(request).ok_or("No response from server")?;
+    let result = response.result.ok_or("Missing result")?;
 
-    let symbols = result.as_array().unwrap();
+    let symbols = result.as_array().ok_or("Result is not an array")?;
 
     // Check that we have the expected top-level symbols
     assert!(symbols.iter().any(|s| s["name"].as_str() == Some("Parent")));
@@ -407,4 +430,6 @@ sub child_method {
     assert!(symbols.iter().any(|s| s["name"].as_str() == Some("parent_method")));
     assert!(symbols.iter().any(|s| s["name"].as_str() == Some("child_method")));
     assert!(symbols.iter().any(|s| s["name"].as_str() == Some("$package_var")));
+
+    Ok(())
 }

@@ -213,21 +213,28 @@ impl AdvancedTestContext {
 // ===================== Snippet Tests =====================
 
 #[test]
-fn test_snippet_completion() {
+fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
     let ctx = AdvancedTestContext::new_initialized();
 
     // Test getting snippet completions
     let completions = ctx.get_snippet_completions("su");
     assert!(!completions.is_empty(), "Should find 'sub' snippet");
 
-    let sub_snippet =
-        completions.iter().find(|c| c["label"] == "sub").expect("Should have sub snippet");
+    let sub_snippet = completions
+        .iter()
+        .find(|c| c["label"] == "sub")
+        .ok_or("Should have sub snippet")?;
 
     assert_eq!(sub_snippet["insertTextFormat"], 2, "Should be snippet format");
+    let insert_text = sub_snippet["insertText"]
+        .as_str()
+        .ok_or("insertText should be a string")?;
     assert!(
-        sub_snippet["insertText"].as_str().unwrap().contains("${1:function_name}"),
+        insert_text.contains("${1:function_name}"),
         "Should contain snippet placeholders"
     );
+
+    Ok(())
 }
 
 #[test]

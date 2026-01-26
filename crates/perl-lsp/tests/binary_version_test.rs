@@ -1,3 +1,4 @@
+
 //! Binary version regression test
 //!
 //! This test ensures that the LSP server binary being tested matches the

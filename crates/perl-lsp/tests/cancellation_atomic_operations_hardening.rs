@@ -1,5 +1,4 @@
 //! Targeted mutation hardening tests for LSP cancellation atomic operations
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //!
 //! This test suite specifically targets surviving mutants in the cancellation.rs
 //! module by focusing on atomic operations, state transitions, and performance
@@ -24,6 +23,8 @@ use serde_json::json;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Direct atomic operations testing - targets AtomicBool load/store mutations
 #[cfg(test)]
@@ -171,7 +172,7 @@ mod atomic_state_transition_tests {
 
     /// Test atomic ordering mutations under concurrent access
     #[test]
-    fn test_atomic_ordering_mutations_concurrent() {
+    fn test_atomic_ordering_mutations_concurrent() -> TestResult {
         let token = Arc::new(PerlLspCancellationToken::new(json!(6), "concurrent".to_string()));
         let num_threads = 10;
         let iterations = 100;
@@ -222,11 +223,12 @@ mod atomic_state_transition_tests {
 
         // Wait for all threads
         for handle in handles {
-            handle.join().expect("Thread should complete without panic");
+            handle.join().map_err(|_| "Thread should complete without panic")?;
         }
 
         // Final state should be cancelled (since we have canceller threads)
         assert!(token.is_cancelled(), "Final state should be cancelled");
+        Ok(())
     }
 }
 
@@ -258,7 +260,7 @@ mod registry_coordination_hardening_tests {
 
     /// Test get_token RwLock read operations mutations
     #[test]
-    fn test_get_token_rwlock_mutations() {
+    fn test_get_token_rwlock_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
         let request_id = json!(101);
         let token = PerlLspCancellationToken::new(request_id.clone(), "get_test".to_string());
@@ -268,18 +270,19 @@ mod registry_coordination_hardening_tests {
         assert!(result.is_none(), "get_token must return None for non-existent token");
 
         // Register and test get - targets RwLock::read() success case
-        registry.register_token(token.clone()).unwrap();
+        registry.register_token(token.clone())?;
         let result = registry.get_token(&request_id);
         assert!(result.is_some(), "get_token must return Some for existing token");
 
-        let retrieved = result.unwrap();
+        let retrieved = result.ok_or("Failed to retrieve token")?;
         assert_eq!(retrieved.request_id(), &request_id, "Retrieved token must match request ID");
         assert_eq!(retrieved.provider(), "get_test", "Retrieved token must match provider");
+        Ok(())
     }
 
     /// Test is_cancelled registry lookup mutations
     #[test]
-    fn test_is_cancelled_registry_lookup_mutations() {
+    fn test_is_cancelled_registry_lookup_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
         let request_id = json!(102);
         let token = PerlLspCancellationToken::new(request_id.clone(), "lookup_test".to_string());
@@ -291,7 +294,7 @@ mod registry_coordination_hardening_tests {
         );
 
         // Register uncancelled token and test
-        registry.register_token(token.clone()).unwrap();
+        registry.register_token(token.clone())?;
         assert!(
             !registry.is_cancelled(&request_id),
             "is_cancelled must return false for uncancelled token"
@@ -303,17 +306,18 @@ mod registry_coordination_hardening_tests {
             registry.is_cancelled(&request_id),
             "is_cancelled must return true after token cancellation"
         );
+        Ok(())
     }
 
     /// Test cancel_request coordination mutations
     #[test]
-    fn test_cancel_request_coordination_mutations() {
+    fn test_cancel_request_coordination_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
         let request_id = json!(103);
         let token = PerlLspCancellationToken::new(request_id.clone(), "cancel_test".to_string());
 
         // Register token
-        registry.register_token(token.clone()).unwrap();
+        registry.register_token(token.clone())?;
 
         // Test cancel_request - targets RwLock::read() + token.cancel() coordination
         let result = registry.cancel_request(&request_id);
@@ -327,17 +331,18 @@ mod registry_coordination_hardening_tests {
         let non_existent_id = json!(999999);
         let result = registry.cancel_request(&non_existent_id);
         assert!(result.is_ok(), "cancel_request must succeed even for non-existent token");
+        Ok(())
     }
 
     /// Test remove_request cleanup mutations
     #[test]
-    fn test_remove_request_cleanup_mutations() {
+    fn test_remove_request_cleanup_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
         let request_id = json!(104);
         let token = PerlLspCancellationToken::new(request_id.clone(), "remove_test".to_string());
 
         // Register and verify presence
-        registry.register_token(token.clone()).unwrap();
+        registry.register_token(token.clone())?;
         assert_eq!(registry.active_count(), 1, "Token must be registered");
 
         // Remove and verify absence - targets HashMap::remove() success
@@ -351,17 +356,18 @@ mod registry_coordination_hardening_tests {
         // Test remove non-existent - targets removal idempotence
         registry.remove_request(&request_id);
         assert_eq!(registry.active_count(), 0, "Remove non-existent should be safe");
+        Ok(())
     }
 
     /// Test registry caching mutations
     #[test]
-    fn test_registry_cache_mutations() {
+    fn test_registry_cache_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
         let request_id = json!(105);
         let token = PerlLspCancellationToken::new(request_id.clone(), "cache_test".to_string());
 
         // Register token
-        registry.register_token(token.clone()).unwrap();
+        registry.register_token(token.clone())?;
 
         // First access - cache miss, should populate cache
         let result1 = registry.get_token(&request_id);
@@ -372,8 +378,8 @@ mod registry_coordination_hardening_tests {
         assert!(result2.is_some(), "Second access should hit cache");
 
         // Verify both results are equivalent - targets cache correctness
-        let token1 = result1.unwrap();
-        let token2 = result2.unwrap();
+        let token1 = result1.ok_or("First access failed to retrieve token")?;
+        let token2 = result2.ok_or("Second access failed to retrieve token")?;
         assert_eq!(token1.request_id(), token2.request_id(), "Cached token must match original");
         assert_eq!(token1.provider(), token2.provider(), "Cached token provider must match");
 
@@ -381,11 +387,12 @@ mod registry_coordination_hardening_tests {
         token.cancel();
         let cached_cancelled = registry.is_cancelled(&request_id);
         assert!(cached_cancelled, "Cached token must reflect cancellation state");
+        Ok(())
     }
 
     /// Test concurrent registry operations mutations
     #[test]
-    fn test_concurrent_registry_operations_mutations() {
+    fn test_concurrent_registry_operations_mutations() -> TestResult {
         let registry = Arc::new(CancellationRegistry::new());
         let base_id = 200;
         let num_threads = 8;
@@ -436,7 +443,7 @@ mod registry_coordination_hardening_tests {
 
         // Wait for all operations to complete
         for handle in handles {
-            handle.join().expect("Concurrent operation should not panic");
+            handle.join().map_err(|_| "Concurrent operation should not panic")?;
         }
 
         // Registry should be in a consistent state (no panics = success)
@@ -445,6 +452,7 @@ mod registry_coordination_hardening_tests {
 
         // Any final count is acceptable as long as no panics occurred
         // This test primarily targets thread safety mutations
+        Ok(())
     }
 }
 
@@ -529,13 +537,13 @@ mod performance_optimization_hardening_tests {
 
     /// Test registry fast path vs slow path mutations
     #[test]
-    fn test_registry_fast_slow_path_mutations() {
+    fn test_registry_fast_slow_path_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
         let request_id = json!(302);
         let token = PerlLspCancellationToken::new(request_id.clone(), "path_test".to_string());
 
         // Register token
-        registry.register_token(token.clone()).unwrap();
+        registry.register_token(token.clone())?;
 
         // First call - slow path (cache miss)
         let start_slow = Instant::now();
@@ -552,18 +560,19 @@ mod performance_optimization_hardening_tests {
         assert!(result_fast.is_some(), "Fast path should succeed");
 
         // Results should be equivalent - targets cache correctness
-        let token_slow = result_slow.unwrap();
-        let token_fast = result_fast.unwrap();
+        let token_slow = result_slow.ok_or("Slow path failed to retrieve token")?;
+        let token_fast = result_fast.ok_or("Fast path failed to retrieve token")?;
         assert_eq!(token_slow.request_id(), token_fast.request_id(), "Path results must match");
 
         // Fast path should generally be faster, but we won't assert on timing
         // since it's unreliable in test environments
         println!("Path performance: slow={:?}, fast={:?}", duration_slow, duration_fast);
+        Ok(())
     }
 
     /// Test cache size limit and eviction mutations
     #[test]
-    fn test_cache_eviction_mutations() {
+    fn test_cache_eviction_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
         let cache_size_limit = 100; // Matches registry.max_cache_size
 
@@ -572,7 +581,7 @@ mod performance_optimization_hardening_tests {
             let request_id = json!(400 + i);
             let token =
                 PerlLspCancellationToken::new(request_id.clone(), "eviction_test".to_string());
-            registry.register_token(token).unwrap();
+            registry.register_token(token)?;
 
             // Access to populate cache
             let _ = registry.get_token(&request_id);
@@ -585,14 +594,15 @@ mod performance_optimization_hardening_tests {
         let test_id = json!(400 + cache_size_limit + 50);
         let test_token =
             PerlLspCancellationToken::new(test_id.clone(), "post_eviction".to_string());
-        registry.register_token(test_token).unwrap();
+        registry.register_token(test_token)?;
 
         let result = registry.get_token(&test_id);
         assert!(result.is_some(), "Operations must work after cache eviction");
 
         // Test cancellation still works
-        registry.cancel_request(&test_id).unwrap();
+        registry.cancel_request(&test_id)?;
         assert!(registry.is_cancelled(&test_id), "Cancellation must work after cache eviction");
+        Ok(())
     }
 }
 
@@ -675,7 +685,7 @@ mod metrics_atomic_counter_hardening_tests {
 
     /// Test concurrent metrics operations mutations
     #[test]
-    fn test_concurrent_metrics_mutations() {
+    fn test_concurrent_metrics_mutations() -> TestResult {
         let metrics = Arc::new(CancellationMetrics::new());
         let num_threads = 10;
         let increments_per_thread = 100;
@@ -707,7 +717,7 @@ mod metrics_atomic_counter_hardening_tests {
 
         // Wait for all threads
         for handle in handles {
-            handle.join().expect("Metrics thread should not panic");
+            handle.join().map_err(|_| "Metrics thread should not panic")?;
         }
 
         // Calculate expected counts
@@ -750,11 +760,12 @@ mod metrics_atomic_counter_hardening_tests {
             "Concurrent metrics final counts: registered={}, cancelled={}, completed={}",
             final_registered, final_cancelled, final_completed
         );
+        Ok(())
     }
 
     /// Test registry metrics integration mutations
     #[test]
-    fn test_registry_metrics_integration_mutations() {
+    fn test_registry_metrics_integration_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
         let initial_metrics = registry.metrics();
 
@@ -765,7 +776,7 @@ mod metrics_atomic_counter_hardening_tests {
 
         // Register a token - should increment registered counter
         let token = PerlLspCancellationToken::new(json!(500), "metrics_test".to_string());
-        registry.register_token(token.clone()).unwrap();
+        registry.register_token(token.clone())?;
 
         assert_eq!(
             initial_metrics.registered_count(),
@@ -774,7 +785,7 @@ mod metrics_atomic_counter_hardening_tests {
         );
 
         // Cancel request - should increment cancelled counter
-        registry.cancel_request(&json!(500)).unwrap();
+        registry.cancel_request(&json!(500))?;
         assert_eq!(
             initial_metrics.cancelled_count(),
             1,
@@ -793,6 +804,7 @@ mod metrics_atomic_counter_hardening_tests {
         assert_eq!(initial_metrics.registered_count(), 1, "Registered count must persist");
         assert_eq!(initial_metrics.cancelled_count(), 1, "Cancelled count must persist");
         assert_eq!(initial_metrics.completed_count(), 1, "Completed count must persist");
+        Ok(())
     }
 
     /// Test memory overhead calculation mutations
@@ -863,7 +875,7 @@ mod global_registry_hardening_tests {
 
     /// Test global registry thread safety mutations
     #[test]
-    fn test_global_registry_thread_safety_mutations() {
+    fn test_global_registry_thread_safety_mutations() -> TestResult {
         let num_threads = 5;
         let ops_per_thread = 20;
         let mut handles = Vec::new();
@@ -895,7 +907,7 @@ mod global_registry_hardening_tests {
 
         // Wait for all threads - tests concurrent access safety
         for handle in handles {
-            handle.join().expect("Global registry thread should not panic");
+            handle.join().map_err(|_| "Global registry thread should not panic")?;
         }
 
         // Global registry should remain in consistent state
@@ -904,6 +916,7 @@ mod global_registry_hardening_tests {
 
         // Should be 0 or close to 0 since we cleaned up
         assert!(final_count < 10, "Global registry should be mostly clean after operations");
+        Ok(())
     }
 }
 

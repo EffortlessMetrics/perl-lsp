@@ -1,5 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use serde_json::json;
 
 mod support;
@@ -7,7 +5,7 @@ use support::lsp_client::LspClient;
 
 #[test]
 
-fn prepare_and_subtypes() {
+fn prepare_and_subtypes() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
     let uri = "file:///isa.pl";
@@ -16,7 +14,7 @@ fn prepare_and_subtypes() {
     client.did_open(uri, "perl", source);
 
     // Prepare type hierarchy at "Base"
-    let base_col = source.find("Base").unwrap();
+    let base_col = source.find("Base").ok_or("Failed to find 'Base' in source")?;
     let prep_response = client.request(
         "textDocument/prepareTypeHierarchy",
         json!({
@@ -25,8 +23,9 @@ fn prepare_and_subtypes() {
         }),
     );
 
-    let items =
-        prep_response["result"].as_array().expect("prepareTypeHierarchy should return an array");
+    let items = prep_response["result"]
+        .as_array()
+        .ok_or("prepareTypeHierarchy should return an array")?;
 
     assert!(!items.is_empty(), "Should prepare type hierarchy item");
     let base_item = &items[0];
@@ -40,13 +39,15 @@ fn prepare_and_subtypes() {
         }),
     );
 
-    let subtypes = subtypes_response["result"].as_array().expect("subtypes should return an array");
+    let subtypes = subtypes_response["result"]
+        .as_array()
+        .ok_or("subtypes should return an array")?;
 
     assert_eq!(subtypes.len(), 1, "Base should have one direct subtype");
     assert_eq!(subtypes[0]["name"], "Child", "Subtype should be Child");
 
     // Get supertypes of Child
-    let child_col = source.find("Child").unwrap();
+    let child_col = source.find("Child").ok_or("Failed to find 'Child' in source")?;
     let child_prep = client.request(
         "textDocument/prepareTypeHierarchy",
         json!({
@@ -55,8 +56,9 @@ fn prepare_and_subtypes() {
         }),
     );
 
-    let child_items =
-        child_prep["result"].as_array().expect("prepareTypeHierarchy should return an array");
+    let child_items = child_prep["result"]
+        .as_array()
+        .ok_or("prepareTypeHierarchy should return an array")?;
     let child_item = &child_items[0];
 
     let supertypes_response = client.request(
@@ -66,18 +68,20 @@ fn prepare_and_subtypes() {
         }),
     );
 
-    let supertypes =
-        supertypes_response["result"].as_array().expect("supertypes should return an array");
+    let supertypes = supertypes_response["result"]
+        .as_array()
+        .ok_or("supertypes should return an array")?;
 
     assert_eq!(supertypes.len(), 1, "Child should have one direct supertype");
     assert_eq!(supertypes[0]["name"], "Base", "Supertype should be Base");
 
     client.shutdown();
+    Ok(())
 }
 
 #[test]
 
-fn multiple_inheritance() {
+fn multiple_inheritance() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
     let uri = "file:///multi.pl";
@@ -92,7 +96,7 @@ use parent qw(Mixin1 Mixin2);
     client.did_open(uri, "perl", source);
 
     // Find position of "Combined"
-    let col = source.find("Combined").unwrap();
+    let col = source.find("Combined").ok_or("Failed to find 'Combined' in source")?;
     let line = source[..col].matches('\n').count();
     let char_pos = col - source[..col].rfind('\n').map(|p| p + 1).unwrap_or(0);
 
@@ -104,8 +108,9 @@ use parent qw(Mixin1 Mixin2);
         }),
     );
 
-    let items =
-        prep_response["result"].as_array().expect("prepareTypeHierarchy should return an array");
+    let items = prep_response["result"]
+        .as_array()
+        .ok_or("prepareTypeHierarchy should return an array")?;
 
     assert!(!items.is_empty(), "Should prepare type hierarchy item");
     let combined_item = &items[0];
@@ -118,23 +123,32 @@ use parent qw(Mixin1 Mixin2);
         }),
     );
 
-    let supertypes =
-        supertypes_response["result"].as_array().expect("supertypes should return an array");
+    let supertypes = supertypes_response["result"]
+        .as_array()
+        .ok_or("supertypes should return an array")?;
 
     assert_eq!(supertypes.len(), 2, "Combined should have two supertypes");
 
-    let names: Vec<String> =
-        supertypes.iter().map(|item| item["name"].as_str().unwrap().to_string()).collect();
+    let names: Vec<String> = supertypes
+        .iter()
+        .map(|item| {
+            item["name"]
+                .as_str()
+                .ok_or("Item name should be a string")
+                .map(|s| s.to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
     assert!(names.contains(&"Mixin1".to_string()), "Should have Mixin1 as parent");
     assert!(names.contains(&"Mixin2".to_string()), "Should have Mixin2 as parent");
 
     client.shutdown();
+    Ok(())
 }
 
 #[test]
 
-fn isa_array_inheritance() {
+fn isa_array_inheritance() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
     let uri = "file:///isa.pl";
@@ -149,7 +163,7 @@ our @ISA = ('Parent1', 'Parent2');
     client.did_open(uri, "perl", source);
 
     // Find position of "Child"
-    let col = source.find("Child").unwrap();
+    let col = source.find("Child").ok_or("Failed to find 'Child' in source")?;
     let line = source[..col].matches('\n').count();
     let char_pos = col - source[..col].rfind('\n').map(|p| p + 1).unwrap_or(0);
 
@@ -161,8 +175,9 @@ our @ISA = ('Parent1', 'Parent2');
         }),
     );
 
-    let items =
-        prep_response["result"].as_array().expect("prepareTypeHierarchy should return an array");
+    let items = prep_response["result"]
+        .as_array()
+        .ok_or("prepareTypeHierarchy should return an array")?;
 
     assert!(!items.is_empty(), "Should prepare type hierarchy item");
     let child_item = &items[0];
@@ -175,23 +190,32 @@ our @ISA = ('Parent1', 'Parent2');
         }),
     );
 
-    let supertypes =
-        supertypes_response["result"].as_array().expect("supertypes should return an array");
+    let supertypes = supertypes_response["result"]
+        .as_array()
+        .ok_or("supertypes should return an array")?;
 
     assert_eq!(supertypes.len(), 2, "Child should have two supertypes via @ISA");
 
-    let names: Vec<String> =
-        supertypes.iter().map(|item| item["name"].as_str().unwrap().to_string()).collect();
+    let names: Vec<String> = supertypes
+        .iter()
+        .map(|item| {
+            item["name"]
+                .as_str()
+                .ok_or("Item name should be a string")
+                .map(|s| s.to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
     assert!(names.contains(&"Parent1".to_string()), "Should have Parent1 in @ISA");
     assert!(names.contains(&"Parent2".to_string()), "Should have Parent2 in @ISA");
 
     client.shutdown();
+    Ok(())
 }
 
 #[test]
 
-fn type_hierarchy_ignores_string_literals() {
+fn type_hierarchy_ignores_string_literals() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
     let uri = "file:///string.pl";
@@ -208,7 +232,7 @@ sub test {
     client.did_open(uri, "perl", source);
 
     // Try to get type hierarchy on the string literal 'Base'
-    let string_col = source.find("'Base'").unwrap();
+    let string_col = source.find("'Base'").ok_or("Failed to find 'Base' in source")?;
     let line = source[..string_col].matches('\n').count();
     let char_pos = (string_col + 1) - source[..string_col].rfind('\n').map(|p| p + 1).unwrap_or(0); // +1 to be inside the string
 
@@ -229,7 +253,7 @@ sub test {
     }
 
     // Now test that the actual package Base works
-    let package_col = source.find("package Base").unwrap() + 8; // Position on "Base"
+    let package_col = source.find("package Base").ok_or("Failed to find 'package Base' in source")? + 8; // Position on "Base"
     let prep_response2 = client.request(
         "textDocument/prepareTypeHierarchy",
         json!({
@@ -238,9 +262,12 @@ sub test {
         }),
     );
 
-    let items = prep_response2["result"].as_array().expect("Package should have type hierarchy");
+    let items = prep_response2["result"]
+        .as_array()
+        .ok_or("Package should have type hierarchy")?;
     assert!(!items.is_empty(), "Package Base should be found");
     assert_eq!(items[0]["name"], "Base", "Should find the Base package");
 
     client.shutdown();
+    Ok(())
 }

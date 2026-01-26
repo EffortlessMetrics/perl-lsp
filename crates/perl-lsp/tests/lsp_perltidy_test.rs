@@ -7,7 +7,7 @@ use serde_json::json;
 /// NOTE: Feature incomplete - workspace_roots() returns empty, so code actions don't include pragma suggestions
 #[cfg(feature = "lsp-extras")]
 #[test]
-fn test_pragma_code_actions() {
+fn test_pragma_code_actions() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = LspServer::new();
 
     // Initialize server
@@ -64,10 +64,13 @@ fn test_pragma_code_actions() {
         })),
     };
 
-    let response = srv.handle_request(actions_req).unwrap();
+    let response = srv.handle_request(actions_req)
+        .ok_or("Failed to get response from code action request")?;
 
-    let result = response.result.expect("Expected result");
-    let actions = result.as_array().expect("Expected array of actions");
+    let result = response.result
+        .ok_or("Expected result in code action response")?;
+    let actions = result.as_array()
+        .ok_or("Expected array of actions in code action result")?;
 
     // Look for pragma actions
     let has_strict_action = actions.iter().any(|a| a["title"].as_str() == Some("Add use strict;"));
@@ -76,12 +79,13 @@ fn test_pragma_code_actions() {
 
     assert!(has_strict_action, "Expected 'Add use strict;' action");
     assert!(has_warnings_action, "Expected 'Add use warnings;' action");
+
+    Ok(())
 }
 
 /// Test that formatting provider is advertised when perltidy is available
 #[test]
-
-fn test_formatting_provider_capability() {
+fn test_formatting_provider_capability() -> Result<(), Box<dyn std::error::Error>> {
     let has_perltidy = perl_lsp::execute_command::command_exists("perltidy");
 
     let mut srv = LspServer::new();
@@ -95,9 +99,11 @@ fn test_formatting_provider_capability() {
         })),
     };
 
-    let response = srv.handle_request(init_req).unwrap();
+    let response = srv.handle_request(init_req)
+        .ok_or("Failed to get response from initialize request")?;
 
-    let result = response.result.expect("Expected result");
+    let result = response.result
+        .ok_or("Expected result in initialize response")?;
     let has_formatting =
         result["capabilities"]["documentFormattingProvider"].as_bool().unwrap_or(false);
 
@@ -106,4 +112,6 @@ fn test_formatting_provider_capability() {
         has_formatting, has_perltidy,
         "documentFormattingProvider should match perltidy availability"
     );
+
+    Ok(())
 }

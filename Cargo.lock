@@ -1448,6 +1448,7 @@ dependencies = [
  "glob",
  "once_cell",
  "perl-parser",
+ "perl-tdd-support",
  "proptest",
  "rand",
  "regex",
@@ -1466,6 +1467,7 @@ dependencies = [
  "lsp-types",
  "nix",
  "perl-parser",
+ "perl-tdd-support",
  "proptest",
  "regex",
  "ropey",
@@ -1494,6 +1496,7 @@ dependencies = [
  "lsp-types",
  "perl-lexer",
  "perl-parser-core",
+ "perl-tdd-support",
  "ropey",
  "serde_json",
  "tracing",
@@ -1524,13 +1527,13 @@ dependencies = [
  "md5",
  "nix",
  "parking_lot",
- "perl-corpus",
  "perl-lexer",
  "perl-lsp-protocol",
  "perl-lsp-providers",
  "perl-lsp-transport",
  "perl-parser",
  "perl-position-tracking",
+ "perl-tdd-support",
  "phf",
  "predicates",
  "pretty_assertions",
@@ -1572,6 +1575,7 @@ dependencies = [
  "perl-position-tracking",
  "perl-refactoring",
  "perl-semantic-analyzer",
+ "perl-tdd-support",
  "perl-workspace-index",
  "regex",
  "rustc-hash",
@@ -1636,6 +1640,7 @@ version = "0.8.8"
 dependencies = [
  "perl-lexer",
  "perl-position-tracking",
+ "perl-tdd-support",
  "phf",
  "ropey",
  "serde",
@@ -1673,6 +1678,7 @@ name = "perl-refactoring"
 version = "0.8.8"
 dependencies = [
  "perl-parser-core",
+ "perl-tdd-support",
  "perl-workspace-index",
  "regex",
  "serde",
@@ -1685,6 +1691,7 @@ version = "0.8.8"
 dependencies = [
  "perl-parser-core",
  "perl-symbol-types",
+ "perl-tdd-support",
  "perl-workspace-index",
  "regex",
  "rustc-hash",
@@ -1722,6 +1729,7 @@ dependencies = [
 name = "perl-uri"
 version = "0.8.8"
 dependencies = [
+ "perl-tdd-support",
  "tempfile",
  "url",
 ]
@@ -1737,6 +1745,7 @@ dependencies = [
  "perl-parser-core",
  "perl-position-tracking",
  "perl-symbol-types",
+ "perl-tdd-support",
  "perl-uri",
  "regex",
  "serde",

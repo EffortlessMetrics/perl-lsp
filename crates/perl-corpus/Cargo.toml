@@ -6,9 +6,9 @@ rust-version.workspace = true
 license = "MIT OR Apache-2.0"
 description = "Test corpus management and generators for Perl parsers"
 readme = "README.md"
-repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 documentation = "https://docs.rs/perl-corpus"
-homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 keywords = ["perl", "corpus", "proptest", "testing"]
 categories = ["development-tools", "testing"]
 include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
@@ -38,6 +38,7 @@ rand = "0.9.2"
 [dev-dependencies]
 proptest = "1.9.0"
 perl-parser = { workspace = true }
+perl-tdd-support = { workspace = true }
 
 [features]
 default = []

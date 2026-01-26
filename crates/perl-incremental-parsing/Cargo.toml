@@ -7,8 +7,8 @@ authors = ["Tree-sitter Perl Contributors"]
 description = "Incremental parsing support for Perl"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 documentation = "https://docs.rs/perl-incremental-parsing"
 keywords = ["perl", "incremental", "parser", "lsp"]
 categories = ["parsing", "development-tools", "text-editors"]
@@ -33,6 +33,9 @@ tracing = "0.1.44"
 
 [features]
 default = []
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
 
 [lints]
 workspace = true

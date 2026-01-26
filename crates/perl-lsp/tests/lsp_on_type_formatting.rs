@@ -3,7 +3,7 @@ use serde_json::json;
 
 #[test]
 
-fn on_type_braces_indent() {
+fn on_type_braces_indent() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -51,23 +51,24 @@ fn on_type_braces_indent() {
             "options": {"tabSize": 4, "insertSpaces": true}
         })),
     };
-    let res = srv.handle_request(req).unwrap();
-    let edits = res.result.unwrap();
+    let res = srv.handle_request(req).ok_or("onTypeFormatting request failed")?;
+    let edits = res.result.ok_or("onTypeFormatting response missing result")?;
 
     // Should return edits or null
     if !edits.is_null() {
-        let edits_array = edits.as_array().unwrap();
+        let edits_array = edits.as_array().ok_or("edits result is not an array")?;
         // Verify edit structure
         for edit in edits_array {
             assert!(edit.get("range").is_some(), "edit should have range");
             assert!(edit.get("newText").is_some(), "edit should have newText");
         }
     }
+    Ok(())
 }
 
 #[test]
 
-fn on_type_closing_brace_dedent() {
+fn on_type_closing_brace_dedent() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -115,12 +116,13 @@ fn on_type_closing_brace_dedent() {
             "options": {"tabSize": 4, "insertSpaces": true}
         })),
     };
-    let res = srv.handle_request(req).unwrap();
-    let edits = res.result.unwrap();
+    let res = srv.handle_request(req).ok_or("onTypeFormatting request failed")?;
+    let edits = res.result.ok_or("onTypeFormatting response missing result")?;
 
     // Should return edits for dedent or null if already properly formatted
     if !edits.is_null() {
-        let edits_array = edits.as_array().unwrap();
+        let edits_array = edits.as_array().ok_or("edits result is not an array")?;
         assert!(!edits_array.is_empty(), "should have dedent edits");
     }
+    Ok(())
 }

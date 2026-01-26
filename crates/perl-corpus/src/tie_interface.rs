@@ -535,6 +535,7 @@ pub fn tie_cases_by_tags_all(tags: &[&str]) -> Vec<&'static TieInterfaceCase> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
     use std::collections::HashSet;
 
     #[test]
@@ -573,7 +574,7 @@ mod tests {
     fn tie_case_find_by_id() {
         let case = find_tie_case("tie.scalar.basic");
         assert!(case.is_some());
-        assert_eq!(case.unwrap().id, "tie.scalar.basic");
+        assert_eq!(must_some(case).id, "tie.scalar.basic");
     }
 
     #[test]

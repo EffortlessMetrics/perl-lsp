@@ -3,8 +3,6 @@
 //! This test suite targets surviving mutants in LSP cancellation handling logic
 //! by implementing comprehensive edge case coverage for concurrent request
 //! cancellation scenarios, timeout handling, and workspace operations.
-
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //!
 //! Focuses on eliminating mutants in:
 //! - `is_cancelled()` boolean logic boundary conditions
@@ -83,7 +81,7 @@ impl MockLspState {
 
     /// Get current operation count
     fn operation_count(&self) -> u32 {
-        self.concurrent_operations.lock().map(|ops| *ops).unwrap_or(0)
+        self.concurrent_operations.lock().ok().map_or(0, |ops| *ops)
     }
 }
 
@@ -106,7 +104,7 @@ mod cancellation_boolean_logic_tests {
         #[case] request_id: Value,
         #[case] should_cancel: bool,
         #[case] expected_result: bool,
-    ) {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let state = MockLspState::new();
 
         // Set up cancellation state
@@ -129,11 +127,13 @@ mod cancellation_boolean_logic_tests {
             "Inconsistent cancellation check results for {:?}",
             request_id
         );
+
+        Ok(())
     }
 
     /// Test NOT operator mutations in cancellation logic
     #[test]
-    fn test_cancellation_not_operator_mutations() {
+    fn test_cancellation_not_operator_mutations() -> Result<(), Box<dyn std::error::Error>> {
         let state = MockLspState::new();
         let request_id = json!(12345);
 
@@ -151,11 +151,13 @@ mod cancellation_boolean_logic_tests {
         // Test edge case: multiple clears don't change state
         state.cancel_clear(&request_id);
         assert!(!state.is_cancelled(&request_id), "Multiple clears should be safe");
+
+        Ok(())
     }
 
     /// Test concurrent cancellation and checking to expose race condition mutations
     #[test]
-    fn test_concurrent_cancellation_race_conditions() {
+    fn test_concurrent_cancellation_race_conditions() -> Result<(), Box<dyn std::error::Error>> {
         let state = MockLspState::new();
         let request_ids: Vec<Value> = (1..=10).map(|i| json!(i)).collect();
         let mut handles = Vec::new();
@@ -183,7 +185,7 @@ mod cancellation_boolean_logic_tests {
 
         // Wait for all threads to complete
         for handle in handles {
-            handle.join().expect("Thread should complete successfully");
+            handle.join().map_err(|_| "Thread should complete successfully")?;
         }
 
         // Verify final state consistency
@@ -192,11 +194,13 @@ mod cancellation_boolean_logic_tests {
             // After clearing, all should be not cancelled
             assert!(!final_state, "Final state should be not cancelled for {:?}", id);
         }
+
+        Ok(())
     }
 
     /// Test boundary conditions with empty and full cancellation sets
     #[test]
-    fn test_cancellation_set_boundary_conditions() {
+    fn test_cancellation_set_boundary_conditions() -> Result<(), Box<dyn std::error::Error>> {
         let state = MockLspState::new();
 
         // Test with empty set
@@ -225,6 +229,8 @@ mod cancellation_boolean_logic_tests {
             !state.is_cancelled(&json!(99999)),
             "Non-existent ID should not be found in large set"
         );
+
+        Ok(())
     }
 }
 
@@ -235,7 +241,7 @@ mod workspace_cancellation_tests {
 
     /// Test cancellation during workspace indexing operations
     #[test]
-    fn test_workspace_indexing_cancellation() {
+    fn test_workspace_indexing_cancellation() -> Result<(), Box<dyn std::error::Error>> {
         let state = MockLspState::new();
         let workspace_index = WorkspaceIndex::new();
         let large_perl_content = generate_large_perl_file(1000); // 1000 functions
@@ -276,7 +282,7 @@ mod workspace_cancellation_tests {
         state.mark_cancelled(&request_id);
 
         // Wait for indexing to complete or be cancelled
-        let result = indexing_handle.join().expect("Indexing thread should complete");
+        let result = indexing_handle.join().map_err(|_| "Indexing thread should complete")?;
 
         // Verify cancellation was detected
         match result {
@@ -292,13 +298,17 @@ mod workspace_cancellation_tests {
                 // Completed before cancellation - acceptable for this test
                 println!("Indexing completed before cancellation could take effect");
             }
-            Err(other) => panic!("Unexpected error: {}", other),
+            Err(other) => {
+                return Err(format!("Unexpected error: {}", other).into());
+            }
         }
+
+        Ok(())
     }
 
     /// Test multiple concurrent requests with selective cancellation
     #[test]
-    fn test_selective_request_cancellation() {
+    fn test_selective_request_cancellation() -> Result<(), Box<dyn std::error::Error>> {
         let state = MockLspState::new();
         let request_ids: Vec<Value> = (6001..=6010).map(|i| json!(i)).collect();
         let mut handles = Vec::new();
@@ -343,7 +353,7 @@ mod workspace_cancellation_tests {
         let mut completed_count = 0;
 
         for (handle, id, is_odd) in handles {
-            let result = handle.join().expect("Thread should complete");
+            let result = handle.join().map_err(|_| "Thread should complete")?;
             if result.contains("Cancelled") {
                 cancelled_count += 1;
                 assert!(is_odd, "Only odd-numbered requests should be cancelled: {:?}", id);
@@ -356,6 +366,8 @@ mod workspace_cancellation_tests {
         assert!(cancelled_count > 0, "Some requests should have been cancelled");
         assert!(completed_count > 0, "Some requests should have completed");
         assert_eq!(state.operation_count(), 0, "All operations should be finished");
+
+        Ok(())
     }
 
     /// Generate large Perl file for testing workspace operations
@@ -386,7 +398,7 @@ mod cancellation_timeout_tests {
     fn test_cancellation_timeout_boundaries(
         #[case] timeout_duration: Duration,
         #[case] test_name: &str,
-    ) {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let state = MockLspState::new();
         let request_id = json!(format!("timeout_test_{}", test_name));
 
@@ -414,7 +426,7 @@ mod cancellation_timeout_tests {
         thread::sleep(timeout_duration);
         state.mark_cancelled(&request_id);
 
-        let result = operation_handle.join().expect("Operation should complete");
+        let result = operation_handle.join().map_err(|_| "Operation should complete")?;
 
         // Verify proper cancellation behavior
         match result {
@@ -430,15 +442,19 @@ mod cancellation_timeout_tests {
                 // This is acceptable for very short timeouts
                 println!("Operation timed out before cancellation for {}", test_name);
             }
-            other => panic!("Unexpected result: {}", other),
+            other => {
+                return Err(format!("Unexpected result: {}", other).into());
+            }
         }
 
         assert_eq!(state.operation_count(), 0, "Operation count should be reset");
+
+        Ok(())
     }
 
     /// Test cancellation error response generation
     #[test]
-    fn test_cancellation_error_response_generation() {
+    fn test_cancellation_error_response_generation() -> Result<(), Box<dyn std::error::Error>> {
         let test_cases = vec![
             (json!(1), "numeric_id"),
             (json!("string_id"), "string_id"),
@@ -463,13 +479,13 @@ mod cancellation_timeout_tests {
 
             // Test error code boundaries
             assert_eq!(
-                response["error"]["code"].as_i64().unwrap(),
+                response["error"]["code"].as_i64().ok_or("Missing error code")?,
                 -32800,
                 "Error code mutation detected for {}",
                 test_name
             );
             assert_eq!(
-                response["error"]["message"].as_str().unwrap(),
+                response["error"]["message"].as_str().ok_or("Missing error message")?,
                 "Request cancelled",
                 "Error message mutation detected for {}",
                 test_name
@@ -480,11 +496,13 @@ mod cancellation_timeout_tests {
                 test_name
             );
         }
+
+        Ok(())
     }
 
     /// Test cancellation with Mutex lock failures
     #[test]
-    fn test_cancellation_with_lock_failures() {
+    fn test_cancellation_with_lock_failures() -> Result<(), Box<dyn std::error::Error>> {
         let state = MockLspState::new();
         let request_id = json!(7001);
 
@@ -517,7 +535,7 @@ mod cancellation_timeout_tests {
 
         // Wait for all contention threads to complete
         for handle in handles {
-            handle.join().expect("Contention thread should complete");
+            handle.join().map_err(|_| "Contention thread should complete")?;
         }
 
         // Verify cancellation state survived the contention
@@ -529,6 +547,8 @@ mod cancellation_timeout_tests {
         // Clear and verify
         state.cancel_clear(&request_id);
         assert!(!state.is_cancelled(&request_id), "Clear should work after high contention");
+
+        Ok(())
     }
 }
 
@@ -612,7 +632,9 @@ mod cancellation_property_tests {
 
             // All operations should complete without panic
             for handle in handles {
-                handle.join().expect("Concurrent operation should not panic");
+                if handle.join().is_err() {
+                    panic!("Concurrent operation should not panic");
+                }
             }
 
             // Final state should be consistent (all cleared)
@@ -632,7 +654,7 @@ mod cancellation_integration_tests {
 
     /// Test cancellation during complex multi-step LSP operations
     #[test]
-    fn test_cancellation_during_complex_lsp_workflow() {
+    fn test_cancellation_during_complex_lsp_workflow() -> Result<(), Box<dyn std::error::Error>> {
         let state = MockLspState::new();
         let workspace_index = WorkspaceIndex::new();
         let request_id = json!(8001);
@@ -697,7 +719,7 @@ mod cancellation_integration_tests {
         thread::sleep(Duration::from_millis(25));
         state.mark_cancelled(&request_id);
 
-        let result = operation_handle.join().expect("Operation should complete");
+        let result = operation_handle.join().map_err(|_| "Operation should complete")?;
 
         // Verify appropriate cancellation behavior
         if result.contains("Cancelled") {
@@ -706,8 +728,10 @@ mod cancellation_integration_tests {
             assert_eq!(state.operation_count(), 0, "Operation count should be reset");
         } else if result == "Completed all steps" {
             // Workflow completed before cancellation took effect
-            let processed = state.requests_processed.lock().unwrap();
+            let processed = state.requests_processed.lock().map_err(|_| "Failed to acquire lock")?;
             assert!(processed.contains(&request_id), "Should record completion");
         }
+
+        Ok(())
     }
 }

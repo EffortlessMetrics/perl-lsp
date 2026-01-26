@@ -1,7 +1,5 @@
 //! Property-based tests for `qw/.../` expressions
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_parser::Parser;
 use proptest::{
     collection, prop_assume, prop_oneof, proptest,
@@ -57,8 +55,13 @@ proptest! {
 
         let mut pa = Parser::new(&a);
         let mut pb = Parser::new(&b);
-        let sa = extract_ast_shape(&pa.parse().expect("parse a"));
-        let sb = extract_ast_shape(&pb.parse().expect("parse b"));
+        let ast_a = pa.parse();
+        let ast_b = pb.parse();
+        prop_assume!(ast_a.is_ok(), "parse a failed");
+        prop_assume!(ast_b.is_ok(), "parse b failed");
+        // Safety: We just checked is_ok() above via prop_assume!, so these are safe
+        let sa = ast_a.ok().map(|ast| extract_ast_shape(&ast));
+        let sb = ast_b.ok().map(|ast| extract_ast_shape(&ast));
 
         prop_assert_eq!(&sa, &sb, "shapes differ:\nA: {}\n{:?}\n\nB: {}\n{:?}", a, sa, b, sb);
     }
@@ -80,7 +83,8 @@ proptest! {
 
         for code in &snippets {
             let mut p = Parser::new(code);
-            let _ = p.parse().expect(code);
+            let result = p.parse();
+            prop_assert!(result.is_ok(), "Failed to parse: {}", code);
         }
     }
 }

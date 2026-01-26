@@ -12,6 +12,8 @@ mod incremental_comprehensive_tests {
     use perl_parser::{edit::Edit, position::Position};
     use std::time::Instant;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
     #[test]
     fn test_comprehensive_simple_value_edits() {
         let result = IncrementalTestUtils::performance_test_with_stats(
@@ -104,7 +106,7 @@ if ($condition) {
     }
 
     #[test]
-    fn test_comprehensive_large_document_scaling() {
+    fn test_comprehensive_large_document_scaling() -> TestResult {
         // Generate progressively larger documents and test scaling
         let sizes = vec![10, 25, 50, 100];
         let mut scaling_results = Vec::new();
@@ -157,12 +159,14 @@ if ($condition) {
 
         // Performance should not degrade exponentially
         let small_time = scaling_results[0].1 as f64;
-        let large_time = scaling_results.last().unwrap().1 as f64;
+        let last_result = scaling_results.last().ok_or("scaling_results is empty")?;
+        let large_time = last_result.1 as f64;
         let scaling_factor = large_time / small_time;
-        let size_factor = scaling_results.last().unwrap().0 as f64 / scaling_results[0].0 as f64;
+        let size_factor = last_result.0 as f64 / scaling_results[0].0 as f64;
 
         println!("Scaling factor: {:.1}x time for {:.1}x size", scaling_factor, size_factor);
         assert!(scaling_factor < size_factor * 2.0, "Performance should scale better than O(n²)");
+        Ok(())
     }
 
     #[test]
@@ -240,12 +244,12 @@ if ($condition) {
     }
 
     #[test]
-    fn test_comprehensive_rapid_consecutive_edits() {
+    fn test_comprehensive_rapid_consecutive_edits() -> TestResult {
         let mut parser = IncrementalParserV2::new();
         let source = "my $a = 1; my $b = 2; my $c = 3;";
 
         // Initial parse
-        parser.parse(source).unwrap();
+        parser.parse(source)?;
 
         let edits = [("1", "10"), ("2", "20"), ("3", "30")];
 
@@ -296,10 +300,11 @@ if ($condition) {
         } else {
             println!("⚠️ Some rapid edits had lower efficiency (expected for complex scenarios)");
         }
+        Ok(())
     }
 
     #[test]
-    fn test_comprehensive_memory_and_stability() {
+    fn test_comprehensive_memory_and_stability() -> TestResult {
         // Test memory stability under repeated operations
         let mut parser = IncrementalParserV2::new();
         let base_source = "my $counter = 0;";
@@ -341,14 +346,15 @@ if ($condition) {
 
             // Reset for next iteration
             parser = IncrementalParserV2::new();
-            parser.parse(base_source).unwrap();
+            parser.parse(base_source)?;
         }
 
         println!("✅ Memory stability test completed successfully");
+        Ok(())
     }
 
     #[test]
-    fn test_comprehensive_performance_regression_detection() {
+    fn test_comprehensive_performance_regression_detection() -> TestResult {
         // Run the same test multiple times to detect performance regressions
         let test_source = "my $regression_test = 42;";
         let mut batch_averages = Vec::new();
@@ -371,8 +377,8 @@ if ($condition) {
 
         // Analyze for regression
         let overall_avg = batch_averages.iter().sum::<u128>() / batch_averages.len() as u128;
-        let min_time = *batch_averages.iter().min().unwrap();
-        let max_time = *batch_averages.iter().max().unwrap();
+        let min_time = *batch_averages.iter().min().ok_or("batch_averages is empty")?;
+        let max_time = *batch_averages.iter().max().ok_or("batch_averages is empty")?;
 
         println!("  Overall average: {}µs", overall_avg);
         println!("  Range: {}µs - {}µs", min_time, max_time);
@@ -397,6 +403,7 @@ if ($condition) {
         );
 
         println!("✅ No significant performance regression detected");
+        Ok(())
     }
 
     // Import the test result struct from the incremental test utils

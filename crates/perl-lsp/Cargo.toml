@@ -6,8 +6,8 @@ rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
 description = "Perl Language Server (LSP) — Tree-sitter-compatible with comprehensive IDE features"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 readme = "README.md"
 documentation = "https://docs.rs/perl-lsp"
 keywords = ["perl", "lsp", "language-server", "ide"]
@@ -84,7 +84,7 @@ pretty_assertions = "1.4.1"
 serial_test = "3.3.1"
 tempfile = "3.24.0"
 proptest = "1.9.0"
-perl-corpus = { workspace = true }
+perl-tdd-support = { workspace = true }
 which = "8.0.0"
 parking_lot = "0.12.5"
 criterion = "0.8.1"

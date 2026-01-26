@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Highlight integration tests for perl-corpus
 //!
 //! This module tests the integration between the tree-sitter highlight test runner

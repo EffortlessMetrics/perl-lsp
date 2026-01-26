@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Test parser depth limit to prevent stack overflow on deeply nested constructs
 //!
 //! This test verifies that the parser cleanly rejects deeply nested constructs
@@ -7,6 +6,7 @@
 //! recursion limit triggers before OS stack overflow occurs.
 
 use perl_parser::{ParseError, Parser};
+use perl_tdd_support::must_err;
 
 /// Test that deeply nested blocks are rejected with RecursionLimit error
 #[test]
@@ -30,7 +30,7 @@ fn parser_depth_limit_nested_blocks() {
 
     assert!(result.is_err(), "Expected error for deeply nested blocks");
     assert!(
-        matches!(result.unwrap_err(), ParseError::RecursionLimit),
+        matches!(must_err(result), ParseError::RecursionLimit),
         "Expected RecursionLimit error for deeply nested blocks"
     );
 }
@@ -57,7 +57,7 @@ fn parser_depth_limit_nested_parens() {
 
     assert!(result.is_err(), "Expected error for deeply nested parentheses");
     assert!(
-        matches!(result.unwrap_err(), ParseError::RecursionLimit),
+        matches!(must_err(result), ParseError::RecursionLimit),
         "Expected RecursionLimit error for deeply nested parentheses"
     );
 }
@@ -84,7 +84,7 @@ fn parser_depth_limit_nested_arrays() {
 
     assert!(result.is_err(), "Expected error for deeply nested arrays");
     assert!(
-        matches!(result.unwrap_err(), ParseError::RecursionLimit),
+        matches!(must_err(result), ParseError::RecursionLimit),
         "Expected RecursionLimit error for deeply nested arrays"
     );
 }
@@ -138,7 +138,7 @@ fn parser_depth_limit_mixed_nesting() {
 
     assert!(result.is_err(), "Expected error for mixed deep nesting");
     assert!(
-        matches!(result.unwrap_err(), ParseError::RecursionLimit),
+        matches!(must_err(result), ParseError::RecursionLimit),
         "Expected RecursionLimit error for mixed deep nesting"
     );
 }
@@ -165,7 +165,7 @@ fn parser_depth_limit_nested_control_flow() {
 
     assert!(result.is_err(), "Expected error for deeply nested control flow");
     assert!(
-        matches!(result.unwrap_err(), ParseError::RecursionLimit),
+        matches!(must_err(result), ParseError::RecursionLimit),
         "Expected RecursionLimit error for deeply nested control flow"
     );
 }
@@ -213,7 +213,7 @@ fn parser_depth_limit_boundary_above() {
 
     assert!(result.is_err(), "Expected error for nesting just above limit");
     assert!(
-        matches!(result.unwrap_err(), ParseError::RecursionLimit),
+        matches!(must_err(result), ParseError::RecursionLimit),
         "Expected RecursionLimit error for nesting just above limit"
     );
 }

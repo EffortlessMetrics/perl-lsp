@@ -279,27 +279,19 @@ ci-workflow-audit:
 # This is the canonical pre-push check (same as merge-gate with legacy checks)
 ci-gate:
     @echo "Running fast merge gate..."
-    @START=$$(date +%s); \
     just ci-workflow-audit && \
     just ci-check-no-nested-lock && \
     just ci-format && \
     just ci-docs-check && \
     just ci-clippy-lib && \
     just clippy-prod-no-unwrap && \
+    just clippy-no-unwrap-all && \
     just ci-test-lib && \
     just ci-policy && \
     just ci-lsp-def && \
     just ci-parser-features-check && \
-    just ci-features-invariants; \
-    RC=$$?; \
-    END=$$(date +%s); \
-    echo ""; \
-    if [ $$RC -eq 0 ]; then \
-        echo "Merge gate passed! (total: $$((END - START))s)"; \
-    else \
-        echo "Merge gate FAILED (total: $$((END - START))s)"; \
-        exit $$RC; \
-    fi
+    just ci-features-invariants
+    # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
 # Uses xtask gates for structured gate execution with receipt generation
@@ -358,6 +350,11 @@ ci-clippy-lib:
 clippy-prod-no-unwrap:
     @echo "🔒 Enforcing no unwrap/expect in production code..."
     cargo clippy --workspace --lib --bins --no-deps -- -D clippy::unwrap_used -D clippy::expect_used
+
+# Clippy NO UNWRAP ALL gate - enforces zero unwrap/expect everywhere
+clippy-no-unwrap-all:
+    @echo "🔒 Enforcing no unwrap/expect everywhere (including tests)..."
+    cargo clippy --workspace --all-targets -- -D clippy::unwrap_used -D clippy::expect_used
     @echo "✅ Production code is panic-safe (no unwrap/expect)"
 
 # Core tests (fast, essential)

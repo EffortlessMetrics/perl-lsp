@@ -5,6 +5,8 @@
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 /// Helper to create and initialize a test server
 fn setup_server() -> LspServer {
     let mut server = LspServer::new();
@@ -73,7 +75,7 @@ fn get_signature_help(
 }
 
 #[test]
-fn test_file_operation_signatures() {
+fn test_file_operation_signatures() -> TestResult {
     let mut server = setup_server();
 
     // Test seek signature - cursor inside parentheses after FILE,
@@ -82,10 +84,15 @@ fn test_file_operation_signatures() {
     let result = get_signature_help(&mut server, "file:///test.pl", 0, 11);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("seek"));
+    let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().unwrap().contains("FILEHANDLE, POSITION, WHENCE")
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("seek")
+    );
+    assert!(
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("FILEHANDLE, POSITION, WHENCE")
     );
 
     // Test chmod signature - cursor after first comma
@@ -94,9 +101,16 @@ fn test_file_operation_signatures() {
     let result = get_signature_help(&mut server, "file:///test2.pl", 0, 12);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("chmod"));
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("MODE, LIST"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("chmod")
+    );
+    assert!(
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("MODE, LIST")
+    );
 
     // Test stat signature - cursor just inside parentheses
     let code = "stat($file);";
@@ -104,12 +118,16 @@ fn test_file_operation_signatures() {
     let result = get_signature_help(&mut server, "file:///test3.pl", 0, 5);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("stat"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("stat")
+    );
+
+    Ok(())
 }
 
 #[test]
-fn test_string_data_signatures() {
+fn test_string_data_signatures() -> TestResult {
     let mut server = setup_server();
 
     // Test pack signature
@@ -118,9 +136,16 @@ fn test_string_data_signatures() {
     let result = get_signature_help(&mut server, "file:///pack.pl", 0, 11);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("pack"));
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("TEMPLATE, LIST"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("pack")
+    );
+    assert!(
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("TEMPLATE, LIST")
+    );
 
     // Test unpack signature
     let code = "unpack($template, $data);";
@@ -128,8 +153,10 @@ fn test_string_data_signatures() {
     let result = get_signature_help(&mut server, "file:///unpack.pl", 0, 18);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("unpack"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("unpack")
+    );
 
     // Test hex signature
     let code = "hex($str);";
@@ -137,12 +164,14 @@ fn test_string_data_signatures() {
     let result = get_signature_help(&mut server, "file:///hex.pl", 0, 4);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("hex"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("hex"));
+
+    Ok(())
 }
 
 #[test]
-fn test_math_signatures() {
+fn test_math_signatures() -> TestResult {
     let mut server = setup_server();
 
     let math_functions = [
@@ -160,8 +189,8 @@ fn test_math_signatures() {
         let result = get_signature_help(&mut server, &uri, 0, *cursor_pos);
 
         assert!(result.is_some(), "Failed for function: {}", func_name);
-        let sig = result.unwrap();
-        let label = sig["signatures"][0]["label"].as_str().unwrap();
+        let sig = result.ok_or("Expected signature result")?;
+        let label = sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?;
         assert!(label.contains(func_name), "Label doesn't contain {}: {}", func_name, label);
         assert!(
             label.contains(expected_params),
@@ -170,10 +199,12 @@ fn test_math_signatures() {
             label
         );
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_system_process_signatures() {
+fn test_system_process_signatures() -> TestResult {
     let mut server = setup_server();
 
     // Test fork (no parameters)
@@ -182,8 +213,10 @@ fn test_system_process_signatures() {
     let result = get_signature_help(&mut server, "file:///fork.pl", 0, 5);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("fork"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("fork")
+    );
 
     // Test kill signature
     let code = "kill(9, @pids);";
@@ -191,9 +224,16 @@ fn test_system_process_signatures() {
     let result = get_signature_help(&mut server, "file:///kill.pl", 0, 8);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("kill"));
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("SIGNAL, LIST"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("kill")
+    );
+    assert!(
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("SIGNAL, LIST")
+    );
 
     // Test system signature
     let code = "system($cmd);";
@@ -201,12 +241,16 @@ fn test_system_process_signatures() {
     let result = get_signature_help(&mut server, "file:///system.pl", 0, 7);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("system"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("system")
+    );
+
+    Ok(())
 }
 
 #[test]
-fn test_network_signatures() {
+fn test_network_signatures() -> TestResult {
     let mut server = setup_server();
 
     // Test socket signature
@@ -215,9 +259,16 @@ fn test_network_signatures() {
     let result = get_signature_help(&mut server, "file:///socket.pl", 0, 13);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("socket"));
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("DOMAIN, TYPE, PROTOCOL"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("socket")
+    );
+    assert!(
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("DOMAIN, TYPE, PROTOCOL")
+    );
 
     // Test bind signature
     let code = "bind(SOCK, $addr);";
@@ -225,13 +276,22 @@ fn test_network_signatures() {
     let result = get_signature_help(&mut server, "file:///bind.pl", 0, 11);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("bind"));
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("SOCKET, NAME"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("bind")
+    );
+    assert!(
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("SOCKET, NAME")
+    );
+
+    Ok(())
 }
 
 #[test]
-fn test_control_flow_signatures() {
+fn test_control_flow_signatures() -> TestResult {
     let mut server = setup_server();
 
     // Test eval signature
@@ -240,8 +300,10 @@ fn test_control_flow_signatures() {
     let result = get_signature_help(&mut server, "file:///eval.pl", 0, 5);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("eval"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("eval")
+    );
 
     // Test require signature
     let code = "require($module);";
@@ -249,12 +311,16 @@ fn test_control_flow_signatures() {
     let result = get_signature_help(&mut server, "file:///require.pl", 0, 8);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("require"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("require")
+    );
+
+    Ok(())
 }
 
 #[test]
-fn test_misc_signatures() {
+fn test_misc_signatures() -> TestResult {
     let mut server = setup_server();
 
     // Test tie signature
@@ -263,9 +329,14 @@ fn test_misc_signatures() {
     let result = get_signature_help(&mut server, "file:///tie.pl", 0, 11);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("tie"));
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("VARIABLE, CLASSNAME"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("tie"));
+    assert!(
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("VARIABLE, CLASSNAME")
+    );
 
     // Test select signature
     let code = "select(STDOUT);";
@@ -273,12 +344,16 @@ fn test_misc_signatures() {
     let result = get_signature_help(&mut server, "file:///select.pl", 0, 7);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert!(sig["signatures"][0]["label"].as_str().unwrap().contains("select"));
+    let sig = result.ok_or("Expected signature result")?;
+    assert!(
+        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("select")
+    );
+
+    Ok(())
 }
 
 #[test]
-fn test_active_parameter_tracking() {
+fn test_active_parameter_tracking() -> TestResult {
     let mut server = setup_server();
 
     // Test with multiple parameters
@@ -287,8 +362,8 @@ fn test_active_parameter_tracking() {
     let result = get_signature_help(&mut server, "file:///atan2.pl", 0, 11);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert_eq!(sig["activeParameter"].as_u64().unwrap(), 1); // Second parameter
+    let sig = result.ok_or("Expected signature result")?;
+    assert_eq!(sig["activeParameter"].as_u64().ok_or("Expected activeParameter u64")?, 1); // Second parameter
 
     // Test with three parameters
     let code = "substr($text, 5, 10);";
@@ -296,12 +371,14 @@ fn test_active_parameter_tracking() {
     let result = get_signature_help(&mut server, "file:///substr.pl", 0, 17);
 
     assert!(result.is_some());
-    let sig = result.unwrap();
-    assert_eq!(sig["activeParameter"].as_u64().unwrap(), 2); // Third parameter
+    let sig = result.ok_or("Expected signature result")?;
+    assert_eq!(sig["activeParameter"].as_u64().ok_or("Expected activeParameter u64")?, 2); // Third parameter
+
+    Ok(())
 }
 
 #[test]
-fn test_all_114_builtins_are_recognized() {
+fn test_all_114_builtins_are_recognized() -> TestResult {
     let mut server = setup_server();
 
     // List of all 114 built-in functions we support
@@ -463,8 +540,8 @@ fn test_all_114_builtins_are_recognized() {
         let result = get_signature_help(&mut server, &uri, 0, cursor_pos);
 
         assert!(result.is_some(), "No signature found for function: {}", func);
-        let sig = result.unwrap();
-        let label = sig["signatures"][0]["label"].as_str().unwrap();
+        let sig = result.ok_or("Expected signature result")?;
+        let label = sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?;
         assert!(
             label.contains(func),
             "Signature for {} doesn't contain function name: {}",
@@ -472,4 +549,6 @@ fn test_all_114_builtins_are_recognized() {
             label
         );
     }
+
+    Ok(())
 }

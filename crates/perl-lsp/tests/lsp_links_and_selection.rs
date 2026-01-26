@@ -2,7 +2,7 @@ use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]
-fn document_links_and_selection() {
+fn document_links_and_selection() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -45,8 +45,8 @@ fn document_links_and_selection() {
         method: "textDocument/documentLink".into(),
         params: Some(json!({"textDocument": {"uri": uri}})),
     };
-    let links_res = srv.handle_request(links_req).unwrap();
-    let links = links_res.result.unwrap();
+    let links_res = srv.handle_request(links_req).ok_or("Failed to handle document link request")?;
+    let links = links_res.result.ok_or("Document link response missing result")?;
     assert!(
         links.as_array().map(|a| !a.is_empty()).unwrap_or(false),
         "should have document links for use statement"
@@ -62,8 +62,8 @@ fn document_links_and_selection() {
             "positions": [{"line": 1, "character": 5}]
         })),
     };
-    let sel_res = srv.handle_request(sel_req).unwrap();
-    let sel = sel_res.result.unwrap();
+    let sel_res = srv.handle_request(sel_req).ok_or("Failed to handle selection range request")?;
+    let sel = sel_res.result.ok_or("Selection range response missing result")?;
     assert!(sel.as_array().map(|a| !a.is_empty()).unwrap_or(false), "should have selection ranges");
 
     // Verify selection range structure
@@ -76,4 +76,6 @@ fn document_links_and_selection() {
             }
         }
     }
+
+    Ok(())
 }

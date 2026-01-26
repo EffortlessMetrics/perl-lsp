@@ -134,6 +134,7 @@ impl Default for DocumentStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn test_document_lifecycle() {
@@ -146,13 +147,13 @@ mod tests {
         assert_eq!(store.count(), 1);
 
         // Get document
-        let doc = store.get(&uri).unwrap();
+        let doc = must_some(store.get(&uri));
         assert_eq!(doc.version, 1);
         assert_eq!(doc.text, "print 'hello';");
 
         // Update document
         assert!(store.update(&uri, 2, "print 'world';".to_string()));
-        let doc = store.get(&uri).unwrap();
+        let doc = must_some(store.get(&uri));
         assert_eq!(doc.version, 2);
         assert_eq!(doc.text, "print 'world';");
 
@@ -208,7 +209,7 @@ mod tests {
         store.open(uri.clone(), 1, "# test".to_string());
         assert!(store.is_open(&uri));
 
-        let doc = store.get(&uri).unwrap();
+        let doc = must_some(store.get(&uri));
         assert_eq!(doc.text, "# test");
     }
 }

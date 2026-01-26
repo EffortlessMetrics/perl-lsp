@@ -3,7 +3,6 @@
 //! This module implements comprehensive statistical analysis of incremental parsing
 //! performance to detect regressions, validate consistency, and ensure quality.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 #![cfg(feature = "incremental")]
 
 mod support;
@@ -48,8 +47,8 @@ impl StatisticalAnalyzer {
             self.samples[count / 2] as f64
         };
 
-        let min = *self.samples.iter().min().unwrap() as f64;
-        let max = *self.samples.iter().max().unwrap() as f64;
+        let min = self.samples.first().copied().unwrap_or(0) as f64;
+        let max = self.samples.last().copied().unwrap_or(0) as f64;
 
         // Calculate variance and standard deviation
         let variance =
@@ -246,7 +245,7 @@ impl ValidationResult {
 
 /// Comprehensive statistical validation of simple value edits
 #[test]
-fn test_statistical_validation_simple_edits() {
+fn test_statistical_validation_simple_edits() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📈 Statistical Validation: Simple Value Edits");
 
     let mut analyzer = StatisticalAnalyzer::new();
@@ -256,7 +255,7 @@ fn test_statistical_validation_simple_edits() {
     // Collect performance samples
     for i in 0..iterations {
         let mut parser = IncrementalParserV2::new();
-        parser.parse(source).unwrap();
+        parser.parse(source)?;
 
         let new_val = format!("{}", 100 + i);
         let (new_source, edit) = IncrementalTestUtils::create_value_edit(source, "42", &new_val);
@@ -289,11 +288,13 @@ fn test_statistical_validation_simple_edits() {
         validation.passed || validation.violations.len() <= 1,
         "Simple edits should meet most performance criteria"
     );
+
+    Ok(())
 }
 
 /// Statistical analysis of complex document performance
 #[test]
-fn test_statistical_validation_complex_documents() {
+fn test_statistical_validation_complex_documents() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📈 Statistical Validation: Complex Documents");
 
     let mut analyzer = StatisticalAnalyzer::new();
@@ -315,7 +316,7 @@ fn test_statistical_validation_complex_documents() {
     // Collect performance samples
     for i in 0..iterations {
         let mut parser = IncrementalParserV2::new();
-        parser.parse(&complex_source).unwrap();
+        parser.parse(&complex_source)?;
 
         // Edit a parameter value in the middle of the document
         let old_val = format!("{}", 10);
@@ -362,11 +363,13 @@ fn test_statistical_validation_complex_documents() {
         stats.coefficient_of_variation < 2.0,
         "Complex edits should have reasonable consistency"
     );
+
+    Ok(())
 }
 
 /// Performance regression detection across multiple test runs
 #[test]
-fn test_regression_detection_across_sessions() {
+fn test_regression_detection_across_sessions() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🕰️ Performance Regression Detection");
 
     let test_cases = vec![
@@ -383,7 +386,7 @@ fn test_regression_detection_across_sessions() {
 
         for _i in 0..30 {
             let mut parser = IncrementalParserV2::new();
-            parser.parse(source).unwrap();
+            parser.parse(source)?;
 
             let (new_source, edit) =
                 IncrementalTestUtils::create_value_edit(source, old_val, new_val);
@@ -414,7 +417,7 @@ fn test_regression_detection_across_sessions() {
 
             for _i in 0..20 {
                 let mut parser = IncrementalParserV2::new();
-                parser.parse(source).unwrap();
+                parser.parse(source)?;
 
                 let (new_source, edit) =
                     IncrementalTestUtils::create_value_edit(source, old_val, new_val);
@@ -432,7 +435,8 @@ fn test_regression_detection_across_sessions() {
             }
 
             let current_stats = analyzer.calculate_statistics();
-            let baseline = baseline_stats.get(&**name).unwrap();
+            let baseline = baseline_stats.get(&**name)
+                .ok_or_else(|| format!("Baseline stats not found for {}", name))?;
 
             // Regression detection
             let mean_regression = current_stats.mean / baseline.mean;
@@ -469,11 +473,13 @@ fn test_regression_detection_across_sessions() {
     }
 
     println!("  ✅ Regression detection completed - no extreme regressions found");
+
+    Ok(())
 }
 
 /// Analyze performance distribution patterns
 #[test]
-fn test_performance_distribution_analysis() {
+fn test_performance_distribution_analysis() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📊 Performance Distribution Analysis");
 
     let mut analyzer = StatisticalAnalyzer::new();
@@ -483,7 +489,7 @@ fn test_performance_distribution_analysis() {
     // Collect large sample for distribution analysis
     for i in 0..iterations {
         let mut parser = IncrementalParserV2::new();
-        parser.parse(source).unwrap();
+        parser.parse(source)?;
 
         let new_val = format!("value_{}", i);
         let (new_source, edit) =
@@ -523,16 +529,18 @@ fn test_performance_distribution_analysis() {
     // Validate distribution sanity
     assert!(skewness.abs() < 5.0, "Extreme skewness indicates performance issues");
     assert!(kurtosis.abs() < 10.0, "Extreme kurtosis indicates performance issues");
+
+    Ok(())
 }
 
 /// Test performance under sustained load
 #[test]
-fn test_sustained_load_performance() {
+fn test_sustained_load_performance() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🔄 Sustained Load Performance Test");
 
     let mut parser = IncrementalParserV2::new();
     let source = "my $sustained = 42; my $load = 'test';";
-    parser.parse(source).unwrap();
+    parser.parse(source)?;
 
     let mut load_analyzer = StatisticalAnalyzer::new();
     let load_iterations = 500;
@@ -590,6 +598,8 @@ fn test_sustained_load_performance() {
     assert!(avg_efficiency > 60.0, "Sustained load should maintain >60% efficiency");
 
     println!("  ✅ Sustained load test completed successfully");
+
+    Ok(())
 }
 
 // Helper functions for statistical calculations

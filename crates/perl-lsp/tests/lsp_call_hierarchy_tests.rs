@@ -16,18 +16,18 @@ mod support;
 use serde_json::json;
 use support::lsp_harness::LspHarness;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 /// Tests feature spec: call_hierarchy_provider.rs#prepare
 /// Test basic prepareCallHierarchy at a function definition
 #[test]
-fn test_prepare_call_hierarchy_basic_function() {
+fn test_prepare_call_hierarchy_basic_function() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 sub hello {
     print "Hello, world!\n";
 }
@@ -36,24 +36,21 @@ sub main {
     hello();
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Request call hierarchy at "hello" function (line 1, char 4)
-    let response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 1, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 4 }
+        }),
+    )?;
 
     // Response should be an array of CallHierarchyItem
     assert!(response.is_array(), "prepareCallHierarchy should return array, got: {:?}", response);
 
-    let items = response.as_array().expect("Expected array");
+    let items = response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
         let item = &items[0];
         assert_eq!(item["name"], "hello", "Function name should be 'hello'");
@@ -62,20 +59,20 @@ sub main {
         assert!(item["range"].is_object(), "Range should be present");
         assert!(item["selectionRange"].is_object(), "Selection range should be present");
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#prepare
 /// Test prepareCallHierarchy with method calls
 #[test]
-fn test_prepare_call_hierarchy_method() {
+fn test_prepare_call_hierarchy_method() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 package MyClass;
 
 sub new {
@@ -92,41 +89,38 @@ package main;
 my $obj = MyClass->new();
 $obj->process();
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Request call hierarchy at "process" method (line 8, char 4)
-    let response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 8, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 8, "character": 4 }
+        }),
+    )?;
 
     assert!(response.is_array(), "prepareCallHierarchy should return array");
 
-    let items = response.as_array().expect("Expected array");
+    let items = response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
         let item = &items[0];
         assert_eq!(item["name"], "process", "Method name should be 'process'");
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#incoming_calls
 /// Test incoming calls (callers of a function)
 #[test]
-fn test_incoming_calls_basic() {
+fn test_incoming_calls_basic() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 sub greet {
     print "Hello!\n";
 }
@@ -139,37 +133,32 @@ sub say_hi {
     greet();
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // First prepare call hierarchy for "greet"
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 1, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 4 }
+        }),
+    )?;
 
-    let items = prepare_response.as_array().expect("Expected array");
+    let items = prepare_response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
         let item = &items[0];
 
         // Request incoming calls for "greet"
-        let incoming_response = harness
-            .request(
-                "callHierarchy/incomingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get incoming calls");
+        let incoming_response = harness.request(
+            "callHierarchy/incomingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
         assert!(incoming_response.is_array(), "incomingCalls should return array");
 
-        let calls = incoming_response.as_array().expect("Expected array");
+        let calls = incoming_response.as_array().ok_or("not an array")?;
         // Should find both say_hello and say_hi as callers
         if !calls.is_empty() {
             let caller_names: Vec<String> = calls
@@ -186,20 +175,20 @@ sub say_hi {
             );
         }
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#incoming_calls
 /// Test incoming calls with multiple call sites in same function
 #[test]
-fn test_incoming_calls_multiple_sites() {
+fn test_incoming_calls_multiple_sites() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 sub log_message {
     print shift . "\n";
 }
@@ -212,35 +201,30 @@ sub process {
     log_message("Done");
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Prepare call hierarchy for "log_message"
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 1, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 4 }
+        }),
+    )?;
 
-    let items = prepare_response.as_array().expect("Expected array");
+    let items = prepare_response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
         let item = &items[0];
 
         // Request incoming calls
-        let incoming_response = harness
-            .request(
-                "callHierarchy/incomingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get incoming calls");
+        let incoming_response = harness.request(
+            "callHierarchy/incomingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
-        let calls = incoming_response.as_array().expect("Expected array");
+        let calls = incoming_response.as_array().ok_or("not an array")?;
         if !calls.is_empty() {
             // Find the "process" caller
             let process_call = calls.iter().find(|call| call["from"]["name"] == "process");
@@ -252,20 +236,20 @@ sub process {
             }
         }
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#outgoing_calls
 /// Test outgoing calls (functions called by this function)
 #[test]
-fn test_outgoing_calls_basic() {
+fn test_outgoing_calls_basic() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 sub helper1 {
     print "Helper 1\n";
 }
@@ -279,37 +263,32 @@ sub main_function {
     helper2();
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Prepare call hierarchy for "main_function"
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 9, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 9, "character": 4 }
+        }),
+    )?;
 
-    let items = prepare_response.as_array().expect("Expected array");
+    let items = prepare_response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
         let item = &items[0];
 
         // Request outgoing calls
-        let outgoing_response = harness
-            .request(
-                "callHierarchy/outgoingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get outgoing calls");
+        let outgoing_response = harness.request(
+            "callHierarchy/outgoingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
         assert!(outgoing_response.is_array(), "outgoingCalls should return array");
 
-        let calls = outgoing_response.as_array().expect("Expected array");
+        let calls = outgoing_response.as_array().ok_or("not an array")?;
         if !calls.is_empty() {
             let callee_names: Vec<String> = calls
                 .iter()
@@ -326,20 +305,20 @@ sub main_function {
             );
         }
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#outgoing_calls
 /// Test outgoing calls with method calls
 #[test]
-fn test_outgoing_calls_methods() {
+fn test_outgoing_calls_methods() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 package Logger;
 
 sub new {
@@ -359,35 +338,30 @@ sub process_data {
     $logger->log("Processing");
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Prepare call hierarchy for "process_data"
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 15, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 15, "character": 4 }
+        }),
+    )?;
 
-    let items = prepare_response.as_array().expect("Expected array");
+    let items = prepare_response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
         let item = &items[0];
 
         // Request outgoing calls
-        let outgoing_response = harness
-            .request(
-                "callHierarchy/outgoingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get outgoing calls");
+        let outgoing_response = harness.request(
+            "callHierarchy/outgoingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
-        let calls = outgoing_response.as_array().expect("Expected array");
+        let calls = outgoing_response.as_array().ok_or("not an array")?;
         if !calls.is_empty() {
             let callee_names: Vec<String> = calls
                 .iter()
@@ -404,20 +378,20 @@ sub process_data {
             );
         }
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#recursive-calls
 /// Test detection of recursive function calls
 #[test]
-fn test_recursive_calls() {
+fn test_recursive_calls() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 sub factorial {
     my $n = shift;
     return 1 if $n <= 1;
@@ -428,35 +402,30 @@ sub main {
     my $result = factorial(5);
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Prepare call hierarchy for "factorial"
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 1, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 4 }
+        }),
+    )?;
 
-    let items = prepare_response.as_array().expect("Expected array");
+    let items = prepare_response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
         let item = &items[0];
 
         // Check outgoing calls - should include recursive call to itself
-        let outgoing_response = harness
-            .request(
-                "callHierarchy/outgoingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get outgoing calls");
+        let outgoing_response = harness.request(
+            "callHierarchy/outgoingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
-        let calls = outgoing_response.as_array().expect("Expected array");
+        let calls = outgoing_response.as_array().ok_or("not an array")?;
         if !calls.is_empty() {
             let callee_names: Vec<String> = calls
                 .iter()
@@ -470,16 +439,14 @@ sub main {
         }
 
         // Check incoming calls - should include call from main
-        let incoming_response = harness
-            .request(
-                "callHierarchy/incomingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get incoming calls");
+        let incoming_response = harness.request(
+            "callHierarchy/incomingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
-        let calls = incoming_response.as_array().expect("Expected array");
+        let calls = incoming_response.as_array().ok_or("not an array")?;
         if !calls.is_empty() {
             let caller_names: Vec<String> = calls
                 .iter()
@@ -496,20 +463,20 @@ sub main {
             );
         }
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#cross-package
 /// Test cross-package function calls
 #[test]
-fn test_cross_package_calls() {
+fn test_cross_package_calls() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 package Utils;
 
 sub format_string {
@@ -527,35 +494,30 @@ sub process {
 package main;
 App::process();
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Prepare call hierarchy for "format_string"
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 3, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 3, "character": 4 }
+        }),
+    )?;
 
-    let items = prepare_response.as_array().expect("Expected array");
+    let items = prepare_response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
         let item = &items[0];
 
         // Check incoming calls from other package
-        let incoming_response = harness
-            .request(
-                "callHierarchy/incomingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get incoming calls");
+        let incoming_response = harness.request(
+            "callHierarchy/incomingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
-        let calls = incoming_response.as_array().expect("Expected array");
+        let calls = incoming_response.as_array().ok_or("not an array")?;
         if !calls.is_empty() {
             // Should find "process" from App package
             let caller_names: Vec<String> = calls
@@ -571,118 +533,109 @@ App::process();
             );
         }
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#edge-cases
 /// Test call hierarchy with no calls found
 #[test]
-fn test_no_calls_found() {
+fn test_no_calls_found() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 sub unused_function {
     print "Never called\n";
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Prepare call hierarchy for unused function
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 1, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 4 }
+        }),
+    )?;
 
-    let items = prepare_response.as_array().expect("Expected array");
+    let items = prepare_response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
         let item = &items[0];
 
         // Request incoming calls - should be empty
-        let incoming_response = harness
-            .request(
-                "callHierarchy/incomingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get incoming calls");
+        let incoming_response = harness.request(
+            "callHierarchy/incomingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
         assert!(incoming_response.is_array(), "Should return empty array for no incoming calls");
 
         // Request outgoing calls - should be empty
-        let outgoing_response = harness
-            .request(
-                "callHierarchy/outgoingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get outgoing calls");
+        let outgoing_response = harness.request(
+            "callHierarchy/outgoingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
         assert!(outgoing_response.is_array(), "Should return empty array for no outgoing calls");
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#edge-cases
 /// Test call hierarchy at invalid position (no symbol)
 #[test]
-fn test_prepare_at_invalid_position() {
+fn test_prepare_at_invalid_position() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 sub hello {
     print "Hello\n";
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Request call hierarchy at a comment or whitespace (line 0, char 0)
-    let response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 0, "character": 0 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 0, "character": 0 }
+        }),
+    )?;
 
     // Should return null or empty array when no symbol found
     assert!(
-        response.is_null() || (response.is_array() && response.as_array().unwrap().is_empty()),
+        response.is_null()
+            || (response.is_array() && response.as_array().ok_or("not an array")?.is_empty()),
         "Should return null or empty array for invalid position, got: {:?}",
         response
     );
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#edge-cases
 /// Test call hierarchy with Unicode function names
 #[test]
-fn test_unicode_function_names() {
+fn test_unicode_function_names() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 sub 你好 {
     print "Hello in Chinese\n";
 }
@@ -691,19 +644,16 @@ sub main {
     你好();
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Prepare call hierarchy for Unicode function name
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 1, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 4 }
+        }),
+    )?;
 
     // Should handle Unicode gracefully
     assert!(
@@ -719,20 +669,20 @@ sub main {
             assert!(item["name"].is_string(), "Function name should be string");
         }
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#nested-calls
 /// Test deeply nested function calls
 #[test]
-fn test_nested_function_calls() {
+fn test_nested_function_calls() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 sub level3 {
     print "Level 3\n";
 }
@@ -749,35 +699,30 @@ sub main {
     level1();
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Test call hierarchy at middle level (level2)
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 5, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 5, "character": 4 }
+        }),
+    )?;
 
-    let items = prepare_response.as_array().expect("Expected array");
+    let items = prepare_response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
         let item = &items[0];
 
         // Check incoming calls (should find level1)
-        let incoming_response = harness
-            .request(
-                "callHierarchy/incomingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get incoming calls");
+        let incoming_response = harness.request(
+            "callHierarchy/incomingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
-        let incoming_calls = incoming_response.as_array().expect("Expected array");
+        let incoming_calls = incoming_response.as_array().ok_or("not an array")?;
         if !incoming_calls.is_empty() {
             let caller_names: Vec<String> = incoming_calls
                 .iter()
@@ -793,16 +738,14 @@ sub main {
         }
 
         // Check outgoing calls (should find level3)
-        let outgoing_response = harness
-            .request(
-                "callHierarchy/outgoingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get outgoing calls");
+        let outgoing_response = harness.request(
+            "callHierarchy/outgoingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
-        let outgoing_calls = outgoing_response.as_array().expect("Expected array");
+        let outgoing_calls = outgoing_response.as_array().ok_or("not an array")?;
         if !outgoing_calls.is_empty() {
             let callee_names: Vec<String> = outgoing_calls
                 .iter()
@@ -817,20 +760,20 @@ sub main {
             );
         }
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#anonymous-subs
 /// Test call hierarchy with anonymous subroutines (edge case)
 #[test]
-fn test_anonymous_subroutines() {
+fn test_anonymous_subroutines() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 sub process_callback {
     my $callback = shift;
     $callback->();
@@ -840,39 +783,36 @@ sub main {
     process_callback(sub { print "Anonymous\n"; });
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Prepare call hierarchy for process_callback
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 1, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 4 }
+        }),
+    )?;
 
     // Should handle file with anonymous subs gracefully
     assert!(
         prepare_response.is_array() || prepare_response.is_null(),
         "Should handle anonymous subs gracefully"
     );
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#complex-expressions
 /// Test call hierarchy with complex call expressions
 #[test]
-fn test_complex_call_expressions() {
+fn test_complex_call_expressions() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 sub get_handler {
     return sub { print "Handler\n"; };
 }
@@ -887,39 +827,36 @@ sub main {
     $ref->();
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Prepare call hierarchy for get_handler
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 1, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 4 }
+        }),
+    )?;
 
     // Should return valid response even with complex expressions
     assert!(
         prepare_response.is_array() || prepare_response.is_null(),
         "Should handle complex call expressions"
     );
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#builtin-calls
 /// Test call hierarchy with builtin function calls (should not appear in hierarchy)
 #[test]
-fn test_builtin_function_calls() {
+fn test_builtin_function_calls() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 sub custom_print {
     my $msg = shift;
     print $msg;
@@ -927,51 +864,46 @@ sub custom_print {
     return uc($msg);
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Prepare call hierarchy for custom_print
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 1, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 4 }
+        }),
+    )?;
 
-    let items = prepare_response.as_array().expect("Expected array");
+    let items = prepare_response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
         let item = &items[0];
 
         // Check outgoing calls - builtins like print, chomp, uc may or may not be included
-        let outgoing_response = harness
-            .request(
-                "callHierarchy/outgoingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get outgoing calls");
+        let outgoing_response = harness.request(
+            "callHierarchy/outgoingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
         // Should return array (implementation may choose to include/exclude builtins)
         assert!(outgoing_response.is_array(), "Should return array for outgoing calls");
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#method-on-variable
 /// Test call hierarchy with method calls on specific variables
 #[test]
-fn test_method_calls_on_objects() {
+fn test_method_calls_on_objects() -> TestResult {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None).expect("Failed to initialize");
+    let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 package Database;
 
 sub new {
@@ -999,35 +931,30 @@ sub run_query {
     my $results = $db->query("SELECT * FROM users");
 }
 "#,
-        )
-        .expect("Failed to open file");
+    )?;
 
     // Test call hierarchy for "connect" method
-    let prepare_response = harness
-        .request(
-            "textDocument/prepareCallHierarchy",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 8, "character": 4 }
-            }),
-        )
-        .expect("Failed to prepare call hierarchy");
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 8, "character": 4 }
+        }),
+    )?;
 
-    let items = prepare_response.as_array().expect("Expected array");
+    let items = prepare_response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
         let item = &items[0];
 
         // Check incoming calls - should find run_query
-        let incoming_response = harness
-            .request(
-                "callHierarchy/incomingCalls",
-                json!({
-                    "item": item
-                }),
-            )
-            .expect("Failed to get incoming calls");
+        let incoming_response = harness.request(
+            "callHierarchy/incomingCalls",
+            json!({
+                "item": item
+            }),
+        )?;
 
-        let calls = incoming_response.as_array().expect("Expected array");
+        let calls = incoming_response.as_array().ok_or("not an array")?;
         if !calls.is_empty() {
             let caller_names: Vec<String> = calls
                 .iter()
@@ -1042,14 +969,15 @@ sub run_query {
             );
         }
     }
+    Ok(())
 }
 
 /// Tests feature spec: call_hierarchy_provider.rs#capability-advertisement
 /// Test that call hierarchy capability is advertised in server capabilities
 #[test]
-fn test_call_hierarchy_capability_advertised() {
+fn test_call_hierarchy_capability_advertised() -> TestResult {
     let mut harness = LspHarness::new();
-    let init_response = harness.initialize(None).expect("Failed to initialize");
+    let init_response = harness.initialize(None)?;
 
     let capabilities = &init_response["capabilities"];
 
@@ -1059,4 +987,5 @@ fn test_call_hierarchy_capability_advertised() {
         let has_capability = capabilities.get("callHierarchyProvider").is_some();
         assert!(has_capability, "callHierarchyProvider should be advertised in capabilities");
     }
+    Ok(())
 }

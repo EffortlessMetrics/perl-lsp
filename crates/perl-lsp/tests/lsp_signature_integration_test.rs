@@ -6,12 +6,12 @@ use perl_parser::Parser;
 use serde_json::json;
 
 #[test]
-fn test_lsp_signature_help_request_format() {
+fn test_lsp_signature_help_request_format() -> Result<(), Box<dyn std::error::Error>> {
     // Test that signature help responses match LSP specification
     let code = "print($x, ";
     let position = 9; // After comma
 
-    let ast = Parser::new(code).parse().unwrap_or_else(|_| Parser::new("").parse().unwrap());
+    let ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
     let provider = SignatureHelpProvider::new(&ast);
 
     if let Some(help) = provider.get_signature_help(code, position) {
@@ -41,10 +41,11 @@ fn test_lsp_signature_help_request_format() {
         assert!(json_help["activeSignature"].is_number());
         assert!(json_help["activeParameter"].is_number());
     }
+    Ok(())
 }
 
 #[test]
-fn test_signature_help_trigger_characters() {
+fn test_signature_help_trigger_characters() -> Result<(), Box<dyn std::error::Error>> {
     // Test that signature help is triggered correctly
     let trigger_cases = vec![
         ("print(", 6, true),    // Opening paren
@@ -54,7 +55,7 @@ fn test_signature_help_trigger_characters() {
     ];
 
     for (code, position, should_trigger) in trigger_cases {
-        let ast = Parser::new(code).parse().unwrap_or_else(|_| Parser::new("").parse().unwrap());
+        let ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
         let provider = SignatureHelpProvider::new(&ast);
 
         let help = provider.get_signature_help(code, position);
@@ -66,10 +67,11 @@ fn test_signature_help_trigger_characters() {
             position
         );
     }
+    Ok(())
 }
 
 #[test]
-fn test_multi_signature_functions() {
+fn test_multi_signature_functions() -> Result<(), Box<dyn std::error::Error>> {
     // Test functions with multiple signatures
     let multi_sig_functions = vec![
         (
@@ -96,7 +98,7 @@ fn test_multi_signature_functions() {
         let code = format!("{}(", func);
         let position = code.len();
 
-        let ast = Parser::new(&code).parse().unwrap_or_else(|_| Parser::new("").parse().unwrap());
+        let ast = Parser::new(&code).parse().or_else(|_| Parser::new("").parse())?;
         let provider = SignatureHelpProvider::new(&ast);
 
         if let Some(help) = provider.get_signature_help(&code, position) {
@@ -117,10 +119,11 @@ fn test_multi_signature_functions() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_parameter_highlighting() {
+fn test_parameter_highlighting() -> Result<(), Box<dyn std::error::Error>> {
     // Test that active parameter is correctly highlighted
     struct TestCase {
         code: &'static str,
@@ -148,7 +151,7 @@ fn test_parameter_highlighting() {
 
     for test in test_cases {
         let ast =
-            Parser::new(test.code).parse().unwrap_or_else(|_| Parser::new("").parse().unwrap());
+            Parser::new(test.code).parse().or_else(|_| Parser::new("").parse())?;
         let provider = SignatureHelpProvider::new(&ast);
 
         if let Some(help) = provider.get_signature_help(test.code, test.position) {
@@ -161,10 +164,11 @@ fn test_parameter_highlighting() {
             );
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_builtin_vs_user_functions() {
+fn test_builtin_vs_user_functions() -> Result<(), Box<dyn std::error::Error>> {
     // Test that we distinguish between built-in and user-defined functions
     let code = r#"
 sub my_print {
@@ -176,22 +180,23 @@ print("world");
 "#;
 
     // Test user function (should not have built-in signature)
-    let user_func_pos = code.find("my_print(").unwrap() + 9;
-    let ast = Parser::new(code).parse().unwrap_or_else(|_| Parser::new("").parse().unwrap());
+    let user_func_pos = code.find("my_print(").ok_or("Pattern 'my_print(' not found")? + 9;
+    let ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
     let provider = SignatureHelpProvider::new(&ast);
 
     // User function might have signature from parsing
     let _user_help = provider.get_signature_help(code, user_func_pos);
 
     // Test built-in function
-    let builtin_pos = code.find("print(\"world").unwrap() + 6;
+    let builtin_pos = code.find("print(\"world").ok_or("Pattern 'print(\"world' not found")? + 6;
     let builtin_help = provider.get_signature_help(code, builtin_pos);
 
     assert!(builtin_help.is_some(), "Should have signature for built-in print");
+    Ok(())
 }
 
 #[test]
-fn test_method_call_signatures() {
+fn test_method_call_signatures() -> Result<(), Box<dyn std::error::Error>> {
     // Test that method calls don't incorrectly trigger built-in signatures
     let test_cases = vec![
         "$obj->print(",  // Method call, not built-in print
@@ -201,17 +206,18 @@ fn test_method_call_signatures() {
 
     for code in test_cases {
         let position = code.len();
-        let ast = Parser::new(code).parse().unwrap_or_else(|_| Parser::new("").parse().unwrap());
+        let ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
         let provider = SignatureHelpProvider::new(&ast);
 
         // Method calls might not have signatures unless defined
         let _help = provider.get_signature_help(code, position);
         // We don't assert absence since methods might be recognized
     }
+    Ok(())
 }
 
 #[test]
-fn test_signature_help_with_syntax_errors() {
+fn test_signature_help_with_syntax_errors() -> Result<(), Box<dyn std::error::Error>> {
     // Test that signature help works even with syntax errors
     let error_cases = vec![
         "print(((",       // Unmatched parens
@@ -222,17 +228,18 @@ fn test_signature_help_with_syntax_errors() {
 
     for code in error_cases {
         let position = code.len() - 1;
-        let ast = Parser::new(code).parse().unwrap_or_else(|_| Parser::new("").parse().unwrap());
+        let ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
         let provider = SignatureHelpProvider::new(&ast);
 
         // Should still try to provide help
         let _help = provider.get_signature_help(code, position);
         // Don't assert - just ensure no panic
     }
+    Ok(())
 }
 
 #[test]
-fn test_overloaded_operators_as_functions() {
+fn test_overloaded_operators_as_functions() -> Result<(), Box<dyn std::error::Error>> {
     // Test operators that can be used as functions
     let operator_functions = vec![
         ("push", "push ARRAY, LIST"),
@@ -246,7 +253,7 @@ fn test_overloaded_operators_as_functions() {
         let code = format!("{}(@array, ", op);
         let position = code.len();
 
-        let ast = Parser::new(&code).parse().unwrap_or_else(|_| Parser::new("").parse().unwrap());
+        let ast = Parser::new(&code).parse().or_else(|_| Parser::new("").parse())?;
         let provider = SignatureHelpProvider::new(&ast);
 
         if let Some(help) = provider.get_signature_help(&code, position) {
@@ -257,11 +264,12 @@ fn test_overloaded_operators_as_functions() {
             );
         }
     }
+    Ok(())
 }
 
 #[cfg(feature = "lsp-extras")]
 #[test]
-fn test_file_test_operators() {
+fn test_file_test_operators() -> Result<(), Box<dyn std::error::Error>> {
     // Test file test operators
     let file_tests = vec![
         "-e", "-f", "-d", "-r", "-w", "-x", "-o", "-R", "-W", "-X", "-O", "-z", "-s", "-l", "-p",
@@ -269,16 +277,17 @@ fn test_file_test_operators() {
     ];
 
     for op in file_tests {
-        let ast = Parser::new("").parse().unwrap();
+        let ast = Parser::new("").parse()?;
         let provider = SignatureHelpProvider::new(&ast);
 
         // File test operators should have signatures
         assert!(provider.has_builtin(op), "Missing file test operator: {}", op);
     }
+    Ok(())
 }
 
 #[test]
-fn test_special_forms() {
+fn test_special_forms() -> Result<(), Box<dyn std::error::Error>> {
     // Test special forms that look like functions
     let special_forms = vec![
         ("do", vec!["do BLOCK", "do EXPR"]),
@@ -289,21 +298,22 @@ fn test_special_forms() {
     ];
 
     for (form, _sigs) in special_forms {
-        let ast = Parser::new("").parse().unwrap();
+        let ast = Parser::new("").parse()?;
         let provider = SignatureHelpProvider::new(&ast);
 
         assert!(provider.has_builtin(form), "Missing special form: {}", form);
     }
+    Ok(())
 }
 
 #[test]
-fn test_pragma_like_functions() {
+fn test_pragma_like_functions() -> Result<(), Box<dyn std::error::Error>> {
     // Test pragma-like built-ins
     let pragmas =
         vec!["strict", "warnings", "feature", "utf8", "bytes", "integer", "locale", "constant"];
 
     // These are not functions but modules, so they shouldn't have signatures
-    let ast = Parser::new("").parse().unwrap();
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     for pragma in pragmas {
@@ -314,12 +324,13 @@ fn test_pragma_like_functions() {
             pragma
         );
     }
+    Ok(())
 }
 
 #[test]
-fn test_comprehensive_function_categories() {
+fn test_comprehensive_function_categories() -> Result<(), Box<dyn std::error::Error>> {
     // Ensure all categories of functions are covered
-    let ast = Parser::new("").parse().unwrap();
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     let categories = vec![
@@ -340,12 +351,13 @@ fn test_comprehensive_function_categories() {
             assert!(provider.has_builtin(func), "Missing {} function: {}", category, func);
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_documentation_quality() {
+fn test_documentation_quality() -> Result<(), Box<dyn std::error::Error>> {
     // Test that all signatures have documentation
-    let ast = Parser::new("").parse().unwrap();
+    let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
     let important_funcs = vec![
@@ -358,4 +370,5 @@ fn test_documentation_quality() {
             assert!(!sig.documentation.is_empty(), "Function {} should have documentation", func);
         }
     }
+    Ok(())
 }

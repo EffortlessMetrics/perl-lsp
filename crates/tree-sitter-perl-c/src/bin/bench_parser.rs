@@ -10,7 +10,10 @@ fn main() {
         std::process::exit(1);
     }
     let file_path = &args[1];
-    let code = fs::read_to_string(file_path).expect("Failed to read file");
+    let code = fs::read_to_string(file_path).unwrap_or_else(|e| {
+        eprintln!("Failed to read file: {}", e);
+        std::process::exit(1);
+    });
     let start = Instant::now();
     let result = parse_perl_code(&code);
     let duration = start.elapsed().as_micros();

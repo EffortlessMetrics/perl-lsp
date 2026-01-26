@@ -1,7 +1,5 @@
 //! Integration tests for all new features implemented in perl-parser
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_parser::Parser;
 
 #[test]
@@ -17,7 +15,10 @@ fn test_regex_modifiers_integration() {
 
     for (code, expected_modifiers) in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("Failed to parse regex");
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => panic!("Failed to parse regex '{}': {}", code, e),
+        };
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains("regex"), "Expected regex node for: {}", code);
@@ -44,7 +45,10 @@ fn test_substitution_integration() {
 
     for (code, desc) in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("Failed to parse: {}", desc));
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => panic!("Failed to parse '{}': {}", desc, e),
+        };
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains("substitution"), "{}: Expected substitution in: {}", desc, sexp);
@@ -62,7 +66,10 @@ fn test_transliteration_integration() {
 
     for (code, desc) in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("Failed to parse: {}", desc));
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => panic!("Failed to parse '{}': {}", desc, e),
+        };
         let sexp = ast.to_sexp();
 
         assert!(
@@ -87,7 +94,10 @@ fn test_qw_integration() {
 
     for (code, desc) in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("Failed to parse: {}", desc));
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => panic!("Failed to parse '{}': {}", desc, e),
+        };
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains("array"), "{}: Expected array in: {}", desc, sexp);
@@ -106,7 +116,10 @@ fn test_statement_modifiers_integration() {
 
     for (code, desc) in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("Failed to parse: {}", desc));
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => panic!("Failed to parse '{}': {}", desc, e),
+        };
         let sexp = ast.to_sexp();
 
         assert!(
@@ -125,7 +138,10 @@ fn test_isa_operator_integration() {
 
     for code in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("Failed to parse ISA: {}", code));
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => panic!("Failed to parse ISA '{}': {}", code, e),
+        };
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains("binary_ISA"), "Expected ISA operator in: {}", sexp);
@@ -139,7 +155,10 @@ fn test_file_test_operators_integration() {
 
     for code in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("Failed to parse file test: {}", code));
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => panic!("Failed to parse file test '{}': {}", code, e),
+        };
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains("unary_-"), "Expected unary file test in: {}", sexp);
@@ -152,8 +171,10 @@ fn test_smart_match_integration() {
 
     for code in tests {
         let mut parser = Parser::new(code);
-        let ast =
-            parser.parse().unwrap_or_else(|_| panic!("Failed to parse smart match: {}", code));
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => panic!("Failed to parse smart match '{}': {}", code, e),
+        };
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains("~~"), "Expected smart match operator in: {}", sexp);
@@ -172,7 +193,10 @@ fn test_special_blocks_integration() {
 
     for (code, block_type) in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("Failed to parse {} block", block_type));
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => panic!("Failed to parse {} block: {}", block_type, e),
+        };
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains(block_type), "Expected {} block in: {}", block_type, sexp);
@@ -190,7 +214,10 @@ fn test_attributes_integration() {
 
     for (code, desc) in tests {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("Failed to parse: {}", desc));
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => panic!("Failed to parse '{}': {}", desc, e),
+        };
         let sexp = ast.to_sexp();
 
         // Skip test case if attributes aren't represented yet

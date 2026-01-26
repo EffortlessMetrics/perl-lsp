@@ -30,9 +30,10 @@
 //! ```no_run
 //! use perl_lsp_providers::{Parser, ide::lsp_compat::semantic_tokens::collect_semantic_tokens};
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "package MyModule; sub greet { my $name = shift; print \"Hello, $name!\"; }";
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().unwrap();
+//! let ast = parser.parse()?;
 //!
 //! // Generate semantic tokens for syntax highlighting
 //! let to_pos16 = |byte_pos: usize| {
@@ -47,6 +48,8 @@
 //!     println!("Token: [{}, {}, {}, {}, {}]",
 //!              token[0], token[1], token[2], token[3], token[4]);
 //! }
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## LSP Semantic Tokens Provider
@@ -55,9 +58,10 @@
 //! use perl_lsp_providers::ide::lsp_compat::semantic_tokens::{collect_semantic_tokens, legend};
 //! use perl_lsp_providers::Parser;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "my @array = (1, 2, 3); for my $item (@array) { print $item; }";
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().unwrap();
+//! let ast = parser.parse()?;
 //!
 //! // Get encoded tokens for LSP response
 //! let to_pos16 = |byte_pos: usize| {
@@ -72,6 +76,8 @@
 //! println!("Generated {} semantic tokens", encoded_tokens.len());
 //! println!("Token types: {:?}", legend.token_types);
 //! println!("Token modifiers: {:?}", legend.modifiers);
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Custom Token Classification
@@ -210,15 +216,18 @@ fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
 /// ```rust
 /// use perl_lsp_providers::{Parser, ide::lsp_compat::semantic_tokens::collect_semantic_tokens};
 ///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let script = "my $data_filter = qr/valid/;";
 /// let mut parser = Parser::new(script);
-/// let ast = parser.parse().unwrap();
+/// let ast = parser.parse()?;
 ///
 /// let pos_mapper = |pos| (0u32, pos as u32); // Simple line-based mapping
 /// let tokens = collect_semantic_tokens(&ast, script, &pos_mapper);
 ///
 /// assert!(!tokens.is_empty());
 /// // Tokens are delta-encoded for LSP transmission
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Email Processing Context
@@ -395,6 +404,7 @@ where
 }
 
 #[cfg(test)]
+
 mod tests {
     use super::*;
 

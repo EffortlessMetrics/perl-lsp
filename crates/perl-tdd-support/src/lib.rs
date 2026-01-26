@@ -73,3 +73,7 @@ pub use tdd::tdd_workflow;
 pub use tdd::test_generator;
 /// Test execution and TDD support functionality.
 pub use tdd::test_runner;
+
+/// Safe unwrap replacements for tests.
+pub mod must;
+pub use must::{must, must_some, must_err};

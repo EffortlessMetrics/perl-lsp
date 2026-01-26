@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::parser::Parser;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_division_vs_regex() {
@@ -9,7 +10,7 @@ mod tests {
         let mut parser = Parser::new(code_div);
         let result = parser.parse();
         assert!(result.is_ok(), "Failed to parse division");
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
         // Should contain binary division operator
         assert!(sexp.contains("binary_/"), "Should be parsed as division: {}", sexp);
@@ -20,7 +21,7 @@ mod tests {
         let mut parser2 = Parser::new(code_regex);
         let result2 = parser2.parse();
         assert!(result2.is_ok(), "Failed to parse regex match");
-        let ast2 = result2.unwrap();
+        let ast2 = must(result2);
         let sexp2 = ast2.to_sexp();
         assert!(sexp2.contains("regex"), "Should be parsed as regex: {}", sexp2);
 
@@ -30,7 +31,7 @@ mod tests {
         let mut parser3 = Parser::new(code_bare_regex);
         let result3 = parser3.parse();
         assert!(result3.is_ok());
-        let ast3 = result3.unwrap();
+        let ast3 = must(result3);
         let sexp3 = ast3.to_sexp();
         assert!(sexp3.contains("regex"), "Should be parsed as regex in void context: {}", sexp3);
     }
@@ -42,7 +43,7 @@ mod tests {
         let mut parser = Parser::new(code);
         let result = parser.parse();
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
 
         // Should see two division operations
@@ -66,7 +67,7 @@ mod tests {
         let mut parser = Parser::new(code);
         let result = parser.parse();
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
         assert!(sexp.contains("regex"), "Should be regex: {}", sexp);
     }
@@ -79,7 +80,7 @@ mod tests {
         let mut parser = Parser::new(code);
         let result = parser.parse();
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
         assert!(sexp.contains("binary_/"), "Should be division after nullary function: {}", sexp);
     }

@@ -532,11 +532,14 @@ fn generate_performance_substitutions(count: usize) -> String {
         .map(|i| {
             let delims = ["//", "||", "##", "@@", "%%"];
             let delim = delims[i % delims.len()];
+            // delims are static 2-char strings, first/last char always available
+            let first_char = delim.chars().next().unwrap_or('/');
+            let last_char = delim.chars().last().unwrap_or('/');
             format!(
                 "$large_text =~ s{}word{}term{}g;\n",
-                delim.chars().next().unwrap(),
-                delim.chars().next().unwrap(),
-                delim.chars().last().unwrap()
+                first_char,
+                first_char,
+                last_char
             )
         })
         .collect::<Vec<_>>()

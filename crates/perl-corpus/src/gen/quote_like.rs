@@ -168,8 +168,8 @@ mod tests {
         #[cfg(not(feature = "ci-fast"))]
         fn metamorphic_forms_are_equivalent((a, b) in q_like_metamorphic(q_like_payload())) {
             // Both should start with the same operator
-            let op_a = a.split(|c: char| !c.is_ascii_alphabetic()).next().unwrap();
-            let op_b = b.split(|c: char| !c.is_ascii_alphabetic()).next().unwrap();
+            let op_a = a.split(|c: char| !c.is_ascii_alphabetic()).next().unwrap_or("");
+            let op_b = b.split(|c: char| !c.is_ascii_alphabetic()).next().unwrap_or("");
             assert_eq!(op_a, op_b);
         }
 

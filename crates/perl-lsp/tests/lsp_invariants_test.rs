@@ -13,7 +13,7 @@ use serde_json::json;
 
 /// Verify all responses have proper JSON-RPC structure
 #[test]
-fn test_response_structure_invariants() {
+fn test_response_structure_invariants() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -42,11 +42,12 @@ fn test_response_structure_invariants() {
     // Must have matching ID
     assert!(response.get("id").is_some(), "Response must have an id field");
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Verify error responses have proper structure
 #[test]
-fn test_error_response_structure() {
+fn test_error_response_structure() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -68,7 +69,9 @@ fn test_error_response_structure() {
     assert!(error["message"].is_string(), "Error must have string message");
 
     // Standard JSON-RPC error codes
-    let code = error["code"].as_i64().unwrap();
+    let code = error["code"]
+        .as_i64()
+        .ok_or("Error code must be a valid i64 number")?;
     assert!(
         code == -32700  // Parse error
         || code == -32600  // Invalid request
@@ -79,11 +82,12 @@ fn test_error_response_structure() {
         "Error code must be standard JSON-RPC or server-defined"
     );
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Verify ID matching between request and response
 #[test]
-fn test_id_matching_invariants() {
+fn test_id_matching_invariants() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -119,11 +123,12 @@ fn test_id_matching_invariants() {
     );
     assert_eq!(response["id"], "test-id", "Response ID must match string request ID");
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Verify diagnostics always include version and errors are cleared when fixed
 #[test]
-fn test_diagnostics_version_invariant() {
+fn test_diagnostics_version_invariant() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -179,18 +184,21 @@ fn test_diagnostics_version_invariant() {
         common::short_timeout(),
     ) {
         assert_eq!(diag["params"]["version"], 2, "Diagnostics must have updated version");
-        let diags = diag["params"]["diagnostics"].as_array().unwrap();
+        let diags = diag["params"]["diagnostics"]
+            .as_array()
+            .ok_or("Diagnostics must be an array")?;
         // Check that there are no error-level diagnostics (severity 1)
         // Hints and warnings (severity 2-4) may still be present
         let errors: Vec<_> = diags.iter().filter(|d| d["severity"] == 1).collect();
         assert!(errors.is_empty(), "Fixed code should have no error-level diagnostics");
     }
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Verify server doesn't crash on malformed JSON
 #[test]
-fn test_no_crash_on_malformed_json() {
+fn test_no_crash_on_malformed_json() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -215,11 +223,12 @@ fn test_no_crash_on_malformed_json() {
     );
     assert!(response["result"].is_array() || response["error"].is_object());
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Verify proper error for invalid method
 #[test]
-fn test_invalid_request_errors() {
+fn test_invalid_request_errors() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -236,11 +245,12 @@ fn test_invalid_request_errors() {
     assert!(response["error"].is_object());
     assert_eq!(response["error"]["code"], -32601); // Method not found
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Verify notifications don't produce responses
 #[test]
-fn test_notifications_no_response() {
+fn test_notifications_no_response() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -274,11 +284,12 @@ fn test_notifications_no_response() {
         );
     }
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Verify server handles concurrent requests properly
 #[test]
-fn test_concurrent_request_handling() {
+fn test_concurrent_request_handling() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -315,4 +326,5 @@ fn test_concurrent_request_handling() {
     received_ids.sort();
     assert_eq!(received_ids, vec![200, 201, 202, 203, 204]);
     shutdown_and_exit(&mut server);
+    Ok(())
 }

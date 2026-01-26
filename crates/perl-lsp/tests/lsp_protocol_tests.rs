@@ -1,5 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use parking_lot::Mutex;
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
@@ -29,7 +27,7 @@ impl Write for CapturingWriter {
 }
 
 /// Parse LSP-framed JSON messages from the captured output
-fn parse_messages(data: &[u8]) -> Vec<Value> {
+fn parse_messages(data: &[u8]) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
     let mut messages = Vec::new();
     let cursor = Cursor::new(data);
     let mut reader = BufReader::new(cursor);
@@ -40,8 +38,8 @@ fn parse_messages(data: &[u8]) -> Vec<Value> {
         // Read headers
         loop {
             let mut line = String::new();
-            if reader.read_line(&mut line).unwrap() == 0 {
-                return messages; // EOF
+            if reader.read_line(&mut line)? == 0 {
+                return Ok(messages); // EOF
             }
 
             if line == "\r\n" || line == "\n" {
@@ -60,7 +58,7 @@ fn parse_messages(data: &[u8]) -> Vec<Value> {
 
         if let Some(length) = content_length {
             let mut content = vec![0u8; length];
-            reader.read_exact(&mut content).unwrap();
+            reader.read_exact(&mut content)?;
             if let Ok(json) = serde_json::from_slice::<Value>(&content) {
                 messages.push(json);
             }
@@ -69,11 +67,11 @@ fn parse_messages(data: &[u8]) -> Vec<Value> {
         }
     }
 
-    messages
+    Ok(messages)
 }
 
 #[test]
-fn test_diagnostics_clear_protocol_framing() {
+fn test_diagnostics_clear_protocol_framing() -> Result<(), Box<dyn std::error::Error>> {
     // Buffer to capture all output from the server
     let buffer = Arc::new(Mutex::new(Vec::new()));
     let writer = CapturingWriter::new(buffer.clone());
@@ -132,20 +130,22 @@ fn test_diagnostics_clear_protocol_framing() {
 
     // Parse captured output
     let output_bytes = buffer.lock().clone();
-    let messages = parse_messages(&output_bytes);
+    let messages = parse_messages(&output_bytes)?;
     let diagnostics: Vec<_> = messages
         .into_iter()
         .filter(|m| m.get("method") == Some(&json!("textDocument/publishDiagnostics")))
         .collect();
 
     assert!(!diagnostics.is_empty(), "No diagnostics notifications emitted");
-    let last = diagnostics.last().unwrap();
+    let last = diagnostics.last().ok_or("No last diagnostic message")?;
     assert_eq!(last["params"]["uri"], "file:///test/test.pl");
     assert_eq!(last["params"]["diagnostics"], json!([]));
+
+    Ok(())
 }
 
 #[test]
-fn test_workspace_symbol_deduplication() {
+fn test_workspace_symbol_deduplication() -> Result<(), Box<dyn std::error::Error>> {
     use perl_parser::workspace_index::WorkspaceIndex;
     use std::collections::HashSet;
     use url::Url;
@@ -172,7 +172,7 @@ sub another {
 "#;
 
     let uri = "file:///test/test.pl";
-    index.index_file(Url::parse(uri).unwrap(), perl_code.to_string()).unwrap();
+    index.index_file(Url::parse(uri)?, perl_code.to_string())?;
 
     // Search for symbols
     let symbols = index.find_symbols("test");
@@ -198,10 +198,12 @@ sub another {
     // There should be no duplicates in the final result
     // (The workspace/symbol handler should deduplicate)
     assert!(duplicates.is_empty(), "Found duplicate symbols: {:?}", duplicates);
+
+    Ok(())
 }
 
 #[test]
-fn test_workspace_symbol_response_format() {
+fn test_workspace_symbol_response_format() -> Result<(), Box<dyn std::error::Error>> {
     use perl_parser::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex};
     use url::Url;
 
@@ -217,7 +219,7 @@ sub test_function {
 "#;
 
     let uri = "file:///test/test.pl";
-    index.index_file(Url::parse(uri).unwrap(), perl_code.to_string()).unwrap();
+    index.index_file(Url::parse(uri)?, perl_code.to_string())?;
 
     // Search for symbols
     let symbols = index.find_symbols("test");
@@ -226,34 +228,36 @@ sub test_function {
     for symbol in symbols {
         // Convert to LSP wire format for serialization testing
         let lsp_symbol: LspWorkspaceSymbol = (&symbol).into();
-        let json = serde_json::to_value(&lsp_symbol).unwrap();
+        let json = serde_json::to_value(&lsp_symbol)?;
 
         // Verify required LSP fields are present
         assert!(json.get("name").is_some(), "Symbol missing 'name' field");
         assert!(json.get("kind").is_some(), "Symbol missing 'kind' field");
 
         // Location should contain uri and range
-        let location = json.get("location").expect("Symbol missing 'location' field");
+        let location = json.get("location").ok_or("Symbol missing 'location' field")?;
         assert!(location.get("uri").is_some(), "Location missing 'uri' field");
         assert!(location.get("range").is_some(), "Location missing 'range' field");
 
         // Verify range structure
-        let range = location.get("range").unwrap();
+        let range = location.get("range").ok_or("Location missing 'range' field")?;
         assert!(range.get("start").is_some(), "Range missing 'start' field");
         assert!(range.get("end").is_some(), "Range missing 'end' field");
 
-        let start = range.get("start").unwrap();
+        let start = range.get("start").ok_or("Range missing 'start' field")?;
         assert!(start.get("line").is_some(), "Start missing 'line' field");
         assert!(start.get("character").is_some(), "Start missing 'character' field");
 
-        let end = range.get("end").unwrap();
+        let end = range.get("end").ok_or("Range missing 'end' field")?;
         assert!(end.get("line").is_some(), "End missing 'line' field");
         assert!(end.get("character").is_some(), "End missing 'character' field");
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_position_encoding_advertised() {
+fn test_position_encoding_advertised() -> Result<(), Box<dyn std::error::Error>> {
     // This test verifies that the server advertises UTF-16 position encoding
     let _server = LspServer::new();
 
@@ -271,10 +275,12 @@ fn test_position_encoding_advertised() {
     // response["result"]["capabilities"]["positionEncoding"] == "utf-16"
 
     // For now, this test ensures the code compiles with the correct structure
+
+    Ok(())
 }
 
 #[test]
-fn test_tool_detection() {
+fn test_tool_detection() -> Result<(), Box<dyn std::error::Error>> {
     // Test that tool detection doesn't crash on systems without perltidy/perlcritic
     // The actual detection happens in handle_initialize which uses Command::new
 
@@ -301,10 +307,12 @@ fn test_tool_detection() {
 
     // This should not panic, regardless of whether perlcritic is installed
     println!("perlcritic available: {}", has_perlcritic);
+
+    Ok(())
 }
 
 #[test]
-fn test_uri_normalization() {
+fn test_uri_normalization() -> Result<(), Box<dyn std::error::Error>> {
     use perl_parser::workspace_index::WorkspaceIndex;
     use url::Url;
 
@@ -335,4 +343,6 @@ fn test_uri_normalization() {
         };
         assert!(result.is_ok(), "Failed to index with URI: {}", input);
     }
+
+    Ok(())
 }

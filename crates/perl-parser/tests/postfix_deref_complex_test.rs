@@ -1,7 +1,9 @@
 use perl_parser::Parser;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 #[test]
-fn test_complex_postfix_deref() {
+fn test_complex_postfix_deref() -> TestResult {
     // Test with real-world Perl code examples
     let cases = vec![
         // Basic postfix dereferences
@@ -34,11 +36,7 @@ fn test_complex_postfix_deref() {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
-        if let Err(e) = &result {
-            panic!("Failed to parse '{}': {:?}", code, e);
-        }
-
-        let ast = result.unwrap();
+        let ast = result.map_err(|e| format!("Failed to parse '{}': {:?}", code, e))?;
         let sexp = ast.to_sexp();
 
         assert!(
@@ -49,10 +47,11 @@ fn test_complex_postfix_deref() {
             sexp
         );
     }
+    Ok(())
 }
 
 #[test]
-fn test_postfix_deref_edge_cases() {
+fn test_postfix_deref_edge_cases() -> TestResult {
     // Test edge cases and potential parsing ambiguities
     let cases = vec![
         // Multiple dereferences in a row
@@ -69,11 +68,7 @@ fn test_postfix_deref_edge_cases() {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
-        if let Err(e) = &result {
-            panic!("Failed to parse '{}': {:?}", code, e);
-        }
-
-        let ast = result.unwrap();
+        let ast = result.map_err(|e| format!("Failed to parse '{}': {:?}", code, e))?;
         let sexp = ast.to_sexp();
 
         for pattern in expected_patterns {
@@ -86,4 +81,5 @@ fn test_postfix_deref_edge_cases() {
             );
         }
     }
+    Ok(())
 }

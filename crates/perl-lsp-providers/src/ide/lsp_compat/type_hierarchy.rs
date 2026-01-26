@@ -410,10 +410,11 @@ impl TypeHierarchyProvider {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+
 mod tests {
     use super::*;
     use perl_parser_core::parser::Parser;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_type_hierarchy_for_package() {
@@ -426,13 +427,13 @@ sub new {
 }
 "#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let provider = TypeHierarchyProvider::new();
 
         // Position on "MyClass" (package starts at position 0)
         let items = provider.prepare(&ast, code, 8);
         assert!(items.is_some());
-        let items = items.unwrap();
+        let items = must_some(items);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].name, "MyClass");
 
@@ -448,13 +449,13 @@ sub new {
 our @ISA = qw(Parent1 Parent2);
 "#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let provider = TypeHierarchyProvider::new();
 
         // Position on "Child"
         let items = provider.prepare(&ast, code, 8);
         assert!(items.is_some());
-        let items = items.unwrap();
+        let items = must_some(items);
         assert_eq!(items[0].name, "Child");
 
         // Find supertypes - qw() parsing needs AST improvements
@@ -477,7 +478,7 @@ package Unrelated;
 use parent 'Other';
 "#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let provider = TypeHierarchyProvider::new();
 
         // Create a Base item
@@ -507,12 +508,12 @@ use parent 'Other';
 our @ISA = qw(Parent1 Parent2 Parent3);
 "#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let provider = TypeHierarchyProvider::new();
 
         let items = provider.prepare(&ast, code, 8);
         assert!(items.is_some());
-        let items = items.unwrap();
+        let items = must_some(items);
         assert_eq!(items[0].name, "Multi");
 
         // Find supertypes - should handle qw() properly
@@ -531,7 +532,7 @@ package Other;
 use parent 'Outer';
 "#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let provider = TypeHierarchyProvider::new();
 
         let outer_item = TypeHierarchyItem {

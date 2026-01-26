@@ -130,22 +130,22 @@ fn test_duplicate_request_ids() {
 }
 
 #[test]
-fn test_invalid_content_length_header() {
+fn test_invalid_content_length_header() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
 
     // Send malformed content-length
     server
         .stdin_writer()
-        .write_all(b"Content-Length: not-a-number\r\n\r\n{\"jsonrpc\":\"2.0\"}")
-        .unwrap();
-    server.stdin_writer().flush().unwrap();
+        .write_all(b"Content-Length: not-a-number\r\n\r\n{\"jsonrpc\":\"2.0\"}")?;
+    server.stdin_writer().flush()?;
 
     std::thread::sleep(Duration::from_millis(100));
     // Server should recover
+    Ok(())
 }
 
 #[test]
-fn test_mismatched_content_length() {
+fn test_mismatched_content_length() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
 
     // Content-Length doesn't match actual content
@@ -154,31 +154,31 @@ fn test_mismatched_content_length() {
 
     server
         .stdin_writer()
-        .write_all(format!("Content-Length: {}\r\n\r\n{}", wrong_length, content).as_bytes())
-        .unwrap();
-    server.stdin_writer().flush().unwrap();
+        .write_all(format!("Content-Length: {}\r\n\r\n{}", wrong_length, content).as_bytes())?;
+    server.stdin_writer().flush()?;
 
     std::thread::sleep(Duration::from_millis(100));
     // Server should handle gracefully
+    Ok(())
 }
 
 #[test]
-fn test_missing_content_length_header() {
+fn test_missing_content_length_header() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
 
     // Send without Content-Length
     server
         .stdin_writer()
-        .write_all(b"\r\n{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}")
-        .unwrap();
-    server.stdin_writer().flush().unwrap();
+        .write_all(b"\r\n{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}")?;
+    server.stdin_writer().flush()?;
 
     std::thread::sleep(Duration::from_millis(100));
     // Server should reject
+    Ok(())
 }
 
 #[test]
-fn test_additional_headers() {
+fn test_additional_headers() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
 
     // Send with additional headers
@@ -190,15 +190,16 @@ fn test_additional_headers() {
             content.len(),
             content
         ).as_bytes()
-    ).unwrap();
-    server.stdin_writer().flush().unwrap();
+    )?;
+    server.stdin_writer().flush()?;
 
     let response = read_response(&mut server);
     assert!(response["id"].is_number());
+    Ok(())
 }
 
 #[test]
-fn test_invalid_utf8_in_message() {
+fn test_invalid_utf8_in_message() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -210,13 +211,13 @@ fn test_invalid_utf8_in_message() {
 
     server
         .stdin_writer()
-        .write_all(format!("Content-Length: {}\r\n\r\n", invalid_content.len()).as_bytes())
-        .unwrap();
-    server.stdin_writer().write_all(&invalid_content).unwrap();
-    server.stdin_writer().flush().unwrap();
+        .write_all(format!("Content-Length: {}\r\n\r\n", invalid_content.len()).as_bytes())?;
+    server.stdin_writer().write_all(&invalid_content)?;
+    server.stdin_writer().flush()?;
 
     std::thread::sleep(Duration::from_millis(100));
     // Server should handle invalid UTF-8
+    Ok(())
 }
 
 #[cfg(feature = "strict-jsonrpc")]
@@ -342,7 +343,7 @@ fn test_params_type_violations() {
 }
 
 #[test]
-fn test_circular_json_reference() {
+fn test_circular_json_reference() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -361,10 +362,11 @@ fn test_circular_json_reference() {
         }
     }"#;
 
-    send_request(&mut server, serde_json::from_str(circular_json).unwrap());
+    send_request(&mut server, serde_json::from_str(circular_json)?);
 
     // Should handle without stack overflow
     std::thread::sleep(Duration::from_millis(100));
+    Ok(())
 }
 
 #[test]
@@ -568,12 +570,12 @@ fn test_response_without_request() {
 
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
-fn test_batch_request_violations() {
+fn test_batch_request_violations() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
 
     // Empty batch
-    server.stdin_writer().write_all(b"Content-Length: 2\r\n\r\n[]").unwrap();
-    server.stdin_writer().flush().unwrap();
+    server.stdin_writer().write_all(b"Content-Length: 2\r\n\r\n[]")?;
+    server.stdin_writer().flush()?;
 
     std::thread::sleep(Duration::from_millis(100));
 
@@ -587,29 +589,29 @@ fn test_batch_request_violations() {
     let content = batch.to_string();
     server
         .stdin_writer()
-        .write_all(format!("Content-Length: {}\r\n\r\n{}", content.len(), content).as_bytes())
-        .unwrap();
-    server.stdin_writer().flush().unwrap();
+        .write_all(format!("Content-Length: {}\r\n\r\n{}", content.len(), content).as_bytes())?;
+    server.stdin_writer().flush()?;
 
     // Should process valid ones and error on invalid
     std::thread::sleep(Duration::from_millis(200));
+    Ok(())
 }
 
 #[test]
-fn test_incomplete_message() {
+fn test_incomplete_message() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
 
     // Send partial message
     let content = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}"#; // Missing closing brace
 
-    server
-        .stdin_writer()
-        .write_all(format!("Content-Length: {}\r\n\r\n{}", content.len() + 1, content).as_bytes())
-        .unwrap();
-    server.stdin_writer().flush().unwrap();
+    server.stdin_writer().write_all(
+        format!("Content-Length: {}\r\n\r\n{}", content.len() + 1, content).as_bytes(),
+    )?;
+    server.stdin_writer().flush()?;
 
     // Server should timeout or error
     std::thread::sleep(Duration::from_millis(500));
+    Ok(())
 }
 
 #[test]

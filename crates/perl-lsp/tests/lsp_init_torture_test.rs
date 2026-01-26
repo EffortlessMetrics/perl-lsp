@@ -32,22 +32,20 @@ fn get_iterations() -> usize {
 ///
 /// This catches the exact class of race that produced BrokenPipe errors.
 #[test]
-fn torture_init_shutdown_cycles() {
+fn torture_init_shutdown_cycles() -> Result<(), Box<dyn std::error::Error>> {
     let iterations = get_iterations();
     let mut success_count = 0;
     let mut failure_count = 0;
 
     for i in 0..iterations {
-        let result = std::panic::catch_unwind(|| {
+        let result = std::panic::catch_unwind(|| -> Result<(), Box<dyn std::error::Error>> {
             let mut harness = LspHarness::new_raw();
 
             // Initialize with barrier
-            harness
-                .initialize_ready("file:///workspace", None)
-                .expect("initialization should succeed");
+            harness.initialize_ready("file:///workspace", None)?;
 
             // Open a tiny document
-            harness.open("file:///test.pl", "my $x = 1;").expect("open should succeed");
+            harness.open("file:///test.pl", "my $x = 1;")?;
 
             // Request hover
             let result = harness.request(
@@ -63,6 +61,7 @@ fn torture_init_shutdown_cycles() {
 
             // Graceful shutdown (happens automatically on drop, but we can be explicit)
             harness.shutdown_gracefully();
+            Ok(())
         });
 
         if result.is_ok() {
@@ -82,13 +81,14 @@ fn torture_init_shutdown_cycles() {
     );
 
     eprintln!("Init torture test passed: {}/{} iterations successful", success_count, iterations);
+    Ok(())
 }
 
 /// Test: Rapid init/shutdown cycles with TestContext wrapper
 ///
 /// Validates that the TestContext compatibility wrapper also prevents races.
 #[test]
-fn torture_test_context_init_cycles() {
+fn torture_test_context_init_cycles() -> Result<(), Box<dyn std::error::Error>> {
     let iterations = get_iterations();
     let mut success_count = 0;
 
@@ -116,22 +116,23 @@ fn torture_test_context_init_cycles() {
         "TestContext torture test passed: {}/{} iterations successful",
         success_count, iterations
     );
+    Ok(())
 }
 
 /// Test: Multiple documents open/close in rapid succession
 #[test]
-fn torture_document_lifecycle() {
+fn torture_document_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
     let iterations = get_iterations();
 
     let mut harness = LspHarness::new_raw();
-    harness.initialize_ready("file:///workspace", None).expect("initialization should succeed");
+    harness.initialize_ready("file:///workspace", None)?;
 
     for i in 0..iterations {
         let uri = format!("file:///test_{}.pl", i);
         let content = format!("my $var{} = {};", i, i);
 
         // Open document
-        harness.open(&uri, &content).expect("open should succeed");
+        harness.open(&uri, &content)?;
 
         // Barrier to ensure processing
         if i % 10 == 0 {
@@ -139,33 +140,35 @@ fn torture_document_lifecycle() {
         }
 
         // Close document
-        harness.close(&uri).expect("close should succeed");
+        harness.close(&uri)?;
     }
 
     // Final barrier
     harness.barrier();
 
     eprintln!("Document lifecycle torture test passed: {} open/close cycles", iterations);
+    Ok(())
 }
 
 /// Test: Rapid document updates
 #[test]
-fn torture_document_updates() {
+fn torture_document_updates() -> Result<(), Box<dyn std::error::Error>> {
     let iterations = get_iterations();
 
     let mut harness = LspHarness::new_raw();
-    harness.initialize_ready("file:///workspace", None).expect("initialization should succeed");
+    harness.initialize_ready("file:///workspace", None)?;
 
     let uri = "file:///test.pl";
-    harness.open(uri, "my $x = 0;").expect("open should succeed");
+    harness.open(uri, "my $x = 0;")?;
 
     for i in 1..=iterations {
         let content = format!("my $x = {};", i);
-        harness.change_full(uri, i as i32, &content).expect("change should succeed");
+        harness.change_full(uri, i as i32, &content)?;
     }
 
     // Final barrier
     harness.barrier();
 
     eprintln!("Document update torture test passed: {} updates", iterations);
+    Ok(())
 }

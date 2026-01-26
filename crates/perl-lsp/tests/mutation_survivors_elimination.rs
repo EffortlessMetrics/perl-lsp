@@ -166,7 +166,7 @@ mod semantic_token_overlap_validation {
 
     /// Test no-overlap property for semantic tokens
     #[test]
-    fn test_semantic_tokens_no_overlap_property() {
+    fn test_semantic_tokens_no_overlap_property() -> Result<(), Box<dyn std::error::Error>> {
         let test_code = r#"
 package MyModule;
 use strict;
@@ -187,7 +187,7 @@ $var =~ tr/abc/xyz/;
 "#;
 
         let mut parser = Parser::new(test_code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
 
         // Create position converter for testing
         let to_pos16 = |byte_pos: usize| -> (u32, u32) {
@@ -227,15 +227,17 @@ $var =~ tr/abc/xyz/;
                 }
             }
         }
+
+        Ok(())
     }
 
     /// Test semantic tokens idempotence property
     #[test]
-    fn test_semantic_tokens_idempotence_property() {
+    fn test_semantic_tokens_idempotence_property() -> Result<(), Box<dyn std::error::Error>> {
         let test_code = "my $var = 'hello'; sub test { return $var; }";
 
         let mut parser = Parser::new(test_code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
 
         let to_pos16 = |byte_pos: usize| -> (u32, u32) {
             let line = test_code[..byte_pos].matches('\n').count() as u32;
@@ -253,17 +255,19 @@ $var =~ tr/abc/xyz/;
         assert_eq!(tokens1, tokens2, "Semantic tokens generation is not idempotent (call 1 vs 2)");
         assert_eq!(tokens2, tokens3, "Semantic tokens generation is not idempotent (call 2 vs 3)");
         assert_eq!(tokens1, tokens3, "Semantic tokens generation is not idempotent (call 1 vs 3)");
+
+        Ok(())
     }
 
     /// Test semantic tokens permutation stability (order independence)
     #[test]
-    fn test_semantic_tokens_permutation_stability() {
+    fn test_semantic_tokens_permutation_stability() -> Result<(), Box<dyn std::error::Error>> {
         let test_cases =
             vec!["my $a = 1; my $b = 2;", "sub func1 {} sub func2 {}", "package A; package B;"];
 
         for test_code in test_cases {
             let mut parser = Parser::new(test_code);
-            let ast = parser.parse().unwrap();
+            let ast = parser.parse()?;
 
             let to_pos16 = |byte_pos: usize| -> (u32, u32) {
                 let line = test_code[..byte_pos].matches('\n').count() as u32;
@@ -301,11 +305,13 @@ $var =~ tr/abc/xyz/;
                 prev_col = current_col;
             }
         }
+
+        Ok(())
     }
 
     /// Test higher-priority token precedence in overlap situations
     #[test]
-    fn test_semantic_tokens_priority_precedence() {
+    fn test_semantic_tokens_priority_precedence() -> Result<(), Box<dyn std::error::Error>> {
         // Test cases where multiple token types could apply
         let priority_test_cases = vec![
             ("my $special_var;", "variable declarations should have priority"),
@@ -316,7 +322,7 @@ $var =~ tr/abc/xyz/;
 
         for (test_code, _description) in priority_test_cases {
             let mut parser = Parser::new(test_code);
-            let ast = parser.parse().unwrap();
+            let ast = parser.parse()?;
 
             let to_pos16 = |byte_pos: usize| -> (u32, u32) {
                 let line = test_code[..byte_pos].matches('\n').count() as u32;
@@ -338,6 +344,8 @@ $var =~ tr/abc/xyz/;
                 );
             }
         }
+
+        Ok(())
     }
 
     /// Helper function to decode delta-encoded token positions
@@ -671,7 +679,7 @@ mod property_based_mutation_tests {
 
     /// Property: Semantic tokens should maintain ordering invariants
     #[test]
-    fn test_semantic_tokens_ordering_invariants() {
+    fn test_semantic_tokens_ordering_invariants() -> Result<(), Box<dyn std::error::Error>> {
         let test_codes = vec![
             "my $var = 'test';",
             "sub func { return 1; }",
@@ -682,7 +690,7 @@ mod property_based_mutation_tests {
 
         for test_code in test_codes {
             let mut parser = Parser::new(test_code);
-            let ast = parser.parse().unwrap();
+            let ast = parser.parse()?;
 
             let to_pos16 = |byte_pos: usize| -> (u32, u32) {
                 let line = test_code[..byte_pos].matches('\n').count() as u32;
@@ -721,6 +729,8 @@ mod property_based_mutation_tests {
                 );
             }
         }
+
+        Ok(())
     }
 }
 

@@ -1,7 +1,9 @@
 use perl_parser::Parser;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 #[test]
-fn test_heredoc_body_consumption() {
+fn test_heredoc_body_consumption() -> TestResult {
     // Test that heredoc bodies are consumed, not parsed as tokens
     let input = r#"my $x = <<END;
 hello
@@ -10,17 +12,18 @@ END
 say 1;"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Should NOT contain "hello" or "world" as identifiers
     assert!(!sexp.contains("(identifier hello)"));
     assert!(!sexp.contains("(identifier world)"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_multiple_heredocs_single_line() {
+fn test_multiple_heredocs_single_line() -> TestResult {
     // Test multiple heredocs on one line (FIFO processing)
     let input = r#"print <<FIRST, <<SECOND;
 body of first
@@ -30,7 +33,7 @@ SECOND
 say "done";"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Bodies should be consumed, not parsed as identifiers
@@ -39,10 +42,11 @@ say "done";"#;
     assert!(!sexp.contains("(identifier first)"));
     assert!(!sexp.contains("(identifier second)"));
     assert!(sexp.contains(r#"say ((string_interpolated ""done""))"#));
+    Ok(())
 }
 
 #[test]
-fn test_three_heredocs() {
+fn test_three_heredocs() -> TestResult {
     let input = r#"print <<A, <<B, <<C;
 aaa
 A
@@ -53,7 +57,7 @@ C
 say 1;"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // All three bodies should be consumed
@@ -61,10 +65,11 @@ say 1;"#;
     assert!(!sexp.contains("(identifier bbb)"));
     assert!(!sexp.contains("(identifier ccc)"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_indented_heredoc() {
+fn test_indented_heredoc() -> TestResult {
     // Test Perl 5.26+ indented heredoc (<<~)
     let input = r#"my $x = <<~END;
     hello
@@ -73,17 +78,18 @@ fn test_indented_heredoc() {
 say 1;"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Body should be consumed
     assert!(!sexp.contains("(identifier hello)"));
     assert!(!sexp.contains("(identifier world)"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_mixed_heredocs() {
+fn test_mixed_heredocs() -> TestResult {
     // Test mix of regular and indented heredocs
     let input = r#"print <<REGULAR, <<~INDENTED;
 not indented
@@ -93,7 +99,7 @@ REGULAR
 say 1;"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Bodies should be consumed
@@ -101,10 +107,11 @@ say 1;"#;
     assert!(!sexp.contains("(identifier indented)"));
     assert!(!sexp.contains("(identifier content)"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_heredoc_fake_data_marker() {
+fn test_heredoc_fake_data_marker() -> TestResult {
     // Test that __DATA__ inside heredoc is ignored
     let input = r#"my $x = <<END;
 __DATA__
@@ -115,7 +122,7 @@ __DATA__
 real data"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Fake __DATA__ in heredoc should be consumed
@@ -123,10 +130,11 @@ real data"#;
     assert!(!sexp.contains("(identifier real)"), "Should not parse 'real' from heredoc body");
     // Real __DATA__ section should exist
     assert!(sexp.contains("data_section"));
+    Ok(())
 }
 
 #[test]
-fn test_non_indented_heredoc_rejects_indented_terminator() {
+fn test_non_indented_heredoc_rejects_indented_terminator() -> TestResult {
     // Non-indented heredoc should NOT accept indented terminator
     let input = r#"my $x = <<END;
 hello
@@ -134,105 +142,112 @@ hello
 more content"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Should get UNKNOWN_REST since terminator wasn't found
     assert!(sexp.contains("UNKNOWN_REST"));
+    Ok(())
 }
 
 #[test]
-fn test_quoted_label_with_spaces() {
+fn test_quoted_label_with_spaces() -> TestResult {
     let input = r#"my $x = <<'END THIS';
 foo bar
 END THIS
 say 1;"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Body should be consumed
     assert!(!sexp.contains("(identifier foo)"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_backslashed_label_no_interpolation() {
+fn test_backslashed_label_no_interpolation() -> TestResult {
     let input = r#"my $x = <<\END;
 $var should not interpolate
 END
 say 1;"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Body consumed, no interpolation check needed at lexer level
     assert!(!sexp.contains("(identifier var)"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_whitespace_after_heredoc_operator() {
+fn test_whitespace_after_heredoc_operator() -> TestResult {
     let input = r#"my $x = <<   "END";
 hello world
 END
 say 1;"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Body should be consumed
     assert!(!sexp.contains("(identifier hello)"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_crlf_line_endings() {
+fn test_crlf_line_endings() -> TestResult {
     let input = "my $x = <<END;\r\nhello\r\nEND\r\nsay 1;\r\n";
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Should work identically to LF endings
     assert!(!sexp.contains("(identifier hello)"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_tab_indented_tilde_heredoc() {
+fn test_tab_indented_tilde_heredoc() -> TestResult {
     let input = "my $x = <<~END;\n\t\thello\n\t\tEND\nsay 1;";
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Tab-indented terminator should work with <<~
     assert!(!sexp.contains("(identifier hello)"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_terminator_with_trailing_junk() {
+fn test_terminator_with_trailing_junk() -> TestResult {
     let input = r#"my $x = <<END;
 hello
 END junk after terminator
 say 1;"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Terminator with trailing non-space should not be recognized
     // Should get UNKNOWN_REST since terminator wasn't found
     assert!(sexp.contains("UNKNOWN_REST"));
+    Ok(())
 }
 
 #[test]
-fn test_mixed_regular_and_tilde_heredocs() {
+fn test_mixed_regular_and_tilde_heredocs() -> TestResult {
     let input = r#"print <<END, <<~INDENTED;
 regular
 END
@@ -241,7 +256,7 @@ END
 say 1;"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Both bodies should be consumed
@@ -249,10 +264,11 @@ say 1;"#;
     assert!(!sexp.contains("(identifier indented)"));
     assert!(!sexp.contains("(identifier content)"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_heredoc_after_large_regex() {
+fn test_heredoc_after_large_regex() -> TestResult {
     // Test that budget limits don't interfere with heredoc handling
     let input = r#"m{.{1000}}; # Large regex
 my $x = <<END;
@@ -261,47 +277,47 @@ END
 say 1;"#;
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // Heredoc should still work after large regex
     assert!(!sexp.contains("(identifier hello)"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_bom_at_file_start() {
+fn test_bom_at_file_start() -> TestResult {
     // UTF-8 BOM: EF BB BF
     let input = "\u{FEFF}my $x = <<END;\nhello\nEND\nsay 1;";
 
     let mut parser = Parser::new(input);
-    let tree = parser.parse().unwrap();
+    let tree = parser.parse()?;
     let sexp = tree.to_sexp();
 
     // BOM should be skipped, heredoc should work
     assert!(!sexp.contains("(identifier hello)"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_comprehensive_crlf_tilde_trailing_spaces() {
+fn test_comprehensive_crlf_tilde_trailing_spaces() -> TestResult {
     // Mixed CRLF + <<~ + trailing spaces on terminator
     let input = "my $x = <<~END;\r\n    indented\r\n    END  \t \r\nsay 1;\r\n";
 
     let mut parser = Parser::new(input);
-    let ast = parser.parse();
-    assert!(ast.is_ok());
-
-    let ast = ast.unwrap();
+    let ast = parser.parse()?;
     let sexp = ast.to_sexp();
 
     // Verify structure is preserved with CRLF
     assert!(sexp.contains("(my_declaration"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_data_end_with_trailing_junk_non_ws() {
+fn test_data_end_with_trailing_junk_non_ws() -> TestResult {
     // __DATA__ and __END__ should reject lines with non-whitespace trailing junk
     let inputs = vec![
         "__DATA__ # comment\nShould not be data",
@@ -313,10 +329,8 @@ fn test_data_end_with_trailing_junk_non_ws() {
 
     for input in inputs {
         let mut parser = Parser::new(input);
-        let ast = parser.parse();
-        assert!(ast.is_ok());
-
-        let sexp = ast.unwrap().to_sexp();
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
         // Should not parse as data sections
         assert!(
             !sexp.contains("(data_section"),
@@ -324,10 +338,11 @@ fn test_data_end_with_trailing_junk_non_ws() {
             input
         );
     }
+    Ok(())
 }
 
 #[test]
-fn test_reject_ruby_style_heredoc() {
+fn test_reject_ruby_style_heredoc() -> TestResult {
     // Ruby uses <<- for indented heredocs, Perl does not
     // Perl sees <<-END as: << operator followed by unary minus and bareword END
     let input = "my $x = <<-END;\n    indented\n    -END\nsay 1;";
@@ -346,51 +361,49 @@ fn test_reject_ruby_style_heredoc() {
         // Or it might fail to parse due to syntax error
         // Either way, it's not a valid heredoc - nothing to assert
     }
+    Ok(())
 }
 
 #[test]
-fn test_old_mac_cr_only_line_endings() {
+fn test_old_mac_cr_only_line_endings() -> TestResult {
     // Old Mac used \r only for line endings
     let input = "my $x = <<END;\rLine1\rLine2\rEND\rsay 1;\r";
 
     let mut parser = Parser::new(input);
-    let ast = parser.parse();
-    assert!(ast.is_ok());
-
-    let sexp = ast.unwrap().to_sexp();
+    let ast = parser.parse()?;
+    let sexp = ast.to_sexp();
     // Verify structure is preserved with CR-only line endings
     assert!(sexp.contains("(my_declaration"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_tilde_heredoc_allows_blank_lines() {
+fn test_tilde_heredoc_allows_blank_lines() -> TestResult {
     // Perl allows empty lines in <<~ heredocs
     let input = "my $x = <<~END;\n    line1\n    \n    line3\n    END\nsay 1;\n";
 
     let mut parser = Parser::new(input);
-    let ast = parser.parse();
-    assert!(ast.is_ok());
-
-    let sexp = ast.unwrap().to_sexp();
+    let ast = parser.parse()?;
+    let sexp = ast.to_sexp();
     // Blank lines are allowed in indented heredocs
     assert!(sexp.contains("(my_declaration"));
     assert!(sexp.contains("say"));
+    Ok(())
 }
 
 #[test]
-fn test_end_with_trailing_junk_is_ignored() {
+fn test_end_with_trailing_junk_is_ignored() -> TestResult {
     // __END__ with non-whitespace trailing text should not be treated as data section
     let input = "__END__ trailing\nstill code\n";
 
     let mut parser = Parser::new(input);
-    let ast = parser.parse();
-    assert!(ast.is_ok());
-
-    let sexp = ast.unwrap().to_sexp();
+    let ast = parser.parse()?;
+    let sexp = ast.to_sexp();
     // Should not parse as data section
     assert!(
         !sexp.contains("(data_section"),
         "__END__ with trailing junk should not be data section"
     );
+    Ok(())
 }

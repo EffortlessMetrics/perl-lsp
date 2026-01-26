@@ -310,14 +310,17 @@ mod tests {
     use super::*;
     use test_utils::*;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
     #[test]
-    fn test_fixture_completeness_validation() {
-        validate_fixture_completeness().expect("Fixture validation failed");
+    fn test_fixture_completeness_validation() -> TestResult {
+        validate_fixture_completeness()?;
+        Ok(())
     }
 
     #[test]
-    fn test_fixture_coverage_stats() {
-        let stats = get_fixture_coverage_stats().expect("Failed to get coverage stats");
+    fn test_fixture_coverage_stats() -> TestResult {
+        let stats = get_fixture_coverage_stats()?;
 
         // Verify we have reasonable coverage
         assert!(stats["valid_cancellation_requests"] > 0, "No valid cancellation request fixtures");
@@ -326,12 +329,12 @@ mod tests {
         assert!(stats["race_condition_scenarios"] > 0, "No race condition fixtures");
 
         println!("Fixture coverage stats: {:?}", stats);
+        Ok(())
     }
 
     #[test]
-    fn test_workspace_creation_from_fixtures() {
-        let workspace = create_test_workspace_from_fixtures()
-            .expect("Failed to create test workspace");
+    fn test_workspace_creation_from_fixtures() -> TestResult {
+        let workspace = create_test_workspace_from_fixtures()?;
 
         assert!(workspace.len() >= 5, "Test workspace should have at least 5 files");
 
@@ -339,12 +342,12 @@ mod tests {
         assert!(workspace.contains_key("file:///test/incremental_parsing.pl"));
         assert!(workspace.contains_key("file:///lib/MultiFileProject/Core.pm"));
         assert!(workspace.contains_key("file:///lib/MultiFileProject/Database.pm"));
+        Ok(())
     }
 
     #[test]
-    fn test_performance_thresholds_extraction() {
-        let thresholds = get_performance_thresholds()
-            .expect("Failed to extract performance thresholds");
+    fn test_performance_thresholds_extraction() -> TestResult {
+        let thresholds = get_performance_thresholds()?;
 
         // Verify critical performance thresholds are present
         assert!(thresholds.contains_key("max_cancellation_check_latency_us"));
@@ -355,5 +358,6 @@ mod tests {
         assert!(thresholds["max_cancellation_check_latency_us"] <= 100.0);
         assert!(thresholds["max_e2e_cancellation_response_ms"] <= 50.0);
         assert!(thresholds["max_memory_overhead_kb"] <= 1024.0);
+        Ok(())
     }
 }

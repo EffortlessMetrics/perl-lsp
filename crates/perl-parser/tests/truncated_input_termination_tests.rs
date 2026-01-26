@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Truncated Input Termination Tests
 //!
 //! These tests verify that the parser terminates gracefully (no infinite loops)

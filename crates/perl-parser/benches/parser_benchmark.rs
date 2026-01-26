@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Benchmarks for the perl-parser crate
 //!
 //! This benchmark suite measures the performance of the modern two-crate

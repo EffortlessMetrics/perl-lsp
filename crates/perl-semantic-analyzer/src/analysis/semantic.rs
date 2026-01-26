@@ -1358,13 +1358,16 @@ fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
 /// use perl_parser::Parser;
 /// use perl_parser::semantic::SemanticModel;
 ///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let code = "my $x = 42; $x + 10;";
 /// let mut parser = Parser::new(code);
-/// let ast = parser.parse().unwrap();
+/// let ast = parser.parse()?;
 ///
 /// let model = SemanticModel::build(&ast, code);
 /// let tokens = model.tokens();
 /// assert!(!tokens.is_empty());
+/// # Ok(())
+/// # }
 /// ```
 #[derive(Debug)]
 pub struct SemanticModel {
@@ -1440,15 +1443,18 @@ impl SemanticModel {
     /// use perl_parser::Parser;
     /// use perl_parser::semantic::SemanticModel;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let code = "my $x = 1;\n$x + 2;\n";
     /// let mut parser = Parser::new(code);
-    /// let ast = parser.parse().unwrap();
+    /// let ast = parser.parse()?;
     ///
     /// let model = SemanticModel::build(&ast, code);
     /// // Find definition of $x on line 1 (byte position ~11)
     /// if let Some(symbol) = model.definition_at(11) {
     ///     assert_eq!(symbol.location.start.line, 0);
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn definition_at(&self, position: usize) -> Option<&Symbol> {
         self.analyzer.find_definition(position)
@@ -1456,20 +1462,20 @@ impl SemanticModel {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+
 mod tests {
     use super::*;
     use crate::parser::Parser;
 
     #[test]
-    fn test_semantic_tokens() {
+    fn test_semantic_tokens() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 my $x = 42;
 print $x;
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
 
         let analyzer = SemanticAnalyzer::analyze(&ast);
         let tokens = analyzer.semantic_tokens();
@@ -1490,10 +1496,11 @@ print $x;
             .collect();
         assert!(!x_tokens.is_empty());
         assert!(x_tokens[0].modifiers.contains(&SemanticTokenModifier::Declaration));
+        Ok(())
     }
 
     #[test]
-    fn test_hover_info() {
+    fn test_hover_info() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 sub foo {
     return 42;
@@ -1503,17 +1510,18 @@ my $result = foo();
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
 
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         // The hover info would be at specific locations
         // In practice, we'd look up by position
         assert!(!analyzer.hover_info.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_hover_doc_from_pod() {
+    fn test_hover_doc_from_pod() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 # This is foo
 # More docs
@@ -1523,37 +1531,39 @@ sub foo {
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
 
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         // Find the symbol for foo and check its hover documentation
-        let sym = analyzer.symbol_table().symbols.get("foo").unwrap()[0].clone();
-        let hover = analyzer.hover_at(sym.location).unwrap();
-        assert!(hover.documentation.as_ref().unwrap().contains("This is foo"));
+        let sym = analyzer.symbol_table().symbols.get("foo").ok_or("symbol not found")?[0].clone();
+        let hover = analyzer.hover_at(sym.location).ok_or("hover not found")?;
+        assert!(hover.documentation.as_ref().ok_or("doc not found")?.contains("This is foo"));
+        Ok(())
     }
 
     #[test]
-    fn test_comment_doc_extraction() {
+    fn test_comment_doc_extraction() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 # Adds two numbers
 sub add { 1 }
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
 
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let sub_symbols =
             analyzer.symbol_table().find_symbol("add", 0, crate::symbol::SymbolKind::Subroutine);
         assert!(!sub_symbols.is_empty());
-        let hover = analyzer.hover_at(sub_symbols[0].location).unwrap();
+        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
         assert_eq!(hover.documentation.as_deref(), Some("Adds two numbers"));
+        Ok(())
     }
 
     #[test]
-    fn test_cross_package_navigation() {
+    fn test_cross_package_navigation() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 package Foo {
     # bar sub
@@ -1565,18 +1575,19 @@ Foo::bar();
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
-        let pos = code.find("Foo::bar").unwrap() + 5; // position within "bar"
-        let def = analyzer.find_definition(pos).expect("definition");
+        let pos = code.find("Foo::bar").ok_or("Foo::bar not found")? + 5; // position within "bar"
+        let def = analyzer.find_definition(pos).ok_or("definition")?;
         assert_eq!(def.name, "bar");
 
-        let hover = analyzer.hover_at(def.location).unwrap();
-        assert!(hover.documentation.as_ref().unwrap().contains("bar sub"));
+        let hover = analyzer.hover_at(def.location).ok_or("hover not found")?;
+        assert!(hover.documentation.as_ref().ok_or("doc not found")?.contains("bar sub"));
+        Ok(())
     }
 
     #[test]
-    fn test_scope_identification() {
+    fn test_scope_identification() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 my $x = 0;
 package Foo {
@@ -1587,22 +1598,23 @@ my $y = $x;
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
-        let inner_ref_pos = code.find("return $x").unwrap() + "return ".len();
-        let inner_def = analyzer.find_definition(inner_ref_pos).unwrap();
-        let expected_inner = code.find("my $x = 1").unwrap() + 3;
+        let inner_ref_pos = code.find("return $x").ok_or("return $x not found")? + "return ".len();
+        let inner_def = analyzer.find_definition(inner_ref_pos).ok_or("inner def not found")?;
+        let expected_inner = code.find("my $x = 1").ok_or("my $x = 1 not found")? + 3;
         assert_eq!(inner_def.location.start, expected_inner);
 
-        let outer_ref_pos = code.rfind("$x;").unwrap();
-        let outer_def = analyzer.find_definition(outer_ref_pos).unwrap();
-        let expected_outer = code.find("my $x = 0").unwrap() + 3;
+        let outer_ref_pos = code.rfind("$x;").ok_or("$x; not found")?;
+        let outer_def = analyzer.find_definition(outer_ref_pos).ok_or("outer def not found")?;
+        let expected_outer = code.find("my $x = 0").ok_or("my $x = 0 not found")? + 3;
         assert_eq!(outer_def.location.start, expected_outer);
+        Ok(())
     }
 
     #[test]
-    fn test_pod_documentation_extraction() {
+    fn test_pod_documentation_extraction() -> Result<(), Box<dyn std::error::Error>> {
         // Test with a simple case that parses correctly
         let code = r#"# Simple comment before sub
 sub documented_with_comment {
@@ -1611,7 +1623,7 @@ sub documented_with_comment {
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let sub_symbols = analyzer.symbol_table().find_symbol(
@@ -1620,25 +1632,27 @@ sub documented_with_comment {
             crate::symbol::SymbolKind::Subroutine,
         );
         assert!(!sub_symbols.is_empty());
-        let hover = analyzer.hover_at(sub_symbols[0].location).unwrap();
-        let doc = hover.documentation.as_ref().unwrap();
+        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        let doc = hover.documentation.as_ref().ok_or("doc not found")?;
         assert!(doc.contains("Simple comment before sub"));
+        Ok(())
     }
 
     #[test]
-    fn test_empty_source_handling() {
+    fn test_empty_source_handling() -> Result<(), Box<dyn std::error::Error>> {
         let code = "";
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         // Should not crash with empty source
         assert!(analyzer.semantic_tokens().is_empty());
         assert!(analyzer.hover_info.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_multiple_comment_lines() {
+    fn test_multiple_comment_lines() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 # First comment
 # Second comment
@@ -1649,7 +1663,7 @@ sub multi_commented {
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let sub_symbols = analyzer.symbol_table().find_symbol(
@@ -1658,23 +1672,24 @@ sub multi_commented {
             crate::symbol::SymbolKind::Subroutine,
         );
         assert!(!sub_symbols.is_empty());
-        let hover = analyzer.hover_at(sub_symbols[0].location).unwrap();
-        let doc = hover.documentation.as_ref().unwrap();
+        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        let doc = hover.documentation.as_ref().ok_or("doc not found")?;
         assert!(doc.contains("First comment"));
         assert!(doc.contains("Second comment"));
         assert!(doc.contains("Third comment"));
+        Ok(())
     }
 
     // SemanticModel tests
     #[test]
-    fn test_semantic_model_build_and_tokens() {
+    fn test_semantic_model_build_and_tokens() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 my $x = 42;
 my $y = 10;
 $x + $y;
 "#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
 
         let model = SemanticModel::build(&ast, code);
 
@@ -1693,10 +1708,11 @@ $x + $y;
             })
             .collect();
         assert!(var_tokens.len() >= 2, "Should have at least 2 variable tokens");
+        Ok(())
     }
 
     #[test]
-    fn test_semantic_model_symbol_table_access() {
+    fn test_semantic_model_symbol_table_access() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 my $x = 42;
 sub foo {
@@ -1704,7 +1720,7 @@ sub foo {
 }
 "#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
 
         let model = SemanticModel::build(&ast, code);
 
@@ -1715,16 +1731,17 @@ sub foo {
 
         let foo_symbols = symbol_table.find_symbol("foo", 0, SymbolKind::Subroutine);
         assert!(!foo_symbols.is_empty(), "Should find sub foo in symbol table");
+        Ok(())
     }
 
     #[test]
-    fn test_semantic_model_hover_info() {
+    fn test_semantic_model_hover_info() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 # This is a documented variable
 my $documented = 42;
 "#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
 
         let model = SemanticModel::build(&ast, code);
 
@@ -1739,25 +1756,26 @@ my $documented = 42;
         }
         // Note: hover_info_at might return None if no explicit hover was generated,
         // which is acceptable for now
+        Ok(())
     }
 
     #[test]
-    fn test_analyzer_find_definition_scalar() {
+    fn test_analyzer_find_definition_scalar() -> Result<(), Box<dyn std::error::Error>> {
         let code = "my $x = 1;\n$x + 2;\n";
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
 
         // Use the same path SemanticModel uses to feed source
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         // Find the byte offset of the reference "$x" in the second line
-        let ref_line = code.lines().nth(1).unwrap();
-        let line_offset = code.lines().next().unwrap().len() + 1; // +1 for '\n'
-        let col_in_line = ref_line.find("$x").expect("could not find $x on line 2");
+        let ref_line = code.lines().nth(1).ok_or("line 2 not found")?;
+        let line_offset = code.lines().next().ok_or("line 1 not found")?.len() + 1; // +1 for '\n'
+        let col_in_line = ref_line.find("$x").ok_or("could not find $x on line 2")?;
         let ref_pos = line_offset + col_in_line;
 
         let symbol =
-            analyzer.find_definition(ref_pos).expect("definition not found for $x reference");
+            analyzer.find_definition(ref_pos).ok_or("definition not found for $x reference")?;
 
         // 1. Must be a scalar named "x"
         assert_eq!(symbol.name, "x");
@@ -1770,20 +1788,21 @@ my $documented = 42;
             symbol.location.start,
             ref_pos
         );
+        Ok(())
     }
 
     #[test]
-    fn test_semantic_model_definition_at() {
+    fn test_semantic_model_definition_at() -> Result<(), Box<dyn std::error::Error>> {
         let code = "my $x = 1;\n$x + 2;\n";
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
 
         let model = SemanticModel::build(&ast, code);
 
         // Compute the byte offset of the reference "$x" on the second line
         let ref_line_index = 1;
-        let ref_line = code.lines().nth(ref_line_index).unwrap();
-        let col_in_line = ref_line.find("$x").expect("could not find $x");
+        let ref_line = code.lines().nth(ref_line_index).ok_or("line not found")?;
+        let col_in_line = ref_line.find("$x").ok_or("could not find $x")?;
         let byte_offset = code
             .lines()
             .take(ref_line_index)
@@ -1803,11 +1822,12 @@ my $documented = 42;
         } else {
             panic!("definition_at returned None for $x reference at {}", byte_offset);
         }
+        Ok(())
     }
 
     #[test]
     #[ignore = "anonymous subroutine semantic tokens not yet implemented"]
-    fn test_anonymous_subroutine_semantic_tokens() {
+    fn test_anonymous_subroutine_semantic_tokens() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 my $closure = sub {
     my $x = 42;
@@ -1816,7 +1836,7 @@ my $closure = sub {
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         // Check that we have semantic tokens for the anonymous sub
@@ -1829,18 +1849,19 @@ my $closure = sub {
         assert!(!sub_keywords.is_empty(), "Should have keyword token for 'sub'");
 
         // Check hover info exists for the anonymous sub
-        let sub_position = code.find("sub {").unwrap();
+        let sub_position = code.find("sub {").ok_or("sub { not found")?;
         let hover_exists = analyzer
             .hover_info
             .iter()
             .any(|(loc, _)| loc.start <= sub_position && loc.end >= sub_position);
 
         assert!(hover_exists, "Should have hover info for anonymous subroutine");
+        Ok(())
     }
 
     #[test]
     #[ignore = "anonymous subroutine hover info not yet implemented"]
-    fn test_anonymous_subroutine_hover_info() {
+    fn test_anonymous_subroutine_hover_info() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 # This is a closure
 my $adder = sub {
@@ -1850,11 +1871,11 @@ my $adder = sub {
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         // Find hover info for the anonymous sub
-        let sub_position = code.find("sub {").unwrap();
+        let sub_position = code.find("sub {").ok_or("sub { not found")?;
         let hover = analyzer
             .hover_info
             .iter()
@@ -1874,5 +1895,6 @@ my $adder = sub {
                 "Hover should extract documentation comment"
             );
         }
+        Ok(())
     }
 }

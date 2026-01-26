@@ -11,7 +11,7 @@ use common::{
 /// Ensures the LSP server handles concurrent requests correctly
 
 #[test]
-fn test_concurrent_document_modifications() {
+fn test_concurrent_document_modifications() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -51,7 +51,7 @@ fn test_concurrent_document_modifications() {
 
     // Apply all modifications
     for handle in handles {
-        let (version, text) = handle.join().unwrap();
+        let (version, text) = handle.join().map_err(|_| "Thread join failed")?;
         send_notification(
             &mut server,
             json!({
@@ -87,10 +87,12 @@ fn test_concurrent_document_modifications() {
             }
         }),
     );
+
+    Ok(())
 }
 
 #[test]
-fn test_concurrent_requests() {
+fn test_concurrent_requests() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -146,10 +148,12 @@ fn test_concurrent_requests() {
             thread::sleep(adaptive_sleep_ms(10));
         }
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_race_condition_open_close() {
+fn test_race_condition_open_close() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -220,10 +224,12 @@ fn test_race_condition_open_close() {
             }),
         );
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_workspace_symbol_during_changes() {
+fn test_workspace_symbol_during_changes() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -292,10 +298,12 @@ fn test_workspace_symbol_during_changes() {
             }
         }),
     );
+
+    Ok(())
 }
 
 #[test]
-fn test_reference_search_during_edits() {
+fn test_reference_search_during_edits() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -363,10 +371,12 @@ fn test_reference_search_during_edits() {
             }
         }),
     );
+
+    Ok(())
 }
 
 #[test]
-fn test_completion_cache_invalidation() {
+fn test_completion_cache_invalidation() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -434,10 +444,12 @@ fn test_completion_cache_invalidation() {
             }
         }),
     );
+
+    Ok(())
 }
 
 #[test]
-fn test_diagnostic_publishing_race() {
+fn test_diagnostic_publishing_race() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -493,10 +505,12 @@ fn test_diagnostic_publishing_race() {
             }
         }),
     );
+
+    Ok(())
 }
 
 #[test]
-fn test_multi_file_rename_race() {
+fn test_multi_file_rename_race() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -554,10 +568,12 @@ fn test_multi_file_rename_race() {
             }),
         );
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_call_hierarchy_during_refactoring() {
+fn test_call_hierarchy_during_refactoring() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -648,10 +664,12 @@ sub qux {
             }
         }),
     );
+
+    Ok(())
 }
 
 #[test]
-fn test_semantic_tokens_consistency() {
+fn test_semantic_tokens_consistency() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -709,4 +727,6 @@ fn test_semantic_tokens_consistency() {
             );
         }
     }
+
+    Ok(())
 }

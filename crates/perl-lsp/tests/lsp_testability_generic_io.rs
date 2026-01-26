@@ -141,7 +141,7 @@ fn lsp_protocol_edge_case_large_buffer() {
 
 /// Test protocol edge case: Concurrent output writes
 #[test]
-fn lsp_protocol_edge_case_concurrent_writes() {
+fn lsp_protocol_edge_case_concurrent_writes() -> Result<(), Box<dyn std::error::Error>> {
     use std::thread;
 
     // Create shared output buffer
@@ -163,10 +163,11 @@ fn lsp_protocol_edge_case_concurrent_writes() {
     });
 
     // Wait for both threads
-    handle1.join().unwrap();
-    handle2.join().unwrap();
+    handle1.join().map_err(|e| format!("Thread 1 panicked: {:?}", e))?;
+    handle2.join().map_err(|e| format!("Thread 2 panicked: {:?}", e))?;
 
     // The Arc<Mutex<...>> should have prevented any race conditions
+    Ok(())
 }
 
 /// Test that with_io works with different Read implementations

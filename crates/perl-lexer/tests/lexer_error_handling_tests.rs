@@ -113,6 +113,8 @@
 //! is documented in [ERROR_HANDLING_STRATEGY.md](../../../docs/ERROR_HANDLING_STRATEGY.md)
 //! and represents best practices for testing defensive programming patterns.
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 // AC:2 - Lexer Substitution Operator Error Handling (lib.rs:1385)
 /// Tests lexer substitution operator error handling with diagnostic token emission.
 ///
@@ -327,18 +329,17 @@ fn test_regression_guard_bypass_scenarios() {
 /// - AC7: Documentation validation
 /// - Requirements: Inline comments + module-level documentation
 #[test]
-fn test_ac7_lexer_documentation_presence() {
+fn test_ac7_lexer_documentation_presence() -> TestResult {
     // AC:7
     // Verify no unreachable!() at line 1385 and documentation present
     // Expected: unreachable!() removed, error handling documented
     // Verify that the source code contains TokenType::Error pattern (not unreachable!)
-    let source_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("perl-lexer/src/lib.rs");
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path =
+        manifest_dir.parent().ok_or("Expected parent directory")?.join("perl-lexer/src/lib.rs");
 
     if source_path.exists() {
-        let source_content = std::fs::read_to_string(&source_path).unwrap();
+        let source_content = std::fs::read_to_string(&source_path)?;
         // Check for defensive error handling pattern (not unreachable!)
         assert!(
             source_content.contains("TokenType::Error"),
@@ -346,6 +347,7 @@ fn test_ac7_lexer_documentation_presence() {
         );
     }
     // If source file not accessible, test passes (we're in a limited test environment)
+    Ok(())
 }
 
 // AC:7 - Error Message Documentation Validation

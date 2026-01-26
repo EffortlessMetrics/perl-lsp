@@ -58,9 +58,10 @@
 //! use perl_lsp_providers::ide::lsp_compat::rename::{RenameProvider, RenameOptions};
 //! use perl_parser_core::Parser;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "sub hello_world { print \"Hello!\"; } hello_world();";
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().unwrap();
+//! let ast = parser.parse()?;
 //!
 //! let provider = RenameProvider::new(&ast, code.to_string());
 //! let position = 4; // Byte position of 'hello_world'
@@ -76,6 +77,8 @@
 //! } else if let Some(error) = &result.error {
 //!     eprintln!("Rename failed: {}", error);
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 mod apply;
@@ -198,11 +201,12 @@ impl RenameProvider {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+
 mod tests {
     use super::*;
     use perl_parser_core::Parser;
     use perl_semantic_analyzer::symbol::SymbolKind;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_rename_variable() {
@@ -213,12 +217,12 @@ print $count;
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = RenameProvider::new(&ast, code.to_string());
 
         // Find position of first $count
-        let pos = code.find("$count").unwrap() + 1; // Skip sigil
+        let pos = must_some(code.find("$count")) + 1; // Skip sigil
 
         // Prepare rename
         let prepare = provider.prepare_rename(pos);
@@ -247,12 +251,12 @@ my $result = calculate();
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = RenameProvider::new(&ast, code.to_string());
 
         // Find position of sub name
-        let pos = code.find("calculate").unwrap();
+        let pos = must_some(code.find("calculate"));
 
         // Perform rename
         let result = provider.rename(pos, "compute", &RenameOptions::default());
@@ -269,7 +273,7 @@ my $result = calculate();
     #[test]
     fn test_validate_new_name() {
         let code = "my $x = 1;";
-        let ast = Parser::new(code).parse().unwrap();
+        let ast = must(Parser::new(code).parse());
         let provider = RenameProvider::new(&ast, code.to_string());
 
         // Invalid names

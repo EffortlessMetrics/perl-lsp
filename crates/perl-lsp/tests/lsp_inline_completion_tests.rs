@@ -3,7 +3,7 @@
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
-fn setup_server() -> LspServer {
+fn setup_server() -> Result<LspServer, Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
     // Initialize the server
@@ -28,7 +28,7 @@ fn setup_server() -> LspServer {
     };
     server.handle_request(initialized_notification);
 
-    server
+    Ok(server)
 }
 
 fn open_doc(server: &mut LspServer, uri: &str, text: &str) {
@@ -53,7 +53,7 @@ fn inline_completion(
     uri: &str,
     line: u32,
     character: u32,
-) -> serde_json::Value {
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
@@ -63,63 +63,71 @@ fn inline_completion(
             "position": { "line": line, "character": character }
         })),
     };
-    let response = server.handle_request(request).expect("inline completion response");
-    response.result.expect("result field present")
+    let response = server.handle_request(request).ok_or("inline completion response")?;
+    response.result.ok_or("result field present".into())
 }
 
 #[test]
-fn test_inline_completion_after_arrow() {
-    let mut server = setup_server();
+fn test_inline_completion_after_arrow() -> Result<(), Box<dyn std::error::Error>> {
+    let mut server = setup_server()?;
     let uri = "file:///test.pl";
     open_doc(&mut server, uri, "my $obj = Package->");
-    let result = inline_completion(&mut server, uri, 0, 19);
-    let items = result["items"].as_array().expect("items array");
+    let result = inline_completion(&mut server, uri, 0, 19)?;
+    let items = result["items"].as_array().ok_or("items array")?;
     assert!(!items.is_empty());
-    assert_eq!(items[0]["insertText"].as_str().unwrap(), "new()");
+    assert_eq!(items[0]["insertText"].as_str().ok_or("insertText not a string")?, "new()");
+    Ok(())
 }
 
 #[test]
-fn test_inline_completion_after_use() {
-    let mut server = setup_server();
+fn test_inline_completion_after_use() -> Result<(), Box<dyn std::error::Error>> {
+    let mut server = setup_server()?;
     let uri = "file:///test.pl";
     open_doc(&mut server, uri, "use ");
-    let result = inline_completion(&mut server, uri, 0, 4);
-    let items = result["items"].as_array().expect("items array");
+    let result = inline_completion(&mut server, uri, 0, 4)?;
+    let items = result["items"].as_array().ok_or("items array")?;
     assert!(!items.is_empty());
-    let suggestions: Vec<String> =
-        items.iter().map(|i| i["insertText"].as_str().unwrap().to_string()).collect();
+    let mut suggestions = Vec::new();
+    for item in items.iter() {
+        let text = item["insertText"].as_str().ok_or("insertText not a string")?;
+        suggestions.push(text.to_string());
+    }
     assert!(suggestions.contains(&"strict;".to_string()));
     assert!(suggestions.contains(&"warnings;".to_string()));
+    Ok(())
 }
 
 #[test]
-fn test_inline_completion_shebang() {
-    let mut server = setup_server();
+fn test_inline_completion_shebang() -> Result<(), Box<dyn std::error::Error>> {
+    let mut server = setup_server()?;
     let uri = "file:///test.pl";
     open_doc(&mut server, uri, "#!");
-    let result = inline_completion(&mut server, uri, 0, 2);
-    let items = result["items"].as_array().expect("items array");
+    let result = inline_completion(&mut server, uri, 0, 2)?;
+    let items = result["items"].as_array().ok_or("items array")?;
     assert!(!items.is_empty());
-    assert_eq!(items[0]["insertText"].as_str().unwrap(), "/usr/bin/env perl");
+    assert_eq!(items[0]["insertText"].as_str().ok_or("insertText not a string")?, "/usr/bin/env perl");
+    Ok(())
 }
 
 #[test]
-fn test_inline_completion_sub_body() {
-    let mut server = setup_server();
+fn test_inline_completion_sub_body() -> Result<(), Box<dyn std::error::Error>> {
+    let mut server = setup_server()?;
     let uri = "file:///test.pl";
     open_doc(&mut server, uri, "sub test ");
-    let result = inline_completion(&mut server, uri, 0, 9);
-    let items = result["items"].as_array().expect("items array");
+    let result = inline_completion(&mut server, uri, 0, 9)?;
+    let items = result["items"].as_array().ok_or("items array")?;
     assert!(!items.is_empty());
-    assert!(items[0]["insertText"].as_str().unwrap().contains("{"));
+    assert!(items[0]["insertText"].as_str().ok_or("insertText not a string")?.contains("{"));
+    Ok(())
 }
 
 #[test]
-fn test_inline_completion_no_suggestions() {
-    let mut server = setup_server();
+fn test_inline_completion_no_suggestions() -> Result<(), Box<dyn std::error::Error>> {
+    let mut server = setup_server()?;
     let uri = "file:///test.pl";
     open_doc(&mut server, uri, "my $x = 42;");
-    let result = inline_completion(&mut server, uri, 0, 10);
-    let items = result["items"].as_array().expect("items array");
+    let result = inline_completion(&mut server, uri, 0, 10)?;
+    let items = result["items"].as_array().ok_or("items array")?;
     assert!(items.is_empty());
+    Ok(())
 }

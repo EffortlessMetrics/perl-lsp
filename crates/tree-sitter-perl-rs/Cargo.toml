@@ -6,7 +6,7 @@ edition = "2024"
 description = "Tree-sitter Perl validation harness (internal only)"
 publish = false
 license = "Apache-2.0 OR MIT"
-repository = "https://github.com/EffortlessSteven/tree-sitter-perl"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl"
 keywords = ["tree-sitter", "perl", "parser", "grammar"]
 categories = ["parsing", "text-processing"]
 

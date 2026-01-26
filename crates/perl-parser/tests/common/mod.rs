@@ -46,10 +46,13 @@ fn next_id() -> i64 {
 
 /// Get completion items from a response, handling both array and object formats
 pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
-    resp["result"]["items"]
-        .as_array()
-        .or_else(|| resp["result"].as_array())
-        .expect("completion result should be array or { items: [] }")
+    match resp["result"]["items"].as_array().or_else(|| resp["result"].as_array()) {
+        Some(items) => items,
+        None => panic!(
+            "Completion result should be array or object with items array, got: {:?}",
+            resp["result"]
+        ),
+    }
 }
 
 pub struct LspServer {
@@ -65,7 +68,10 @@ pub struct LspServer {
 impl LspServer {
     /// Check if the server process is still running
     pub fn is_alive(&mut self) -> bool {
-        self.process.try_wait().unwrap().is_none()
+        match self.process.try_wait() {
+            Ok(status) => status.is_none(),
+            Err(e) => panic!("Failed to check LSP server process status: {}", e),
+        }
     }
 
     /// Get mutable access to the stdin writer
@@ -127,17 +133,27 @@ pub fn start_lsp_server() -> LspServer {
                 }
             }
         }
-        spawned.unwrap_or_else(|| {
-            panic!("Failed to start perl-lsp via CARGO_BIN_EXE, PATH, or cargo run: {:?}", last_err)
-        })
+        match spawned {
+            Some(child) => child,
+            None => panic!(
+                "Failed to start perl-lsp via CARGO_BIN_EXE, PATH, or cargo run. Last error: {}",
+                last_err.map(|e| e.to_string()).unwrap_or_else(|| "No error recorded".to_string())
+            ),
+        }
     };
 
-    let stdin = process.stdin.take().expect("child stdin should be available");
+    let stdin = match process.stdin.take() {
+        Some(s) => s,
+        None => panic!("Child process stdin should be available but was not"),
+    };
 
     // -------- stderr drain thread (prevents child from blocking on logs) --------
-    let stderr = process.stderr.take().expect("stderr piped");
+    let stderr = match process.stderr.take() {
+        Some(s) => s,
+        None => panic!("Child process stderr should be piped but was not"),
+    };
     let echo = std::env::var_os("LSP_TEST_ECHO_STDERR").is_some();
-    let _stderr_thread = std::thread::Builder::new()
+    let _stderr_thread = match std::thread::Builder::new()
         .name("lsp-stderr-drain".into())
         .spawn(move || {
             let mut r = BufReader::new(stderr);
@@ -149,12 +165,18 @@ pub fn start_lsp_server() -> LspServer {
                 line.clear();
             }
         })
-        .unwrap();
+    {
+        Ok(handle) => handle,
+        Err(e) => panic!("Failed to spawn stderr drain thread: {}", e),
+    };
 
     // -------- stdout LSP reader thread --------
-    let stdout = process.stdout.take().expect("stdout piped");
+    let stdout = match process.stdout.take() {
+        Some(s) => s,
+        None => panic!("Child process stdout should be piped but was not"),
+    };
     let (tx, rx) = mpsc::channel::<Value>();
-    let _stdout_thread = std::thread::Builder::new()
+    let _stdout_thread = match std::thread::Builder::new()
         .name("lsp-stdout-reader".into())
         .spawn(move || {
             let mut r = BufReader::new(stdout);
@@ -195,7 +217,10 @@ pub fn start_lsp_server() -> LspServer {
                 }
             }
         })
-        .unwrap();
+    {
+        Ok(handle) => handle,
+        Err(e) => panic!("Failed to spawn stdout reader thread: {}", e),
+    };
 
     LspServer {
         process,
@@ -219,13 +244,21 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
     };
 
     let body = request.to_string();
-    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
-    server.writer.flush().unwrap();
+    if let Err(e) = write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body) {
+        panic!("Failed to write LSP request: {}", e);
+    }
+    if let Err(e) = server.writer.flush() {
+        panic!("Failed to flush LSP request: {}", e);
+    }
 
     // Match by ID to avoid confusion with interleaved notifications
     match id {
         Some(Value::Number(n)) if n.as_i64().is_some() => {
-            read_response_matching_i64(server, n.as_i64().unwrap(), default_timeout())
+            let id_val = match n.as_i64() {
+                Some(i) => i,
+                None => panic!("Number value should have i64 representation but doesn't: {:?}", n),
+            };
+            read_response_matching_i64(server, id_val, default_timeout())
                 .unwrap_or_else(
                     || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
                 )
@@ -239,8 +272,12 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
 
 pub fn send_notification(server: &mut LspServer, notification: Value) {
     let body = notification.to_string();
-    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
-    server.writer.flush().unwrap();
+    if let Err(e) = write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body) {
+        panic!("Failed to write LSP notification: {}", e);
+    }
+    if let Err(e) = server.writer.flush() {
+        panic!("Failed to flush LSP notification: {}", e);
+    }
 }
 
 fn default_timeout() -> Duration {
@@ -324,8 +361,12 @@ pub fn read_response_matching_i64(server: &mut LspServer, id: i64, dur: Duration
 
 /// Write raw bytes (for malformed/binary frame tests).
 pub fn send_raw(server: &mut LspServer, bytes: &[u8]) {
-    server.writer.write_all(bytes).unwrap();
-    server.writer.flush().unwrap();
+    if let Err(e) = server.writer.write_all(bytes) {
+        panic!("Failed to write raw bytes to LSP server: {}", e);
+    }
+    if let Err(e) = server.writer.flush() {
+        panic!("Failed to flush raw bytes to LSP server: {}", e);
+    }
 }
 
 /// Read a notification matching the given method name
@@ -399,13 +440,19 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
     // write without reading
     {
         let body = init.to_string();
-        write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
-        server.writer.flush().unwrap();
+        if let Err(e) = write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body) {
+            panic!("Failed to write initialize request: {}", e);
+        }
+        if let Err(e) = server.writer.flush() {
+            panic!("Failed to flush initialize request: {}", e);
+        }
     }
 
     // wait specifically for id=1
-    let resp =
-        read_response_matching_i64(server, 1, default_timeout()).expect("initialize response");
+    let resp = match read_response_matching_i64(server, 1, default_timeout()) {
+        Some(r) => r,
+        None => panic!("Failed to receive initialize response within timeout"),
+    };
 
     // send initialized notification
     send_notification(server, json!({"jsonrpc":"2.0","method":"initialized"}));
@@ -434,15 +481,23 @@ pub fn shutdown_and_exit(server: &mut LspServer) {
 
 /// Send raw message to server (for testing malformed input)
 pub fn send_raw_message(server: &mut LspServer, content: &str) {
-    write!(server.writer, "Content-Length: {}\r\n\r\n{}", content.len(), content).unwrap();
-    server.writer.flush().unwrap();
+    if let Err(e) = write!(server.writer, "Content-Length: {}\r\n\r\n{}", content.len(), content) {
+        panic!("Failed to write raw message: {}", e);
+    }
+    if let Err(e) = server.writer.flush() {
+        panic!("Failed to flush raw message: {}", e);
+    }
 }
 
 /// Send request without waiting for response
 pub fn send_request_no_wait(server: &mut LspServer, req: Value) {
     let body = req.to_string();
-    write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
-    server.writer.flush().unwrap();
+    if let Err(e) = write!(server.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body) {
+        panic!("Failed to write request (no-wait): {}", e);
+    }
+    if let Err(e) = server.writer.flush() {
+        panic!("Failed to flush request (no-wait): {}", e);
+    }
 }
 
 impl Drop for LspServer {

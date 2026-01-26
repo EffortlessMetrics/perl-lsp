@@ -31,7 +31,7 @@
 //! cargo bench -p perl-dap -- --measurement-time 5
 //! ```
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use perl_dap::configuration::{AttachConfiguration, LaunchConfiguration};

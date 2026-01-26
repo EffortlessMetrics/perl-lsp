@@ -3,18 +3,18 @@
 //! These tests verify that command injection vulnerabilities are properly mitigated
 //! in the debug adapter's program launch functionality.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::json;
 use std::sync::mpsc::channel;
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Test that `-e` flag injection is blocked
 ///
 /// Vulnerability: If program argument accepts "-e", Perl would interpret the
 /// "args" as code to execute rather than script arguments.
 #[test]
-fn test_command_injection_via_program_argument() {
+fn test_command_injection_via_program_argument() -> TestResult {
     let mut adapter = DebugAdapter::new();
     let (tx, rx) = channel();
     adapter.set_event_sender(tx);
@@ -30,14 +30,14 @@ fn test_command_injection_via_program_argument() {
     match response {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail because file '-e' does not exist");
-            let msg = message.unwrap();
+            let msg = message.ok_or("Expected error message")?;
             assert!(
                 msg.contains("Could not access program file"),
                 "Should fail with access error: {}",
                 msg
             );
         }
-        _ => panic!("Expected Response"),
+        _ => return Err("Expected Response".into()),
     }
 
     // Launch is expected to fail synchronously, so we can immediately check
@@ -57,11 +57,12 @@ fn test_command_injection_via_program_argument() {
 
     // Assert that we don't see "pwned" (this should pass after fix)
     assert!(!found_pwned, "Should not execute arbitrary code via -e");
+    Ok(())
 }
 
 /// Test that non-existent files are rejected gracefully
 #[test]
-fn test_launch_with_nonexistent_file_errors_gracefully() {
+fn test_launch_with_nonexistent_file_errors_gracefully() -> TestResult {
     let mut adapter = DebugAdapter::new();
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
@@ -76,20 +77,21 @@ fn test_launch_with_nonexistent_file_errors_gracefully() {
     match response {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail for nonexistent file");
-            let msg = message.unwrap();
+            let msg = message.ok_or("Expected error message")?;
             assert!(
                 msg.contains("Could not access program file"),
                 "Should return meaningful error: {}",
                 msg
             );
         }
-        _ => panic!("Expected Response"),
+        _ => return Err("Expected Response".into()),
     }
+    Ok(())
 }
 
 /// Test that empty program path is rejected
 #[test]
-fn test_launch_with_empty_program_rejected() {
+fn test_launch_with_empty_program_rejected() -> TestResult {
     let mut adapter = DebugAdapter::new();
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
@@ -104,16 +106,17 @@ fn test_launch_with_empty_program_rejected() {
     match response {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail for empty program");
-            let msg = message.unwrap();
+            let msg = message.ok_or("Expected error message")?;
             assert!(msg.contains("cannot be empty"), "Should indicate empty path: {}", msg);
         }
-        _ => panic!("Expected Response"),
+        _ => return Err("Expected Response".into()),
     }
+    Ok(())
 }
 
 /// Test that whitespace-only program path is rejected
 #[test]
-fn test_launch_with_whitespace_program_rejected() {
+fn test_launch_with_whitespace_program_rejected() -> TestResult {
     let mut adapter = DebugAdapter::new();
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
@@ -128,27 +131,28 @@ fn test_launch_with_whitespace_program_rejected() {
     match response {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail for whitespace-only program");
-            let msg = message.unwrap();
+            let msg = message.ok_or("Expected error message")?;
             assert!(
                 msg.contains("cannot be empty"),
                 "Should indicate empty path after trimming: {}",
                 msg
             );
         }
-        _ => panic!("Expected Response"),
+        _ => return Err("Expected Response".into()),
     }
+    Ok(())
 }
 
 /// Test that directory paths are rejected (not regular files)
 #[test]
-fn test_launch_with_directory_rejected() {
+fn test_launch_with_directory_rejected() -> TestResult {
     let mut adapter = DebugAdapter::new();
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
 
     // Use tempdir for cross-platform compatibility (avoids hardcoded /tmp on non-Unix)
-    let temp_dir = tempfile::tempdir().expect("Failed to create temporary directory");
-    let dir_path = temp_dir.path().to_str().unwrap();
+    let temp_dir = tempfile::tempdir()?;
+    let dir_path = temp_dir.path().to_str().ok_or("Failed to convert path to string")?;
 
     let args = json!({
         "program": dir_path,
@@ -160,20 +164,21 @@ fn test_launch_with_directory_rejected() {
     match response {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail for directory path");
-            let msg = message.unwrap();
+            let msg = message.ok_or("Expected error message")?;
             assert!(
                 msg.contains("not a regular file"),
                 "Should indicate path is not a file: {}",
                 msg
             );
         }
-        _ => panic!("Expected Response"),
+        _ => return Err("Expected Response".into()),
     }
+    Ok(())
 }
 
 /// Test that other Perl flags are also blocked
 #[test]
-fn test_other_flag_injection_blocked() {
+fn test_other_flag_injection_blocked() -> TestResult {
     let mut adapter = DebugAdapter::new();
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
@@ -192,7 +197,8 @@ fn test_other_flag_injection_blocked() {
                 assert!(!success, "Launch should fail for flag '{}' as program", flag);
                 assert!(message.is_some(), "Should have error message for flag '{}'", flag);
             }
-            _ => panic!("Expected Response for flag '{}'", flag),
+            _ => return Err(format!("Expected Response for flag '{}'", flag).into()),
         }
     }
+    Ok(())
 }

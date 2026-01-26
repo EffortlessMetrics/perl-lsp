@@ -4,7 +4,7 @@ use serde_json::json;
 /// Test Type Hierarchy support (LSP 3.17)
 #[test]
 
-fn test_type_hierarchy_prepare() {
+fn test_type_hierarchy_prepare() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -71,11 +71,11 @@ sub new {
         })),
     };
 
-    let response = server.handle_request(request).unwrap();
+    let response = server.handle_request(request).ok_or("Failed to get response")?;
     let result = response.result.as_ref().and_then(|r| r.as_array());
 
     assert!(result.is_some(), "Should return type hierarchy items");
-    let items = result.unwrap();
+    let items = result.ok_or("Failed to get items array")?;
     assert!(!items.is_empty(), "Should have at least one item");
 
     let item = &items[0];
@@ -84,11 +84,13 @@ sub new {
     assert!(item["uri"].as_str().is_some());
     assert!(item["range"].is_object());
     assert!(item["selectionRange"].is_object());
+
+    Ok(())
 }
 
 #[test]
 
-fn test_type_hierarchy_supertypes() {
+fn test_type_hierarchy_supertypes() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -149,8 +151,10 @@ package Parent2;
         })),
     };
 
-    let prepare_response = server.handle_request(prepare_request).unwrap();
-    let items = prepare_response.result.unwrap().as_array().unwrap().clone();
+    let prepare_response = server.handle_request(prepare_request).ok_or("Failed to get prepare response")?;
+    let result_value = prepare_response.result.ok_or("Failed to get result from prepare response")?;
+    let items_array = result_value.as_array().ok_or("Result is not an array")?;
+    let items = items_array.clone();
     let child_item = &items[0];
 
     // Request supertypes
@@ -173,11 +177,11 @@ package Parent2;
         })),
     };
 
-    let response = server.handle_request(supertypes_request).unwrap();
+    let response = server.handle_request(supertypes_request).ok_or("Failed to get supertypes response")?;
     let result = response.result.as_ref().and_then(|r| r.as_array());
 
     assert!(result.is_some(), "Should return supertypes");
-    let supertypes = result.unwrap();
+    let supertypes = result.ok_or("Failed to get supertypes array")?;
 
     // Should find Parent1 and Parent2
     let names: Vec<String> =
@@ -185,11 +189,13 @@ package Parent2;
 
     assert!(names.contains(&"Parent1".to_string()), "Should find Parent1");
     assert!(names.contains(&"Parent2".to_string()), "Should find Parent2");
+
+    Ok(())
 }
 
 #[test]
 
-fn test_type_hierarchy_subtypes() {
+fn test_type_hierarchy_subtypes() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -251,8 +257,10 @@ our @ISA = ('Base');
         })),
     };
 
-    let prepare_response = server.handle_request(prepare_request).unwrap();
-    let items = prepare_response.result.unwrap().as_array().unwrap().clone();
+    let prepare_response = server.handle_request(prepare_request).ok_or("Failed to get prepare response")?;
+    let result_value = prepare_response.result.ok_or("Failed to get result from prepare response")?;
+    let items_array = result_value.as_array().ok_or("Result is not an array")?;
+    let items = items_array.clone();
     let base_item = &items[0];
 
     // Request subtypes
@@ -275,11 +283,11 @@ our @ISA = ('Base');
         })),
     };
 
-    let response = server.handle_request(subtypes_request).unwrap();
+    let response = server.handle_request(subtypes_request).ok_or("Failed to get subtypes response")?;
     let result = response.result.as_ref().and_then(|r| r.as_array());
 
     assert!(result.is_some(), "Should return subtypes");
-    let subtypes = result.unwrap();
+    let subtypes = result.ok_or("Failed to get subtypes array")?;
 
     // Should find Derived1 and Derived2
     let names: Vec<String> =
@@ -287,11 +295,13 @@ our @ISA = ('Base');
 
     assert!(names.contains(&"Derived1".to_string()), "Should find Derived1");
     assert!(names.contains(&"Derived2".to_string()), "Should find Derived2");
+
+    Ok(())
 }
 
 #[test]
 
-fn test_type_hierarchy_capability_advertised() {
+fn test_type_hierarchy_capability_advertised() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
     let init_request = JsonRpcRequest {
@@ -304,8 +314,8 @@ fn test_type_hierarchy_capability_advertised() {
         })),
     };
 
-    let response = server.handle_request(init_request).unwrap();
-    let result = response.result.unwrap();
+    let response = server.handle_request(init_request).ok_or("Failed to get init response")?;
+    let result = response.result.ok_or("Failed to get result from init response")?;
     let caps = &result["capabilities"];
 
     // Type hierarchy should be advertised in non-lock mode
@@ -316,11 +326,13 @@ fn test_type_hierarchy_capability_advertised() {
             "typeHierarchyProvider should be advertised"
         );
     }
+
+    Ok(())
 }
 
 #[test]
 
-fn test_type_hierarchy_with_namespace_packages() {
+fn test_type_hierarchy_with_namespace_packages() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -380,13 +392,15 @@ package Foo::Bar::Baz;
         })),
     };
 
-    let response = server.handle_request(request).unwrap();
+    let response = server.handle_request(request).ok_or("Failed to get response")?;
     let result = response.result.as_ref().and_then(|r| r.as_array());
 
     assert!(result.is_some(), "Should return type hierarchy items");
-    let items = result.unwrap();
+    let items = result.ok_or("Failed to get items array")?;
     assert!(!items.is_empty());
 
     let item = &items[0];
     assert_eq!(item["name"], "Foo::Bar");
+
+    Ok(())
 }

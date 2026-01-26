@@ -14,19 +14,21 @@ use perl_parser::Parser;
 use perl_parser::semantic::{SemanticAnalyzer, SemanticTokenType};
 use perl_parser::symbol::SymbolKind;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 // ============================================================================
 // PHASE 1: Critical LSP Features
 // ============================================================================
 
 #[test]
-fn test_expression_statement_semantic() {
+fn test_expression_statement_semantic() -> TestResult {
     let code = r#"
 my $x = 42;
 $x + 10;  # ExpressionStatement wrapping binary expression
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     // Should have semantic tokens for variables
@@ -42,10 +44,11 @@ $x + 10;  # ExpressionStatement wrapping binary expression
         .collect();
 
     assert!(!var_tokens.is_empty(), "Should have variable tokens");
+    Ok(())
 }
 
 #[test]
-fn test_try_block_semantic() {
+fn test_try_block_semantic() -> TestResult {
     let code = r#"
 try {
     my $x = risky_operation();
@@ -55,16 +58,17 @@ try {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     // Should not crash and should generate some tokens
     let tokens = analyzer.semantic_tokens();
     assert!(!tokens.is_empty(), "Try blocks should generate semantic tokens");
+    Ok(())
 }
 
 #[test]
-fn test_eval_block_semantic() {
+fn test_eval_block_semantic() -> TestResult {
     let code = r#"
 eval {
     my $result = dangerous_operation();
@@ -76,7 +80,7 @@ if ($@) {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     // Should have tokens for variables inside eval
@@ -88,10 +92,11 @@ if ($@) {
 
     // Note: Depending on scope handling, this might be empty
     // The important part is that analyzer doesn't crash
+    Ok(())
 }
 
 #[test]
-fn test_do_block_semantic() {
+fn test_do_block_semantic() -> TestResult {
     let code = r#"
 my $value = do {
     my $temp = calculate();
@@ -100,7 +105,7 @@ my $value = do {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     let tokens = analyzer.semantic_tokens();
@@ -110,17 +115,18 @@ my $value = do {
     let symbols = analyzer.symbol_table();
     let value_symbols = symbols.find_symbol("value", 0, SymbolKind::scalar());
     assert!(!value_symbols.is_empty(), "Should find $value declaration");
+    Ok(())
 }
 
 #[test]
-fn test_variable_list_declaration_semantic() {
+fn test_variable_list_declaration_semantic() -> TestResult {
     let code = r#"
 my ($x, $y, $z) = (1, 2, 3);
 my @arr = ($x, $y);
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     // Should have declaration tokens for all three variables
@@ -141,10 +147,11 @@ my @arr = ($x, $y);
     assert!(!symbols.find_symbol("x", 0, SymbolKind::scalar()).is_empty());
     assert!(!symbols.find_symbol("y", 0, SymbolKind::scalar()).is_empty());
     assert!(!symbols.find_symbol("z", 0, SymbolKind::scalar()).is_empty());
+    Ok(())
 }
 
 #[test]
-fn test_variable_with_attributes_semantic() {
+fn test_variable_with_attributes_semantic() -> TestResult {
     let code = r#"
 my $shared :shared = 42;
 sub lvalue_sub :lvalue {
@@ -154,7 +161,7 @@ sub lvalue_sub :lvalue {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     // Should handle attribute annotations
@@ -164,17 +171,18 @@ sub lvalue_sub :lvalue {
     // Should have symbol for $shared
     let shared_symbols = analyzer.symbol_table().find_symbol("shared", 0, SymbolKind::scalar());
     assert!(!shared_symbols.is_empty(), "Should find $shared symbol");
+    Ok(())
 }
 
 #[test]
-fn test_ternary_expression_semantic() {
+fn test_ternary_expression_semantic() -> TestResult {
     let code = r#"
 my $x = 10;
 my $result = $x > 5 ? "big" : "small";
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     let tokens = analyzer.semantic_tokens();
@@ -194,10 +202,11 @@ my $result = $x > 5 ? "big" : "small";
 
     assert!(var_count >= 2, "Should have variable tokens");
     assert!(string_count >= 2, "Should have string tokens");
+    Ok(())
 }
 
 #[test]
-fn test_unary_operators_semantic() {
+fn test_unary_operators_semantic() -> TestResult {
     let code = r#"
 my $x = 10;
 my $y = -$x;
@@ -207,7 +216,7 @@ $x++;
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     let tokens = analyzer.semantic_tokens();
@@ -224,10 +233,11 @@ $x++;
         .collect();
 
     assert!(var_tokens.len() >= 3, "Should have tokens for x, y, z");
+    Ok(())
 }
 
 #[test]
-fn test_readline_operator_semantic() {
+fn test_readline_operator_semantic() -> TestResult {
     let code = r#"
 my $line = <STDIN>;
 while (<>) {
@@ -237,7 +247,7 @@ while (<>) {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     let tokens = analyzer.semantic_tokens();
@@ -246,17 +256,18 @@ while (<>) {
     // Should have symbol for $line
     let line_symbols = analyzer.symbol_table().find_symbol("line", 0, SymbolKind::scalar());
     assert!(!line_symbols.is_empty(), "Should find $line symbol");
+    Ok(())
 }
 
 #[test]
-fn test_array_literal_semantic() {
+fn test_array_literal_semantic() -> TestResult {
     let code = r#"
 my @arr = [1, 2, 3, 4];
 my $first = $arr[0];
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     let tokens = analyzer.semantic_tokens();
@@ -279,17 +290,18 @@ my $first = $arr[0];
         tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Number)).collect();
 
     assert!(num_tokens.len() >= 4, "Should have number tokens for [1,2,3,4]");
+    Ok(())
 }
 
 #[test]
-fn test_hash_literal_semantic() {
+fn test_hash_literal_semantic() -> TestResult {
     let code = r#"
 my %hash = { key1 => "value1", key2 => "value2" };
 my $val = $hash{key1};
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     let tokens = analyzer.semantic_tokens();
@@ -312,10 +324,11 @@ my $val = $hash{key1};
         tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::String)).collect();
 
     assert!(string_tokens.len() >= 2, "Should have string tokens for hash values");
+    Ok(())
 }
 
 #[test]
-fn test_phase_block_semantic() {
+fn test_phase_block_semantic() -> TestResult {
     let code = r#"
 BEGIN {
     print "Starting up\n";
@@ -331,7 +344,7 @@ INIT {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     let tokens = analyzer.semantic_tokens();
@@ -342,6 +355,7 @@ INIT {
         tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Function)).collect();
 
     assert!(!fn_tokens.is_empty(), "Should have function tokens");
+    Ok(())
 }
 
 // ============================================================================
@@ -349,14 +363,14 @@ INIT {
 // ============================================================================
 
 #[test]
-fn test_substitution_operator_semantic() {
+fn test_substitution_operator_semantic() -> TestResult {
     let code = r#"
 my $text = "hello world";
 $text =~ s/world/universe/g;
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     let tokens = analyzer.semantic_tokens();
@@ -366,6 +380,7 @@ $text =~ s/world/universe/g;
         tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
 
     assert!(!op_tokens.is_empty(), "Should have operator tokens for s///");
+    Ok(())
 }
 
 // =============================================================================
@@ -379,8 +394,10 @@ mod semantic_phase2_tests {
     use perl_parser::semantic::{SemanticAnalyzer, SemanticTokenType};
     use perl_parser::symbol::SymbolKind;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
     #[test]
-    fn test_method_call_semantic() {
+    fn test_method_call_semantic() -> TestResult {
         let code = r#"
 my $obj = Foo->new();
 $obj->process();
@@ -388,7 +405,7 @@ my $result = $obj->get_value();
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let tokens = analyzer.semantic_tokens();
@@ -398,10 +415,11 @@ my $result = $obj->get_value();
             tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Method)).collect();
 
         assert!(method_tokens.len() >= 3, "Should have tokens for new, process, get_value");
+        Ok(())
     }
 
     #[test]
-    fn test_reference_dereference_semantic() {
+    fn test_reference_dereference_semantic() -> TestResult {
         let code = r#"
 my $scalar = 42;
 my $ref = \$scalar;
@@ -409,7 +427,7 @@ my $value = $$ref;
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let tokens = analyzer.semantic_tokens();
@@ -420,10 +438,11 @@ my $value = $$ref;
         assert!(!symbols.find_symbol("scalar", 0, SymbolKind::scalar()).is_empty());
         assert!(!symbols.find_symbol("ref", 0, SymbolKind::scalar()).is_empty());
         assert!(!symbols.find_symbol("value", 0, SymbolKind::scalar()).is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_use_require_semantic() {
+    fn test_use_require_semantic() -> TestResult {
         let code = r#"
 use strict;
 use warnings;
@@ -432,7 +451,7 @@ require Exporter;
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let tokens = analyzer.semantic_tokens();
@@ -444,10 +463,11 @@ require Exporter;
             .collect();
 
         assert!(!ns_tokens.is_empty(), "Should have namespace tokens for modules");
+        Ok(())
     }
 
     #[test]
-    fn test_given_when_semantic() {
+    fn test_given_when_semantic() -> TestResult {
         let code = r#"
 use v5.10;
 given ($value) {
@@ -458,15 +478,16 @@ given ($value) {
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let tokens = analyzer.semantic_tokens();
         assert!(!tokens.is_empty(), "Should generate tokens for given/when");
+        Ok(())
     }
 
     #[test]
-    fn test_control_flow_keywords_semantic() {
+    fn test_control_flow_keywords_semantic() -> TestResult {
         let code = r#"
 sub process {
     foreach my $item (@items) {
@@ -479,31 +500,33 @@ sub process {
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let tokens = analyzer.semantic_tokens();
         assert!(!tokens.is_empty(), "Should generate tokens for control flow");
+        Ok(())
     }
 
     // Phase 3 tests (also under semantic-phase2 feature for simplicity)
     #[test]
-    fn test_postfix_loop_semantic() {
+    fn test_postfix_loop_semantic() -> TestResult {
         let code = r#"
 say $_ for @items;
 print "$_\n" while <>;
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let tokens = analyzer.semantic_tokens();
         assert!(!tokens.is_empty(), "Should generate tokens for postfix loops");
+        Ok(())
     }
 
     #[test]
-    fn test_file_test_semantic() {
+    fn test_file_test_semantic() -> TestResult {
         let code = r#"
 my $exists = -e $file;
 my $is_dir = -d $path;
@@ -511,11 +534,12 @@ my $readable = -r $filename;
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let tokens = analyzer.semantic_tokens();
         assert!(!tokens.is_empty(), "Should generate tokens for file tests");
+        Ok(())
     }
 }
 
@@ -524,7 +548,7 @@ my $readable = -r $filename;
 // ============================================================================
 
 #[test]
-fn test_complex_real_world_semantic() {
+fn test_complex_real_world_semantic() -> TestResult {
     let code = r#"
 package MyModule;
 use strict;
@@ -559,7 +583,7 @@ sub process {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     // Should not crash
@@ -578,4 +602,5 @@ sub process {
     assert!(has_package, "Should have package tokens");
     assert!(has_function, "Should have function tokens");
     assert!(has_variable, "Should have variable tokens");
+    Ok(())
 }

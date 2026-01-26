@@ -5,7 +5,7 @@
 //! AC3: Enhanced Request Correlation System
 //! AC4: Request Context with LSP Workflow Integration
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 
 use serde_json::json;
 use std::time::{Duration, Instant};
