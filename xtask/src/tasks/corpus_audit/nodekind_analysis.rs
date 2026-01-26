@@ -112,7 +112,7 @@ pub fn analyze_nodekind_coverage(
 /// This implementation parses the file and traverses the AST to collect
 /// all unique NodeKind names.
 fn extract_nodekinds_from_content(path: &PathBuf) -> Vec<String> {
-    use perl_parser::{Parser, ast::Node};
+    use perl_parser::Parser;
     use std::fs;
 
     let content = match fs::read_to_string(path) {

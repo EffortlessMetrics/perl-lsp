@@ -346,7 +346,7 @@ impl ScopeAnalyzer {
                     issues.push(ScopeIssue {
                         kind: issue_kind,
                         variable_name: full_name,
-                        line: self.get_line_from_node(variable, code),
+                        line,
                         range: (variable.location.start, variable.location.end),
                         description,
                     });
@@ -395,7 +395,7 @@ impl ScopeAnalyzer {
                         issues.push(ScopeIssue {
                             kind: issue_kind,
                             variable_name: full_name,
-                            line: self.get_line_from_node(variable, code),
+                            line,
                             range: (variable.location.start, variable.location.end),
                             description,
                         });

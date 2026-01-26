@@ -1169,6 +1169,15 @@ impl Node {
         }
     }
 
+    /// Count the total number of nodes in this subtree (inclusive).
+    pub fn count_nodes(&self) -> usize {
+        let mut count = 1;
+        self.for_each_child(|child| {
+            count += child.count_nodes();
+        });
+        count
+    }
+
     /// Collect direct child nodes into a vector for convenience APIs.
     pub fn children(&self) -> Vec<&Node> {
         let mut children = Vec::new();

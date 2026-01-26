@@ -1061,7 +1061,7 @@ impl RefactoringEngine {
         let line_ending = if source_code.contains("\r\n") { "\r\n" } else { "\n" };
 
         // Calculate offsets
-        let mut line_index = LineIndex::new(source_code.clone());
+        let line_index = LineIndex::new(source_code.clone());
         let start_offset = line_index
             .position_to_offset(start_position.0 as u32, start_position.1 as u32)
             .ok_or_else(|| ParseError::SyntaxError {

@@ -62,7 +62,7 @@ pub fn build_rename_edit(
                 // For subroutines, preserve any existing package qualifier
                 let mut replacement = new_name_bare.to_string();
 
-                if let Some(mut doc) = idx.document_store().get(&loc.uri) {
+                if let Some(doc) = idx.document_store().get(&loc.uri) {
                     if let (Some(start_off), Some(end_off)) = (
                         doc.line_index.position_to_offset(start_line, start_char),
                         doc.line_index.position_to_offset(end_line, end_char),
