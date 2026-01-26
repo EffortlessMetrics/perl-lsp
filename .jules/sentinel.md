@@ -40,3 +40,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The `perl-dap` safe evaluation mode failed to block state-mutating and resource-consuming operations including `bless`, `reset`, `umask`, `binmode`, `opendir`, and `seek`. This allowed "safe" hover expressions to silently alter object classes, clear global variables, modify process permissions, or consume file handles.
 **Learning:** Security blocklists for "safe evaluation" often focus on obvious system execution (`system`, `unlink`) but miss subtle state-corruption primitives (`bless`, `reset`) or resource management ops (`opendir`, `binmode`) that can be equally destructive to the debugging session or application state.
 **Prevention:** Regularly audit language primitives for *any* side effects, not just external system calls. Treat object modification (`bless`) and global state resets (`reset`) as high-risk mutations.
+
+## 2026-10-25 - Path Traversal via Configuration
+**Vulnerability:** The `BinaryDownloader` constructed file paths using `path.join(tempDir, assetName)` where `assetName` was derived from a user-configurable version tag (`perl-lsp.versionTag`). An attacker could supply a malicious tag (e.g., `../../etc/passwd`) to write files outside the intended temporary directory.
+**Learning:** Never trust that `path.join` with a "filename" will stay within a directory. If the filename part comes from user input (even indirectly via configuration), it must be validated to ensure it contains no path separators.
+**Prevention:** Explicitly validate that constructed filenames match a strict allowlist (e.g., `^[a-zA-Z0-9_.-]+$`) and reject any input containing path separators or `..`.

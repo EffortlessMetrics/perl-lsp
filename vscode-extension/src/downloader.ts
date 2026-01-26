@@ -139,6 +139,11 @@ export class BinaryDownloader {
                 this.outputChannel.appendLine(`Available assets: ${availableAssets}`);
                 throw new Error(`No binary found for platform: ${target}. Available assets: ${availableAssets}`);
             }
+
+            // Security check: Validate asset name to prevent path traversal
+            if (!/^[a-zA-Z0-9_.-]+$/.test(assetName) || assetName.includes('..')) {
+                throw new Error(`Invalid asset name detected: ${assetName}`);
+            }
             
             this.outputChannel.appendLine(`Found matching asset: ${assetName}`);
             
