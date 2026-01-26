@@ -312,7 +312,6 @@ impl ScopeAnalyzer {
                 let extracted = self.extract_variable_name(variable);
                 let (sigil, var_name_part) = extracted.parts();
 
-                let line = self.get_line_from_node(variable, code);
                 let is_our = declarator == "our";
                 let is_initialized = initializer.is_some();
 
@@ -331,6 +330,7 @@ impl ScopeAnalyzer {
                     is_our,
                     is_initialized,
                 ) {
+                    let line = self.get_line_from_node(variable, code);
                     // Optimization: Only allocate full name string when we actually have an issue to report
                     let full_name = extracted.as_string();
                     // Build description first (borrows full_name), then move full_name into struct
@@ -365,7 +365,6 @@ impl ScopeAnalyzer {
                 for variable in variables {
                     let extracted = self.extract_variable_name(variable);
                     let (sigil, var_name_part) = extracted.parts();
-                    let line = self.get_line_from_node(variable, code);
 
                     if let Some(issue_kind) = scope.declare_variable_parts(
                         sigil,
@@ -374,6 +373,7 @@ impl ScopeAnalyzer {
                         is_our,
                         is_initialized,
                     ) {
+                        let line = self.get_line_from_node(variable, code);
                         // Optimization: Only allocate full name string when we actually have an issue to report
                         let full_name = extracted.as_string();
                         // Build description first (borrows full_name), then move full_name into struct
