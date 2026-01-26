@@ -49,18 +49,17 @@ impl PragmaTracker {
         pragma_map: &[(Range<usize>, PragmaState)],
         offset: usize,
     ) -> PragmaState {
-        // Find the last pragma state that starts before this offset
-        let mut effective_state = PragmaState::default();
+        // Find the last pragma state that starts before this offset.
+        // pragma_map is sorted by start offset (guaranteed by build()).
+        // We use partition_point to find the first element where start > offset,
+        // then take the element before it.
+        let idx = pragma_map.partition_point(|(range, _)| range.start <= offset);
 
-        for (range, state) in pragma_map {
-            if range.start <= offset {
-                effective_state = state.clone();
-            } else {
-                break;
-            }
+        if idx > 0 {
+            pragma_map[idx - 1].1.clone()
+        } else {
+            PragmaState::default()
         }
-
-        effective_state
     }
 
     fn build_ranges(
