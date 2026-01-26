@@ -45,6 +45,7 @@
 //! Create debugging configurations for launching Perl scripts:
 //!
 //! ```no_run
+//! # fn main() -> anyhow::Result<()> {
 //! use perl_dap::LaunchConfiguration;
 //! use std::path::PathBuf;
 //! use std::collections::HashMap;
@@ -60,7 +61,7 @@
 //!
 //! // Validate configuration before launching
 //! config.validate()?;
-//! # Ok(())
+//! # Ok::<(), anyhow::Error>(())
 //! # }
 //! ```
 //!
