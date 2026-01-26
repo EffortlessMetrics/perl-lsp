@@ -8,7 +8,7 @@ impl<'a> Parser<'a> {
             // Handle absolute path like ::Foo::Bar
             "::".to_string()
         } else {
-            start_token.text
+            start_token.text.to_string()
         };
 
         // Keep consuming :: and identifiers
@@ -54,7 +54,7 @@ impl<'a> Parser<'a> {
             TokenKind::Number => {
                 let token = self.tokens.next()?;
                 Ok(Node::new(
-                    NodeKind::Number { value: token.text },
+                    NodeKind::Number { value: token.text.to_string() },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -64,7 +64,7 @@ impl<'a> Parser<'a> {
                 // Check if it's a double-quoted string (interpolated)
                 let interpolated = token.text.starts_with('"');
                 Ok(Node::new(
-                    NodeKind::String { value: token.text, interpolated },
+                    NodeKind::String { value: token.text.to_string(), interpolated },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -89,7 +89,7 @@ impl<'a> Parser<'a> {
                 // Quote operators produce strings
                 let interpolated = matches!(token.kind, TokenKind::QuoteDouble);
                 Ok(Node::new(
-                    NodeKind::String { value: token.text, interpolated },
+                    NodeKind::String { value: token.text.to_string(), interpolated },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -97,7 +97,7 @@ impl<'a> Parser<'a> {
             TokenKind::QuoteWords => {
                 let token = self.tokens.next()?;
                 let start = token.start;
-                let text = token.text.as_str();
+                let text = &token.text;
 
                 // Parse qw(...) to extract words
                 if let Some(content) = text.strip_prefix("qw") {
@@ -136,7 +136,7 @@ impl<'a> Parser<'a> {
                 } else {
                     // Fallback - shouldn't happen with proper lexer
                     Ok(Node::new(
-                        NodeKind::String { value: token.text, interpolated: false },
+                        NodeKind::String { value: token.text.to_string(), interpolated: false },
                         SourceLocation { start, end: token.end },
                     ))
                 }
@@ -146,7 +146,7 @@ impl<'a> Parser<'a> {
                 let token = self.tokens.next()?;
                 // qx/backticks - for now treat as a string
                 Ok(Node::new(
-                    NodeKind::String { value: token.text, interpolated: true },
+                    NodeKind::String { value: token.text.to_string(), interpolated: true },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -509,7 +509,7 @@ impl<'a> Parser<'a> {
                     // It's used as an identifier
                     let token = self.tokens.next()?;
                     Ok(Node::new(
-                        NodeKind::Identifier { name: token.text },
+                        NodeKind::Identifier { name: token.text.to_string() },
                         SourceLocation { start: token.start, end: token.end },
                     ))
                 }
@@ -543,7 +543,7 @@ impl<'a> Parser<'a> {
                 // But NOT for statement modifiers like if, unless, while, etc.
                 let token = self.tokens.next()?;
                 Ok(Node::new(
-                    NodeKind::Identifier { name: token.text },
+                    NodeKind::Identifier { name: token.text.to_string() },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }

@@ -42,7 +42,7 @@ impl<'a> Parser<'a> {
                     let end = operand.location.end;
 
                     return Ok(Node::new(
-                        NodeKind::Unary { op: op_token.text, operand: Box::new(operand) },
+                        NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(operand) },
                         SourceLocation { start, end },
                     ));
                 }
@@ -58,7 +58,7 @@ impl<'a> Parser<'a> {
 
                         // Wrap the hash in a unary plus to preserve the explicit disambiguation
                         return Ok(Node::new(
-                            NodeKind::Unary { op: op_token.text, operand: Box::new(hash) },
+                            NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(hash) },
                             SourceLocation { start, end },
                         ));
                     }
@@ -69,7 +69,7 @@ impl<'a> Parser<'a> {
                         let end = op_token.end;
                         return Ok(Node::new(
                             NodeKind::Unary {
-                                op: op_token.text,
+                                op: op_token.text.to_string(),
                                 operand: Box::new(Node::new(
                                     NodeKind::Undef,
                                     SourceLocation { start: end, end },
@@ -83,7 +83,7 @@ impl<'a> Parser<'a> {
                     let end = operand.location.end;
 
                     return Ok(Node::new(
-                        NodeKind::Unary { op: op_token.text, operand: Box::new(operand) },
+                        NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(operand) },
                         SourceLocation { start, end },
                     ));
                 }
@@ -97,7 +97,7 @@ impl<'a> Parser<'a> {
                         let end = op_token.end;
                         return Ok(Node::new(
                             NodeKind::Unary {
-                                op: op_token.text,
+                                op: op_token.text.to_string(),
                                 operand: Box::new(Node::new(
                                     NodeKind::Undef,
                                     SourceLocation { start: end, end },
@@ -111,7 +111,7 @@ impl<'a> Parser<'a> {
                     let end = operand.location.end;
 
                     return Ok(Node::new(
-                        NodeKind::Unary { op: op_token.text, operand: Box::new(operand) },
+                        NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(operand) },
                         SourceLocation { start, end },
                     ));
                 }
@@ -123,7 +123,7 @@ impl<'a> Parser<'a> {
                     let end = operand.location.end;
 
                     return Ok(Node::new(
-                        NodeKind::Unary { op: op_token.text, operand: Box::new(operand) },
+                        NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(operand) },
                         SourceLocation { start, end },
                     ));
                 }
@@ -138,7 +138,7 @@ impl<'a> Parser<'a> {
                         let end = op_token.end;
                         return Ok(Node::new(
                             NodeKind::Unary {
-                                op: op_token.text,
+                                op: op_token.text.to_string(),
                                 operand: Box::new(Node::new(
                                     NodeKind::Undef,
                                     SourceLocation { start: end, end },
@@ -152,7 +152,7 @@ impl<'a> Parser<'a> {
                     let end = operand.location.end;
 
                     return Ok(Node::new(
-                        NodeKind::Unary { op: op_token.text, operand: Box::new(operand) },
+                        NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(operand) },
                         SourceLocation { start, end },
                     ));
                 }
