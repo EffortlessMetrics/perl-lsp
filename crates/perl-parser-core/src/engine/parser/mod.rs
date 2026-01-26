@@ -50,6 +50,7 @@ use crate::{
 };
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 
 /// High-performance Perl parser for Perl script analysis within LSP workflow
 ///
@@ -89,6 +90,8 @@ pub struct Parser<'a> {
     src_bytes: &'a [u8],
     /// Byte cursor tracking position for heredoc content collection
     byte_cursor: usize,
+    /// Start time of parsing for timeout enforcement (specifically heredocs)
+    heredoc_start_time: Option<Instant>,
     /// Collection of parse errors encountered during parsing (for error recovery)
     errors: Vec<ParseError>,
 }
@@ -131,6 +134,7 @@ impl<'a> Parser<'a> {
             pending_heredocs: VecDeque::new(),
             src_bytes: input.as_bytes(),
             byte_cursor: 0,
+            heredoc_start_time: None,
             errors: Vec::new(),
         }
     }
@@ -235,3 +239,5 @@ mod indirect_call_tests;
 mod slash_ambiguity_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod heredoc_security_tests;

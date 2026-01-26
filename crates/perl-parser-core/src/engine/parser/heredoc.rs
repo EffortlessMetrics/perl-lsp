@@ -76,6 +76,9 @@ fn map_heredoc_quote_kind(text: &str, _interpolated: bool) -> heredoc_collector:
     }
 }
 
+const MAX_HEREDOC_DEPTH: usize = 50;
+const HEREDOC_TIMEOUT_MS: u64 = 5000;
+
 impl<'a> Parser<'a> {
     /// Enqueue a heredoc declaration for later content collection
     fn push_heredoc_decl(
@@ -86,6 +89,18 @@ impl<'a> Parser<'a> {
         decl_start: usize,
         decl_end: usize,
     ) {
+        if self.pending_heredocs.len() >= MAX_HEREDOC_DEPTH {
+            self.errors.push(ParseError::syntax(
+                format!("Heredoc depth limit exceeded (max {})", MAX_HEREDOC_DEPTH),
+                decl_start,
+            ));
+            return;
+        }
+
+        if self.pending_heredocs.is_empty() {
+            self.heredoc_start_time = Some(Instant::now());
+        }
+
         self.pending_heredocs.push_back(PendingHeredoc {
             label: Arc::from(label.as_str()),
             allow_indent,
@@ -97,8 +112,24 @@ impl<'a> Parser<'a> {
     /// Drain all pending heredocs after statement completion (FIFO order)
     fn drain_pending_heredocs(&mut self, root: &mut Node) {
         if self.pending_heredocs.is_empty() {
+            self.heredoc_start_time = None;
             return;
         }
+
+        // Check for timeout
+        if let Some(start) = self.heredoc_start_time {
+            if start.elapsed().as_millis() > HEREDOC_TIMEOUT_MS as u128 {
+                self.errors.push(ParseError::syntax(
+                    format!("Heredoc parsing timed out (> {}ms)", HEREDOC_TIMEOUT_MS),
+                    self.byte_cursor,
+                ));
+                // Clear pending to prevent further processing/hanging
+                self.pending_heredocs.clear();
+                self.heredoc_start_time = None;
+                return;
+            }
+        }
+
         // Advance to first content line (handle newline after statement terminator)
         self.byte_cursor = after_line_break(self.src_bytes, self.byte_cursor);
 
