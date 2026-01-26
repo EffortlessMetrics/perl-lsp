@@ -347,13 +347,6 @@
         ],
         "description": "Test if two values are not equal (Test::More)"
     },
-    "Test Is Deeply": {
-        "prefix": "tm-is_deeply",
-        "body": [
-            "is_deeply(${1:$got}, ${2:$expected}, '${3:test description}');"
-        ],
-        "description": "Test if two data structures are identical (Test::More)"
-    },
     "Test Like": {
         "prefix": "tm-like",
         "body": [
@@ -367,20 +360,6 @@
             "unlike(${1:$got}, qr/${2:pattern}/, '${3:test description}');"
         ],
         "description": "Test if value does not match regex (Test::More)"
-    },
-    "Test Cmp Ok": {
-        "prefix": "tm-cmp_ok",
-        "body": [
-            "cmp_ok(${1:$got}, '${2:op}', ${3:$expected}, '${4:test description}');"
-        ],
-        "description": "Compare two arguments using an operator (Test::More)"
-    },
-    "Test Isa Ok": {
-        "prefix": "tm-isa_ok",
-        "body": [
-            "isa_ok(${1:$obj}, '${2:Class::Name}', '${3:object name}');"
-        ],
-        "description": "Test if object is of a given class (Test::More)"
     },
     "Test Subtest": {
         "prefix": "tm-subtest",
