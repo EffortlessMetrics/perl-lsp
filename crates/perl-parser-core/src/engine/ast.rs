@@ -349,22 +349,22 @@ impl Node {
             }
 
             NodeKind::While { condition, body, continue_block } => {
-                let mut s = format!("(while {} {})", self.node_to_sexp(condition), self.node_to_sexp(body));
+                let mut s = format!("(while {} {})", condition.to_sexp(), body.to_sexp());
                 if let Some(cont) = continue_block {
-                    s.push_str(&format!(" (continue {})", self.node_to_sexp(cont)));
+                    s.push_str(&format!(" (continue {})", cont.to_sexp()));
                 }
                 s
             }
             NodeKind::Tie { variable, package, args } => {
-                let mut s = format!("(tie {} {}", self.node_to_sexp(variable), self.node_to_sexp(package));
+                let mut s = format!("(tie {} {}", variable.to_sexp(), package.to_sexp());
                 for arg in args {
-                    s.push_str(&format!(" {}", self.node_to_sexp(arg)));
+                    s.push_str(&format!(" {}", arg.to_sexp()));
                 }
                 s.push(')');
                 s
             }
             NodeKind::Untie { variable } => {
-                format!("(untie {})", self.node_to_sexp(variable))
+                format!("(untie {})", variable.to_sexp())
             }
             NodeKind::For { init, condition, update, body, continue_block } => {
                 let init_str =
@@ -708,6 +708,15 @@ impl Node {
     /// The closure receives a mutable reference to each child node.
     pub fn for_each_child_mut<F: FnMut(&mut Node)>(&mut self, mut f: F) {
         match &mut self.kind {
+            NodeKind::Tie { variable, package, args } => {
+                f(variable);
+                f(package);
+                for arg in args {
+                    f(arg);
+                }
+            }
+            NodeKind::Untie { variable } => f(variable),
+
             // Root program node
             NodeKind::Program { statements } => {
                 for stmt in statements {
@@ -931,6 +940,15 @@ impl Node {
     /// The closure receives an immutable reference to each child node.
     pub fn for_each_child<'a, F: FnMut(&'a Node)>(&'a self, mut f: F) {
         match &self.kind {
+            NodeKind::Tie { variable, package, args } => {
+                f(variable);
+                f(package);
+                for arg in args {
+                    f(arg);
+                }
+            }
+            NodeKind::Untie { variable } => f(variable),
+
             // Root program node
             NodeKind::Program { statements } => {
                 for stmt in statements {
@@ -1759,6 +1777,7 @@ impl NodeKind {
     pub fn kind_name(&self) -> &'static str {
         match self {
             NodeKind::Program { .. } => "Program",
+            NodeKind::ExpressionStatement { .. } => "ExpressionStatement",
             NodeKind::VariableDeclaration { .. } => "VariableDeclaration",
             NodeKind::VariableListDeclaration { .. } => "VariableListDeclaration",
             NodeKind::Variable { .. } => "Variable",
@@ -1820,15 +1839,6 @@ impl NodeKind {
             NodeKind::UnknownRest => "UnknownRest",
         }
     }
-}
-
-/// Represents a single node in the Abstract Syntax Tree (AST).
-#[derive(Debug, Clone, PartialEq)]
-pub struct Node {
-    /// The specific type of Perl construct this node represents
-    pub kind: NodeKind,
-    /// The location of this node in the source code
-    pub location: SourceLocation,
 }
 
 /// Format unary operator for S-expression output

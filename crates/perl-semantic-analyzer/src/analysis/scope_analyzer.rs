@@ -512,6 +512,28 @@ impl ScopeAnalyzer {
                 self.analyze_node(lhs, scope, ancestors, issues, code, pragma_map);
             }
 
+            NodeKind::Tie { variable, package, args } => {
+                ancestors.push(node);
+                // Analyze arguments first
+                self.analyze_node(package, scope, ancestors, issues, code, pragma_map);
+                for arg in args {
+                    self.analyze_node(arg, scope, ancestors, issues, code, pragma_map);
+                }
+
+                // Mark variable as initialized
+                self.mark_initialized(variable, scope);
+
+                // Analyze variable
+                self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
+                ancestors.pop();
+            }
+
+            NodeKind::Untie { variable } => {
+                ancestors.push(node);
+                self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
+                ancestors.pop();
+            }
+
             NodeKind::Identifier { name } => {
                 // Check for barewords under strict mode, excluding hash keys
                 if strict_mode

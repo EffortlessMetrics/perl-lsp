@@ -15,7 +15,7 @@
 
 use perl_parser::{
     Parser,
-    ast::{Node, NodeKind},
+    ast::Node,
 };
 use proptest::prelude::*;
 use rstest::*;
@@ -147,54 +147,10 @@ mod ast_analysis {
             let end = node.location.end;
             self.position_sequence.push((start, end));
 
-            // Recursively analyze children based on node kind (targets iteration and indexing mutations)
-            self.analyze_children(&node.kind, Some(node_ptr), depth + 1);
-        }
-
-        fn analyze_children(&mut self, kind: &NodeKind, parent: Option<*const Node>, depth: usize) {
-            use perl_parser::ast::NodeKind;
-
-            // Extract children based on node type (targets pattern matching mutations)
-            match kind {
-                NodeKind::Program { statements } => {
-                    for (child_index, child) in statements.iter().enumerate() {
-                        if child_index < statements.len() {
-                            // Target < vs <= mutations
-                            self.analyze_node(child, parent, depth);
-                        }
-                    }
-                }
-                NodeKind::ExpressionStatement { expression } => {
-                    self.analyze_node(expression, parent, depth);
-                }
-                NodeKind::VariableDeclaration { variable, initializer, .. } => {
-                    self.analyze_node(variable, parent, depth);
-                    if let Some(init) = initializer {
-                        self.analyze_node(init, parent, depth);
-                    }
-                }
-                NodeKind::VariableListDeclaration { variables, initializer, .. } => {
-                    for var in variables.iter() {
-                        self.analyze_node(var, parent, depth);
-                    }
-                    if let Some(init) = initializer {
-                        self.analyze_node(init, parent, depth);
-                    }
-                }
-                NodeKind::FunctionCall { name: _, args, .. } => {
-                    // name is String, not Node - no need to analyze it
-                    for arg in args.iter() {
-                        self.analyze_node(arg, parent, depth);
-                    }
-                }
-                NodeKind::String { .. } | NodeKind::Number { .. } | NodeKind::Variable { .. } => {
-                    // Terminal nodes - no children to analyze
-                }
-                // Add more cases as needed - this covers the main structural nodes
-                _ => {
-                    // Terminal nodes or nodes without structural children
-                }
-            }
+            // Recursively analyze children (targets iteration and indexing mutations)
+            node.for_each_child(|child| {
+                self.analyze_node(child, Some(node_ptr), depth + 1);
+            });
         }
 
         fn compute_invariants(self) -> AstInvariants {
