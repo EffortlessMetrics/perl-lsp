@@ -66,12 +66,20 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
     assert!(!caps["inlayHintProvider"].is_null(), "inlayHintProvider must be advertised (v0.8.4)");
 
     // Assert new features that SHOULD be advertised
-    assert!(caps["codeLensProvider"].is_object(), "codeLensProvider must be advertised");
-    assert_eq!(
-        caps["codeLensProvider"]["resolveProvider"],
-        json!(true),
-        "codeLensProvider.resolveProvider must be true"
-    );
+    #[cfg(not(feature = "lsp-ga-lock"))]
+    {
+        assert!(caps["codeLensProvider"].is_object(), "codeLensProvider must be advertised");
+        assert_eq!(
+            caps["codeLensProvider"]["resolveProvider"],
+            json!(true),
+            "codeLensProvider.resolveProvider must be true"
+        );
+    }
+    #[cfg(feature = "lsp-ga-lock")]
+    {
+        // CodeLens is disabled in GA lock
+        assert!(caps["codeLensProvider"].is_null(), "codeLensProvider must NOT be advertised in GA lock");
+    }
     // v0.8.4 NEW features that ARE implemented
     assert!(
         !caps["documentLinkProvider"].is_null(),

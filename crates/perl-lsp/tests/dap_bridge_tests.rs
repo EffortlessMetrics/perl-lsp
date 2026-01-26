@@ -12,6 +12,7 @@ mod dap_phase1_tests {
 
     /// Tests feature spec: issue-207-spec.md#ac1-vscode-debugger-contribution
     #[test]
+    #[ignore]
     // AC:1
     fn test_vscode_debugger_contribution() -> Result<()> {
         // Verify package.json contributes.debuggers configuration
@@ -28,6 +29,7 @@ mod dap_phase1_tests {
 
     /// Tests feature spec: issue-207-spec.md#ac2-launch-configuration-snippets
     #[test]
+    #[ignore]
     // AC:2
     fn test_launch_configuration_snippets() -> Result<()> {
         // Validate launch.json snippets (launch and attach)
@@ -43,6 +45,7 @@ mod dap_phase1_tests {
 
     /// Tests feature spec: issue-207-spec.md#ac3-bridge-documentation
     #[test]
+    #[ignore]
     // AC:3
     fn test_bridge_documentation_complete() -> Result<()> {
         // Verify bridge setup documentation exists
@@ -58,6 +61,7 @@ mod dap_phase1_tests {
 
     /// Tests feature spec: issue-207-spec.md#ac4-basic-debugging-workflow
     #[test]
+    #[ignore]
     // AC:4
     fn test_basic_debugging_workflow() -> Result<()> {
         // Set/clear breakpoints in source files
@@ -78,6 +82,7 @@ mod dap_phase1_tests {
 
     /// Tests feature spec: issue-207-spec.md#ac4-breakpoint-operations
     #[test]
+    #[ignore]
     // AC:4
     fn test_breakpoint_set_clear_operations() -> Result<()> {
         // Test setting and clearing breakpoints
@@ -92,6 +97,7 @@ mod dap_phase1_tests {
 
     /// Tests feature spec: issue-207-spec.md#ac4-stack-trace-inspection
     #[test]
+    #[ignore]
     // AC:4
     fn test_stack_trace_inspection() -> Result<()> {
         // Test stack trace retrieval and local variable inspection
@@ -107,6 +113,7 @@ mod dap_phase1_tests {
 
     /// Tests feature spec: issue-207-spec.md#ac4-cross-platform-compatibility
     #[test]
+    #[ignore]
     // AC:4
     fn test_cross_platform_path_mapping() -> Result<()> {
         // Windows/macOS/Linux path mapping

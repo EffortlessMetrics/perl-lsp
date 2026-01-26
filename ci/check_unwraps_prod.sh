@@ -47,3 +47,32 @@ if (( count > baseline )); then
   cat "$tmp"
   exit 1
 fi
+
+# Also check for panics (ratcheting down)
+PANIC_PATTERN='panic!\('
+if rg -n "$PANIC_PATTERN" "${TARGETS[@]}" >"$tmp.panic"; then
+  : # matches found
+else
+  status=$?
+  if [[ "$status" -ne 1 ]]; then
+    echo "rg panic check failed (exit=$status)" >&2
+    exit "$status"
+  fi
+  : # exit 1 = no matches
+fi
+
+panic_count="$(wc -l <"$tmp.panic" | tr -d ' ')"
+panic_baseline_file="ci/panic_prod_baseline.txt"
+if [ -f "$panic_baseline_file" ]; then
+  panic_baseline=$(cat "$panic_baseline_file")
+else
+  panic_baseline=0
+fi
+
+echo "panic!: $panic_count (baseline: $panic_baseline)"
+
+if (( panic_count > panic_baseline )); then
+  echo "FAIL: panic! count ($panic_count) exceeds baseline ($panic_baseline)" >&2
+  echo "If you removed panics, update ci/panic_prod_baseline.txt with the new lower count."
+  exit 1
+fi

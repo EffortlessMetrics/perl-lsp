@@ -216,7 +216,8 @@ impl<'a> DeclarationProvider<'a> {
 
             // If we exhausted the cap, we have a cycle
             if depth >= cap {
-                panic!("Cycle detected in ParentMap - node is its own ancestor");
+                eprintln!("Cycle detected in ParentMap - node is its own ancestor (depth limit {})", cap);
+                break;
             }
         }
     }
@@ -707,18 +708,37 @@ impl<'a> DeclarationProvider<'a> {
     where
         F: FnMut(usize, usize) -> bool,
     {
+        let b = s.as_bytes();
         let mut i = 0;
-        while let Some(open) = s[i..].find('{') {
-            let start = i + open + 1;
-            if let Some(close_rel) = s[start..].find('}') {
-                let end = start + close_rel;
-                if f(start, end) {
-                    return true;
+        while i < b.len() {
+            if b[i] == b'{' {
+                let start = i + 1;
+                let mut nesting = 1;
+                let mut j = i + 1;
+                while j < b.len() {
+                    match b[j] {
+                        b'{' => nesting += 1,
+                        b'}' => {
+                            nesting -= 1;
+                            if nesting == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    j += 1;
                 }
-                i = end + 1;
-            } else {
-                break;
+
+                if nesting == 0 {
+                    // Found matching closing brace at j
+                    if f(start, j) {
+                        return true;
+                    }
+                    i = j + 1;
+                    continue;
+                }
             }
+            i += 1;
         }
         false
     }
@@ -893,6 +913,11 @@ impl<'a> DeclarationProvider<'a> {
             }
             NodeKind::FunctionCall { args, .. } => args.iter().collect(),
             NodeKind::MethodCall { object, args, .. } => {
+                let mut children = vec![object.as_ref()];
+                children.extend(args.iter());
+                children
+            }
+            NodeKind::IndirectCall { object, args, .. } => {
                 let mut children = vec![object.as_ref()];
                 children.extend(args.iter());
                 children

@@ -1456,6 +1456,7 @@ dependencies = [
  "chrono",
  "clap",
  "glob",
+ "lazy_static",
  "once_cell",
  "perl-parser",
  "perl-tdd-support",

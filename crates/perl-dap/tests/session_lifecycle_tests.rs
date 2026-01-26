@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! DAP Session Lifecycle Tests (AC5.5)
 //!
 //! Comprehensive tests for DAP session management including:
@@ -9,11 +8,10 @@
 //!
 //! Specification: GitHub Issue #449 - AC5.1, AC5.3, AC5.4, AC5.5
 
-
-
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
+use perl_tdd_support::{must, must_some};
 use serde_json::json;
-use std::sync::mpsc::{Receiver, channel};
+use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -50,7 +48,7 @@ fn test_session_lifecycle_initialize() {
             assert!(body.is_some(), "Initialize should return capabilities");
 
             // Verify capabilities structure
-            let caps = body.unwrap();
+            let caps = must_some(body);
             assert!(caps.get("supportsConfigurationDoneRequest").is_some());
             assert!(caps.get("supportsEvaluateForHovers").is_some());
         }
@@ -60,7 +58,7 @@ fn test_session_lifecycle_initialize() {
     // Verify initialized event is sent
     let event = wait_for_event(&rx, 100);
     assert!(event.is_some(), "Should emit initialized event");
-    match event.unwrap() {
+    match must_some(event) {
         DapMessage::Event { event, .. } => {
             assert_eq!(event, "initialized");
         }
@@ -87,7 +85,7 @@ fn test_session_lifecycle_disconnect_without_session() {
     // Should emit terminated event
     let event = wait_for_event(&rx, 100);
     assert!(event.is_some(), "Should emit terminated event");
-    match event.unwrap() {
+    match must_some(event) {
         DapMessage::Event { event, .. } => {
             assert_eq!(event, "terminated");
         }
@@ -108,7 +106,7 @@ fn test_session_lifecycle_launch_missing_arguments() {
             assert!(!success, "Launch should fail without arguments");
             assert_eq!(command, "launch");
             assert!(message.is_some());
-            assert!(message.unwrap().contains("Missing launch arguments"));
+            assert!(must_some(message).contains("Missing launch arguments"));
         }
         _ => panic!("Expected Response message"),
     }
@@ -133,7 +131,7 @@ fn test_session_lifecycle_launch_empty_program() {
             assert!(!success, "Launch should fail with empty program");
             assert_eq!(command, "launch");
             assert!(message.is_some());
-            let msg = message.unwrap();
+            let msg = must_some(message);
             assert!(
                 msg.contains("empty") || msg.contains("cannot be empty"),
                 "Error should mention empty path: {}",
@@ -163,7 +161,7 @@ fn test_session_lifecycle_launch_nonexistent_program() {
             assert!(!success, "Launch should fail with nonexistent program");
             assert_eq!(command, "launch");
             assert!(message.is_some());
-            let msg = message.unwrap();
+            let msg = must_some(message);
             assert!(
                 msg.contains("Could not access") || msg.contains("not a regular file"),
                 "Error should mention access issue: {}",
@@ -187,7 +185,7 @@ fn test_session_lifecycle_attach_missing_arguments() {
             assert!(!success, "Attach should fail without arguments");
             assert_eq!(command, "attach");
             assert!(message.is_some());
-            assert!(message.unwrap().contains("Missing attach arguments"));
+            assert!(must_some(message).contains("Missing attach arguments"));
         }
         _ => panic!("Expected Response message"),
     }
@@ -214,7 +212,7 @@ fn test_session_lifecycle_attach_validation() {
             assert_eq!(command, "attach");
             assert!(message.is_some());
             // Should validate but indicate not implemented
-            let msg = message.unwrap();
+            let msg = must_some(message);
             assert!(
                 msg.contains("not yet fully implemented") || msg.contains("localhost:13603"),
                 "Should validate args: {}",
@@ -281,7 +279,7 @@ fn test_session_lifecycle_threads_request() {
             assert!(body.is_some());
 
             // Even without active session, should return empty threads array
-            let body_val = body.unwrap();
+            let body_val = must_some(body);
             assert!(body_val.get("threads").is_some());
         }
         _ => panic!("Expected Response message"),
@@ -307,7 +305,7 @@ fn test_session_lifecycle_stacktrace_request() {
             assert!(body.is_some());
 
             // Should return empty frames without active session
-            let body_val = body.unwrap();
+            let body_val = must_some(body);
             assert!(body_val.get("stackFrames").is_some());
             assert!(body_val.get("totalFrames").is_some());
         }
@@ -333,7 +331,7 @@ fn test_session_lifecycle_scopes_request() {
             assert_eq!(command, "scopes");
             assert!(body.is_some());
 
-            let body_val = body.unwrap();
+            let body_val = must_some(body);
             assert!(body_val.get("scopes").is_some());
         }
         _ => panic!("Expected Response message"),
@@ -358,7 +356,7 @@ fn test_session_lifecycle_variables_request() {
             assert_eq!(command, "variables");
             assert!(body.is_some());
 
-            let body_val = body.unwrap();
+            let body_val = must_some(body);
             assert!(body_val.get("variables").is_some());
         }
         _ => panic!("Expected Response message"),
@@ -377,10 +375,10 @@ fn test_message_framing_request_structure() {
         DapMessage::Request { seq: 1, command: "initialize".to_string(), arguments: None };
 
     // Serialize to JSON
-    let json = serde_json::to_string(&request).expect("Should serialize");
+    let json = must(serde_json::to_string(&request));
 
     // Verify structure
-    let parsed: serde_json::Value = serde_json::from_str(&json).expect("Should parse");
+    let parsed: serde_json::Value = must(serde_json::from_str(&json));
     assert_eq!(parsed.get("type").and_then(|v| v.as_str()), Some("request"));
     assert_eq!(parsed.get("seq").and_then(|v| v.as_i64()), Some(1));
     assert_eq!(parsed.get("command").and_then(|v| v.as_str()), Some("initialize"));
@@ -400,10 +398,10 @@ fn test_message_framing_response_structure() {
     };
 
     // Serialize to JSON
-    let json = serde_json::to_string(&response).expect("Should serialize");
+    let json = must(serde_json::to_string(&response));
 
     // Verify structure
-    let parsed: serde_json::Value = serde_json::from_str(&json).expect("Should parse");
+    let parsed: serde_json::Value = must(serde_json::from_str(&json));
     assert_eq!(parsed.get("type").and_then(|v| v.as_str()), Some("response"));
     assert_eq!(parsed.get("seq").and_then(|v| v.as_i64()), Some(2));
     assert_eq!(parsed.get("request_seq").and_then(|v| v.as_i64()), Some(1));
@@ -418,10 +416,10 @@ fn test_message_framing_event_structure() {
     let event = DapMessage::Event { seq: 3, event: "initialized".to_string(), body: None };
 
     // Serialize to JSON
-    let json = serde_json::to_string(&event).expect("Should serialize");
+    let json = must(serde_json::to_string(&event));
 
     // Verify structure
-    let parsed: serde_json::Value = serde_json::from_str(&json).expect("Should parse");
+    let parsed: serde_json::Value = must(serde_json::from_str(&json));
     assert_eq!(parsed.get("type").and_then(|v| v.as_str()), Some("event"));
     assert_eq!(parsed.get("seq").and_then(|v| v.as_i64()), Some(3));
     assert_eq!(parsed.get("event").and_then(|v| v.as_str()), Some("initialized"));
@@ -440,7 +438,7 @@ fn test_message_framing_content_length() {
         message: None,
     };
 
-    let json = serde_json::to_string(&response).expect("Should serialize");
+    let json = must(serde_json::to_string(&response));
     let content_length = json.len();
     let frame = format!("Content-Length: {}\r\n\r\n{}", content_length, json);
 
@@ -465,7 +463,7 @@ fn test_thread_safe_sequence_numbers() {
     for i in 0..10 {
         let adapter_clone = Arc::clone(&adapter);
         let handle = thread::spawn(move || {
-            let mut adapter = adapter_clone.lock().unwrap();
+            let mut adapter = must(adapter_clone.lock());
             let response = adapter.handle_request(i, "initialize", None);
             match response {
                 DapMessage::Response { seq, .. } => seq,
@@ -477,7 +475,7 @@ fn test_thread_safe_sequence_numbers() {
 
     // Collect all sequence numbers
     let mut seq_numbers: Vec<i64> =
-        handles.into_iter().map(|h| h.join().expect("Thread should complete")).collect();
+        handles.into_iter().map(|h| must(h.join())).collect();
 
     // Verify all unique
     seq_numbers.sort_unstable();
@@ -500,7 +498,7 @@ fn test_thread_safe_session_state() {
     let adapter1 = Arc::clone(&adapter);
     let h1 = thread::spawn(move || {
         thread::sleep(Duration::from_millis(10));
-        let mut adapter = adapter1.lock().unwrap();
+        let mut adapter = must(adapter1.lock());
         adapter.handle_request(1, "initialize", None)
     });
     handles.push(h1);
@@ -509,7 +507,7 @@ fn test_thread_safe_session_state() {
     let adapter2 = Arc::clone(&adapter);
     let h2 = thread::spawn(move || {
         thread::sleep(Duration::from_millis(20));
-        let mut adapter = adapter2.lock().unwrap();
+        let mut adapter = must(adapter2.lock());
         let args = json!({
             "source": { "path": "/test.pl" },
             "breakpoints": [{ "line": 10 }]
@@ -522,14 +520,14 @@ fn test_thread_safe_session_state() {
     let adapter3 = Arc::clone(&adapter);
     let h3 = thread::spawn(move || {
         thread::sleep(Duration::from_millis(30));
-        let mut adapter = adapter3.lock().unwrap();
+        let mut adapter = must(adapter3.lock());
         adapter.handle_request(3, "disconnect", None)
     });
     handles.push(h3);
 
     // All threads should complete successfully
     for handle in handles {
-        let response = handle.join().expect("Thread should complete");
+        let response = must(handle.join());
         match response {
             DapMessage::Response { success, .. } => {
                 assert!(success, "Request should succeed");
@@ -550,7 +548,7 @@ fn test_thread_safe_breakpoint_storage() {
     for i in 0..5 {
         let adapter_clone = Arc::clone(&adapter);
         let handle = thread::spawn(move || {
-            let mut adapter = adapter_clone.lock().unwrap();
+            let mut adapter = must(adapter_clone.lock());
             let args = json!({
                 "source": { "path": format!("/test{}.pl", i) },
                 "breakpoints": [{ "line": 10 + i }]
@@ -562,7 +560,7 @@ fn test_thread_safe_breakpoint_storage() {
 
     // All threads should complete successfully
     for handle in handles {
-        let response = handle.join().expect("Thread should complete");
+        let response = must(handle.join());
         match response {
             DapMessage::Response { success, .. } => {
                 assert!(success, "setBreakpoints should succeed");
@@ -589,7 +587,7 @@ fn test_error_handling_invalid_command() {
             assert!(!success, "Invalid command should fail");
             assert_eq!(command, "invalidCommand");
             assert!(message.is_some());
-            assert!(message.unwrap().contains("Unknown command"));
+            assert!(must_some(message).contains("Unknown command"));
             assert!(body.is_none());
         }
         _ => panic!("Expected Response message"),
@@ -636,7 +634,7 @@ fn test_error_handling_evaluate_with_newlines() {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Expression with newlines should be rejected");
             assert!(message.is_some());
-            let msg = message.unwrap();
+            let msg = must_some(message);
             assert!(msg.contains("newline"), "Error should mention newlines: {}", msg);
         }
         _ => panic!("Expected Response message"),
@@ -660,7 +658,7 @@ fn test_error_handling_evaluate_empty_expression() {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Empty expression should be rejected");
             assert!(message.is_some());
-            assert!(message.unwrap().contains("Empty"));
+            assert!(must_some(message).contains("Empty"));
         }
         _ => panic!("Expected Response message"),
     }
@@ -679,7 +677,7 @@ fn test_error_handling_scopes_missing_frame_id() {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Scopes without frameId should fail");
             assert!(message.is_some());
-            assert!(message.unwrap().contains("frameId"));
+            assert!(must_some(message).contains("frameId"));
         }
         _ => panic!("Expected Response message"),
     }
@@ -698,7 +696,7 @@ fn test_error_handling_variables_missing_reference() {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Variables without reference should fail");
             assert!(message.is_some());
-            assert!(message.unwrap().contains("variablesReference"));
+            assert!(must_some(message).contains("variablesReference"));
         }
         _ => panic!("Expected Response message"),
     }
@@ -722,7 +720,7 @@ fn test_error_handling_launch_program_is_directory() {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch with directory should fail");
             assert!(message.is_some());
-            let msg = message.unwrap();
+            let msg = must_some(message);
             assert!(
                 msg.contains("not a regular file") || msg.contains("directory"),
                 "Error should mention file type: {}",

@@ -266,12 +266,10 @@ pub use tie_interface::{
 };
 
 static SEC_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-    Regex::new(r"(?m)^=+\s*$")
-        .unwrap_or_else(|_| panic!("SEC_RE regex is invalid - this is a bug in the corpus parser"))
+    Regex::new(r"(?m)^=+\s*$").unwrap_or_else(|e| panic!("Invalid separator regex: {e}"))
 });
 static META_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-    Regex::new(r"(?m)^#\s*@(?P<k>id|tags|perl|flags):\s*(?P<v>.*)$")
-        .unwrap_or_else(|_| panic!("META_RE regex is invalid - this is a bug in the corpus parser"))
+    Regex::new(r"(?m)^#\s*@(?P<k>id|tags|perl|flags):\s*(?P<v>.*)$").unwrap_or_else(|e| panic!("Invalid metadata regex: {e}"))
 });
 
 fn slugify_title(title: &str) -> String {
