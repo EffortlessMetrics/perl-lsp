@@ -382,6 +382,27 @@
         ],
         "description": "Test if object is of a given class (Test::More)"
     },
+    "Test Can Ok": {
+        "prefix": "tm-can_ok",
+        "body": [
+            "can_ok(${1:$obj}, qw(${2:methods}));"
+        ],
+        "description": "Test if object or class has methods (Test::More)"
+    },
+    "Test Pass": {
+        "prefix": "tm-pass",
+        "body": [
+            "pass('${1:test description}');"
+        ],
+        "description": "Explicitly pass a test (Test::More)"
+    },
+    "Test Fail": {
+        "prefix": "tm-fail",
+        "body": [
+            "fail('${1:test description}');"
+        ],
+        "description": "Explicitly fail a test (Test::More)"
+    },
     "Test Subtest": {
         "prefix": "tm-subtest",
         "body": [
