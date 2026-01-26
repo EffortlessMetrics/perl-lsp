@@ -194,7 +194,11 @@ impl<'a> Parser<'a> {
                 // Regular expression
                 // Validate regex complexity and check for embedded code
                 let validator = crate::engine::regex_validator::RegexValidator::new();
-                validator.validate(&content, start)?;
+                validator.validate(&content, start).map_err(|e| match e {
+                    crate::engine::regex_validator::RegexError::Syntax { message, offset } => {
+                        ParseError::syntax(message, offset)
+                    }
+                })?;
                 let has_embedded_code = validator.detects_code_execution(&content);
 
                 Ok(Node::new(
@@ -218,7 +222,11 @@ impl<'a> Parser<'a> {
                 // Match operator with pattern
                 // Validate regex complexity and check for embedded code
                 let validator = crate::engine::regex_validator::RegexValidator::new();
-                validator.validate(&content, start)?;
+                validator.validate(&content, start).map_err(|e| match e {
+                    crate::engine::regex_validator::RegexError::Syntax { message, offset } => {
+                        ParseError::syntax(message, offset)
+                    }
+                })?;
                 let has_embedded_code = validator.detects_code_execution(&content);
 
                 let mut modifiers = String::new();

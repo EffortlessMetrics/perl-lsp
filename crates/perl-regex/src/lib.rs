@@ -1,4 +1,27 @@
-use crate::error::ParseError;
+//! Perl regex validation and analysis
+//!
+//! This module provides tools to validate Perl regular expressions
+//! and detect potential security or performance issues like catastrophic backtracking.
+
+use thiserror::Error;
+
+#[derive(Error, Debug, Clone, PartialEq)]
+pub enum RegexError {
+    #[error("{message} at offset {offset}")]
+    Syntax {
+        message: String,
+        offset: usize,
+    },
+}
+
+impl RegexError {
+    pub fn syntax(message: impl Into<String>, offset: usize) -> Self {
+        RegexError::Syntax {
+            message: message.into(),
+            offset,
+        }
+    }
+}
 
 /// Validator for Perl regular expressions to prevent security and performance issues
 pub struct RegexValidator {
@@ -18,7 +41,7 @@ impl RegexValidator {
     }
 
     /// Validate a regex pattern for potential performance or security risks
-    pub fn validate(&self, pattern: &str, start_pos: usize) -> Result<(), ParseError> {
+    pub fn validate(&self, pattern: &str, start_pos: usize) -> Result<(), RegexError> {
         self.check_complexity(pattern, start_pos)
     }
 
@@ -118,9 +141,9 @@ impl RegexValidator {
         false
     }
 
-    fn check_complexity(&self, pattern: &str, start_pos: usize) -> Result<(), ParseError> {
+    fn check_complexity(&self, pattern: &str, start_pos: usize) -> Result<(), RegexError> {
         if self.detect_nested_quantifiers(pattern) {
-            return Err(ParseError::syntax(
+            return Err(RegexError::syntax(
                 "Potential catastrophic backtracking detected (nested quantifiers)",
                 start_pos,
             ));
@@ -146,7 +169,7 @@ impl RegexValidator {
                                 if let Some((_, '{')) = chars.peek() {
                                     unicode_property_count += 1;
                                     if unicode_property_count > self.max_unicode_properties {
-                                        return Err(ParseError::syntax(
+                                        return Err(RegexError::syntax(
                                             "Too many Unicode properties in regex (max 50)",
                                             start_pos + idx,
                                         ));
@@ -190,7 +213,7 @@ impl RegexValidator {
                             let lookbehind_depth =
                                 stack.iter().filter(|g| matches!(g, GroupType::Lookbehind)).count();
                             if lookbehind_depth >= self.max_nesting {
-                                return Err(ParseError::syntax(
+                                return Err(RegexError::syntax(
                                     "Regex lookbehind nesting too deep",
                                     start_pos + idx,
                                 ));
@@ -204,7 +227,7 @@ impl RegexValidator {
                                 .count();
                             if reset_depth >= self.max_nesting {
                                 // Use same nesting limit for now
-                                return Err(ParseError::syntax(
+                                return Err(RegexError::syntax(
                                     "Regex branch reset nesting too deep",
                                     start_pos + idx,
                                 ));
@@ -220,7 +243,7 @@ impl RegexValidator {
                         *branch_count += 1;
                         if *branch_count > 50 {
                             // Max 50 branches
-                            return Err(ParseError::syntax(
+                            return Err(RegexError::syntax(
                                 "Too many branches in branch reset group (max 50)",
                                 start_pos + idx,
                             ));

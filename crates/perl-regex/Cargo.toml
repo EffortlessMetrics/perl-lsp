@@ -1,0 +1,11 @@
+[package]
+name = "perl-regex"
+version = "0.8.8"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+thiserror = "2.0.18"
+
+[lints]
+workspace = true

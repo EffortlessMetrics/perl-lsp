@@ -1,0 +1,11 @@
+[package]
+name = "perl-builtins"
+version = "0.8.8"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+phf = { version = "0.13.1", features = ["macros"] }
+
+[lints]
+workspace = true

@@ -1434,6 +1434,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "perl-ast"
+version = "0.8.8"
+dependencies = [
+ "perl-position-tracking",
+]
+
+[[package]]
+name = "perl-builtins"
+version = "0.8.8"
+dependencies = [
+ "phf",
+]
+
+[[package]]
 name = "perl-corpus"
 version = "0.8.8"
 dependencies = [
@@ -1485,11 +1499,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-edit"
+version = "0.8.8"
+dependencies = [
+ "perl-position-tracking",
+ "perl-tdd-support",
+]
+
+[[package]]
+name = "perl-error"
+version = "0.8.8"
+dependencies = [
+ "perl-ast",
+ "perl-lexer",
+ "perl-position-tracking",
+ "perl-regex",
+ "thiserror",
+]
+
+[[package]]
+name = "perl-heredoc"
+version = "0.0.1"
+dependencies = [
+ "perl-position-tracking",
+]
+
+[[package]]
 name = "perl-incremental-parsing"
 version = "0.8.8"
 dependencies = [
  "anyhow",
  "lsp-types",
+ "perl-edit",
  "perl-lexer",
  "perl-parser-core",
  "perl-tdd-support",
@@ -1504,6 +1545,7 @@ version = "0.8.8"
 dependencies = [
  "criterion",
  "memchr",
+ "perl-position-tracking",
  "pretty_assertions",
  "proptest",
  "thiserror",
@@ -1634,9 +1676,19 @@ dependencies = [
 name = "perl-parser-core"
 version = "0.8.8"
 dependencies = [
+ "perl-ast",
+ "perl-builtins",
+ "perl-edit",
+ "perl-error",
+ "perl-heredoc",
  "perl-lexer",
  "perl-position-tracking",
+ "perl-pragma",
+ "perl-quote",
+ "perl-regex",
  "perl-tdd-support",
+ "perl-token",
+ "perl-tokenizer",
  "phf",
  "ropey",
  "serde",
@@ -1666,8 +1718,20 @@ dependencies = [
  "lsp-types",
  "ropey",
  "serde",
+ "serde_json",
  "thiserror",
 ]
+
+[[package]]
+name = "perl-pragma"
+version = "0.8.8"
+dependencies = [
+ "perl-ast",
+]
+
+[[package]]
+name = "perl-quote"
+version = "0.8.8"
 
 [[package]]
 name = "perl-refactoring"
@@ -1679,6 +1743,13 @@ dependencies = [
  "regex",
  "serde",
  "tempfile",
+]
+
+[[package]]
+name = "perl-regex"
+version = "0.8.8"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
@@ -1719,6 +1790,21 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "perl-token"
+version = "0.8.8"
+
+[[package]]
+name = "perl-tokenizer"
+version = "0.8.8"
+dependencies = [
+ "perl-ast",
+ "perl-error",
+ "perl-lexer",
+ "perl-position-tracking",
+ "perl-token",
 ]
 
 [[package]]

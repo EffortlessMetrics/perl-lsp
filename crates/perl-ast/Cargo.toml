@@ -1,0 +1,16 @@
+[package]
+name = "perl-ast"
+version = "0.8.8"
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Tree-sitter Perl Contributors"]
+description = "AST definitions for Perl parser"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+
+[dependencies]
+perl-position-tracking = { workspace = true }
+
+[lints]
+workspace = true

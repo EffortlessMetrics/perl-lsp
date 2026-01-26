@@ -5,7 +5,7 @@ edition = "2021"
 description = "UTF-8/UTF-16 position tracking and conversion for Perl LSP"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/perlwasm/perl-lsp"
+repository = "https://github.com/EffortlessMetrics/perl-lsp"
 include = [
   "src/**",
   "Cargo.toml",
@@ -14,6 +14,7 @@ include = [
 ]
 
 [dependencies]
+serde_json = "1.0"
 ropey = "1.6.1"
 thiserror = "2.0"
 serde = { version = "1.0.228", features = ["derive"] }

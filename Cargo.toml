@@ -21,7 +21,8 @@ members = [
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
-    "xtask",
+    "xtask", "crates/perl-ast", "crates/perl-token", "crates/perl-quote", "crates/perl-pragma", "crates/perl-edit", "crates/perl-builtins", "crates/perl-regex", "crates/perl-heredoc",
+    "crates/perl-error", "crates/perl-tokenizer",
 ]
 exclude = [
     "tree-sitter-perl",
@@ -38,7 +39,17 @@ rust-version = "1.89"
 
 [workspace.dependencies]
 # Tier 1: Leaf crates (no internal dependencies)
+perl-token = { path = "crates/perl-token", version = "0.8.8" }
+perl-quote = { path = "crates/perl-quote", version = "0.8.8" }
+perl-edit = { path = "crates/perl-edit", version = "0.8.8" }
+perl-builtins = { path = "crates/perl-builtins", version = "0.8.8" }
+perl-regex = { path = "crates/perl-regex", version = "0.8.8" }
+perl-pragma = { path = "crates/perl-pragma", version = "0.8.8" }
 perl-lexer = { path = "crates/perl-lexer", version = "0.8.8" }
+perl-ast = { path = "crates/perl-ast", version = "0.8.8" }
+perl-heredoc = { path = "crates/perl-heredoc", version = "0.0.1" }
+perl-error = { path = "crates/perl-error", version = "0.8.8" }
+perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.8.8" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.8.8" }
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.8.8" }
 perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.8.8" }
