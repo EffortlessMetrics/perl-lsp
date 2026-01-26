@@ -59,7 +59,9 @@
 //! };
 //!
 //! // Validate configuration before launching
-//! config.validate().expect("Valid configuration");
+//! config.validate()?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Attach Configuration
@@ -69,13 +71,16 @@
 //! ```rust
 //! use perl_dap::AttachConfiguration;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = AttachConfiguration {
 //!     host: "localhost".to_string(),
 //!     port: 13603,
 //!     timeout_ms: Some(5000),
 //! };
 //!
-//! config.validate().expect("Valid configuration");
+//! config.validate()?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## VSCode Integration
@@ -177,9 +182,10 @@
 //! use perl_dap::{BreakpointStore, SourceBreakpoint};
 //! use perl_parser::Parser;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "sub foo {\n    my $x = 1;\n    return $x;\n}";
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().unwrap();
+//! let ast = parser.parse()?;
 //!
 //! let mut store = BreakpointStore::new();
 //! let bp = SourceBreakpoint {
@@ -192,6 +198,8 @@
 //!
 //! // Validate breakpoint is on executable line
 //! let validated = store.add_breakpoint("script.pl", bp, &ast);
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! # Platform Support
@@ -206,8 +214,11 @@
 //! ```rust,ignore
 //! use perl_dap::platform::{find_perl, normalize_path};
 //!
-//! let perl = find_perl().expect("Perl in PATH");
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let perl = find_perl().unwrap_or_else(|| std::path::PathBuf::from("/usr/bin/perl"));
 //! let normalized = normalize_path("/workspace/lib/Foo.pm");
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! # Configuration Examples

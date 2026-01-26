@@ -318,6 +318,7 @@ impl CheckpointedIncrementalParser {
 mod tests {
     use super::*;
     use crate::NodeKind;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_checkpoint_incremental_parsing() {
@@ -325,12 +326,12 @@ mod tests {
 
         // Initial parse
         let source = "my $x = 42;\nmy $y = 99;\n".to_string();
-        let tree1 = parser.parse(source).unwrap();
+        let tree1 = must(parser.parse(source));
 
         // Edit: change 42 to 4242
         let edit = SimpleEdit { start: 8, end: 10, new_text: "4242".to_string() };
 
-        let tree2 = parser.apply_edit(&edit).unwrap();
+        let tree2 = must(parser.apply_edit(&edit));
 
         // Check stats
         let stats = parser.stats();
@@ -355,14 +356,14 @@ mod tests {
 
         // Parse a larger file
         let source = "my $x = 1;\n".repeat(20);
-        parser.parse(source).unwrap();
+        must(parser.parse(source));
 
         // Multiple edits
         let edit1 = SimpleEdit { start: 8, end: 9, new_text: "42".to_string() };
-        parser.apply_edit(&edit1).unwrap();
+        must(parser.apply_edit(&edit1));
 
         let edit2 = SimpleEdit { start: 20, end: 21, new_text: "99".to_string() };
-        parser.apply_edit(&edit2).unwrap();
+        must(parser.apply_edit(&edit2));
 
         let stats = parser.stats();
         assert_eq!(stats.incremental_parses, 2);

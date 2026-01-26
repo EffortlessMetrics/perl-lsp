@@ -41,12 +41,15 @@
 //! ```rust
 //! use perl_corpus::{CorpusPaths, get_corpus_files};
 //!
-//! let paths = CorpusPaths::detect().expect("Corpus paths");
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let paths = CorpusPaths::detect().unwrap_or(CorpusPaths::default());
 //! let files = get_corpus_files(&paths);
 //!
 //! for file in files {
 //!     println!("Found corpus file: {:?}", file.path);
 //! }
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Parsing Corpus Sections
@@ -441,9 +444,9 @@ pub fn find_by_flag<'a>(sections: &'a [Section], flag: &str) -> Vec<&'a Section>
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use perl_tdd_support::{must, must_some};
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -483,21 +486,22 @@ Tagged Section
 my $y = 2;
 "#;
 
-        fs::write(&path, contents).expect("write temp corpus file");
-        let sections = parse_file(&path).expect("parse corpus file");
-        fs::remove_file(&path).expect("cleanup temp corpus file");
+        must(fs::write(&path, contents));
+        let sections = must(parse_file(&path));
+        must(fs::remove_file(&path));
 
         // Note: The parser currently finds 3 sections due to the way === delimiters work
         // This is expected behavior with the current parsing logic
         assert!(sections.len() >= 2);
 
         // Find the sections by checking their content/ids
-        let sample_section = sections
+        let sample_section = must_some(
+            sections
             .iter()
             .find(|s| s.body.contains("my $x = 1;"))
-            .expect("Sample section not found");
+        );
         let tagged_section =
-            sections.iter().find(|s| s.id == "custom.id").expect("Tagged section not found");
+            must_some(sections.iter().find(|s| s.id == "custom.id"));
 
         assert_eq!(sample_section.body, "my $x = 1;");
         assert!(!sample_section.body.contains("---"));

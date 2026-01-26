@@ -50,13 +50,16 @@
 //! ```
 //! use perl_parser::{Parser, ast::Node};
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "my $x = 42;";
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().unwrap();
+//! let ast = parser.parse()?;
 //!
 //! // Convert to tree-sitter compatible format
 //! let sexp = ast.to_sexp();
 //! println!("S-expression: {}", sexp);
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## AST Traversal and Analysis
@@ -84,10 +87,11 @@
 //! ```no_run
 //! use perl_parser::{Parser, symbol::SymbolExtractor};
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Parse Perl code and extract symbols for LSP
 //! let code = "sub hello { my $name = shift; print \"Hello, $name!\\n\"; }";
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().unwrap();
+//! let ast = parser.parse()?;
 //!
 //! // Extract symbols for workspace indexing
 //! let extractor = SymbolExtractor::new();
@@ -99,6 +103,8 @@
 //!         println!("Found symbol: {} at {:?}", symbol.name, symbol.location);
 //!     }
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 // Re-export SourceLocation from perl-position-tracking for unified span handling

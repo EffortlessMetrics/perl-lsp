@@ -424,10 +424,10 @@ impl GlobExpressionGenerator {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use std::collections::HashSet;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn glob_cases_have_ids() {
@@ -479,22 +479,22 @@ mod tests {
     #[test]
     fn glob_case_lookup_by_id() {
         let case = find_glob_case("glob.function.basic");
-        assert!(case.is_some());
-        assert_eq!(case.unwrap().id, "glob.function.basic");
+        must_some(case);
+        assert_eq!(must_some(case).id, "glob.function.basic");
     }
 
     #[test]
     fn glob_case_sample_is_stable() {
         let first = GlobExpressionGenerator::sample(42);
         let second = GlobExpressionGenerator::sample(42);
-        assert_eq!(first.unwrap().id, second.unwrap().id);
+        assert_eq!(must_some(first).id, must_some(second).id);
     }
 
     #[test]
     fn glob_case_sample_by_tag_matches() {
         let case = GlobExpressionGenerator::sample_by_tag("diamond", 7);
-        assert!(case.is_some());
-        assert!(case.unwrap().tags.contains(&"diamond"));
+        must_some(case);
+        assert!(must_some(case).tags.contains(&"diamond"));
     }
 
     #[test]
@@ -531,7 +531,7 @@ mod tests {
     #[test]
     fn glob_generator_find_works() {
         let case = GlobExpressionGenerator::find("glob.diamond.variable");
-        assert!(case.is_some());
-        assert_eq!(case.unwrap().id, "glob.diamond.variable");
+        must_some(case);
+        assert_eq!(must_some(case).id, "glob.diamond.variable");
     }
 }

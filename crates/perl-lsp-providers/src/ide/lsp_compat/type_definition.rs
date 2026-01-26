@@ -375,6 +375,7 @@ impl Default for TypeDefinitionProvider {
 mod tests {
     use super::*;
     use perl_parser_core::Parser;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_find_package_definition() {
@@ -392,7 +393,7 @@ my $obj = MyClass->new();
 $obj->method();
 "#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("Failed to parse");
+        let ast = must(parser.parse());
 
         let provider = TypeDefinitionProvider::new();
         let uri = "file:///test.pl";
@@ -400,7 +401,7 @@ $obj->method();
         // Test finding MyClass definition
         let locations = provider.find_package_definition(&ast, "MyClass", uri, code);
         assert!(locations.is_some());
-        let locs = locations.unwrap();
+        let locs = must_some(locations);
         assert_eq!(locs.len(), 1);
     }
 
@@ -408,7 +409,7 @@ $obj->method();
     fn test_extract_type_from_constructor() {
         let code = "my $obj = Package::Name->new();";
         let mut parser = Parser::new(code);
-        let _ast = parser.parse().expect("Failed to parse");
+        let _ast = must(parser.parse());
 
         let _provider = TypeDefinitionProvider::new();
 
@@ -432,7 +433,7 @@ my $obj = MyClass->new();
 $obj->method();
 "#;
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("Failed to parse");
+        let ast = must(parser.parse());
 
         let provider = TypeDefinitionProvider::new();
         let uri = "file:///test.pl";
@@ -474,7 +475,7 @@ $obj->method();
         }
 
         assert!(locations.is_some(), "Should find type definition for MyClass->new()");
-        let locs = locations.unwrap();
+        let locs = must_some(locations);
         assert_eq!(locs.len(), 1, "Should find exactly one definition");
     }
 }

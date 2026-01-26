@@ -1432,9 +1432,9 @@ pub fn sample_complex_case(seed: u64) -> &'static ComplexDataStructureCase {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
     use std::collections::HashSet;
 
     #[test]
@@ -1486,7 +1486,7 @@ mod tests {
 
     #[test]
     fn edge_case_sample_by_tag_matches() {
-        let case = EdgeCaseGenerator::sample_by_tag("regex", 3).expect("expected regex case");
+        let case = must_some(EdgeCaseGenerator::sample_by_tag("regex", 3));
         assert!(case.tags.contains(&"regex"));
     }
 

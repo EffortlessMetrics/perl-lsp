@@ -1847,7 +1847,7 @@ mod tests {
 
     #[test]
     fn test_operation_id_generation() {
-        let engine = RefactoringEngine::new().unwrap();
+        let engine = must(RefactoringEngine::new());
         let id1 = engine.generate_operation_id();
         let id2 = engine.generate_operation_id();
         assert_ne!(id1, id2);
@@ -1880,22 +1880,21 @@ sub test {
     return $z;
 }
 "#;
-        write!(file, "{}", code).unwrap();
+        must(write!(file, "{}", code));
         let path = file.path().to_path_buf();
 
-        let mut engine = RefactoringEngine::new().unwrap();
+        let mut engine = must(RefactoringEngine::new());
         engine.config.safe_mode = false;
 
         // Lines are 0-indexed.
         // Line 5: "    print $x;\n"
         // Line 8: "    # End extraction\n"
-        let result = engine
-            .perform_extract_method("extracted_sub", (5, 0), (8, 0), std::slice::from_ref(&path))
-            .unwrap();
+        let result = must(engine
+            .perform_extract_method("extracted_sub", (5, 0), (8, 0), std::slice::from_ref(&path)));
 
         assert!(result.success);
 
-        let new_code = std::fs::read_to_string(&path).unwrap();
+        let new_code = must(std::fs::read_to_string(&path));
         println!("New code:\n{}", new_code);
 
         // Inputs: $x, $y (used in range, declared before)
@@ -1928,27 +1927,26 @@ sub existing {
 
 1;
 "#;
-        write!(file, "{}", code).unwrap();
+        must(write!(file, "{}", code));
         let path = file.path().to_path_buf();
 
-        let mut engine = RefactoringEngine::new().unwrap();
+        let mut engine = must(RefactoringEngine::new());
         engine.config.safe_mode = false;
 
         // selection should include lines 8 and 9 (0-indexed)
         // Line 8: "    print $val;\n"
         // Line 9: "    my $new_val = $val * 2;\n"
-        let result = engine
-            .perform_extract_method("helper", (8, 0), (10, 0), std::slice::from_ref(&path))
-            .unwrap();
+        let result = must(engine
+            .perform_extract_method("helper", (8, 0), (10, 0), std::slice::from_ref(&path)));
 
         assert!(result.success);
 
-        let new_code = std::fs::read_to_string(&path).unwrap();
+        let new_code = must(std::fs::read_to_string(&path));
         println!("New code with placement:\n{}", new_code);
 
         // Check placement: helper should be before 1;
         assert!(new_code.contains("sub helper {"));
-        assert!(new_code.find("sub helper {").unwrap() < new_code.find("1;").unwrap());
+        assert!(must_some(new_code.find("sub helper {")) < must_some(new_code.find("1;")));
 
         assert!(new_code.contains("my ($val) = @_;"));
         assert!(new_code.contains("return ($new_val);"));
@@ -1973,20 +1971,19 @@ sub complex {
     return ($sum, $call_count);
 }
 "#;
-        write!(file, "{}", code).unwrap();
+        must(write!(file, "{}", code));
         let path = file.path().to_path_buf();
 
-        let mut engine = RefactoringEngine::new().unwrap();
+        let mut engine = must(RefactoringEngine::new());
         engine.config.safe_mode = false;
 
         // Line 5: "    foreach my $item (@items) {"
         // Line 10: "    # end"
-        let result = engine
-            .perform_extract_method("do_math", (5, 0), (10, 0), std::slice::from_ref(&path))
-            .unwrap();
+        let result = must(engine
+            .perform_extract_method("do_math", (5, 0), (10, 0), std::slice::from_ref(&path)));
 
         assert!(result.success);
-        let new_code = std::fs::read_to_string(&path).unwrap();
+        let new_code = must(std::fs::read_to_string(&path));
         println!("New code complex:\n{}", new_code);
 
         // check if sub created
@@ -2339,7 +2336,7 @@ sub complex {
 
             let result = engine.validate_operation(&op, &[]);
             assert!(result.is_err());
-            let err_msg = format!("{:?}", result.unwrap_err());
+            let err_msg = format!("{:?}", must_err(result));
             assert!(err_msg.contains("must be different"));
         }
 
@@ -2455,7 +2452,7 @@ sub complex {
 
             let result = engine.validate_operation(&op, &[]);
             assert!(result.is_err());
-            let err_msg = format!("{:?}", result.unwrap_err());
+            let err_msg = format!("{:?}", must_err(result));
             assert!(err_msg.contains("must be different"));
         }
 
@@ -2606,7 +2603,7 @@ sub complex {
 
         #[test]
         fn test_validate_backup_directory_structure() {
-            let engine = RefactoringEngine::new().unwrap();
+            let engine = must(RefactoringEngine::new());
 
             let backup_root = std::env::temp_dir().join("perl_refactor_backups");
             let _ = std::fs::create_dir_all(&backup_root);
@@ -2614,12 +2611,12 @@ sub complex {
             // Valid backup directory
             let valid_backup = backup_root.join("refactor_123_456");
             let _ = std::fs::create_dir_all(&valid_backup);
-            assert!(engine.validate_backup_directory(&valid_backup).unwrap());
+            assert!(must(engine.validate_backup_directory(&valid_backup)));
 
             // Invalid backup directory (wrong prefix)
             let invalid_backup = backup_root.join("invalid_backup");
             let _ = std::fs::create_dir_all(&invalid_backup);
-            assert!(!engine.validate_backup_directory(&invalid_backup).unwrap());
+            assert!(!must(engine.validate_backup_directory(&invalid_backup)));
 
             // Cleanup
             let _ = std::fs::remove_dir_all(&backup_root);
@@ -2627,19 +2624,19 @@ sub complex {
 
         #[test]
         fn test_calculate_directory_size() {
-            let engine = RefactoringEngine::new().unwrap();
+            let engine = must(RefactoringEngine::new());
 
-            let temp_dir = tempfile::tempdir().unwrap();
+            let temp_dir = must(tempfile::tempdir());
             let dir_path = temp_dir.path().to_path_buf();
 
             // Create test files with known sizes
             let file1 = dir_path.join("file1.txt");
             let file2 = dir_path.join("file2.txt");
 
-            std::fs::write(&file1, "hello").unwrap(); // 5 bytes
-            std::fs::write(&file2, "world!").unwrap(); // 6 bytes
+            must(std::fs::write(&file1, "hello")); // 5 bytes
+            must(std::fs::write(&file2, "world!")); // 6 bytes
 
-            let total_size = engine.calculate_directory_size(&dir_path).unwrap();
+            let total_size = must(engine.calculate_directory_size(&dir_path));
             assert_eq!(total_size, 11);
         }
 
@@ -2648,13 +2645,13 @@ sub complex {
         fn test_backup_cleanup_result_space_reclaimed() {
             use std::io::Write;
 
-            let mut engine = RefactoringEngine::new().unwrap();
+            let mut engine = must(RefactoringEngine::new());
             engine.config.create_backups = true;
 
             // Create a file with known size
             let mut file: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
             let test_content = "sub test { print 'hello world'; }";
-            write!(file, "{}", test_content).unwrap();
+            must(write!(file, "{}", test_content));
             let path = file.path().to_path_buf();
 
             // Perform operation to create backup
@@ -2667,7 +2664,7 @@ sub complex {
             let _ = engine.refactor(op, vec![path]);
 
             // Clean up and verify space was reclaimed
-            let result = engine.clear_history().unwrap();
+            let result = must(engine.clear_history());
             assert!(result.space_reclaimed > 0);
         }
     }

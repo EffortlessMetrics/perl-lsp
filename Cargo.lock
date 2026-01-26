@@ -1444,6 +1444,7 @@ dependencies = [
  "glob",
  "once_cell",
  "perl-parser",
+ "perl-tdd-support",
  "proptest",
  "rand",
  "regex",
@@ -1491,6 +1492,7 @@ dependencies = [
  "lsp-types",
  "perl-lexer",
  "perl-parser-core",
+ "perl-tdd-support",
  "ropey",
  "serde_json",
  "tracing",
@@ -1723,6 +1725,7 @@ dependencies = [
 name = "perl-uri"
 version = "0.8.8"
 dependencies = [
+ "perl-tdd-support",
  "tempfile",
  "url",
 ]

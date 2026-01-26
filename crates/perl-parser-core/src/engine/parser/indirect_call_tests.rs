@@ -27,7 +27,7 @@ $method $object;
         let mut parser_valid = Parser::new(code_valid);
         let result_valid = parser_valid.parse();
         assert!(result_valid.is_ok());
-        let ast_valid = result_valid.unwrap();
+        let ast_valid = must(result_valid);
         let sexp_valid = ast_valid.to_sexp();
         // Should be parsed as indirect call
         assert!(
@@ -71,7 +71,7 @@ $method $object;
         // print $x, $y -> print($x, $y) (not indirect)
         let code_direct = "print $x, $y;";
         let mut parser = Parser::new(code_direct);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let sexp = ast.to_sexp();
         assert!(
             !sexp.contains("indirect_call"),
@@ -82,7 +82,7 @@ $method $object;
         // print $fh $x -> print($fh, $x) (indirect)
         let code_indirect = "print $fh $x;";
         let mut parser2 = Parser::new(code_indirect);
-        let ast2 = parser2.parse().unwrap();
+        let ast2 = must(parser2.parse());
         let sexp2 = ast2.to_sexp();
         assert!(
             sexp2.contains("indirect_call"),

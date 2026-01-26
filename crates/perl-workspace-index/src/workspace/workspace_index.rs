@@ -32,15 +32,16 @@
 //! # Usage Examples
 //!
 //! ```rust
-//! use perl_parser::workspace_index::WorkspaceIndex;
+//! use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
 //! use url::Url;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let index = WorkspaceIndex::new();
 //!
 //! // Index a Perl file
-//! let uri = Url::parse("file:///example.pl").unwrap();
+//! let uri = Url::parse("file:///example.pl")?;
 //! let code = "package MyPackage;\nsub example { return 42; }";
-//! index.index_file(uri, code.to_string()).unwrap();
+//! index.index_file(uri, code.to_string())?;
 //!
 //! // Find symbol definitions
 //! let definition = index.find_definition("MyPackage::example");
@@ -49,6 +50,8 @@
 //! // Workspace symbol search
 //! let symbols = index.find_symbols("example");
 //! assert!(!symbols.is_empty());
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! # Related Modules
@@ -2018,7 +2021,7 @@ sub hello {
 my $var = 42;
 "#;
 
-        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
         // Should have indexed the package and subroutine
         let symbols = index.file_symbols(uri);
@@ -2040,7 +2043,7 @@ sub test {
 }
 "#;
 
-        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
         let refs = index.find_references("$x");
         assert!(refs.len() >= 2); // Definition + at least one usage
@@ -2057,7 +2060,7 @@ use warnings;
 use Data::Dumper;
 "#;
 
-        index.index_file(url::Url::parse(uri).unwrap(), code.to_string()).unwrap();
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
         let deps = index.file_dependencies(uri);
         assert!(deps.contains("strict"));

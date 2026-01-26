@@ -418,16 +418,17 @@ struct CallContext {
 mod tests {
     use super::*;
     use perl_parser_core::Parser;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_builtin_signature_help() {
         let code = "print($fh, ";
         let position = code.len() - 1;
 
-        let ast = Parser::new("").parse().unwrap();
+        let ast = must(Parser::new("").parse());
         let provider = SignatureHelpProvider::new(&ast);
 
-        let help = provider.get_signature_help(code, position).unwrap();
+        let help = must_some(provider.get_signature_help(code, position));
         assert!(!help.signatures.is_empty());
         assert_eq!(help.active_parameter, Some(1)); // Second parameter
         assert_eq!(help.signatures[0].active_parameter, Some(1));
@@ -439,10 +440,10 @@ mod tests {
         let code = "substr($str, 5, ";
         let position = code.len() - 1;
 
-        let ast = Parser::new("").parse().unwrap();
+        let ast = must(Parser::new("").parse());
         let provider = SignatureHelpProvider::new(&ast);
 
-        let help = provider.get_signature_help(code, position).unwrap();
+        let help = must_some(provider.get_signature_help(code, position));
         assert_eq!(help.active_parameter, Some(2)); // Third parameter
         assert_eq!(help.signatures[0].active_parameter, Some(2));
         assert_eq!(help.signatures[0].parameters[0].label, "EXPR");
@@ -453,10 +454,10 @@ mod tests {
         let code = "push(@arr, split(',', $str))";
         let position = 22; // After the comma in split(',',
 
-        let ast = Parser::new(code).parse().unwrap();
+        let ast = must(Parser::new(code).parse());
         let provider = SignatureHelpProvider::new(&ast);
 
-        let help = provider.get_signature_help(code, position).unwrap();
+        let help = must_some(provider.get_signature_help(code, position));
         assert_eq!(help.signatures[0].label, "split /PATTERN/, EXPR, LIMIT");
 
         // The active parameter could be 1 or 2 depending on interpretation
@@ -468,7 +469,7 @@ mod tests {
     #[test]
     fn test_user_defined_signature_parameters() {
         let code = "sub add($x, $y) { $x + $y }\nadd(1, 2);";
-        let ast = Parser::new(code).parse().unwrap();
+        let ast = must(Parser::new(code).parse());
         let provider = SignatureHelpProvider::new(&ast);
 
         let sigs = provider.get_signatures("add");

@@ -34,6 +34,9 @@ tracing = "0.1.44"
 [features]
 default = []
 
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
 [lints]
 workspace = true
 

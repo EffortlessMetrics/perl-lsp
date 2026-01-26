@@ -19,6 +19,7 @@ url = "2.5.8"
 
 [dev-dependencies]
 tempfile = "3.24.0"
+perl-tdd-support = { workspace = true }
 
 [features]
 default = []

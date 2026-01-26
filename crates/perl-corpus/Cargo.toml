@@ -38,6 +38,7 @@ rand = "0.9.2"
 [dev-dependencies]
 proptest = "1.9.0"
 perl-parser = { workspace = true }
+perl-tdd-support = { workspace = true }
 
 [features]
 default = []

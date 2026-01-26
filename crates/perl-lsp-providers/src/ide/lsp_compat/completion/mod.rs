@@ -116,10 +116,13 @@ impl CompletionProvider {
     /// use perl_parser_core::Parser;
     /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut parser = Parser::new("my $var = 42; sub hello { print $var; }");
-    /// let ast = parser.parse().unwrap();
+    /// let ast = parser.parse()?;
     /// let provider = CompletionProvider::new_with_index(&ast, None);
     /// // Provider ready for Perl script completion analysis
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
         Self::new_with_index_and_source(ast, "", workspace_index)
@@ -150,15 +153,18 @@ impl CompletionProvider {
     /// use perl_workspace_index::workspace_index::WorkspaceIndex;
     /// use std::sync::Arc;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let script = "package EmailProcessor; sub filter_spam { my $var; }";
     /// let mut parser = Parser::new(script);
-    /// let ast = parser.parse().unwrap();
+    /// let ast = parser.parse()?;
     ///
     /// let workspace_idx = Arc::new(WorkspaceIndex::new());
     /// let provider = CompletionProvider::new_with_index_and_source(
     ///     &ast, script, Some(workspace_idx)
     /// );
     /// // Provider ready for cross-file Perl script completions
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new_with_index_and_source(
         ast: &Node,
@@ -191,12 +197,15 @@ impl CompletionProvider {
     /// use perl_parser_core::Parser;
     /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let script = "my $email_count = 0; my $";
     /// let mut parser = Parser::new(script);
-    /// let ast = parser.parse().unwrap();
+    /// let ast = parser.parse()?;
     ///
     /// let provider = CompletionProvider::new(&ast);
     /// // Provider ready for local variable completions
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new(ast: &Node) -> Self {
         Self::new_with_index(ast, None)
@@ -225,15 +234,18 @@ impl CompletionProvider {
     /// use perl_parser_core::Parser;
     /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let script = "my $var = 42; sub hello { print $var; }";
     /// let mut parser = Parser::new(script);
-    /// let ast = parser.parse().unwrap();
+    /// let ast = parser.parse()?;
     ///
     /// let provider = CompletionProvider::new(&ast);
     /// let completions = provider.get_completions_with_path(
     ///     script, script.len(), Some("/path/to/data_processor.pl")
     /// );
     /// assert!(!completions.is_empty());
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// See also [`Self::get_completions_with_path_cancellable`] for cancellation support
@@ -280,9 +292,10 @@ impl CompletionProvider {
     /// use std::sync::atomic::{AtomicBool, Ordering};
     /// use std::sync::Arc;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let script = "package EmailHandler; sub process_emails { }";
     /// let mut parser = Parser::new(script);
-    /// let ast = parser.parse().unwrap();
+    /// let ast = parser.parse()?;
     ///
     /// let provider = CompletionProvider::new(&ast);
     /// let cancelled = Arc::new(AtomicBool::new(false));
@@ -291,6 +304,8 @@ impl CompletionProvider {
     /// let completions = provider.get_completions_with_path_cancellable(
     ///     script, script.len(), Some("email_handler.pl"), &cancel_fn
     /// );
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn get_completions_with_path_cancellable(
         &self,
@@ -476,15 +491,18 @@ impl CompletionProvider {
     /// use perl_parser_core::Parser;
     /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let script = "my $email_count = scalar(@emails); $email_c";
     /// let mut parser = Parser::new(script);
-    /// let ast = parser.parse().unwrap();
+    /// let ast = parser.parse()?;
     ///
     /// let provider = CompletionProvider::new(&ast);
     /// let completions = provider.get_completions(script, script.len());
     ///
     /// // Should include completion for $email_count variable
     /// assert!(completions.iter().any(|c| c.label.contains("email_count")));
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// See also [`Self::get_completions_with_path`] for enhanced context-aware completions.
@@ -685,6 +703,7 @@ impl CompletionProvider {
 mod tests {
     use super::*;
     use perl_parser_core::Parser;
+    use perl_tdd_support::{must, must_some};
     use perl_workspace_index::workspace_index::WorkspaceIndex;
     use std::sync::Arc;
     use url::Url;
@@ -700,7 +719,7 @@ $c
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = CompletionProvider::new(&ast);
         let completions = provider.get_completions(code, code.len() - 1);
@@ -724,7 +743,7 @@ proc
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = CompletionProvider::new(&ast);
         let completions = provider.get_completions(code, code.len() - 1);
@@ -738,7 +757,7 @@ proc
         let code = "pr";
 
         let mut parser = Parser::new(""); // Empty AST
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = CompletionProvider::new(&ast);
         let completions = provider.get_completions(code, code.len());
@@ -755,7 +774,7 @@ $x
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let provider = CompletionProvider::new(&ast);
 
         // position at end of file
@@ -773,11 +792,11 @@ package Bar;
 $"#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let provider = CompletionProvider::new(&ast);
 
         // Inside Foo block
-        let pos_foo = code.find("$x;").unwrap() + 2; // position after $x
+        let pos_foo = must_some(code.find("$x;")) + 2; // position after $x
         let ctx_foo = provider.analyze_context(code, pos_foo);
         assert_eq!(ctx_foo.current_package, "Foo");
 
@@ -791,19 +810,19 @@ $"#;
     fn test_package_member_completion() {
         // Create workspace index with a module exporting a function
         let index = Arc::new(WorkspaceIndex::new());
-        let module_uri = Url::parse("file:///workspace/MyModule.pm").unwrap();
+        let module_uri = must(Url::parse("file:///workspace/MyModule.pm"));
         let module_code = r#"package MyModule;
 our @EXPORT = qw(exported_sub);
 sub exported_sub { }
 sub internal_sub { }
 1;
 "#;
-        index.index_file(module_uri, module_code.to_string()).expect("indexing module");
+        must(index.index_file(module_uri, module_code.to_string()));
 
         // Code that triggers package completion
         let code = "use MyModule;\nMyModule::";
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = CompletionProvider::new_with_index(&ast, Some(index));
         let completions = provider.get_completions(code, code.len());

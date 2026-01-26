@@ -20,6 +20,7 @@
 //! use perl_lsp_transport::{read_message, write_message};
 //! use perl_lsp_protocol::JsonRpcResponse;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut reader = BufReader::new(stdin());
 //! let mut writer = stdout();
 //!
@@ -29,8 +30,10 @@
 //!     let response = JsonRpcResponse::null(request.id);
 //!
 //!     // Write the response
-//!     write_message(&mut writer, &response).unwrap();
+//!     write_message(&mut writer, &response)?;
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 #![deny(unsafe_code)]

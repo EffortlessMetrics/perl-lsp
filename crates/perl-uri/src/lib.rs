@@ -88,16 +88,17 @@ pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
 ///
 /// ```
 /// # #[cfg(not(target_arch = "wasm32"))]
-/// # fn main() {
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use perl_uri::fs_path_to_uri;
 ///
 /// // Absolute path
-/// let uri = fs_path_to_uri("/tmp/test.pl").unwrap();
+/// let uri = fs_path_to_uri("/tmp/test.pl")?;
 /// assert!(uri.starts_with("file:///"));
 ///
 /// // Path with spaces gets percent-encoded
-/// let uri = fs_path_to_uri("/tmp/path with spaces/test.pl").unwrap();
+/// let uri = fs_path_to_uri("/tmp/path with spaces/test.pl")?;
 /// assert!(uri.contains("%20"));
+/// # Ok(())
 /// # }
 /// # #[cfg(target_arch = "wasm32")]
 /// # fn main() {}
@@ -358,12 +359,13 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     mod filesystem_tests {
         use super::*;
+        use perl_tdd_support::{must, must_some};
 
         #[test]
         fn test_uri_to_fs_path_basic() {
             let path = uri_to_fs_path("file:///tmp/test.pl");
             assert!(path.is_some());
-            let path = path.unwrap();
+            let path = must_some(path);
             assert!(path.ends_with("test.pl"));
         }
 
@@ -377,21 +379,21 @@ mod tests {
         fn test_uri_to_fs_path_with_spaces() {
             let path = uri_to_fs_path("file:///tmp/path%20with%20spaces/test.pl");
             assert!(path.is_some());
-            let path = path.unwrap();
+            let path = must_some(path);
             let path_str = path.to_string_lossy();
             assert!(path_str.contains("path with spaces"));
         }
 
         #[test]
         fn test_fs_path_to_uri_basic() {
-            let uri = fs_path_to_uri("/tmp/test.pl").unwrap();
+            let uri = must(fs_path_to_uri("/tmp/test.pl"));
             assert!(uri.starts_with("file:///"));
             assert!(uri.contains("test.pl"));
         }
 
         #[test]
         fn test_fs_path_to_uri_with_spaces() {
-            let uri = fs_path_to_uri("/tmp/path with spaces/test.pl").unwrap();
+            let uri = must(fs_path_to_uri("/tmp/path with spaces/test.pl"));
             assert!(uri.contains("%20") || uri.contains("path with spaces"));
         }
 
@@ -410,8 +412,8 @@ mod tests {
         #[test]
         fn test_roundtrip() {
             let original = "/tmp/roundtrip-test.pl";
-            let uri = fs_path_to_uri(original).unwrap();
-            let path = uri_to_fs_path(&uri).unwrap();
+            let uri = must(fs_path_to_uri(original));
+            let path = must_some(uri_to_fs_path(&uri));
             assert!(path.ends_with("roundtrip-test.pl"));
         }
     }

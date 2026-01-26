@@ -35,11 +35,12 @@
 //! use perl_parser_core::Parser;
 //! use std::collections::HashMap;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create provider and parse Perl code
 //! let mut provider = WorkspaceSymbolsProvider::new();
 //! let source = "sub hello { print 'world'; }";
 //! let mut parser = Parser::new(source);
-//! let ast = parser.parse().unwrap();
+//! let ast = parser.parse()?;
 //!
 //! // Index the document
 //! provider.index_document("file:///test.pl", &ast, source);
@@ -49,6 +50,8 @@
 //! source_map.insert("file:///test.pl".to_string(), source.to_string());
 //! let results = provider.search("hello", &source_map);
 //! assert!(!results.is_empty());
+//! # Ok(())
+//! # }
 //! ```
 
 use perl_parser_core::{SourceLocation, ast::Node};
@@ -385,6 +388,7 @@ mod tests {
     use super::*;
     use perl_parser_core::Parser;
     use perl_position_tracking::offset_to_utf16_line_col;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_workspace_symbols_search() {
@@ -411,7 +415,7 @@ sub baz {
         source_map.insert("file:///test.pl".to_string(), source.to_string());
 
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         provider.index_document("file:///test.pl", &ast, source);
 
@@ -474,7 +478,7 @@ sub baz {
         source_map.insert("file:///emoji.pl".to_string(), source.to_string());
 
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         provider.index_document("file:///emoji.pl", &ast, source);
 
@@ -551,7 +555,7 @@ sub helper {
         source_map.insert("file:///multi.pl".to_string(), source.to_string());
 
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         provider.index_document("file:///multi.pl", &ast, source);
 
@@ -606,7 +610,7 @@ my $top_level_var = 42;
         source_map.insert("file:///toplevel.pl".to_string(), source.to_string());
 
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         provider.index_document("file:///toplevel.pl", &ast, source);
 
@@ -659,7 +663,7 @@ sub connect {
         source_map.insert("file:///database.pl".to_string(), source.to_string());
 
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         provider.index_document("file:///database.pl", &ast, source);
 

@@ -11,6 +11,7 @@
 //! use perl_dap::LaunchConfiguration;
 //! use std::path::PathBuf;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut config = LaunchConfiguration {
 //!     program: PathBuf::from("script.pl"),
 //!     args: vec!["--verbose".to_string()],
@@ -20,7 +21,9 @@
 //!     include_paths: vec![],
 //! };
 //!
-//! config.validate().expect("Valid configuration");
+//! config.validate()?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Attach Configuration
@@ -28,11 +31,16 @@
 //! ```
 //! use perl_dap::AttachConfiguration;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = AttachConfiguration {
 //!     host: "localhost".to_string(),
 //!     port: 13603,
 //!     timeout_ms: Some(5000),
 //! };
+//!
+//! config.validate()?;
+//! # Ok(())
+//! # }
 //! ```
 
 use anyhow::Result;
@@ -245,13 +253,16 @@ impl AttachConfiguration {
     /// ```
     /// use perl_dap::AttachConfiguration;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let config = AttachConfiguration {
     ///     host: "localhost".to_string(),
     ///     port: 13603,
     ///     timeout_ms: Some(5000),
     /// };
     ///
-    /// config.validate().expect("Valid configuration");
+    /// config.validate()?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn validate(&self) -> Result<()> {
         // Verify host is not empty

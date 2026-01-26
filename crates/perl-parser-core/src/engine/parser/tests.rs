@@ -166,7 +166,7 @@ fn test_issue_461_variable_length_lookbehind() {
     assert!(result_nested.is_ok(), "Failed to parse nested lookbehind");
 
     // Check if the AST contains the regex pattern
-    let ast = result_nested.unwrap();
+    let ast = must(result_nested);
     println!("Nested Lookbehind AST: {}", ast.to_sexp());
 }
 
@@ -272,7 +272,7 @@ fn test_source_filter_detection() {
     let mut parser_safe = Parser::new(code_safe);
     let result_safe = parser_safe.parse();
     assert!(result_safe.is_ok());
-    let ast_safe = result_safe.unwrap();
+    let ast_safe = must(result_safe);
     let sexp_safe = ast_safe.to_sexp();
     assert!(
         !sexp_safe.contains("(risk:filter)"),
@@ -297,7 +297,7 @@ fn test_regex_code_execution_detection() {
     let mut parser_safe = Parser::new(code_safe);
     let result_safe = parser_safe.parse();
     assert!(result_safe.is_ok());
-    let ast_safe = result_safe.unwrap();
+    let ast_safe = must(result_safe);
     let sexp_safe = ast_safe.to_sexp();
     assert!(!sexp_safe.contains("(risk:code)"), "Should not flag safe regex in: {}", sexp_safe);
 }

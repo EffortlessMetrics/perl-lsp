@@ -21,7 +21,7 @@ mod tests {
         let mut parser2 = Parser::new(code_regex);
         let result2 = parser2.parse();
         assert!(result2.is_ok(), "Failed to parse regex match");
-        let ast2 = result2.unwrap();
+        let ast2 = must(result2);
         let sexp2 = ast2.to_sexp();
         assert!(sexp2.contains("regex"), "Should be parsed as regex: {}", sexp2);
 
@@ -31,7 +31,7 @@ mod tests {
         let mut parser3 = Parser::new(code_bare_regex);
         let result3 = parser3.parse();
         assert!(result3.is_ok());
-        let ast3 = result3.unwrap();
+        let ast3 = must(result3);
         let sexp3 = ast3.to_sexp();
         assert!(sexp3.contains("regex"), "Should be parsed as regex in void context: {}", sexp3);
     }

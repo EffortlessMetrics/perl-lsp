@@ -19,7 +19,7 @@ mod tests {
         let mut parser2 = Parser::new(code_block);
         let result2 = parser2.parse();
         assert!(result2.is_ok(), "Failed to parse code block");
-        let ast2 = result2.unwrap();
+        let ast2 = must(result2);
         let sexp2 = ast2.to_sexp();
         assert!(sexp2.contains("(block"), "Should parse as block: {}", sexp2);
     }
@@ -65,7 +65,7 @@ sub my_sub {
         let mut parser2 = Parser::new(code2);
         let result2 = parser2.parse();
         assert!(result2.is_ok());
-        let ast2 = result2.unwrap();
+        let ast2 = must(result2);
         let sexp2 = ast2.to_sexp();
         assert!(
             sexp2.contains("(block"),

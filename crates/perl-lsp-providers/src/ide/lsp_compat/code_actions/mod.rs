@@ -34,10 +34,11 @@
 //! use perl_lsp_providers::ide::lsp_compat::diagnostics::Diagnostic;
 //! use perl_parser_core::Parser;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "my $unused_var = 42;";
 //! let provider = CodeActionsProvider::new(code.to_string());
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().unwrap();
+//! let ast = parser.parse()?;
 //! let diagnostics = vec![]; // Would contain actual diagnostics
 //!
 //! // Generate code actions for diagnostics
@@ -45,6 +46,8 @@
 //! for action in actions {
 //!     println!("Available action: {} ({:?})", action.title, action.kind);
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 mod ast_utils;
@@ -146,12 +149,13 @@ mod tests {
     use super::*;
     use crate::ide::lsp_compat::diagnostics::DiagnosticsProvider;
     use perl_parser_core::Parser;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_undefined_variable_fix() {
         let source = "use strict;\nprint $undefined;";
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let diag_provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = diag_provider.get_diagnostics(&ast, &[], source);
@@ -175,7 +179,7 @@ mod tests {
     fn test_assignment_in_condition_fix() {
         let source = "if ($x = 5) { }";
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let diag_provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = diag_provider.get_diagnostics(&ast, &[], source);

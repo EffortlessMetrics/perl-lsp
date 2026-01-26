@@ -115,9 +115,12 @@
 //! ```rust,no_run
 //! use perl_parser::Parser;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "sub hello { print qq{Hello, world!\\n}; }";
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().expect("Parse successful");
+//! let ast = parser.parse()?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! The parser automatically creates and manages a `PerlLexer` instance internally.
