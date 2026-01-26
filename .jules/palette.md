@@ -18,3 +18,7 @@
 **Learning:** UI elements (like commands in the palette or context menus) that exist in `package.json` but lack implementation in code create a "Broken Promise" – users see the option, click it, and nothing happens. This is worse than the feature not existing at all.
 **Action:** When auditing extensions, verify that every command contributed in `package.json` is actually registered in `extension.ts` or the relevant activation script.
 **Fixed:** Implemented `perl-lsp.runTests` which was visible but broken.
+
+## 2026-01-26 - Communicating Unimplemented Features
+**Learning:** When a feature is visible but not yet ready (e.g., in a development build), a polite "Under Development" message is superior to silence. It converts a "bug" (nothing happened) into a "roadmap communication" (this is coming soon).
+**Action:** Register placeholder handlers for planned commands that show a friendly message and link to the project roadmap or repository.

@@ -100,6 +100,32 @@ export async function activate(context: vscode.ExtensionContext) {
     
     // Initialize debug adapter
     activateDebugger(context);
+
+    // Helper for unimplemented refactoring commands
+    const handleMissingRefactor = async (title: string) => {
+        const selection = await vscode.window.showInformationMessage(
+            `The '${title}' feature is currently in development.`,
+            'View Roadmap'
+        );
+        if (selection === 'View Roadmap') {
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessSteven/tree-sitter-perl'));
+        }
+    };
+
+    // Register placeholder refactoring commands
+    const extractSubCommand = vscode.commands.registerCommand('perl-lsp.extractSubroutine', () =>
+        handleMissingRefactor('Extract Subroutine')
+    );
+
+    const extractVarCommand = vscode.commands.registerCommand('perl-lsp.extractVariable', () =>
+        handleMissingRefactor('Extract Variable')
+    );
+
+    const inlineVarCommand = vscode.commands.registerCommand('perl-lsp.inlineVariable', () =>
+        handleMissingRefactor('Inline Variable')
+    );
+
+    context.subscriptions.push(extractSubCommand, extractVarCommand, inlineVarCommand);
     
     // Register commands
     const restartCommand = vscode.commands.registerCommand('perl-lsp.restart', async () => {
