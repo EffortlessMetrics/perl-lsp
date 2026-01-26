@@ -523,11 +523,16 @@ impl ScopeAnalyzer {
                     self.analyze_node(arg, scope, ancestors, issues, code, pragma_map);
                 }
 
-                // Mark variable as initialized
-                self.mark_initialized(variable, scope);
-
-                // Analyze variable
-                self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
+                if let NodeKind::VariableDeclaration { .. } = variable.kind {
+                     // Must analyze declaration FIRST to declare it, then mark initialized
+                     self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
+                     self.mark_initialized(variable, scope);
+                } else {
+                     // For existing variables, mark initialized then analyze (usage)
+                     self.mark_initialized(variable, scope);
+                     self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
+                }
+                
                 ancestors.pop();
             }
 
@@ -779,7 +784,6 @@ impl ScopeAnalyzer {
     fn mark_initialized(&self, node: &Node, scope: &Rc<Scope>) {
         match &node.kind {
             NodeKind::Variable { sigil, name } => {
-                // Skip package-qualified variables (e.g., $Foo::bar)
                 if !name.contains("::") {
                     scope.initialize_variable_parts(sigil, name);
                 }
