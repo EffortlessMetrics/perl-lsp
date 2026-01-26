@@ -262,7 +262,7 @@ fn main() {
                     }
                 }
 
-                total_stats.add_file(&path_str, source.len(), parse_time, count_nodes(&ast));
+                total_stats.add_file(&path_str, source.len(), parse_time, ast.count_nodes());
             }
             Err(e) => {
                 if !args.quiet {
@@ -299,92 +299,6 @@ fn read_input(input: &Input) -> io::Result<String> {
     }
 }
 
-fn count_nodes(ast: &Node) -> usize {
-    use perl_parser::NodeKind;
-
-    // Count all nodes recursively
-    let mut count = 1; // Count this node
-
-    // Count children based on node kind
-    match &ast.kind {
-        NodeKind::Program { statements } => {
-            for stmt in statements {
-                count += count_nodes(stmt);
-            }
-        }
-        NodeKind::Block { statements } => {
-            for stmt in statements {
-                count += count_nodes(stmt);
-            }
-        }
-        NodeKind::Binary { left, right, .. } => {
-            count += count_nodes(left);
-            count += count_nodes(right);
-        }
-        NodeKind::Unary { operand, .. } => {
-            count += count_nodes(operand);
-        }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
-            count += count_nodes(condition);
-            count += count_nodes(then_expr);
-            count += count_nodes(else_expr);
-        }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
-            count += count_nodes(condition);
-            count += count_nodes(then_branch);
-            for (cond, branch) in elsif_branches {
-                count += count_nodes(cond);
-                count += count_nodes(branch);
-            }
-            if let Some(else_b) = else_branch {
-                count += count_nodes(else_b);
-            }
-        }
-        NodeKind::FunctionCall { args, .. } => {
-            for arg in args {
-                count += count_nodes(arg);
-            }
-        }
-        NodeKind::MethodCall { object, args, .. } => {
-            count += count_nodes(object);
-            for arg in args {
-                count += count_nodes(arg);
-            }
-        }
-        NodeKind::IndirectCall { object, args, .. } => {
-            count += count_nodes(object);
-            for arg in args {
-                count += count_nodes(arg);
-            }
-        }
-        NodeKind::Return { value: Some(val) } => {
-            count += count_nodes(val);
-        }
-        NodeKind::Return { value: None } => {}
-        NodeKind::Assignment { lhs, rhs, .. } => {
-            count += count_nodes(lhs);
-            count += count_nodes(rhs);
-        }
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
-            count += count_nodes(variable);
-            if let Some(init) = initializer {
-                count += count_nodes(init);
-            }
-        }
-        NodeKind::VariableListDeclaration { variables, initializer, .. } => {
-            for var in variables {
-                count += count_nodes(var);
-            }
-            if let Some(init) = initializer {
-                count += count_nodes(init);
-            }
-        }
-        _ => {} // Leaf nodes
-    }
-
-    count
-}
-
 fn ast_to_json(ast: &Node) -> serde_json::Value {
     // Convert AST to JSON representation
     serde_json::json!({
@@ -394,7 +308,7 @@ fn ast_to_json(ast: &Node) -> serde_json::Value {
             "end": ast.location.end,
         },
         "sexp": ast.to_sexp(),
-        "node_count": count_nodes(ast),
+        "node_count": ast.count_nodes(),
     })
 }
 
@@ -437,6 +351,9 @@ fn print_error(error: &ParseError, source: &str) {
         }
         ParseError::RecursionLimit => {
             writeln!(stderr, "Parse error: Maximum recursion depth exceeded").ok();
+        }
+        ParseError::NestingTooDeep { depth, max_depth } => {
+             writeln!(stderr, "Parse error: Nesting too deep: {} > {}", depth, max_depth).ok();
         }
     }
 }

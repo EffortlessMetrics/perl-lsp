@@ -245,6 +245,13 @@
           "when": "editorLangId == perl"
         }
       ],
+      "editor/title": [
+        {
+          "command": "perl-lsp.runTests",
+          "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl)$/",
+          "group": "navigation"
+        }
+      ],
       "editor/context": [
         {
           "command": "perl-lsp.runTests",
