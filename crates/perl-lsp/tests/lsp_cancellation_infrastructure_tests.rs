@@ -13,7 +13,6 @@
 //! edge case coverage and performance monitoring integration.
 
 #![allow(unused_imports, dead_code)] // Scaffolding may have unused imports initially
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
@@ -190,7 +189,9 @@ impl ResourceMonitor {
     }
 
     fn get_resource_summary(&self) -> ResourceSummary {
-        let snapshots = self.memory_snapshots.lock().unwrap().clone();
+        let snapshots = self.memory_snapshots.lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default();
 
         ResourceSummary {
             memory_snapshots: snapshots,
@@ -289,7 +290,9 @@ impl ThreadSafetyMonitor {
     }
 
     fn get_thread_safety_report(&self) -> ThreadSafetyReport {
-        let operations = self.concurrent_operations.lock().unwrap().clone();
+        let operations = self.concurrent_operations.lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default();
         let race_conditions = self.data_race_counter.load(Ordering::Relaxed);
         let deadlocks = self.check_for_deadlocks();
 

@@ -3,7 +3,7 @@ use serde_json::json;
 
 /// Test that inlayHint/resolve adds tooltip when requested
 #[test]
-fn lsp_inlay_hint_resolve_adds_tooltip() {
+fn lsp_inlay_hint_resolve_adds_tooltip() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -52,8 +52,8 @@ fn lsp_inlay_hint_resolve_adds_tooltip() {
         params: Some(hint.clone()),
     };
 
-    let res = srv.handle_request(req).unwrap();
-    let result = res.result.unwrap();
+    let res = srv.handle_request(req).ok_or("Failed to handle inlayHint/resolve request")?;
+    let result = res.result.ok_or("No result in inlayHint/resolve response")?;
 
     // Should add tooltip
     assert!(result.get("tooltip").is_some(), "should add tooltip");
@@ -62,11 +62,13 @@ fn lsp_inlay_hint_resolve_adds_tooltip() {
     assert_eq!(result["label"], "str:");
     assert_eq!(result["kind"], 2);
     assert_eq!(result["data"]["uri"], "file:///test.pl");
+
+    Ok(())
 }
 
 /// Test that resolve preserves data field
 #[test]
-fn lsp_inlay_hint_resolve_preserves_data() {
+fn lsp_inlay_hint_resolve_preserves_data() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -104,17 +106,19 @@ fn lsp_inlay_hint_resolve_preserves_data() {
         params: Some(hint.clone()),
     };
 
-    let res = srv.handle_request(req).unwrap();
-    let result = res.result.unwrap();
+    let res = srv.handle_request(req).ok_or("Failed to handle inlayHint/resolve request")?;
+    let result = res.result.ok_or("No result in inlayHint/resolve response")?;
 
     // Data field should be preserved
     assert_eq!(result["data"], hint["data"]);
     assert_eq!(result["data"]["custom"], "preserved");
+
+    Ok(())
 }
 
 /// Test that resolve returns same hint if already has tooltip
 #[test]
-fn lsp_inlay_hint_resolve_no_op_when_complete() {
+fn lsp_inlay_hint_resolve_no_op_when_complete() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -150,17 +154,19 @@ fn lsp_inlay_hint_resolve_no_op_when_complete() {
         params: Some(hint.clone()),
     };
 
-    let res = srv.handle_request(req).unwrap();
-    let result = res.result.unwrap();
+    let res = srv.handle_request(req).ok_or("Failed to handle inlayHint/resolve request")?;
+    let result = res.result.ok_or("No result in inlayHint/resolve response")?;
 
     // Should return same hint
     assert_eq!(result["tooltip"], "Already has tooltip");
     assert_eq!(result["label"], "param:");
+
+    Ok(())
 }
 
 /// Test that resolve handles missing params gracefully
 #[test]
-fn lsp_inlay_hint_resolve_handles_invalid_params() {
+fn lsp_inlay_hint_resolve_handles_invalid_params() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -185,9 +191,12 @@ fn lsp_inlay_hint_resolve_handles_invalid_params() {
         params: None,
     };
 
-    let res = srv.handle_request(req).unwrap();
+    let res = srv.handle_request(req).ok_or("Failed to handle inlayHint/resolve request")?;
 
     // Should return error for invalid params
     assert!(res.error.is_some());
-    assert_eq!(res.error.unwrap().code, -32602); // InvalidParams
+    let error = res.error.ok_or("Expected error for invalid params")?;
+    assert_eq!(error.code, -32602); // InvalidParams
+
+    Ok(())
 }

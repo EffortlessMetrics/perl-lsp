@@ -11,7 +11,7 @@ mod incremental_tests {
 
     #[test]
     #[serial_test::serial]
-    fn test_incremental_parsing_small_edit() {
+    fn test_incremental_parsing_small_edit() -> Result<(), Box<dyn std::error::Error>> {
         // Enable incremental parsing
         unsafe { std::env::set_var("PERL_LSP_INCREMENTAL", "1") };
         let config = IncrementalConfig::default();
@@ -24,10 +24,10 @@ my $y = 100;
 print $x + $y;
 "#;
 
-        let mut doc = DocumentParser::new(initial_code.to_string(), &config).unwrap();
+        let mut doc = DocumentParser::new(initial_code.to_string(), &config)?;
 
         // Verify initial AST
-        let ast1 = doc.ast().unwrap();
+        let ast1 = doc.ast().ok_or("Failed to get initial AST")?;
         assert!(format!("{:?}", ast1).contains("Variable"));
 
         // Apply incremental edit (change 42 to 99)
@@ -40,14 +40,14 @@ print $x + $y;
         })];
 
         let start = Instant::now();
-        doc.apply_changes(&changes, &config).unwrap();
+        doc.apply_changes(&changes, &config)?;
         let parse_time = start.elapsed();
 
         // Verify parse time is reasonable
         assert!(parse_time.as_millis() < 100, "Parse time too slow: {:?}", parse_time);
 
         // Verify updated AST
-        let ast2 = doc.ast().unwrap();
+        let ast2 = doc.ast().ok_or("Failed to get updated AST")?;
         assert!(doc.content().contains("99"));
         assert!(format!("{:?}", ast2).contains("Variable"));
 
@@ -58,11 +58,12 @@ print $x + $y;
         }
 
         unsafe { std::env::remove_var("PERL_LSP_INCREMENTAL") };
+        Ok(())
     }
 
     #[test]
     #[serial_test::serial]
-    fn test_incremental_parsing_multiple_edits() {
+    fn test_incremental_parsing_multiple_edits() -> Result<(), Box<dyn std::error::Error>> {
         unsafe { std::env::set_var("PERL_LSP_INCREMENTAL", "1") };
         let config = IncrementalConfig::default();
 
@@ -76,7 +77,7 @@ sub world {
 }
 "#;
 
-        let mut doc = DocumentParser::new(initial_code.to_string(), &config).unwrap();
+        let mut doc = DocumentParser::new(initial_code.to_string(), &config)?;
 
         // Apply multiple edits
         let changes = vec![
@@ -96,7 +97,7 @@ sub world {
             }),
         ];
 
-        doc.apply_changes(&changes, &config).unwrap();
+        doc.apply_changes(&changes, &config)?;
 
         // Verify both changes applied
         assert!(doc.content().contains("Hi"));
@@ -105,6 +106,7 @@ sub world {
         assert!(!doc.content().contains("World"));
 
         unsafe { std::env::remove_var("PERL_LSP_INCREMENTAL") };
+        Ok(())
     }
 
     #[test]
@@ -156,29 +158,30 @@ sub world {
 
     #[test]
     #[serial_test::serial]
-    fn test_full_document_replacement() {
+    fn test_full_document_replacement() -> Result<(), Box<dyn std::error::Error>> {
         unsafe { std::env::set_var("PERL_LSP_INCREMENTAL", "1") };
         let config = IncrementalConfig::default();
 
         let initial_code = "my $x = 1;";
-        let mut doc = DocumentParser::new(initial_code.to_string(), &config).unwrap();
+        let mut doc = DocumentParser::new(initial_code.to_string(), &config)?;
 
         // Full document replacement (no range)
         let changes = vec![json!({
             "text": "my $y = 2;\nmy $z = 3;"
         })];
 
-        doc.apply_changes(&changes, &config).unwrap();
+        doc.apply_changes(&changes, &config)?;
 
         assert_eq!(doc.content(), "my $y = 2;\nmy $z = 3;");
         assert!(doc.ast().is_some());
 
         unsafe { std::env::remove_var("PERL_LSP_INCREMENTAL") };
+        Ok(())
     }
 
     #[test]
     #[serial_test::serial]
-    fn test_incremental_disabled_fallback() {
+    fn test_incremental_disabled_fallback() -> Result<(), Box<dyn std::error::Error>> {
         // Ensure incremental is disabled
         unsafe { std::env::remove_var("PERL_LSP_INCREMENTAL") };
         let config = IncrementalConfig::default();
@@ -186,25 +189,27 @@ sub world {
 
         // Should still work with full parsing
         let code = "my $x = 42;";
-        let mut doc = DocumentParser::new(code.to_string(), &config).unwrap();
+        let mut doc = DocumentParser::new(code.to_string(), &config)?;
 
         let changes = vec![json!({"text": "my $y = 99;"})];
-        doc.apply_changes(&changes, &config).unwrap();
+        doc.apply_changes(&changes, &config)?;
 
         assert_eq!(doc.content(), "my $y = 99;");
         assert!(doc.ast().is_some());
+        Ok(())
     }
 }
 
 // Test without incremental feature
 #[cfg(not(feature = "incremental"))]
 #[test]
-fn test_incremental_feature_disabled() {
+fn test_incremental_feature_disabled() -> Result<(), Box<dyn std::error::Error>> {
     // Just verify the crate compiles without the feature
     use perl_parser::Parser;
 
     let code = "my $x = 42;";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     assert!(format!("{:?}", ast).contains("Variable"));
+    Ok(())
 }

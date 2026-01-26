@@ -1,10 +1,10 @@
 //! Tests for document links feature
 
 #[test]
-fn test_document_links_basic() {
+fn test_document_links_basic() -> Result<(), Box<dyn std::error::Error>> {
     use url::Url;
 
-    let uri: Url = "file:///workspace/test.pl".parse().unwrap();
+    let uri: Url = "file:///workspace/test.pl".parse()?;
     let _text = r#"
 use Data::Dumper;
 require JSON::XS;
@@ -17,22 +17,23 @@ use Foo::Bar::Baz;
 
     // For now, just ensure the test compiles
     assert!(uri.scheme() == "file");
+    Ok(())
 }
 
 #[test]
-fn test_url_handling() {
+fn test_url_handling() -> Result<(), Box<dyn std::error::Error>> {
     use url::Url;
 
     // Test Windows-style paths
-    let uri = Url::parse("file:///C:/Users/test/project.pl").unwrap();
+    let uri = Url::parse("file:///C:/Users/test/project.pl")?;
     assert_eq!(uri.scheme(), "file");
 
     // Test Unix-style paths
-    let uri2 = Url::parse("file:///home/user/project.pl").unwrap();
+    let uri2 = Url::parse("file:///home/user/project.pl")?;
     assert_eq!(uri2.scheme(), "file");
 
     // Test relative path resolution
-    let base = Url::parse("file:///workspace/src/main.pl").unwrap();
+    let base = Url::parse("file:///workspace/src/main.pl")?;
     #[allow(clippy::collapsible_if)]
     if let Ok(path) = base.to_file_path() {
         if let Some(parent) = path.parent() {
@@ -42,4 +43,5 @@ fn test_url_handling() {
             }
         }
     }
+    Ok(())
 }

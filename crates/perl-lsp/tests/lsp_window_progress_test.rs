@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Window & Progress API Contract Tests for LSP 3.17
 //!
 //! Tests window notifications, progress reporting, and work done progress per LSP 3.17 spec.
@@ -14,7 +13,7 @@ use support::lsp_harness::LspHarness;
 // ==================== WINDOW NOTIFICATIONS ====================
 
 #[test]
-fn test_window_show_document_capability_gating() {
+fn test_window_show_document_capability_gating() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
 
     // Initialize WITHOUT showDocument support
@@ -27,8 +26,7 @@ fn test_window_show_document_capability_gating() {
                     }
                 }
             }
-        })))
-        .expect("init");
+        })))?;
 
     // Server should NOT advertise any window/showDocument usage
     // (This is a server->client request, so we can't test sending it)
@@ -44,17 +42,17 @@ fn test_window_show_document_capability_gating() {
                     }
                 }
             }
-        })))
-        .expect("init");
+        })))?;
 
     // Server may now use window/showDocument
+    Ok(())
 }
 
 #[test]
-fn test_window_log_message_notification() {
+fn test_window_log_message_notification() -> Result<(), Box<dyn std::error::Error>> {
     // window/logMessage is always available, no capability gating
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // These would be server->client, but we document the contract:
     // Type 1: Error
@@ -102,12 +100,13 @@ fn test_window_log_message_notification() {
     assert_eq!(warning_msg["params"]["type"], 2);
     assert_eq!(info_msg["params"]["type"], 3);
     assert_eq!(log_msg["params"]["type"], 4);
+    Ok(())
 }
 
 // ==================== WORK DONE PROGRESS ====================
 
 #[test]
-fn test_work_done_progress_capability_gating() {
+fn test_work_done_progress_capability_gating() -> Result<(), Box<dyn std::error::Error>> {
     // Test WITHOUT work done progress support
     let mut harness = LspHarness::new();
     let _result = harness
@@ -117,8 +116,7 @@ fn test_work_done_progress_capability_gating() {
                     "workDoneProgress": false
                 }
             }
-        })))
-        .expect("init");
+        })))?;
 
     // Server MUST NOT send window/workDoneProgress/create
 
@@ -131,14 +129,14 @@ fn test_work_done_progress_capability_gating() {
                     "workDoneProgress": true
                 }
             }
-        })))
-        .expect("init");
+        })))?;
 
     // Server MAY send window/workDoneProgress/create
+    Ok(())
 }
 
 #[test]
-fn test_progress_notification_sequence() {
+fn test_progress_notification_sequence() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
     harness
         .initialize(Some(json!({
@@ -147,8 +145,7 @@ fn test_progress_notification_sequence() {
                     "workDoneProgress": true
                 }
             }
-        })))
-        .expect("init");
+        })))?;
 
     // Simulate progress sequence (these would come from server normally)
     let token = "index#1";
@@ -219,6 +216,7 @@ fn test_progress_notification_sequence() {
 
     assert_eq!(end["params"]["value"]["kind"], "end");
     assert!(end["params"]["value"]["message"].is_string());
+    Ok(())
 }
 
 #[test]
@@ -283,7 +281,7 @@ fn test_progress_percentage_monotonic() {
 }
 
 #[test]
-fn test_work_done_progress_cancel() {
+fn test_work_done_progress_cancel() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
     harness
         .initialize(Some(json!({
@@ -292,8 +290,7 @@ fn test_work_done_progress_cancel() {
                     "workDoneProgress": true
                 }
             }
-        })))
-        .expect("init");
+        })))?;
 
     let token = "long-task#1";
 
@@ -309,6 +306,7 @@ fn test_work_done_progress_cancel() {
     // 1. Best-effort cancel the work
     // 2. Complete the associated request with -32800 or partial result
     // 3. Send end progress notification
+    Ok(())
 }
 
 #[test]
@@ -330,7 +328,7 @@ fn test_progress_token_types() {
 }
 
 #[test]
-fn test_work_done_progress_create_response() {
+fn test_work_done_progress_create_response() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
     harness
         .initialize(Some(json!({
@@ -339,8 +337,7 @@ fn test_work_done_progress_create_response() {
                     "workDoneProgress": true
                 }
             }
-        })))
-        .expect("init");
+        })))?;
 
     // This would be server->client, but we document the contract
     let _create_request = json!({
@@ -371,14 +368,15 @@ fn test_work_done_progress_create_response() {
 
     assert!(success_response["result"].is_null());
     assert_eq!(error_response["error"]["code"], -32601);
+    Ok(())
 }
 
 // ==================== TELEMETRY ====================
 
 #[test]
-fn test_telemetry_event_notification() {
+fn test_telemetry_event_notification() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // telemetry/event params must be object | array (3.17)
     // No capability gating required
@@ -414,6 +412,7 @@ fn test_telemetry_event_notification() {
     assert!(telemetry1["params"].is_object());
     assert!(telemetry2["params"].is_object());
     assert!(telemetry3["params"].is_array());
+    Ok(())
 }
 
 #[test]
@@ -610,9 +609,9 @@ fn test_diagnostic_server_cancellation_data() {
 }
 
 #[test]
-fn test_cancelled_request_error() {
+fn test_cancelled_request_error() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // When a request is cancelled, server should return -32800
     let error = json!({
@@ -625,12 +624,13 @@ fn test_cancelled_request_error() {
     });
 
     assert_eq!(error["error"]["code"], -32800);
+    Ok(())
 }
 
 #[test]
-fn test_content_modified_error() {
+fn test_content_modified_error() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // When content changes invalidate a request mid-flight
     let error = json!({
@@ -643,12 +643,13 @@ fn test_content_modified_error() {
     });
 
     assert_eq!(error["error"]["code"], -32801);
+    Ok(())
 }
 
 #[test]
-fn test_server_cancelled_error() {
+fn test_server_cancelled_error() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Server cancelled a request that supports server cancellation (3.17)
     let error = json!({
@@ -661,12 +662,13 @@ fn test_server_cancelled_error() {
     });
 
     assert_eq!(error["error"]["code"], -32802);
+    Ok(())
 }
 
 #[test]
-fn test_request_failed_error() {
+fn test_request_failed_error() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
+    harness.initialize(None)?;
 
     // Request was valid but failed (3.17)
     let error = json!({
@@ -679,6 +681,7 @@ fn test_request_failed_error() {
     });
 
     assert_eq!(error["error"]["code"], -32803);
+    Ok(())
 }
 
 // ==================== COMPLEX SCENARIOS ====================
@@ -706,10 +709,10 @@ fn test_parallel_progress_tokens() {
 }
 
 #[test]
-fn test_progress_with_partial_results() {
+fn test_progress_with_partial_results() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    harness.initialize(None).expect("init");
-    harness.open("file:///test.pl", "sub a{}\nsub b{}\nsub c{}").expect("open");
+    harness.initialize(None)?;
+    harness.open("file:///test.pl", "sub a{}\nsub b{}\nsub c{}")?;
 
     // Request with both work done and partial result tokens
     let _request = json!({
@@ -749,6 +752,7 @@ fn test_progress_with_partial_results() {
     });
 
     // Final result combines all partials
+    Ok(())
 }
 
 // ==================== ACCEPTANCE CRITERIA ====================

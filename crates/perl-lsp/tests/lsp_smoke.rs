@@ -52,8 +52,6 @@
 //! cargo test -p perl-lsp --test lsp_smoke -- --test-threads=1 || exit 1
 //! ```
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 
@@ -117,7 +115,7 @@ fn create_server() -> LspServer {
 /// NOTE: Does NOT send `initialized` notification to avoid triggering
 /// workspace indexing and stdout notifications that interfere with test output.
 /// For tests that need full initialization, use `initialize_server_full()`.
-fn initialize_server(server: &mut LspServer) -> Value {
+fn initialize_server(server: &mut LspServer) -> Result<Value, Box<dyn std::error::Error>> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
@@ -140,16 +138,16 @@ fn initialize_server(server: &mut LspServer) -> Value {
         })),
     };
 
-    let response = server.handle_request(request).expect("Initialize should return response");
+    let response = server.handle_request(request).ok_or("Initialize should return response")?;
     assert!(response.error.is_none(), "Initialize should not return error");
 
-    response.result.unwrap()
+    Ok(response.result.ok_or("Initialize should return result")?)
 }
 
 /// Send initialize request AND initialized notification
 /// Use when you need full server functionality including workspace indexing
-fn initialize_server_full(server: &mut LspServer) -> Value {
-    let result = initialize_server(server);
+fn initialize_server_full(server: &mut LspServer) -> Result<Value, Box<dyn std::error::Error>> {
+    let result = initialize_server(server)?;
 
     // Send initialized notification
     let initialized = JsonRpcRequest {
@@ -160,7 +158,7 @@ fn initialize_server_full(server: &mut LspServer) -> Value {
     };
     server.handle_request(initialized);
 
-    result
+    Ok(result)
 }
 
 /// Open a document in the server
@@ -227,9 +225,9 @@ fn shutdown_server(server: &mut LspServer) {
 /// - Server returns valid capabilities object
 /// - Core providers are advertised (hover, completion, definition)
 #[test]
-fn smoke_server_initialization_and_capabilities() {
+fn smoke_server_initialization_and_capabilities() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let init_result = initialize_server(&mut server);
+    let init_result = initialize_server(&mut server)?;
 
     // Verify response structure
     let caps = &init_result["capabilities"];
@@ -257,13 +255,14 @@ fn smoke_server_initialization_and_capabilities() {
     );
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 /// Smoke test: Server rejects double initialization
 #[test]
-fn smoke_double_initialization_rejected() {
+fn smoke_double_initialization_rejected() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
 
     // Try to initialize again
     let request = JsonRpcRequest {
@@ -277,10 +276,11 @@ fn smoke_double_initialization_rejected() {
         })),
     };
 
-    let response = server.handle_request(request).expect("Should return response");
+    let response = server.handle_request(request).ok_or("Should return response")?;
     assert!(response.error.is_some(), "Second initialize should return error");
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 // =============================================================================
@@ -289,9 +289,9 @@ fn smoke_double_initialization_rejected() {
 
 /// Smoke test: Document open is accepted
 #[test]
-fn smoke_document_open() {
+fn smoke_document_open() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
 
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
@@ -310,13 +310,14 @@ fn smoke_document_open() {
     assert!(result.is_some(), "Hover should return a response (even if null)");
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 /// Smoke test: Document change is accepted
 #[test]
-fn smoke_document_change() {
+fn smoke_document_change() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
 
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
@@ -351,6 +352,7 @@ fn smoke_document_change() {
     assert!(result.is_some(), "Server should still respond after document change");
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 // =============================================================================
@@ -359,9 +361,9 @@ fn smoke_document_change() {
 
 /// Smoke test: Hover returns valid response
 #[test]
-fn smoke_hover_response_structure() {
+fn smoke_hover_response_structure() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(
@@ -377,7 +379,7 @@ fn smoke_hover_response_structure() {
     // Hover should return something (may be null for some positions)
     assert!(result.is_some(), "Hover should return a response");
 
-    let hover = result.unwrap();
+    let hover = result.ok_or("Hover should return a value")?;
     if !hover.is_null() {
         // If we got content, verify structure
         assert!(
@@ -387,13 +389,14 @@ fn smoke_hover_response_structure() {
     }
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 /// Smoke test: Hover on subroutine name
 #[test]
-fn smoke_hover_on_subroutine() {
+fn smoke_hover_on_subroutine() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(
@@ -409,6 +412,7 @@ fn smoke_hover_on_subroutine() {
     assert!(result.is_some(), "Hover on subroutine should return response");
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 // =============================================================================
@@ -417,9 +421,9 @@ fn smoke_hover_on_subroutine() {
 
 /// Smoke test: Completion returns items
 #[test]
-fn smoke_completion_returns_items() {
+fn smoke_completion_returns_items() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(
@@ -434,7 +438,7 @@ fn smoke_completion_returns_items() {
 
     assert!(result.is_some(), "Completion should return a response");
 
-    let completion = result.unwrap();
+    let completion = result.ok_or("Completion should return a value")?;
     // Completion returns either array or object with items
     let items = if completion.is_array() {
         completion.as_array()
@@ -451,13 +455,14 @@ fn smoke_completion_returns_items() {
     }
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 /// Smoke test: Completion for builtins
 #[test]
-fn smoke_completion_builtins() {
+fn smoke_completion_builtins() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
 
     // Open a file with partial builtin
     open_document(&mut server, "file:///builtin.pl", "pri");
@@ -474,7 +479,7 @@ fn smoke_completion_builtins() {
 
     assert!(result.is_some(), "Completion should return a response for builtins");
 
-    let completion = result.unwrap();
+    let completion = result.ok_or("Completion should return a value")?;
     let items = if completion.is_array() {
         completion.as_array()
     } else {
@@ -490,6 +495,7 @@ fn smoke_completion_builtins() {
     }
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 // =============================================================================
@@ -498,9 +504,9 @@ fn smoke_completion_builtins() {
 
 /// Smoke test: Definition returns locations
 #[test]
-fn smoke_definition_returns_locations() {
+fn smoke_definition_returns_locations() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     // Request definition for say_hello call
@@ -516,11 +522,11 @@ fn smoke_definition_returns_locations() {
 
     assert!(result.is_some(), "Definition should return a response");
 
-    let definition = result.unwrap();
+    let definition = result.ok_or("Definition should return a value")?;
     if !definition.is_null() {
         // Definition returns either Location or Location[]
         if definition.is_array() {
-            let locations = definition.as_array().unwrap();
+            let locations = definition.as_array().ok_or("Definition array should be valid")?;
             if !locations.is_empty() {
                 assert!(locations[0].get("uri").is_some(), "Location must have uri");
                 assert!(locations[0].get("range").is_some(), "Location must have range");
@@ -531,6 +537,7 @@ fn smoke_definition_returns_locations() {
     }
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 // =============================================================================
@@ -539,9 +546,9 @@ fn smoke_definition_returns_locations() {
 
 /// Smoke test: Document symbols returns symbols
 #[test]
-fn smoke_document_symbols() {
+fn smoke_document_symbols() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(
@@ -555,8 +562,8 @@ fn smoke_document_symbols() {
 
     assert!(result.is_some(), "Document symbols should return a response");
 
-    let symbols = result.unwrap();
-    let symbols_array = symbols.as_array().expect("Symbols should be an array");
+    let symbols = result.ok_or("Document symbols should return a value")?;
+    let symbols_array = symbols.as_array().ok_or("Symbols should be an array")?;
 
     // Should have at least one symbol (say_hello subroutine)
     assert!(!symbols_array.is_empty(), "Should have at least one symbol");
@@ -581,6 +588,7 @@ fn smoke_document_symbols() {
     );
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 // =============================================================================
@@ -589,9 +597,9 @@ fn smoke_document_symbols() {
 
 /// Smoke test: References returns locations
 #[test]
-fn smoke_find_references() {
+fn smoke_find_references() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(
@@ -607,7 +615,7 @@ fn smoke_find_references() {
 
     assert!(result.is_some(), "References should return a response");
 
-    let refs = result.unwrap();
+    let refs = result.ok_or("References should return a value")?;
     if let Some(refs_array) = refs.as_array() {
         // Verify structure
         for reference in refs_array {
@@ -617,6 +625,7 @@ fn smoke_find_references() {
     }
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 // =============================================================================
@@ -625,9 +634,9 @@ fn smoke_find_references() {
 
 /// Smoke test: Folding ranges returns ranges
 #[test]
-fn smoke_folding_ranges() {
+fn smoke_folding_ranges() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(
@@ -641,7 +650,7 @@ fn smoke_folding_ranges() {
 
     assert!(result.is_some(), "Folding ranges should return a response");
 
-    let ranges = result.unwrap();
+    let ranges = result.ok_or("Folding ranges should return a value")?;
     if let Some(ranges_array) = ranges.as_array() {
         for range in ranges_array {
             assert!(range.get("startLine").is_some(), "Folding range must have startLine");
@@ -650,6 +659,7 @@ fn smoke_folding_ranges() {
     }
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 // =============================================================================
@@ -658,9 +668,9 @@ fn smoke_folding_ranges() {
 
 /// Smoke test: Workspace symbol search
 #[test]
-fn smoke_workspace_symbols() {
+fn smoke_workspace_symbols() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
     open_document(&mut server, "file:///module.pm", FIXTURE_MODULE);
 
@@ -676,7 +686,7 @@ fn smoke_workspace_symbols() {
     assert!(result.is_some(), "Workspace symbols should return a response");
 
     // Response may be empty if indexing is not complete, which is acceptable
-    let symbols = result.unwrap();
+    let symbols = result.ok_or("Workspace symbols should return a value")?;
     if let Some(symbols_array) = symbols.as_array() {
         for symbol in symbols_array {
             assert!(symbol.get("name").is_some(), "Workspace symbol must have name");
@@ -685,6 +695,7 @@ fn smoke_workspace_symbols() {
     }
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 // =============================================================================
@@ -693,9 +704,9 @@ fn smoke_workspace_symbols() {
 
 /// Smoke test: Server handles unknown method gracefully
 #[test]
-fn smoke_unknown_method_error() {
+fn smoke_unknown_method_error() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
 
     let result = send_request(
         &mut server,
@@ -722,13 +733,14 @@ fn smoke_unknown_method_error() {
     assert!(hover_result.is_some(), "Server should still respond after error");
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 /// Smoke test: Server handles request for non-existent document
 #[test]
-fn smoke_nonexistent_document() {
+fn smoke_nonexistent_document() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
 
     // Don't open any document, just request hover
     let result = send_request(
@@ -745,6 +757,7 @@ fn smoke_nonexistent_document() {
     assert!(result.is_some(), "Should return response for non-existent document");
 
     shutdown_server(&mut server);
+    Ok(())
 }
 
 // =============================================================================
@@ -753,9 +766,9 @@ fn smoke_nonexistent_document() {
 
 /// Smoke test: Graceful shutdown
 #[test]
-fn smoke_graceful_shutdown() {
+fn smoke_graceful_shutdown() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
-    let _ = initialize_server_full(&mut server);
+    let _ = initialize_server_full(&mut server)?;
     open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     // Make some requests
@@ -778,7 +791,7 @@ fn smoke_graceful_shutdown() {
     };
 
     let response =
-        server.handle_request(shutdown_request).expect("Shutdown should return response");
+        server.handle_request(shutdown_request).ok_or("Shutdown should return response")?;
     assert!(response.error.is_none(), "Shutdown should not return error");
 
     // Exit
@@ -791,6 +804,7 @@ fn smoke_graceful_shutdown() {
     server.handle_request(exit_request);
 
     // Test passes if we get here without hanging or crashing
+    Ok(())
 }
 
 // =============================================================================

@@ -1,13 +1,10 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use serde_json::json;
 
 mod support;
 use support::lsp_client::LspClient;
 
 #[test]
-
-fn highlights_read_and_write() {
+fn highlights_read_and_write() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
     let uri = "file:///test.pl";
@@ -16,7 +13,7 @@ fn highlights_read_and_write() {
     client.did_open(uri, "perl", source);
 
     // Find column for first "$x"
-    let col = source.find("$x").unwrap();
+    let col = source.find("$x").ok_or("Could not find '$x' in source")?;
     let response = client.request(
         "textDocument/documentHighlight",
         json!({
@@ -25,8 +22,9 @@ fn highlights_read_and_write() {
         }),
     );
 
-    let highlights =
-        response["result"].as_array().expect("documentHighlight should return an array");
+    let highlights = response["result"]
+        .as_array()
+        .ok_or("documentHighlight should return an array")?;
 
     // Should find 3 occurrences of $x
     assert_eq!(highlights.len(), 3, "Should find all 3 occurrences of $x");
@@ -35,14 +33,18 @@ fn highlights_read_and_write() {
     // Sort highlights by position to make order-independent
     let mut sorted_highlights: Vec<_> = highlights
         .iter()
-        .map(|h| {
+        .map(|h| -> Result<(usize, usize, i64), Box<dyn std::error::Error>> {
             let range = &h["range"];
-            let start_char = range["start"]["character"].as_u64().unwrap() as usize;
-            let end_char = range["end"]["character"].as_u64().unwrap() as usize;
+            let start_char = range["start"]["character"]
+                .as_u64()
+                .ok_or("Missing start character")? as usize;
+            let end_char = range["end"]["character"]
+                .as_u64()
+                .ok_or("Missing end character")? as usize;
             let kind = h["kind"].as_i64().unwrap_or(2);
-            (start_char, end_char, kind)
+            Ok((start_char, end_char, kind))
         })
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
     sorted_highlights.sort_by_key(|&(start, _, _)| start);
 
     let expected_positions = [
@@ -69,10 +71,11 @@ fn highlights_read_and_write() {
     }
 
     client.shutdown();
+    Ok(())
 }
 
 #[test]
-fn highlights_across_scopes() {
+fn highlights_across_scopes() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
     let uri = "file:///scope.pl";
@@ -89,7 +92,7 @@ $global++;
     client.did_open(uri, "perl", source);
 
     // Highlight $global
-    let col = source.find("$global").unwrap();
+    let col = source.find("$global").ok_or("Could not find '$global' in source")?;
     let line = source[..col].matches('\n').count();
 
     let response = client.request("textDocument/documentHighlight", json!({
@@ -97,18 +100,19 @@ $global++;
         "position": {"line": line, "character": col - source[..col].rfind('\n').map(|p| p + 1).unwrap_or(0)}
     }));
 
-    let highlights =
-        response["result"].as_array().expect("documentHighlight should return an array");
+    let highlights = response["result"]
+        .as_array()
+        .ok_or("documentHighlight should return an array")?;
 
     // Should find 4 occurrences of $global
     assert_eq!(highlights.len(), 4, "Should find all 4 occurrences of $global");
 
     client.shutdown();
+    Ok(())
 }
 
 #[test]
-
-fn no_highlights_for_different_variables() {
+fn no_highlights_for_different_variables() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin);
     let uri = "file:///different.pl";
@@ -117,7 +121,7 @@ fn no_highlights_for_different_variables() {
     client.did_open(uri, "perl", source);
 
     // Highlight $foo
-    let col = source.find("$foo").unwrap();
+    let col = source.find("$foo").ok_or("Could not find '$foo' in source")?;
     let response = client.request(
         "textDocument/documentHighlight",
         json!({
@@ -126,8 +130,9 @@ fn no_highlights_for_different_variables() {
         }),
     );
 
-    let highlights =
-        response["result"].as_array().expect("documentHighlight should return an array");
+    let highlights = response["result"]
+        .as_array()
+        .ok_or("documentHighlight should return an array")?;
 
     // Should only find $foo occurrences, not $bar
     assert_eq!(highlights.len(), 2, "Should only find $foo occurrences");
@@ -135,12 +140,17 @@ fn no_highlights_for_different_variables() {
     // Verify ranges don't include $bar
     for highlight in highlights {
         let range = &highlight["range"];
-        let start_char = range["start"]["character"].as_i64().unwrap() as usize;
-        let end_char = range["end"]["character"].as_i64().unwrap() as usize;
+        let start_char = range["start"]["character"]
+            .as_i64()
+            .ok_or("Missing start character")? as usize;
+        let end_char = range["end"]["character"]
+            .as_i64()
+            .ok_or("Missing end character")? as usize;
         let text = &source[start_char..end_char];
         assert!(text.contains("foo"), "Highlight should only contain 'foo' variable");
         assert!(!text.contains("bar"), "Highlight should not contain 'bar' variable");
     }
 
     client.shutdown();
+    Ok(())
 }

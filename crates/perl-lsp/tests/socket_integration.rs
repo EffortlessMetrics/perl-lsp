@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::process::{Command, Stdio};
@@ -9,7 +8,7 @@ use std::time::Duration;
 /// Spawns the LSP server in socket mode, connects, and verifies the initialize handshake.
 #[test]
 #[ignore = "integration test that spawns external process"]
-fn test_socket_connection() {
+fn test_socket_connection() -> Result<(), Box<dyn std::error::Error>> {
     let bin_path = env!("CARGO_BIN_EXE_perl-lsp");
 
     // Start the server in socket mode on a random port (port 0)
@@ -19,24 +18,23 @@ fn test_socket_connection() {
         .arg("0")
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
-        .spawn()
-        .expect("Failed to start perl-lsp");
+        .spawn()?;
 
-    let stderr = child.stderr.take().expect("Failed to capture stderr");
+    let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
     let reader = BufReader::new(stderr);
 
     // Read stderr to find the port
     let mut lines = reader.lines();
     let mut port = 0;
     while let Some(line_res) = lines.next() {
-        let line = line_res.expect("Failed to read line from stderr");
+        let line = line_res?;
         println!("Server startup: {}", line); // Debug output
         if line.contains("Perl LSP listening on") {
             // Parse port from "Perl LSP listening on 127.0.0.1:12345"
             let parts: Vec<&str> = line.split_whitespace().collect();
             if let Some(addr) = parts.last() {
                 if let Some(port_str) = addr.split(':').last() {
-                    port = port_str.parse().expect("Failed to parse port");
+                    port = port_str.parse()?;
                     break;
                 }
             }
@@ -55,18 +53,18 @@ fn test_socket_connection() {
     });
 
     // Connect to the server with timeout
-    let stream = TcpStream::connect(("127.0.0.1", port)).expect("Failed to connect to server");
-    stream.set_read_timeout(Some(Duration::from_secs(5))).expect("Failed to set read timeout");
-    stream.set_write_timeout(Some(Duration::from_secs(5))).expect("Failed to set write timeout");
+    let stream = TcpStream::connect(("127.0.0.1", port))?;
+    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(5)))?;
 
     // Clone stream for reading/writing - BufReader will own the read half
-    let mut write_stream = stream.try_clone().expect("Failed to clone stream");
+    let mut write_stream = stream.try_clone()?;
 
     // Send initialize request
     let request = r#"{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"processId": null, "rootUri": null, "capabilities": {}}}"#;
     let message = format!("Content-Length: {}\r\n\r\n{}", request.len(), request);
-    write_stream.write_all(message.as_bytes()).expect("Failed to write to socket");
-    write_stream.flush().expect("Failed to flush socket");
+    write_stream.write_all(message.as_bytes())?;
+    write_stream.flush()?;
 
     // Read response
     let mut reader = BufReader::new(stream);
@@ -75,14 +73,12 @@ fn test_socket_connection() {
     let mut content_length = 0;
     loop {
         let mut line = String::new();
-        reader.read_line(&mut line).expect("Failed to read header");
+        reader.read_line(&mut line)?;
         if line == "\r\n" {
             break;
         }
         if line.starts_with("Content-Length: ") {
-            content_length = line.trim()["Content-Length: ".len()..]
-                .parse()
-                .expect("Failed to parse Content-Length");
+            content_length = line.trim()["Content-Length: ".len()..].parse()?;
         }
     }
 
@@ -90,8 +86,8 @@ fn test_socket_connection() {
 
     // Read body
     let mut body = vec![0; content_length];
-    reader.read_exact(&mut body).expect("Failed to read body");
-    let response_str = String::from_utf8(body).expect("Failed to parse body as UTF-8");
+    reader.read_exact(&mut body)?;
+    let response_str = String::from_utf8(body)?;
 
     // Validate response
     assert!(response_str.contains("\"result\""), "Response should contain result");
@@ -100,8 +96,8 @@ fn test_socket_connection() {
     // Send shutdown request
     let shutdown_request = r#"{"jsonrpc": "2.0", "id": 2, "method": "shutdown"}"#;
     let message = format!("Content-Length: {}\r\n\r\n{}", shutdown_request.len(), shutdown_request);
-    write_stream.write_all(message.as_bytes()).expect("Failed to write shutdown");
-    write_stream.flush().expect("Failed to flush shutdown");
+    write_stream.write_all(message.as_bytes())?;
+    write_stream.flush()?;
 
     // Send exit notification for graceful shutdown
     let exit_notification = r#"{"jsonrpc": "2.0", "method": "exit"}"#;
@@ -113,4 +109,6 @@ fn test_socket_connection() {
     // Give server time to exit gracefully before force-killing
     std::thread::sleep(std::time::Duration::from_millis(100));
     let _ = child.kill();
+
+    Ok(())
 }

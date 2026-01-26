@@ -5,7 +5,7 @@ use std::time::Instant;
 
 /// Ensure that applying edits on large files remains efficient and accurate
 #[test]
-fn large_file_edit() {
+fn large_file_edit() -> Result<(), Box<dyn std::error::Error>> {
     let initial = "a".repeat(100_000);
     let mut doc = Doc { rope: Rope::from_str(&initial), version: 1 };
     let change = TextDocumentContentChangeEvent {
@@ -15,7 +15,10 @@ fn large_file_edit() {
     };
     apply_changes(&mut doc, &[change], PosEnc::Utf16);
     assert_eq!(doc.rope.len_bytes(), 100_000);
-    assert_eq!(doc.rope.to_string().chars().next().unwrap(), 'b');
+    let first_char = doc.rope.to_string().chars().next().ok_or("Empty rope after edit")?;
+    assert_eq!(first_char, 'b');
+
+    Ok(())
 }
 
 /// Test incremental edits on large files with UTF-16 position mapping

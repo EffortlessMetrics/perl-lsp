@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 // Property-based tests for quote-like operators (q, qq, qr, qw, s///, tr///)
 
 // Include the utilities module
@@ -24,7 +23,7 @@ mod tests {
             cases: std::env::var("PROPTEST_CASES")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(64),
+                .unwrap_or(64), // Default case count when env var not set - acceptable
             failure_persistence: Some(Box::new(
                 proptest::test_runner::FileFailurePersistence::Direct(crate::REGRESS_DIR)
             )),
@@ -52,15 +51,19 @@ mod tests {
             prop_assert!(ast.is_ok(), "Failed to parse: {}", code);
 
             // Extract constants from the AST
-            let ast_str = format!("{:?}", ast.unwrap());
+            if let Ok(ast_value) = ast {
+                let ast_str = format!("{:?}", ast_value);
 
-            // All names should be discoverable in the AST
-            for name in &names {
-                prop_assert!(
-                    ast_str.contains(name),
-                    "Constant '{}' not found in AST for: {}",
-                    name, code
-                );
+                // All names should be discoverable in the AST
+                for name in &names {
+                    prop_assert!(
+                        ast_str.contains(name),
+                        "Constant '{}' not found in AST for: {}",
+                        name, code
+                    );
+                }
+            } else {
+                prop_assert!(false, "AST extraction failed for: {}", code);
             }
         }
 
@@ -91,12 +94,16 @@ mod tests {
             prop_assert!(ast2.is_ok(), "Failed to parse q with {}{}: {}",
                         open2, close2, q2);
 
-            let shape1 = extract_ast_shape(&ast1.unwrap());
-            let shape2 = extract_ast_shape(&ast2.unwrap());
+            if let (Ok(ast1_value), Ok(ast2_value)) = (ast1, ast2) {
+                let shape1 = extract_ast_shape(&ast1_value);
+                let shape2 = extract_ast_shape(&ast2_value);
 
-            prop_assert_eq!(shape1, shape2,
-                           "Different AST shapes for q with different delimiters\n{}\n---\n{}",
-                           q1, q2);
+                prop_assert_eq!(shape1, shape2,
+                               "Different AST shapes for q with different delimiters\n{}\n---\n{}",
+                               q1, q2);
+            } else {
+                prop_assert!(false, "AST extraction failed");
+            }
 
             // Test qq{} with different delimiters
             let qq1 = format!("my $x = qq{open}{payload}{close};",
@@ -115,12 +122,16 @@ mod tests {
             prop_assert!(ast4.is_ok(), "Failed to parse qq with {}{}: {}",
                         open2, close2, qq2);
 
-            let shape3 = extract_ast_shape(&ast3.unwrap());
-            let shape4 = extract_ast_shape(&ast4.unwrap());
+            if let (Ok(ast3_value), Ok(ast4_value)) = (ast3, ast4) {
+                let shape3 = extract_ast_shape(&ast3_value);
+                let shape4 = extract_ast_shape(&ast4_value);
 
-            prop_assert_eq!(shape3, shape4,
-                           "Different AST shapes for qq with different delimiters\n{}\n---\n{}",
-                           qq1, qq2);
+                prop_assert_eq!(shape3, shape4,
+                               "Different AST shapes for qq with different delimiters\n{}\n---\n{}",
+                               qq1, qq2);
+            } else {
+                prop_assert!(false, "AST extraction failed");
+            }
         }
 
         #[test]
@@ -150,12 +161,16 @@ mod tests {
             prop_assert!(ast2.is_ok(), "Failed to parse qr with {}{}: {}",
                         open2, close2, code2);
 
-            let shape1 = extract_ast_shape(&ast1.unwrap());
-            let shape2 = extract_ast_shape(&ast2.unwrap());
+            if let (Ok(ast1_value), Ok(ast2_value)) = (ast1, ast2) {
+                let shape1 = extract_ast_shape(&ast1_value);
+                let shape2 = extract_ast_shape(&ast2_value);
 
-            prop_assert_eq!(shape1, shape2,
-                           "Different AST shapes for qr with {}{} vs {}{}\n{}\n---\n{}",
-                           open1, close1, open2, close2, code1, code2);
+                prop_assert_eq!(shape1, shape2,
+                               "Different AST shapes for qr with {}{} vs {}{}\n{}\n---\n{}",
+                               open1, close1, open2, close2, code1, code2);
+            } else {
+                prop_assert!(false, "AST extraction failed");
+            }
         }
 
         #[test]
@@ -205,12 +220,16 @@ mod tests {
             prop_assert!(ast2.is_ok(), "Failed to parse s/// with {}{}: {}",
                         open2, close2, code2);
 
-            let shape1 = extract_ast_shape(&ast1.unwrap());
-            let shape2 = extract_ast_shape(&ast2.unwrap());
+            if let (Ok(ast1_value), Ok(ast2_value)) = (ast1, ast2) {
+                let shape1 = extract_ast_shape(&ast1_value);
+                let shape2 = extract_ast_shape(&ast2_value);
 
-            prop_assert_eq!(shape1, shape2,
-                           "Different AST shapes for s/// with {}{} vs {}{}\n{}\n---\n{}",
-                           open1, close1, open2, close2, code1, code2);
+                prop_assert_eq!(shape1, shape2,
+                               "Different AST shapes for s/// with {}{} vs {}{}\n{}\n---\n{}",
+                               open1, close1, open2, close2, code1, code2);
+            } else {
+                prop_assert!(false, "AST extraction failed");
+            }
         }
 
         #[test]
@@ -263,18 +282,22 @@ mod tests {
             prop_assert!(ast_tr2.is_ok(), "Failed to parse tr with {}{}: {}",
                         open2, close2, tr2);
 
-            let shape_tr1 = extract_ast_shape(&ast_tr1.unwrap());
-            let shape_y1 = extract_ast_shape(&ast_y1.unwrap());
-            let shape_tr2 = extract_ast_shape(&ast_tr2.unwrap());
+            if let (Ok(ast_tr1_value), Ok(ast_y1_value), Ok(ast_tr2_value)) = (ast_tr1, ast_y1, ast_tr2) {
+                let shape_tr1 = extract_ast_shape(&ast_tr1_value);
+                let shape_y1 = extract_ast_shape(&ast_y1_value);
+                let shape_tr2 = extract_ast_shape(&ast_tr2_value);
 
-            // Test that y/// is an alias of tr///
-            prop_assert_eq!(&shape_tr1, &shape_y1,
-                           "y/// should be an alias of tr///\n{}\n---\n{}", tr1, y1);
+                // Test that y/// is an alias of tr///
+                prop_assert_eq!(&shape_tr1, &shape_y1,
+                               "y/// should be an alias of tr///\n{}\n---\n{}", tr1, y1);
 
-            // Test delimiter metamorphic property
-            prop_assert_eq!(&shape_tr1, &shape_tr2,
-                           "Different AST shapes for tr/// with {}{} vs {}{}\n{}\n---\n{}",
-                           open1, close1, open2, close2, tr1, tr2);
+                // Test delimiter metamorphic property
+                prop_assert_eq!(&shape_tr1, &shape_tr2,
+                               "Different AST shapes for tr/// with {}{} vs {}{}\n{}\n---\n{}",
+                               open1, close1, open2, close2, tr1, tr2);
+            } else {
+                prop_assert!(false, "AST extraction failed");
+            }
         }
 
         #[test]
@@ -311,12 +334,16 @@ mod tests {
                 prop_assert!(ast1.is_ok(), "Failed to parse q in {}: {}", context_name, code1);
                 prop_assert!(ast2.is_ok(), "Failed to parse q in {}: {}", context_name, code2);
 
-                let shape1 = extract_ast_shape(&ast1.unwrap());
-                let shape2 = extract_ast_shape(&ast2.unwrap());
+                if let (Ok(ast1_value), Ok(ast2_value)) = (ast1, ast2) {
+                    let shape1 = extract_ast_shape(&ast1_value);
+                    let shape2 = extract_ast_shape(&ast2_value);
 
-                prop_assert_eq!(shape1, shape2,
-                               "Different AST shapes in {} with {}{} vs {}{}\n{}\n---\n{}",
-                               context_name, open1, close1, open2, close2, code1, code2);
+                    prop_assert_eq!(shape1, shape2,
+                                   "Different AST shapes in {} with {}{} vs {}{}\n{}\n---\n{}",
+                                   context_name, open1, close1, open2, close2, code1, code2);
+                } else {
+                    prop_assert!(false, "AST extraction failed in context {}", context_name);
+                }
             }
         }
 
@@ -346,13 +373,17 @@ mod tests {
 
             // When there's no interpolation, q and qq should produce the same shape
             // (though the actual QuoteLike node might differ in interpolation flag)
-            let shape_q = shape(&ast_q.unwrap());
-            let shape_qq = shape(&ast_qq.unwrap());
+            if let (Ok(ast_q_value), Ok(ast_qq_value)) = (ast_q, ast_qq) {
+                let shape_q = shape(&ast_q_value);
+                let shape_qq = shape(&ast_qq_value);
 
-            // Both should have the same basic structure
-            prop_assert_eq!(shape_q.len(), shape_qq.len(),
-                           "q and qq should have same shape when no interpolation\n{}\n---\n{}",
-                           q_code, qq_code);
+                // Both should have the same basic structure
+                prop_assert_eq!(shape_q.len(), shape_qq.len(),
+                               "q and qq should have same shape when no interpolation\n{}\n---\n{}",
+                               q_code, qq_code);
+            } else {
+                prop_assert!(false, "AST extraction failed");
+            }
         }
 
         #[test]
@@ -382,12 +413,16 @@ mod tests {
             prop_assert!(ast2.is_ok(), "Failed to parse m// with {}{}: {}",
                         open2, close2, code2);
 
-            let shape1 = extract_ast_shape(&ast1.unwrap());
-            let shape2 = extract_ast_shape(&ast2.unwrap());
+            if let (Ok(ast1_value), Ok(ast2_value)) = (ast1, ast2) {
+                let shape1 = extract_ast_shape(&ast1_value);
+                let shape2 = extract_ast_shape(&ast2_value);
 
-            prop_assert_eq!(shape1, shape2,
-                           "Different AST shapes for m// with {}{} vs {}{}\n{}\n---\n{}",
-                           open1, close1, open2, close2, code1, code2);
+                prop_assert_eq!(shape1, shape2,
+                               "Different AST shapes for m// with {}{} vs {}{}\n{}\n---\n{}",
+                               open1, close1, open2, close2, code1, code2);
+            } else {
+                prop_assert!(false, "AST extraction failed");
+            }
         }
 
         #[test]
@@ -419,7 +454,11 @@ mod tests {
                 let ast = parser.parse();
 
                 prop_assert!(ast.is_ok(), "Failed to parse qw: {}", code);
-                shapes.push(extract_ast_shape(&ast.unwrap()));
+                if let Ok(ast_value) = ast {
+                    shapes.push(extract_ast_shape(&ast_value));
+                } else {
+                    prop_assert!(false, "AST extraction failed for: {}", code);
+                }
             }
 
             // All whitespace variations should produce the same shape

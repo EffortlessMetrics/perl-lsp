@@ -10,7 +10,7 @@ use std::io::Write;
 use std::time::Duration;
 
 #[test]
-fn test_malformed_headers_handling() {
+fn test_malformed_headers_handling() -> Result<(), Box<dyn std::error::Error>> {
     // Validates PR #173's enhanced malformed frame recovery implementation
     // Tests that the server gracefully handles malformed headers with enhanced error recovery
     let mut server = start_lsp_server();
@@ -20,9 +20,9 @@ fn test_malformed_headers_handling() {
     let header = format!("Content-Length   : {}\r\n\r\n", body.len());
 
     {
-        server.stdin_writer().write_all(header.as_bytes()).unwrap();
-        server.stdin_writer().write_all(body.as_bytes()).unwrap();
-        server.stdin_writer().flush().unwrap();
+        server.stdin_writer().write_all(header.as_bytes())?;
+        server.stdin_writer().write_all(body.as_bytes())?;
+        server.stdin_writer().flush()?;
     }
 
     // PR #173: Enhanced malformed frame recovery should handle this gracefully
@@ -43,10 +43,11 @@ fn test_malformed_headers_handling() {
         }),
     );
     assert!(test_response["result"].is_null() || test_response["error"].is_object());
+    Ok(())
 }
 
 #[test]
-fn test_edge_case_malformed_frame_recovery() {
+fn test_edge_case_malformed_frame_recovery() -> Result<(), Box<dyn std::error::Error>> {
     // Validates PR #173's enhanced malformed frame recovery for edge cases
     // Tests header-only with missing body scenario - server should recover gracefully
     let mut server = start_lsp_server();
@@ -55,8 +56,8 @@ fn test_edge_case_malformed_frame_recovery() {
     let header = "Content-Length: 50\r\n\r\n";
 
     {
-        server.stdin_writer().write_all(header.as_bytes()).unwrap();
-        server.stdin_writer().flush().unwrap();
+        server.stdin_writer().write_all(header.as_bytes())?;
+        server.stdin_writer().flush()?;
     }
 
     // PR #173: Enhanced frame recovery should handle this gracefully without crashing
@@ -89,10 +90,11 @@ fn test_edge_case_malformed_frame_recovery() {
             // Server gracefully terminated connection after malformed frame - this is acceptable recovery behavior
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_invalid_json_body() {
+fn test_invalid_json_body() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -130,10 +132,11 @@ fn test_invalid_json_body() {
             // Server terminated connection after invalid JSON - acceptable recovery behavior
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_server_specific_header_parsing() {
+fn test_server_specific_header_parsing() -> Result<(), Box<dyn std::error::Error>> {
     // Validates PR #173's enhanced header parsing implementation
     // Tests how our server handles duplicate Content-Length headers specifically
     let mut server = start_lsp_server();
@@ -144,9 +147,9 @@ fn test_server_specific_header_parsing() {
         format!("Content-Length: {}\r\nContent-Length: {}\r\n\r\n", body.len(), body.len());
 
     {
-        server.stdin_writer().write_all(header.as_bytes()).unwrap();
-        server.stdin_writer().write_all(body.as_bytes()).unwrap();
-        server.stdin_writer().flush().unwrap();
+        server.stdin_writer().write_all(header.as_bytes())?;
+        server.stdin_writer().write_all(body.as_bytes())?;
+        server.stdin_writer().flush()?;
     }
 
     // PR #173: Our server should handle duplicate headers gracefully
@@ -177,10 +180,11 @@ fn test_server_specific_header_parsing() {
             );
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_wrong_content_length_recovery() {
+fn test_wrong_content_length_recovery() -> Result<(), Box<dyn std::error::Error>> {
     // Validates PR #173's enhanced recovery from wrong Content-Length headers
     // Tests that server gracefully handles mismatched content length and recovers
     let mut server = start_lsp_server();
@@ -191,9 +195,9 @@ fn test_wrong_content_length_recovery() {
     let header = format!("Content-Length: {}\r\n\r\n", body.len() + 10); // Wrong length
 
     {
-        server.stdin_writer().write_all(header.as_bytes()).unwrap();
-        server.stdin_writer().write_all(body.as_bytes()).unwrap();
-        server.stdin_writer().flush().unwrap();
+        server.stdin_writer().write_all(header.as_bytes())?;
+        server.stdin_writer().write_all(body.as_bytes())?;
+        server.stdin_writer().flush()?;
     }
 
     // PR #173: Enhanced malformed frame recovery should handle wrong content-length
@@ -251,10 +255,11 @@ fn test_wrong_content_length_recovery() {
             // Server terminated connection after wrong content-length - acceptable enhanced recovery behavior
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_unknown_method() {
+fn test_unknown_method() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -275,10 +280,11 @@ fn test_unknown_method() {
         // Some servers return null for unknown methods
         assert!(response["result"].is_null());
     }
+    Ok(())
 }
 
 #[test]
-fn test_header_case_sensitivity() {
+fn test_header_case_sensitivity() -> Result<(), Box<dyn std::error::Error>> {
     // Validates PR #173's header case sensitivity handling implementation
     // Tests that our server properly handles case-insensitive headers per HTTP/LSP standards
     let mut server = start_lsp_server();
@@ -288,9 +294,9 @@ fn test_header_case_sensitivity() {
     let header = format!("content-length: {}\r\n\r\n", body.len()); // lowercase
 
     {
-        server.stdin_writer().write_all(header.as_bytes()).unwrap();
-        server.stdin_writer().write_all(body.as_bytes()).unwrap();
-        server.stdin_writer().flush().unwrap();
+        server.stdin_writer().write_all(header.as_bytes())?;
+        server.stdin_writer().write_all(body.as_bytes())?;
+        server.stdin_writer().flush()?;
     }
 
     // PR #173: Enhanced header parsing should handle case-insensitive headers correctly
@@ -325,12 +331,13 @@ fn test_header_case_sensitivity() {
     // Handle broken pipe gracefully - server may have exited due to previous malformed input
     if let Err(e) = server.stdin_writer().write_all(mixed_case_test.as_bytes()) {
         if e.kind() == std::io::ErrorKind::BrokenPipe {
-            return; // Server exited, test complete
+            return Ok(()); // Server exited, test complete
         }
-        panic!("Unexpected error: {}", e);
+        return Err(Box::new(e));
     }
     let _ = server.stdin_writer().flush(); // Ignore flush errors
 
     // Server should handle mixed case headers consistently
     let _final_response = common::read_response_timeout(&mut server, Duration::from_millis(500));
+    Ok(())
 }

@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 /// Comprehensive tests for LSP completion functionality
 use serde_json::json;
 
@@ -7,7 +6,7 @@ use common::{completion_items, initialize_lsp, send_notification, send_request, 
 
 /// Test basic variable completion
 #[test]
-fn test_scalar_variable_completion() {
+fn test_scalar_variable_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -52,17 +51,21 @@ $cou
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
     // Check that both $count and $counter are suggested
-    let labels: Vec<String> =
-        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
 
     assert!(labels.contains(&"$count".to_string()));
     assert!(labels.contains(&"$counter".to_string()));
     assert!(!labels.contains(&"$total_sum".to_string())); // Shouldn't match
+
+    Ok(())
 }
 
 /// Test array variable completion
 #[test]
-fn test_array_variable_completion() {
+fn test_array_variable_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -104,16 +107,20 @@ my @data = qw(a b c);
     let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
-    let labels: Vec<String> =
-        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
 
     assert!(labels.contains(&"@items".to_string()));
     assert!(labels.contains(&"@iterator".to_string()));
+
+    Ok(())
 }
 
 /// Test hash variable completion
 #[test]
-fn test_hash_variable_completion() {
+fn test_hash_variable_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -155,16 +162,20 @@ my %settings = ();
     let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
-    let labels: Vec<String> =
-        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
 
     assert!(labels.contains(&"%config".to_string()));
     assert!(labels.contains(&"%connection".to_string()));
+
+    Ok(())
 }
 
 /// Test function completion
 #[test]
-fn test_function_completion() {
+fn test_function_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -212,16 +223,20 @@ proc
     let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
-    let labels: Vec<String> =
-        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
 
     assert!(labels.contains(&"process_data".to_string()));
     assert!(labels.contains(&"process_items".to_string()));
+
+    Ok(())
 }
 
 /// Test built-in function completion
 #[test]
-fn test_builtin_completion() {
+fn test_builtin_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -257,16 +272,20 @@ fn test_builtin_completion() {
     let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have print and printf");
 
-    let labels: Vec<String> =
-        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
 
     assert!(labels.contains(&"print".to_string()));
     assert!(labels.contains(&"printf".to_string()));
+
+    Ok(())
 }
 
 /// Test keyword completion
 #[test]
-fn test_keyword_completion() {
+fn test_keyword_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -304,21 +323,25 @@ fn test_keyword_completion() {
     // Allow empty completions for partial keywords
     if items.is_empty() {
         eprintln!("No completions for 'for' - completion might not support partial keywords");
-        return;
+        return Ok(());
     }
 
     assert!(items.len() >= 2, "Should have for and foreach");
 
-    let labels: Vec<String> =
-        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
 
     assert!(labels.contains(&"for".to_string()));
     assert!(labels.contains(&"foreach".to_string()));
+
+    Ok(())
 }
 
 /// Test special variable completion
 #[test]
-fn test_special_variable_completion() {
+fn test_special_variable_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -356,15 +379,17 @@ fn test_special_variable_completion() {
     // Allow empty completions for special variables
     if items.is_empty() {
         eprintln!("No completions for '$^' - completion might not support special variable prefix");
-        return;
+        return Ok(());
     }
 
     // The completion provider might return keywords instead of special variables
     // in this context, so we'll be more lenient
     assert!(items.len() >= 2, "Should have at least some completions");
 
-    let labels: Vec<String> =
-        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
 
     // Check if we got special variables or keywords (both are acceptable)
     let has_special_vars =
@@ -372,11 +397,13 @@ fn test_special_variable_completion() {
     let has_keywords = labels.contains(&"print".to_string()) || labels.contains(&"my".to_string());
 
     assert!(has_special_vars || has_keywords, "Should have either special variables or keywords");
+
+    Ok(())
 }
 
 /// Test method completion after ->
 #[test]
-fn test_method_completion() {
+fn test_method_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -414,21 +441,25 @@ fn test_method_completion() {
     // Allow empty completions for method calls
     if items.is_empty() {
         eprintln!("No completions for '$object->' - method completion might not be supported");
-        return;
+        return Ok(());
     }
 
     assert!(items.len() >= 3, "Should have common methods");
 
-    let labels: Vec<String> =
-        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
 
     // Check that we have some method completions
     assert!(!labels.is_empty(), "Should have at least some method completions");
+
+    Ok(())
 }
 
 /// Test completion in mixed context
 #[test]
-fn test_mixed_context_completion() {
+fn test_mixed_context_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -474,18 +505,22 @@ va
     let items = completion_items(&response);
     assert!(items.len() >= 3, "Should have variables and function");
 
-    let labels: Vec<String> =
-        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
 
     // Should suggest both variables and the function
     assert!(labels.contains(&"$value".to_string()));
     assert!(labels.contains(&"$var".to_string()));
     assert!(labels.contains(&"validate".to_string()));
+
+    Ok(())
 }
 
 /// Test completion details and documentation
 #[test]
-fn test_completion_details() {
+fn test_completion_details() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -522,7 +557,7 @@ fn test_completion_details() {
 
     // Find @ARGV in completions
     let argv_item =
-        items.iter().find(|item| item["label"] == "@ARGV").expect("Should have @ARGV completion");
+        items.iter().find(|item| item["label"] == "@ARGV").ok_or("Should have @ARGV completion")?;
 
     // Check it has details
     assert!(argv_item["detail"].is_string());
@@ -535,11 +570,13 @@ fn test_completion_details() {
             assert_eq!(value, "Command line arguments");
         }
     }
+
+    Ok(())
 }
 
 /// Test completion with empty prefix (should show all relevant items)
 #[test]
-fn test_empty_prefix_completion() {
+fn test_empty_prefix_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -576,18 +613,22 @@ fn test_empty_prefix_completion() {
     assert!(items.len() > 10, "Should have many completions for empty prefix");
 
     // Should include keywords, built-ins, and defined items
-    let labels: Vec<String> =
-        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
 
     assert!(labels.iter().any(|l| l.starts_with("if")));
     assert!(labels.iter().any(|l| l.starts_with("print")));
     assert!(labels.contains(&"$var".to_string()));
     assert!(labels.contains(&"test".to_string()));
+
+    Ok(())
 }
 
 /// Test that completion doesn't trigger in comments
 #[test]
-fn test_no_completion_in_comments() {
+fn test_no_completion_in_comments() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -622,11 +663,13 @@ fn test_no_completion_in_comments() {
 
     let items = completion_items(&response);
     assert_eq!(items.len(), 0, "Should have no completions in comments");
+
+    Ok(())
 }
 
 /// Test completion with package context
 #[test]
-fn test_package_completion() {
+fn test_package_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -670,11 +713,13 @@ MyModule::"#
     let items = completion_items(&response);
     // Since package completion is TODO, this might be empty for now
     assert!(items.is_empty() || !items.is_empty(), "Package completion handling");
+
+    Ok(())
 }
 
 /// Test snippet expansion in completions
 #[test]
-fn test_snippet_completion() {
+fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -714,21 +759,22 @@ fn test_snippet_completion() {
     // Allow empty completions in this case (partial keyword)
     if items.is_empty() {
         eprintln!("No completions for 'sub' - this might be expected for partial keywords");
-        return;
+        return Ok(());
     }
 
     // Find the 'sub' keyword completion
     let sub_item = items.iter().find(|item| item["label"] == "sub");
 
-    if sub_item.is_none() {
-        eprintln!("No 'sub' completion found. Available items:");
-        for item in items {
-            eprintln!("  - {}", item["label"]);
+    let sub_item = match sub_item {
+        Some(item) => item,
+        None => {
+            eprintln!("No 'sub' completion found. Available items:");
+            for item in items {
+                eprintln!("  - {}", item["label"]);
+            }
+            return Ok(());
         }
-        return;
-    }
-
-    let sub_item = sub_item.unwrap();
+    };
 
     // Check it has a snippet with placeholders
     #[allow(clippy::collapsible_if)]
@@ -743,14 +789,16 @@ fn test_snippet_completion() {
 
     // Check if it's a snippet kind (15) or keyword kind (14)
     if let Some(kind) = sub_item.get("kind") {
-        let kind_num = kind.as_i64().unwrap_or(0);
+        let kind_num = kind.as_i64().ok_or("Invalid kind field")?;
         assert!(kind_num == 14 || kind_num == 15, "Should be keyword or snippet kind");
     }
+
+    Ok(())
 }
 
 /// Test array and hash element access completion
 #[test]
-fn test_element_access_completion() {
+fn test_element_access_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -790,16 +838,25 @@ $arr"#
     let items = completion_items(&response);
 
     // Should suggest $array[...] for array element access
-    let labels: Vec<String> =
-        items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
+        .collect::<Result<_, _>>()?;
 
     // The provider might need enhancement to handle this case
     assert!(items.is_empty() || labels.iter().any(|l| l.contains("array")));
+
+    Ok(())
 }
 
 /// Test completion filtering and ranking
 #[test]
-fn test_completion_ranking() {
+fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -835,16 +892,26 @@ fn test_completion_ranking() {
     let items = completion_items(&response);
 
     // Special variables should appear first (they have sort_text starting with "0_")
-    let first_items: Vec<String> =
-        items.iter().take(5).map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let first_items: Vec<String> = items
+        .iter()
+        .take(5)
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
+        .collect::<Result<_, _>>()?;
 
     // Check that special variables are prioritized
     assert!(first_items.iter().any(|l| l == "$_" || l == "$$" || l == "$@"));
+
+    Ok(())
 }
 
 /// Test completion with incremental typing
 #[test]
-fn test_incremental_completion() {
+fn test_incremental_completion() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -885,7 +952,9 @@ $p"#
         }),
     );
 
-    let items1 = response1["result"]["items"].as_array().unwrap();
+    let items1 = response1["result"]["items"]
+        .as_array()
+        .ok_or("Expected items array in response")?;
     assert_eq!(items1.len(), 3, "Should have all three variables starting with 'p'");
 
     // Update document to narrow down
@@ -924,7 +993,9 @@ $pre"#
         }),
     );
 
-    let items2 = response2["result"]["items"].as_array().unwrap();
+    let items2 = response2["result"]["items"]
+        .as_array()
+        .ok_or("Expected items array in response")?;
     assert_eq!(items2.len(), 3, "Should still have all three");
 
     // Update to be more specific
@@ -963,13 +1034,24 @@ $prefi"#
         }),
     );
 
-    let items3 = response3["result"]["items"].as_array().unwrap();
+    let items3 = response3["result"]["items"]
+        .as_array()
+        .ok_or("Expected items array in response")?;
     assert_eq!(items3.len(), 2, "Should have only prefix and prefixed_var");
 
-    let labels3: Vec<String> =
-        items3.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+    let labels3: Vec<String> = items3
+        .iter()
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
+        .collect::<Result<_, _>>()?;
 
     assert!(labels3.contains(&"$prefix".to_string()));
     assert!(labels3.contains(&"$prefixed_var".to_string()));
     assert!(!labels3.contains(&"$preliminary".to_string()));
+
+    Ok(())
 }

@@ -48,7 +48,7 @@ fn send_initialized(server: &mut LspServer) {
 }
 
 #[test]
-fn test_did_change_watched_files_created() {
+fn test_did_change_watched_files_created() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 
     // Initialize the server first
@@ -74,11 +74,12 @@ fn test_did_change_watched_files_created() {
 
     // This is a notification, should return None
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), None);
+    assert_eq!(result?, None);
+    Ok(())
 }
 
 #[test]
-fn test_did_change_watched_files_changed() {
+fn test_did_change_watched_files_changed() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 
     // Initialize the server
@@ -115,11 +116,12 @@ fn test_did_change_watched_files_changed() {
 
     // This is a notification, should return None
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), None);
+    assert_eq!(result?, None);
+    Ok(())
 }
 
 #[test]
-fn test_did_change_watched_files_deleted() {
+fn test_did_change_watched_files_deleted() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 
     // Initialize the server
@@ -156,11 +158,12 @@ fn test_did_change_watched_files_deleted() {
 
     // This is a notification, should return None
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), None);
+    assert_eq!(result?, None);
+    Ok(())
 }
 
 #[test]
-fn test_did_change_watched_files_invalid_uri() {
+fn test_did_change_watched_files_invalid_uri() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 
     // Initialize the server
@@ -185,7 +188,8 @@ fn test_did_change_watched_files_invalid_uri() {
 
     // Should handle gracefully
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), None);
+    assert_eq!(result?, None);
+    Ok(())
 }
 
 #[test]
@@ -263,7 +267,7 @@ fn test_will_rename_files_missing_uri() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-fn test_did_delete_files() {
+fn test_did_delete_files() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 
     // Initialize the server
@@ -299,11 +303,12 @@ fn test_did_delete_files() {
 
     // This is a notification, should return None
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), None);
+    assert_eq!(result?, None);
+    Ok(())
 }
 
 #[test]
-fn test_did_delete_files_invalid_uri() {
+fn test_did_delete_files_invalid_uri() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 
     // Initialize the server
@@ -328,7 +333,8 @@ fn test_did_delete_files_invalid_uri() {
 
     // Should handle gracefully
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), None);
+    assert_eq!(result?, None);
+    Ok(())
 }
 
 #[test]

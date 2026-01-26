@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Workspace Resolution Regression Tests
 //!
 //! Validates the deterministic module resolution precedence order:
@@ -148,7 +147,7 @@ fn workspace_config_system_inc_disabled_by_default() {
 // =============================================================================
 
 #[test]
-fn initialize_with_workspace_folders() {
+fn initialize_with_workspace_folders() -> Result<(), Box<dyn std::error::Error>> {
     let (mut server, _buffer) = create_test_server();
 
     let result = send_request(
@@ -164,14 +163,14 @@ fn initialize_with_workspace_folders() {
         }),
     );
 
-    assert!(result.is_some());
-    let caps = result.unwrap();
+    let caps = result.ok_or("Expected initialize result")?;
     assert!(caps.get("capabilities").is_some());
     assert!(caps.get("serverInfo").is_some());
+    Ok(())
 }
 
 #[test]
-fn initialize_with_root_uri_fallback() {
+fn initialize_with_root_uri_fallback() -> Result<(), Box<dyn std::error::Error>> {
     let (mut server, _buffer) = create_test_server();
 
     let result = send_request(
@@ -184,13 +183,13 @@ fn initialize_with_root_uri_fallback() {
         }),
     );
 
-    assert!(result.is_some());
-    let caps = result.unwrap();
+    let caps = result.ok_or("Expected initialize result")?;
     assert!(caps.get("capabilities").is_some());
+    Ok(())
 }
 
 #[test]
-fn initialize_with_legacy_root_path_fallback() {
+fn initialize_with_legacy_root_path_fallback() -> Result<(), Box<dyn std::error::Error>> {
     let (mut server, _buffer) = create_test_server();
 
     // Legacy rootPath (deprecated since LSP 3.0 but still used by some clients)
@@ -204,13 +203,13 @@ fn initialize_with_legacy_root_path_fallback() {
         }),
     );
 
-    assert!(result.is_some());
-    let caps = result.unwrap();
+    let caps = result.ok_or("Expected initialize result")?;
     assert!(caps.get("capabilities").is_some());
+    Ok(())
 }
 
 #[test]
-fn initialize_windows_root_path_conversion() {
+fn initialize_windows_root_path_conversion() -> Result<(), Box<dyn std::error::Error>> {
     let (mut server, _buffer) = create_test_server();
 
     // Windows-style rootPath should be handled
@@ -224,11 +223,12 @@ fn initialize_windows_root_path_conversion() {
         }),
     );
 
-    assert!(result.is_some());
+    result.ok_or("Expected initialize result")?;
+    Ok(())
 }
 
 #[test]
-fn initialize_rejects_double_initialize() {
+fn initialize_rejects_double_initialize() -> Result<(), Box<dyn std::error::Error>> {
     let (mut server, _buffer) = create_test_server();
 
     // First initialize should succeed
@@ -241,7 +241,7 @@ fn initialize_rejects_double_initialize() {
             "capabilities": {}
         }),
     );
-    assert!(result1.is_some());
+    result1.ok_or("Expected first initialize to succeed")?;
 
     // Send initialized notification to complete handshake
     let req = JsonRpcRequest {
@@ -265,10 +265,10 @@ fn initialize_rejects_double_initialize() {
     let response = server.handle_request(req);
 
     // Should get an error response
-    assert!(response.is_some());
-    let resp = response.unwrap();
-    assert!(resp.error.is_some());
-    assert_eq!(resp.error.as_ref().unwrap().code, -32600); // InvalidRequest
+    let resp = response.ok_or("Expected error response")?;
+    let error = resp.error.as_ref().ok_or("Expected error field")?;
+    assert_eq!(error.code, -32600); // InvalidRequest
+    Ok(())
 }
 
 // =============================================================================
@@ -276,7 +276,7 @@ fn initialize_rejects_double_initialize() {
 // =============================================================================
 
 #[test]
-fn configuration_returns_workspace_include_paths() {
+fn configuration_returns_workspace_include_paths() -> Result<(), Box<dyn std::error::Error>> {
     let (mut server, _buffer) = create_test_server();
 
     // Initialize and mark ready
@@ -294,20 +294,20 @@ fn configuration_returns_workspace_include_paths() {
         }),
     );
 
-    assert!(result.is_some());
-    let items = result.unwrap();
-    let array = items.as_array().expect("Expected array");
+    let items = result.ok_or("Expected configuration result")?;
+    let array = items.as_array().ok_or("Expected array")?;
     assert_eq!(array.len(), 1);
 
     // Should return default include paths
-    let paths = array[0].as_array().expect("Expected paths array");
+    let paths = array[0].as_array().ok_or("Expected paths array")?;
     assert!(paths.contains(&json!("lib")));
     assert!(paths.contains(&json!(".")));
     assert!(paths.contains(&json!("local/lib/perl5")));
+    Ok(())
 }
 
 #[test]
-fn configuration_returns_system_inc_disabled() {
+fn configuration_returns_system_inc_disabled() -> Result<(), Box<dyn std::error::Error>> {
     let (mut server, _buffer) = create_test_server();
 
     // Initialize and mark ready
@@ -325,14 +325,14 @@ fn configuration_returns_system_inc_disabled() {
         }),
     );
 
-    assert!(result.is_some());
-    let items = result.unwrap();
-    let array = items.as_array().expect("Expected array");
+    let items = result.ok_or("Expected configuration result")?;
+    let array = items.as_array().ok_or("Expected array")?;
     assert_eq!(array[0], json!(false)); // Disabled by default
+    Ok(())
 }
 
 #[test]
-fn configuration_returns_resolution_timeout() {
+fn configuration_returns_resolution_timeout() -> Result<(), Box<dyn std::error::Error>> {
     let (mut server, _buffer) = create_test_server();
 
     // Initialize and mark ready
@@ -350,10 +350,10 @@ fn configuration_returns_resolution_timeout() {
         }),
     );
 
-    assert!(result.is_some());
-    let items = result.unwrap();
-    let array = items.as_array().expect("Expected array");
+    let items = result.ok_or("Expected configuration result")?;
+    let array = items.as_array().ok_or("Expected array")?;
     assert_eq!(array[0], json!(50)); // Default 50ms
+    Ok(())
 }
 
 // =============================================================================
@@ -361,7 +361,7 @@ fn configuration_returns_resolution_timeout() {
 // =============================================================================
 
 #[test]
-fn did_change_configuration_updates_workspace_settings() {
+fn did_change_configuration_updates_workspace_settings() -> Result<(), Box<dyn std::error::Error>> {
     let (mut server, _buffer) = create_test_server();
 
     // Initialize and mark ready
@@ -400,14 +400,14 @@ fn did_change_configuration_updates_workspace_settings() {
         }),
     );
 
-    assert!(result.is_some());
-    let items = result.unwrap();
-    let array = items.as_array().expect("Expected array");
-    let paths = array[0].as_array().expect("Expected paths array");
+    let items = result.ok_or("Expected configuration result")?;
+    let array = items.as_array().ok_or("Expected array")?;
+    let paths = array[0].as_array().ok_or("Expected paths array")?;
 
     // Should now have custom paths
     assert!(paths.contains(&json!("custom/lib")));
     assert!(paths.contains(&json!("vendor")));
+    Ok(())
 }
 
 // =============================================================================

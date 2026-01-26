@@ -1,11 +1,10 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 use lsp_types::DocumentDiagnosticReport;
 use perl_lsp::features::diagnostics::PullDiagnosticsProvider;
 
 #[test]
-fn pull_diagnostics_full_then_unchanged() {
+fn pull_diagnostics_full_then_unchanged() -> Result<(), Box<dyn std::error::Error>> {
     let provider = PullDiagnosticsProvider::new();
-    let uri = "file:///test.pl".parse().expect("valid uri");
+    let uri = "file:///test.pl".parse()?;
     let content = "my $x = ;";
 
     let first = provider.get_document_diagnostics(&uri, content, None);
@@ -17,10 +16,10 @@ fn pull_diagnostics_full_then_unchanged() {
                 report.items.iter().all(|item| item.source.as_deref() == Some("perl-lsp")),
                 "expected deterministic diagnostic source"
             );
-            report.result_id.clone().expect("result id")
+            report.result_id.clone().ok_or("result id missing")?
         }
         DocumentDiagnosticReport::Unchanged(_) => {
-            panic!("expected full diagnostics report for initial request");
+            return Err("expected full diagnostics report for initial request".into());
         }
     };
 
@@ -29,4 +28,6 @@ fn pull_diagnostics_full_then_unchanged() {
         matches!(second, DocumentDiagnosticReport::Unchanged(_)),
         "expected unchanged diagnostics report on identical content"
     );
+
+    Ok(())
 }

@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Golden fixture tests for LSP functionality
 //!
 //! These tests use fixture files to ensure consistent behavior across releases
@@ -14,10 +13,10 @@ use support::test_helpers::{
 use url::Url;
 
 /// Convert a path to a file:// URI string, cross-platform safe
-fn path_to_uri(path: &Path) -> String {
-    Url::from_file_path(path)
-        .unwrap_or_else(|_| panic!("file path to URI failed: {}", path.display()))
-        .to_string()
+fn path_to_uri(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(Url::from_file_path(path)
+        .map_err(|_| format!("file path to URI failed: {}", path.display()))?
+        .to_string())
 }
 
 /// Test context that manages the LSP server lifecycle
@@ -76,7 +75,7 @@ impl TestContext {
         cmd
     }
 
-    fn new() -> Self {
+    fn new() -> Result<Self, Box<dyn std::error::Error>> {
         // Start LSP server using optimized binary resolution
         let mut cmd = Self::find_perl_lsp_binary();
         let mut server = cmd
@@ -85,14 +84,19 @@ impl TestContext {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
             .spawn()
-            .expect("Failed to start LSP server");
+            .map_err(|e| format!("Failed to start LSP server: {}", e))?;
 
-        let reader = std::io::BufReader::new(server.stdout.take().unwrap());
-        let writer = server.stdin.take().unwrap();
+        let reader =
+            std::io::BufReader::new(server.stdout.take().ok_or("Failed to capture server stdout")?);
+        let writer = server.stdin.take().ok_or("Failed to capture server stdin")?;
 
         let mut ctx = TestContext { server, reader, writer };
 
         // Initialize with minimal capabilities for faster startup
+        let current_dir = std::env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {}", e))?;
+        let root_uri = path_to_uri(&current_dir)?;
+
         ctx.send_request(
             "initialize",
             Some(json!({
@@ -103,19 +107,23 @@ impl TestContext {
                         "completion": {}
                     }
                 },
-                "rootUri": path_to_uri(&std::env::current_dir().unwrap())
+                "rootUri": root_uri
             })),
-        );
+        )?;
 
-        ctx.send_notification("initialized", None);
+        ctx.send_notification("initialized", None)?;
 
         // Give minimal time for initialization
         std::thread::sleep(std::time::Duration::from_millis(50));
 
-        ctx
+        Ok(ctx)
     }
 
-    fn send_request(&mut self, method: &str, params: Option<Value>) -> Option<Value> {
+    fn send_request(
+        &mut self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, Box<dyn std::error::Error>> {
         use std::io::{BufRead, Read, Write};
 
         static mut REQUEST_ID: i32 = 1;
@@ -132,11 +140,14 @@ impl TestContext {
             "params": params.unwrap_or(json!({}))
         });
 
-        let content = serde_json::to_string(&request).unwrap();
+        let content = serde_json::to_string(&request)
+            .map_err(|e| format!("Failed to serialize request: {}", e))?;
         let message = format!("Content-Length: {}\r\n\r\n{}", content.len(), content);
 
-        self.writer.write_all(message.as_bytes()).unwrap();
-        self.writer.flush().unwrap();
+        self.writer
+            .write_all(message.as_bytes())
+            .map_err(|e| format!("Failed to write request: {}", e))?;
+        self.writer.flush().map_err(|e| format!("Failed to flush writer: {}", e))?;
 
         // Read response using proper LSP framing:
         // 1. Parse headers line-by-line until blank line
@@ -148,9 +159,12 @@ impl TestContext {
 
         loop {
             line.clear();
-            let bytes_read = self.reader.read_line(&mut line).ok()?;
+            let bytes_read = self
+                .reader
+                .read_line(&mut line)
+                .map_err(|e| format!("Failed to read response header: {}", e))?;
             if bytes_read == 0 {
-                return None; // EOF
+                return Ok(None); // EOF
             }
 
             let trimmed = line.trim();
@@ -168,15 +182,22 @@ impl TestContext {
         }
 
         // Now read exactly Content-Length bytes
-        let len = content_length?;
+        let len = content_length.ok_or("Missing Content-Length header")?;
         let mut buffer = vec![0u8; len];
-        self.reader.read_exact(&mut buffer).ok()?;
+        self.reader
+            .read_exact(&mut buffer)
+            .map_err(|e| format!("Failed to read response body: {}", e))?;
 
-        let response: Value = serde_json::from_slice(&buffer).ok()?;
-        response.get("result").cloned()
+        let response: Value = serde_json::from_slice(&buffer)
+            .map_err(|e| format!("Failed to parse response JSON: {}", e))?;
+        Ok(response.get("result").cloned())
     }
 
-    fn send_notification(&mut self, method: &str, params: Option<Value>) {
+    fn send_notification(
+        &mut self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         use std::io::Write;
 
         let notification = json!({
@@ -185,16 +206,23 @@ impl TestContext {
             "params": params.unwrap_or(json!({}))
         });
 
-        let content = serde_json::to_string(&notification).unwrap();
+        let content = serde_json::to_string(&notification)
+            .map_err(|e| format!("Failed to serialize notification: {}", e))?;
         let message = format!("Content-Length: {}\r\n\r\n{}", content.len(), content);
 
-        self.writer.write_all(message.as_bytes()).unwrap();
-        self.writer.flush().unwrap();
+        self.writer
+            .write_all(message.as_bytes())
+            .map_err(|e| format!("Failed to write notification: {}", e))?;
+        self.writer.flush().map_err(|e| format!("Failed to flush writer: {}", e))?;
+        Ok(())
     }
 
-    fn open_file(&mut self, path: &str) {
-        let content = fs::read_to_string(path).expect("Failed to read fixture file");
-        let uri = path_to_uri(&std::fs::canonicalize(path).unwrap());
+    fn open_file(&mut self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read fixture file {}: {}", path, e))?;
+        let canonical_path = std::fs::canonicalize(path)
+            .map_err(|e| format!("Failed to canonicalize path {}: {}", path, e))?;
+        let uri = path_to_uri(&canonical_path)?;
 
         self.send_notification(
             "textDocument/didOpen",
@@ -206,7 +234,8 @@ impl TestContext {
                     "text": content
                 }
             })),
-        );
+        )?;
+        Ok(())
     }
 }
 
@@ -219,19 +248,23 @@ impl Drop for TestContext {
 // ===================== Golden Tests =====================
 
 #[test]
-fn test_hover_golden() {
-    let mut ctx = TestContext::new();
+fn test_hover_golden() -> Result<(), Box<dyn std::error::Error>> {
+    let mut ctx = TestContext::new()?;
     let fixture = "tests/fixtures/hover_test.pl";
-    ctx.open_file(fixture);
+    ctx.open_file(fixture)?;
 
     // Test hover on custom function
+    let canonical_fixture = std::fs::canonicalize(fixture)
+        .map_err(|e| format!("Failed to canonicalize fixture path: {}", e))?;
+    let uri = path_to_uri(&canonical_fixture)?;
+
     let hover = ctx.send_request(
         "textDocument/hover",
         Some(json!({
-            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
+            "textDocument": { "uri": uri },
             "position": { "line": 10, "character": 15 }  // On 'calculate_sum'
         })),
-    );
+    )?;
 
     assert_hover_has_text(&hover);
 
@@ -256,19 +289,20 @@ fn test_hover_golden() {
     let hover_builtin = ctx.send_request(
         "textDocument/hover",
         Some(json!({
-            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
+            "textDocument": { "uri": path_to_uri(&canonical_fixture)? },
             "position": { "line": 16, "character": 20 }  // On 'join'
         })),
-    );
+    )?;
 
     assert_hover_has_text(&hover_builtin);
+    Ok(())
 }
 
 #[test]
-fn test_diagnostics_golden() {
-    let mut ctx = TestContext::new();
+fn test_diagnostics_golden() -> Result<(), Box<dyn std::error::Error>> {
+    let mut ctx = TestContext::new()?;
     let fixture = "tests/fixtures/diagnostics_test.pl";
-    ctx.open_file(fixture);
+    ctx.open_file(fixture)?;
 
     // Minimal wait for diagnostics
     std::thread::sleep(std::time::Duration::from_millis(20));
@@ -277,32 +311,41 @@ fn test_diagnostics_golden() {
     // For now, we'll test that the file opens without crashing
 
     // Test that we can still get hover despite errors
+    let canonical_fixture = std::fs::canonicalize(fixture)
+        .map_err(|e| format!("Failed to canonicalize fixture path: {}", e))?;
+    let uri = path_to_uri(&canonical_fixture)?;
+
     let hover = ctx.send_request(
         "textDocument/hover",
         Some(json!({
-            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
+            "textDocument": { "uri": uri },
             "position": { "line": 7, "character": 10 }  // On undefined_var
         })),
-    );
+    )?;
 
     // Should handle gracefully even with syntax errors
     assert!(hover.is_none(), "Should handle invalid code gracefully");
+    Ok(())
 }
 
 #[test]
-fn test_completion_golden() {
-    let mut ctx = TestContext::new();
+fn test_completion_golden() -> Result<(), Box<dyn std::error::Error>> {
+    let mut ctx = TestContext::new()?;
     let fixture = "tests/fixtures/completion_test.pl";
-    ctx.open_file(fixture);
+    ctx.open_file(fixture)?;
 
     // Test variable completion
+    let canonical_fixture = std::fs::canonicalize(fixture)
+        .map_err(|e| format!("Failed to canonicalize fixture path: {}", e))?;
+    let uri = path_to_uri(&canonical_fixture)?;
+
     let completion = ctx.send_request(
         "textDocument/completion",
         Some(json!({
-            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) },
+            "textDocument": { "uri": uri },
             "position": { "line": 31, "character": 14 }  // After '$us' in comment
         })),
-    );
+    )?;
 
     assert_completion_has_items(&completion);
 
@@ -327,21 +370,26 @@ fn test_completion_golden() {
         assert!(labels.iter().any(|l| l.contains("user_name")), "Should complete $user_name");
         assert!(labels.iter().any(|l| l.contains("user_age")), "Should complete $user_age");
     }
+    Ok(())
 }
 
 #[test]
-fn test_semantic_tokens_golden() {
-    let mut ctx = TestContext::new();
+fn test_semantic_tokens_golden() -> Result<(), Box<dyn std::error::Error>> {
+    let mut ctx = TestContext::new()?;
     let fixture = "tests/fixtures/semantic_test.pl";
-    ctx.open_file(fixture);
+    ctx.open_file(fixture)?;
 
     // Request semantic tokens
+    let canonical_fixture = std::fs::canonicalize(fixture)
+        .map_err(|e| format!("Failed to canonicalize fixture path: {}", e))?;
+    let uri = path_to_uri(&canonical_fixture)?;
+
     let tokens = ctx.send_request(
         "textDocument/semanticTokens/full",
         Some(json!({
-            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) }
+            "textDocument": { "uri": uri }
         })),
-    );
+    )?;
 
     if let Some(t) = tokens {
         let data = t.get("data").and_then(|d| d.as_array());
@@ -354,27 +402,32 @@ fn test_semantic_tokens_golden() {
             assert!(token_data.len() >= 5, "Should have at least one token");
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_folding_ranges_golden() {
-    let mut ctx = TestContext::new();
+fn test_folding_ranges_golden() -> Result<(), Box<dyn std::error::Error>> {
+    let mut ctx = TestContext::new()?;
     let fixture = "tests/fixtures/folding_test.pl";
-    ctx.open_file(fixture);
+    ctx.open_file(fixture)?;
 
     // Request folding ranges
+    let canonical_fixture = std::fs::canonicalize(fixture)
+        .map_err(|e| format!("Failed to canonicalize fixture path: {}", e))?;
+    let uri = path_to_uri(&canonical_fixture)?;
+
     let ranges = ctx.send_request(
         "textDocument/foldingRange",
         Some(json!({
-            "textDocument": { "uri": path_to_uri(&std::fs::canonicalize(fixture).unwrap()) }
+            "textDocument": { "uri": uri }
         })),
-    );
+    )?;
 
     if let Some(r) = ranges {
         assert_folding_ranges_valid(&Some(r.clone()));
 
         // Verify specific folds exist
-        let ranges_arr = r.as_array().expect("Folding ranges should be array");
+        let ranges_arr = r.as_array().ok_or("Folding ranges should be array")?;
 
         // Should have folds for subroutines (lines 11, 18) and control structures (line 28)
         let sub_folds = ranges_arr
@@ -387,13 +440,14 @@ fn test_folding_ranges_golden() {
 
         assert!(sub_folds > 0, "Should have folding ranges for subroutines");
     }
+    Ok(())
 }
 
 // ===================== Edit Loop Fuzzing =====================
 
 #[test]
-fn test_edit_loop_robustness() {
-    let mut ctx = TestContext::new();
+fn test_edit_loop_robustness() -> Result<(), Box<dyn std::error::Error>> {
+    let mut ctx = TestContext::new()?;
 
     // Create a test document with various Perl constructs
     let test_content = r#"#!/usr/bin/perl
@@ -412,7 +466,7 @@ sub test { print "hello" }
                 "text": test_content
             }
         })),
-    );
+    )?;
 
     // Simulate rapid edits around quotes and braces
     let edits = [
@@ -444,7 +498,7 @@ sub test { print "hello" }
                     "text": text
                 }]
             })),
-        );
+        )?;
 
         // Try to trigger operations on potentially invalid code
         let _ = ctx.send_request(
@@ -461,4 +515,5 @@ sub test { print "hello" }
 
     // If we got here without hanging, the test passes
     // Server survived rapid edit fuzzing
+    Ok(())
 }

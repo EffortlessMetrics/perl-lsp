@@ -17,6 +17,19 @@ use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
 const REGRESS_DIR: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/fuzz_quote_parser");
 
+/// Helper to create regex strategy safely without unwrap/expect in tests
+/// These regex patterns are compile-time constants and should always be valid
+fn regex_strategy(pattern: &str) -> proptest::strategy::BoxedStrategy<String> {
+    match prop::string::string_regex(pattern) {
+        Ok(strategy) => strategy.boxed(),
+        Err(_) => {
+            // Fallback to any string if regex is invalid
+            // This should never happen for our hardcoded patterns
+            any::<String>().boxed()
+        }
+    }
+}
+
 /// Property-based fuzz testing for regex parts extraction
 /// Tests stress conditions with random inputs to find crashes/panics
 #[test]
@@ -73,19 +86,19 @@ fn fuzz_extract_regex_parts_stress_test() {
             // Generate various input patterns that could trigger edge cases
             input in prop_oneof![
                 // Empty and minimal inputs
-                prop::string::string_regex("").unwrap(),
+                regex_strategy(""),
                 // Single characters that might cause boundary issues
-                prop::string::string_regex("[mqr/\\\\{}()\\[\\]<>|#!~]").unwrap(),
+                regex_strategy("[mqr/\\\\{}()\\[\\]<>|#!~]"),
                 // Short strings with potential regex prefixes
-                prop::string::string_regex("(m|qr|q|qq)?[/\\\\{}()\\[\\]<>|#!~][a-zA-Z0-9]*").unwrap(),
+                regex_strategy("(m|qr|q|qq)?[/\\\\{}()\\[\\]<>|#!~][a-zA-Z0-9]*"),
                 // Longer strings with nested delimiters
-                prop::string::string_regex("(m|qr)[/\\\\{}()\\[\\]<>|#!~][^/\\\\{}()\\[\\]<>|#!~]*[/\\\\{}()\\[\\]<>|#!~][imsxgaeludnrpcoRD]*").unwrap(),
+                regex_strategy("(m|qr)[/\\\\{}()\\[\\]<>|#!~][^/\\\\{}()\\[\\]<>|#!~]*[/\\\\{}()\\[\\]<>|#!~][imsxgaeludnrpcoRD]*"),
                 // Unicode strings that might cause UTF-8 boundary issues
-                prop::string::string_regex(".*[\\u{0080}-\\u{FFFF}].*").unwrap(),
+                regex_strategy(".*[\\u{0080}-\\u{FFFF}].*"),
                 // Malformed regex patterns
-                prop::string::string_regex("(m|qr)[^a-zA-Z0-9\\s]*").unwrap(),
+                regex_strategy("(m|qr)[^a-zA-Z0-9\\s]*"),
                 // Very long strings to test memory boundaries
-                prop::string::string_regex("[a-zA-Z0-9/\\\\{}()\\[\\]<>|#!~]{0,1000}").unwrap()
+                regex_strategy("[a-zA-Z0-9/\\\\{}()\\[\\]<>|#!~]{0,1000}")
             ]
         ) {
             test_regex_parts_no_panic(input)?;
@@ -160,14 +173,14 @@ fn fuzz_extract_substitution_parts_crash_detection() {
                 // Empty inputs
                 "",
                 // Minimal s operations
-                prop::string::string_regex("s").unwrap(),
+                regex_strategy("s"),
                 // Basic substitution patterns
-                prop::string::string_regex("s[/\\\\{}()\\[\\]<>|#!~][^/\\\\{}()\\[\\]<>|#!~]*[/\\\\{}()\\[\\]<>|#!~][^/\\\\{}()\\[\\]<>|#!~]*[/\\\\{}()\\[\\]<>|#!~]?[imsxgaeludnrpcoRD]*").unwrap(),
+                regex_strategy("s[/\\\\{}()\\[\\]<>|#!~][^/\\\\{}()\\[\\]<>|#!~]*[/\\\\{}()\\[\\]<>|#!~][^/\\\\{}()\\[\\]<>|#!~]*[/\\\\{}()\\[\\]<>|#!~]?[imsxgaeludnrpcoRD]*"),
                 // Unbalanced delimiters (potential crash triggers)
-                prop::string::string_regex("s[{(\\[].*").unwrap(),
-                prop::string::string_regex("s[})].*").unwrap(),
+                regex_strategy("s[{(\\[].*"),
+                regex_strategy("s[})].*"),
                 // Escape sequence stress testing
-                prop::string::string_regex("s/([^/\\\\]|\\\\.)*//[imsxg]*").unwrap(),
+                regex_strategy("s/([^/\\\\]|\\\\.)*//[imsxg]*"),
                 // Very deep nesting
                 "s[{(\\[]{0,50}.*[})]\\[]{0,50}",
                 // Unicode boundary stress
@@ -258,14 +271,14 @@ fn fuzz_extract_transliteration_ast_invariants() {
                 Just("tr".to_string()),
                 Just("y".to_string()),
                 // Basic transliteration patterns
-                prop::string::string_regex("(tr|y)[/\\\\{}()\\[\\]<>|#!~][a-zA-Z0-9]*[/\\\\{}()\\[\\]<>|#!~][a-zA-Z0-9]*[/\\\\{}()\\[\\]<>|#!~]?[cdsr]*").unwrap(),
+                regex_strategy("(tr|y)[/\\\\{}()\\[\\]<>|#!~][a-zA-Z0-9]*[/\\\\{}()\\[\\]<>|#!~][a-zA-Z0-9]*[/\\\\{}()\\[\\]<>|#!~]?[cdsr]*"),
                 // Character class patterns
                 Just("tr/[a-z]/[A-Z]/".to_string()),
                 Just("y/[0-9]/[a-j]/d".to_string()),
                 // Unicode character classes
                 Just("tr/[α-ω]/[Α-Ω]/".to_string()),
                 // Malformed patterns that might break parsing
-                prop::string::string_regex("(tr|y)[^a-zA-Z0-9\\s/\\\\]*").unwrap(),
+                regex_strategy("(tr|y)[^a-zA-Z0-9\\s/\\\\]*"),
                 // Edge case delimiters
                 Just("tr|||".to_string()),
                 Just("y###".to_string()),
@@ -383,15 +396,15 @@ fn fuzz_quote_parser_extreme_stress() {
         fn extreme_stress_fuzz(
             input in prop_oneof![
                 // Memory stress: very long strings
-                prop::string::string_regex("[a-zA-Z0-9/\\\\{}()\\[\\]<>|#!~]{500,2000}").unwrap(),
+                regex_strategy("[a-zA-Z0-9/\\\\{}()\\[\\]<>|#!~]{500,2000}"),
                 // Nested delimiter stress
-                prop::string::string_regex("s[{(\\[]+[^})]\\[]*[})]\\[]+[{(\\[]+[^})]\\[]*[})]\\[]+").unwrap(),
+                regex_strategy("s[{(\\[]+[^})]\\[]*[})]\\[]+[{(\\[]+[^})]\\[]*[})]\\[]+"),
                 // Escape sequence stress
-                prop::string::string_regex("s/(\\\\.){1,100}/(\\\\.){1,100}/").unwrap(),
+                regex_strategy("s/(\\\\.){1,100}/(\\\\.){1,100}/"),
                 // Unicode stress with mixed byte sequences
-                prop::string::string_regex(".*[\\u{0000}-\\u{FFFF}]{1,100}.*").unwrap(),
+                regex_strategy(".*[\\u{0000}-\\u{FFFF}]{1,100}.*"),
                 // Repeated pattern stress (potential infinite loop triggers)
-                prop::string::string_regex("(s//|m//|tr///|qr//){1,50}").unwrap(),
+                regex_strategy("(s//|m//|tr///|qr//){1,50}"),
                 // Binary-like data that might confuse parser
                 prop::collection::vec(any::<u8>(), 0..1000).prop_map(|bytes| {
                     String::from_utf8_lossy(&bytes).into_owned()
@@ -472,9 +485,9 @@ print "Done\n";
         fn incremental_integration_fuzz(
             input in prop_oneof![
                 // Valid-looking quote constructs
-                prop::string::string_regex("qr/[a-zA-Z0-9_.]+/[imsxg]*").unwrap(),
-                prop::string::string_regex("s/[a-zA-Z0-9_.]+/[a-zA-Z0-9_.]+/[imsxg]*").unwrap(),
-                prop::string::string_regex("tr/[a-zA-Z0-9]+/[a-zA-Z0-9]+/[cdsr]*").unwrap(),
+                regex_strategy("qr/[a-zA-Z0-9_.]+/[imsxg]*"),
+                regex_strategy("s/[a-zA-Z0-9_.]+/[a-zA-Z0-9_.]+/[imsxg]*"),
+                regex_strategy("tr/[a-zA-Z0-9]+/[a-zA-Z0-9]+/[cdsr]*"),
                 // Edge cases that might break integration
                 "m//", "s///", "tr///",
                 "qr{}", "s{}{}", "tr{}{}",

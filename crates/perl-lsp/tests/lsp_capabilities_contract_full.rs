@@ -6,7 +6,7 @@ use serde_json::json;
 
 #[test]
 #[cfg(not(feature = "lsp-ga-lock"))]
-fn full_capabilities_match_contract() {
+fn full_capabilities_match_contract() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -14,8 +14,8 @@ fn full_capabilities_match_contract() {
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
-    let res = srv.handle_request(init).unwrap();
-    let result = res.result.unwrap();
+    let res = srv.handle_request(init).ok_or("Failed to handle initialize request")?;
+    let result = res.result.ok_or("Response missing result field")?;
     let caps = &result["capabilities"];
 
     // Always-on capabilities
@@ -85,4 +85,6 @@ fn full_capabilities_match_contract() {
         !caps["executeCommandProvider"].is_null(),
         "executeCommandProvider must be advertised (implemented in v0.8.6)"
     );
+
+    Ok(())
 }

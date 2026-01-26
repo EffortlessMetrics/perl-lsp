@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Tests for $/cancelRequest notification
 //! Phase 1 Stabilization: Deterministic cancellation tests with stable harness
 
@@ -231,7 +230,7 @@ fn test_cancel_request_no_response() {
 
 /// PHASE 1 STABLE: Test deterministic cancellation with stable harness
 #[test]
-fn test_cancel_deterministic_stable() {
+fn test_cancel_deterministic_stable() -> Result<(), Box<dyn std::error::Error>> {
     // Use new stable harness for deterministic cancellation
     let mut harness = spawn_lsp();
 
@@ -241,7 +240,7 @@ fn test_cancel_deterministic_stable() {
 
     // Open a document
     let uri = "file:///test.pl";
-    harness.open(uri, "my $x = 42;\n").expect("Failed to open document");
+    harness.open(uri, "my $x = 42;\n")?;
 
     // Barrier to ensure document is indexed
     harness.barrier();
@@ -271,6 +270,8 @@ fn test_cancel_deterministic_stable() {
 
     // Clean shutdown
     shutdown_graceful(&mut harness);
+
+    Ok(())
 }
 
 /// Test cancelling multiple requests

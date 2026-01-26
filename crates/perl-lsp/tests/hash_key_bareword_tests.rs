@@ -8,13 +8,12 @@
 //! is not yet implemented. Tests are gated behind the `lsp-extras` feature.
 
 #![cfg(feature = "lsp-extras")]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use perl_lsp::features::diagnostics::DiagnosticsProvider;
 use perl_parser::Parser;
 
 #[test]
-fn test_hash_key_vs_variable_bareword() {
+fn test_hash_key_vs_variable_bareword() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 use strict;
 my %h = ();
@@ -23,7 +22,7 @@ print FOO;
 "#;
 
     let mut parser = Parser::new(source);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -31,12 +30,15 @@ print FOO;
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
 
     assert_eq!(bareword_errors.len(), 1);
-    assert!(bareword_errors[0].message.contains("FOO"));
-    assert!(!bareword_errors[0].message.contains("key"));
+    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    assert!(first_error.message.contains("FOO"));
+    assert!(!first_error.message.contains("key"));
+
+    Ok(())
 }
 
 #[test]
-fn test_hash_slice_bareword_keys() {
+fn test_hash_slice_bareword_keys() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 use strict;
 my %h = ();
@@ -45,7 +47,7 @@ print STDERR;
 "#;
 
     let mut parser = Parser::new(source);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -54,13 +56,16 @@ print STDERR;
 
     // Only STDERR should be flagged as a bareword, not key1 or key2
     assert_eq!(bareword_errors.len(), 1);
-    assert!(bareword_errors[0].message.contains("STDERR"));
-    assert!(!bareword_errors[0].message.contains("key1"));
-    assert!(!bareword_errors[0].message.contains("key2"));
+    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    assert!(first_error.message.contains("STDERR"));
+    assert!(!first_error.message.contains("key1"));
+    assert!(!first_error.message.contains("key2"));
+
+    Ok(())
 }
 
 #[test]
-fn test_hash_slice_with_variables() {
+fn test_hash_slice_with_variables() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 use strict;
 my %h = ();
@@ -70,7 +75,7 @@ my @values = @h{$k1, $k2};
 "#;
 
     let mut parser = Parser::new(source);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -83,10 +88,12 @@ my @values = @h{$k1, $k2};
     let undeclared_errors: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("undeclared-variable")).collect();
     assert_eq!(undeclared_errors.len(), 0);
+
+    Ok(())
 }
 
 #[test]
-fn test_hash_slice_mixed_elements() {
+fn test_hash_slice_mixed_elements() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 use strict;
 my %h = ();
@@ -96,7 +103,7 @@ print BAREWORD;
 "#;
 
     let mut parser = Parser::new(source);
-    let ast = parser.parse().expect("parse should succeed");
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -105,14 +112,17 @@ print BAREWORD;
 
     // Only BAREWORD after print should be flagged
     assert_eq!(bareword_errors.len(), 1);
-    assert!(bareword_errors[0].message.contains("BAREWORD"));
+    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    assert!(first_error.message.contains("BAREWORD"));
     // None of the hash slice elements should be flagged
-    assert!(!bareword_errors[0].message.contains("literal"));
-    assert!(!bareword_errors[0].message.contains("func"));
+    assert!(!first_error.message.contains("literal"));
+    assert!(!first_error.message.contains("func"));
+
+    Ok(())
 }
 
 #[test]
-fn test_nested_hash_slice_expressions() {
+fn test_nested_hash_slice_expressions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 use strict;
 my %h = ();
@@ -121,7 +131,7 @@ my @values = @h{ @arr };
 "#;
 
     let mut parser = Parser::new(source);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -129,10 +139,12 @@ my @values = @h{ @arr };
     let bareword_errors: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
     assert_eq!(bareword_errors.len(), 0);
+
+    Ok(())
 }
 
 #[test]
-fn test_hash_slice_with_function_calls() {
+fn test_hash_slice_with_function_calls() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 use strict;
 my %h = ();
@@ -141,7 +153,7 @@ my @values = @h{ get_keys() };
 "#;
 
     let mut parser = Parser::new(source);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -149,10 +161,12 @@ my @values = @h{ get_keys() };
     let bareword_errors: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
     assert_eq!(bareword_errors.len(), 0);
+
+    Ok(())
 }
 
 #[test]
-fn test_deeply_nested_hash_structures() {
+fn test_deeply_nested_hash_structures() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 use strict;
 my %h = ();
@@ -161,7 +175,7 @@ print INVALID;
 "#;
 
     let mut parser = Parser::new(source);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -170,14 +184,17 @@ print INVALID;
 
     // Only INVALID should be flagged, not the nested hash keys
     assert_eq!(bareword_errors.len(), 1);
-    assert!(bareword_errors[0].message.contains("INVALID"));
-    assert!(!bareword_errors[0].message.contains("level1"));
-    assert!(!bareword_errors[0].message.contains("level2"));
-    assert!(!bareword_errors[0].message.contains("level3"));
+    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    assert!(first_error.message.contains("INVALID"));
+    assert!(!first_error.message.contains("level1"));
+    assert!(!first_error.message.contains("level2"));
+    assert!(!first_error.message.contains("level3"));
+
+    Ok(())
 }
 
 #[test]
-fn test_complex_hash_literal_with_nested_keys() {
+fn test_complex_hash_literal_with_nested_keys() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 use strict;
 my %complex = (
@@ -191,7 +208,7 @@ print BAREWORD_WARNING;
 "#;
 
     let mut parser = Parser::new(source);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -200,16 +217,19 @@ print BAREWORD_WARNING;
 
     // Only BAREWORD_WARNING should be flagged - all hash keys should be ignored
     assert_eq!(bareword_errors.len(), 1);
-    assert!(bareword_errors[0].message.contains("BAREWORD_WARNING"));
+    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    assert!(first_error.message.contains("BAREWORD_WARNING"));
     // Verify none of the legitimate hash keys are flagged
-    assert!(!bareword_errors[0].message.contains("outer_key"));
-    assert!(!bareword_errors[0].message.contains("inner_key"));
-    assert!(!bareword_errors[0].message.contains("another_inner"));
-    assert!(!bareword_errors[0].message.contains("simple_key"));
+    assert!(!first_error.message.contains("outer_key"));
+    assert!(!first_error.message.contains("inner_key"));
+    assert!(!first_error.message.contains("another_inner"));
+    assert!(!first_error.message.contains("simple_key"));
+
+    Ok(())
 }
 
 #[test]
-fn test_hash_slice_with_mixed_quote_styles() {
+fn test_hash_slice_with_mixed_quote_styles() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 use strict;
 my %h = ();
@@ -218,7 +238,7 @@ print SHOULD_WARN;
 "#;
 
     let mut parser = Parser::new(source);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -227,22 +247,25 @@ print SHOULD_WARN;
 
     // Only SHOULD_WARN should trigger an error
     assert_eq!(bareword_errors.len(), 1);
-    assert!(bareword_errors[0].message.contains("SHOULD_WARN"));
+    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    assert!(first_error.message.contains("SHOULD_WARN"));
+
+    Ok(())
 }
 
 #[test]
-fn test_hash_slice_performance_edge_case() {
+fn test_hash_slice_performance_edge_case() -> Result<(), Box<dyn std::error::Error>> {
     // Test the MAX_TRAVERSAL_DEPTH safety limit in deeply nested structures
     let source = r#"
 use strict;
 my %h = ();
 # Create a deeply nested structure that would test the traversal depth limit
-my $deep = $h{a}{b}{c}{d}{e}{f}{g}{h}{i}{j}{k}; 
+my $deep = $h{a}{b}{c}{d}{e}{f}{g}{h}{i}{j}{k};
 print NORMAL_BAREWORD;
 "#;
 
     let mut parser = Parser::new(source);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -251,11 +274,14 @@ print NORMAL_BAREWORD;
 
     // Should still detect legitimate barewords even with deep nesting
     assert_eq!(bareword_errors.len(), 1);
-    assert!(bareword_errors[0].message.contains("NORMAL_BAREWORD"));
+    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    assert!(first_error.message.contains("NORMAL_BAREWORD"));
+
+    Ok(())
 }
 
 #[test]
-fn test_hash_keys_in_different_contexts() {
+fn test_hash_keys_in_different_contexts() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 use strict;
 my %hash = (contextual_key => 'value');
@@ -272,7 +298,7 @@ delete $hash{delete_key};
 "#;
 
     let mut parser = Parser::new(source);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -281,5 +307,8 @@ delete $hash{delete_key};
 
     // Only ACTUAL_BAREWORD should be flagged
     assert_eq!(bareword_errors.len(), 1);
-    assert!(bareword_errors[0].message.contains("ACTUAL_BAREWORD"));
+    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    assert!(first_error.message.contains("ACTUAL_BAREWORD"));
+
+    Ok(())
 }

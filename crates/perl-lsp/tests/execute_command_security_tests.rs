@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Security regression tests for executeCommand.
 //!
 //! These tests verify that command injection vulnerabilities in run_test_sub,
@@ -9,6 +8,7 @@
 
 use perl_lsp::execute_command::ExecuteCommandProvider;
 use serde_json::Value;
+use std::error::Error;
 use std::fs;
 use tempfile::TempDir;
 
@@ -21,7 +21,7 @@ use tempfile::TempDir;
 /// With secure path resolution, non-existent files are rejected before execution.
 /// The key security property is that the malicious code never reaches Perl.
 #[test]
-fn test_run_test_sub_file_path_injection() {
+fn test_run_test_sub_file_path_injection() -> Result<(), Box<dyn Error>> {
     let provider = ExecuteCommandProvider::new();
 
     // Payload that would inject code if string interpolation is used
@@ -35,7 +35,7 @@ fn test_run_test_sub_file_path_injection() {
     // With secure path resolution, non-existent files are rejected early
     // BEFORE any shell command or Perl code is executed
     assert!(result.is_err(), "Malicious path should be rejected during path resolution");
-    let err = result.unwrap_err();
+    let err = result.err().ok_or("Expected error but got Ok")?;
 
     // The error should be about path resolution (file not found/canonicalize failure)
     // NOT about Perl code execution or subroutine lookup
@@ -48,6 +48,7 @@ fn test_run_test_sub_file_path_injection() {
     // The path may be echoed in the error (this is fine - it's just a filename),
     // but the key is that no Perl code was executed with this malicious string.
     // The secure path resolution catches it at the Rust layer.
+    Ok(())
 }
 
 /// Test that run_test_sub is protected against code injection via sub_name.
@@ -57,7 +58,7 @@ fn test_run_test_sub_file_path_injection() {
 /// message will contain the literal name (safe behavior), but the injected
 /// code will NOT be executed.
 #[test]
-fn test_run_test_sub_subname_injection() {
+fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
     let provider = ExecuteCommandProvider::new();
 
     // Create a minimal test file with a marker subroutine
@@ -77,8 +78,8 @@ fn test_run_test_sub_subname_injection() {
     std::fs::remove_file(test_file).ok();
 
     assert!(result.is_ok(), "Command should not fail to spawn");
-    let val = result.unwrap();
-    let output = val["output"].as_str().unwrap_or("");
+    let val = result?;
+    let output = val["output"].as_str().ok_or("Missing 'output' field")?;
 
     // Key assertions:
     // 1. The injected print statement should NOT have executed
@@ -97,8 +98,9 @@ fn test_run_test_sub_subname_injection() {
     );
 
     // 3. The command should have failed because no subroutine with that literal name exists
-    let success = val["success"].as_bool().unwrap_or(true);
+    let success = val["success"].as_bool().ok_or("Missing 'success' field")?;
     assert!(!success, "Command should have failed (subroutine not found)");
+    Ok(())
 }
 
 /// Test that run_file is protected against argument injection via file_path.
@@ -106,7 +108,7 @@ fn test_run_test_sub_subname_injection() {
 /// A file path starting with `-` could be interpreted as a flag without `--`.
 /// With secure path resolution, non-existent files are rejected before execution.
 #[test]
-fn test_run_file_argument_injection() {
+fn test_run_file_argument_injection() -> Result<(), Box<dyn Error>> {
     let provider = ExecuteCommandProvider::new();
 
     // Payload that would be interpreted as a flag without `--` separator
@@ -118,7 +120,7 @@ fn test_run_file_argument_injection() {
 
     // With secure path resolution, non-existent files are rejected early
     assert!(result.is_err(), "Malicious path '-e' should be rejected during path resolution");
-    let err = result.unwrap_err();
+    let err = result.err().ok_or("Expected error but got Ok")?;
 
     // The error should be about path validation
     assert!(
@@ -126,12 +128,13 @@ fn test_run_file_argument_injection() {
         "Error should be about path validation: {}",
         err
     );
+    Ok(())
 }
 
 /// Test that run_tests is protected against argument injection via file_path.
 /// With secure path resolution, non-existent files are rejected before execution.
 #[test]
-fn test_run_tests_argument_injection() {
+fn test_run_tests_argument_injection() -> Result<(), Box<dyn Error>> {
     let provider = ExecuteCommandProvider::new();
 
     // Similar test for run_tests
@@ -142,7 +145,7 @@ fn test_run_tests_argument_injection() {
 
     // With secure path resolution, non-existent files are rejected early
     assert!(result.is_err(), "Malicious path '-e' should be rejected during path resolution");
-    let err = result.unwrap_err();
+    let err = result.err().ok_or("Expected error but got Ok")?;
 
     // The error should be about path validation
     assert!(
@@ -150,6 +153,7 @@ fn test_run_tests_argument_injection() {
         "Error should be about path validation: {}",
         err
     );
+    Ok(())
 }
 
 /// Test that file paths with shell metacharacters are safely rejected.
@@ -157,7 +161,7 @@ fn test_run_tests_argument_injection() {
 /// With secure path resolution, files that don't exist are rejected before
 /// any shell command is executed, preventing shell metacharacter expansion.
 #[test]
-fn test_shell_metacharacter_safety() {
+fn test_shell_metacharacter_safety() -> Result<(), Box<dyn Error>> {
     let provider = ExecuteCommandProvider::new();
 
     // File paths with shell metacharacters that could cause issues
@@ -177,7 +181,7 @@ fn test_shell_metacharacter_safety() {
 
         // Non-existent paths should be rejected during path resolution
         assert!(result.is_err(), "Non-existent path should be rejected: {}", path);
-        let err = result.unwrap_err();
+        let err = result.err().ok_or("Expected error but got Ok")?;
 
         // Error should be about path validation, not shell execution
         assert!(
@@ -187,14 +191,15 @@ fn test_shell_metacharacter_safety() {
             err
         );
     }
+    Ok(())
 }
 
 /// Test that valid files with safe paths execute correctly.
 #[test]
-fn test_valid_file_execution() {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+fn test_valid_file_execution() -> Result<(), Box<dyn Error>> {
+    let temp_dir = TempDir::new()?;
     let file_path = temp_dir.path().join("test_valid.pl");
-    fs::write(&file_path, "print 'VALID_OUTPUT';").expect("Failed to write test file");
+    fs::write(&file_path, "print 'VALID_OUTPUT';")?;
 
     let provider = ExecuteCommandProvider::new();
 
@@ -204,8 +209,9 @@ fn test_valid_file_execution() {
     );
 
     assert!(result.is_ok(), "Valid file should execute successfully");
-    let val = result.unwrap();
-    let output = val["output"].as_str().unwrap_or("");
+    let val = result?;
+    let output = val["output"].as_str().ok_or("Missing 'output' field")?;
 
     assert!(output.contains("VALID_OUTPUT"), "Output should contain expected result: {}", output);
+    Ok(())
 }

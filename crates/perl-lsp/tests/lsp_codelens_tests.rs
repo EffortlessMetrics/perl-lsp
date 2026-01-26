@@ -5,7 +5,7 @@ use support::lsp_harness::LspHarness;
 
 #[test]
 
-fn test_shows_codelens_on_sub() {
+fn test_shows_codelens_on_sub() -> Result<(), Box<dyn std::error::Error>> {
     let doc = r#"
 sub add {
     my ($x, $y) = @_;
@@ -15,8 +15,8 @@ sub add {
 my $z = add(1, 2);
 "#;
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///test.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
     let uri = "file:///test.pl";
 
     let result = harness
@@ -44,11 +44,13 @@ my $z = add(1, 2);
 
         assert!(has_ref_lens, "Should have a reference code lens");
     }
+
+    Ok(())
 }
 
 #[test]
 
-fn test_test_subroutine_gets_run_lens() {
+fn test_test_subroutine_gets_run_lens() -> Result<(), Box<dyn std::error::Error>> {
     let doc = r#"
 sub test_addition {
     my $result = add(2, 3);
@@ -61,8 +63,8 @@ sub add {
 }
 "#;
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///test.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
     let uri = "file:///test.pl";
 
     let result = harness
@@ -86,11 +88,13 @@ sub add {
 
         assert!(has_run_test, "Test subroutine should have a 'Run Test' code lens");
     }
+
+    Ok(())
 }
 
 #[test]
 
-fn test_package_gets_references_lens() {
+fn test_package_gets_references_lens() -> Result<(), Box<dyn std::error::Error>> {
     let doc = r#"
 package MyModule;
 
@@ -102,8 +106,8 @@ sub new {
 1;
 "#;
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///test.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
     let uri = "file:///test.pl";
 
     let result = harness
@@ -119,11 +123,13 @@ sub new {
         // Should have lenses for both package and sub
         assert!(lenses.len() >= 2, "Should have code lenses for package and subroutine");
     }
+
+    Ok(())
 }
 
 #[test]
 
-fn test_codelens_resolve() {
+fn test_codelens_resolve() -> Result<(), Box<dyn std::error::Error>> {
     let doc = r#"
 sub helper {
     return 42;
@@ -133,8 +139,8 @@ my $x = helper();
 my $y = helper();
 "#;
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///test.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
     let uri = "file:///test.pl";
 
     // First get the code lenses
@@ -163,4 +169,6 @@ my $y = helper();
             }
         }
     }
+
+    Ok(())
 }

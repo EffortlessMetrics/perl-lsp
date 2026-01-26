@@ -23,7 +23,7 @@ mod utf16_round_trip_tests {
     }
 
     #[test]
-    fn test_crlf_round_trip() {
+    fn test_crlf_round_trip() -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let text = "my $x = 1;\r\n$x++;\r\nprint $x;";
 
@@ -47,10 +47,12 @@ mod utf16_round_trip_tests {
         let (rt_line, rt_char) = server.offset_to_position(text, clamped_offset);
         assert_eq!(rt_line, 0, "Should stay on first line");
         assert_eq!(rt_char, 10, "Should clamp to before \\r");
+
+        Ok(())
     }
 
     #[test]
-    fn test_emoji_round_trip() {
+    fn test_emoji_round_trip() -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let text = "my $x = \"🐍\";\n";
 
@@ -85,10 +87,12 @@ mod utf16_round_trip_tests {
 
         let (line2, char2) = server.offset_to_position(text_just_emoji, after_offset);
         assert_eq!((line2, char2), (0, 2), "After emoji round-trips correctly");
+
+        Ok(())
     }
 
     #[test]
-    fn test_pi_symbol_round_trip() {
+    fn test_pi_symbol_round_trip() -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let text = "my $π = 3.14159;\n$π++;\n";
 
@@ -105,10 +109,12 @@ mod utf16_round_trip_tests {
         let offset_before = server.position_to_offset(text, 0, 3);
         let offset_after = server.position_to_offset(text, 0, 4);
         assert_eq!(offset_after - offset_before, 2, "π is 2 bytes (UTF-8)");
+
+        Ok(())
     }
 
     #[test]
-    fn test_mixed_unicode_round_trip() {
+    fn test_mixed_unicode_round_trip() -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let text = "my $café = \"☕\";\r\nmy $Σ = 100;\r\n";
 
@@ -135,10 +141,12 @@ mod utf16_round_trip_tests {
                 }
             }
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_edge_positions() {
+    fn test_edge_positions() -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
 
         // Empty string
@@ -156,10 +164,12 @@ mod utf16_round_trip_tests {
         // Position on non-existent line (should clamp)
         let offset = server.position_to_offset(text, 10, 0);
         assert_eq!(offset, 5, "Clamped to end of text");
+
+        Ok(())
     }
 
     #[test]
-    fn test_complex_emoji_sequences() {
+    fn test_complex_emoji_sequences() -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
 
         // Test with emoji combinations and zero-width joiners
@@ -170,14 +180,16 @@ mod utf16_round_trip_tests {
 
         // Position after the complex emoji (it's many UTF-16 units)
         let _offset_start = server.position_to_offset(text, 0, 0);
-        let offset_after_emoji = text.find(" family").unwrap();
+        let offset_after_emoji = text.find(" family").ok_or("Could not find ' family' in text")?;
         let (line, char) = server.offset_to_position(text, offset_after_emoji);
         assert_eq!(line, 0, "Still on first line");
         assert!(char > 0, "Character position advanced past emoji");
 
         // Test round-trip at "family" text
-        let family_start = text.find("family").unwrap();
+        let family_start = text.find("family").ok_or("Could not find 'family' in text")?;
         let (line, char) = server.offset_to_position(text, family_start);
         assert!(test_round_trip(&server, text, line, char), "At 'family' text");
+
+        Ok(())
     }
 }

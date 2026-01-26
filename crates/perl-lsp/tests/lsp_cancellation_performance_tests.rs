@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive LSP Cancellation Performance Validation Test Suite
 //! Tests AC12: Quantitative performance requirements for enhanced cancellation system
 //!
@@ -191,17 +190,25 @@ impl MetricsCollector {
         }
     }
 
-    fn get_statistics(&self) -> PerformanceStatistics {
-        let latencies = self.latency_measurements.lock().unwrap().clone();
-        let memory_samples = self.memory_measurements.lock().unwrap().clone();
+    fn get_statistics(&self) -> Result<PerformanceStatistics, Box<dyn std::error::Error>> {
+        let latencies = self
+            .latency_measurements
+            .lock()
+            .map_err(|e| format!("Failed to lock latency measurements: {}", e))?
+            .clone();
+        let memory_samples = self
+            .memory_measurements
+            .lock()
+            .map_err(|e| format!("Failed to lock memory measurements: {}", e))?
+            .clone();
         let total_operations = self.operation_counts.load(Ordering::Relaxed);
 
-        PerformanceStatistics::calculate(
+        Ok(PerformanceStatistics::calculate(
             latencies,
             memory_samples,
             total_operations,
             self.start_time.elapsed(),
-        )
+        ))
     }
 }
 
@@ -378,7 +385,7 @@ fn estimate_memory_usage() -> usize {
 /// Tests feature spec: LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md#micro-benchmark-requirements
 /// AC:12 - Cancellation check latency validation with statistical analysis
 #[test]
-fn test_cancellation_check_latency_performance_ac12() {
+fn test_cancellation_check_latency_performance_ac12() -> Result<(), Box<dyn std::error::Error>> {
     // AC:12 - Cancellation check latency validation with statistical analysis
     let token = Arc::new(PerlLspCancellationToken::new(
         json!("latency_performance_test"),
@@ -455,12 +462,14 @@ fn test_cancellation_check_latency_performance_ac12() {
         "Performance regression detected: 99th percentile {}μs > 100μs requirement",
         p99.as_micros()
     );
+
+    Ok(())
 }
 
 /// Tests feature spec: LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md#threading-scenarios
 /// AC:12 - Cancellation check performance under thread contention
 #[test]
-fn test_cancellation_check_threading_performance_ac12() {
+fn test_cancellation_check_threading_performance_ac12() -> Result<(), Box<dyn std::error::Error>> {
     // Test cancellation performance under various threading scenarios
     let threading_scenarios = vec![
         ThreadingScenario::SingleThread,
@@ -506,7 +515,9 @@ fn test_cancellation_check_threading_performance_ac12() {
         // Collect results from all threads
         let mut all_measurements = Vec::new();
         for handle in handles {
-            let result = handle.join().expect("Thread should complete successfully");
+            let result = handle
+                .join()
+                .map_err(|e| format!("Thread failed to complete: {:?}", e))?;
             all_measurements.extend(result.measurements);
         }
 
@@ -549,6 +560,8 @@ fn test_cancellation_check_threading_performance_ac12() {
 
     // Placeholder for threading performance validation
     assert!(thread_count >= 1, "Should have at least 1 thread available");
+
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -586,7 +599,7 @@ impl ThreadingScenario {
 /// Tests feature spec: LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md#macro-benchmark-requirements
 /// AC:12 - End-to-end cancellation response time validation across all LSP providers
 #[test]
-fn test_end_to_end_cancellation_response_time_ac12() {
+fn test_end_to_end_cancellation_response_time_ac12() -> Result<(), Box<dyn std::error::Error>> {
     let mut fixture = PerformanceTestFixture::new();
 
     let provider_scenarios = vec![
@@ -754,6 +767,8 @@ fn test_end_to_end_cancellation_response_time_ac12() {
             println!("  {} provider average: {}ms", provider, provider_avg.as_millis());
         }
     }
+
+    Ok(())
 }
 
 // ============================================================================
@@ -763,7 +778,7 @@ fn test_end_to_end_cancellation_response_time_ac12() {
 /// Tests feature spec: LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md#memory-performance-specification
 /// AC:12 - Memory overhead validation for complete cancellation infrastructure
 #[test]
-fn test_memory_overhead_validation_ac12() {
+fn test_memory_overhead_validation_ac12() -> Result<(), Box<dyn std::error::Error>> {
     let baseline_memory = estimate_memory_usage();
 
     // Initialize cancellation infrastructure
@@ -796,11 +811,11 @@ fn test_memory_overhead_validation_ac12() {
         };
 
         let token = PerlLspCancellationToken::new(json!(i), provider_type.to_string());
-        registry.register_token(token.clone()).expect("Failed to register token");
+        registry.register_token(token.clone())?;
 
         if let Some(p) = params {
             let context = ProviderCleanupContext::new(provider_type.to_string(), Some(p));
-            registry.register_cleanup(&json!(i), context).expect("Failed to register cleanup");
+            registry.register_cleanup(&json!(i), context)?;
         }
 
         tokens.push(token);
@@ -874,6 +889,8 @@ fn test_memory_overhead_validation_ac12() {
     println!("  Total tokens overhead: {} KB", tokens_overhead / 1024);
     println!("  Memory after cleanup: {} KB", memory_after_cleanup / 1024);
     println!("  Potential leak: {} KB", potential_leak / 1024);
+
+    Ok(())
 }
 
 /// Force garbage collection for more accurate memory measurements
@@ -891,7 +908,7 @@ fn force_garbage_collection() {
 /// Tests feature spec: LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md#incremental-parsing-preservation
 /// AC:12 - Incremental parsing performance preservation with cancellation support
 #[test]
-fn test_incremental_parsing_performance_preservation_ac12() {
+fn test_incremental_parsing_performance_preservation_ac12() -> Result<(), Box<dyn std::error::Error>> {
     // Enhanced constraint checking for performance cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
     let thread_count =
@@ -907,7 +924,7 @@ fn test_incremental_parsing_performance_preservation_ac12() {
         eprintln!(
             "Run with: RUST_TEST_THREADS=1 cargo test test_incremental_parsing_performance_preservation_ac12"
         );
-        return;
+        return Ok(());
     }
 
     // Skip in CI environments where LSP infrastructure may be unstable
@@ -916,7 +933,7 @@ fn test_incremental_parsing_performance_preservation_ac12() {
         || std::env::var("CONTINUOUS_INTEGRATION").is_ok()
     {
         eprintln!("Skipping performance cancellation test in CI environment for stability");
-        return;
+        return Ok(());
     }
 
     let _content = generate_large_perl_content(5000); // 5K lines for realistic testing
@@ -1046,6 +1063,8 @@ fn test_incremental_parsing_performance_preservation_ac12() {
         cancellation_p95.as_micros()
     );
     println!("  Overhead: {}μs ({:.2}%)", overhead.as_micros(), overhead_percentage);
+
+    Ok(())
 }
 
 /// Generate large Perl content for performance testing
@@ -1119,18 +1138,20 @@ impl Position {
 impl Drop for PerformanceTestFixture {
     fn drop(&mut self) {
         // Generate final performance report
-        let stats = self.metrics_collector.get_statistics();
+        if let Ok(stats) = self.metrics_collector.get_statistics() {
+            println!("\nFinal Performance Test Summary:");
+            println!("  Total operations: {}", stats.total_operations);
+            println!("  Test duration: {:.2}s", stats.test_duration.as_secs_f64());
+            println!("  Throughput: {:.1} ops/sec", stats.throughput);
 
-        println!("\nFinal Performance Test Summary:");
-        println!("  Total operations: {}", stats.total_operations);
-        println!("  Test duration: {:.2}s", stats.test_duration.as_secs_f64());
-        println!("  Throughput: {:.1} ops/sec", stats.throughput);
-
-        if stats.latency_stats.sample_count > 0 {
-            println!("  Latency stats:");
-            println!("    Average: {}μs", stats.latency_stats.average.as_micros());
-            println!("    95th percentile: {}μs", stats.latency_stats.p95.as_micros());
-            println!("    99th percentile: {}μs", stats.latency_stats.p99.as_micros());
+            if stats.latency_stats.sample_count > 0 {
+                println!("  Latency stats:");
+                println!("    Average: {}μs", stats.latency_stats.average.as_micros());
+                println!("    95th percentile: {}μs", stats.latency_stats.p95.as_micros());
+                println!("    99th percentile: {}μs", stats.latency_stats.p99.as_micros());
+            }
+        } else {
+            eprintln!("Warning: Failed to collect performance statistics");
         }
 
         // Graceful server shutdown

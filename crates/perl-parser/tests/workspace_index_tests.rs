@@ -3,8 +3,6 @@
 //! This test suite demonstrates that the WorkspaceIndex can successfully:
 //! 1. Index symbols from multiple files
 //! 2. Find symbols across file boundaries
-
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! 3. Track dependencies between files
 //! 4. Find unused symbols across the workspace
 
@@ -12,7 +10,7 @@ use perl_parser::workspace_index::{SymbolKind, WorkspaceIndex};
 // ReferenceKind is not exported, we'll check Location fields instead
 
 #[test]
-fn test_cross_file_symbol_resolution() {
+fn test_cross_file_symbol_resolution() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // File 1: lib/Foo.pm - defines a package and subroutine
@@ -42,12 +40,8 @@ print $result;
 "#;
 
     // Index both files
-    index
-        .index_file(url::Url::parse(file1_uri).unwrap(), file1_content.to_string())
-        .expect("Failed to index file1");
-    index
-        .index_file(url::Url::parse(file2_uri).unwrap(), file2_content.to_string())
-        .expect("Failed to index file2");
+    index.index_file(url::Url::parse(file1_uri)?, file1_content.to_string())?;
+    index.index_file(url::Url::parse(file2_uri)?, file2_content.to_string())?;
 
     // Test 1: Find the 'bar' subroutine
     let bar_symbols = index.find_symbols("bar");
@@ -95,10 +89,12 @@ print $result;
         member_names.contains(&&"unused_func".to_string()),
         "Should find 'unused_func' in Foo package"
     );
+
+    Ok(())
 }
 
 #[test]
-fn test_workspace_index_file_updates() {
+fn test_workspace_index_file_updates() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let file_uri = "file:///workspace/test.pl";
 
@@ -109,9 +105,7 @@ sub old_function {
 }
 "#;
 
-    index
-        .index_file(url::Url::parse(file_uri).unwrap(), content_v1.to_string())
-        .expect("Failed to index v1");
+    index.index_file(url::Url::parse(file_uri)?, content_v1.to_string())?;
 
     let old_func = index.find_symbols("old_function");
     assert_eq!(old_func.len(), 1, "Should find old_function");
@@ -123,19 +117,19 @@ sub new_function {
 }
 "#;
 
-    index
-        .index_file(url::Url::parse(file_uri).unwrap(), content_v2.to_string())
-        .expect("Failed to index v2");
+    index.index_file(url::Url::parse(file_uri)?, content_v2.to_string())?;
 
     let old_func = index.find_symbols("old_function");
     assert_eq!(old_func.len(), 0, "Should not find old_function after update");
 
     let new_func = index.find_symbols("new_function");
     assert_eq!(new_func.len(), 1, "Should find new_function after update");
+
+    Ok(())
 }
 
 #[test]
-fn test_workspace_index_clear_file() {
+fn test_workspace_index_clear_file() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let file_uri = "file:///workspace/temp.pl";
 
@@ -144,9 +138,7 @@ package TempPackage;
 sub temp_sub { }
 "#;
 
-    index
-        .index_file(url::Url::parse(file_uri).unwrap(), content.to_string())
-        .expect("Failed to index");
+    index.index_file(url::Url::parse(file_uri)?, content.to_string())?;
 
     let symbols = index.find_symbols("TempPackage");
     let packages: Vec<_> = symbols.iter().filter(|s| s.kind == SymbolKind::Package).collect();
@@ -157,10 +149,12 @@ sub temp_sub { }
 
     let symbols = index.find_symbols("TempPackage");
     assert_eq!(symbols.len(), 0, "Should not find TempPackage after clearing");
+
+    Ok(())
 }
 
 #[test]
-fn test_variable_indexing() {
+fn test_variable_indexing() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let file_uri = "file:///workspace/vars.pl";
 
@@ -171,9 +165,7 @@ my %hash = (key => 'value');
 my ($x, $y, $z) = (1, 2, 3);
 "#;
 
-    index
-        .index_file(url::Url::parse(file_uri).unwrap(), content.to_string())
-        .expect("Failed to index");
+    index.index_file(url::Url::parse(file_uri)?, content.to_string())?;
 
     let scalar = index.find_symbols("$scalar");
     assert_eq!(scalar.len(), 1, "Should find $scalar");
@@ -187,4 +179,6 @@ my ($x, $y, $z) = (1, 2, 3);
 
     let x = index.find_symbols("$x");
     assert_eq!(x.len(), 1, "Should find $x from list declaration");
+
+    Ok(())
 }
