@@ -4,7 +4,7 @@
 //! incremental updates and UTF-16 position mapping.
 
 use perl_parser::declaration::ParentMap;
-use perl_parser::positions::LineStartsCache;
+use perl_parser::position::LineStartsCache;
 use std::borrow::Cow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};

@@ -14,7 +14,7 @@
 //!
 //! # Usage Examples
 //!
-//! ```rust
+//! ```ignore
 //! use perl_parser::error_classifier::{ErrorClassifier, ParseErrorKind};
 //! use perl_parser::{Parser, ast::Node};
 //!
@@ -29,7 +29,7 @@
 //! // let suggestion = classifier.get_suggestion(&error_kind);
 //! ```
 
-use crate::ast::Node;
+use perl_ast::Node;
 
 /// Specific types of parse errors found in Perl script content
 ///
@@ -338,28 +338,27 @@ impl ErrorClassifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{NodeKind, Parser, SourceLocation};
+    use perl_ast::{Node, NodeKind, SourceLocation};
 
     #[test]
     fn test_classify_unclosed_string() {
         let classifier = ErrorClassifier::new();
         let source = r#"my $x = "hello"#;
-        let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap_or_else(|_| {
-            Node::new(
-                NodeKind::Error { message: "Parse error".to_string() },
-                SourceLocation { start: 0, end: source.len() },
-            )
-        });
+        
+        // Manually construct error node
+        // "hello is at index 9 (my  = ) is 0..8
+        // m y   $ x   =   "
+        // 0123456789
+        
+        let error_node = Node::new(
+            NodeKind::Error { 
+                message: "Unclosed string".to_string(), 
+            },
+            SourceLocation { start: 9, end: 15 } // "hello
+        );
 
-        // Find error nodes
-        let mut errors = vec![];
-        find_errors(&ast, &mut errors);
-
-        if let Some(error) = errors.first() {
-            let kind = classifier.classify(error, source);
-            assert_eq!(kind, ParseErrorKind::UnclosedString);
-        }
+        let kind = classifier.classify(&error_node, source);
+        assert_eq!(kind, ParseErrorKind::UnclosedString);
     }
 
     #[test]
@@ -369,30 +368,12 @@ mod tests {
 
         // Simulate an error node at the end of first line
         let error = Node::new(
-            NodeKind::Error { message: "".to_string() },
-            SourceLocation { start: 10, end: 11 },
+            NodeKind::Error { 
+                message: "Unexpected token".to_string(), 
+            },
+            SourceLocation { start: 10, end: 11 }, // newline char
         );
         let kind = classifier.classify(&error, source);
         assert_eq!(kind, ParseErrorKind::MissingSemicolon);
-    }
-
-    fn find_errors(node: &Node, errors: &mut Vec<Node>) {
-        if matches!(&node.kind, NodeKind::Error { .. }) {
-            errors.push(node.clone());
-        }
-        // Recursively check children based on node kind
-        match &node.kind {
-            NodeKind::Program { statements } => {
-                for stmt in statements {
-                    find_errors(stmt, errors);
-                }
-            }
-            NodeKind::Block { statements } => {
-                for stmt in statements {
-                    find_errors(stmt, errors);
-                }
-            }
-            _ => {} // Other node types don't have children we need to check
-        }
     }
 }

@@ -154,7 +154,6 @@ use std::sync::{Arc, OnceLock};
 pub mod checkpoint;
 pub mod error;
 pub mod mode;
-pub mod position;
 mod quote_handler;
 pub mod token;
 mod unicode;
@@ -162,7 +161,7 @@ mod unicode;
 pub use checkpoint::{CheckpointCache, Checkpointable, LexerCheckpoint};
 pub use error::{LexerError, Result};
 pub use mode::LexerMode;
-pub use position::Position;
+pub use perl_position_tracking::Position;
 pub use token::{StringPart, Token, TokenType};
 
 use unicode::{is_perl_identifier_continue, is_perl_identifier_start};

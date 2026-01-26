@@ -41,7 +41,10 @@ impl LspServer {
             // Extract the range parameter (required by LSP spec)
             // InlayHint range is required per spec, but we allow graceful degradation to full doc
             let range = if let Ok(((sl, sc), (el, ec))) = req_range(&p) {
-                Some(crate::positions::Range::new(sl, sc, el, ec))
+                Some(perl_position_tracking::WireRange::new(
+                    perl_position_tracking::WirePosition::new(sl, sc),
+                    perl_position_tracking::WirePosition::new(el, ec)
+                ))
             } else {
                 None
             };

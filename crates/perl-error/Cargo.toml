@@ -1,0 +1,19 @@
+[package]
+name = "perl-error"
+version = "0.8.8"
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Tree-sitter Perl Contributors"]
+description = "Error types and recovery strategies for Perl parser"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+
+[dependencies]
+thiserror = "2.0.17"
+perl-ast = { workspace = true }
+perl-regex = { workspace = true }
+perl-position-tracking = { workspace = true }
+perl-lexer = { workspace = true } # Needed for TokenType in recovery
+
+[lints]
+workspace = true

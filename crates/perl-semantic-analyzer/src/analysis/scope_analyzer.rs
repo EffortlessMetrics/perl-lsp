@@ -72,7 +72,7 @@ pub struct ScopeIssue {
 
 #[derive(Debug)]
 struct Variable {
-    line: usize,
+    declaration_offset: usize,
     is_used: RefCell<bool>,
     is_our: bool,
     is_initialized: RefCell<bool>,
@@ -135,7 +135,7 @@ impl Scope {
         &self,
         sigil: &str,
         name: &str,
-        line: usize,
+        offset: usize,
         is_our: bool,
         is_initialized: bool,
     ) -> Option<IssueKind> {
@@ -165,7 +165,7 @@ impl Scope {
         inner.insert(
             name.to_string(),
             Rc::new(Variable {
-                line,
+                declaration_offset: offset,
                 is_used: RefCell::new(is_our), // 'our' variables are considered used
                 is_our,
                 is_initialized: RefCell::new(is_initialized),
@@ -215,7 +215,7 @@ impl Scope {
                             continue;
                         }
                         let full_name = format!("{}{}", index_to_sigil(idx), name);
-                        f(full_name, var.line);
+                        f(full_name, var.declaration_offset);
                     }
                 }
             }
@@ -312,7 +312,6 @@ impl ScopeAnalyzer {
                 let extracted = self.extract_variable_name(variable);
                 let (sigil, var_name_part) = extracted.parts();
 
-                let line = self.get_line_from_node(variable, code);
                 let is_our = declarator == "our";
                 let is_initialized = initializer.is_some();
 
@@ -346,7 +345,7 @@ impl ScopeAnalyzer {
                     issues.push(ScopeIssue {
                         kind: issue_kind,
                         variable_name: full_name,
-                        line,
+                        line: self.get_line_from_node(variable, code),
                         range: (variable.location.start, variable.location.end),
                         description,
                     });
@@ -365,7 +364,6 @@ impl ScopeAnalyzer {
                 for variable in variables {
                     let extracted = self.extract_variable_name(variable);
                     let (sigil, var_name_part) = extracted.parts();
-                    let line = self.get_line_from_node(variable, code);
 
                     if let Some(issue_kind) = scope.declare_variable_parts(
                         sigil,
@@ -395,7 +393,7 @@ impl ScopeAnalyzer {
                         issues.push(ScopeIssue {
                             kind: issue_kind,
                             variable_name: full_name,
-                            line,
+                            line: self.get_line_from_node(variable, code),
                             range: (variable.location.start, variable.location.end),
                             description,
                         });
@@ -998,49 +996,60 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
         }
     }
 
-    match (sigil, name) {
-        // Special variables
-        ("$", "_") | ("@", "_") | ("%", "_") | ("$", "!") | ("$", "@") | ("$", "?") | ("$", "^")
-        | ("$", "$") | ("$", "0") | ("$", "1") | ("$", "2") | ("$", "3") | ("$", "4") | ("$", "5")
-        | ("$", "6") | ("$", "7") | ("$", "8") | ("$", "9") | ("$", ".") | ("$", ",") | ("$", "/")
-        | ("$", "\\") | ("$", "\"") | ("$", ";") | ("$", "%") | ("$", "=") | ("$", "-")
-        | ("$", "~") | ("$", "|") | ("$", "&") | ("$", "`") | ("$", "'") | ("$", "+") | ("@", "+")
-        | ("%", "+") | ("$", "[") | ("$", "]") | ("$", "^A") | ("$", "^C") | ("$", "^D")
-        | ("$", "^E") | ("$", "^F") | ("$", "^H") | ("$", "^I") | ("$", "^L") | ("$", "^M")
-        | ("$", "^N") | ("$", "^O") | ("$", "^P") | ("$", "^R") | ("$", "^S") | ("$", "^T")
-        | ("$", "^V") | ("$", "^W") | ("$", "^X") |
-        // Common globals
-        ("%", "ENV") | ("@", "INC") | ("%", "INC") | ("@", "ARGV") | ("%", "SIG") | ("$", "ARGV")
-        | ("@", "EXPORT") | ("@", "EXPORT_OK") | ("%", "EXPORT_TAGS") | ("@", "ISA")
-        | ("$", "VERSION") | ("$", "AUTOLOAD") |
-        // Filehandles
-        ("", "STDIN") | ("", "STDOUT") | ("", "STDERR") | ("", "DATA") | ("", "ARGVOUT") |
-        // Sort variables
-        ("$", "a") | ("$", "b") |
-        // Error variables
-        ("$", "EVAL_ERROR") | ("$", "ERRNO") | ("$", "EXTENDED_OS_ERROR") | ("$", "CHILD_ERROR")
-        | ("$", "PROCESS_ID") | ("$", "PROGRAM_NAME") |
-        // Perl version variables
-        ("$", "PERL_VERSION") | ("$", "OLD_PERL_VERSION") => true,
-        _ => {
-            // Check patterns
-            // $^[A-Z] variables
-            if sigil == "$" && name.starts_with('^') && name.len() == 2 {
-                if let Some(ch) = name.chars().nth(1) {
-                    if ch.is_ascii_uppercase() {
-                        return true;
+    let sigil_byte = match sigil.as_bytes().first() {
+        Some(b) => *b,
+        None => return match name {
+            // Filehandles (no sigil)
+            "STDIN" | "STDOUT" | "STDERR" | "DATA" | "ARGVOUT" => true,
+            _ => false,
+        },
+    };
+
+    match sigil_byte {
+        b'$' => match name {
+            // Special variables
+            "_" | "!" | "@" | "?" | "^" | "$" | "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8"
+            | "9" | "." | "," | "/" | "\\" | "\"" | ";" | "%" | "=" | "-" | "~" | "|" | "&"
+            | "`" | "'" | "+" | "[" | "]" | "^A" | "^C" | "^D" | "^E" | "^F" | "^H" | "^I" | "^L"
+            | "^M" | "^N" | "^O" | "^P" | "^R" | "^S" | "^T" | "^V" | "^W" | "^X" |
+            // Common globals
+            "ARGV" | "VERSION" | "AUTOLOAD" |
+            // Sort variables
+            "a" | "b" |
+            // Error variables
+            "EVAL_ERROR" | "ERRNO" | "EXTENDED_OS_ERROR" | "CHILD_ERROR" |
+            "PROCESS_ID" | "PROGRAM_NAME" |
+            // Perl version variables
+            "PERL_VERSION" | "OLD_PERL_VERSION" => true,
+            _ => {
+                // Check patterns
+                // $^[A-Z] variables
+                if name.starts_with('^') && name.len() == 2 {
+                    if let Some(ch) = name.chars().nth(1) {
+                        if ch.is_ascii_uppercase() {
+                            return true;
+                        }
                     }
                 }
-            }
 
-            // Numbered capture variables ($1, $2, etc.)
-            // Note: $0-$9 are already handled in the match above
-            if sigil == "$" && !name.is_empty() && name.chars().all(|c| c.is_ascii_digit()) {
-                return true;
-            }
+                // Numbered capture variables ($1, $2, etc.)
+                // Note: $0-$9 are already handled in the match above, but this covers $10+
+                if !name.is_empty() && name.chars().all(|c| c.is_ascii_digit()) {
+                    return true;
+                }
 
-            false
-        }
+                false
+            }
+        },
+        b'@' => match name {
+            "_" | "+" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA" => true,
+            _ => false,
+        },
+        b'%' => match name {
+            "_" | "+" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS" => true,
+            _ => false,
+        },
+        _ => false,
     }
 }
 

@@ -129,7 +129,7 @@ brew install perl-lsp
 cargo install perl-lsp
 
 # Or, build from this repository
-git clone https://github.com/EffortlessSteven/tree-sitter-perl
+git clone https://github.com/EffortlessMetrics/tree-sitter-perl
 cd tree-sitter-perl
 cargo build --release -p perl-lsp
 # The binary will be in target/release/perl-lsp
@@ -454,4 +454,4 @@ Key areas for contribution:
 - [Language Server Protocol Specification](https://microsoft.github.io/language-server-protocol/)
 - [LSP Tutorial](https://microsoft.github.io/language-server-protocol/overviews/lsp/overview/)
 - [Perl Parser Documentation](../crates/perl-parser/README.md)
-- [Project Repository](https://github.com/EffortlessSteven/tree-sitter-perl)
+- [Project Repository](https://github.com/EffortlessMetrics/tree-sitter-perl)

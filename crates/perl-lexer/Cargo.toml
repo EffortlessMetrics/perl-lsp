@@ -21,6 +21,7 @@ memchr = "2.7.6"
 
 # For better error handling
 thiserror = "2.0.17"
+perl-position-tracking = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.8.1"

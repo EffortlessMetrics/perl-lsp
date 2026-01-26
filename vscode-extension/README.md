@@ -60,7 +60,7 @@ brew install perl-lsp
 curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
 
 # From source
-cargo install --git https://github.com/EffortlessSteven/tree-sitter-perl --bin perl-lsp
+cargo install --git https://github.com/EffortlessMetrics/tree-sitter-perl --bin perl-lsp
 ```
 
 ## ⚙️ Configuration
@@ -114,10 +114,10 @@ Works with any LSP-compatible editor:
 
 ## 📚 Resources
 
-- [Documentation](https://github.com/EffortlessSteven/tree-sitter-perl#readme)
-- [Issue Tracker](https://github.com/EffortlessSteven/tree-sitter-perl/issues)
-- [Changelog](https://github.com/EffortlessSteven/tree-sitter-perl/blob/master/CHANGELOG.md)
-- [Migration Guide](https://github.com/EffortlessSteven/tree-sitter-perl/blob/master/MIGRATION.md)
+- [Documentation](https://github.com/EffortlessMetrics/tree-sitter-perl#readme)
+- [Issue Tracker](https://github.com/EffortlessMetrics/tree-sitter-perl/issues)
+- [Changelog](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/CHANGELOG.md)
+- [Migration Guide](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/MIGRATION.md)
 
 ## 📄 License
 

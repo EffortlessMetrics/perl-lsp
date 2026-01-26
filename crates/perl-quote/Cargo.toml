@@ -1,0 +1,10 @@
+[package]
+name = "perl-quote"
+version = "0.8.8"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

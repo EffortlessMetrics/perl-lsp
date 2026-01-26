@@ -24,6 +24,7 @@ doctest = false
 
 [dependencies]
 perl-parser-core = { workspace = true }
+perl-edit = { workspace = true }
 perl-lexer = { workspace = true }
 anyhow = "1.0.100"
 lsp-types = "0.97.0"

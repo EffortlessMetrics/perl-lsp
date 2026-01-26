@@ -3,7 +3,7 @@
 //! This module provides a wrapper around lexer tokens that adds
 //! line and column information for incremental parsing support.
 
-use crate::position::Position;
+use perl_position_tracking::Position;
 use perl_lexer::Token;
 
 /// Token with full position information
@@ -39,8 +39,8 @@ impl TokenWithPosition {
     }
 
     /// Get the position range
-    pub fn range(&self) -> crate::position::Range {
-        crate::position::Range::new(self.start_pos, self.end_pos)
+    pub fn range(&self) -> perl_position_tracking::Range {
+        perl_position_tracking::Range::new(self.start_pos, self.end_pos)
     }
 }
 
