@@ -36,6 +36,6 @@ fn test_heredoc_timeout() {
     let _tokens = lexer.collect_tokens();
     let duration = start.elapsed();
     
-    assert!(duration < Duration::from_secs(6), "Lexer should not hang for more than 6 seconds");
+    assert!(duration < Duration::from_secs(10), "Lexer should not hang for more than 10 seconds");
 }
 

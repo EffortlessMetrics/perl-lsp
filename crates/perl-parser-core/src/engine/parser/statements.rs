@@ -283,10 +283,14 @@ impl<'a> Parser<'a> {
 
                             // Parse first argument
                             // Special handling for open/pipe/socket which can take my $var as first arg
+                            let mut parsed_block_arg = false;
                             if (func_name == "open"
                                 || func_name == "pipe"
                                 || func_name == "socket")
-                                && self.peek_kind() == Some(TokenKind::My)
+                                && (self.peek_kind() == Some(TokenKind::My) 
+                                    || self.peek_kind() == Some(TokenKind::Our)
+                                    || self.peek_kind() == Some(TokenKind::Local)
+                                    || self.peek_kind() == Some(TokenKind::State))
                             {
                                 args.push(self.parse_variable_declaration()?);
                             } else if matches!(func_name.as_str(), "map" | "grep" | "sort")
@@ -294,16 +298,24 @@ impl<'a> Parser<'a> {
                             {
                                 // Special handling for map/grep/sort with block first argument
                                 args.push(self.parse_builtin_block()?);
+                                parsed_block_arg = true;
                             } else {
-                                // For builtins, don't parse word operators as part of arguments
-                                // Word operators should be handled at statement level
-                                args.push(self.parse_expression()?);
+                                // For builtins, use parse_assignment to avoid consuming comma operators
+                                args.push(self.parse_assignment()?);
+                            }
+
+                            // Handle map/grep/sort { block } LIST case where no comma separates block and list
+                            if parsed_block_arg 
+                                && self.peek_kind() != Some(TokenKind::Comma) 
+                                && !self.is_at_statement_end() 
+                            {
+                                args.push(self.parse_assignment()?);
                             }
 
                             // Parse remaining arguments
                             while self.peek_kind() == Some(TokenKind::Comma) {
                                 self.consume_token()?; // consume ,
-                                args.push(self.parse_expression()?);
+                                args.push(self.parse_assignment()?);
                             }
 
                             let end = self.previous_position();
@@ -319,14 +331,20 @@ impl<'a> Parser<'a> {
                     self.consume_token()?; // consume tie
                     self.mark_not_stmt_start();
 
-                    let variable = Box::new(self.parse_expression()?);
+                    // First argument to tie can be a variable declaration, e.g. tie my %hash, ...
+                    let variable = if matches!(self.peek_kind(), Some(TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State)) {
+                        Box::new(self.parse_variable_declaration()?)
+                    } else {
+                        Box::new(self.parse_assignment()?)
+                    };
+
                     self.expect(TokenKind::Comma)?;
-                    let package = Box::new(self.parse_expression()?);
+                    let package = Box::new(self.parse_assignment()?);
 
                     let mut args = vec![];
                     while self.peek_kind() == Some(TokenKind::Comma) {
                         self.consume_token()?; // consume ,
-                        args.push(self.parse_expression()?);
+                        args.push(self.parse_assignment()?);
                     }
 
                     let end = self.previous_position();
@@ -340,7 +358,7 @@ impl<'a> Parser<'a> {
                     self.consume_token()?; // consume untie
                     self.mark_not_stmt_start();
 
-                    let variable = Box::new(self.parse_expression()?);
+                    let variable = Box::new(self.parse_assignment()?);
 
                     let end = self.previous_position();
                     Ok(Node::new(

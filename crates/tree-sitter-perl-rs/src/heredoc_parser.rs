@@ -114,6 +114,10 @@ impl<'a> HeredocScanner<'a> {
                 if let Some(mut decl) = self.parse_heredoc_declaration(&chars) {
                     // Recursion depth limit (Issue #443)
                     if declarations.len() >= MAX_HEREDOC_DEPTH {
+                        // Limit reached: Stop tracking new heredocs to prevent stack overflow.
+                        // We continue parsing the rest of the file, but treat the <<EOF token
+                        // as a normal operator/identifier rather than starting a heredoc body.
+                        // This prevents infinite recursion/loops in malicious input.
                         temp_position = saved_pos + 1;
                         continue;
                     }

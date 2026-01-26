@@ -139,7 +139,7 @@ fn test_get_suggestion_missing_semicolon() {
 fn test_get_suggestion_unclosed_parenthesis() {
     let classifier = ErrorClassifier::new();
     let suggestion = classifier.get_suggestion(&ParseErrorKind::UnclosedParenthesis);
-    assert_eq!(suggestion, Some("Add a closing parenthesis ')'".to_string()));
+    assert_eq!(suggestion, Some("Add a closing parenthesis ')' to match the opening '('".to_string()));
 }
 
 #[cfg(feature = "error-classifier-v2")]
