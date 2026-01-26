@@ -5,11 +5,11 @@ use support::lsp_harness::LspHarness;
 
 #[test]
 
-fn test_brace_pair() {
+fn test_brace_pair() -> Result<(), Box<dyn std::error::Error>> {
     let doc = r#"sub x { my $h = { a => 1 }; }"#;
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///test.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
     let uri = "file:///test.pl";
 
     // cursor on the '{' after '=' (line 0, character 16)
@@ -29,15 +29,17 @@ fn test_brace_pair() {
         // Null is also acceptable if no linked ranges at this position
         assert!(result.is_null(), "Should return either ranges or null");
     }
+
+    Ok(())
 }
 
 #[test]
 
-fn test_quotes_pair() {
+fn test_quotes_pair() -> Result<(), Box<dyn std::error::Error>> {
     let doc = r#"my $s = "hi";"#;
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///test.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
     let uri = "file:///test.pl";
 
     // cursor on opening quote (line 0, character 8)
@@ -56,15 +58,17 @@ fn test_quotes_pair() {
     } else {
         assert!(result.is_null(), "Should return either ranges or null");
     }
+
+    Ok(())
 }
 
 #[test]
 
-fn test_nested_parens() {
+fn test_nested_parens() -> Result<(), Box<dyn std::error::Error>> {
     let doc = r#"if ((($x > 0))) { print "yes"; }"#;
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///test.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
     let uri = "file:///test.pl";
 
     // cursor on innermost opening paren (line 0, character 5)
@@ -83,15 +87,17 @@ fn test_nested_parens() {
     } else {
         assert!(result.is_null(), "Should return either ranges or null");
     }
+
+    Ok(())
 }
 
 #[test]
 
-fn test_square_brackets() {
+fn test_square_brackets() -> Result<(), Box<dyn std::error::Error>> {
     let doc = r#"my @arr = [1, 2, [3, 4]];"#;
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///test.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
     let uri = "file:///test.pl";
 
     // cursor on outer opening bracket (line 0, character 10)
@@ -110,15 +116,17 @@ fn test_square_brackets() {
     } else {
         assert!(result.is_null(), "Should return either ranges or null");
     }
+
+    Ok(())
 }
 
 #[test]
 
-fn test_no_pair_at_position() {
+fn test_no_pair_at_position() -> Result<(), Box<dyn std::error::Error>> {
     let doc = r#"my $x = 42;"#;
     let mut harness = LspHarness::new();
-    harness.initialize(None).unwrap();
-    harness.open_document("file:///test.pl", doc).unwrap();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
     let uri = "file:///test.pl";
 
     // cursor on a number (line 0, character 8)
@@ -133,4 +141,6 @@ fn test_no_pair_at_position() {
         .unwrap_or(json!(null));
 
     assert!(result.is_null(), "Should return null when no paired delimiter at position");
+
+    Ok(())
 }

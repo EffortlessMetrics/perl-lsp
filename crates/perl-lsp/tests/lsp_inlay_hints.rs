@@ -3,7 +3,7 @@ use serde_json::json;
 
 #[test]
 
-fn inlay_hints_for_substr_and_types() {
+fn inlay_hints_for_substr_and_types() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -51,9 +51,9 @@ fn inlay_hints_for_substr_and_types() {
             }
         })),
     };
-    let res = srv.handle_request(req).unwrap();
-    let result = res.result.unwrap();
-    let hints = result.as_array().unwrap();
+    let res = srv.handle_request(req).ok_or("handle_request returned None")?;
+    let result = res.result.ok_or("response result is None")?;
+    let hints = result.as_array().ok_or("result is not an array")?;
 
     // Should have at least one hint
     assert!(!hints.is_empty(), "should have inlay hints");
@@ -72,4 +72,6 @@ fn inlay_hints_for_substr_and_types() {
     let param_hints = ["str:", "offset:", "len:"];
     let has_substr_hints = param_hints.iter().any(|&h| labels.contains(&h));
     assert!(has_substr_hints, "should have substr parameter hints, found: {:?}", labels);
+
+    Ok(())
 }

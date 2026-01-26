@@ -1,12 +1,12 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_parser::{NodeKind, Parser};
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 #[test]
-fn test_simple_array_interpolation() {
+fn test_simple_array_interpolation() -> TestResult {
     // Test basic array interpolation @{[...]}
     let mut parser = Parser::new(r#"my $str = "Array: @{[1, 2, 3]}";"#);
-    let ast = parser.parse().expect("Failed to parse array interpolation");
+    let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
@@ -32,13 +32,14 @@ fn test_simple_array_interpolation() {
     } else {
         panic!("Expected program");
     }
+    Ok(())
 }
 
 #[test]
-fn test_complex_map_interpolation() {
+fn test_complex_map_interpolation() -> TestResult {
     // Test complex expression with map inside interpolation
     let mut parser = Parser::new(r#"my $str = "Complex: @{[ map { $_ * 2 } @array ]}";"#);
-    let ast = parser.parse().expect("Failed to parse complex interpolation");
+    let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
@@ -64,13 +65,14 @@ fn test_complex_map_interpolation() {
     } else {
         panic!("Expected program");
     }
+    Ok(())
 }
 
 #[test]
-fn test_hash_interpolation() {
+fn test_hash_interpolation() -> TestResult {
     // Test hash variable interpolation ${...}
     let mut parser = Parser::new(r#"my $str = "Hash: ${hash{key}}";"#);
-    let ast = parser.parse().expect("Failed to parse hash interpolation");
+    let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
@@ -93,13 +95,14 @@ fn test_hash_interpolation() {
     } else {
         panic!("Expected program");
     }
+    Ok(())
 }
 
 #[test]
-fn test_variable_interpolation() {
+fn test_variable_interpolation() -> TestResult {
     // Test simple variable interpolation ${...}
     let mut parser = Parser::new(r#"my $str = "Value: ${name}";"#);
-    let ast = parser.parse().expect("Failed to parse variable interpolation");
+    let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
@@ -122,4 +125,5 @@ fn test_variable_interpolation() {
     } else {
         panic!("Expected program");
     }
+    Ok(())
 }

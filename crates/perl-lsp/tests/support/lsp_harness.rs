@@ -4,7 +4,6 @@
 
 #![allow(dead_code)]
 #![allow(clippy::collapsible_if)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use parking_lot::Mutex;
 use perl_lsp::LspServer;
@@ -47,7 +46,10 @@ impl TempWorkspace {
     /// Get the full URI for a relative path
     pub fn uri(&self, relative_path: &str) -> String {
         let path = self.dir.path().join(relative_path);
-        Url::from_file_path(&path).expect("Valid file path").to_string()
+        match Url::from_file_path(&path) {
+            Ok(url) => url.to_string(),
+            Err(_) => panic!("Failed to create file URL from path: {}", path.display()),
+        }
     }
 }
 
@@ -822,7 +824,10 @@ impl LspHarness {
         if cfg!(target_os = "linux") && std::env::var("WSL_DISTRO_NAME").is_ok() {
             // In WSL, convert Windows paths like C:\foo to /mnt/c/foo
             if path.len() >= 3 && path.chars().nth(1) == Some(':') {
-                let drive = path.chars().next().unwrap().to_lowercase();
+                let drive = match path.chars().next() {
+                    Some(c) => c.to_lowercase(),
+                    None => panic!("Path should have at least one character: {path}"),
+                };
                 let rest = path[2..].replace('\\', "/");
                 return format!("/mnt/{}{}", drive, rest);
             }
@@ -854,7 +859,10 @@ impl LspHarness {
                 .iter()
                 .position(|n| n.get("method").and_then(|m| m.as_str()) == Some(method))
             {
-                let notif = notifications.remove(pos).unwrap();
+                let notif = match notifications.remove(pos) {
+                    Some(n) => n,
+                    None => panic!("Notification at position {pos} should exist"),
+                };
                 drop(notifications);
 
                 return Ok(notif.get("params").cloned().unwrap_or(json!({})));
@@ -1094,8 +1102,14 @@ pub fn shutdown_graceful(harness: &mut LspHarness) {
 macro_rules! with_open_doc {
     ($uri:expr, $text:expr, $harness:ident, $body:block) => {{
         let mut $harness = LspHarness::new();
-        $harness.initialize(None).expect("Failed to initialize");
-        $harness.open($uri, $text).expect("Failed to open document");
+        match $harness.initialize(None) {
+            Ok(_) => {}
+            Err(e) => panic!("Failed to initialize: {e}"),
+        }
+        match $harness.open($uri, $text) {
+            Ok(_) => {}
+            Err(e) => panic!("Failed to open document: {e}"),
+        }
         $body
     }};
 }
@@ -1105,7 +1119,10 @@ macro_rules! with_open_doc {
 macro_rules! assert_locations {
     ($response:expr, [$( ($uri:expr, ($sl:expr, $sc:expr)..($el:expr, $ec:expr)) ),*]) => {
         {
-            let locations = $response.as_array().expect("Response should be array");
+            let locations = match $response.as_array() {
+                Some(arr) => arr,
+                None => panic!("Response should be array: {:?}", $response),
+            };
             let expected = vec![
                 $( (
                     $uri,
@@ -1133,7 +1150,10 @@ macro_rules! assert_locations {
 macro_rules! assert_highlights {
     ($response:expr, [$( (($sl:expr, $sc:expr)..($el:expr, $ec:expr), $kind:expr) ),*]) => {
         {
-            let highlights = $response.as_array().expect("Response should be array");
+            let highlights = match $response.as_array() {
+                Some(arr) => arr,
+                None => panic!("Response should be array: {:?}", $response),
+            };
             let expected = vec![
                 $( (
                     ($sl, $sc),
@@ -1242,9 +1262,10 @@ impl TestContext {
     /// * `root_uri` - The workspace root URI (e.g., "file:///test" or a real temp directory)
     /// * `capabilities` - Optional custom client capabilities (None = sensible defaults)
     pub fn initialize_with(&mut self, root_uri: &str, capabilities: Option<Value>) -> Value {
-        self.harness
-            .initialize_ready(root_uri, capabilities)
-            .expect("initialization should succeed")
+        match self.harness.initialize_ready(root_uri, capabilities) {
+            Ok(v) => v,
+            Err(e) => panic!("initialization should succeed: {e}"),
+        }
     }
 
     /// Send a request and wait for response
@@ -1265,18 +1286,27 @@ impl TestContext {
 
     /// Open a document
     pub fn open_document(&mut self, uri: &str, text: &str) {
-        self.harness.open(uri, text).expect("open should succeed");
+        match self.harness.open(uri, text) {
+            Ok(_) => {}
+            Err(e) => panic!("open should succeed: {e}"),
+        }
     }
 
     /// Update document content with auto-incrementing version
     pub fn update_document(&mut self, uri: &str, text: &str) {
         self.version_counter += 1;
-        self.harness.change_full(uri, self.version_counter, text).expect("change should succeed");
+        match self.harness.change_full(uri, self.version_counter, text) {
+            Ok(_) => {}
+            Err(e) => panic!("change should succeed: {e}"),
+        }
     }
 
     /// Close a document
     pub fn close_document(&mut self, uri: &str) {
-        self.harness.close(uri).expect("close should succeed");
+        match self.harness.close(uri) {
+            Ok(_) => {}
+            Err(e) => panic!("close should succeed: {e}"),
+        }
     }
 
     /// Synchronization barrier - wait for server to be idle

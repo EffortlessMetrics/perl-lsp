@@ -1,5 +1,4 @@
 #![allow(dead_code)] // This is a utility module used by other tests
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 //! Test utilities and helpers for LSP testing
 //!
@@ -316,19 +315,24 @@ pub mod assertions {
 
     /// Assert that diagnostics contain expected error
     pub fn assert_has_diagnostic(response: &Value, expected_message: &str) {
-        let items =
-            response["result"]["items"].as_array().expect("Expected diagnostic items array");
+        let items = match response["result"]["items"].as_array() {
+            Some(arr) => arr,
+            None => panic!("Expected diagnostic items array, got: {response:?}"),
+        };
 
-        let found = items.iter().any(|item| {
-            item["message"].as_str().map(|msg| msg.contains(expected_message)).unwrap_or(false)
-        });
+        let found = items
+            .iter()
+            .any(|item| item["message"].as_str().is_some_and(|msg| msg.contains(expected_message)));
 
         assert!(found, "Expected diagnostic containing '{}', got: {:?}", expected_message, items);
     }
 
     /// Assert symbol count
     pub fn assert_symbol_count(response: &Value, expected_count: usize) {
-        let symbols = response["result"].as_array().expect("Expected symbols array");
+        let symbols = match response["result"].as_array() {
+            Some(arr) => arr,
+            None => panic!("Expected symbols array, got: {response:?}"),
+        };
         assert_eq!(
             symbols.len(),
             expected_count,
@@ -347,10 +351,10 @@ pub mod assertions {
 
     /// Assert that definition response contains a location at the expected position
     pub fn assert_definition_at(response: &Value, uri: &str, line: u32) {
-        let (def_uri, def_line, _) =
-            super::semantic::first_location(response).unwrap_or_else(|| {
-                panic!("Expected definition location in response, got: {:#}", response)
-            });
+        let (def_uri, def_line, _) = match super::semantic::first_location(response) {
+            Some(loc) => loc,
+            None => panic!("Expected definition location in response, got: {response:#}"),
+        };
 
         assert_eq!(
             def_uri, uri,
@@ -366,8 +370,10 @@ pub mod assertions {
 
     /// Assert that hover response contains expected content
     pub fn assert_hover_contains(response: &Value, expected_content: &str) {
-        let content = super::semantic::hover_content(response)
-            .unwrap_or_else(|| panic!("Expected hover content in response, got: {:#}", response));
+        let content = match super::semantic::hover_content(response) {
+            Some(c) => c,
+            None => panic!("Expected hover content in response, got: {response:#}"),
+        };
 
         assert!(
             content.contains(expected_content),
@@ -380,8 +386,10 @@ pub mod assertions {
 
     /// Assert that hover response contains any of the expected strings
     pub fn assert_hover_contains_any(response: &Value, expected_strings: &[&str]) {
-        let content = super::semantic::hover_content(response)
-            .unwrap_or_else(|| panic!("Expected hover content in response, got: {:#}", response));
+        let content = match super::semantic::hover_content(response) {
+            Some(c) => c,
+            None => panic!("Expected hover content in response, got: {response:#}"),
+        };
 
         let found = expected_strings.iter().any(|s| content.contains(s));
         assert!(
@@ -481,12 +489,13 @@ pub mod semantic {
         }
 
         let line = lines[target_line];
-        let col = line.find(needle).unwrap_or_else(|| {
-            panic!(
+        let col = match line.find(needle) {
+            Some(c) => c,
+            None => panic!(
                 "Could not find '{}' on line {}.\nLine content: '{}'\nFull code:\n{}",
                 needle, target_line, line, code
-            )
-        });
+            ),
+        };
 
         (target_line as u32, col as u32)
     }

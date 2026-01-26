@@ -53,7 +53,7 @@ impl MissingStoryTestContext {
 // modules and their dependencies seamlessly.
 
 #[test]
-fn test_user_story_multi_file_navigation() {
+fn test_user_story_multi_file_navigation() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = MissingStoryTestContext::new();
     ctx.initialize();
 
@@ -235,13 +235,14 @@ sub validate_email {
     println!("✓ Import completion works");
 
     println!("✅ Multi-file navigation user story test complete");
+    Ok(())
 }
 
 // ==================== USER STORY: TEST INTEGRATION WORKFLOW ====================
 // As a Perl developer, I want to discover, run, and debug tests directly from my editor.
 
 #[test]
-fn test_user_story_test_integration() {
+fn test_user_story_test_integration() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = MissingStoryTestContext::new();
     ctx.initialize();
 
@@ -466,13 +467,14 @@ done_testing();
     println!("✓ Test function hover works");
 
     println!("✅ Test integration user story test complete");
+    Ok(())
 }
 
 // ==================== USER STORY: ADVANCED REFACTORING ====================
 // As a Perl developer, I want to refactor my code safely with automated assistance.
 
 #[test]
-fn test_user_story_advanced_refactoring() {
+fn test_user_story_advanced_refactoring() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = MissingStoryTestContext::new();
     ctx.initialize();
 
@@ -543,7 +545,7 @@ sub process_user_data {
 
     // Extract variable might be available depending on context
     if let Some(actions) = extract_variable {
-        let arr = actions.as_array().expect("code actions should be array");
+        let arr = actions.as_array().ok_or("code actions should be array")?;
         for action in arr {
             assert!(action.get("title").is_some(), "Action must have title");
         }
@@ -568,7 +570,7 @@ sub process_user_data {
 
     // Extract method might be available depending on context
     if let Some(actions) = extract_method {
-        let arr = actions.as_array().expect("code actions should be array");
+        let arr = actions.as_array().ok_or("code actions should be array")?;
         for action in arr {
             assert!(action.get("title").is_some(), "Action must have title");
         }
@@ -593,7 +595,7 @@ sub process_user_data {
 
     // Inline variable might be available depending on context
     if let Some(actions) = inline_variable {
-        let arr = actions.as_array().expect("code actions should be array");
+        let arr = actions.as_array().ok_or("code actions should be array")?;
         for action in arr {
             assert!(action.get("title").is_some(), "Action must have title");
         }
@@ -618,7 +620,7 @@ sub process_user_data {
 
     // Change signature might be available depending on context
     if let Some(actions) = change_signature {
-        let arr = actions.as_array().expect("code actions should be array");
+        let arr = actions.as_array().ok_or("code actions should be array")?;
         for action in arr {
             assert!(action.get("title").is_some(), "Action must have title");
         }
@@ -641,7 +643,7 @@ sub process_user_data {
 
     // Move method might be available depending on context
     if let Some(actions) = move_method {
-        let arr = actions.as_array().expect("code actions should be array");
+        let arr = actions.as_array().ok_or("code actions should be array")?;
         for action in arr {
             assert!(action.get("title").is_some(), "Action must have title");
         }
@@ -649,13 +651,14 @@ sub process_user_data {
     println!("✓ Move method refactoring available");
 
     println!("✅ Advanced refactoring user story test complete");
+    Ok(())
 }
 
 // ==================== USER STORY: REGULAR EXPRESSION SUPPORT ====================
 // As a Perl developer, I want intelligent assistance with regular expressions.
 
 #[test]
-fn test_user_story_regex_support() {
+fn test_user_story_regex_support() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = MissingStoryTestContext::new();
     ctx.initialize();
 
@@ -746,7 +749,7 @@ sub validate_and_parse_data {
 
     // Regex testing might not be implemented yet
     if let Some(actions) = test_regex {
-        let arr = actions.as_array().expect("code actions should be array");
+        let arr = actions.as_array().ok_or("code actions should be array")?;
         for action in arr {
             assert!(action.get("title").is_some(), "Action must have title");
         }
@@ -771,7 +774,7 @@ sub validate_and_parse_data {
 
     // Regex refactoring might not be implemented yet
     if let Some(actions) = regex_refactor {
-        let arr = actions.as_array().expect("code actions should be array");
+        let arr = actions.as_array().ok_or("code actions should be array")?;
         for action in arr {
             assert!(action.get("title").is_some(), "Action must have title");
         }
@@ -792,13 +795,14 @@ sub validate_and_parse_data {
     println!("✓ Named capture group completion works");
 
     println!("✅ Regex support user story test complete");
+    Ok(())
 }
 
 // ==================== USER STORY: PERFORMANCE MONITORING ====================
 // As a Perl developer working on production code, I want performance insights.
 
 #[test]
-fn test_user_story_performance_monitoring() {
+fn test_user_story_performance_monitoring() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = MissingStoryTestContext::new();
     ctx.initialize();
 
@@ -908,12 +912,13 @@ sub inefficient_function {
     println!("✓ Memory usage monitoring available");
 
     println!("✅ Performance monitoring user story test complete");
+    Ok(())
 }
 
 // ==================== TEST RUNNER ====================
 
 #[test]
-fn test_missing_user_stories_summary() {
+fn test_missing_user_stories_summary() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🎯 MISSING USER STORIES TEST SUMMARY");
     println!("=====================================");
 
@@ -960,4 +965,5 @@ fn test_missing_user_stories_summary() {
     println!("Current: ~40% of LSP user stories");
     println!("With these tests: ~75% coverage");
     println!("Remaining gaps: CPAN integration, POD support, debugging");
+    Ok(())
 }

@@ -8,7 +8,7 @@ use common::{
 
 /// Test extract variable refactoring
 #[test]
-fn test_extract_variable() {
+fn test_extract_variable() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -53,15 +53,18 @@ print $result;
         }),
     );
 
-    let actions = response["result"].as_array().unwrap();
-    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("Extract")
-        && a["title"].as_str().unwrap().contains("variable")));
+    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    assert!(actions.iter().any(|a| {
+        let title = a["title"].as_str().unwrap_or("");
+        title.contains("Extract") && title.contains("variable")
+    }));
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Test adding error checking to file operations
 #[test]
-fn test_add_error_checking() {
+fn test_add_error_checking() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -106,14 +109,15 @@ close($fh);
         }),
     );
 
-    let actions = response["result"].as_array().unwrap();
-    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("error checking")));
+    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("error checking")));
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Test converting old-style for loops to foreach
 #[test]
-fn test_convert_loop_style() {
+fn test_convert_loop_style() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -158,18 +162,19 @@ for (my $i = 0; $i < @array; $i++) {
         }),
     );
 
-    let actions = response["result"].as_array().unwrap();
+    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
     assert!(
-        actions.iter().any(|a| a["title"].as_str().unwrap().contains("foreach loop")),
+        actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("foreach loop")),
         "Expected 'foreach loop' conversion action but got: {:?}",
         actions.iter().map(|a| a["title"].as_str()).collect::<Vec<_>>()
     );
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Test converting to postfix form
 #[test]
-fn test_convert_to_postfix() {
+fn test_convert_to_postfix() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -214,14 +219,15 @@ if ($debug) {
         }),
     );
 
-    let actions = response["result"].as_array().unwrap();
-    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("postfix")));
+    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("postfix")));
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Test adding missing pragmas
 #[test]
-fn test_add_missing_pragmas() {
+fn test_add_missing_pragmas() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -267,14 +273,15 @@ print $x;
         }),
     );
 
-    let actions = response["result"].as_array().unwrap();
-    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("pragma")));
+    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("pragma")));
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Test quick fix for undefined variable
 #[test]
-fn test_fix_undefined_variable() {
+fn test_fix_undefined_variable() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -333,15 +340,18 @@ print $undefined_var;
         }),
     );
 
-    let actions = response["result"].as_array().unwrap();
-    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("Declare")
-        && a["title"].as_str().unwrap().contains("my")));
+    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    assert!(actions.iter().any(|a| {
+        let title = a["title"].as_str().unwrap_or("");
+        title.contains("Declare") && title.contains("my")
+    }));
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Test extract subroutine refactoring
 #[test]
-fn test_extract_subroutine() {
+fn test_extract_subroutine() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -391,14 +401,15 @@ my $y = 20;
         }),
     );
 
-    let actions = response["result"].as_array().unwrap();
-    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("subroutine")));
+    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("subroutine")));
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Test organize imports refactoring
 #[test]
-fn test_organize_imports() {
+fn test_organize_imports() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -449,14 +460,15 @@ print "test\n";
         }),
     );
 
-    let actions = response["result"].as_array().unwrap();
-    assert!(actions.iter().any(|a| a["title"].as_str().unwrap().contains("Organize imports")));
+    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("Organize imports")));
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 /// Test multiple refactorings available
 #[test]
-fn test_multiple_refactorings() {
+fn test_multiple_refactorings() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -504,10 +516,11 @@ if ($processed > 100) {
     );
 
     eprintln!("Code action response: {:?}", response);
-    let actions = response["result"].as_array().unwrap();
+    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
 
     // Should have multiple refactoring options
     assert!(!actions.is_empty(), "Expected code actions but got none");
     assert!(actions.iter().any(|a| a["kind"].as_str() == Some("refactor.extract")));
     shutdown_and_exit(&mut server);
+    Ok(())
 }

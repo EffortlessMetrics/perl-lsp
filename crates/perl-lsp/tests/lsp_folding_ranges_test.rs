@@ -3,6 +3,8 @@
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 fn setup_server() -> LspServer {
     let mut server = LspServer::new();
 
@@ -48,7 +50,7 @@ fn open_document(server: &mut LspServer, uri: &str, content: &str) {
 }
 
 #[test]
-fn test_folding_ranges_subroutines() {
+fn test_folding_ranges_subroutines() -> TestResult {
     let mut server = setup_server();
 
     let content = r#"
@@ -84,14 +86,14 @@ sub nested {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
+    let response = server.handle_request(request).ok_or("Expected response from server")?;
     assert!(response.result.is_some());
 
-    let result = response.result.unwrap();
+    let result = response.result.ok_or("Expected result in response")?;
 
     // Check that we have folding ranges
     assert!(result.is_array());
-    let ranges = result.as_array().unwrap();
+    let ranges = result.as_array().ok_or("Expected array of folding ranges")?;
 
     // Should have ranges for both subroutines, the if block, and the while block
     assert!(ranges.len() >= 4, "Expected at least 4 folding ranges, got {}", ranges.len());
@@ -101,11 +103,13 @@ sub nested {
         .iter()
         .any(|r| r["startLine"].as_u64() == Some(1) && r["endLine"].as_u64().is_some());
     assert!(has_sub_range, "Should have folding range for first subroutine");
+
+    Ok(())
 }
 
 #[cfg(feature = "lsp-extras")]
 #[test]
-fn test_folding_ranges_blocks() {
+fn test_folding_ranges_blocks() -> TestResult {
     let mut server = setup_server();
 
     let content = r#"
@@ -142,19 +146,21 @@ foreach my $item (@items) {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
+    let response = server.handle_request(request).ok_or("Expected response from server")?;
     assert!(response.result.is_some());
 
-    let result = response.result.unwrap();
+    let result = response.result.ok_or("Expected result in response")?;
     assert!(result.is_array());
-    let ranges = result.as_array().unwrap();
+    let ranges = result.as_array().ok_or("Expected array of folding ranges")?;
 
     // Should have ranges for if, while, for, and foreach blocks
     assert!(ranges.len() >= 4, "Expected at least 4 folding ranges for control structures");
+
+    Ok(())
 }
 
 #[test]
-fn test_folding_ranges_packages() {
+fn test_folding_ranges_packages() -> TestResult {
     let mut server = setup_server();
 
     let content = r#"
@@ -163,7 +169,7 @@ package MyModule {
         my $class = shift;
         return bless {}, $class;
     }
-    
+
     sub method {
         my $self = shift;
         print "Method called\n";
@@ -190,19 +196,21 @@ package AnotherModule {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
+    let response = server.handle_request(request).ok_or("Expected response from server")?;
     assert!(response.result.is_some());
 
-    let result = response.result.unwrap();
+    let result = response.result.ok_or("Expected result in response")?;
     assert!(result.is_array());
-    let ranges = result.as_array().unwrap();
+    let ranges = result.as_array().ok_or("Expected array of folding ranges")?;
 
     // Should have ranges for both packages and their subroutines
     assert!(ranges.len() >= 2, "Expected at least 2 folding ranges for packages");
+
+    Ok(())
 }
 
 #[test]
-fn test_folding_ranges_try_catch() {
+fn test_folding_ranges_try_catch() -> TestResult {
     let mut server = setup_server();
 
     let content = r#"
@@ -230,19 +238,21 @@ try {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
+    let response = server.handle_request(request).ok_or("Expected response from server")?;
     assert!(response.result.is_some());
 
-    let result = response.result.unwrap();
+    let result = response.result.ok_or("Expected result in response")?;
     assert!(result.is_array());
-    let ranges = result.as_array().unwrap();
+    let ranges = result.as_array().ok_or("Expected array of folding ranges")?;
 
     // Should have ranges for try, catch, and finally blocks
     assert!(!ranges.is_empty(), "Expected folding ranges for try-catch-finally");
+
+    Ok(())
 }
 
 #[test]
-fn test_folding_ranges_data_structures() {
+fn test_folding_ranges_data_structures() -> TestResult {
     let mut server = setup_server();
 
     let content = r#"
@@ -275,19 +285,21 @@ my %hash = (
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
+    let response = server.handle_request(request).ok_or("Expected response from server")?;
     assert!(response.result.is_some());
 
-    let result = response.result.unwrap();
+    let result = response.result.ok_or("Expected result in response")?;
     assert!(result.is_array());
-    let ranges = result.as_array().unwrap();
+    let ranges = result.as_array().ok_or("Expected array of folding ranges")?;
 
     // Should have ranges for multi-line array and hash literals
     assert!(ranges.len() >= 2, "Expected folding ranges for array and hash literals");
+
+    Ok(())
 }
 
 #[test]
-fn test_folding_ranges_imports() {
+fn test_folding_ranges_imports() -> TestResult {
     let mut server = setup_server();
 
     let content = r#"
@@ -316,21 +328,23 @@ sub main {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
+    let response = server.handle_request(request).ok_or("Expected response from server")?;
     assert!(response.result.is_some());
 
-    let result = response.result.unwrap();
+    let result = response.result.ok_or("Expected result in response")?;
     assert!(result.is_array());
-    let ranges = result.as_array().unwrap();
+    let ranges = result.as_array().ok_or("Expected array of folding ranges")?;
 
     // Check for import group folding
     let has_import_range =
         ranges.iter().any(|r| r.get("kind").and_then(|k| k.as_str()) == Some("imports"));
     assert!(has_import_range, "Should have folding range for import group");
+
+    Ok(())
 }
 
 #[test]
-fn test_folding_ranges_empty_document() {
+fn test_folding_ranges_empty_document() -> TestResult {
     let mut server = setup_server();
 
     open_document(&mut server, "file:///empty.pl", "");
@@ -346,13 +360,15 @@ fn test_folding_ranges_empty_document() {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).unwrap();
+    let response = server.handle_request(request).ok_or("Expected response from server")?;
     assert!(response.result.is_some());
 
-    let result = response.result.unwrap();
+    let result = response.result.ok_or("Expected result in response")?;
     assert!(result.is_array());
-    let ranges = result.as_array().unwrap();
+    let ranges = result.as_array().ok_or("Expected array of folding ranges")?;
 
     // Empty document should have no folding ranges
     assert_eq!(ranges.len(), 0, "Empty document should have no folding ranges");
+
+    Ok(())
 }

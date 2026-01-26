@@ -31,6 +31,10 @@ count_unwraps() {
       if [[ "$dir" == "crates/tree-sitter-perl-rs/src" ]]; then
         continue
       fi
+      # Skip perl-parser-pest (legacy v2 implementation, not in production)
+      if [[ "$dir" == "crates/perl-parser-pest/src" ]]; then
+        continue
+      fi
       if [ -d "$dir" ]; then
         dir_count=$(rg "$PATTERN" "$dir" --count-matches 2>/dev/null | \
           awk -F: '{sum+=$2} END {print sum+0}')
@@ -53,6 +57,7 @@ show_top_offenders() {
     # Exclude tree-sitter-perl-rs (not in production workspace)
     rg "$PATTERN" crates/*/src -c 2>/dev/null | \
       grep -v "^crates/tree-sitter-perl-rs/" | \
+      grep -v "^crates/perl-parser-pest/" | \
       sort -t: -k2 -rn | head -15 | \
       awk -F: '{printf "  %4d  %s\n", $2, $1}'
   fi

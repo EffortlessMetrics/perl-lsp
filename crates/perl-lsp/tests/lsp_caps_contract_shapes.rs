@@ -3,10 +3,10 @@ use serde_json::json;
 
 /// Contract test ensuring all advertised capabilities have the correct shape per LSP 3.18 spec
 #[test]
-fn test_capability_shapes_lsp_318_contract() {
+fn test_capability_shapes_lsp_318_contract() -> Result<(), Box<dyn std::error::Error>> {
     let build = BuildFlags::production();
     let caps = capabilities_for(build.clone());
-    let caps_json = serde_json::to_value(&caps).unwrap();
+    let caps_json = serde_json::to_value(&caps)?;
 
     // Test text document sync shape (must be object with options)
     // Text sync is always enabled
@@ -260,11 +260,13 @@ fn test_capability_shapes_lsp_318_contract() {
             "inlineCompletionProvider must be under experimental"
         );
     }
+
+    Ok(())
 }
 
 /// Test that non-advertised features return MethodNotFound
 #[test]
-fn test_non_advertised_features_return_method_not_found() {
+fn test_non_advertised_features_return_method_not_found() -> Result<(), Box<dyn std::error::Error>> {
     // This would be tested via actual LSP server instances
     // For now, we document the expected behavior
 
@@ -275,14 +277,16 @@ fn test_non_advertised_features_return_method_not_found() {
     // When a feature is advertised (build flag = true):
     // 1. The capability must be present with correct shape
     // 2. Calling the method should never error, return [] or null for empty results
+
+    Ok(())
 }
 
 /// Test that all capability shapes match their handler expectations
 #[test]
-fn test_capability_handler_consistency() {
+fn test_capability_handler_consistency() -> Result<(), Box<dyn std::error::Error>> {
     let build = BuildFlags::all();
     let caps = capabilities_for(build);
-    let caps_json = serde_json::to_value(&caps).unwrap();
+    let caps_json = serde_json::to_value(&caps)?;
 
     // Verify rename has prepareProvider when handler exists
     if caps_json["renameProvider"].is_object() {
@@ -303,11 +307,13 @@ fn test_capability_handler_consistency() {
     if caps_json["inlayHintProvider"].is_object() {
         assert!(caps_json["inlayHintProvider"]["resolveProvider"].is_boolean());
     }
+
+    Ok(())
 }
 
 /// Test ga_lock configuration is conservative
 #[test]
-fn test_ga_lock_is_conservative() {
+fn test_ga_lock_is_conservative() -> Result<(), Box<dyn std::error::Error>> {
     let ga = BuildFlags::ga_lock();
     let _prod = BuildFlags::production();
 
@@ -323,4 +329,6 @@ fn test_ga_lock_is_conservative() {
     assert!(ga.hover, "hover is GA");
     assert!(ga.definition, "definition is GA");
     assert!(ga.references, "references is GA");
+
+    Ok(())
 }

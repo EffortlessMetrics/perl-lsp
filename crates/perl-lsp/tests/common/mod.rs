@@ -1,5 +1,4 @@
 //! Common test utilities for LSP integration tests
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //!
 //! ## Test Harness Contracts
 //!
@@ -60,10 +59,13 @@ fn next_id() -> i64 {
 
 /// Get completion items from a response, handling both array and object formats
 pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
-    resp["result"]["items"]
-        .as_array()
-        .or_else(|| resp["result"].as_array())
-        .expect("completion result should be array or { items: [] }")
+    match resp["result"]["items"].as_array() {
+        Some(arr) => arr,
+        None => match resp["result"].as_array() {
+            Some(arr) => arr,
+            None => panic!("completion result should be array or {{ items: [] }}, got: {resp:?}"),
+        },
+    }
 }
 
 pub struct LspServer {
@@ -81,7 +83,10 @@ pub struct LspServer {
 impl LspServer {
     /// Check if the server process is still running
     pub fn is_alive(&mut self) -> bool {
-        self.process.try_wait().unwrap().is_none()
+        match self.process.try_wait() {
+            Ok(status) => status.is_none(),
+            Err(_) => false, // If we can't check status, assume not alive
+        }
     }
 
     /// Get mutable access to the stdin writer
@@ -180,7 +185,13 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
 
 pub fn start_lsp_server() -> LspServer {
     // Serialize LSP server creation to prevent resource conflicts during concurrent testing
-    let _guard = LSP_SERVER_MUTEX.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let _guard = match LSP_SERVER_MUTEX.get_or_init(|| Mutex::new(())).lock() {
+        Ok(g) => g,
+        Err(poisoned) => {
+            eprintln!("Warning: LSP_SERVER_MUTEX was poisoned, recovering...");
+            poisoned.into_inner()
+        }
+    };
 
     // Try candidates in order; fall back cleanly on NotFound
     let mut last_err: Option<io::Error> = None;
@@ -250,14 +261,19 @@ pub fn start_lsp_server() -> LspServer {
         })
     };
 
-    let stdin = process.stdin.take().expect("child stdin should be available");
+    let stdin = match process.stdin.take() {
+        Some(s) => s,
+        None => panic!("child stdin should be available after spawn"),
+    };
 
     // -------- stderr drain thread (prevents child from blocking on logs) --------
-    let stderr = process.stderr.take().expect("stderr piped");
+    let stderr = match process.stderr.take() {
+        Some(s) => s,
+        None => panic!("stderr should be piped after spawn"),
+    };
     let echo = std::env::var_os("LSP_TEST_ECHO_STDERR").is_some();
-    let _stderr_thread = std::thread::Builder::new()
-        .name("lsp-stderr-drain".into())
-        .spawn(move || {
+    let _stderr_thread =
+        match std::thread::Builder::new().name("lsp-stderr-drain".into()).spawn(move || {
             let mut r = BufReader::new(stderr);
             let mut line = String::new();
             while r.read_line(&mut line).unwrap_or(0) > 0 {
@@ -266,16 +282,20 @@ pub fn start_lsp_server() -> LspServer {
                 }
                 line.clear();
             }
-        })
-        .unwrap();
+        }) {
+            Ok(handle) => handle,
+            Err(e) => panic!("Failed to spawn stderr drain thread: {e}"),
+        };
 
     // -------- stdout LSP reader thread --------
-    let stdout = process.stdout.take().expect("stdout piped");
+    let stdout = match process.stdout.take() {
+        Some(s) => s,
+        None => panic!("stdout should be piped after spawn"),
+    };
     let (tx, rx) = mpsc::channel::<Value>();
     let debug_reader = std::env::var_os("LSP_TEST_DEBUG_READER").is_some();
-    let _stdout_thread = std::thread::Builder::new()
-        .name("lsp-stdout-reader".into())
-        .spawn(move || {
+    let _stdout_thread =
+        match std::thread::Builder::new().name("lsp-stdout-reader".into()).spawn(move || {
             let mut r = BufReader::new(stdout);
             if debug_reader {
                 eprintln!("[reader] Thread started");
@@ -334,8 +354,10 @@ pub fn start_lsp_server() -> LspServer {
                     let _ = tx.send(val);
                 }
             }
-        })
-        .unwrap();
+        }) {
+            Ok(handle) => handle,
+            Err(e) => panic!("Failed to spawn stdout reader thread: {e}"),
+        };
 
     let server = LspServer {
         process,
@@ -375,18 +397,28 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
     // Match by ID to avoid confusion with interleaved notifications
     match &id {
         Value::Number(n) if n.as_i64().is_some() => {
-            read_response_matching_i64(server, n.as_i64().unwrap(), default_timeout())
-                .unwrap_or_else(|| {
-                    error_response_for_request(
-                        Some(id.clone()),
-                        ERR_TEST_TIMEOUT,
-                        "test harness timeout",
-                    )
-                })
+            // Safe unwrap: we just checked is_some() in the match guard
+            let id_num = match n.as_i64() {
+                Some(num) => num,
+                None => panic!("ID number should be i64: {n:?}"),
+            };
+            match read_response_matching_i64(server, id_num, default_timeout()) {
+                Some(resp) => resp,
+                None => error_response_for_request(
+                    Some(id.clone()),
+                    ERR_TEST_TIMEOUT,
+                    "test harness timeout",
+                ),
+            }
         }
-        v => read_response_matching(server, v, default_timeout()).unwrap_or_else(|| {
-            error_response_for_request(Some(id.clone()), ERR_TEST_TIMEOUT, "test harness timeout")
-        }),
+        v => match read_response_matching(server, v, default_timeout()) {
+            Some(resp) => resp,
+            None => error_response_for_request(
+                Some(id.clone()),
+                ERR_TEST_TIMEOUT,
+                "test harness timeout",
+            ),
+        },
     }
 }
 

@@ -4,7 +4,6 @@
 //! for all LSP features, ensuring complete end-to-end testing.
 
 #![allow(clippy::collapsible_if)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use colored::*;
 use std::collections::HashMap;
@@ -136,8 +135,10 @@ impl LspTestRunner {
             println!("{} {} ({} ms)", "✓".green(), name, duration);
         } else {
             println!("{} {} ({} ms)", "✗".red(), name, duration);
-            if let Some(ref err) = self.test_results.last().unwrap().error {
-                println!("  {}", err.red());
+            if let Some(last_result) = self.test_results.last() {
+                if let Some(ref err) = last_result.error {
+                    println!("  {}", err.red());
+                }
             }
         }
 
@@ -235,17 +236,13 @@ impl LspTestRunner {
             let mut sorted_results = self.test_results.clone();
             sorted_results.sort_by_key(|r| r.duration_ms);
 
-            println!(
-                "Fastest Test: {} ({} ms)",
-                sorted_results.first().unwrap().name,
-                sorted_results.first().unwrap().duration_ms
-            );
+            if let Some(fastest) = sorted_results.first() {
+                println!("Fastest Test: {} ({} ms)", fastest.name, fastest.duration_ms);
+            }
 
-            println!(
-                "Slowest Test: {} ({} ms)",
-                sorted_results.last().unwrap().name,
-                sorted_results.last().unwrap().duration_ms
-            );
+            if let Some(slowest) = sorted_results.last() {
+                println!("Slowest Test: {} ({} ms)", slowest.name, slowest.duration_ms);
+            }
 
             let avg_duration = sorted_results.iter().map(|r| r.duration_ms).sum::<u128>()
                 / sorted_results.len() as u128;
@@ -364,11 +361,13 @@ impl LspTestRunner {
         let mut file = File::create(filename)?;
 
         writeln!(file, "# LSP E2E Test Coverage Report\n")?;
-        writeln!(
-            file,
-            "Generated: {}\n",
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
-        )?;
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        writeln!(file, "Generated: {}\n", timestamp)?;
 
         writeln!(file, "## Summary\n")?;
 
@@ -431,19 +430,13 @@ impl LspTestRunner {
             let mut sorted = self.test_results.clone();
             sorted.sort_by_key(|r| r.duration_ms);
 
-            writeln!(
-                file,
-                "- **Fastest Test**: {} ({}ms)",
-                sorted.first().unwrap().name,
-                sorted.first().unwrap().duration_ms
-            )?;
+            if let Some(fastest) = sorted.first() {
+                writeln!(file, "- **Fastest Test**: {} ({}ms)", fastest.name, fastest.duration_ms)?;
+            }
 
-            writeln!(
-                file,
-                "- **Slowest Test**: {} ({}ms)",
-                sorted.last().unwrap().name,
-                sorted.last().unwrap().duration_ms
-            )?;
+            if let Some(slowest) = sorted.last() {
+                writeln!(file, "- **Slowest Test**: {} ({}ms)", slowest.name, slowest.duration_ms)?;
+            }
         }
 
         Ok(())
@@ -526,13 +519,18 @@ mod tests {
     }
 
     #[test]
-    fn test_runner_execution() {
+    fn test_runner_execution() -> Result<(), Box<dyn std::error::Error>> {
         let mut runner = LspTestRunner::new();
 
         let passed = runner.run_test("test_completion", "Completion", || Ok(()));
 
         assert!(passed);
         assert_eq!(runner.test_results.len(), 1);
-        assert!(runner.features.get("Completion").unwrap().tested);
+
+        let completion_feature =
+            runner.features.get("Completion").ok_or("Completion feature not found")?;
+        assert!(completion_feature.tested);
+
+        Ok(())
     }
 }

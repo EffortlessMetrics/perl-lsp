@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Workstream E: Test Hardening (Trust Anchor)
 //!
 //! This module contains small, brutal regression tests to prevent regressions in:
@@ -35,15 +34,19 @@ mod degraded_mode_tests {
     }
 
     /// Helper to open a test document
-    fn open_test_document(srv: &LspServer, uri: &str, content: &str) {
+    fn open_test_document(
+        srv: &LspServer,
+        uri: &str,
+        content: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         srv.test_handle_did_open(Some(json!({
             "textDocument": {
                 "uri": uri,
                 "text": content,
                 "languageId": "perl"
             }
-        })))
-        .unwrap();
+        })))?;
+        Ok(())
     }
 
     // =========================================================================
@@ -51,7 +54,8 @@ mod degraded_mode_tests {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_workspace_symbol_building_state_returns_open_doc_partials() {
+    fn test_workspace_symbol_building_state_returns_open_doc_partials()
+    -> Result<(), Box<dyn std::error::Error>> {
         // SAFETY: Test runs single-threaded with #[serial]
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
@@ -63,25 +67,24 @@ sub my_function { }
 sub another_function { }
 1;
 "#;
-        open_test_document(&srv, "file:///test/building.pm", content);
+        open_test_document(&srv, "file:///test/building.pm", content)?;
 
         // The index starts in Building state - workspace/symbol should still work
         // by falling back to open document search
-        let result = srv
-            .test_handle_workspace_symbols(Some(json!({
-                "query": "function"
-            })))
-            .unwrap();
+        let result = srv.test_handle_workspace_symbols(Some(json!({
+            "query": "function"
+        })))?;
 
         // Should return results from open documents even in Building state
         if let Some(result) = result {
-            let symbols = result.as_array().expect("Expected array");
+            let symbols = result.as_array().ok_or("Expected array for workspace symbols result")?;
             // Should find symbols containing "function" from the open document
             assert!(
                 !symbols.is_empty(),
                 "Building state should return partial results from open documents"
             );
         }
+        Ok(())
     }
 
     // =========================================================================
@@ -89,7 +92,8 @@ sub another_function { }
     // =========================================================================
     #[test]
     #[serial]
-    fn test_references_degraded_mode_same_file_fallback() {
+    fn test_references_degraded_mode_same_file_fallback() -> Result<(), Box<dyn std::error::Error>>
+    {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -101,19 +105,17 @@ print $counter;
 $counter = $counter + 1;
 "#;
         let uri = "file:///test/refs.pm";
-        open_test_document(&srv, uri, content);
+        open_test_document(&srv, uri, content)?;
 
         // Request references - should use same-file semantic analysis fallback
-        let result = srv
-            .test_handle_references(Some(json!({
-                "textDocument": {"uri": uri},
-                "position": {"line": 1, "character": 4}, // Position on $counter
-                "context": {"includeDeclaration": true}
-            })))
-            .unwrap();
+        let result = srv.test_handle_references(Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 1, "character": 4}, // Position on $counter
+            "context": {"includeDeclaration": true}
+        })))?;
 
         if let Some(result) = result {
-            let refs = result.as_array().expect("Expected array");
+            let refs = result.as_array().ok_or("Expected array for references result")?;
             // Should find multiple references even without full index
             assert!(
                 refs.len() >= 2,
@@ -121,6 +123,7 @@ $counter = $counter + 1;
                 refs.len()
             );
         }
+        Ok(())
     }
 
     // =========================================================================
@@ -128,7 +131,8 @@ $counter = $counter + 1;
     // =========================================================================
     #[test]
     #[serial]
-    fn test_completion_returns_results_in_building_state() {
+    fn test_completion_returns_results_in_building_state() -> Result<(), Box<dyn std::error::Error>>
+    {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -143,15 +147,13 @@ sub main {
 1;
 "#;
         let uri = "file:///test/complete.pm";
-        open_test_document(&srv, uri, content);
+        open_test_document(&srv, uri, content)?;
 
         // Request completion - should work from local context
-        let result = srv
-            .test_handle_completion(Some(json!({
-                "textDocument": {"uri": uri},
-                "position": {"line": 6, "character": 7} // After "hel"
-            })))
-            .unwrap();
+        let result = srv.test_handle_completion(Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 6, "character": 7} // After "hel"
+        })))?;
 
         if let Some(result) = result {
             // Completion should return something - either items array or object with items
@@ -163,6 +165,7 @@ sub main {
                 "Completion should return results even in Building state"
             );
         }
+        Ok(())
     }
 
     // =========================================================================
@@ -170,7 +173,7 @@ sub main {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_definition_same_file_fallback() {
+    fn test_definition_same_file_fallback() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -183,18 +186,16 @@ sub greet {
 greet("World");
 "#;
         let uri = "file:///test/def.pm";
-        open_test_document(&srv, uri, content);
+        open_test_document(&srv, uri, content)?;
 
         // Request definition on 'greet' call - should find same-file definition
-        let result = srv
-            .test_handle_definition(Some(json!({
-                "textDocument": {"uri": uri},
-                "position": {"line": 6, "character": 2} // On greet call
-            })))
-            .unwrap();
+        let result = srv.test_handle_definition(Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 6, "character": 2} // On greet call
+        })))?;
 
         if let Some(result) = result {
-            let defs = result.as_array().expect("Expected array");
+            let defs = result.as_array().ok_or("Expected array for definition result")?;
             // Should find the local definition
             assert!(
                 !defs.is_empty(),
@@ -202,11 +203,12 @@ greet("World");
             );
 
             // Verify it points to the definition line (line 1)
-            if !defs.is_empty() {
-                let line = defs[0]["range"]["start"]["line"].as_u64();
+            if let Some(first) = defs.first() {
+                let line = first["range"]["start"]["line"].as_u64();
                 assert_eq!(line, Some(1), "Should find definition on line 1");
             }
         }
+        Ok(())
     }
 
     // =========================================================================
@@ -214,7 +216,7 @@ greet("World");
     // =========================================================================
     #[test]
     #[serial]
-    fn test_hover_works_in_building_state() {
+    fn test_hover_works_in_building_state() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -226,15 +228,13 @@ sub add {
 }
 "#;
         let uri = "file:///test/hover.pm";
-        open_test_document(&srv, uri, content);
+        open_test_document(&srv, uri, content)?;
 
         // Request hover on 'add' - should work from local analysis
-        let result = srv
-            .test_handle_hover(Some(json!({
-                "textDocument": {"uri": uri},
-                "position": {"line": 2, "character": 5} // On 'add'
-            })))
-            .unwrap();
+        let result = srv.test_handle_hover(Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 2, "character": 5} // On 'add'
+        })))?;
 
         // Hover should return something useful (not an error)
         // Note: The exact content depends on implementation, but it shouldn't fail
@@ -242,6 +242,7 @@ sub add {
             // Should have some hover content or be an empty valid response
             assert!(!result.is_null() || result.as_object().is_some());
         }
+        Ok(())
     }
 
     // =========================================================================
@@ -249,7 +250,7 @@ sub add {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_document_symbols_always_works() {
+    fn test_document_symbols_always_works() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -269,17 +270,15 @@ sub method_two {
 1;
 "#;
         let uri = "file:///test/symbols.pm";
-        open_test_document(&srv, uri, content);
+        open_test_document(&srv, uri, content)?;
 
         // Request document symbols - should always work (file-local operation)
-        let result = srv
-            .test_handle_document_symbols(Some(json!({
-                "textDocument": {"uri": uri}
-            })))
-            .unwrap();
+        let result = srv.test_handle_document_symbols(Some(json!({
+            "textDocument": {"uri": uri}
+        })))?;
 
         if let Some(result) = result {
-            let symbols = result.as_array().expect("Expected array");
+            let symbols = result.as_array().ok_or("Expected array for document symbols result")?;
             // Should find package, methods, and variable
             assert!(
                 symbols.len() >= 2,
@@ -287,6 +286,7 @@ sub method_two {
                 symbols.len()
             );
         }
+        Ok(())
     }
 }
 
@@ -307,15 +307,19 @@ mod caps_enforcement_tests {
         LspServer::with_output(output)
     }
 
-    fn open_test_document(srv: &LspServer, uri: &str, content: &str) {
+    fn open_test_document(
+        srv: &LspServer,
+        uri: &str,
+        content: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         srv.test_handle_did_open(Some(json!({
             "textDocument": {
                 "uri": uri,
                 "text": content,
                 "languageId": "perl"
             }
-        })))
-        .unwrap();
+        })))?;
+        Ok(())
     }
 
     // =========================================================================
@@ -323,7 +327,7 @@ mod caps_enforcement_tests {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_workspace_symbol_respects_cap() {
+    fn test_workspace_symbol_respects_cap() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -335,17 +339,15 @@ mod caps_enforcement_tests {
         content.push_str("1;\n");
 
         let uri = "file:///test/big.pm";
-        open_test_document(&srv, uri, &content);
+        open_test_document(&srv, uri, &content)?;
 
         // Query for "sub_" which matches all 300 subroutines
-        let result = srv
-            .test_handle_workspace_symbols(Some(json!({
-                "query": "sub_"
-            })))
-            .unwrap();
+        let result = srv.test_handle_workspace_symbols(Some(json!({
+            "query": "sub_"
+        })))?;
 
         if let Some(result) = result {
-            let symbols = result.as_array().expect("Expected array");
+            let symbols = result.as_array().ok_or("Expected array for workspace symbols result")?;
             // Default cap is 200, so we should never exceed that
             assert!(
                 symbols.len() <= 200,
@@ -353,6 +355,7 @@ mod caps_enforcement_tests {
                 symbols.len()
             );
         }
+        Ok(())
     }
 
     // =========================================================================
@@ -360,7 +363,7 @@ mod caps_enforcement_tests {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_references_respects_cap() {
+    fn test_references_respects_cap() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -371,22 +374,21 @@ mod caps_enforcement_tests {
         }
 
         let uri = "file:///test/many_refs.pm";
-        open_test_document(&srv, uri, &content);
+        open_test_document(&srv, uri, &content)?;
 
         // Request references to $shared
-        let result = srv
-            .test_handle_references(Some(json!({
-                "textDocument": {"uri": uri},
-                "position": {"line": 0, "character": 4}, // On $shared
-                "context": {"includeDeclaration": true}
-            })))
-            .unwrap();
+        let result = srv.test_handle_references(Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": 4}, // On $shared
+            "context": {"includeDeclaration": true}
+        })))?;
 
         if let Some(result) = result {
-            let refs = result.as_array().expect("Expected array");
+            let refs = result.as_array().ok_or("Expected array for references result")?;
             // Default cap is 500, so we should never exceed that
             assert!(refs.len() <= 500, "References should respect cap (500), got {}", refs.len());
         }
+        Ok(())
     }
 
     // =========================================================================
@@ -394,7 +396,7 @@ mod caps_enforcement_tests {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_completion_respects_cap() {
+    fn test_completion_respects_cap() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -406,17 +408,15 @@ mod caps_enforcement_tests {
         content.push_str("sub main {\n    prefix_\n}\n1;\n");
 
         let uri = "file:///test/many_completions.pm";
-        open_test_document(&srv, uri, &content);
+        open_test_document(&srv, uri, &content)?;
 
         // Request completion after "prefix_"
         // The line number depends on how many subs we created
         let line = 151; // After 150 subs + package declaration + 1 for main start
-        let result = srv
-            .test_handle_completion(Some(json!({
-                "textDocument": {"uri": uri},
-                "position": {"line": line, "character": 11}
-            })))
-            .unwrap();
+        let result = srv.test_handle_completion(Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": 11}
+        })))?;
 
         if let Some(result) = result {
             let items =
@@ -432,6 +432,7 @@ mod caps_enforcement_tests {
                 );
             }
         }
+        Ok(())
     }
 }
 
@@ -452,15 +453,19 @@ mod deadline_enforcement_tests {
         LspServer::with_output(output)
     }
 
-    fn open_test_document(srv: &LspServer, uri: &str, content: &str) {
+    fn open_test_document(
+        srv: &LspServer,
+        uri: &str,
+        content: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         srv.test_handle_did_open(Some(json!({
             "textDocument": {
                 "uri": uri,
                 "text": content,
                 "languageId": "perl"
             }
-        })))
-        .unwrap();
+        })))?;
+        Ok(())
     }
 
     // =========================================================================
@@ -468,7 +473,8 @@ mod deadline_enforcement_tests {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_references_returns_partial_not_timeout_error() {
+    fn test_references_returns_partial_not_timeout_error() -> Result<(), Box<dyn std::error::Error>>
+    {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -479,22 +485,20 @@ mod deadline_enforcement_tests {
         }
 
         let uri = "file:///test/deadline.pm";
-        open_test_document(&srv, uri, &content);
+        open_test_document(&srv, uri, &content)?;
 
         // Request references - should return partial results on deadline, not error
         let result = srv.test_handle_references(Some(json!({
             "textDocument": {"uri": uri},
             "position": {"line": 0, "character": 4}, // On $target
             "context": {"includeDeclaration": true}
-        })));
+        })))?;
 
-        // The key assertion: this should succeed, not return a timeout error
-        assert!(result.is_ok(), "References should return Ok, not timeout error");
-
-        // And the result should be a valid response (array of locations)
-        if let Ok(Some(result)) = result {
+        // The result should be a valid response (array of locations)
+        if let Some(result) = result {
             assert!(result.is_array(), "References result should be an array, not an error");
         }
+        Ok(())
     }
 
     // =========================================================================
@@ -502,7 +506,8 @@ mod deadline_enforcement_tests {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_workspace_symbols_early_exit_returns_partial() {
+    fn test_workspace_symbols_early_exit_returns_partial() -> Result<(), Box<dyn std::error::Error>>
+    {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -510,21 +515,19 @@ mod deadline_enforcement_tests {
         for i in 0..20 {
             let uri = format!("file:///test/file_{}.pm", i);
             let content = format!("package Package{};\nsub search_target_{} {{ }}\n1;\n", i, i);
-            open_test_document(&srv, &uri, &content);
+            open_test_document(&srv, &uri, &content)?;
         }
 
         // Query that matches across all files
         let result = srv.test_handle_workspace_symbols(Some(json!({
             "query": "search_target"
-        })));
+        })))?;
 
-        // Should succeed (not timeout)
-        assert!(result.is_ok(), "Workspace symbols should return Ok, not timeout");
-
-        if let Ok(Some(result)) = result {
+        if let Some(result) = result {
             // Should be an array of symbols
             assert!(result.is_array(), "Should return array of symbols");
         }
+        Ok(())
     }
 
     // =========================================================================
@@ -532,34 +535,33 @@ mod deadline_enforcement_tests {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_handler_graceful_with_minimal_work() {
+    fn test_handler_graceful_with_minimal_work() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
         // Simple file - should complete well within any deadline
         let content = "sub simple { 1 }";
         let uri = "file:///test/simple.pm";
-        open_test_document(&srv, uri, content);
+        open_test_document(&srv, uri, content)?;
 
         // All these operations should complete successfully
-        let def_result = srv.test_handle_definition(Some(json!({
+        srv.test_handle_definition(Some(json!({
             "textDocument": {"uri": uri},
             "position": {"line": 0, "character": 5}
-        })));
-        assert!(def_result.is_ok(), "Definition should succeed");
+        })))?;
 
-        let refs_result = srv.test_handle_references(Some(json!({
+        srv.test_handle_references(Some(json!({
             "textDocument": {"uri": uri},
             "position": {"line": 0, "character": 5},
             "context": {"includeDeclaration": true}
-        })));
-        assert!(refs_result.is_ok(), "References should succeed");
+        })))?;
 
-        let hover_result = srv.test_handle_hover(Some(json!({
+        srv.test_handle_hover(Some(json!({
             "textDocument": {"uri": uri},
             "position": {"line": 0, "character": 5}
-        })));
-        assert!(hover_result.is_ok(), "Hover should succeed");
+        })))?;
+
+        Ok(())
     }
 }
 
@@ -586,15 +588,19 @@ mod windows_uri_path_tests {
         LspServer::with_output(output)
     }
 
-    fn open_test_document(srv: &LspServer, uri: &str, content: &str) {
+    fn open_test_document(
+        srv: &LspServer,
+        uri: &str,
+        content: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         srv.test_handle_did_open(Some(json!({
             "textDocument": {
                 "uri": uri,
                 "text": content,
                 "languageId": "perl"
             }
-        })))
-        .unwrap();
+        })))?;
+        Ok(())
     }
 
     // =========================================================================
@@ -602,7 +608,7 @@ mod windows_uri_path_tests {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_root_path_forward_slashes() {
+    fn test_root_path_forward_slashes() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -610,17 +616,17 @@ mod windows_uri_path_tests {
         let uri = "file:///C:/Users/test/project/lib/Module.pm";
         let content = "package Module; sub foo { } 1;";
 
-        open_test_document(&srv, uri, content);
+        open_test_document(&srv, uri, content)?;
 
         // Should be able to query the document
         let result = srv.test_handle_document_symbols(Some(json!({
             "textDocument": {"uri": uri}
-        })));
+        })))?;
 
-        assert!(result.is_ok(), "Should handle Windows-style URI");
-        if let Ok(Some(result)) = result {
+        if let Some(result) = result {
             assert!(result.is_array());
         }
+        Ok(())
     }
 
     // =========================================================================
@@ -628,32 +634,30 @@ mod windows_uri_path_tests {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_drive_letter_case_normalization() {
+    fn test_drive_letter_case_normalization() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
         // Open with uppercase drive letter
         let uri_upper = "file:///C:/project/test.pm";
         let content = "package Test; sub method { } 1;";
-        open_test_document(&srv, uri_upper, content);
+        open_test_document(&srv, uri_upper, content)?;
 
         // Query with lowercase drive letter - should still find the document
         // Note: The exact behavior depends on normalize_uri_key implementation
         let _uri_lower = "file:///c:/project/test.pm";
 
         // Both should refer to the same document (after normalization)
-        let result_upper = srv.test_handle_document_symbols(Some(json!({
+        srv.test_handle_document_symbols(Some(json!({
             "textDocument": {"uri": uri_upper}
-        })));
-
-        assert!(result_upper.is_ok(), "Upper case drive letter should work");
+        })))?;
 
         // Test that workspace symbols can find content regardless of case
-        let ws_result = srv.test_handle_workspace_symbols(Some(json!({
+        srv.test_handle_workspace_symbols(Some(json!({
             "query": "method"
-        })));
+        })))?;
 
-        assert!(ws_result.is_ok(), "Should find symbols from Windows path");
+        Ok(())
     }
 
     // =========================================================================
@@ -661,7 +665,7 @@ mod windows_uri_path_tests {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_uri_percent_encoding_spaces() {
+    fn test_uri_percent_encoding_spaces() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -669,29 +673,27 @@ mod windows_uri_path_tests {
         let uri = "file:///C:/Program%20Files/MyApp/lib/MyModule.pm";
         let content = "package MyModule; sub init { } 1;";
 
-        open_test_document(&srv, uri, content);
+        open_test_document(&srv, uri, content)?;
 
-        let result = srv.test_handle_document_symbols(Some(json!({
+        srv.test_handle_document_symbols(Some(json!({
             "textDocument": {"uri": uri}
-        })));
+        })))?;
 
-        assert!(result.is_ok(), "Should handle percent-encoded spaces");
+        Ok(())
     }
 
     // =========================================================================
     // Test: URI to filesystem path conversion (Windows-style)
     // =========================================================================
     #[test]
-    fn test_uri_to_fs_path_windows_style() {
+    fn test_uri_to_fs_path_windows_style() -> Result<(), Box<dyn std::error::Error>> {
         // Test that Windows-style URIs can be converted
         // Note: This will behave differently on Windows vs Unix
 
         #[cfg(target_os = "windows")]
         {
             let uri = "file:///C:/Users/test/script.pl";
-            let path = uri_to_fs_path(uri);
-            assert!(path.is_some(), "Should convert Windows file URI");
-            let path = path.unwrap();
+            let path = uri_to_fs_path(uri).ok_or("Should convert Windows file URI")?;
             assert!(path.to_string_lossy().contains("Users"), "Should have correct path");
         }
 
@@ -702,28 +704,26 @@ mod windows_uri_path_tests {
             let uri = "file:///C:/Users/test/script.pl";
             let _ = uri_to_fs_path(uri); // May return None on Unix, that's ok
         }
+        Ok(())
     }
 
     // =========================================================================
     // Test: fs_path_to_uri handles various path formats
     // =========================================================================
     #[test]
-    fn test_fs_path_to_uri_formats() {
+    fn test_fs_path_to_uri_formats() -> Result<(), Box<dyn std::error::Error>> {
         // Unix-style path
-        let result = fs_path_to_uri("/tmp/test.pl");
-        assert!(result.is_ok(), "Should convert Unix path");
-        let uri = result.unwrap();
+        let uri = fs_path_to_uri("/tmp/test.pl")?;
         assert!(uri.starts_with("file://"), "Should be file URI");
         assert!(uri.contains("test.pl"), "Should contain filename");
 
         // Path with spaces
-        let result = fs_path_to_uri("/tmp/my project/test.pl");
-        assert!(result.is_ok(), "Should convert path with spaces");
-        let uri = result.unwrap();
+        let uri = fs_path_to_uri("/tmp/my project/test.pl")?;
         assert!(
             uri.contains("%20") || uri.contains("my%20project"),
             "Should percent-encode spaces"
         );
+        Ok(())
     }
 
     // =========================================================================
@@ -731,7 +731,7 @@ mod windows_uri_path_tests {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_module_resolution_mixed_slashes() {
+    fn test_module_resolution_mixed_slashes() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -750,18 +750,18 @@ sub process {
 
 1;
 "#;
-        open_test_document(&srv, uri, content);
+        open_test_document(&srv, uri, content)?;
 
         // Should be able to find symbols
         let result = srv.test_handle_workspace_symbols(Some(json!({
             "query": "process"
-        })));
+        })))?;
 
-        assert!(result.is_ok());
-        if let Ok(Some(result)) = result {
-            let symbols = result.as_array().expect("Expected array");
+        if let Some(result) = result {
+            let symbols = result.as_array().ok_or("Expected array for symbols result")?;
             assert!(!symbols.is_empty(), "Should find symbols regardless of path format");
         }
+        Ok(())
     }
 
     // =========================================================================
@@ -769,7 +769,7 @@ sub process {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_backslash_path_traversal_security() {
+    fn test_backslash_path_traversal_security() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -778,15 +778,14 @@ sub process {
         let content = "print 'x';";
 
         // Opening should work (the content is benign)
-        open_test_document(&srv, suspicious_uri, content);
+        open_test_document(&srv, suspicious_uri, content)?;
 
         // The key is that operations don't crash and handle the path safely
-        let result = srv.test_handle_document_symbols(Some(json!({
+        srv.test_handle_document_symbols(Some(json!({
             "textDocument": {"uri": suspicious_uri}
-        })));
+        })))?;
 
-        // Should return something (even if empty) without crashing
-        assert!(result.is_ok(), "Should handle suspicious paths without crashing");
+        Ok(())
     }
 
     // =========================================================================
@@ -794,7 +793,7 @@ sub process {
     // =========================================================================
     #[test]
     #[serial]
-    fn test_unc_path_handling() {
+    fn test_unc_path_handling() -> Result<(), Box<dyn std::error::Error>> {
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
         let srv = create_test_server();
 
@@ -802,14 +801,13 @@ sub process {
         let uri = "file://server/share/project/lib/Module.pm";
         let content = "package Module; 1;";
 
-        open_test_document(&srv, uri, content);
+        open_test_document(&srv, uri, content)?;
 
-        let result = srv.test_handle_document_symbols(Some(json!({
+        srv.test_handle_document_symbols(Some(json!({
             "textDocument": {"uri": uri}
-        })));
+        })))?;
 
-        // Should handle without crashing (even if not fully supported)
-        assert!(result.is_ok(), "Should handle UNC-style paths without crashing");
+        Ok(())
     }
 }
 
@@ -863,7 +861,7 @@ mod workspace_index_unit_tests {
     // Test: Resource limits trigger degradation
     // =========================================================================
     #[test]
-    fn test_max_files_limit_triggers_degradation() {
+    fn test_max_files_limit_triggers_degradation() -> Result<(), Box<dyn std::error::Error>> {
         let limits = IndexResourceLimits {
             max_files: 2, // Very low for testing
             ..Default::default()
@@ -875,8 +873,8 @@ mod workspace_index_unit_tests {
         // Index 5 files (exceeds limit of 2)
         for i in 0..5 {
             let uri = format!("file:///test{}.pl", i);
-            let url = url::Url::parse(&uri).unwrap();
-            coordinator.index().index_file(url, "sub test { }".into()).unwrap();
+            let url = url::Url::parse(&uri)?;
+            coordinator.index().index_file(url, "sub test { }".into())?;
         }
 
         coordinator.enforce_limits();
@@ -887,10 +885,11 @@ mod workspace_index_unit_tests {
             }
             other => panic!("Expected MaxFiles degradation, got {:?}", other),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_max_symbols_limit_triggers_degradation() {
+    fn test_max_symbols_limit_triggers_degradation() -> Result<(), Box<dyn std::error::Error>> {
         let limits = IndexResourceLimits {
             max_total_symbols: 5, // Very low for testing
             ..Default::default()
@@ -906,8 +905,8 @@ sub a { } sub b { } sub c { } sub d { } sub e { }
 sub f { } sub g { } sub h { } sub i { } sub j { }
 1;
 "#;
-        let url = url::Url::parse("file:///test.pm").unwrap();
-        coordinator.index().index_file(url, content.into()).unwrap();
+        let url = url::Url::parse("file:///test.pm")?;
+        coordinator.index().index_file(url, content.into())?;
 
         coordinator.enforce_limits();
 
@@ -917,6 +916,7 @@ sub f { } sub g { } sub h { } sub i { } sub j { }
             }
             other => panic!("Expected MaxSymbols degradation, got {:?}", other),
         }
+        Ok(())
     }
 
     // =========================================================================

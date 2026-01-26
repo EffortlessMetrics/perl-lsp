@@ -1,5 +1,4 @@
 #![cfg(feature = "incremental")]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive edge case tests for incremental parsing
 //!
 //! This module tests the incremental parser against challenging scenarios
@@ -12,9 +11,11 @@ use perl_parser::incremental_v2::IncrementalParserV2;
 // Remove unused imports - these were imported but not used in the current test implementation
 use std::time::Instant;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 /// Test incremental parsing with deeply nested structures
 #[test]
-fn test_deeply_nested_structures() {
+fn test_deeply_nested_structures() -> TestResult {
     println!("\n🏗️ Testing deeply nested structures...");
 
     // Create deeply nested Perl structure
@@ -36,7 +37,7 @@ fn test_deeply_nested_structures() {
 
     // Initial parse
     let start = Instant::now();
-    parser.parse(&nested_source).unwrap();
+    parser.parse(&nested_source)?;
     let initial_time = start.elapsed();
     let initial_nodes = parser.reparsed_nodes;
 
@@ -75,11 +76,12 @@ fn test_deeply_nested_structures() {
     } else {
         println!("  ⚠️ No node reuse in deeply nested structure (acceptable fallback)");
     }
+    Ok(())
 }
 
 /// Test incremental parsing with mixed quote types and escaping
 #[test]
-fn test_complex_string_handling() {
+fn test_complex_string_handling() -> TestResult {
     println!("\n🔤 Testing complex string handling...");
 
     let complex_strings = vec![
@@ -94,7 +96,7 @@ fn test_complex_string_handling() {
         println!("  Test case {}: {}", i + 1, source.get(..30).unwrap_or(source));
 
         let mut parser = IncrementalParserV2::new();
-        parser.parse(source).unwrap();
+        parser.parse(source)?;
 
         // Attempt to create edit - some may fail due to string complexity
         let edit_result = std::panic::catch_unwind(|| {
@@ -128,11 +130,12 @@ fn test_complex_string_handling() {
             }
         }
     }
+    Ok(())
 }
 
 /// Test incremental parsing with various whitespace and formatting patterns
 #[test]
-fn test_whitespace_sensitivity() {
+fn test_whitespace_sensitivity() -> TestResult {
     println!("\n⚪ Testing whitespace sensitivity...");
 
     let whitespace_cases = vec![
@@ -149,7 +152,7 @@ fn test_whitespace_sensitivity() {
         println!("  Whitespace case {}: {:?}", i + 1, source);
 
         let mut parser = IncrementalParserV2::new();
-        parser.parse(source).unwrap();
+        parser.parse(source)?;
 
         let (new_source, edit) = IncrementalTestUtils::create_value_edit(source, old_val, new_val);
 
@@ -177,6 +180,7 @@ fn test_whitespace_sensitivity() {
             );
         }
     }
+    Ok(())
 }
 
 /// Test incremental parsing with syntax error recovery scenarios
@@ -246,7 +250,7 @@ fn test_syntax_error_recovery() {
 
 /// Test incremental parsing with very large single statements
 #[test]
-fn test_very_large_statements() {
+fn test_very_large_statements() -> TestResult {
     println!("\n📏 Testing very large statements...");
 
     // Generate a very large array literal
@@ -262,7 +266,7 @@ fn test_very_large_statements() {
     let mut parser = IncrementalParserV2::new();
 
     let start = Instant::now();
-    parser.parse(&large_array).unwrap();
+    parser.parse(&large_array)?;
     let initial_time = start.elapsed();
     let initial_nodes = parser.reparsed_nodes;
 
@@ -297,11 +301,12 @@ fn test_very_large_statements() {
     } else {
         println!("  ⚠️ Limited reuse for large statement (fallback to full parsing)");
     }
+    Ok(())
 }
 
 /// Test incremental parsing with complex regular expressions
 #[test]
-fn test_complex_regex_handling() {
+fn test_complex_regex_handling() -> TestResult {
     println!("\n🔍 Testing complex regex handling...");
 
     let regex_cases = vec![
@@ -316,7 +321,7 @@ fn test_complex_regex_handling() {
         println!("  Regex case {}: {}", i + 1, source);
 
         let mut parser = IncrementalParserV2::new();
-        parser.parse(source).unwrap();
+        parser.parse(source)?;
 
         let edit_result = std::panic::catch_unwind(|| {
             IncrementalTestUtils::create_value_edit(source, old_val, new_val)
@@ -349,11 +354,12 @@ fn test_complex_regex_handling() {
             }
         }
     }
+    Ok(())
 }
 
 /// Test incremental parsing with extreme position shifts
 #[test]
-fn test_extreme_position_shifts() {
+fn test_extreme_position_shifts() -> TestResult {
     println!("\n↔️ Testing extreme position shifts...");
 
     // Create source with content at the beginning, middle, and end
@@ -364,7 +370,7 @@ fn test_extreme_position_shifts() {
     );
 
     let mut parser = IncrementalParserV2::new();
-    parser.parse(&source).unwrap();
+    parser.parse(&source)?;
 
     // Make a small edit near the beginning that could affect positions throughout
     let (new_source, edit) = IncrementalTestUtils::create_value_edit(&source, "100", "1");
@@ -391,6 +397,7 @@ fn test_extreme_position_shifts() {
     } else {
         println!("  ⚠️ Full reparse due to position shifts (acceptable for complex cases)");
     }
+    Ok(())
 }
 
 /// Test incremental parsing with circular reference patterns
@@ -452,7 +459,7 @@ fn test_circular_reference_patterns() {
 
 /// Test incremental parsing performance under memory pressure
 #[test]
-fn test_memory_pressure_scenarios() {
+fn test_memory_pressure_scenarios() -> TestResult {
     println!("\n🧠 Testing memory pressure scenarios...");
 
     // Create multiple large documents to stress memory usage
@@ -469,7 +476,7 @@ fn test_memory_pressure_scenarios() {
         let doc = large_doc.replace("{}", &i.to_string());
 
         let start = Instant::now();
-        parser.parse(&doc).unwrap();
+        parser.parse(&doc)?;
         let parse_time = start.elapsed();
 
         parsers.push((parser, doc));
@@ -503,16 +510,17 @@ fn test_memory_pressure_scenarios() {
     }
 
     println!("  Memory pressure test completed successfully");
+    Ok(())
 }
 
 /// Test incremental parsing with concurrent-like rapid edits
 #[test]
-fn test_rapid_fire_edits() {
+fn test_rapid_fire_edits() -> TestResult {
     println!("\n⚡ Testing rapid fire edits...");
 
     let base_source = "my $counter = 0; my $result = $counter * 2;";
     let mut parser = IncrementalParserV2::new();
-    parser.parse(base_source).unwrap();
+    parser.parse(base_source)?;
 
     let mut cumulative_time = 0u128;
     let mut all_results = Vec::new();
@@ -568,6 +576,7 @@ fn test_rapid_fire_edits() {
     assert!(late_avg < early_avg * 3, "Rapid edit performance should remain stable");
 
     println!("  ✅ Rapid fire edit test completed successfully");
+    Ok(())
 }
 
 /// Test incremental parsing with edge cases in Unicode handling

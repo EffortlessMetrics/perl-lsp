@@ -79,7 +79,7 @@ impl FinalCoverageTestContext {
 
 #[test]
 
-fn test_user_story_advanced_debugging() {
+fn test_user_story_advanced_debugging() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = FinalCoverageTestContext::new();
     ctx.initialize();
 
@@ -310,6 +310,8 @@ main() unless caller;
     println!("✓ Debug console/REPL works");
 
     println!("✅ Advanced debugging user story test complete");
+
+    Ok(())
 }
 
 // ==================== USER STORY: WORKSPACE CONFIGURATION ====================
@@ -318,7 +320,7 @@ main() unless caller;
 
 #[test]
 
-fn test_user_story_workspace_configuration() {
+fn test_user_story_workspace_configuration() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = FinalCoverageTestContext::new();
     ctx.initialize();
 
@@ -461,6 +463,8 @@ sections = NAME | SYNOPSIS | DESCRIPTION | AUTHOR
     println!("✓ Team settings validation works");
 
     println!("✅ Workspace configuration user story test complete");
+
+    Ok(())
 }
 
 // ==================== USER STORY: CUSTOM SNIPPET SYSTEM ====================
@@ -469,7 +473,7 @@ sections = NAME | SYNOPSIS | DESCRIPTION | AUTHOR
 
 #[test]
 
-fn test_user_story_custom_snippets() {
+fn test_user_story_custom_snippets() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = FinalCoverageTestContext::new();
     ctx.initialize();
 
@@ -497,7 +501,7 @@ fn test_user_story_custom_snippets() {
                 "position": {"line": 5, "character": trigger.len()},
                 "context": {
                     "triggerKind": 2,  // TriggerForIncompleteCompletions
-                    "triggerCharacter": trigger.chars().last().unwrap()
+                    "triggerCharacter": trigger.chars().last().ok_or("Empty trigger string")?
                 }
             })),
         );
@@ -649,6 +653,8 @@ fn test_user_story_custom_snippets() {
     println!("✓ Multi-file snippet generation works");
 
     println!("✅ Custom snippet system user story test complete");
+
+    Ok(())
 }
 
 // ==================== USER STORY: VERSION CONTROL INTEGRATION ====================
@@ -657,7 +663,7 @@ fn test_user_story_custom_snippets() {
 
 #[test]
 
-fn test_user_story_version_control_integration() {
+fn test_user_story_version_control_integration() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = FinalCoverageTestContext::new();
     ctx.initialize();
 
@@ -766,6 +772,8 @@ fn test_user_story_version_control_integration() {
     println!("✓ Commit message assistance works");
 
     println!("✅ Version control integration user story test complete");
+
+    Ok(())
 }
 
 // ==================== USER STORY: REAL-TIME COLLABORATION ====================
@@ -774,7 +782,7 @@ fn test_user_story_version_control_integration() {
 
 #[test]
 
-fn test_user_story_real_time_collaboration() {
+fn test_user_story_real_time_collaboration() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = FinalCoverageTestContext::new();
     ctx.initialize();
 
@@ -913,6 +921,8 @@ fn test_user_story_real_time_collaboration() {
     println!("✓ Shared terminal/execution works");
 
     println!("✅ Real-time collaboration user story test complete");
+
+    Ok(())
 }
 
 // ==================== COMPREHENSIVE FINAL SUMMARY ====================

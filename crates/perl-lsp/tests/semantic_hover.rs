@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Semantic-aware textDocument/hover tests
 //!
 //! These tests verify that the LSP hover handler uses SemanticAnalyzer
@@ -30,19 +29,24 @@ mod semantic_hover_tests {
 
     /// Compute (line, character) for a given `needle` on a specific `target_line`.
     /// Same helper as used in semantic_definition.rs for consistency.
-    fn find_pos(code: &str, needle: &str, target_line: usize) -> (u32, u32) {
+    fn find_pos(
+        code: &str,
+        needle: &str,
+        target_line: usize,
+    ) -> Result<(u32, u32), Box<dyn std::error::Error>> {
         let line = code
             .lines()
             .nth(target_line)
-            .unwrap_or_else(|| panic!("no line {} in test code", target_line));
+            .ok_or_else(|| format!("no line {} in test code", target_line))?;
         let col = line
             .find(needle)
-            .unwrap_or_else(|| panic!("could not find `{needle}` on line {target_line}"));
-        (target_line as u32, col as u32)
+            .ok_or_else(|| format!("could not find `{needle}` on line {target_line}"))?;
+        Ok((target_line as u32, col as u32))
     }
 
     #[test]
-    fn hover_on_scalar_variable_shows_declaration_info() {
+    fn hover_on_scalar_variable_shows_declaration_info() -> Result<(), Box<dyn std::error::Error>>
+    {
         let code = r#"my $count = 42;
 my $result = $count * 2;
 "#;
@@ -52,12 +56,12 @@ my $result = $count * 2;
         server.open_document(uri, code);
 
         // Hover on the `$count` reference in the second line
-        let (line, character) = find_pos(code, "$count", 1);
+        let (line, character) = find_pos(code, "$count", 1)?;
         let response = server.get_hover(uri, line, character);
         println!("SCALAR HOVER RESPONSE: {response:#}");
 
-        let content =
-            hover_content(&response).expect("expected hover content for $count reference");
+        let content = hover_content(&response)
+            .ok_or("expected hover content for $count reference")?;
 
         // Verify hover shows scalar variable information
         assert!(
@@ -68,10 +72,11 @@ my $result = $count * 2;
             content.contains("$count"),
             "hover should show variable name with sigil, got: {content}"
         );
+        Ok(())
     }
 
     #[test]
-    fn hover_on_subroutine_shows_signature() {
+    fn hover_on_subroutine_shows_signature() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"sub calculate {
     my ($x, $y) = @_;
     return $x + $y;
@@ -85,22 +90,24 @@ my $sum = calculate(10, 20);
         server.open_document(uri, code);
 
         // Hover on "calculate" in the function call
-        let (line, character) = find_pos(code, "calculate(10", 5);
+        let (line, character) = find_pos(code, "calculate(10", 5)?;
         let response = server.get_hover(uri, line, character);
         println!("SUB HOVER RESPONSE: {response:#}");
 
         let content =
-            hover_content(&response).expect("expected hover content for calculate() call");
+            hover_content(&response).ok_or("expected hover content for calculate() call")?;
 
         // Verify hover shows subroutine information
         assert!(
             content.contains("Subroutine") || content.contains("calculate"),
             "hover should indicate subroutine or show name, got: {content}"
         );
+        Ok(())
     }
 
     #[test]
-    fn hover_on_subroutine_declaration_shows_signature() {
+    fn hover_on_subroutine_declaration_shows_signature(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"sub format_name {
     my ($first, $last) = @_;
     return "$first $last";
@@ -112,22 +119,24 @@ my $sum = calculate(10, 20);
         server.open_document(uri, code);
 
         // Hover on "format_name" in the declaration
-        let (line, character) = find_pos(code, "format_name", 0);
+        let (line, character) = find_pos(code, "format_name", 0)?;
         let response = server.get_hover(uri, line, character);
         println!("SUB DECL HOVER RESPONSE: {response:#}");
 
-        let content =
-            hover_content(&response).expect("expected hover content for format_name declaration");
+        let content = hover_content(&response)
+            .ok_or("expected hover content for format_name declaration")?;
 
         // Verify hover shows subroutine declaration information
         assert!(
             content.contains("Subroutine") || content.contains("format_name"),
             "hover should show subroutine information, got: {content}"
         );
+        Ok(())
     }
 
     #[test]
-    fn hover_on_package_qualified_call_shows_context() {
+    fn hover_on_package_qualified_call_shows_context() -> Result<(), Box<dyn std::error::Error>>
+    {
         let code = r#"package Math::Utils {
     sub multiply {
         my ($a, $b) = @_;
@@ -144,12 +153,12 @@ my $product = Math::Utils::multiply(5, 6);
         server.open_document(uri, code);
 
         // Hover on "multiply" in the qualified call Math::Utils::multiply
-        let (line, character) = find_pos(code, "multiply(5", 8);
+        let (line, character) = find_pos(code, "multiply(5", 8)?;
         let response = server.get_hover(uri, line, character);
         println!("PKG QUALIFIED HOVER RESPONSE: {response:#}");
 
         let content = hover_content(&response)
-            .expect("expected hover content for Math::Utils::multiply() call");
+            .ok_or("expected hover content for Math::Utils::multiply() call")?;
 
         // Verify hover shows function information
         // Note: Package context validation depends on SemanticAnalyzer's package tracking
@@ -157,10 +166,11 @@ my $product = Math::Utils::multiply(5, 6);
             content.contains("multiply") || content.contains("Subroutine"),
             "hover should show function name or type, got: {content}"
         );
+        Ok(())
     }
 
     #[test]
-    fn hover_on_array_variable_shows_type() {
+    fn hover_on_array_variable_shows_type() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"my @numbers = (1, 2, 3, 4, 5);
 my $first = $numbers[0];
 "#;
@@ -170,21 +180,22 @@ my $first = $numbers[0];
         server.open_document(uri, code);
 
         // Hover on "@numbers" in the declaration
-        let (line, character) = find_pos(code, "@numbers", 0);
+        let (line, character) = find_pos(code, "@numbers", 0)?;
         let response = server.get_hover(uri, line, character);
         println!("ARRAY HOVER RESPONSE: {response:#}");
 
-        let content = hover_content(&response).expect("expected hover content for @numbers");
+        let content = hover_content(&response).ok_or("expected hover content for @numbers")?;
 
         // Verify hover shows array variable information
         assert!(
             content.contains("Array Variable") || content.contains("@numbers"),
             "hover should show array type or name, got: {content}"
         );
+        Ok(())
     }
 
     #[test]
-    fn hover_on_hash_variable_shows_type() {
+    fn hover_on_hash_variable_shows_type() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"my %config = (debug => 1, verbose => 0);
 my $debug_mode = $config{debug};
 "#;
@@ -194,21 +205,22 @@ my $debug_mode = $config{debug};
         server.open_document(uri, code);
 
         // Hover on "%config" in the declaration
-        let (line, character) = find_pos(code, "%config", 0);
+        let (line, character) = find_pos(code, "%config", 0)?;
         let response = server.get_hover(uri, line, character);
         println!("HASH HOVER RESPONSE: {response:#}");
 
-        let content = hover_content(&response).expect("expected hover content for %config");
+        let content = hover_content(&response).ok_or("expected hover content for %config")?;
 
         // Verify hover shows hash variable information
         assert!(
             content.contains("Hash Variable") || content.contains("%config"),
             "hover should show hash type or name, got: {content}"
         );
+        Ok(())
     }
 
     #[test]
-    fn hover_on_lexical_scoped_variable() {
+    fn hover_on_lexical_scoped_variable() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"sub outer {
     my $outer_var = 10;
 
@@ -226,21 +238,22 @@ my $debug_mode = $config{debug};
         server.open_document(uri, code);
 
         // Hover on "$inner_var" in the return statement
-        let (line, character) = find_pos(code, "$inner_var", 5);
+        let (line, character) = find_pos(code, "$inner_var", 5)?;
         let response = server.get_hover(uri, line, character);
         println!("LEXICAL SCOPED HOVER RESPONSE: {response:#}");
 
-        let content = hover_content(&response).expect("expected hover content for $inner_var");
+        let content = hover_content(&response).ok_or("expected hover content for $inner_var")?;
 
         // Verify hover shows variable information with proper scoping
         assert!(
             content.contains("Scalar Variable") || content.contains("$inner_var"),
             "hover should show variable information, got: {content}"
         );
+        Ok(())
     }
 
     #[test]
-    fn hover_on_builtin_function_shows_perl_info() {
+    fn hover_on_builtin_function_shows_perl_info() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"my @items = (1, 2, 3);
 my @doubled = map { $_ * 2 } @items;
 "#;
@@ -250,7 +263,7 @@ my @doubled = map { $_ * 2 } @items;
         server.open_document(uri, code);
 
         // Hover on "map" builtin function
-        let (line, character) = find_pos(code, "map", 1);
+        let (line, character) = find_pos(code, "map", 1)?;
         let response = server.get_hover(uri, line, character);
         println!("BUILTIN HOVER RESPONSE: {response:#}");
 
@@ -267,10 +280,12 @@ my @doubled = map { $_ * 2 } @items;
                 "hover should reference the function or Perl, got: {c}"
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn hover_on_undefined_symbol_returns_minimal_info() {
+    fn hover_on_undefined_symbol_returns_minimal_info() -> Result<(), Box<dyn std::error::Error>>
+    {
         let code = r#"my $defined = 42;
 my $result = $undefined + $defined;
 "#;
@@ -280,7 +295,7 @@ my $result = $undefined + $defined;
         server.open_document(uri, code);
 
         // Hover on "$undefined" which is not declared
-        let (line, character) = find_pos(code, "$undefined", 1);
+        let (line, character) = find_pos(code, "$undefined", 1)?;
         let response = server.get_hover(uri, line, character);
         println!("UNDEFINED HOVER RESPONSE: {response:#}");
 
@@ -289,13 +304,15 @@ my $result = $undefined + $defined;
 
         // Either we get minimal info or null (both acceptable for undefined symbols)
         assert!(
-            content.is_none() || content.unwrap().contains("$undefined"),
+            content.is_none() || content.as_ref().is_some_and(|c| c.contains("$undefined")),
             "hover should handle undefined symbols gracefully"
         );
+        Ok(())
     }
 
     #[test]
-    fn hover_on_package_declaration_shows_package_info() {
+    fn hover_on_package_declaration_shows_package_info(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"package MyApp::Utils;
 
 use strict;
@@ -313,7 +330,7 @@ sub helper {
         server.open_document(uri, code);
 
         // Hover on "MyApp::Utils" in package declaration
-        let (line, character) = find_pos(code, "MyApp", 0);
+        let (line, character) = find_pos(code, "MyApp", 0)?;
         let response = server.get_hover(uri, line, character);
         println!("PACKAGE HOVER RESPONSE: {response:#}");
 
@@ -326,10 +343,11 @@ sub helper {
                 "hover should show package-related information, got: {c}"
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn hover_on_method_call_with_arrow_operator() {
+    fn hover_on_method_call_with_arrow_operator() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"package Logger {
     sub new {
         my $class = shift;
@@ -351,21 +369,22 @@ $logger->log_message("test");
         server.open_document(uri, code);
 
         // Hover on "log_message" in the method call
-        let (line, character) = find_pos(code, "log_message(\"test\")", 13);
+        let (line, character) = find_pos(code, "log_message(\"test\")", 13)?;
         let response = server.get_hover(uri, line, character);
         println!("METHOD CALL HOVER RESPONSE: {response:#}");
 
-        let content = hover_content(&response).expect("expected hover content for method call");
+        let content = hover_content(&response).ok_or("expected hover content for method call")?;
 
         // Verify hover shows method information
         assert!(
             content.contains("log_message") || content.contains("Subroutine"),
             "hover should show method name or type, got: {content}"
         );
+        Ok(())
     }
 
     #[test]
-    fn hover_respects_variable_shadowing() {
+    fn hover_respects_variable_shadowing() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"my $value = 100;
 
 sub process {
@@ -381,12 +400,12 @@ my $result = $value + process();
         server.open_document(uri, code);
 
         // Hover on the inner "$value" (line 4)
-        let (line, character) = find_pos(code, "$value", 4);
+        let (line, character) = find_pos(code, "$value", 4)?;
         let response = server.get_hover(uri, line, character);
         println!("SHADOWED HOVER RESPONSE: {response:#}");
 
         let content =
-            hover_content(&response).expect("expected hover content for shadowed variable");
+            hover_content(&response).ok_or("expected hover content for shadowed variable")?;
 
         // Verify hover shows variable information
         // Semantic analyzer should resolve to the inner scope
@@ -394,10 +413,11 @@ my $result = $value + process();
             content.contains("Scalar Variable") || content.contains("$value"),
             "hover should show variable information, got: {content}"
         );
+        Ok(())
     }
 
     #[test]
-    fn hover_on_empty_space_returns_null() {
+    fn hover_on_empty_space_returns_null() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"my $var = 42;
 
 # Comment line
@@ -412,15 +432,18 @@ my $result = $value + process();
         println!("EMPTY SPACE HOVER RESPONSE: {response:#}");
 
         // Should return null result for empty space
-        let result = response.get("result");
+        let result = response
+            .get("result")
+            .ok_or("expected result field in hover response")?;
         assert!(
-            result.is_some() && result.unwrap().is_null(),
+            result.is_null(),
             "hover on empty space should return null result"
         );
+        Ok(())
     }
 
     #[test]
-    fn hover_on_constant_shows_constant_type() {
+    fn hover_on_constant_shows_constant_type() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"use constant PI => 3.14159;
 use constant MAX_SIZE => 1000;
 
@@ -432,7 +455,7 @@ my $circumference = 2 * PI * $radius;
         server.open_document(uri, code);
 
         // Hover on "PI" constant usage
-        let (line, character) = find_pos(code, "PI", 3);
+        let (line, character) = find_pos(code, "PI", 3)?;
         let response = server.get_hover(uri, line, character);
         println!("CONSTANT HOVER RESPONSE: {response:#}");
 
@@ -445,5 +468,6 @@ my $circumference = 2 * PI * $radius;
                 "hover should show constant information, got: {c}"
             );
         }
+        Ok(())
     }
 }

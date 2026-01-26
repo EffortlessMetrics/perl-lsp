@@ -151,7 +151,7 @@ fn test_will_save_notification() {
 }
 
 #[test]
-fn test_will_save_wait_until_returns_valid_edits() {
+fn test_will_save_wait_until_returns_valid_edits() -> Result<(), Box<dyn std::error::Error>> {
     let (mut server, uri) = setup_server_with_document();
 
     // Send willSaveWaitUntil request (this is a request, not notification)
@@ -172,15 +172,15 @@ fn test_will_save_wait_until_returns_valid_edits() {
     let edits = get_result(response);
     assert!(edits.is_some(), "Response should have a result");
 
-    let edits = edits.unwrap();
+    let edits = edits.ok_or("Failed to get edits from response")?;
     assert!(edits.is_array(), "Response should be an array of text edits");
 
     // The server may return formatting edits if perltidy is available
     // We verify the structure is valid
-    let edits_arr = edits.as_array().unwrap();
+    let edits_arr = edits.as_array().ok_or("Edits should be an array")?;
     for edit in edits_arr {
         assert!(edit.is_object());
-        let obj = edit.as_object().unwrap();
+        let obj = edit.as_object().ok_or("Edit should be an object")?;
         assert!(obj.contains_key("range"), "Edit must have range");
         assert!(obj.contains_key("newText"), "Edit must have newText");
 
@@ -188,10 +188,12 @@ fn test_will_save_wait_until_returns_valid_edits() {
         assert!(range["start"].is_object(), "Range start must be object");
         assert!(range["end"].is_object(), "Range end must be object");
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_will_save_wait_until_with_formatting() {
+fn test_will_save_wait_until_with_formatting() -> Result<(), Box<dyn std::error::Error>> {
     let (mut server, uri) = setup_server_with_document();
 
     // Update document with poorly formatted code
@@ -229,15 +231,15 @@ fn test_will_save_wait_until_with_formatting() {
     let edits = get_result(response);
     assert!(edits.is_some(), "Response should have a result");
 
-    let edits = edits.unwrap();
+    let edits = edits.ok_or("Failed to get edits from response")?;
     assert!(edits.is_array(), "Response should be an array of text edits");
 
     // The server may return formatting edits if configured
     // We're just checking the structure is correct
-    let edits_arr = edits.as_array().unwrap();
+    let edits_arr = edits.as_array().ok_or("Edits should be an array")?;
     for edit in edits_arr {
         assert!(edit.is_object());
-        let obj = edit.as_object().unwrap();
+        let obj = edit.as_object().ok_or("Edit should be an object")?;
         assert!(obj.contains_key("range"), "Edit must have range");
         assert!(obj.contains_key("newText"), "Edit must have newText");
 
@@ -245,6 +247,8 @@ fn test_will_save_wait_until_with_formatting() {
         assert!(range["start"].is_object(), "Range start must be object");
         assert!(range["end"].is_object(), "Range end must be object");
     }
+
+    Ok(())
 }
 
 #[test]

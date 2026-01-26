@@ -64,7 +64,7 @@ impl Clone for OutputCapture {
 }
 
 #[test]
-fn lsp_window_show_message_request_format() {
+fn lsp_window_show_message_request_format() -> Result<(), Box<dyn std::error::Error>> {
     let output = OutputCapture::new();
     let output_box: Box<dyn Write + Send> = Box::new(output.clone());
     let mut server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
@@ -109,14 +109,16 @@ fn lsp_window_show_message_request_format() {
     assert_eq!(request["params"]["type"], 2); // Warning = 2
     assert_eq!(request["params"]["message"], "Do you want to continue?");
 
-    let actions = request["params"]["actions"].as_array().unwrap();
+    let actions = request["params"]["actions"].as_array().ok_or("Expected actions array")?;
     assert_eq!(actions.len(), 2);
     assert_eq!(actions[0]["title"], "Yes");
     assert_eq!(actions[1]["title"], "No");
+
+    Ok(())
 }
 
 #[test]
-fn lsp_window_show_document_requires_capability() {
+fn lsp_window_show_document_requires_capability() -> Result<(), Box<dyn std::error::Error>> {
     let output = OutputCapture::new();
     let output_box: Box<dyn Write + Send> = Box::new(output.clone());
     let server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
@@ -127,9 +129,11 @@ fn lsp_window_show_document_requires_capability() {
 
     // Should fail with Unsupported error
     assert!(result.is_err());
-    let err = result.unwrap_err();
+    let err = result.err().ok_or("Expected error result")?;
     assert_eq!(err.kind(), std::io::ErrorKind::Unsupported);
     assert!(err.to_string().contains("doesn't support"));
+
+    Ok(())
 }
 
 #[test]
@@ -255,7 +259,7 @@ fn lsp_window_progress_lifecycle() {
 }
 
 #[test]
-fn lsp_window_progress_duplicate_token_fails() {
+fn lsp_window_progress_duplicate_token_fails() -> Result<(), Box<dyn std::error::Error>> {
     let output = OutputCapture::new();
     let output_box: Box<dyn Write + Send> = Box::new(output.clone());
     let mut server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
@@ -284,8 +288,10 @@ fn lsp_window_progress_duplicate_token_fails() {
     // Try to create same token again
     let result = server.create_work_done_progress(token);
     assert!(result.is_err());
-    let err = result.unwrap_err();
+    let err = result.err().ok_or("Expected error result")?;
     assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+
+    Ok(())
 }
 
 #[test]
@@ -427,7 +433,7 @@ fn lsp_window_message_types() {
 }
 
 #[test]
-fn lsp_window_progress_without_capability() {
+fn lsp_window_progress_without_capability() -> Result<(), Box<dyn std::error::Error>> {
     let output = OutputCapture::new();
     let output_box: Box<dyn Write + Send> = Box::new(output.clone());
     let server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
@@ -436,9 +442,11 @@ fn lsp_window_progress_without_capability() {
     let result = server.create_work_done_progress("test");
 
     assert!(result.is_err());
-    let err = result.unwrap_err();
+    let err = result.err().ok_or("Expected error result")?;
     assert_eq!(err.kind(), std::io::ErrorKind::Unsupported);
     assert!(err.to_string().contains("doesn't support"));
+
+    Ok(())
 }
 
 #[test]

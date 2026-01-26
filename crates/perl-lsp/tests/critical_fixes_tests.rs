@@ -4,13 +4,14 @@ use std::collections::HashSet;
 use url::Url;
 
 #[test]
-fn test_document_store_close_uses_normalized_uri() {
+fn test_document_store_close_uses_normalized_uri() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Index a file with a non-normalized URI (missing file://)
     let uri = "/home/user/test.pl";
     let text = "sub test_func { my $x = 42; }";
-    index.index_file(Url::from_file_path(uri).unwrap(), text.to_string()).unwrap();
+    let url = Url::from_file_path(uri).map_err(|_| "Failed to create URL from file path")?;
+    index.index_file(url, text.to_string())?;
 
     // The file should be indexed (accessible with both normalized and non-normalized)
     let symbols = index.find_symbols("test_func");
@@ -25,7 +26,7 @@ fn test_document_store_close_uses_normalized_uri() {
 
     // Re-index with file:// prefix
     let normalized_uri = "file:///home/user/test.pl";
-    index.index_file(Url::parse(normalized_uri).unwrap(), text.to_string()).unwrap();
+    index.index_file(Url::parse(normalized_uri)?, text.to_string())?;
     let symbols = index.find_symbols("test_func");
     assert_eq!(symbols.len(), 1);
 
@@ -33,16 +34,18 @@ fn test_document_store_close_uses_normalized_uri() {
     index.remove_file(uri);
     let symbols = index.find_symbols("test_func");
     assert_eq!(symbols.len(), 0);
+
+    Ok(())
 }
 
 #[test]
-fn test_lsp_workspace_symbol_no_internal_fields() {
+fn test_lsp_workspace_symbol_no_internal_fields() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Index a file with a regular subroutine that has internal 'has_body' field
     let uri = "file:///test.pl";
     let text = "sub test_func { return 42; } my $x = 'test';";
-    index.index_file(Url::parse(uri).unwrap(), text.to_string()).unwrap();
+    index.index_file(Url::parse(uri)?, text.to_string())?;
 
     // Get symbols and convert to LSP DTOs
     let internal_symbols = index.find_symbols("test_func");
@@ -50,10 +53,11 @@ fn test_lsp_workspace_symbol_no_internal_fields() {
         internal_symbols.iter().map(|sym| sym.into()).collect();
 
     // Serialize to JSON and check fields
-    let json_value = serde_json::to_value(&lsp_symbols).unwrap();
+    let json_value = serde_json::to_value(&lsp_symbols)?;
     if let Value::Array(symbols) = json_value {
         for symbol in symbols {
-            let obj = symbol.as_object().unwrap();
+            let obj = symbol.as_object()
+                .ok_or("Expected symbol to be a JSON object")?;
 
             // These fields should exist
             assert!(obj.contains_key("name"));
@@ -78,6 +82,8 @@ fn test_lsp_workspace_symbol_no_internal_fields() {
             assert!(range.get("end").is_some());
         }
     }
+
+    Ok(())
 }
 
 #[test]
@@ -126,13 +132,13 @@ fn test_symbol_kind_uses_lsp_constants() {
 }
 
 #[test]
-fn test_workspace_symbol_deduplication() {
+fn test_workspace_symbol_deduplication() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Index a file with duplicate symbol definitions (shouldn't happen, but test dedup)
     let uri = "file:///test.pl";
     let text = "sub dup_func { } sub dup_func { }"; // Parser might produce duplicates
-    index.index_file(Url::parse(uri).unwrap(), text.to_string()).unwrap();
+    index.index_file(Url::parse(uri)?, text.to_string())?;
 
     // Get symbols - should be deduplicated
     let symbols = index.find_symbols("dup_func");
@@ -144,14 +150,16 @@ fn test_workspace_symbol_deduplication() {
 
         // This would fail if we had true duplicates at the same position
         if seen.contains(&key) {
-            panic!("Found duplicate symbol at same position: {:?}", key);
+            return Err(format!("Found duplicate symbol at same position: {:?}", key).into());
         }
         seen.insert(key);
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_uri_normalization_consistency() {
+fn test_uri_normalization_consistency() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Test various URI formats
@@ -166,11 +174,12 @@ fn test_uri_normalization_consistency() {
 
         // Index with various formats
         let url = if input_uri.starts_with("file://") || input_uri.starts_with("untitled:") {
-            Url::parse(input_uri).unwrap()
+            Url::parse(input_uri)?
         } else {
-            Url::from_file_path(input_uri).unwrap()
+            Url::from_file_path(input_uri)
+                .map_err(|_| format!("Failed to create URL from file path: {}", input_uri))?
         };
-        index.index_file(url, text.clone()).unwrap();
+        index.index_file(url, text.clone())?;
 
         // Should be able to find the symbol
         let func_name = format!("test_{}", input_uri.len());
@@ -182,10 +191,12 @@ fn test_uri_normalization_consistency() {
         let symbols = index.find_symbols(&func_name);
         assert!(symbols.is_empty(), "Failed to remove file with URI: {}", input_uri);
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_utf16_position_encoding() {
+fn test_utf16_position_encoding() -> Result<(), Box<dyn std::error::Error>> {
     // This test would require the actual LSP server, but we can test
     // that the position encoding is advertised correctly
     let index = WorkspaceIndex::new();
@@ -193,7 +204,7 @@ fn test_utf16_position_encoding() {
     // Index a file with emoji (multi-byte UTF-8, different in UTF-16)
     let uri = "file:///emoji.pl";
     let text = "my $♥ = 'love'; sub test { }";
-    index.index_file(Url::parse(uri).unwrap(), text.to_string()).unwrap();
+    index.index_file(Url::parse(uri)?, text.to_string())?;
 
     // Find the subroutine
     let symbols = index.find_symbols("test");
@@ -203,8 +214,11 @@ fn test_utf16_position_encoding() {
     // In UTF-8 bytes: "my $♥ = 'love'; sub " is 20 bytes (♥ is 3 bytes)
     // In UTF-16 units: "my $♥ = 'love'; sub " is 18 units (♥ is 1 unit)
     // Character position should reflect this
-    let symbol = &symbols[0];
+    let symbol = symbols.first()
+        .ok_or("Expected at least one symbol")?;
 
     // The exact position depends on the parser, but it should be consistent
     assert!(symbol.range.start.column < 100, "Position seems unreasonably large");
+
+    Ok(())
 }

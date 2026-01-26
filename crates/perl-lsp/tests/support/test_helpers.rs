@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Test helper functions for LSP test assertions
 //!
 //! This module provides specialized assertion helpers for validating LSP responses.
@@ -26,7 +25,10 @@ pub fn assert_hover_has_text(v: &Option<Value>) {
     if let Some(hover) = v
         && !hover.is_null()
     {
-        let obj = hover.as_object().expect("hover should be object");
+        let obj = match hover.as_object() {
+            Some(o) => o,
+            None => panic!("hover should be object: {hover:?}"),
+        };
         assert!(obj.contains_key("contents"), "hover must have contents field");
 
         let contents = &obj["contents"];
@@ -48,14 +50,23 @@ pub fn assert_completion_has_items(v: &Option<Value>) {
         if !completion.is_null() {
             // Handle LSP completion response format: either direct array or object with "items" field
             let array = if let Some(items) = completion.get("items") {
-                items.as_array().expect("completion items should be array")
+                match items.as_array() {
+                    Some(arr) => arr,
+                    None => panic!("completion items should be array: {items:?}"),
+                }
             } else {
-                completion.as_array().expect("completion should be array")
+                match completion.as_array() {
+                    Some(arr) => arr,
+                    None => panic!("completion should be array: {completion:?}"),
+                }
             };
             assert!(!array.is_empty(), "completion must have at least one item");
 
             for item in array {
-                let obj = item.as_object().expect("completion item should be object");
+                let obj = match item.as_object() {
+                    Some(o) => o,
+                    None => panic!("completion item should be object: {item:?}"),
+                };
                 assert!(obj.contains_key("label"), "completion item must have label");
 
                 // Optional: check other fields if present
@@ -72,7 +83,10 @@ pub fn assert_completion_has_items(v: &Option<Value>) {
 
 /// Validate LSP range structure
 fn assert_range_valid(range: &Value, context: &str) {
-    let obj = range.as_object().expect("range should be object");
+    let obj = match range.as_object() {
+        Some(o) => o,
+        None => panic!("{context} range should be object: {range:?}"),
+    };
     assert!(obj.contains_key("start"), "{} must have start", context);
     assert!(obj.contains_key("end"), "{} must have end", context);
 
@@ -85,13 +99,19 @@ fn assert_range_valid(range: &Value, context: &str) {
 
 /// Validate LSP position structure
 fn assert_position_valid(position: &Value, context: &str) {
-    let obj = position.as_object().expect("position should be object");
+    let obj = match position.as_object() {
+        Some(o) => o,
+        None => panic!("{context} position should be object: {position:?}"),
+    };
     assert!(obj.contains_key("line"), "{} must have line", context);
     assert!(obj.contains_key("character"), "{} must have character", context);
 
     if let Some(line) = obj.get("line") {
         assert!(line.is_number(), "{} line must be number", context);
-        let line_num = line.as_u64().expect("line should be u64");
+        let line_num = match line.as_u64() {
+            Some(n) => n,
+            None => panic!("{context} line should be u64: {line:?}"),
+        };
         assert!(line_num < 1000000, "{} line number should be reasonable", context);
     } else {
         panic!("{} must have line", context);
@@ -99,7 +119,10 @@ fn assert_position_valid(position: &Value, context: &str) {
 
     if let Some(character) = obj.get("character") {
         assert!(character.is_number(), "{} character must be number", context);
-        let char_num = character.as_u64().expect("character should be u64");
+        let char_num = match character.as_u64() {
+            Some(n) => n,
+            None => panic!("{context} character should be u64: {character:?}"),
+        };
         assert!(char_num < 10000, "{} character should be reasonable", context);
     } else {
         panic!("{} must have character", context);
@@ -110,11 +133,17 @@ fn assert_position_valid(position: &Value, context: &str) {
 pub fn assert_references_found(v: &Option<Value>) {
     if let Some(refs_val) = v {
         if !refs_val.is_null() {
-            let refs = refs_val.as_array().expect("references should be array");
+            let refs = match refs_val.as_array() {
+                Some(arr) => arr,
+                None => panic!("references should be array: {refs_val:?}"),
+            };
 
             // Validate each reference has required fields
             for reference in refs {
-                let ref_obj = reference.as_object().expect("reference must be object");
+                let ref_obj = match reference.as_object() {
+                    Some(o) => o,
+                    None => panic!("reference must be object: {reference:?}"),
+                };
                 assert!(ref_obj.contains_key("uri"), "reference must have uri");
                 assert!(ref_obj.contains_key("range"), "reference must have range");
                 assert_range_valid(&ref_obj["range"], "reference range");
@@ -127,12 +156,18 @@ pub fn assert_references_found(v: &Option<Value>) {
 pub fn assert_call_hierarchy_items(v: &Option<Value>, expected_name: Option<&str>) {
     if let Some(ch_val) = v {
         if !ch_val.is_null() {
-            let items = ch_val.as_array().expect("call hierarchy should be array");
+            let items = match ch_val.as_array() {
+                Some(arr) => arr,
+                None => panic!("call hierarchy should be array: {ch_val:?}"),
+            };
 
             if !items.is_empty() {
                 // Validate each item has required fields
                 for item in items {
-                    let item_obj = item.as_object().expect("call hierarchy item must be object");
+                    let item_obj = match item.as_object() {
+                        Some(o) => o,
+                        None => panic!("call hierarchy item must be object: {item:?}"),
+                    };
                     assert!(item_obj.contains_key("name"), "call hierarchy item must have name");
                     assert!(item_obj.contains_key("uri"), "call hierarchy item must have uri");
                     assert!(item_obj.contains_key("range"), "call hierarchy item must have range");
@@ -149,10 +184,7 @@ pub fn assert_call_hierarchy_items(v: &Option<Value>, expected_name: Option<&str
                 // Check for expected name if provided
                 if let Some(name) = expected_name {
                     let found = items.iter().any(|item| {
-                        item.get("name")
-                            .and_then(|n| n.as_str())
-                            .map(|n| n == name)
-                            .unwrap_or(false)
+                        item.get("name").and_then(|n| n.as_str()).is_some_and(|n| n == name)
                     });
                     assert!(found, "call hierarchy should contain '{}'", name);
                 }
@@ -165,21 +197,27 @@ pub fn assert_call_hierarchy_items(v: &Option<Value>, expected_name: Option<&str
 pub fn assert_folding_ranges_valid(v: &Option<Value>) {
     if let Some(ranges_val) = v {
         if !ranges_val.is_null() {
-            let ranges = ranges_val.as_array().expect("folding ranges should be array");
+            let ranges = match ranges_val.as_array() {
+                Some(arr) => arr,
+                None => panic!("folding ranges should be array: {ranges_val:?}"),
+            };
             assert!(!ranges.is_empty(), "should have at least one folding range");
 
             for range in ranges {
-                let obj = range.as_object().expect("folding range must be object");
+                let obj = match range.as_object() {
+                    Some(o) => o,
+                    None => panic!("folding range must be object: {range:?}"),
+                };
 
-                let start = obj
-                    .get("startLine")
-                    .and_then(|v| v.as_u64())
-                    .expect("folding range must have startLine");
+                let start = match obj.get("startLine").and_then(|v| v.as_u64()) {
+                    Some(n) => n,
+                    None => panic!("folding range must have startLine: {obj:?}"),
+                };
 
-                let end = obj
-                    .get("endLine")
-                    .and_then(|v| v.as_u64())
-                    .expect("folding range must have endLine");
+                let end = match obj.get("endLine").and_then(|v| v.as_u64()) {
+                    Some(n) => n,
+                    None => panic!("folding range must have endLine: {obj:?}"),
+                };
 
                 assert!(end > start, "folding range must span multiple lines");
 
@@ -199,10 +237,16 @@ pub fn assert_folding_ranges_valid(v: &Option<Value>) {
 pub fn assert_code_actions_available(v: &Option<Value>) {
     if let Some(actions) = v {
         if !actions.is_null() {
-            let arr = actions.as_array().expect("code actions should be array");
+            let arr = match actions.as_array() {
+                Some(a) => a,
+                None => panic!("code actions should be array: {actions:?}"),
+            };
 
             for action in arr {
-                let action_obj = action.as_object().expect("code action must be object");
+                let action_obj = match action.as_object() {
+                    Some(o) => o,
+                    None => panic!("code action must be object: {action:?}"),
+                };
                 assert!(action_obj.contains_key("title"), "code action must have title");
 
                 // Must have either command or edit
@@ -252,10 +296,34 @@ pub fn apply_text_edits(text: &str, edits: &[Value]) -> String {
         let range = &edit["range"];
         let new_text = edit["newText"].as_str().unwrap_or("");
 
-        let start_line = range["start"]["line"].as_u64().unwrap_or(0) as usize;
-        let start_char = range["start"]["character"].as_u64().unwrap_or(0) as usize;
-        let end_line = range["end"]["line"].as_u64().unwrap_or(0) as usize;
-        let end_char = range["end"]["character"].as_u64().unwrap_or(0) as usize;
+        let start_line = match range["start"]["line"].as_u64() {
+            Some(n) => n as usize,
+            None => {
+                eprintln!("Warning: missing start line in edit range, using 0");
+                0
+            }
+        };
+        let start_char = match range["start"]["character"].as_u64() {
+            Some(n) => n as usize,
+            None => {
+                eprintln!("Warning: missing start character in edit range, using 0");
+                0
+            }
+        };
+        let end_line = match range["end"]["line"].as_u64() {
+            Some(n) => n as usize,
+            None => {
+                eprintln!("Warning: missing end line in edit range, using 0");
+                0
+            }
+        };
+        let end_char = match range["end"]["character"].as_u64() {
+            Some(n) => n as usize,
+            None => {
+                eprintln!("Warning: missing end character in edit range, using 0");
+                0
+            }
+        };
 
         // Convert UTF-16 positions to byte offsets
         let start_offset = line_col_to_offset(&lines, start_line, start_char);

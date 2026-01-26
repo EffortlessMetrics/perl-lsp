@@ -5,7 +5,7 @@ use serde_json::json;
 /// This prevents accidental drift where we advertise features that don't work
 /// PHASE 1 RE-ENABLED: Pure API contract test, no I/O, safe for CI
 #[test]
-fn test_ga_capabilities_contract() {
+fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
     // Send initialize request through public API
@@ -20,9 +20,9 @@ fn test_ga_capabilities_contract() {
         })),
     };
 
-    let response = server.handle_request(request).unwrap();
+    let response = server.handle_request(request).ok_or("Initialize request failed to return response")?;
     assert!(response.error.is_none(), "Initialize should succeed");
-    let caps = response.result.unwrap()["capabilities"].clone();
+    let caps = response.result.ok_or("Initialize response missing result")?["capabilities"].clone();
 
     // Assert what SHOULD be advertised (working features)
     assert!(caps["textDocumentSync"].is_object(), "textDocumentSync must be advertised");
@@ -97,12 +97,14 @@ fn test_ga_capabilities_contract() {
 
     // documentFormattingProvider is conditional on perltidy availability - that's OK
     // It can be either true or null depending on environment
+
+    Ok(())
 }
 
 /// Test that unsupported methods return proper errors
 #[test]
 
-fn test_unsupported_methods_return_error() {
+fn test_unsupported_methods_return_error() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
     // Initialize first through public API
@@ -144,13 +146,15 @@ fn test_unsupported_methods_return_error() {
         let response = server.handle_request(request);
         assert!(response.is_some(), "Method {} should return a response", method);
 
-        let resp = response.unwrap();
-        assert!(resp.error.is_some(), "Method {} should return an error", method);
+        let resp = response.ok_or(format!("Method {} failed to return response", method))?;
+        let error = resp.error.ok_or(format!("Method {} should return an error", method))?;
         assert_eq!(
-            resp.error.unwrap().code,
+            error.code,
             -32601,
             "Method {} should return method_not_found error",
             method
         );
     }
+
+    Ok(())
 }

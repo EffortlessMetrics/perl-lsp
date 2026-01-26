@@ -41,12 +41,15 @@
 //! ```rust
 //! use perl_corpus::{CorpusPaths, get_corpus_files};
 //!
-//! let paths = CorpusPaths::detect().expect("Corpus paths");
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let paths = CorpusPaths::detect().unwrap_or(CorpusPaths::default());
 //! let files = get_corpus_files(&paths);
 //!
 //! for file in files {
 //!     println!("Found corpus file: {:?}", file.path);
 //! }
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Parsing Corpus Sections
@@ -299,8 +302,10 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
     let mut sections = Vec::new();
     let file_stem = path
         .file_stem()
-        .map(|stem| slugify_title(&stem.to_string_lossy()))
-        .filter(|stem| !stem.is_empty())
+        .and_then(|stem| {
+            let slug = slugify_title(&stem.to_string_lossy());
+            if slug.is_empty() { None } else { Some(slug) }
+        })
         .unwrap_or_else(|| "corpus".to_string());
     let mut auto_ids: HashMap<String, usize> = HashMap::new();
     let mut section_index = 0usize;
@@ -385,10 +390,13 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
         // Calculate line number (for error reporting)
         let line_num = text[..start].lines().count() + 1;
 
+        // Get file name, use empty OsStr if path has no file name component
+        let file_name = path.file_name().unwrap_or_default();
+
         sections.push(Section {
             id,
             title,
-            file: path.file_name().unwrap_or_default().to_string_lossy().into(),
+            file: file_name.to_string_lossy().into(),
             tags,
             perl,
             flags,
@@ -438,6 +446,7 @@ pub fn find_by_flag<'a>(sections: &'a [Section], flag: &str) -> Vec<&'a Section>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::{must, must_some};
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -477,21 +486,22 @@ Tagged Section
 my $y = 2;
 "#;
 
-        fs::write(&path, contents).expect("write temp corpus file");
-        let sections = parse_file(&path).expect("parse corpus file");
-        fs::remove_file(&path).expect("cleanup temp corpus file");
+        must(fs::write(&path, contents));
+        let sections = must(parse_file(&path));
+        must(fs::remove_file(&path));
 
         // Note: The parser currently finds 3 sections due to the way === delimiters work
         // This is expected behavior with the current parsing logic
         assert!(sections.len() >= 2);
 
         // Find the sections by checking their content/ids
-        let sample_section = sections
+        let sample_section = must_some(
+            sections
             .iter()
             .find(|s| s.body.contains("my $x = 1;"))
-            .expect("Sample section not found");
+        );
         let tagged_section =
-            sections.iter().find(|s| s.id == "custom.id").expect("Tagged section not found");
+            must_some(sections.iter().find(|s| s.id == "custom.id"));
 
         assert_eq!(sample_section.body, "my $x = 1;");
         assert!(!sample_section.body.contains("---"));

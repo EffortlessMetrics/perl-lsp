@@ -12,6 +12,8 @@ use std::time::Duration;
 mod support;
 use support::lsp_harness::{LspHarness, TempWorkspace};
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 // Test fixtures for code actions testing
 mod code_actions_fixtures {
     /// Code with extractable expressions for refactoring tests
@@ -147,37 +149,32 @@ print "Global: $globalVar\n";
 }
 
 /// Create test server with code actions-focused workspace
-fn create_code_actions_server() -> (LspHarness, TempWorkspace) {
+fn create_code_actions_server() -> Result<(LspHarness, TempWorkspace), Box<dyn std::error::Error>> {
     let (mut harness, workspace) = LspHarness::with_workspace(&[
         ("refactoring.pl", code_actions_fixtures::REFACTORING_OPPORTUNITIES_FILE),
         ("imports.pl", code_actions_fixtures::IMPORT_MANAGEMENT_FILE),
         ("pragmas.pl", code_actions_fixtures::MISSING_PRAGMAS_FILE),
         ("undefined.pl", code_actions_fixtures::UNDEFINED_VARIABLES_FILE),
-    ])
-    .expect("Failed to create code actions test workspace");
+    ])?;
 
     // Initialize documents
-    harness
-        .open_document(
-            &workspace.uri("refactoring.pl"),
-            code_actions_fixtures::REFACTORING_OPPORTUNITIES_FILE,
-        )
-        .expect("Failed to open refactoring file");
+    harness.open_document(
+        &workspace.uri("refactoring.pl"),
+        code_actions_fixtures::REFACTORING_OPPORTUNITIES_FILE,
+    )?;
+
+    harness.open_document(
+        &workspace.uri("imports.pl"),
+        code_actions_fixtures::IMPORT_MANAGEMENT_FILE,
+    )?;
 
     harness
-        .open_document(&workspace.uri("imports.pl"), code_actions_fixtures::IMPORT_MANAGEMENT_FILE)
-        .expect("Failed to open imports file");
+        .open_document(&workspace.uri("pragmas.pl"), code_actions_fixtures::MISSING_PRAGMAS_FILE)?;
 
-    harness
-        .open_document(&workspace.uri("pragmas.pl"), code_actions_fixtures::MISSING_PRAGMAS_FILE)
-        .expect("Failed to open pragmas file");
-
-    harness
-        .open_document(
-            &workspace.uri("undefined.pl"),
-            code_actions_fixtures::UNDEFINED_VARIABLES_FILE,
-        )
-        .expect("Failed to open undefined variables file");
+    harness.open_document(
+        &workspace.uri("undefined.pl"),
+        code_actions_fixtures::UNDEFINED_VARIABLES_FILE,
+    )?;
 
     // Trigger processing and wait for idle
     harness.did_save(&workspace.uri("refactoring.pl")).ok();
@@ -187,35 +184,32 @@ fn create_code_actions_server() -> (LspHarness, TempWorkspace) {
 
     harness.wait_for_idle(Duration::from_millis(1000));
 
-    (harness, workspace)
+    Ok((harness, workspace))
 }
 
 // ======================== AC3: Advanced Code Action Refactorings ========================
 
 /// Create test server for capabilities testing - returns init result for capability inspection
-fn create_capabilities_test_server() -> (LspHarness, TempWorkspace, serde_json::Value) {
-    let workspace = TempWorkspace::new().expect("Failed to create temp workspace");
+fn create_capabilities_test_server()
+-> Result<(LspHarness, TempWorkspace, serde_json::Value), Box<dyn std::error::Error>> {
+    let workspace = TempWorkspace::new()?;
 
     // Write test files
-    workspace
-        .write("test.pl", code_actions_fixtures::REFACTORING_OPPORTUNITIES_FILE)
-        .expect("Failed to write file");
+    workspace.write("test.pl", code_actions_fixtures::REFACTORING_OPPORTUNITIES_FILE)?;
 
     let mut harness = LspHarness::new_without_initialize();
-    let init_result = harness
-        .initialize_with_root(&workspace.root_uri, None)
-        .expect("Failed to initialize LSP server");
+    let init_result = harness.initialize_with_root(&workspace.root_uri, None)?;
 
-    (harness, workspace, init_result)
+    Ok((harness, workspace, init_result))
 }
 
 #[test]
 // AC3:codeActions - Server capabilities for code actions
-fn test_code_action_server_capabilities() {
-    let (_harness, _workspace, init_result) = create_capabilities_test_server();
+fn test_code_action_server_capabilities() -> TestResult {
+    let (_harness, _workspace, init_result) = create_capabilities_test_server()?;
 
     let capabilities =
-        init_result.get("capabilities").expect("Initialize result should contain capabilities");
+        init_result.get("capabilities").ok_or("Initialize result should contain capabilities")?;
 
     // Verify codeActionProvider is advertised
     assert!(
@@ -237,7 +231,7 @@ fn test_code_action_server_capabilities() {
     } else if code_action_provider.is_object() {
         // Check for supported code action kinds (optional)
         if let Some(kinds) = code_action_provider.get("codeActionKinds") {
-            let kinds_array = kinds.as_array().expect("codeActionKinds should be array");
+            let kinds_array = kinds.as_array().ok_or("codeActionKinds should be array")?;
 
             // Server must advertise at least one code action kind
             assert!(
@@ -260,36 +254,36 @@ fn test_code_action_server_capabilities() {
             assert!(resolve_provider.is_boolean(), "resolveProvider should be boolean");
         }
     } else {
-        panic!("codeActionProvider should be boolean or object");
+        return Err("codeActionProvider should be boolean or object".into());
     }
+
+    Ok(())
 }
 
 #[cfg(feature = "lsp-extras")]
 #[test]
 // AC3:codeActions - Extract variable refactoring
-fn test_extract_variable_refactoring() {
-    let (mut harness, workspace) = create_code_actions_server();
+fn test_extract_variable_refactoring() -> TestResult {
+    let (mut harness, workspace) = create_code_actions_server()?;
 
     // Request code actions for a complex expression that can be extracted
-    let actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("refactoring.pl")},
-                "range": {
-                    "start": {"line": 7, "character": 17}, // Start of complex expression
-                    "end": {"line": 7, "character": 70}     // End of complex expression
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["refactor.extract"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed");
+    let actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("refactoring.pl")},
+            "range": {
+                "start": {"line": 7, "character": 17}, // Start of complex expression
+                "end": {"line": 7, "character": 70}     // End of complex expression
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["refactor.extract"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let actions = actions_result.as_array().expect("Should return action array");
+    let actions = actions_result.as_array().ok_or("Should return action array")?;
     assert!(!actions.is_empty(), "Should have refactoring actions");
 
     // Look for extract variable action
@@ -302,7 +296,7 @@ fn test_extract_variable_refactoring() {
 
     assert!(extract_var_action.is_some(), "Should have 'Extract variable' action available");
 
-    let action = extract_var_action.unwrap();
+    let action = extract_var_action.ok_or("Extract variable action not found")?;
 
     // Verify action properties
     assert_eq!(
@@ -314,33 +308,33 @@ fn test_extract_variable_refactoring() {
         action.get("edit").is_some() || action.get("command").is_some(),
         "Should have edit or command"
     );
+
+    Ok(())
 }
 
 #[test]
 // AC3:codeActions - Extract subroutine refactoring
-fn test_extract_subroutine_refactoring() {
-    let (mut harness, workspace) = create_code_actions_server();
+fn test_extract_subroutine_refactoring() -> TestResult {
+    let (mut harness, workspace) = create_code_actions_server()?;
 
     // Request code actions for code block that can be extracted into subroutine
-    let actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("refactoring.pl")},
-                "range": {
-                    "start": {"line": 12, "character": 4},  // Start of extractable block
-                    "end": {"line": 17, "character": 4}     // End of extractable block
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["refactor.extract"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed");
+    let actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("refactoring.pl")},
+            "range": {
+                "start": {"line": 12, "character": 4},  // Start of extractable block
+                "end": {"line": 17, "character": 4}     // End of extractable block
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["refactor.extract"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let actions = actions_result.as_array().expect("Should return action array");
+    let actions = actions_result.as_array().ok_or("Should return action array")?;
 
     // Look for extract subroutine action
     let extract_sub_action = actions.iter().find(|action| {
@@ -365,33 +359,33 @@ fn test_extract_subroutine_refactoring() {
         );
     }
     // Note: Extract subroutine may not be implemented yet, so we don't assert it exists
+
+    Ok(())
 }
 
 #[test]
 // AC3:codeActions - Import organization refactoring
-fn test_organize_imports_refactoring() {
-    let (mut harness, workspace) = create_code_actions_server();
+fn test_organize_imports_refactoring() -> TestResult {
+    let (mut harness, workspace) = create_code_actions_server()?;
 
     // Request code actions for import organization
-    let actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("imports.pl")},
-                "range": {
-                    "start": {"line": 0, "character": 0},
-                    "end": {"line": 20, "character": 0}  // Cover import section
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["source.organizeImports"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed");
+    let actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("imports.pl")},
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 20, "character": 0}  // Cover import section
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["source.organizeImports"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let actions = actions_result.as_array().expect("Should return action array");
+    let actions = actions_result.as_array().ok_or("Should return action array")?;
 
     // Look for organize imports action
     let organize_imports_action = actions.iter().find(|action| {
@@ -409,33 +403,33 @@ fn test_organize_imports_refactoring() {
         );
         assert!(action.get("edit").is_some(), "Should have text edits for import organization");
     }
+
+    Ok(())
 }
 
 #[test]
 // AC3:codeActions - Code quality improvement refactorings
-fn test_code_quality_refactorings() {
-    let (mut harness, workspace) = create_code_actions_server();
+fn test_code_quality_refactorings() -> TestResult {
+    let (mut harness, workspace) = create_code_actions_server()?;
 
     // Request code actions for C-style for loop conversion
-    let loop_actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("refactoring.pl")},
-                "range": {
-                    "start": {"line": 30, "character": 0},  // C-style for loop line
-                    "end": {"line": 33, "character": 0}
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["refactor.rewrite"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed");
+    let loop_actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("refactoring.pl")},
+            "range": {
+                "start": {"line": 30, "character": 0},  // C-style for loop line
+                "end": {"line": 33, "character": 0}
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["refactor.rewrite"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let loop_actions = loop_actions_result.as_array().expect("Should return action array");
+    let loop_actions = loop_actions_result.as_array().ok_or("Should return action array")?;
 
     // Look for loop conversion actions
     let convert_loop_action = loop_actions.iter().find(|action| {
@@ -456,25 +450,23 @@ fn test_code_quality_refactorings() {
     }
 
     // Request code actions for file operation error checking
-    let error_check_actions = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("refactoring.pl")},
-                "range": {
-                    "start": {"line": 35, "character": 0},  // File operation lines
-                    "end": {"line": 38, "character": 0}
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["refactor.rewrite"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed");
+    let error_check_actions = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("refactoring.pl")},
+            "range": {
+                "start": {"line": 35, "character": 0},  // File operation lines
+                "end": {"line": 38, "character": 0}
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["refactor.rewrite"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let error_actions = error_check_actions.as_array().expect("Should return action array");
+    let error_actions = error_check_actions.as_array().ok_or("Should return action array")?;
 
     // Look for error checking actions
     let add_error_check_action = error_actions.iter().find(|action| {
@@ -491,33 +483,33 @@ fn test_code_quality_refactorings() {
             "Should have correct action kind"
         );
     }
+
+    Ok(())
 }
 
 #[test]
 // AC3:codeActions - Add missing pragmas refactoring
-fn test_add_missing_pragmas_refactoring() {
-    let (mut harness, workspace) = create_code_actions_server();
+fn test_add_missing_pragmas_refactoring() -> TestResult {
+    let (mut harness, workspace) = create_code_actions_server()?;
 
     // Request code actions for adding missing pragmas
-    let actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("pragmas.pl")},
-                "range": {
-                    "start": {"line": 0, "character": 0},
-                    "end": {"line": 5, "character": 0}   // Top of file where pragmas should go
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["quickfix", "refactor.rewrite"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed");
+    let actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("pragmas.pl")},
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 5, "character": 0}   // Top of file where pragmas should go
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["quickfix", "refactor.rewrite"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let actions = actions_result.as_array().expect("Should return action array");
+    let actions = actions_result.as_array().ok_or("Should return action array")?;
 
     // Look for pragma addition actions
     let strict_action = actions.iter().find(|action| {
@@ -546,12 +538,14 @@ fn test_add_missing_pragmas_refactoring() {
         strict_action.is_some() || warnings_action.is_some() || utf8_action.is_some(),
         "Should have at least one pragma addition action"
     );
+
+    Ok(())
 }
 
 #[test]
 // AC3:codeActions - Performance validation for code actions response time
-fn test_code_actions_performance() {
-    let (mut harness, workspace) = create_code_actions_server();
+fn test_code_actions_performance() -> TestResult {
+    let (mut harness, workspace) = create_code_actions_server()?;
 
     let start_time = std::time::Instant::now();
 
@@ -579,36 +573,37 @@ fn test_code_actions_performance() {
         "Code actions should respond within 75ms, took: {:?}",
         duration
     );
+
+    Ok(())
 }
 
 #[test]
 // AC3:codeActions - Code action resolve capability
-fn test_code_action_resolve() {
-    let (mut harness, workspace) = create_code_actions_server();
+fn test_code_action_resolve() -> TestResult {
+    let (mut harness, workspace) = create_code_actions_server()?;
 
     // Get code actions first
-    let actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("refactoring.pl")},
-                "range": {
-                    "start": {"line": 7, "character": 17},
-                    "end": {"line": 7, "character": 70}
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["refactor.extract"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed");
+    let actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("refactoring.pl")},
+            "range": {
+                "start": {"line": 7, "character": 17},
+                "end": {"line": 7, "character": 70}
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["refactor.extract"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let actions = actions_result.as_array().expect("Should return action array");
+    let actions = actions_result.as_array().ok_or("Should return action array")?;
 
     if !actions.is_empty() {
-        let first_action = &actions[0];
+        let first_action =
+            actions.first().ok_or("Actions array should have at least one element")?;
 
         // If action doesn't have edit but has data, it needs resolving
         if first_action.get("edit").is_none() && first_action.get("data").is_some() {
@@ -620,21 +615,23 @@ fn test_code_action_resolve() {
 
             assert!(resolved_result.is_ok(), "Code action resolve should succeed");
 
-            let resolved_action = resolved_result.unwrap();
+            let resolved_action = resolved_result?;
             assert!(
                 resolved_action.get("edit").is_some(),
                 "Resolved code action should have edit field"
             );
         }
     }
+
+    Ok(())
 }
 
 // ======================== Code Actions Integration with Diagnostics ========================
 
 #[test]
 // AC3:codeActions - Quick fix actions from diagnostics
-fn test_quickfix_actions_from_diagnostics() {
-    let (mut harness, workspace) = create_code_actions_server();
+fn test_quickfix_actions_from_diagnostics() -> TestResult {
+    let (mut harness, workspace) = create_code_actions_server()?;
 
     // Create mock diagnostics for undefined variables
     let mock_diagnostics = json!([
@@ -649,25 +646,23 @@ fn test_quickfix_actions_from_diagnostics() {
         }
     ]);
 
-    let actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("undefined.pl")},
-                "range": {
-                    "start": {"line": 6, "character": 20},
-                    "end": {"line": 6, "character": 32}
-                },
-                "context": {
-                    "diagnostics": mock_diagnostics,
-                    "only": ["quickfix"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed");
+    let actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("undefined.pl")},
+            "range": {
+                "start": {"line": 6, "character": 20},
+                "end": {"line": 6, "character": 32}
+            },
+            "context": {
+                "diagnostics": mock_diagnostics,
+                "only": ["quickfix"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let actions = actions_result.as_array().expect("Should return action array");
+    let actions = actions_result.as_array().ok_or("Should return action array")?;
 
     // Look for quickfix actions
     let quickfix_action = actions.iter().find(|action| action["kind"].as_str() == Some("quickfix"));
@@ -682,40 +677,42 @@ fn test_quickfix_actions_from_diagnostics() {
             "Quickfix action should have edit or command"
         );
     }
+
+    Ok(())
 }
 
 // ======================== Error Handling and Edge Cases ========================
 
 #[test]
 // Test code actions for empty selections
-fn test_code_actions_empty_selection() {
-    let (mut harness, workspace) = create_code_actions_server();
+fn test_code_actions_empty_selection() -> TestResult {
+    let (mut harness, workspace) = create_code_actions_server()?;
 
-    let actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("refactoring.pl")},
-                "range": {
-                    "start": {"line": 5, "character": 10},
-                    "end": {"line": 5, "character": 10}  // Empty range
-                },
-                "context": {
-                    "diagnostics": []
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed for empty selection");
+    let actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("refactoring.pl")},
+            "range": {
+                "start": {"line": 5, "character": 10},
+                "end": {"line": 5, "character": 10}  // Empty range
+            },
+            "context": {
+                "diagnostics": []
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let _actions = actions_result.as_array().expect("Should return action array");
+    let _actions = actions_result.as_array().ok_or("Should return action array")?;
     // Empty selection may have fewer actions, but should not error
+
+    Ok(())
 }
 
 #[test]
 // Test code actions for invalid ranges
-fn test_code_actions_invalid_range() {
-    let (mut harness, workspace) = create_code_actions_server();
+fn test_code_actions_invalid_range() -> TestResult {
+    let (mut harness, workspace) = create_code_actions_server()?;
 
     let actions_result = harness.request_with_timeout(
         "textDocument/codeAction",
@@ -734,34 +731,34 @@ fn test_code_actions_invalid_range() {
 
     // Should handle invalid range gracefully (either empty actions or error)
     assert!(actions_result.is_ok() || actions_result.is_err(), "Should handle invalid range");
+
+    Ok(())
 }
 
 #[cfg(feature = "lsp-extras")]
 #[test]
 // Test code actions with specific "only" filters
-fn test_code_actions_filtering() {
-    let (mut harness, workspace) = create_code_actions_server();
+fn test_code_actions_filtering() -> TestResult {
+    let (mut harness, workspace) = create_code_actions_server()?;
 
     // Request only refactor actions
-    let refactor_actions = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("refactoring.pl")},
-                "range": {
-                    "start": {"line": 0, "character": 0},
-                    "end": {"line": 10, "character": 0}
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["refactor"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Refactor-only request should succeed");
+    let refactor_actions = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("refactoring.pl")},
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 10, "character": 0}
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["refactor"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let refactor_actions_array = refactor_actions.as_array().expect("Should return action array");
+    let refactor_actions_array = refactor_actions.as_array().ok_or("Should return action array")?;
 
     // Verify all returned actions are refactor kinds
     for action in refactor_actions_array {
@@ -775,25 +772,23 @@ fn test_code_actions_filtering() {
     }
 
     // Request only quickfix actions
-    let quickfix_actions = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("pragmas.pl")},
-                "range": {
-                    "start": {"line": 0, "character": 0},
-                    "end": {"line": 5, "character": 0}
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["quickfix"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Quickfix-only request should succeed");
+    let quickfix_actions = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("pragmas.pl")},
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 5, "character": 0}
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["quickfix"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let quickfix_actions_array = quickfix_actions.as_array().expect("Should return action array");
+    let quickfix_actions_array = quickfix_actions.as_array().ok_or("Should return action array")?;
 
     // Verify all returned actions are quickfix kinds (if any)
     for action in quickfix_actions_array {
@@ -801,4 +796,6 @@ fn test_code_actions_filtering() {
             assert!(kind == "quickfix", "All actions should be quickfix kind, found: {}", kind);
         }
     }
+
+    Ok(())
 }

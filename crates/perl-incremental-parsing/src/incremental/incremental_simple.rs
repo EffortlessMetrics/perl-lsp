@@ -243,6 +243,7 @@ impl Default for SimpleIncrementalParser {
 mod tests {
     use super::*;
     use crate::position::Position;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_simple_incremental() {
@@ -250,7 +251,7 @@ mod tests {
 
         // Initial parse
         let source1 = "my $x = 42;";
-        parser.parse(source1).unwrap();
+        let _ = must(parser.parse(source1));
         assert_eq!(parser.reused_nodes, 0);
         assert!(parser.reparsed_nodes > 0);
 
@@ -266,7 +267,7 @@ mod tests {
 
         // Reparse with incremental
         let source2 = "my $x = 4242;";
-        parser.parse(source2).unwrap();
+        let _ = must(parser.parse(source2));
 
         // Should have reused some nodes
         assert!(parser.reused_nodes > 0);

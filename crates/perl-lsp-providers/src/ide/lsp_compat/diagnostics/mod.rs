@@ -60,9 +60,10 @@
 //! use perl_lsp_providers::ide::lsp_compat::diagnostics::{DiagnosticsProvider, DiagnosticSeverity};
 //! use perl_parser_core::Parser;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "my $x = 42; # valid code";
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().unwrap();
+//! let ast = parser.parse()?;
 //! let provider = DiagnosticsProvider::new(&ast, code.to_string());
 //!
 //! // Generate diagnostics for code
@@ -71,6 +72,8 @@
 //! for diagnostic in diagnostics {
 //!     println!("{:?}: {} at {:?}", diagnostic.severity, diagnostic.message, diagnostic.range);
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 use perl_parser_core::ast::Node;
@@ -121,12 +124,15 @@ impl DiagnosticsProvider {
     /// use perl_parser_core::Parser;
     /// use perl_lsp_providers::ide::lsp_compat::diagnostics::DiagnosticsProvider;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let script = "my $data_filter = qr/valid/; my $data_filter = 1;";
     /// let mut parser = Parser::new(script);
-    /// let ast = parser.parse().unwrap();
+    /// let ast = parser.parse()?;
     ///
     /// let provider = DiagnosticsProvider::new(&ast, script.to_string());
     /// // Provider ready for Perl script error analysis
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new(ast: &Node, source: String) -> Self {
         let extractor = SymbolExtractor::new_with_source(&source);
@@ -220,10 +226,11 @@ impl DiagnosticsProvider {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+
 mod tests {
     use super::*;
     use perl_parser_core::Parser;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_undefined_variable() {
@@ -233,7 +240,7 @@ mod tests {
         "#;
 
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
@@ -254,7 +261,7 @@ mod tests {
         "#;
 
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
@@ -270,7 +277,7 @@ mod tests {
         "#;
 
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
@@ -310,7 +317,7 @@ mod tests {
         "#;
 
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
@@ -350,7 +357,7 @@ mod tests {
         "#;
 
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
@@ -377,7 +384,7 @@ mod tests {
         let source = "print 'Hello';";
 
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = provider.get_diagnostics(&ast, &[], source);
@@ -402,7 +409,7 @@ mod tests {
         "#;
 
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let provider = DiagnosticsProvider::new(&ast, source.to_string());
         let diagnostics = provider.get_diagnostics(&ast, &[], source);

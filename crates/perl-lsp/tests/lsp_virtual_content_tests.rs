@@ -21,7 +21,7 @@ fn send_request(
         params: Some(params),
     };
 
-    let response = server.handle_request(request).expect("Should get response");
+    let response = server.handle_request(request).ok_or_else(|| "Should get response".to_string())?;
     if let Some(error) = response.error {
         return Err(error.message);
     }
@@ -58,7 +58,7 @@ fn setup_server() -> LspServer {
 }
 
 #[test]
-fn lsp_virtual_perldoc_strict() {
+fn lsp_virtual_perldoc_strict() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = setup_server();
 
     let result = send_request(
@@ -72,7 +72,7 @@ fn lsp_virtual_perldoc_strict() {
     // This test may fail if perldoc is not available or strict module is not installed
     match result {
         Ok(content) => {
-            let text = content["text"].as_str().expect("Should have text field");
+            let text = content["text"].as_str().ok_or("Should have text field")?;
             assert!(!text.is_empty(), "Content should not be empty");
             // Verify it contains documentation-like content
             assert!(
@@ -89,10 +89,11 @@ fn lsp_virtual_perldoc_strict() {
             );
         }
     }
+    Ok(())
 }
 
 #[test]
-fn lsp_virtual_perldoc_invalid_module() {
+fn lsp_virtual_perldoc_invalid_module() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = setup_server();
 
     let result = send_request(
@@ -105,10 +106,11 @@ fn lsp_virtual_perldoc_invalid_module() {
 
     // Should return error for non-existent module
     assert!(result.is_err(), "Should return error for non-existent module");
+    Ok(())
 }
 
 #[test]
-fn lsp_virtual_unsupported_scheme() {
+fn lsp_virtual_unsupported_scheme() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = setup_server();
 
     let result = send_request(
@@ -121,24 +123,26 @@ fn lsp_virtual_unsupported_scheme() {
 
     // Should return error for unsupported scheme
     assert!(result.is_err(), "Should return error for unsupported scheme");
-    let error = result.unwrap_err();
+    let error = result.err().ok_or("Expected error result")?;
     assert!(
         error.contains("Unsupported") || error.contains("not found"),
         "Error message should indicate unsupported URI"
     );
+    Ok(())
 }
 
 #[test]
-fn lsp_virtual_missing_params() {
+fn lsp_virtual_missing_params() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = setup_server();
 
     // Empty params
     let result = send_request(&mut server, "workspace/textDocumentContent", json!({}));
     assert!(result.is_err(), "Should return error for missing URI");
+    Ok(())
 }
 
 #[test]
-fn lsp_virtual_perldoc_common_modules() {
+fn lsp_virtual_perldoc_common_modules() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = setup_server();
 
     // Test common modules that should be available on most systems
@@ -155,7 +159,7 @@ fn lsp_virtual_perldoc_common_modules() {
 
         match result {
             Ok(content) => {
-                let text = content["text"].as_str().expect("Should have text field");
+                let text = content["text"].as_str().ok_or("Should have text field")?;
                 assert!(text.len() > 100, "Module {} should have substantial content", module);
             }
             Err(_) => {
@@ -164,14 +168,15 @@ fn lsp_virtual_perldoc_common_modules() {
                     "Note: Skipping test for module '{}' - perldoc may not be available",
                     module
                 );
-                return;
+                return Ok(());
             }
         }
     }
+    Ok(())
 }
 
 #[test]
-fn lsp_virtual_empty_module_name() {
+fn lsp_virtual_empty_module_name() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = setup_server();
 
     let result = send_request(
@@ -184,4 +189,5 @@ fn lsp_virtual_empty_module_name() {
 
     // Should return error for empty module name
     assert!(result.is_err(), "Should return error for empty module name");
+    Ok(())
 }

@@ -1,7 +1,5 @@
 //! Tests for new LSP features in v0.8.2
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use serde_json::json;
 
 mod common;
@@ -27,7 +25,7 @@ fn resolve_link(
 /// NOTE: Feature incomplete - workspace_roots() returns empty, document links not fully working
 #[cfg(feature = "lsp-extras")]
 #[test]
-fn test_document_links_metacpan() {
+fn test_document_links_metacpan() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -64,7 +62,7 @@ require Module::Load;
         }),
     );
 
-    let links = response["result"].as_array().unwrap();
+    let links = response["result"].as_array().ok_or("Expected result to be an array")?;
     assert!(links.len() >= 3, "Should have links for Data::Dumper, File::Path, and Module::Load");
 
     let resolved_links: Vec<_> =
@@ -74,15 +72,17 @@ require Module::Load;
     let dumper_link = resolved_links
         .iter()
         .find(|l| l["target"].as_str().unwrap_or("").contains("Data::Dumper"))
-        .expect("Should have Data::Dumper link");
-    assert!(dumper_link["target"].as_str().unwrap().contains("metacpan.org"));
+        .ok_or("Should have Data::Dumper link")?;
+    let target = dumper_link["target"].as_str().ok_or("Expected target to be a string")?;
+    assert!(target.contains("metacpan.org"));
+    Ok(())
 }
 
 /// Test document links for local files
 /// NOTE: Feature incomplete - workspace_roots() returns empty, local file resolution fails
 #[cfg(feature = "lsp-extras")]
 #[test]
-fn test_document_links_local_files() {
+fn test_document_links_local_files() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -118,15 +118,15 @@ do "config/settings.pl";
         }),
     );
 
-    let links = response["result"].as_array().unwrap();
+    let links = response["result"].as_array().ok_or("Expected result to be an array")?;
     if links.is_empty() {
-        return;
+        return Ok(());
     }
 
     let resolved_links: Vec<_> =
         links.iter().filter_map(|link| resolve_link(&mut server, link)).collect();
     if resolved_links.is_empty() {
-        return;
+        return Ok(());
     }
 
     // Check that links are file:// URIs
@@ -134,11 +134,12 @@ do "config/settings.pl";
         let target = link["target"].as_str().unwrap_or("");
         assert!(target.starts_with("file://"), "Local file links should use file:// protocol");
     }
+    Ok(())
 }
 
 /// Test selection ranges
 #[test]
-fn test_selection_ranges() {
+fn test_selection_ranges() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -182,10 +183,10 @@ sub process_data {
         }),
     );
 
-    let ranges = response["result"].as_array().unwrap();
+    let ranges = response["result"].as_array().ok_or("Expected result to be an array")?;
     assert!(!ranges.is_empty(), "Should have selection ranges");
 
-    let first_range = &ranges[0];
+    let first_range = ranges.first().ok_or("Expected at least one range")?;
     assert!(first_range.get("range").is_some(), "Should have a range");
 
     // Check that we have a parent chain (identifier -> expression -> statement -> block -> function)
@@ -196,11 +197,12 @@ sub process_data {
         depth += 1;
     }
     assert!(depth >= 2, "Should have at least 2 levels of selection hierarchy");
+    Ok(())
 }
 
 /// Test on-type formatting for braces
 #[test]
-fn test_on_type_formatting_brace() {
+fn test_on_type_formatting_brace() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -247,11 +249,12 @@ fn test_on_type_formatting_brace() {
             assert!(edit.get("newText").is_some(), "Edit should have newText");
         }
     }
+    Ok(())
 }
 
 /// Test on-type formatting for newline
 #[test]
-fn test_on_type_formatting_newline() {
+fn test_on_type_formatting_newline() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -305,11 +308,12 @@ fn test_on_type_formatting_newline() {
             }
         }
     }
+    Ok(())
 }
 
 /// Test workspace/didChangeWatchedFiles registration
 #[test]
-fn test_file_watcher_registration() {
+fn test_file_watcher_registration() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
 
     // Initialize with dynamic registration support
@@ -348,11 +352,12 @@ fn test_file_watcher_registration() {
     // The server should have sent a client/registerCapability request
     // In a real test harness, we'd capture outgoing requests
     // For now, just verify the server doesn't crash
+    Ok(())
 }
 
 /// Test that selection ranges handle edge cases
 #[test]
-fn test_selection_ranges_edge_cases() {
+fn test_selection_ranges_edge_cases() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -390,13 +395,14 @@ fn test_selection_ranges_edge_cases() {
         }),
     );
 
-    let ranges = response["result"].as_array().unwrap();
+    let ranges = response["result"].as_array().ok_or("Expected result to be an array")?;
     assert_eq!(ranges.len(), 2, "Should return a range for each position");
+    Ok(())
 }
 
 /// Test on-type formatting with tabs
 #[test]
-fn test_on_type_formatting_tabs() {
+fn test_on_type_formatting_tabs() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -445,11 +451,12 @@ fn test_on_type_formatting_tabs() {
             }
         }
     }
+    Ok(())
 }
 
 #[cfg(windows)]
 #[test]
-fn test_document_links_windows_path_with_space() {
+fn test_document_links_windows_path_with_space() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -485,13 +492,17 @@ fn test_document_links_windows_path_with_space() {
         }),
     );
 
-    let links = resp["result"].as_array().expect("links array");
+    let links = resp["result"].as_array().ok_or("Expected links array")?;
     assert!(!links.is_empty(), "should return at least one link");
-    let target = links[0]["target"].as_str().expect("target uri");
+    let target = links.first()
+        .ok_or("Expected at least one link")?["target"]
+        .as_str()
+        .ok_or("Expected target uri to be a string")?;
 
     // Percent-encoded space must be preserved; path join must be forward-slash normalized
     assert!(
         target.ends_with("C:/Temp/Perl%20LSP%20Demo/lib/Thing.pm"),
         "unexpected target: {target}"
     );
+    Ok(())
 }

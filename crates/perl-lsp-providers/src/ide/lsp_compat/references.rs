@@ -18,9 +18,10 @@
 //! use perl_parser_core::{Parser, Node};
 //! use perl_lsp_providers::ide::lsp_compat::references::find_references_single_file;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let script = "my $count = 0; $count++; print $count;";
 //! let mut parser = Parser::new(script);
-//! let ast = parser.parse().unwrap();
+//! let ast = parser.parse()?;
 //!
 //! // Find all references to $count
 //! if let Some(refs) = find_references_single_file(&ast, 3) { // Position of first $count
@@ -29,6 +30,8 @@
 //!         println!("Reference at {}-{}: {}", start, end, &script[start..end]);
 //!     }
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 use perl_parser_core::ast::{Node, NodeKind};

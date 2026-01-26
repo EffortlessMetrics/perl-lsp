@@ -124,7 +124,9 @@ mod tests {
 
         #[test]
         fn identifiers_are_valid(id in identifier()) {
-            assert!(id.chars().next().unwrap().is_ascii_alphabetic() || id.starts_with('_'));
+            // Identifiers must not be empty (guaranteed by generator)
+            let first_char = id.chars().next().unwrap_or('\0');
+            assert!(first_char.is_ascii_alphabetic() || id.starts_with('_'));
             assert!(id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
         }
 

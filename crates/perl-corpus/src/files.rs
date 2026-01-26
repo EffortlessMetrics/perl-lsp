@@ -176,25 +176,26 @@ fn has_allowed_extension(path: &Path, extensions: &[&str]) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    fn temp_root(prefix: &str) -> PathBuf {
+    fn temp_root(prefix: &str) -> std::io::Result<PathBuf> {
         let mut root = std::env::temp_dir();
         let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
         root.push(format!("{}_{}_{}", prefix, std::process::id(), nanos));
-        fs::create_dir_all(&root).expect("create temp root");
-        root
+        fs::create_dir_all(&root)?;
+        Ok(root)
     }
 
     #[test]
-    fn collect_files_filters_extensions_and_skips_hidden() {
-        let root = temp_root("perl_corpus_files");
+    fn collect_files_filters_extensions_and_skips_hidden() -> Result<(), Box<dyn std::error::Error>> {
+        let root = temp_root("perl_corpus_files")?;
         let keep_dir = root.join("keep");
-        fs::create_dir_all(&keep_dir).expect("create keep dir");
-        fs::create_dir_all(root.join("_skip")).expect("create skip dir");
-        fs::create_dir_all(root.join(".hidden_dir")).expect("create hidden dir");
+        fs::create_dir_all(&keep_dir)?;
+        fs::create_dir_all(root.join("_skip"))?;
+        fs::create_dir_all(root.join(".hidden_dir"))?;
 
         let fixtures = [
             root.join("case.pl"),
@@ -205,39 +206,40 @@ mod tests {
             keep_dir.join("nested.pl"),
         ];
         for fixture in &fixtures {
-            fs::write(fixture, "print 1;\n").expect("write fixture");
+            fs::write(fixture, "print 1;\n")?;
         }
 
-        fs::write(root.join("case.txt"), "ignore\n").expect("write ignored");
-        fs::write(root.join(".hidden.pl"), "ignore\n").expect("write hidden");
-        fs::write(root.join("_skip/inner.pl"), "ignore\n").expect("write skipped");
-        fs::write(root.join(".hidden_dir/inner.pm"), "ignore\n").expect("write hidden dir");
+        fs::write(root.join("case.txt"), "ignore\n")?;
+        fs::write(root.join(".hidden.pl"), "ignore\n")?;
+        fs::write(root.join("_skip/inner.pl"), "ignore\n")?;
+        fs::write(root.join(".hidden_dir/inner.pm"), "ignore\n")?;
 
         let files = collect_files(&root, TEST_EXTENSIONS);
         let mut names: Vec<_> = files
             .iter()
-            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
+            .map(|path| path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default())
             .collect();
         names.sort();
 
         let expected = vec!["case.cgi", "case.pl", "case.pm", "case.psgi", "case.t", "nested.pl"];
         assert_eq!(names, expected);
 
-        fs::remove_dir_all(&root).expect("cleanup temp root");
+        fs::remove_dir_all(&root)?;
+        Ok(())
     }
 
     #[test]
-    fn corpus_files_include_layer_info() {
-        let root = temp_root("perl_corpus_layers");
+    fn corpus_files_include_layer_info() -> Result<(), Box<dyn std::error::Error>> {
+        let root = temp_root("perl_corpus_layers")?;
         let test_dir = root.join("test_corpus");
         let fuzz_dir = root.join("crates/perl-corpus/fuzz");
-        fs::create_dir_all(&test_dir).expect("create test_corpus dir");
-        fs::create_dir_all(&fuzz_dir).expect("create fuzz dir");
+        fs::create_dir_all(&test_dir)?;
+        fs::create_dir_all(&fuzz_dir)?;
 
         let test_file = test_dir.join("case.pl");
         let fuzz_file = fuzz_dir.join("fuzz_case.pl");
-        fs::write(&test_file, "print 1;\n").expect("write test fixture");
-        fs::write(&fuzz_file, "print 2;\n").expect("write fuzz fixture");
+        fs::write(&test_file, "print 1;\n")?;
+        fs::write(&fuzz_file, "print 2;\n")?;
 
         let paths = CorpusPaths::from_root(root.clone());
         let files = get_corpus_files_from(&paths);
@@ -253,6 +255,7 @@ mod tests {
             "Expected fuzz file in results"
         );
 
-        fs::remove_dir_all(&root).expect("cleanup temp root");
+        fs::remove_dir_all(&root)?;
+        Ok(())
     }
 }

@@ -75,9 +75,15 @@ impl From<lsp_types::Range> for WireRange {
 }
 impl From<WireLocation> for lsp_types::Location {
     fn from(l: WireLocation) -> Self {
-        #[allow(clippy::expect_used)]
-        static FALLBACK_URI: std::sync::LazyLock<lsp_types::Uri> =
-            std::sync::LazyLock::new(|| "file:///unknown".parse().expect("valid fallback URL"));
-        Self { uri: l.uri.parse().unwrap_or_else(|_| FALLBACK_URI.clone()), range: l.range.into() }
+        static FALLBACK_URI: std::sync::LazyLock<lsp_types::Uri> = std::sync::LazyLock::new(|| {
+            match "file:///unknown".parse() {
+                Ok(u) => u,
+                Err(_) => panic!("valid fallback URL"),
+            }
+        });
+        Self {
+            uri: l.uri.parse().unwrap_or_else(|_| FALLBACK_URI.clone()),
+            range: l.range.into(),
+        }
     }
 }

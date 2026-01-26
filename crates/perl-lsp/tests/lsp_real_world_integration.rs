@@ -7,11 +7,11 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 
 /// Test with a real CPAN module structure
 #[test]
-fn test_cpan_module_structure() {
+fn test_cpan_module_structure() -> Result<(), Box<dyn std::error::Error>> {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
         eprintln!("skipping test_cpan_module_structure (set RUN_REAL_WORLD=1 to run)");
-        return;
+        return Ok(());
     }
 
     let mut server = start_lsp_server();
@@ -111,7 +111,9 @@ This is a sample CPAN-style module for testing.
     let response = read_response(&mut server);
     assert!(response["result"].is_array());
 
-    let symbols = response["result"].as_array().unwrap();
+    let symbols = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
 
     // Verify expected symbols are found
     let symbol_names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
@@ -121,15 +123,17 @@ This is a sample CPAN-style module for testing.
     assert!(symbol_names.contains(&"function1"));
     assert!(symbol_names.contains(&"function2"));
     assert!(symbol_names.contains(&"DESTROY"));
+
+    Ok(())
 }
 
 /// Test with Mojolicious web application
 #[test]
-fn test_mojolicious_app() {
+fn test_mojolicious_app() -> Result<(), Box<dyn std::error::Error>> {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
         eprintln!("skipping test_mojolicious_app (set RUN_REAL_WORLD=1 to run)");
-        return;
+        return Ok(());
     }
 
     let mut server = start_lsp_server();
@@ -229,19 +233,23 @@ __DATA__
     );
 
     let response = read_response(&mut server);
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = response["result"]["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
 
     // Should parse without errors
     assert_eq!(items.len(), 0, "Mojolicious app should parse without errors");
+
+    Ok(())
 }
 
 /// Test with DBI database code
 #[test]
-fn test_dbi_database_code() {
+fn test_dbi_database_code() -> Result<(), Box<dyn std::error::Error>> {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
         eprintln!("skipping test_dbi_database_code (set RUN_REAL_WORLD=1 to run)");
-        return;
+        return Ok(());
     }
 
     let mut server = start_lsp_server();
@@ -369,7 +377,9 @@ END {
     );
 
     let response = read_response(&mut server);
-    let symbols = response["result"].as_array().unwrap();
+    let symbols = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
 
     // Verify subroutines are detected
     let sub_names: Vec<&str> = symbols
@@ -380,15 +390,17 @@ END {
 
     assert!(sub_names.contains(&"add_user_with_profile"));
     assert!(sub_names.contains(&"get_recent_users"));
+
+    Ok(())
 }
 
 /// Test with Test::More test file
 #[test]
-fn test_perl_test_file() {
+fn test_perl_test_file() -> Result<(), Box<dyn std::error::Error>> {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
         eprintln!("skipping test_perl_test_file (set RUN_REAL_WORLD=1 to run)");
-        return;
+        return Ok(());
     }
 
     let mut server = start_lsp_server();
@@ -493,17 +505,21 @@ done_testing();
     );
 
     let response = read_response(&mut server);
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = response["result"]["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
     assert_eq!(items.len(), 0, "Test file should parse without errors");
+
+    Ok(())
 }
 
 /// Test with Catalyst MVC controller
 #[test]
-fn test_catalyst_controller() {
+fn test_catalyst_controller() -> Result<(), Box<dyn std::error::Error>> {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
         eprintln!("skipping test_catalyst_controller (set RUN_REAL_WORLD=1 to run)");
-        return;
+        return Ok(());
     }
 
     let mut server = start_lsp_server();
@@ -666,7 +682,9 @@ __PACKAGE__->meta->make_immutable;
     );
 
     let response = read_response(&mut server);
-    let symbols = response["result"].as_array().unwrap();
+    let symbols = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
 
     let method_names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
 
@@ -676,15 +694,17 @@ __PACKAGE__->meta->make_immutable;
     assert!(method_names.contains(&"user_GET"));
     assert!(method_names.contains(&"user_PUT"));
     assert!(method_names.contains(&"user_DELETE"));
+
+    Ok(())
 }
 
 /// Test with complex regex patterns
 #[test]
-fn test_complex_regex_patterns() {
+fn test_complex_regex_patterns() -> Result<(), Box<dyn std::error::Error>> {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
         eprintln!("skipping test_complex_regex_patterns (set RUN_REAL_WORLD=1 to run)");
-        return;
+        return Ok(());
     }
 
     let mut server = start_lsp_server();
@@ -827,17 +847,21 @@ sub normalize_text {
     );
 
     let response = read_response(&mut server);
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = response["result"]["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
     assert_eq!(items.len(), 0, "Complex regex patterns should parse correctly");
+
+    Ok(())
 }
 
 /// Test with modern Perl features
 #[test]
-fn test_modern_perl_features() {
+fn test_modern_perl_features() -> Result<(), Box<dyn std::error::Error>> {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
         eprintln!("skipping test_modern_perl_features (set RUN_REAL_WORLD=1 to run)");
-        return;
+        return Ok(());
     }
 
     let mut server = start_lsp_server();
@@ -966,7 +990,9 @@ sub array_operations {
     );
 
     let response = read_response(&mut server);
-    let symbols = response["result"].as_array().unwrap();
+    let symbols = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
 
     // Look for class and methods
     let symbol_names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
@@ -974,15 +1000,17 @@ sub array_operations {
     assert!(symbol_names.contains(&"Point"));
     assert!(symbol_names.contains(&"risky_operation"));
     assert!(symbol_names.contains(&"with_defer"));
+
+    Ok(())
 }
 
 /// Test multi-file project with modules
 #[test]
-fn test_multi_file_project() {
+fn test_multi_file_project() -> Result<(), Box<dyn std::error::Error>> {
     // Opt-in for slow/flake-prone integration test
     if std::env::var("RUN_REAL_WORLD").is_err() {
         eprintln!("skipping test_multi_file_project (set RUN_REAL_WORLD=1 to run)");
-        return;
+        return Ok(());
     }
 
     let mut server = start_lsp_server();
@@ -1105,7 +1133,9 @@ sub get {
     );
 
     let response = read_response(&mut server);
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = response["result"]["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
     assert_eq!(items.len(), 0, "Main script should parse without errors");
 
     send_request(
@@ -1121,6 +1151,10 @@ sub get {
     );
 
     let response = read_response(&mut server);
-    let items = response["result"]["items"].as_array().unwrap();
+    let items = response["result"]["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
     assert_eq!(items.len(), 0, "Config module should parse without errors");
+
+    Ok(())
 }

@@ -309,16 +309,16 @@ impl TriviaPreservingParser {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn test_trivia_collection() {
         let source = "  # comment\n  my $x = 42;".to_string();
         let mut lexer = TriviaLexer::new(source);
 
-        let (_token, trivia) = lexer.next_token_with_trivia().unwrap();
+        let (_token, trivia) = must_some(lexer.next_token_with_trivia());
 
         // Should have whitespace and comment as trivia
         eprintln!("Trivia count: {}", trivia.len());
@@ -335,7 +335,7 @@ mod tests {
         let source = "=head1 NAME\n\nTest\n\n=cut\n\nmy $x;".to_string();
         let mut lexer = TriviaLexer::new(source);
 
-        let (_, trivia) = lexer.next_token_with_trivia().unwrap();
+        let (_, trivia) = must_some(lexer.next_token_with_trivia());
 
         // Should have POD as trivia
         assert!(trivia.iter().any(|t| matches!(&t.trivia, Trivia::PodComment(_))));

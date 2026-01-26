@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::parser::Parser;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_indirect_method_call() {
@@ -13,7 +14,7 @@ $method $object;
         let result = parser.parse();
         assert!(result.is_ok(), "Failed to parse indirect method call");
 
-        let ast = result.unwrap();
+        let ast = must(result);
         let _sexp = ast.to_sexp();
         // Should parse as variable followed by variable if not detected as indirect call,
         // OR as indirect call if our heuristics match.
@@ -26,7 +27,7 @@ $method $object;
         let mut parser_valid = Parser::new(code_valid);
         let result_valid = parser_valid.parse();
         assert!(result_valid.is_ok());
-        let ast_valid = result_valid.unwrap();
+        let ast_valid = must(result_valid);
         let sexp_valid = ast_valid.to_sexp();
         // Should be parsed as indirect call
         assert!(
@@ -43,7 +44,7 @@ $method $object;
         let result = parser.parse();
         assert!(result.is_ok());
 
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
         assert!(sexp.contains("indirect_call"), "Should detect indirect constructor in: {}", sexp);
     }
@@ -55,7 +56,7 @@ $method $object;
         let result = parser.parse();
         assert!(result.is_ok());
 
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
         // Should be binary operation, NOT indirect call
         assert!(
@@ -70,7 +71,7 @@ $method $object;
         // print $x, $y -> print($x, $y) (not indirect)
         let code_direct = "print $x, $y;";
         let mut parser = Parser::new(code_direct);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let sexp = ast.to_sexp();
         assert!(
             !sexp.contains("indirect_call"),
@@ -81,7 +82,7 @@ $method $object;
         // print $fh $x -> print($fh, $x) (indirect)
         let code_indirect = "print $fh $x;";
         let mut parser2 = Parser::new(code_indirect);
-        let ast2 = parser2.parse().unwrap();
+        let ast2 = must(parser2.parse());
         let sexp2 = ast2.to_sexp();
         assert!(
             sexp2.contains("indirect_call"),

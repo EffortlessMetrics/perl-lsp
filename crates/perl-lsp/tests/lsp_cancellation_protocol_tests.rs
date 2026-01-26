@@ -133,7 +133,7 @@ fn setup_test_file(server: &mut LspServer, uri: &str, content: &str) {
 /// Tests feature spec: LSP_CANCELLATION_PROTOCOL.md#enhanced-protocol-requirements
 /// AC:1 - Enhanced $/cancelRequest notification processing with provider context awareness
 #[test]
-fn test_enhanced_cancel_request_with_provider_context_ac1() {
+fn test_enhanced_cancel_request_with_provider_context_ac1() -> Result<(), Box<dyn std::error::Error>> {
     let mut fixture = CancellationTestFixture::new();
 
     // Test completion provider cancellation with enhanced context
@@ -181,8 +181,10 @@ fn test_enhanced_cancel_request_with_provider_context_ac1() {
                 Some(-32800),
                 "Should return RequestCancelled error code"
             );
+            let message = error["message"].as_str()
+                .ok_or("Error message should be a string")?;
             assert!(
-                error["message"].as_str().unwrap().contains("completion"),
+                message.contains("completion"),
                 "Error message should reference completion provider"
             );
 
@@ -202,12 +204,13 @@ fn test_enhanced_cancel_request_with_provider_context_ac1() {
 
     // Test will initially fail due to basic cancellation implementation
     // Enhanced provider context processing will be implemented in feature development
+    Ok(())
 }
 
 /// Tests feature spec: LSP_CANCELLATION_PROTOCOL.md#provider-integration-schema
 /// AC:1 - Multiple LSP provider cancellation validation with enhanced context
 #[test]
-fn test_multiple_provider_cancellation_with_context_ac1() {
+fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn std::error::Error>> {
     let mut fixture = CancellationTestFixture::new();
 
     let provider_scenarios = vec![
@@ -274,7 +277,10 @@ fn test_multiple_provider_cancellation_with_context_ac1() {
                     "context": {
                         "provider": method,
                         "provider_type": provider_type,
-                        "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64
+                        "timestamp": std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map_err(|e| format!("System time error: {}", e))?
+                            .as_millis() as i64
                     }
                 }
             }),
@@ -289,7 +295,8 @@ fn test_multiple_provider_cancellation_with_context_ac1() {
         if let Some(resp) = response {
             if let Some(error) = resp.get("error") {
                 assert_eq!(error["code"].as_i64(), Some(-32800));
-                let message = error["message"].as_str().unwrap();
+                let message = error["message"].as_str()
+                    .ok_or("Error message should be a string")?;
                 let method_name = method.split('/').next_back().unwrap_or(method);
                 assert!(
                     message.to_lowercase().contains(&method_name.to_lowercase()),
@@ -311,12 +318,13 @@ fn test_multiple_provider_cancellation_with_context_ac1() {
 
     // This test establishes the pattern for provider-specific cancellation
     // Implementation will add enhanced context processing and cleanup coordination
+    Ok(())
 }
 
 /// Tests feature spec: LSP_CANCELLATION_PROTOCOL.md#json-rpc-compliance
 /// AC:1 - JSON-RPC 2.0 protocol compliance validation
 #[test]
-fn test_json_rpc_protocol_compliance_ac1() {
+fn test_json_rpc_protocol_compliance_ac1() -> Result<(), Box<dyn std::error::Error>> {
     let mut fixture = CancellationTestFixture::new();
 
     // Test 1: Invalid cancellation request handling
@@ -393,6 +401,7 @@ fn test_json_rpc_protocol_compliance_ac1() {
 
     // Test establishes JSON-RPC 2.0 compliance patterns
     // Enhanced implementation will add comprehensive protocol validation
+    Ok(())
 }
 
 // ============================================================================
@@ -402,7 +411,7 @@ fn test_json_rpc_protocol_compliance_ac1() {
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#thread-safe-cancellation-token
 /// AC:2 - Thread-safe cancellation token with atomic operations
 #[test]
-fn test_atomic_cancellation_token_operations_ac2() {
+fn test_atomic_cancellation_token_operations_ac2() -> Result<(), Box<dyn std::error::Error>> {
     // This test will fail initially as PerlLspCancellationToken doesn't exist yet
     // TODO: Uncomment when implementing cancellation token architecture
     /*
@@ -475,12 +484,13 @@ fn test_atomic_cancellation_token_operations_ac2() {
     // Placeholder assertion that will pass until implementation exists
     // This establishes the test structure for atomic cancellation token operations
     // Test scaffolding established - implement PerlLspCancellationToken
+    Ok(())
 }
 
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#cancellation-registry
 /// AC:2 - Cancellation registry thread safety with concurrent operations
 #[test]
-fn test_cancellation_registry_concurrent_operations_ac2() {
+fn test_cancellation_registry_concurrent_operations_ac2() -> Result<(), Box<dyn std::error::Error>> {
     // Test scaffolding for cancellation registry thread safety
     // Will fail initially as CancellationRegistry doesn't exist
     /*
@@ -580,12 +590,13 @@ fn test_cancellation_registry_concurrent_operations_ac2() {
 
     // Placeholder for test scaffolding
     // Test scaffolding established - implement CancellationRegistry
+    Ok(())
 }
 
 /// Tests feature spec: LSP_CANCELLATION_PROTOCOL.md#provider-cleanup-context
 /// AC:2 - Provider-specific cleanup with thread-safe coordination
 #[test]
-fn test_provider_cleanup_thread_safety_ac2() {
+fn test_provider_cleanup_thread_safety_ac2() -> Result<(), Box<dyn std::error::Error>> {
     // Test scaffolding for provider cleanup thread safety
     // Will establish patterns for CancellableProvider trait implementation
     /*
@@ -679,6 +690,7 @@ fn test_provider_cleanup_thread_safety_ac2() {
 
     // Placeholder for provider cleanup thread safety testing
     // Test scaffolding established - implement CancellableProvider trait
+    Ok(())
 }
 
 // ============================================================================
@@ -688,7 +700,7 @@ fn test_provider_cleanup_thread_safety_ac2() {
 /// Tests feature spec: LSP_CANCELLATION_INTEGRATION_SCHEMA.md#dual-indexing-integration
 /// AC:3 - Dual indexing cancellation with consistency preservation
 #[test]
-fn test_dual_indexing_cancellation_consistency_ac3() {
+fn test_dual_indexing_cancellation_consistency_ac3() -> Result<(), Box<dyn std::error::Error>> {
     let mut fixture = CancellationTestFixture::new();
 
     // Wait for initial indexing to complete with adaptive timeout
@@ -762,6 +774,7 @@ fn test_dual_indexing_cancellation_consistency_ac3() {
     }
 
     // Test establishes dual indexing consistency patterns for enhanced implementation
+    Ok(())
 }
 
 /// Helper function to request workspace symbols
@@ -781,7 +794,7 @@ fn request_workspace_symbols(server: &mut LspServer, query: &str) -> Vec<Value> 
 /// Tests feature spec: LSP_CANCELLATION_INTEGRATION_SCHEMA.md#cross-file-navigation
 /// AC:3 - Cross-file navigation cancellation with multi-tier fallback preservation
 #[test]
-fn test_cross_file_navigation_cancellation_ac3() {
+fn test_cross_file_navigation_cancellation_ac3() -> Result<(), Box<dyn std::error::Error>> {
     let mut fixture = CancellationTestFixture::new();
 
     // Wait for cross-file indexing to stabilize with adaptive timeout
@@ -851,6 +864,7 @@ fn test_cross_file_navigation_cancellation_ac3() {
 
     // Test establishes cross-file navigation cancellation patterns
     // Enhanced implementation will add multi-tier fallback preservation
+    Ok(())
 }
 
 /// Helper function to validate cancellation response or normal completion
@@ -884,7 +898,7 @@ fn validate_cancellation_or_completion(response: Option<Value>, operation: &str)
 /// Tests feature spec: LSP_CANCELLATION_INTEGRATION_SCHEMA.md#workspace-symbol-search
 /// AC:3 - Workspace symbol search with dual pattern cancellation handling
 #[test]
-fn test_workspace_symbol_dual_pattern_cancellation_ac3() {
+fn test_workspace_symbol_dual_pattern_cancellation_ac3() -> Result<(), Box<dyn std::error::Error>> {
     let mut fixture = CancellationTestFixture::new();
 
     // Create larger test workspace to increase cancellation opportunity
@@ -970,6 +984,7 @@ fn test_workspace_symbol_dual_pattern_cancellation_ac3() {
 
     // Test establishes dual pattern search cancellation patterns
     // Enhanced implementation will add comprehensive dual indexing coordination
+    Ok(())
 }
 
 /// Generate large Perl content for testing cancellation timing
@@ -995,7 +1010,7 @@ fn generate_large_perl_content(function_count: usize) -> String {
 /// Tests feature spec: LSP_CANCELLATION_PROTOCOL.md#enhanced-error-response
 /// AC:4 - Enhanced -32800 error code responses with context and performance tracking
 #[test]
-fn test_enhanced_error_response_handling_ac4() {
+fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error::Error>> {
     let mut fixture = CancellationTestFixture::new();
 
     let test_scenarios = vec![
@@ -1054,7 +1069,10 @@ fn test_enhanced_error_response_handling_ac4() {
                     "context": {
                         "provider": method,
                         "scenario": scenario_name,
-                        "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64,
+                        "timestamp": std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map_err(|e| format!("System time error: {}", e))?
+                            .as_millis() as i64,
                         "latency_tracking": true
                     }
                 }
@@ -1077,7 +1095,8 @@ fn test_enhanced_error_response_handling_ac4() {
                 );
 
                 // Validate enhanced error message with provider context
-                let message = error["message"].as_str().expect("Error should have message");
+                let message = error["message"].as_str()
+                    .ok_or("Error should have message")?;
                 assert!(
                     message.contains(scenario_name)
                         || message.to_lowercase().contains(
@@ -1097,8 +1116,8 @@ fn test_enhanced_error_response_handling_ac4() {
 
                     // Latency tracking validation (enhanced feature)
                     if data.get("latency_ms").is_some() {
-                        let latency_ms =
-                            data["latency_ms"].as_u64().expect("Latency should be numeric");
+                        let latency_ms = data["latency_ms"].as_u64()
+                            .ok_or("Latency should be numeric")?;
                         assert!(
                             latency_ms <= cancellation_latency.as_millis() as u64,
                             "Reported latency should be reasonable: {}ms",
@@ -1123,12 +1142,13 @@ fn test_enhanced_error_response_handling_ac4() {
 
     // Test establishes enhanced error response patterns
     // Implementation will add comprehensive error context and performance tracking
+    Ok(())
 }
 
 /// Tests feature spec: LSP_CANCELLATION_PROTOCOL.md#error-graceful-degradation
 /// AC:4 - Graceful error handling under various cancellation scenarios
 #[test]
-fn test_graceful_error_degradation_ac4() {
+fn test_graceful_error_degradation_ac4() -> Result<(), Box<dyn std::error::Error>> {
     let mut fixture = CancellationTestFixture::new();
 
     // Test 1: Rapid successive cancellations
@@ -1242,6 +1262,7 @@ fn test_graceful_error_degradation_ac4() {
     );
 
     // Test establishes graceful error degradation patterns
+    Ok(())
 }
 
 // ============================================================================
@@ -1251,7 +1272,7 @@ fn test_graceful_error_degradation_ac4() {
 /// Tests feature spec: LSP_CANCELLATION_PROTOCOL.md#concurrent-cancellation-management
 /// AC:5 - Multiple concurrent cancellation handling without interference
 #[test]
-fn test_concurrent_cancellation_coordination_ac5() {
+fn test_concurrent_cancellation_coordination_ac5() -> Result<(), Box<dyn std::error::Error>> {
     let mut fixture = CancellationTestFixture::new();
 
     // Create concurrent requests across different providers
@@ -1403,12 +1424,13 @@ fn test_concurrent_cancellation_coordination_ac5() {
 
     // Test establishes concurrent cancellation coordination patterns
     // Enhanced implementation will add comprehensive coordination and resource management
+    Ok(())
 }
 
 /// Tests feature spec: LSP_CANCELLATION_PROTOCOL.md#resource-management
 /// AC:5 - Resource cleanup during concurrent cancellation without memory leaks
 #[test]
-fn test_concurrent_resource_cleanup_ac5() {
+fn test_concurrent_resource_cleanup_ac5() -> Result<(), Box<dyn std::error::Error>> {
     let mut fixture = CancellationTestFixture::new();
 
     // Memory measurement before concurrent operations
@@ -1507,6 +1529,7 @@ fn test_concurrent_resource_cleanup_ac5() {
 
     // Test establishes resource cleanup patterns for concurrent cancellation
     // Enhanced implementation will add comprehensive resource tracking and leak prevention
+    Ok(())
 }
 
 /// Estimate memory usage (simplified for testing - real implementation would use system calls)

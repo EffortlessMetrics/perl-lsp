@@ -69,7 +69,7 @@ criterion = "0.8.1"
 # Test fixtures
 tempfile = "3.24.0"
 
-# Golden transcript validation (AC13) - serde_yaml removed (unused)
+perl-tdd-support = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31.1", features = ["signal"] }  # For SIGINT handling (AC9)

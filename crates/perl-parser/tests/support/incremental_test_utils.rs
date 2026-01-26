@@ -3,8 +3,6 @@
 //! Provides helper functions and structures for comprehensive testing of
 //! incremental parsing functionality with detailed performance metrics.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_parser::incremental_v2::{IncrementalMetrics, IncrementalParserV2};
 use perl_parser::{edit::Edit, position::Position};
 use std::time::{Duration, Instant};
@@ -19,9 +17,10 @@ impl IncrementalTestUtils {
     /// Create a performance edit that changes a value in the source
     #[allow(dead_code)]
     pub fn create_value_edit(source: &str, old_value: &str, new_value: &str) -> (String, Edit) {
-        let pos = source
-            .find(old_value)
-            .unwrap_or_else(|| panic!("Could not find '{}' in source", old_value));
+        let pos = match source.find(old_value) {
+            Some(p) => p,
+            None => panic!("Could not find '{}' in source. Source content: {}", old_value, source),
+        };
         let end_pos = pos + old_value.len();
         let new_end = pos + new_value.len();
 
@@ -87,7 +86,12 @@ impl IncrementalTestUtils {
 
             // Initial parse timing
             let start = Instant::now();
-            parser.parse(initial_source).unwrap();
+            if let Err(e) = parser.parse(initial_source) {
+                panic!(
+                    "Failed to parse initial source in iteration {}: {} (source: {})",
+                    i, e, initial_source
+                );
+            }
             let initial_time = start.elapsed();
             initial_times.push(initial_time);
 
@@ -128,8 +132,14 @@ impl IncrementalTestUtils {
         let avg_initial =
             initial_times_micros.iter().sum::<u128>() / initial_times_micros.len() as u128;
 
-        let min_incremental = *incremental_times.iter().min().unwrap();
-        let max_incremental = *incremental_times.iter().max().unwrap();
+        let min_incremental = match incremental_times.iter().min() {
+            Some(&m) => m,
+            None => panic!("No incremental times recorded for analysis"),
+        };
+        let max_incremental = match incremental_times.iter().max() {
+            Some(&m) => m,
+            None => panic!("No incremental times recorded for analysis"),
+        };
 
         let median_incremental = {
             let mut sorted = incremental_times.clone();

@@ -1,5 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use insta::assert_yaml_snapshot;
 use perl_lsp::features::map::feature_ids_from_caps;
 use perl_lsp::features::{advertised_features, compliance_percent};
@@ -9,7 +7,7 @@ mod support;
 use support::lsp_harness::LspHarness;
 
 #[test]
-fn test_advertised_features_match_capabilities() {
+fn test_advertised_features_match_capabilities() -> Result<(), Box<dyn std::error::Error>> {
     use lsp_types::*;
 
     // Use shared client capabilities for consistency
@@ -17,12 +15,10 @@ fn test_advertised_features_match_capabilities() {
 
     // Get real ServerCapabilities from actual LSP initialization
     let mut harness = LspHarness::new();
-    let init_result =
-        harness.initialize(Some(client_caps)).expect("Failed to initialize LSP server");
+    let init_result = harness.initialize(Some(client_caps))?;
 
     // Extract ServerCapabilities from initialization result
-    let caps: ServerCapabilities = serde_json::from_value(init_result["capabilities"].clone())
-        .expect("Failed to deserialize ServerCapabilities");
+    let caps: ServerCapabilities = serde_json::from_value(init_result["capabilities"].clone())?;
 
     // Get features from capabilities and catalog
     let mut from_caps = feature_ids_from_caps(&caps);
@@ -43,6 +39,8 @@ fn test_advertised_features_match_capabilities() {
     // Also verify compliance percentage is reasonable
     let p = compliance_percent();
     assert!((80.0..=85.0).contains(&p), "unexpected compliance percent: {}", p);
+
+    Ok(())
 }
 
 #[test]

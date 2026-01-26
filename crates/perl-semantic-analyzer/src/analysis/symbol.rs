@@ -880,9 +880,11 @@ impl SymbolExtractor {
 }
 
 #[cfg(test)]
+
 mod tests {
     use super::*;
     use crate::parser::Parser;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_symbol_extraction() {
@@ -899,7 +901,7 @@ sub bar {
 "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let extractor = SymbolExtractor::new_with_source(code);
         let table = extractor.extract(&ast);

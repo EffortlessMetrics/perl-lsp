@@ -174,9 +174,9 @@ impl EditSet {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn test_simple_edit() {
@@ -199,7 +199,7 @@ mod tests {
 
         // Position after edit - shifted
         let pos = Position::new(20, 2, 15);
-        let new_pos = edit.apply_to_position(pos).unwrap();
+        let new_pos = must_some(edit.apply_to_position(pos));
         assert_eq!(new_pos.byte, 22);
         assert_eq!(new_pos.column, 17);
     }
@@ -221,7 +221,7 @@ mod tests {
 
         // Position on later line - shifted
         let pos = Position::new(50, 6, 5);
-        let new_pos = edit.apply_to_position(pos).unwrap();
+        let new_pos = must_some(edit.apply_to_position(pos));
         assert_eq!(new_pos.byte, 40);
         assert_eq!(new_pos.line, 4);
         assert_eq!(new_pos.column, 5);

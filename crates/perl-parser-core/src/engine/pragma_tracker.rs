@@ -187,16 +187,16 @@ impl PragmaTracker {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use crate::Parser;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_use_strict_enables_all() {
         let source = "use strict;\nmy $x = FOO;";
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let pragma_map = PragmaTracker::build(&ast);
 
@@ -211,7 +211,7 @@ mod tests {
     fn test_use_strict_specific_category() {
         let source = "use strict 'subs';\nmy $x = FOO;";
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let pragma_map = PragmaTracker::build(&ast);
 
@@ -226,7 +226,7 @@ mod tests {
     fn test_no_strict_disables() {
         let source = "use strict;\nno strict 'subs';\nmy $x = FOO;";
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         let pragma_map = PragmaTracker::build(&ast);
 

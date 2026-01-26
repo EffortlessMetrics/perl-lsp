@@ -32,7 +32,7 @@ fn setup_server() -> LspServer {
 
 /// Test Workspace Symbol Resolve support (LSP 3.17)
 #[test]
-fn test_workspace_symbol_resolve() {
+fn test_workspace_symbol_resolve() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = setup_server();
 
     // Open a document with symbols
@@ -84,14 +84,15 @@ our $VERSION = '1.0';
         params: Some(basic_symbol.clone()),
     };
 
-    let response = server.handle_request(request).unwrap();
-    let resolved = response.result.unwrap();
+    let response = server.handle_request(request).ok_or("handle_request failed")?;
+    let resolved = response.result.ok_or("No result in response")?;
 
     // Check that the symbol was enhanced
     assert_eq!(resolved["name"], "hello");
     assert!(resolved["detail"].is_string(), "Should have detail field");
+    let detail_str = resolved["detail"].as_str().ok_or("detail is not a string")?;
     assert!(
-        resolved["detail"].as_str().unwrap().contains("sub"),
+        detail_str.contains("sub"),
         "Detail should indicate it's a subroutine"
     );
 
@@ -99,10 +100,12 @@ our $VERSION = '1.0';
     assert!(resolved["location"].is_object());
     assert!(resolved["location"]["uri"].is_string());
     assert!(resolved["location"]["range"].is_object());
+
+    Ok(())
 }
 
 #[test]
-fn test_workspace_symbol_resolve_with_container() {
+fn test_workspace_symbol_resolve_with_container() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = setup_server();
 
     // Open a document with nested symbols
@@ -156,8 +159,8 @@ sub another_method {
         params: Some(basic_symbol),
     };
 
-    let response = server.handle_request(request).unwrap();
-    let resolved = response.result.unwrap();
+    let response = server.handle_request(request).ok_or("handle_request failed")?;
+    let resolved = response.result.ok_or("No result in response")?;
 
     // Check enhanced fields
     assert_eq!(resolved["name"], "method_in_package");
@@ -166,12 +169,15 @@ sub another_method {
     // Should potentially have container information
     // (depending on implementation details)
     if resolved["containerName"].is_string() {
-        assert!(!resolved["containerName"].as_str().unwrap().is_empty());
+        let container_str = resolved["containerName"].as_str().ok_or("containerName is not a string")?;
+        assert!(!container_str.is_empty());
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_workspace_symbol_resolve_capability() {
+fn test_workspace_symbol_resolve_capability() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
     let init_request = JsonRpcRequest {
@@ -185,8 +191,8 @@ fn test_workspace_symbol_resolve_capability() {
         })),
     };
 
-    let response = server.handle_request(init_request).unwrap();
-    let result = response.result.unwrap();
+    let response = server.handle_request(init_request).ok_or("handle_request failed")?;
+    let result = response.result.ok_or("No result in response")?;
     let caps = &result["capabilities"];
 
     // Workspace symbol provider should advertise resolve support in non-lock mode
@@ -195,10 +201,12 @@ fn test_workspace_symbol_resolve_capability() {
         assert!(ws_provider.is_object(), "workspaceSymbolProvider should be an object");
         assert_eq!(ws_provider["resolveProvider"], json!(true), "Should support resolve");
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_workspace_symbol_resolve_unknown_symbol() {
+fn test_workspace_symbol_resolve_unknown_symbol() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = setup_server();
 
     // Try to resolve a symbol without opening the document
@@ -221,10 +229,12 @@ fn test_workspace_symbol_resolve_unknown_symbol() {
         params: Some(unknown_symbol.clone()),
     };
 
-    let response = server.handle_request(request).unwrap();
-    let resolved = response.result.unwrap();
+    let response = server.handle_request(request).ok_or("handle_request failed")?;
+    let resolved = response.result.ok_or("No result in response")?;
 
     // Should return the original symbol unchanged
     assert_eq!(resolved["name"], "unknown_function");
     assert_eq!(resolved["kind"], 12);
+
+    Ok(())
 }

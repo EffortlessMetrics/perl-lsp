@@ -8,6 +8,8 @@
 //! directly as LSP character positions (UTF-16 code units), causing navigation
 //! and highlighting to be off by the difference in encoding lengths.
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 /// Helper function to convert byte position to UTF-16 column
 /// This mirrors the logic in lsp/server_impl/mod.rs
 fn byte_to_utf16_col(line_text: &str, byte_pos: usize) -> usize {
@@ -65,7 +67,7 @@ fn test_byte_to_utf16_col_with_accented_chars() {
 
 /// Test package name extraction with emoji prefix in comments
 #[test]
-fn test_package_with_emoji_comment_prefix() {
+fn test_package_with_emoji_comment_prefix() -> TestResult {
     // Simulating a line where emoji appears before the package name
     let line = "# 🎉 package MyPackage;";
 
@@ -76,7 +78,7 @@ fn test_package_with_emoji_comment_prefix() {
     // Total before "MyPackage": 13 UTF-16 units
 
     // Let's find where "MyPackage" starts (byte offset of 'M')
-    let pkg_start = line.find("MyPackage").unwrap();
+    let pkg_start = line.find("MyPackage").ok_or("expected 'MyPackage' in line")?;
     let pkg_end = pkg_start + "MyPackage".len();
 
     let start_utf16 = byte_to_utf16_col(line, pkg_start);
@@ -84,16 +86,17 @@ fn test_package_with_emoji_comment_prefix() {
 
     // Verify the UTF-16 positions are correct (2 fewer than byte positions due to emoji)
     assert_eq!(end_utf16 - start_utf16, 9); // "MyPackage" is 9 chars
+    Ok(())
 }
 
 /// Test subroutine name extraction with emoji in preceding content
 #[test]
-fn test_sub_with_emoji_in_doc_comment() {
+fn test_sub_with_emoji_in_doc_comment() -> TestResult {
     // Simulating code where emoji appears before sub declaration
     let line = "    sub emoji_🎉_handler { }";
 
     // Find "emoji_🎉_handler" in the line
-    let sub_name_start = line.find("emoji_").unwrap();
+    let sub_name_start = line.find("emoji_").ok_or("expected 'emoji_' in line")?;
     let sub_name_end = sub_name_start + "emoji_🎉_handler".len();
 
     let start_utf16 = byte_to_utf16_col(line, sub_name_start);
@@ -104,18 +107,19 @@ fn test_sub_with_emoji_in_doc_comment() {
     // - 6 + 4 + 8 = 18 bytes in UTF-8
     // - 6 + 2 + 8 = 16 UTF-16 units
     assert_eq!(end_utf16 - start_utf16, 16);
+    Ok(())
 }
 
 /// Test code lens position calculation for package with leading emoji
 #[test]
-fn test_code_lens_package_position() {
+fn test_code_lens_package_position() -> TestResult {
     use regex::Regex;
 
     let line = "# 🚀 Released!\npackage MyApp::Handler;";
     let lines: Vec<&str> = line.lines().collect();
     let pkg_line = lines[1];
 
-    let pkg_regex = Regex::new(r"^\s*package\s+([\w:]+)").unwrap();
+    let pkg_regex = Regex::new(r"^\s*package\s+([\w:]+)")?;
     if let Some(captures) = pkg_regex.captures(pkg_line)
         && let Some(pkg_name) = captures.get(1)
     {
@@ -130,18 +134,19 @@ fn test_code_lens_package_position() {
         // Start position should be after "package " (8 chars)
         assert_eq!(utf16_start, 8);
     }
+    Ok(())
 }
 
 /// Test workspace symbol position calculation for subroutine with emoji
 #[test]
-fn test_workspace_symbol_sub_position() {
+fn test_workspace_symbol_sub_position() -> TestResult {
     use regex::Regex;
 
     // This regex won't match because \w doesn't match emoji
     // But let's test the position calculation anyway with a simpler case
     let simple_line = "    sub my_handler {";
 
-    let sub_regex = Regex::new(r"^\s*sub\s+(\w+)").unwrap();
+    let sub_regex = Regex::new(r"^\s*sub\s+(\w+)")?;
     if let Some(captures) = sub_regex.captures(simple_line)
         && let Some(sub_name) = captures.get(1)
     {
@@ -156,6 +161,7 @@ fn test_workspace_symbol_sub_position() {
         // Start after "    sub " (8 chars)
         assert_eq!(utf16_start, 8);
     }
+    Ok(())
 }
 
 /// Test that ASCII-only content works correctly (no conversion needed)
@@ -190,13 +196,13 @@ fn test_chinese_characters() {
 /// Regression test: Verify package name positions with preceding emoji
 /// This tests the exact pattern that was broken before the fix
 #[test]
-fn test_regression_package_after_emoji_comment() {
+fn test_regression_package_after_emoji_comment() -> TestResult {
     use regex::Regex;
 
     // Line with emoji in comment before package declaration
     let _line = "package Emoji::🎉::Handler;"; // package name contains emoji
 
-    let pkg_regex = Regex::new(r"^\s*package\s+([\w:]+)").unwrap();
+    let pkg_regex = Regex::new(r"^\s*package\s+([\w:]+)")?;
 
     // The regex won't match because of emoji, but if we had a line like:
     let simple_line = "package MyHandler;";
@@ -232,11 +238,12 @@ fn test_regression_package_after_emoji_comment() {
         // This is exactly the difference for one emoji (4 bytes -> 2 UTF-16 units)
         assert_eq!(start - utf16_start, 2);
     }
+    Ok(())
 }
 
 /// Regression test: Verify subroutine positions with multi-byte chars
 #[test]
-fn test_regression_sub_with_multibyte_prefix() {
+fn test_regression_sub_with_multibyte_prefix() -> TestResult {
     use regex::Regex;
 
     // Line with accented characters before sub declaration
@@ -244,7 +251,7 @@ fn test_regression_sub_with_multibyte_prefix() {
     let lines: Vec<&str> = line.lines().collect();
     let sub_line = lines[1];
 
-    let sub_regex = Regex::new(r"^\s*sub\s+(\w+)").unwrap();
+    let sub_regex = Regex::new(r"^\s*sub\s+(\w+)")?;
     if let Some(captures) = sub_regex.captures(sub_line)
         && let Some(sub_name) = captures.get(1)
     {
@@ -255,4 +262,5 @@ fn test_regression_sub_with_multibyte_prefix() {
         assert_eq!(byte_start, utf16_start);
         assert_eq!(byte_start, 4); // "sub " is 4 chars
     }
+    Ok(())
 }

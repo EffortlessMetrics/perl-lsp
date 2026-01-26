@@ -49,7 +49,7 @@ fn read_lsp_response(reader: &mut impl BufRead) -> Option<Value> {
 }
 
 #[test]
-fn test_lsp_initialize() {
+fn test_lsp_initialize() -> Result<(), Box<dyn std::error::Error>> {
     // Create channels for communication
     let (tx_in, _rx_in) = mpsc::channel::<Vec<u8>>();
     let (_tx_out, _rx_out) = mpsc::channel::<Vec<u8>>();
@@ -80,7 +80,9 @@ fn test_lsp_initialize() {
 
     impl Write for MockIO {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.output.send(buf.to_vec()).unwrap();
+            self.output
+                .send(buf.to_vec())
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::BrokenPipe, e))?;
             Ok(buf.len())
         }
 
@@ -102,7 +104,9 @@ fn test_lsp_initialize() {
     });
 
     // Send request
-    tx_in.send(create_lsp_message(&init_request.to_string())).unwrap();
+    tx_in
+        .send(create_lsp_message(&init_request.to_string()))
+        .map_err(|e| format!("Failed to send init request: {}", e))?;
 
     // TODO: The current LspServer implementation expects real stdin/stdout
     // We need to refactor it to accept generic Read/Write traits for testing
@@ -110,6 +114,7 @@ fn test_lsp_initialize() {
     // For now, just verify the server can be created
     let _server = LspServer::new();
     // Server successfully created
+    Ok(())
 }
 
 #[test]
@@ -123,7 +128,7 @@ fn test_lsp_message_format() {
 }
 
 #[test]
-fn test_lsp_response_parsing() {
+fn test_lsp_response_parsing() -> Result<(), Box<dyn std::error::Error>> {
     // Test response parsing - verify content length
     let json_content = r#"{"jsonrpc":"2.0","id":1,"result":{"test":true}}"#;
     let header = format!("Content-Length: {}\r\n\r\n", json_content.len());
@@ -133,8 +138,9 @@ fn test_lsp_response_parsing() {
     let parsed = read_lsp_response(&mut reader);
     assert!(parsed.is_some(), "Failed to parse LSP response");
 
-    let value = parsed.unwrap();
+    let value = parsed.ok_or("Failed to parse LSP response")?;
     assert_eq!(value["jsonrpc"], "2.0");
     assert_eq!(value["id"], 1);
     assert_eq!(value["result"]["test"], true);
+    Ok(())
 }

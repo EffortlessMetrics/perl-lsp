@@ -400,9 +400,9 @@ pub fn format_with_trivia(node: &NodeWithTrivia) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn test_trivia_preservation() {
@@ -436,7 +436,7 @@ our $y;"#
         let source = "  \t  my $x;".to_string();
         let ctx = TriviaParserContext::new(source);
 
-        let first_token = ctx.current_token().unwrap();
+        let first_token = must_some(ctx.current_token());
         assert!(!first_token.leading_trivia.is_empty());
         assert!(matches!(
             &first_token.leading_trivia[0].trivia,

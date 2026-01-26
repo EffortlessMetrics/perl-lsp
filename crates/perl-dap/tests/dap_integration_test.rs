@@ -5,17 +5,17 @@ use std::sync::mpsc::channel;
 use std::time::Duration;
 use tempfile::tempdir;
 
-// Helper function removed - not needed in improved test
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
-fn test_dap_basic_flow() {
+fn test_dap_basic_flow() -> TestResult {
     // Skip if perl is not available
     if std::process::Command::new("perl").arg("--version").output().is_err() {
         eprintln!("Skipping DAP basic flow test - perl not available");
-        return;
+        return Ok(());
     }
 
-    let dir = tempdir().unwrap();
+    let dir = tempdir()?;
     let script_path = dir.path().join("sample.pl");
     write(
         &script_path,
@@ -26,8 +26,7 @@ my $x = 1;
 $x++;
 print "x=$x\n";
 "#,
-    )
-    .unwrap();
+    )?;
 
     let mut adapter = DebugAdapter::new();
     let (tx, rx) = channel();
@@ -37,7 +36,7 @@ print "x=$x\n";
     let init_response = adapter.handle_request(1, "initialize", None);
     match init_response {
         DapMessage::Response { success, .. } => assert!(success, "Initialize should succeed"),
-        _ => panic!("Expected initialize response"),
+        _ => return Err("Expected initialize response".into()),
     }
 
     // Try to wait for initialized event, but don't fail if timing issues
@@ -60,7 +59,7 @@ print "x=$x\n";
 
     // Launch
     let launch_args = json!({
-        "program": script_path.to_str().unwrap(),
+        "program": script_path.to_str().ok_or("Failed to convert path to string")?,
         "args": [],
         "stopOnEntry": true
     });
@@ -91,15 +90,16 @@ print "x=$x\n";
                 eprintln!("Launch failed (expected on some systems): {:?}", message);
             }
         }
-        _ => panic!("Expected launch response"),
+        _ => return Err("Expected launch response".into()),
     }
 
     // Disconnect
     let disconnect_response = adapter.handle_request(3, "disconnect", None);
     match disconnect_response {
         DapMessage::Response { success, .. } => assert!(success, "Disconnect should succeed"),
-        _ => panic!("Expected disconnect response"),
+        _ => return Err("Expected disconnect response".into()),
     }
 
     eprintln!("DAP basic flow test completed");
+    Ok(())
 }

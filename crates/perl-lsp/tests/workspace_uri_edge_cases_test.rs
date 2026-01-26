@@ -1,5 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 mod support;
 
 #[cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]
@@ -7,24 +5,27 @@ mod support;
 mod tests {
     use crate::support::env_guard::EnvGuard;
     use lsp_types::Position;
+    use parking_lot::Mutex;
     use perl_lsp::LspServer;
     use serde_json::json;
     use serial_test::serial;
     use std::sync::Arc;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
     #[test]
     #[serial]
-    fn test_cross_file_with_spaces_in_directory() {
+    fn test_cross_file_with_spaces_in_directory() -> TestResult {
         use std::fs;
         use tempfile::tempdir;
 
         // Create a workspace with spaces in directory names
-        let temp = tempdir().unwrap();
+        let temp = tempdir()?;
         let workspace_dir = temp.path().join("My Perl Project");
-        fs::create_dir(&workspace_dir).unwrap();
+        fs::create_dir(&workspace_dir)?;
 
         let lib_dir = workspace_dir.join("Lib Modules");
-        fs::create_dir(&lib_dir).unwrap();
+        fs::create_dir(&lib_dir)?;
 
         // Create a module in a directory with spaces
         let module_file = lib_dir.join("Math Utils.pm");
@@ -37,7 +38,7 @@ sub calculate_🚀 {
 
 1;
 "#;
-        fs::write(&module_file, module_content).unwrap();
+        fs::write(&module_file, module_content)?;
 
         // Create main script that uses the module
         let main_file = workspace_dir.join("main script.pl");
@@ -48,18 +49,22 @@ use Math::Utils;
 my $result = Math::Utils::calculate_🚀(5, 10);
 print "Result: $result\n";
 "#;
-        fs::write(&main_file, main_content).unwrap();
+        fs::write(&main_file, main_content)?;
 
         // Set up LSP server with workspace indexing
         // SAFETY: Test runs single-threaded with #[serial_test::serial]
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
-        let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> =
-            Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
+        let output: Arc<Mutex<Box<dyn std::io::Write + Send>>> =
+            Arc::new(Mutex::new(Box::new(Vec::new())));
         let srv = LspServer::with_output(output.clone());
 
         // Convert paths to URIs (with proper percent-encoding for spaces)
-        let module_uri = url::Url::from_file_path(&module_file).unwrap().to_string();
-        let main_uri = url::Url::from_file_path(&main_file).unwrap().to_string();
+        let module_uri = url::Url::from_file_path(&module_file)
+            .map_err(|_| "Failed to create URL from module file path")?
+            .to_string();
+        let main_uri = url::Url::from_file_path(&main_file)
+            .map_err(|_| "Failed to create URL from main file path")?
+            .to_string();
 
         // Open both files to index them
         srv.test_handle_did_open(Some(json!({
@@ -69,7 +74,7 @@ print "Result: $result\n";
                 "languageId": "perl"
             }
         })))
-        .unwrap();
+        .map_err(|e| format!("Failed to open module file: {e:?}"))?;
 
         srv.test_handle_did_open(Some(json!({
             "textDocument": {
@@ -78,7 +83,7 @@ print "Result: $result\n";
                 "languageId": "perl"
             }
         })))
-        .unwrap();
+        .map_err(|e| format!("Failed to open main file: {e:?}"))?;
 
         // Test: Go to definition on "calculate_🚀" with emoji
         // Position is line 4, character 30 (inside 'calculate_🚀')
@@ -88,38 +93,37 @@ print "Result: $result\n";
                 "textDocument": {"uri": main_uri.clone()},
                 "position": pos
             })))
-            .unwrap();
+            .map_err(|e| format!("Failed to handle definition: {e:?}"))?;
 
         // Should find the definition in Math Utils.pm
-        if let Some(result) = result {
-            let locations = result.as_array().expect("Expected array of locations");
-            assert!(!locations.is_empty(), "Should find definition");
+        let result = result.ok_or("Expected definition result")?;
+        let locations = result.as_array().ok_or("Expected array of locations")?;
+        assert!(!locations.is_empty(), "Should find definition");
 
-            let location = &locations[0];
-            let def_uri = location["uri"].as_str().unwrap();
+        let location = &locations[0];
+        let def_uri = location["uri"].as_str().ok_or("Expected uri as string")?;
 
-            // Verify it points to the module file (with proper encoding)
-            assert!(
-                def_uri.contains("Math%20Utils.pm"),
-                "Definition should be in 'Math Utils.pm' with encoded space"
-            );
-            assert!(
-                def_uri.contains("Lib%20Modules"),
-                "Path should contain 'Lib Modules' with encoded space"
-            );
-        } else {
-            panic!("Expected definition result");
-        }
+        // Verify it points to the module file (with proper encoding)
+        assert!(
+            def_uri.contains("Math%20Utils.pm"),
+            "Definition should be in 'Math Utils.pm' with encoded space"
+        );
+        assert!(
+            def_uri.contains("Lib%20Modules"),
+            "Path should contain 'Lib Modules' with encoded space"
+        );
+
+        Ok(())
     }
 
     #[test]
     #[serial]
-    fn test_references_with_emoji_on_line() {
+    fn test_references_with_emoji_on_line() -> TestResult {
         use std::fs;
         use tempfile::tempdir;
 
         // Create workspace
-        let temp = tempdir().unwrap();
+        let temp = tempdir()?;
 
         // Create a module with emoji identifiers
         let emoji_file = temp.path().join("emoji.pm");
@@ -139,16 +143,18 @@ sub use_emoji {
 
 1;
 "#;
-        fs::write(&emoji_file, emoji_content).unwrap();
+        fs::write(&emoji_file, emoji_content)?;
 
         // Set up LSP server
         // SAFETY: Test runs single-threaded with #[serial_test::serial]
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
-        let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> =
-            Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
+        let output: Arc<Mutex<Box<dyn std::io::Write + Send>>> =
+            Arc::new(Mutex::new(Box::new(Vec::new())));
         let srv = LspServer::with_output(output.clone());
 
-        let emoji_uri = url::Url::from_file_path(&emoji_file).unwrap().to_string();
+        let emoji_uri = url::Url::from_file_path(&emoji_file)
+            .map_err(|_| "Failed to create URL from emoji file path")?
+            .to_string();
 
         // Open file to index it
         srv.test_handle_did_open(Some(json!({
@@ -158,7 +164,7 @@ sub use_emoji {
                 "languageId": "perl"
             }
         })))
-        .unwrap();
+        .map_err(|e| format!("Failed to open emoji file: {e:?}"))?;
 
         // Test: Find references to "process_♥"
         // Position is line 4, character 5 (inside 'process_♥' definition)
@@ -169,33 +175,34 @@ sub use_emoji {
                 "position": pos,
                 "context": {"includeDeclaration": true}
             })))
-            .unwrap();
+            .map_err(|e| format!("Failed to handle references: {e:?}"))?;
 
         // Should find both definition and usage
-        if let Some(result) = result {
-            let references = result.as_array().expect("Expected array of references");
-            assert_eq!(references.len(), 2, "Should find definition and usage");
+        let result = result.ok_or("Expected references result")?;
+        let references = result.as_array().ok_or("Expected array of references")?;
+        assert_eq!(references.len(), 2, "Should find definition and usage");
 
-            // Verify the line numbers
-            let lines: Vec<u32> = references
-                .iter()
-                .map(|r| r["range"]["start"]["line"].as_u64().unwrap() as u32)
-                .collect();
+        // Verify the line numbers
+        let lines: Vec<u32> = references
+            .iter()
+            .map(|r| {
+                r["range"]["start"]["line"].as_u64().ok_or("Expected line number").map(|v| v as u32)
+            })
+            .collect::<Result<Vec<u32>, _>>()?;
 
-            assert!(lines.contains(&4), "Should find definition on line 4");
-            assert!(lines.contains(&10), "Should find usage on line 10");
-        } else {
-            panic!("Expected references result");
-        }
+        assert!(lines.contains(&4), "Should find definition on line 4");
+        assert!(lines.contains(&10), "Should find usage on line 10");
+
+        Ok(())
     }
 
     #[test]
     #[serial]
-    fn test_completion_with_utf16_columns() {
+    fn test_completion_with_utf16_columns() -> TestResult {
         use std::fs;
         use tempfile::tempdir;
 
-        let temp = tempdir().unwrap();
+        let temp = tempdir()?;
 
         // Create a module with mixed-width characters
         let unicode_file = temp.path().join("unicode.pm");
@@ -208,7 +215,7 @@ sub emoji_🎉_function { }  # Emoji in name
 
 1;
 "#;
-        fs::write(&unicode_file, unicode_content).unwrap();
+        fs::write(&unicode_file, unicode_content)?;
 
         // Create main file
         let main_file = temp.path().join("main.pl");
@@ -217,17 +224,21 @@ sub emoji_🎉_function { }  # Emoji in name
 # Type after Unicode:: to get completions
 Unicode::
 "#;
-        fs::write(&main_file, main_content).unwrap();
+        fs::write(&main_file, main_content)?;
 
         // Set up LSP server
         // SAFETY: Test runs single-threaded with #[serial_test::serial]
         let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
-        let output: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>> =
-            Arc::new(std::sync::Mutex::new(Box::new(Vec::new())));
+        let output: Arc<Mutex<Box<dyn std::io::Write + Send>>> =
+            Arc::new(Mutex::new(Box::new(Vec::new())));
         let srv = LspServer::with_output(output.clone());
 
-        let unicode_uri = url::Url::from_file_path(&unicode_file).unwrap().to_string();
-        let main_uri = url::Url::from_file_path(&main_file).unwrap().to_string();
+        let unicode_uri = url::Url::from_file_path(&unicode_file)
+            .map_err(|_| "Failed to create URL from unicode file path")?
+            .to_string();
+        let main_uri = url::Url::from_file_path(&main_file)
+            .map_err(|_| "Failed to create URL from main file path")?
+            .to_string();
 
         // Open both files
         srv.test_handle_did_open(Some(json!({
@@ -237,7 +248,7 @@ Unicode::
                 "languageId": "perl"
             }
         })))
-        .unwrap();
+        .map_err(|e| format!("Failed to open unicode file: {e:?}"))?;
 
         srv.test_handle_did_open(Some(json!({
             "textDocument": {
@@ -246,7 +257,7 @@ Unicode::
                 "languageId": "perl"
             }
         })))
-        .unwrap();
+        .map_err(|e| format!("Failed to open main file: {e:?}"))?;
 
         // Test: Get completions after "Unicode::"
         // Position is line 3, character 9 (after '::')
@@ -256,25 +267,28 @@ Unicode::
                 "textDocument": {"uri": main_uri.clone()},
                 "position": pos
             })))
-            .unwrap();
+            .map_err(|e| format!("Failed to handle completion: {e:?}"))?;
 
         // Should get all the unicode function completions
-        if let Some(result) = result {
-            let items = result["items"].as_array().expect("Expected completion items");
-            assert!(items.len() >= 4, "Should have at least 4 unicode functions");
+        let result = result.ok_or("Expected completion result")?;
+        let items = result["items"].as_array().ok_or("Expected completion items")?;
+        assert!(items.len() >= 4, "Should have at least 4 unicode functions");
 
-            let labels: Vec<String> =
-                items.iter().map(|item| item["label"].as_str().unwrap().to_string()).collect();
+        let labels: Vec<String> = items
+            .iter()
+            .map(|item| {
+                item["label"].as_str().ok_or("Expected label as string").map(|s| s.to_string())
+            })
+            .collect::<Result<Vec<String>, _>>()?;
 
-            assert!(labels.iter().any(|l| l.contains("日本語")), "Should have Japanese function");
-            assert!(labels.iter().any(|l| l.contains("café")), "Should have accented function");
-            assert!(
-                labels.iter().any(|l| l.contains("𝕦𝕟𝕚𝕔𝕠𝕕𝕖")),
-                "Should have mathematical unicode function"
-            );
-            assert!(labels.iter().any(|l| l.contains("🎉")), "Should have emoji function");
-        } else {
-            panic!("Expected completion result");
-        }
+        assert!(labels.iter().any(|l| l.contains("日本語")), "Should have Japanese function");
+        assert!(labels.iter().any(|l| l.contains("café")), "Should have accented function");
+        assert!(
+            labels.iter().any(|l| l.contains("𝕦𝕟𝕚𝕔𝕠𝕕𝕖")),
+            "Should have mathematical unicode function"
+        );
+        assert!(labels.iter().any(|l| l.contains("🎉")), "Should have emoji function");
+
+        Ok(())
     }
 }

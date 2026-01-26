@@ -3,8 +3,7 @@ use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]
-
-fn locked_capabilities_are_conservative() {
+fn locked_capabilities_are_conservative() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -12,8 +11,8 @@ fn locked_capabilities_are_conservative() {
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
-    let res = srv.handle_request(init).unwrap();
-    let result = res.result.unwrap();
+    let res = srv.handle_request(init)?;
+    let result = res.result.ok_or("missing result field")?;
     let caps = &result["capabilities"];
 
     // Always-on capabilities
@@ -53,4 +52,6 @@ fn locked_capabilities_are_conservative() {
         caps["executeCommandProvider"].is_null(),
         "executeCommandProvider must NOT be advertised"
     );
+
+    Ok(())
 }

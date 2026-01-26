@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Control Flow Handlers Tests (AC9)
 //!
 //! Tests for DAP control flow operations: continue, next, stepIn, stepOut, pause
@@ -423,11 +422,10 @@ fn test_continue_includes_all_threads_continued() {
 
     let response = adapter.handle_request(1, "continue", None);
 
-    match response {
-        DapMessage::Response { body, .. } => {
-            assert!(body.is_some(), "Continue must have response body");
+    if let DapMessage::Response { body, .. } = response {
+        assert!(body.is_some(), "Continue must have response body");
 
-            let body_value = body.unwrap();
+        if let Some(body_value) = body {
             assert!(
                 body_value.get("allThreadsContinued").is_some(),
                 "Continue body must include allThreadsContinued field"
@@ -438,7 +436,8 @@ fn test_continue_includes_all_threads_continued() {
                 "allThreadsContinued should be true"
             );
         }
-        _ => panic!("Expected Response for continue"),
+    } else {
+        panic!("Expected Response for continue");
     }
 }
 

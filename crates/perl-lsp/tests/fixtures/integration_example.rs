@@ -8,9 +8,11 @@
 mod integration_tests {
     use super::super::fixtures::*;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
     /// Example test demonstrating fixture integration for executeCommand testing
     #[test]
-    fn example_execute_command_fixture_integration() {
+    fn example_execute_command_fixture_integration() -> TestResult {
         // Load executeCommand-specific fixtures
         let execute_fixtures = quick_access::get_execute_command_fixtures();
         assert!(!execute_fixtures.is_empty(), "Should have executeCommand fixtures");
@@ -21,7 +23,7 @@ mod integration_tests {
 
         // Example validation using protocol fixture
         let perl_critic_fixture = get_protocol_fixture_by_name("perl_run_critic_external_success")
-            .expect("Should have perl.runCritic fixture");
+            .ok_or("Should have perl.runCritic fixture")?;
 
         assert_eq!(
             perl_critic_fixture.request_method,
@@ -35,7 +37,7 @@ mod integration_tests {
 
         // Example validation using syntax fixture
         let policy_violations_fixture = get_fixture_by_name("basic_policy_violations")
-            .expect("Should have policy violations fixture");
+            .ok_or("Should have policy violations fixture")?;
 
         assert!(
             policy_violations_fixture.expected_violations > 0,
@@ -47,11 +49,12 @@ mod integration_tests {
         );
 
         println!("✅ ExecuteCommand fixture integration validated");
+        Ok(())
     }
 
     /// Example test demonstrating dual indexing corpus validation
     #[test]
-    fn example_dual_indexing_corpus_validation() {
+    fn example_dual_indexing_corpus_validation() -> TestResult {
         // Load dual indexing corpus
         let corpus = quick_access::get_dual_indexing_corpus();
         assert!(!corpus.is_empty(), "Should have dual indexing corpus entries");
@@ -66,7 +69,7 @@ mod integration_tests {
 
         // Example corpus entry validation
         let basic_resolution = get_corpus_entry_by_name("basic_package_resolution")
-            .expect("Should have basic package resolution corpus");
+            .ok_or("Should have basic package resolution corpus")?;
 
         assert!(
             !basic_resolution.expected_qualified_refs.is_empty(),
@@ -93,6 +96,7 @@ mod integration_tests {
         );
 
         println!("✅ Dual indexing corpus validation passed");
+        Ok(())
     }
 
     /// Example test demonstrating enhanced builtin function fixture usage

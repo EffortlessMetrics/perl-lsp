@@ -20,6 +20,7 @@
 //! ```rust
 //! use perl_parser::Parser;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = r#"sub hello { print "Hello, world!\n"; }"#;
 //! let mut parser = Parser::new(code);
 //!
@@ -30,6 +31,8 @@
 //!     }
 //!     Err(e) => eprintln!("Parse error: {}", e),
 //! }
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ### Test-Driven Development
@@ -39,9 +42,10 @@
 //! ```rust
 //! use perl_parser::{Parser, TestGenerator, TestFramework};
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = r#"sub add { my ($a, $b) = @_; return $a + $b; }"#;
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().expect("Valid Perl code");
+//! let ast = parser.parse()?;
 //!
 //! let generator = TestGenerator::new(TestFramework::TestMore);
 //! let tests = generator.generate_tests(&ast, "");
@@ -49,6 +53,8 @@
 //! // Outputs test cases with intelligent assertions
 //! // Auto-detects that add(1, 2) should return 3
 //! println!("{}", tests);
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ### LSP Integration
@@ -58,13 +64,16 @@
 //! ```rust
 //! use perl_parser::{Parser, SemanticAnalyzer};
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "my $x = 42;";
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse().expect("Valid code");
+//! let ast = parser.parse()?;
 //!
 //! // Semantic analysis for hover, completion, etc.
 //! let analyzer = SemanticAnalyzer::new();
 //! let model = analyzer.analyze(&ast);
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Architecture
@@ -141,8 +150,9 @@
 //! ```rust,ignore
 //! use perl_parser::{IncrementalState, apply_edits, Edit};
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut state = IncrementalState::new("my $x = 1;");
-//! let ast = state.parse().expect("Initial parse");
+//! let ast = state.parse()?;
 //!
 //! // Apply an edit
 //! let edit = Edit {
@@ -154,7 +164,9 @@
 //! apply_edits(&mut state, vec![edit]);
 //!
 //! // Incremental re-parse reuses unchanged nodes
-//! let new_ast = state.parse().expect("Incremental parse");
+//! let new_ast = state.parse()?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Error Recovery
@@ -592,6 +604,7 @@ pub use tdd_workflow::{
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_basic_parsing() {
@@ -599,7 +612,7 @@ mod tests {
         let result = parser.parse();
         assert!(result.is_ok());
 
-        let ast = result.unwrap();
+        let ast = must(result);
         assert!(matches!(ast.kind, NodeKind::Program { .. }));
     }
 
@@ -617,7 +630,7 @@ mod tests {
             let result = parser.parse();
             assert!(result.is_ok(), "Failed to parse: {}", code);
 
-            let ast = result.unwrap();
+            let ast = must(result);
             if let NodeKind::Program { statements } = &ast.kind {
                 assert_eq!(statements.len(), 1);
                 if let NodeKind::VariableDeclaration { declarator: decl, .. } = &statements[0].kind
@@ -647,7 +660,7 @@ mod tests {
             let result = parser.parse();
             assert!(result.is_ok(), "Failed to parse: {}", code);
 
-            let ast = result.unwrap();
+            let ast = must(result);
             if let NodeKind::Program { statements } = &ast.kind {
                 assert!(!statements.is_empty(), "No statements found in AST for: {}", code);
 
@@ -700,7 +713,7 @@ mod tests {
             let result = parser.parse();
             assert!(result.is_ok(), "Failed to parse: {}", code);
 
-            let ast = result.unwrap();
+            let ast = must(result);
             if let NodeKind::Program { statements } = &ast.kind {
                 assert!(!statements.is_empty(), "No statements found in AST for: {}", code);
 
@@ -771,7 +784,7 @@ mod tests {
             let result = parser.parse();
             assert!(result.is_ok(), "Failed to parse: {}", code);
 
-            let ast = result.unwrap();
+            let ast = must(result);
             if let NodeKind::Program { statements } = &ast.kind {
                 assert_eq!(statements.len(), 1);
                 assert!(matches!(statements[0].kind, NodeKind::Subroutine { .. }));

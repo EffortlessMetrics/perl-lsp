@@ -1,10 +1,10 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::json;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 #[test]
-fn test_evaluate_rejects_newlines() {
+fn test_evaluate_rejects_newlines() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Malicious expression with newline
@@ -17,18 +17,19 @@ fn test_evaluate_rejects_newlines() {
     match response {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Evaluate should fail for expression with newlines");
-            let msg = message.expect("Should have error message");
+            let msg = message.ok_or("Should have error message")?;
             assert_eq!(
                 msg, "Expression cannot contain newlines",
                 "Should reject newlines explicitly"
             );
         }
-        _ => panic!("Expected Response"),
+        _ => return Err("Expected Response".into()),
     }
+    Ok(())
 }
 
 #[test]
-fn test_evaluate_detects_unsafe_backticks() {
+fn test_evaluate_detects_unsafe_backticks() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Expression with backticks (shell execution)
@@ -42,18 +43,19 @@ fn test_evaluate_detects_unsafe_backticks() {
     match response {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Evaluate should fail for backticks in safe mode");
-            let msg = message.expect("Should have error message");
+            let msg = message.ok_or("Should have error message")?;
             assert!(
                 msg.contains("Safe evaluation mode: backticks"),
                 "Should specifically mention backticks"
             );
         }
-        _ => panic!("Expected Response"),
+        _ => return Err("Expected Response".into()),
     }
+    Ok(())
 }
 
 #[test]
-fn test_evaluate_detects_unsafe_qx() {
+fn test_evaluate_detects_unsafe_qx() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Expression with qx (shell execution)
@@ -67,18 +69,19 @@ fn test_evaluate_detects_unsafe_qx() {
     match response {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Evaluate should fail for qx in safe mode");
-            let msg = message.expect("Should have error message");
+            let msg = message.ok_or("Should have error message")?;
             assert!(
                 msg.contains("Safe evaluation mode: potentially mutating operation 'qx'"),
                 "Should specifically mention qx"
             );
         }
-        _ => panic!("Expected Response"),
+        _ => return Err("Expected Response".into()),
     }
+    Ok(())
 }
 
 #[test]
-fn test_evaluate_rejects_carriage_returns() {
+fn test_evaluate_rejects_carriage_returns() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Malicious expression with carriage return
@@ -91,14 +94,15 @@ fn test_evaluate_rejects_carriage_returns() {
     match response {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Evaluate should fail for expression with carriage returns");
-            let msg = message.expect("Should have error message");
+            let msg = message.ok_or("Should have error message")?;
             assert_eq!(
                 msg, "Expression cannot contain newlines",
                 "Should reject newlines explicitly"
             );
         }
-        _ => panic!("Expected Response"),
+        _ => return Err("Expected Response".into()),
     }
+    Ok(())
 }
 
 /// Comprehensive test for all unsafe operations that must be blocked in safe evaluation mode.
@@ -110,7 +114,7 @@ fn test_evaluate_rejects_carriage_returns() {
 /// - Network operations (socket, connect, bind, listen, accept, send, recv)
 /// - Arbitrary code via tie mechanism (tie, untie)
 #[test]
-fn test_evaluate_blocks_dangerous_operations() {
+fn test_evaluate_blocks_dangerous_operations() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Map of operation -> example expression that uses it
@@ -182,16 +186,19 @@ fn test_evaluate_blocks_dangerous_operations() {
     }
 
     if !failures.is_empty() {
-        panic!(
+        return Err(format!(
             "The following dangerous operations were NOT blocked in safe mode:\n{}",
             failures.join("\n")
-        );
+        )
+        .into());
     }
+
+    Ok(())
 }
 
 /// Test that dangerous operations ARE allowed when allowSideEffects is true
 #[test]
-fn test_evaluate_allows_dangerous_ops_with_side_effects_enabled() {
+fn test_evaluate_allows_dangerous_ops_with_side_effects_enabled() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // These should NOT be blocked when allowSideEffects is true
@@ -218,4 +225,6 @@ fn test_evaluate_allows_dangerous_ops_with_side_effects_enabled() {
         }
         // Events are fine, just checking we don't get safe-mode rejection
     }
+
+    Ok(())
 }

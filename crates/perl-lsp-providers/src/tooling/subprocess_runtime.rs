@@ -156,10 +156,11 @@ impl SubprocessRuntime for OsSubprocessRuntime {
 /// This implementation allows tests to define expected command invocations
 /// and their responses without actually executing subprocesses.
 #[cfg(test)]
-#[allow(clippy::expect_used)]
+
 pub mod mock {
     use super::*;
     use std::sync::{Arc, Mutex};
+    use perl_tdd_support::must;
 
     /// A recorded command invocation
     #[derive(Debug, Clone)]
@@ -217,10 +218,7 @@ pub mod mock {
 
         /// Add a response to be returned for the next command
         pub fn add_response(&self, response: MockResponse) {
-            self.responses
-                .lock()
-                .expect("MockSubprocessRuntime: responses mutex poisoned")
-                .push(response);
+            must(self.responses.lock()).push(response);
         }
 
         /// Set the default response when no queued responses remain
@@ -230,18 +228,12 @@ pub mod mock {
 
         /// Get all recorded invocations
         pub fn invocations(&self) -> Vec<CommandInvocation> {
-            self.invocations
-                .lock()
-                .expect("MockSubprocessRuntime: invocations mutex poisoned")
-                .clone()
+            must(self.invocations.lock()).clone()
         }
 
         /// Clear recorded invocations
         pub fn clear_invocations(&self) {
-            self.invocations
-                .lock()
-                .expect("MockSubprocessRuntime: invocations mutex poisoned")
-                .clear();
+            must(self.invocations.lock()).clear();
         }
     }
 
@@ -259,19 +251,15 @@ pub mod mock {
             stdin: Option<&[u8]>,
         ) -> Result<SubprocessOutput, SubprocessError> {
             // Record the invocation
-            self.invocations
-                .lock()
-                .expect("MockSubprocessRuntime: invocations mutex poisoned")
-                .push(CommandInvocation {
-                    program: program.to_string(),
-                    args: args.iter().map(|s| s.to_string()).collect(),
-                    stdin: stdin.map(|s| s.to_vec()),
-                });
+            must(self.invocations.lock()).push(CommandInvocation {
+                program: program.to_string(),
+                args: args.iter().map(|s| s.to_string()).collect(),
+                stdin: stdin.map(|s| s.to_vec()),
+            });
 
             // Get the next response or use default
             let response = {
-                let mut responses =
-                    self.responses.lock().expect("MockSubprocessRuntime: responses mutex poisoned");
+                let mut responses = must(self.responses.lock());
                 if responses.is_empty() {
                     self.default_response.clone()
                 } else {
@@ -289,9 +277,10 @@ pub mod mock {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+
 mod tests {
     use super::*;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_subprocess_output_success() {
@@ -322,7 +311,7 @@ mod tests {
         let result = runtime.run_command("perltidy", &["-st"], Some(b"my $x = 1;"));
 
         assert!(result.is_ok());
-        let output = result.unwrap();
+        let output = must(result);
         assert!(output.success());
         assert_eq!(output.stdout_lossy(), "formatted code");
 
@@ -342,7 +331,7 @@ mod tests {
         let result = runtime.run_command("echo", &["hello"], None);
 
         assert!(result.is_ok());
-        let output = result.unwrap();
+        let output = must(result);
         assert!(output.success());
         assert!(output.stdout_lossy().trim() == "hello");
     }

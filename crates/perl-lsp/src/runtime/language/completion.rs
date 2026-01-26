@@ -778,6 +778,7 @@ impl LspServer {
 }
 
 #[cfg(test)]
+
 mod tests {
     use super::*;
 

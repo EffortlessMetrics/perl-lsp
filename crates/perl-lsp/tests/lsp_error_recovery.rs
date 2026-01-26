@@ -11,7 +11,7 @@ use common::{
 /// Ensures the LSP server can recover from various error states
 
 #[test]
-fn test_recover_from_parse_errors() {
+fn test_recover_from_parse_errors() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -72,13 +72,15 @@ fn test_recover_from_parse_errors() {
         }),
     );
     assert!(response["result"].is_array(), "Response was not an array: {}", response);
-    let symbols = response["result"].as_array().unwrap();
+    let symbols = response["result"].as_array()
+        .ok_or("Expected 'result' to be an array")?;
     assert!(!symbols.is_empty());
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_partial_document_parsing() {
+fn test_partial_document_parsing() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -132,7 +134,8 @@ sub another_valid {
         }),
     );
     assert!(response["result"].is_array());
-    let symbols = response["result"].as_array().unwrap();
+    let symbols = response["result"].as_array()
+        .ok_or("Expected 'result' to be an array")?;
 
     // Should find at least the valid functions
     let function_names: Vec<String> =
@@ -141,10 +144,11 @@ sub another_valid {
     assert!(function_names.contains(&"valid_function".to_string()));
     assert!(function_names.contains(&"another_valid".to_string()));
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_incremental_edit_recovery() {
+fn test_incremental_edit_recovery() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -230,10 +234,11 @@ fn test_incremental_edit_recovery() {
     );
     assert!(response["result"].is_object() || response["result"].is_null());
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_workspace_recovery_after_error() {
+fn test_workspace_recovery_after_error() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -301,17 +306,19 @@ fn test_workspace_recovery_after_error() {
         }),
     );
     assert!(response["result"].is_array());
-    let symbols = response["result"].as_array().unwrap();
+    let symbols = response["result"].as_array()
+        .ok_or("Expected 'result' to be an array")?;
     // Note: workspace symbols requires the 'workspace' feature to be enabled
     // Without it, an empty array is returned which is valid behavior
     if !symbols.is_empty() {
         assert!(symbols.iter().any(|s| s["name"] == "foo"), "Workspace symbols: {:?}", symbols);
     }
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_reference_search_with_errors() {
+fn test_reference_search_with_errors() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -367,15 +374,17 @@ print $var;  # Another valid reference
         }),
     );
     assert!(response["result"].is_array());
-    let refs = response["result"].as_array().unwrap();
+    let refs = response["result"].as_array()
+        .ok_or("Expected 'result' to be an array")?;
     // When there are syntax errors, references might not be found
     // The important thing is that the server doesn't crash and returns a valid response
     eprintln!("Found {} references (may be 0 due to parse errors): {:?}", refs.len(), refs);
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_completion_in_broken_context() {
+fn test_completion_in_broken_context() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -428,10 +437,11 @@ sub broken {
     // Should suggest "print" despite earlier error
     assert!(items.iter().any(|item| item["label"] == "print"));
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_rename_with_parse_errors() {
+fn test_rename_with_parse_errors() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -504,10 +514,11 @@ $old_name++;
         assert!(response["result"]["changes"].is_object());
     }
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_formatting_with_errors() {
+fn test_formatting_with_errors() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -553,10 +564,11 @@ my   $z   =   3;"#;
     // Should either format what it can or return error gracefully
     assert!(response["result"].is_array() || response["error"].is_object());
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_diagnostic_recovery() {
+fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -677,7 +689,8 @@ fn test_diagnostic_recovery() {
         }),
     );
     assert!(response["result"].is_array());
-    let symbols = response["result"].as_array().unwrap();
+    let symbols = response["result"].as_array()
+        .ok_or("Expected 'result' to be an array")?;
 
     // FLAKY: Incremental document updates may not apply correctly under race conditions.
     // Root cause is unknown but could be:
@@ -694,15 +707,16 @@ fn test_diagnostic_recovery() {
         );
         // Accept degraded behavior: server responds without crash
         shutdown_and_exit(&mut server);
-        return;
+        return Ok(());
     }
 
     assert_eq!(symbols.len(), 3);
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_goto_definition_with_errors() {
+fn test_goto_definition_with_errors() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -749,10 +763,11 @@ my $result = my_func();  # Should still find definition
     );
     assert!(response["result"].is_array() || response["result"].is_object());
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_hover_in_error_context() {
+fn test_hover_in_error_context() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -803,4 +818,5 @@ sub broken {
     );
     assert!(response["result"].is_object() || response["result"].is_null());
     shutdown_and_exit(&mut server);
+    Ok(())
 }

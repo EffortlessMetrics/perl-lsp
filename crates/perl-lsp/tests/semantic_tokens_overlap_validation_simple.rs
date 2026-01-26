@@ -8,11 +8,11 @@ use perl_parser::Parser;
 
 // Test basic semantic token generation without overlaps
 #[test]
-fn test_semantic_token_basic_generation() {
+fn test_semantic_token_basic_generation() -> Result<(), Box<dyn std::error::Error>> {
     let code = "my $var = 123;";
     let provider = SemanticTokensProvider::new(code.to_string());
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
 
     let tokens = provider.extract(&ast);
 
@@ -27,16 +27,17 @@ fn test_semantic_token_basic_generation() {
     }
 
     // Verify no overlaps exist in token list
-    verify_no_semantic_token_overlaps(&tokens);
+    verify_no_semantic_token_overlaps(&tokens)?;
+    Ok(())
 }
 
 // Test semantic token generation with complex code
 #[test]
-fn test_semantic_token_complex_code_generation() {
+fn test_semantic_token_complex_code_generation() -> Result<(), Box<dyn std::error::Error>> {
     let code = "package MyModule::Test; sub test_func { my $variable = \"string\"; }";
     let provider = SemanticTokensProvider::new(code.to_string());
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
 
     let tokens = provider.extract(&ast);
 
@@ -69,16 +70,17 @@ fn test_semantic_token_complex_code_generation() {
     );
 
     // Verify no overlaps
-    verify_no_semantic_token_overlaps(&tokens);
+    verify_no_semantic_token_overlaps(&tokens)?;
+    Ok(())
 }
 
 // Test UTF-8 boundary handling in semantic tokens
 #[test]
-fn test_semantic_token_utf8_handling() {
+fn test_semantic_token_utf8_handling() -> Result<(), Box<dyn std::error::Error>> {
     let code = "my $🦀_var = \"🚀 test\"; # Comment with 🎯";
     let provider = SemanticTokensProvider::new(code.to_string());
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
 
     let tokens = provider.extract(&ast);
 
@@ -92,12 +94,13 @@ fn test_semantic_token_utf8_handling() {
     }
 
     // Verify no overlaps with UTF-8 characters
-    verify_no_semantic_token_overlaps(&tokens);
+    verify_no_semantic_token_overlaps(&tokens)?;
+    Ok(())
 }
 
 // Test edge cases that might cause overlap issues
 #[test]
-fn test_semantic_token_edge_cases() {
+fn test_semantic_token_edge_cases() -> Result<(), Box<dyn std::error::Error>> {
     let test_cases = vec![
         "my $a = 1;",                        // Single character tokens
         ";;; # Empty statements",            // Minimal content
@@ -121,18 +124,19 @@ fn test_semantic_token_edge_cases() {
             }
 
             // Verify no overlaps
-            verify_no_semantic_token_overlaps(&tokens);
+            verify_no_semantic_token_overlaps(&tokens)?;
         }
     }
+    Ok(())
 }
 
 // Test semantic token idempotence
 #[test]
-fn test_semantic_token_idempotence() {
+fn test_semantic_token_idempotence() -> Result<(), Box<dyn std::error::Error>> {
     let code = "package Test::Module; use strict; use warnings; sub test { my $var = 42; }";
     let provider = SemanticTokensProvider::new(code.to_string());
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
 
     // Generate tokens multiple times
     let tokens1 = provider.extract(&ast);
@@ -153,13 +157,14 @@ fn test_semantic_token_idempotence() {
     }
 
     // Verify both results have no overlaps
-    verify_no_semantic_token_overlaps(&tokens1);
-    verify_no_semantic_token_overlaps(&tokens2);
+    verify_no_semantic_token_overlaps(&tokens1)?;
+    verify_no_semantic_token_overlaps(&tokens2)?;
+    Ok(())
 }
 
 // Test performance characteristics
 #[test]
-fn test_semantic_token_performance_characteristics() {
+fn test_semantic_token_performance_characteristics() -> Result<(), Box<dyn std::error::Error>> {
     // Generate a moderate-sized code sample
     let mut code = String::new();
     for i in 0..50 {
@@ -168,7 +173,7 @@ fn test_semantic_token_performance_characteristics() {
 
     let provider = SemanticTokensProvider::new(code.clone());
     let mut parser = Parser::new(&code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
 
     let start = std::time::Instant::now();
     let tokens = provider.extract(&ast);
@@ -184,17 +189,18 @@ fn test_semantic_token_performance_characteristics() {
     assert!(tokens.len() >= 50, "Should generate at least 50 tokens for 50 variables");
 
     // All tokens should be valid
-    verify_no_semantic_token_overlaps(&tokens);
+    verify_no_semantic_token_overlaps(&tokens)?;
 
     // Memory usage should be reasonable
     let total_token_size = tokens.len()
         * std::mem::size_of::<perl_lsp::features::semantic_tokens_provider::SemanticToken>();
     assert!(total_token_size < 100_000, "Token memory usage should be reasonable");
+    Ok(())
 }
 
 // Test nested structure handling
 #[test]
-fn test_semantic_token_nested_structures() {
+fn test_semantic_token_nested_structures() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
     package Nested::Test;
     sub outer {
@@ -210,7 +216,7 @@ fn test_semantic_token_nested_structures() {
 
     let provider = SemanticTokensProvider::new(code.to_string());
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
 
     let tokens = provider.extract(&ast);
 
@@ -221,13 +227,14 @@ fn test_semantic_token_nested_structures() {
     let _line_count = tokens.iter().map(|token| token.line).max().unwrap_or(0);
 
     // Verify no overlaps in complex nested structure
-    verify_no_semantic_token_overlaps(&tokens);
+    verify_no_semantic_token_overlaps(&tokens)?;
+    Ok(())
 }
 
 // Helper function to verify no overlaps exist in semantic token list
 fn verify_no_semantic_token_overlaps(
     tokens: &[perl_lsp::features::semantic_tokens_provider::SemanticToken],
-) {
+) -> Result<(), Box<dyn std::error::Error>> {
     // Sort tokens by position for overlap checking
     let mut sorted_tokens: Vec<_> = tokens.iter().collect();
     sorted_tokens.sort_by(|a, b| a.line.cmp(&b.line).then_with(|| a.start_char.cmp(&b.start_char)));
@@ -251,4 +258,5 @@ fn verify_no_semantic_token_overlaps(
             );
         }
     }
+    Ok(())
 }

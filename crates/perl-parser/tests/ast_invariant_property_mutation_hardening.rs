@@ -3,8 +3,6 @@
 //! This test suite uses advanced property-based testing techniques to eliminate
 //! surviving mutants in AST generation, S-expression serialization, and parser
 //! state management through comprehensive invariant validation.
-
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //!
 //! Focuses on eliminating mutants in:
 //! - AST node construction and parent-child relationships
@@ -441,11 +439,16 @@ mod ast_construction_mutation_tests {
 
         // Wait for all threads to complete
         for handle in handles {
-            handle.join().expect("Thread should complete successfully");
+            if let Err(e) = handle.join() {
+                panic!("Thread should complete successfully: {:?}", e);
+            }
         }
 
         // Analyze results for consistency
-        let final_results = results.lock().unwrap();
+        let final_results = match results.lock() {
+            Ok(guard) => guard,
+            Err(e) => panic!("Lock poisoned: {}", e),
+        };
         assert!(
             !final_results.is_empty(),
             "Should have collected results from concurrent operations"

@@ -4,13 +4,14 @@
 //! using strict JSON schema validation.
 
 #![allow(clippy::collapsible_if)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
 mod support;
 use support::lsp_harness::LspHarness as TestHarness;
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 // ======================== SCHEMA VALIDATORS ========================
 
@@ -250,9 +251,9 @@ fn validate_markup_content(content: &Value) -> Result<(), String> {
 // ======================== INITIALIZE RESPONSE VALIDATION ========================
 
 #[test]
-fn test_initialize_response_schema_3_17() {
+fn test_initialize_response_schema_3_17() -> TestResult {
     let mut harness = TestHarness::new();
-    let result = harness.initialize_default().expect("init");
+    let result = harness.initialize_default()?;
 
     // LSP 3.17 structure validation
     assert!(result.is_object(), "Initialize result must be object");
@@ -275,18 +276,20 @@ fn test_initialize_response_schema_3_17() {
     if let Some(enc) = capabilities.get("positionEncoding") {
         assert!(enc.is_string());
         let valid = ["utf-8", "utf-16", "utf-32"];
-        assert!(valid.contains(&enc.as_str().unwrap()));
+        let enc_str = enc.as_str().ok_or("positionEncoding must be string")?;
+        assert!(valid.contains(&enc_str));
     }
 
     // Validate capability structure
-    validate_server_capabilities(capabilities).unwrap();
+    validate_server_capabilities(capabilities)?;
+    Ok(())
 }
 
 fn validate_server_capabilities(caps: &Value) -> Result<(), String> {
     // Text document sync
     if let Some(sync) = caps.get("textDocumentSync") {
         if sync.is_u64() {
-            let n = sync.as_u64().unwrap();
+            let n = sync.as_u64().ok_or("textDocumentSync must be number")?;
             if n > 2 {
                 return Err("textDocumentSync number must be 0-2".into());
             }
@@ -352,12 +355,12 @@ fn validate_server_capabilities(caps: &Value) -> Result<(), String> {
 // ======================== MESSAGE VALIDATION TESTS ========================
 
 #[test]
-fn test_completion_response_schema() {
+fn test_completion_response_schema() -> TestResult {
     let mut harness = TestHarness::new();
-    harness.initialize_default().expect("failed to init LSP harness");
+    harness.initialize_default()?;
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "my $var = 1;\n$v").expect("failed to open document");
+    harness.open_document(uri, "my $var = 1;\n$v")?;
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -373,8 +376,8 @@ fn test_completion_response_schema() {
 
     // Can be array or CompletionList
     if result.is_array() {
-        for item in result.as_array().unwrap() {
-            validate_completion_item(item).unwrap();
+        for item in result.as_array().ok_or("result must be array")? {
+            validate_completion_item(item).map_err(|e| e.to_string())?;
         }
     } else if result.is_object() {
         // CompletionList
@@ -386,13 +389,14 @@ fn test_completion_response_schema() {
 
         // 3.17: itemDefaults
         if let Some(defaults) = result.get("itemDefaults") {
-            validate_completion_item_defaults(defaults).unwrap();
+            validate_completion_item_defaults(defaults).map_err(|e| e.to_string())?;
         }
 
-        for item in result["items"].as_array().unwrap() {
-            validate_completion_item(item).unwrap();
+        for item in result["items"].as_array().ok_or("items must be array")? {
+            validate_completion_item(item).map_err(|e| e.to_string())?;
         }
     }
+    Ok(())
 }
 
 fn validate_completion_item_defaults(defaults: &Value) -> Result<(), String> {
@@ -492,12 +496,12 @@ fn validate_completion_item(item: &Value) -> Result<(), String> {
 }
 
 #[test]
-fn test_document_symbol_response_schema() {
+fn test_document_symbol_response_schema() -> TestResult {
     let mut harness = TestHarness::new();
-    harness.initialize_default().expect("failed to init LSP harness");
+    harness.initialize_default()?;
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "sub test { my $x = 1; }").expect("failed to open document");
+    harness.open_document(uri, "sub test { my $x = 1; }")?;
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -509,14 +513,15 @@ fn test_document_symbol_response_schema() {
     let result = &response["result"];
     assert!(result.is_array(), "documentSymbol must return array");
 
-    for symbol in result.as_array().unwrap() {
+    for symbol in result.as_array().ok_or("result must be array")? {
         // Can be SymbolInformation or DocumentSymbol
         if symbol.get("location").is_some() {
-            validate_symbol_information(symbol).unwrap();
+            validate_symbol_information(symbol).map_err(|e| e.to_string())?;
         } else {
-            validate_document_symbol(symbol).unwrap();
+            validate_document_symbol(symbol).map_err(|e| e.to_string())?;
         }
     }
+    Ok(())
 }
 
 fn validate_symbol_information(sym: &Value) -> Result<(), String> {
@@ -587,12 +592,12 @@ fn validate_document_symbol(sym: &Value) -> Result<(), String> {
 }
 
 #[test]
-fn test_hover_response_schema() {
+fn test_hover_response_schema() -> TestResult {
     let mut harness = TestHarness::new();
-    harness.initialize_default().expect("failed to init LSP harness");
+    harness.initialize_default()?;
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "print 'hello'").expect("failed to open document");
+    harness.open_document(uri, "print 'hello'")?;
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -608,37 +613,38 @@ fn test_hover_response_schema() {
         let hover = &response["result"];
 
         // Must have contents
-        let contents = hover.get("contents").ok_or("Hover missing 'contents'").unwrap();
+        let contents = hover.get("contents").ok_or("Hover missing 'contents'")?;
 
         // Contents can be string, MarkupContent, or MarkedString[]
         if contents.is_string() {
             // Valid
         } else if contents.is_array() {
             // Array of MarkedString
-            for item in contents.as_array().unwrap() {
+            for item in contents.as_array().ok_or("contents must be array")? {
                 if !item.is_string() && !item.is_object() {
-                    panic!("Hover contents array must contain strings or MarkedString");
+                    return Err("Hover contents array must contain strings or MarkedString".into());
                 }
             }
         } else if contents.is_object() {
-            validate_markup_content(contents).unwrap();
+            validate_markup_content(contents).map_err(|e| e.to_string())?;
         } else {
-            panic!("Invalid hover contents type");
+            return Err("Invalid hover contents type".into());
         }
 
         // Optional range
         if let Some(range) = hover.get("range") {
-            validate_range(range).unwrap();
+            validate_range(range).map_err(|e| e.to_string())?;
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_workspace_symbol_response_schema() {
+fn test_workspace_symbol_response_schema() -> TestResult {
     let mut harness = TestHarness::new();
-    harness.initialize_default().expect("failed to init LSP harness");
+    harness.initialize_default()?;
 
-    harness.open_document("file:///test.pl", "sub test { }").expect("failed to open document");
+    harness.open_document("file:///test.pl", "sub test { }")?;
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -650,16 +656,17 @@ fn test_workspace_symbol_response_schema() {
     let result = &response["result"];
     assert!(result.is_array(), "workspace/symbol must return array");
 
-    for symbol in result.as_array().unwrap() {
+    for symbol in result.as_array().ok_or("result must be array")? {
         // 3.17: Can be WorkspaceSymbol (with optional location.range)
         if symbol.get("location").is_some() && symbol["location"].get("range").is_none() {
             // WorkspaceSymbol - location.range can be missing
-            validate_workspace_symbol(symbol).unwrap();
+            validate_workspace_symbol(symbol).map_err(|e| e.to_string())?;
         } else {
             // SymbolInformation
-            validate_symbol_information(symbol).unwrap();
+            validate_symbol_information(symbol).map_err(|e| e.to_string())?;
         }
     }
+    Ok(())
 }
 
 fn validate_workspace_symbol(sym: &Value) -> Result<(), String> {
@@ -704,12 +711,12 @@ fn validate_workspace_symbol(sym: &Value) -> Result<(), String> {
 }
 
 #[test]
-fn test_code_action_response_schema() {
+fn test_code_action_response_schema() -> TestResult {
     let mut harness = TestHarness::new();
-    harness.initialize_default().expect("failed to init LSP harness");
+    harness.initialize_default()?;
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "open(FH, 'file.txt');").expect("failed to open document");
+    harness.open_document(uri, "open(FH, 'file.txt');")?;
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -729,10 +736,11 @@ fn test_code_action_response_schema() {
     assert!(result.is_array() || result.is_null(), "codeAction must return array or null");
 
     if result.is_array() {
-        for action in result.as_array().unwrap() {
-            validate_code_action(action).unwrap();
+        for action in result.as_array().ok_or("result must be array")? {
+            validate_code_action(action).map_err(|e| e.to_string())?;
         }
     }
+    Ok(())
 }
 
 fn validate_code_action(action: &Value) -> Result<(), String> {
@@ -751,7 +759,8 @@ fn validate_code_action(action: &Value) -> Result<(), String> {
             .as_str()
             .ok_or("command must be string")?;
 
-        if !action.get("arguments").unwrap().is_array() {
+        let args = action.get("arguments").ok_or("Command missing arguments")?;
+        if !args.is_array() {
             return Err("arguments must be array".into());
         }
     } else {
@@ -960,12 +969,12 @@ fn validate_text_edit(edit: &Value) -> Result<(), String> {
 }
 
 #[test]
-fn test_publish_diagnostics_schema() {
+fn test_publish_diagnostics_schema() -> TestResult {
     let mut harness = TestHarness::new();
-    harness.initialize_default().expect("failed to init LSP harness");
+    harness.initialize_default()?;
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "use strict;\n$undefined = 1;").expect("failed to open document");
+    harness.open_document(uri, "use strict;\n$undefined = 1;")?;
 
     // Server should publish diagnostics
     // In real test, we'd capture notifications
@@ -997,7 +1006,8 @@ fn test_publish_diagnostics_schema() {
         }]
     });
 
-    validate_publish_diagnostics_params(&sample_diagnostic).unwrap();
+    validate_publish_diagnostics_params(&sample_diagnostic).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 fn validate_publish_diagnostics_params(params: &Value) -> Result<(), String> {
@@ -1022,7 +1032,7 @@ fn validate_publish_diagnostics_params(params: &Value) -> Result<(), String> {
 }
 
 #[test]
-fn test_error_response_schema() {
+fn test_error_response_schema() -> TestResult {
     let mut harness = TestHarness::new();
 
     // Request before initialization
@@ -1041,10 +1051,11 @@ fn test_error_response_schema() {
     let error = &response["error"];
 
     // Required fields
-    let code = error.get("code").and_then(|c| c.as_i64()).expect("Error must have numeric 'code'");
+    let code =
+        error.get("code").and_then(|c| c.as_i64()).ok_or("Error must have numeric 'code'")?;
 
     let message =
-        error.get("message").and_then(|m| m.as_str()).expect("Error must have string 'message'");
+        error.get("message").and_then(|m| m.as_str()).ok_or("Error must have string 'message'")?;
 
     assert!(!message.is_empty(), "Error message cannot be empty");
 
@@ -1070,15 +1081,16 @@ fn test_error_response_schema() {
     if !(-32099..=-32000).contains(&code) {
         assert!(valid_codes.contains(&code) || code >= 0, "Invalid error code: {}", code);
     }
+    Ok(())
 }
 
 #[test]
-fn test_signature_help_response_schema() {
+fn test_signature_help_response_schema() -> TestResult {
     let mut harness = TestHarness::new();
-    harness.initialize_default().expect("failed to init LSP harness");
+    harness.initialize_default()?;
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "print(").expect("failed to open document");
+    harness.open_document(uri, "print(")?;
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -1096,65 +1108,65 @@ fn test_signature_help_response_schema() {
         let signatures = sig_help
             .get("signatures")
             .and_then(|s| s.as_array())
-            .expect("SignatureHelp must have 'signatures' array");
+            .ok_or("SignatureHelp must have 'signatures' array")?;
 
         assert!(!signatures.is_empty(), "Must have at least one signature");
 
         for sig in signatures {
             sig.get("label")
                 .and_then(|l| l.as_str())
-                .expect("SignatureInformation must have 'label'");
+                .ok_or("SignatureInformation must have 'label'")?;
 
             if let Some(params) = sig.get("parameters") {
-                let param_arr = params.as_array().expect("parameters must be array");
+                let param_arr = params.as_array().ok_or("parameters must be array")?;
 
                 for param in param_arr {
                     // Must have label
-                    let label = param.get("label").expect("ParameterInformation must have 'label'");
+                    let label =
+                        param.get("label").ok_or("ParameterInformation must have 'label'")?;
 
                     // Label can be string or [usize, usize]
                     if label.is_string() {
                         // Valid
                     } else if label.is_array() {
-                        let arr = label.as_array().unwrap();
+                        let arr = label.as_array().ok_or("label must be array")?;
                         assert_eq!(arr.len(), 2, "label array must have 2 elements");
-                        arr[0].as_u64().expect("label[0] must be number");
-                        arr[1].as_u64().expect("label[1] must be number");
+                        arr.first().and_then(|v| v.as_u64()).ok_or("label[0] must be number")?;
+                        arr.get(1).and_then(|v| v.as_u64()).ok_or("label[1] must be number")?;
                     } else {
-                        panic!("Parameter label must be string or [number, number]");
+                        return Err("Parameter label must be string or [number, number]".into());
                     }
                 }
             }
 
             // 3.16+ activeParameter per signature
             if let Some(active_param) = sig.get("activeParameter") {
-                active_param.as_u64().expect("activeParameter must be number");
+                active_param.as_u64().ok_or("activeParameter must be number")?;
             }
         }
 
         // Optional activeSignature
         if let Some(active_sig) = sig_help.get("activeSignature") {
-            active_sig.as_u64().expect("activeSignature must be number");
+            active_sig.as_u64().ok_or("activeSignature must be number")?;
         }
 
         // Optional activeParameter (deprecated in favor of per-signature)
         if let Some(active_param) = sig_help.get("activeParameter") {
-            active_param.as_u64().expect("activeParameter must be number");
+            active_param.as_u64().ok_or("activeParameter must be number")?;
         }
     }
+    Ok(())
 }
 
 // ======================== LSP 3.17 SPECIFIC TESTS ========================
 
 #[test]
-fn test_semantic_tokens_response_schema() {
+fn test_semantic_tokens_response_schema() -> TestResult {
     let mut harness = TestHarness::new();
-    harness.initialize_default().expect("failed to init LSP harness");
+    harness.initialize_default()?;
 
     let uri = "file:///test.pl";
-    harness
-        .open_document(uri, "package Foo;\nsub bar { my $x = 1; }")
-        .expect("failed to open document");
+    harness.open_document(uri, "package Foo;\nsub bar { my $x = 1; }")?;
 
     // This might not be implemented, so we just validate the schema IF it returns
     let response = harness.request_raw(json!({
@@ -1174,30 +1186,31 @@ fn test_semantic_tokens_response_schema() {
             let data = tokens
                 .get("data")
                 .and_then(|d| d.as_array())
-                .expect("SemanticTokens must have 'data' array");
+                .ok_or("SemanticTokens must have 'data' array")?;
 
             // Data must be array of numbers, length divisible by 5
             assert_eq!(data.len() % 5, 0, "SemanticTokens data length must be divisible by 5");
 
             for val in data {
-                val.as_u64().expect("SemanticTokens data must be unsigned integers");
+                val.as_u64().ok_or("SemanticTokens data must be unsigned integers")?;
             }
 
             // Optional resultId for delta
             if let Some(result_id) = tokens.get("resultId") {
-                result_id.as_str().expect("resultId must be string");
+                result_id.as_str().ok_or("resultId must be string")?;
             }
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_inlay_hint_response_schema() {
+fn test_inlay_hint_response_schema() -> TestResult {
     let mut harness = TestHarness::new();
-    harness.initialize_default().expect("failed to init LSP harness");
+    harness.initialize_default()?;
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "substr($str, 0, 5)").expect("failed to open document");
+    harness.open_document(uri, "substr($str, 0, 5)")?;
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -1213,30 +1226,30 @@ fn test_inlay_hint_response_schema() {
     }));
 
     if response.get("result").is_some() && !response["result"].is_null() {
-        let hints = response["result"].as_array().expect("inlayHint must return array");
+        let hints = response["result"].as_array().ok_or("inlayHint must return array")?;
 
         for hint in hints {
             // Required: position
-            let pos = hint.get("position").expect("InlayHint must have 'position'");
-            validate_position(pos).unwrap();
+            let pos = hint.get("position").ok_or("InlayHint must have 'position'")?;
+            validate_position(pos).map_err(|e| e.to_string())?;
 
             // Required: label (string or InlayHintLabelPart[])
-            let label = hint.get("label").expect("InlayHint must have 'label'");
+            let label = hint.get("label").ok_or("InlayHint must have 'label'")?;
             if label.is_string() {
                 // Valid
             } else if label.is_array() {
-                for part in label.as_array().unwrap() {
+                for part in label.as_array().ok_or("label must be array")? {
                     part.get("value")
                         .and_then(|v| v.as_str())
-                        .expect("InlayHintLabelPart must have 'value'");
+                        .ok_or("InlayHintLabelPart must have 'value'")?;
                 }
             } else {
-                panic!("InlayHint label must be string or array");
+                return Err("InlayHint label must be string or array".into());
             }
 
             // Optional: kind
             if let Some(kind) = hint.get("kind") {
-                let k = kind.as_u64().expect("kind must be number");
+                let k = kind.as_u64().ok_or("kind must be number")?;
                 assert!(k == 1 || k == 2, "kind must be 1 (Type) or 2 (Parameter)");
             }
 
@@ -1245,22 +1258,23 @@ fn test_inlay_hint_response_schema() {
                 if tooltip.is_string() {
                     // Valid
                 } else if tooltip.is_object() {
-                    validate_markup_content(tooltip).unwrap();
+                    validate_markup_content(tooltip).map_err(|e| e.to_string())?;
                 } else {
-                    panic!("tooltip must be string or MarkupContent");
+                    return Err("tooltip must be string or MarkupContent".into());
                 }
             }
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_diagnostic_pull_response_schema() {
+fn test_diagnostic_pull_response_schema() -> TestResult {
     let mut harness = TestHarness::new();
-    harness.initialize_default().expect("failed to init LSP harness");
+    harness.initialize_default()?;
 
     let uri = "file:///test.pl";
-    harness.open_document(uri, "$undefined").expect("failed to open document");
+    harness.open_document(uri, "$undefined")?;
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -1277,7 +1291,7 @@ fn test_diagnostic_pull_response_schema() {
         let kind = report
             .get("kind")
             .and_then(|k| k.as_str())
-            .expect("DocumentDiagnosticReport must have 'kind'");
+            .ok_or("DocumentDiagnosticReport must have 'kind'")?;
 
         match kind {
             "full" => {
@@ -1285,15 +1299,15 @@ fn test_diagnostic_pull_response_schema() {
                 let items = report
                     .get("items")
                     .and_then(|i| i.as_array())
-                    .expect("Full report must have 'items' array");
+                    .ok_or("Full report must have 'items' array")?;
 
                 for diag in items {
-                    validate_diagnostic(diag).unwrap();
+                    validate_diagnostic(diag).map_err(|e| e.to_string())?;
                 }
 
                 // Optional resultId
                 if let Some(result_id) = report.get("resultId") {
-                    result_id.as_str().expect("resultId must be string");
+                    result_id.as_str().ok_or("resultId must be string")?;
                 }
             }
             "unchanged" => {
@@ -1301,31 +1315,30 @@ fn test_diagnostic_pull_response_schema() {
                 report
                     .get("resultId")
                     .and_then(|r| r.as_str())
-                    .expect("Unchanged report must have 'resultId'");
+                    .ok_or("Unchanged report must have 'resultId'")?;
             }
-            _ => panic!("Invalid diagnostic report kind: {}", kind),
+            _ => return Err(format!("Invalid diagnostic report kind: {}", kind).into()),
         }
 
         // Optional relatedDocuments
         if let Some(related) = report.get("relatedDocuments") {
-            let obj = related.as_object().expect("relatedDocuments must be object");
+            let obj = related.as_object().ok_or("relatedDocuments must be object")?;
             for (uri, _doc_report) in obj {
                 assert!(uri.contains(':'), "relatedDocuments key must be valid URI");
                 // Recursively validate document reports
             }
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_type_hierarchy_response_schema() {
+fn test_type_hierarchy_response_schema() -> TestResult {
     let mut harness = TestHarness::new();
-    harness.initialize_default().expect("failed to init LSP harness");
+    harness.initialize_default()?;
 
     let uri = "file:///test.pl";
-    harness
-        .open_document(uri, "package Base;\npackage Derived;\nuse base 'Base';")
-        .expect("failed to open document");
+    harness.open_document(uri, "package Base;\npackage Derived;\nuse base 'Base';")?;
 
     let response = harness.request_raw(json!({
         "jsonrpc": "2.0",
@@ -1338,12 +1351,14 @@ fn test_type_hierarchy_response_schema() {
     }));
 
     if response.get("result").is_some() && !response["result"].is_null() {
-        let items = response["result"].as_array().expect("prepareTypeHierarchy must return array");
+        let items =
+            response["result"].as_array().ok_or("prepareTypeHierarchy must return array")?;
 
         for item in items {
-            validate_type_hierarchy_item(item).unwrap();
+            validate_type_hierarchy_item(item).map_err(|e| e.to_string())?;
         }
     }
+    Ok(())
 }
 
 fn validate_type_hierarchy_item(item: &Value) -> Result<(), String> {
@@ -1441,7 +1456,7 @@ fn validate_logtrace(msg: &Value, trace: &str) -> Result<(), String> {
 }
 
 #[test]
-fn test_lsp_3_17_compliance_summary() {
+fn test_lsp_3_17_compliance_summary() -> TestResult {
     println!("LSP 3.17 Schema Validation Summary:");
     println!("====================================");
     println!("✓ Position, Range, Location validated");
@@ -1464,4 +1479,5 @@ fn test_lsp_3_17_compliance_summary() {
     println!("✓ Partial result streaming contracts validated");
 
     println!("\nAll LSP 3.17 message schemas validated!");
+    Ok(())
 }

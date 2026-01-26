@@ -2,7 +2,7 @@ use perl_lsp::features::diagnostics::DiagnosticsProvider;
 use perl_parser::Parser;
 
 #[test]
-fn test_duplicate_parameters() {
+fn test_duplicate_parameters() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 sub test($x, $y, $x) {
     print $x + $y;
@@ -10,8 +10,7 @@ sub test($x, $y, $x) {
 "#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -22,10 +21,11 @@ sub test($x, $y, $x) {
     assert_eq!(duplicate_errors.len(), 1);
     assert!(duplicate_errors[0].message.contains("Duplicate parameter"));
     assert!(duplicate_errors[0].message.contains("$x"));
+    Ok(())
 }
 
 #[test]
-fn test_parameter_shadows_global() {
+fn test_parameter_shadows_global() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 my $count = 10;
 
@@ -35,8 +35,7 @@ sub increment($count) {
 "#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -49,10 +48,11 @@ sub increment($count) {
     assert_eq!(shadow_warnings.len(), 1);
     assert!(shadow_warnings[0].message.contains("shadows"));
     assert!(shadow_warnings[0].message.contains("$count"));
+    Ok(())
 }
 
 #[test]
-fn test_unused_parameter() {
+fn test_unused_parameter() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 sub helper($x, $y, $z) {
     return $x + $y;  # $z is unused
@@ -60,8 +60,7 @@ sub helper($x, $y, $z) {
 "#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -72,11 +71,12 @@ sub helper($x, $y, $z) {
     assert_eq!(unused_warnings.len(), 1);
     assert!(unused_warnings[0].message.contains("never used"));
     assert!(unused_warnings[0].message.contains("$z"));
+    Ok(())
 }
 
 #[cfg(feature = "lsp-extras")]
 #[test]
-fn test_bareword_under_strict() {
+fn test_bareword_under_strict() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 use strict;
 
@@ -85,8 +85,7 @@ my $hash = { key => value };  # These barewords should also be flagged
 "#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -97,10 +96,11 @@ my $hash = { key => value };  # These barewords should also be flagged
     assert!(!bareword_errors.is_empty());
     assert!(bareword_errors[0].message.contains("Bareword"));
     assert!(bareword_errors[0].message.contains("not allowed"));
+    Ok(())
 }
 
 #[test]
-fn test_parameter_with_at_underscore() {
+fn test_parameter_with_at_underscore() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 sub variadic($first, @rest) {
     print $first;
@@ -114,8 +114,7 @@ sub legacy_style {
 "#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -123,10 +122,11 @@ sub legacy_style {
     let false_positives: Vec<_> = diagnostics.iter().filter(|d| d.message.contains("@_")).collect();
 
     assert_eq!(false_positives.len(), 0, "Should not flag @_ usage");
+    Ok(())
 }
 
 #[test]
-fn test_parameter_intentionally_unused() {
+fn test_parameter_intentionally_unused() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 sub callback($event, $_unused_data) {
     print "Event: $event\n";
@@ -135,8 +135,7 @@ sub callback($event, $_unused_data) {
 "#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -148,10 +147,11 @@ sub callback($event, $_unused_data) {
         .collect();
 
     assert_eq!(unused_warnings.len(), 0, "Should not flag underscore-prefixed parameters");
+    Ok(())
 }
 
 #[test]
-fn test_multiple_duplicate_parameters() {
+fn test_multiple_duplicate_parameters() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 sub complex($a, $b, $a, $c, $b) {
     return $a + $b + $c;
@@ -159,8 +159,7 @@ sub complex($a, $b, $a, $c, $b) {
 "#;
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.unwrap();
+    let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
 
@@ -169,4 +168,5 @@ sub complex($a, $b, $a, $c, $b) {
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("duplicate-parameter")).collect();
 
     assert_eq!(duplicate_errors.len(), 2, "Should detect both duplicate parameters");
+    Ok(())
 }

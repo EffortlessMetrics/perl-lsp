@@ -1,4 +1,5 @@
 #![allow(clippy::pedantic)] // Binary tool - focus on core clippy lints only
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -225,7 +226,7 @@ fn main() -> Result<()> {
 
             match generator {
                 Generator::Program => {
-                    let code = perl_corpus::generate_perl_code_with_seed(count as usize, seed);
+                    let code = perl_corpus::generate_perl_code_with_seed(count, seed);
                     println!("# Program ({} statements)", count);
                     println!("{}", code);
                 }

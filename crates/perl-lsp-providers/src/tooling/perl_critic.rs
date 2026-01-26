@@ -488,9 +488,10 @@ impl BuiltInAnalyzer {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+
 mod tests {
     use super::*;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_severity_levels() {
@@ -530,9 +531,7 @@ mod tests {
         let mut analyzer = CriticAnalyzer::new(config, runtime.clone());
 
         let result = analyzer.analyze_file(Path::new("test.pl"));
-        assert!(result.is_ok());
-
-        let violations = result.unwrap();
+        let violations = must(result);
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].policy, "RequireStrict");
         assert_eq!(violations[0].range.start.line, 4); // 0-indexed
@@ -545,9 +544,9 @@ mod tests {
         assert!(invocations[0].args.contains(&"--".to_string()));
         // Ensure the separator comes before the file path
         let sep_pos =
-            invocations[0].args.iter().position(|a| a == "--").expect("Missing -- separator");
+            must_some(invocations[0].args.iter().position(|a| a == "--"));
         let file_pos =
-            invocations[0].args.iter().position(|a| a == "test.pl").expect("Missing file path");
+            must_some(invocations[0].args.iter().position(|a| a == "test.pl"));
         assert!(sep_pos < file_pos, "-- separator must come before file path");
     }
 

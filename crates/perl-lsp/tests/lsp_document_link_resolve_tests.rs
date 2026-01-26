@@ -6,9 +6,11 @@
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 /// Test that documentLink/resolve returns target for deferred module links
 #[test]
-fn test_document_link_resolve_module() {
+fn test_document_link_resolve_module() -> TestResult {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -53,25 +55,27 @@ fn test_document_link_resolve_module() {
     });
 
     assert!(response.is_some());
-    let resp = response.unwrap();
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
     assert!(resp.result.is_some());
 
-    let result = resp.result.unwrap();
+    let result = resp.result.ok_or("Expected result field in response")?;
 
     // Should have a target now (either local file or MetaCPAN)
     assert!(result.get("target").is_some());
-    let target = result["target"].as_str().unwrap();
+    let target = result["target"].as_str().ok_or("Expected target to be a string")?;
 
     // Should be either a file:// URI or https://metacpan.org
     assert!(target.starts_with("file://") || target.starts_with("https://metacpan.org"));
 
     // Data field should be preserved
     assert!(result.get("data").is_some());
+
+    Ok(())
 }
 
 /// Test that documentLink/resolve handles file path links
 #[test]
-fn test_document_link_resolve_file() {
+fn test_document_link_resolve_file() -> TestResult {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -116,23 +120,25 @@ fn test_document_link_resolve_file() {
     });
 
     assert!(response.is_some());
-    let resp = response.unwrap();
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
     assert!(resp.result.is_some());
 
-    let result = resp.result.unwrap();
+    let result = resp.result.ok_or("Expected result field in response")?;
 
     // Should have a target now
     assert!(result.get("target").is_some());
-    let target = result["target"].as_str().unwrap();
+    let target = result["target"].as_str().ok_or("Expected target to be a string")?;
 
     // Should be a file:// URI
     assert!(target.starts_with("file://"));
     assert!(target.contains("lib/Foo.pm") || target.contains("lib\\Foo.pm")); // Windows vs Unix
+
+    Ok(())
 }
 
 /// Test that already-resolved links pass through unchanged
 #[test]
-fn test_document_link_resolve_already_resolved() {
+fn test_document_link_resolve_already_resolved() -> TestResult {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -173,18 +179,20 @@ fn test_document_link_resolve_already_resolved() {
     });
 
     assert!(response.is_some());
-    let resp = response.unwrap();
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
     assert!(resp.result.is_some());
 
-    let result = resp.result.unwrap();
+    let result = resp.result.ok_or("Expected result field in response")?;
 
     // Target should be unchanged
     assert_eq!(result["target"], "https://metacpan.org/pod/Data::Dumper");
+
+    Ok(())
 }
 
 /// Test error handling for invalid link data
 #[test]
-fn test_document_link_resolve_invalid_data() {
+fn test_document_link_resolve_invalid_data() -> TestResult {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -226,17 +234,19 @@ fn test_document_link_resolve_invalid_data() {
     });
 
     assert!(response.is_some());
-    let resp = response.unwrap();
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
 
     // Should be an error response
     assert!(resp.error.is_some());
-    let error = resp.error.unwrap();
+    let error = resp.error.ok_or("Expected error field in response")?;
     assert_eq!(error.code, -32602); // INVALID_PARAMS
+
+    Ok(())
 }
 
 /// Test error handling for missing parameters
 #[test]
-fn test_document_link_resolve_missing_params() {
+fn test_document_link_resolve_missing_params() -> TestResult {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -267,17 +277,19 @@ fn test_document_link_resolve_missing_params() {
     });
 
     assert!(response.is_some());
-    let resp = response.unwrap();
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
 
     // Should be an error response
     assert!(resp.error.is_some());
-    let error = resp.error.unwrap();
+    let error = resp.error.ok_or("Expected error field in response")?;
     assert_eq!(error.code, -32602); // INVALID_PARAMS
+
+    Ok(())
 }
 
 /// Test that data field is preserved in resolved link
 #[test]
-fn test_document_link_resolve_preserves_data() {
+fn test_document_link_resolve_preserves_data() -> TestResult {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -322,10 +334,10 @@ fn test_document_link_resolve_preserves_data() {
     });
 
     assert!(response.is_some());
-    let resp = response.unwrap();
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
     assert!(resp.result.is_some());
 
-    let result = resp.result.unwrap();
+    let result = resp.result.ok_or("Expected result field in response")?;
 
     // Data field should be preserved
     assert!(result.get("data").is_some());
@@ -333,11 +345,13 @@ fn test_document_link_resolve_preserves_data() {
     assert_eq!(data["type"], "module");
     assert_eq!(data["module"], "Foo::Bar");
     assert_eq!(data["custom"], "metadata");
+
+    Ok(())
 }
 
 /// Test URL type links (already resolved)
 #[test]
-fn test_document_link_resolve_url_type() {
+fn test_document_link_resolve_url_type() -> TestResult {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -380,18 +394,20 @@ fn test_document_link_resolve_url_type() {
     });
 
     assert!(response.is_some());
-    let resp = response.unwrap();
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
     assert!(resp.result.is_some());
 
-    let result = resp.result.unwrap();
+    let result = resp.result.ok_or("Expected result field in response")?;
 
     // Target should be set from data.url
     assert_eq!(result["target"], "https://example.com");
+
+    Ok(())
 }
 
 /// Integration test: documentLink returns deferred links, resolve fills them in
 #[test]
-fn test_document_link_integration() {
+fn test_document_link_integration() -> TestResult {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -447,11 +463,11 @@ require Foo::Bar;
     });
 
     assert!(link_response.is_some());
-    let link_resp = link_response.unwrap();
+    let link_resp = link_response.ok_or("Expected response from documentLink")?;
     assert!(link_resp.result.is_some());
 
-    let links = link_resp.result.unwrap();
-    let links_array = links.as_array().unwrap();
+    let links = link_resp.result.ok_or("Expected result field in link response")?;
+    let links_array = links.as_array().ok_or("Expected links to be an array")?;
 
     // Should have links for Data::Dumper, JSON::XS, and Foo::Bar
     assert!(links_array.len() >= 3);
@@ -459,7 +475,7 @@ require Foo::Bar;
     // All links should have data field (deferred resolution)
     for link in links_array {
         assert!(link.get("data").is_some());
-        assert!(link.get("data").unwrap().get("type").is_some());
+        assert!(link.get("data").ok_or("Expected data field")?.get("type").is_some());
 
         // Resolve each link
         let resolve_response = server.handle_request(JsonRpcRequest {
@@ -470,12 +486,14 @@ require Foo::Bar;
         });
 
         assert!(resolve_response.is_some());
-        let resolve_resp = resolve_response.unwrap();
+        let resolve_resp = resolve_response.ok_or("Expected response from documentLink/resolve")?;
         assert!(resolve_resp.result.is_some());
 
-        let resolved = resolve_resp.result.unwrap();
+        let resolved = resolve_resp.result.ok_or("Expected result field in resolve response")?;
 
         // Should now have a target
         assert!(resolved.get("target").is_some());
     }
+
+    Ok(())
 }

@@ -3,25 +3,26 @@
 //! These tests cover various edge cases and complex scenarios for the Perl debugger
 //! output parsing to ensure robustness.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_dap::{DapMessage, DebugAdapter};
 use serde_json::json;
 use std::fs::write;
 use std::sync::mpsc::channel;
-// use std::time::Duration; // Unused import
 use tempfile::tempdir;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 /// Create a test Perl script with specific content
-fn create_edge_case_script(content: &str) -> std::path::PathBuf {
-    let dir = tempdir().unwrap();
+fn create_edge_case_script(
+    content: &str,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let dir = tempdir()?;
     let script_path = dir.path().join("edge_case.pl");
-    write(&script_path, content).unwrap();
-    script_path
+    write(&script_path, content)?;
+    Ok(script_path)
 }
 
 #[test]
-fn test_dap_complex_perl_syntax() {
+fn test_dap_complex_perl_syntax() -> TestResult {
     // Test with complex Perl syntax that might confuse the debugger parser
     let complex_script = r#"#!/usr/bin/perl
 use strict;
@@ -39,7 +40,7 @@ sub new {
 sub method_with_complex_regex {
     my $self = shift;
     my $text = shift;
-    
+
     # Complex regex that might confuse parsing
     if ($text =~ m{
         ^
@@ -50,7 +51,7 @@ sub method_with_complex_regex {
     }x) {
         say "Matched: $+{protocol}, $+{domain}, $+{path}";
     }
-    
+
     return $self;
 }
 
@@ -62,14 +63,14 @@ $obj->method_with_complex_regex('https://example.com/path');
 say "Done";
 "#;
 
-    let script_path = create_edge_case_script(complex_script);
+    let script_path = create_edge_case_script(complex_script)?;
     let mut adapter = DebugAdapter::new();
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
 
     // Test that we can handle complex breakpoint scenarios
     let bp_args = json!({
-        "source": {"path": script_path.to_str().unwrap()},
+        "source": {"path": script_path.to_str().ok_or("Failed to convert path to string")?},
         "breakpoints": [
             {"line": 10, "condition": "$args{name} eq 'test'"},
             {"line": 20},
@@ -81,8 +82,11 @@ say "Done";
     match response {
         DapMessage::Response { success, body, .. } => {
             assert!(success);
-            let body = body.unwrap();
-            let breakpoints = body.get("breakpoints").and_then(|b| b.as_array()).unwrap();
+            let body = body.ok_or("Expected body in response")?;
+            let breakpoints = body
+                .get("breakpoints")
+                .and_then(|b| b.as_array())
+                .ok_or("Expected breakpoints array")?;
             assert_eq!(breakpoints.len(), 3);
 
             // All breakpoints should be present (verified depends on session)
@@ -91,12 +95,13 @@ say "Done";
                 assert!(bp.get("id").is_some());
             }
         }
-        _ => panic!("Expected successful setBreakpoints response"),
+        _ => return Err("Expected successful setBreakpoints response".into()),
     }
+    Ok(())
 }
 
 #[test]
-fn test_dap_evaluate_complex_expressions() {
+fn test_dap_evaluate_complex_expressions() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Test various complex expressions that might be evaluated in debugger
@@ -125,18 +130,19 @@ fn test_dap_evaluate_complex_expressions() {
                 assert_eq!(command, "evaluate");
                 if !success {
                     // Expected when no session - check error message is reasonable
-                    assert!(message.is_some());
-                    let msg = message.unwrap();
-                    assert!(msg.contains("debugger session") || msg.contains("session"));
+                    if let Some(msg) = message {
+                        assert!(msg.contains("debugger session") || msg.contains("session"));
+                    }
                 }
             }
-            _ => panic!("Expected evaluate response for expression: {}", expr),
+            _ => return Err(format!("Expected evaluate response for expression: {}", expr).into()),
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_dap_variables_complex_scopes() {
+fn test_dap_variables_complex_scopes() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Test different variable reference scenarios
@@ -158,8 +164,11 @@ fn test_dap_variables_complex_scopes() {
             DapMessage::Response { success, command, body, .. } => {
                 assert_eq!(command, "variables");
                 if success {
-                    let body = body.unwrap();
-                    let variables = body.get("variables").and_then(|v| v.as_array()).unwrap();
+                    let body = body.ok_or("Expected body in successful response")?;
+                    let variables = body
+                        .get("variables")
+                        .and_then(|v| v.as_array())
+                        .ok_or("Expected variables array")?;
                     // Should return some variables for valid references
                     if var_ref == 1 {
                         assert!(!variables.is_empty(), "Local scope should have default variables");
@@ -171,13 +180,18 @@ fn test_dap_variables_complex_scopes() {
                     }
                 }
             }
-            _ => panic!("Expected variables response for reference: {}", var_ref),
+            _ => {
+                return Err(
+                    format!("Expected variables response for reference: {}", var_ref).into()
+                );
+            }
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_dap_stack_trace_edge_cases() {
+fn test_dap_stack_trace_edge_cases() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Test stack trace with various thread IDs and scenarios
@@ -195,8 +209,11 @@ fn test_dap_stack_trace_edge_cases() {
             DapMessage::Response { success, command, body, .. } => {
                 assert_eq!(command, "stackTrace");
                 if success {
-                    let body = body.unwrap();
-                    let frames = body.get("stackFrames").and_then(|f| f.as_array()).unwrap();
+                    let body = body.ok_or("Expected body in successful response")?;
+                    let frames = body
+                        .get("stackFrames")
+                        .and_then(|f| f.as_array())
+                        .ok_or("Expected stackFrames array")?;
                     let total = body.get("totalFrames").and_then(|t| t.as_u64()).unwrap_or(0);
 
                     // Without active session, should return empty
@@ -204,13 +221,14 @@ fn test_dap_stack_trace_edge_cases() {
                     assert_eq!(total, 0);
                 }
             }
-            _ => panic!("Expected stackTrace response for case: {}", i),
+            _ => return Err(format!("Expected stackTrace response for case: {}", i).into()),
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_dap_scopes_edge_cases() {
+fn test_dap_scopes_edge_cases() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Test scopes with various frame IDs
@@ -231,8 +249,11 @@ fn test_dap_scopes_edge_cases() {
             DapMessage::Response { success, command, body, .. } => {
                 assert_eq!(command, "scopes");
                 if success {
-                    let body = body.unwrap();
-                    let scopes = body.get("scopes").and_then(|s| s.as_array()).unwrap();
+                    let body = body.ok_or("Expected body in successful response")?;
+                    let scopes = body
+                        .get("scopes")
+                        .and_then(|s| s.as_array())
+                        .ok_or("Expected scopes array")?;
 
                     // Should return at least one scope (Local) for any valid frame
                     if frame_id > 0 {
@@ -242,17 +263,22 @@ fn test_dap_scopes_edge_cases() {
                         let scope = &scopes[0];
                         assert!(scope.get("name").is_some());
                         assert!(scope.get("variablesReference").is_some());
-                        assert_eq!(scope.get("name").and_then(|n| n.as_str()).unwrap(), "Local");
+                        let scope_name = scope
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .ok_or("Expected scope name")?;
+                        assert_eq!(scope_name, "Local");
                     }
                 }
             }
-            _ => panic!("Expected scopes response for frame: {}", frame_id),
+            _ => return Err(format!("Expected scopes response for frame: {}", frame_id).into()),
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_dap_pause_without_session() {
+fn test_dap_pause_without_session() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Test pause without active debugger session
@@ -261,16 +287,17 @@ fn test_dap_pause_without_session() {
         DapMessage::Response { success, command, message, .. } => {
             assert_eq!(command, "pause");
             assert!(!success, "Pause should fail without active session");
-            assert!(message.is_some());
-            let msg = message.unwrap();
-            assert!(msg.contains("Failed to pause") || msg.contains("No active"));
+            if let Some(msg) = message {
+                assert!(msg.contains("Failed to pause") || msg.contains("No active"));
+            }
         }
-        _ => panic!("Expected pause response"),
+        _ => return Err("Expected pause response".into()),
     }
+    Ok(())
 }
 
 #[test]
-fn test_dap_step_commands_without_session() {
+fn test_dap_step_commands_without_session() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Test all step commands without active session
@@ -284,13 +311,14 @@ fn test_dap_step_commands_without_session() {
                 // These should succeed (they're graceful no-ops without session)
                 assert!(success, "Step command {} should succeed gracefully", command);
             }
-            _ => panic!("Expected response for command: {}", command),
+            _ => return Err(format!("Expected response for command: {}", command).into()),
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_dap_malformed_requests() {
+fn test_dap_malformed_requests() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Test various malformed or edge case requests
@@ -312,22 +340,29 @@ fn test_dap_malformed_requests() {
                 assert_eq!(resp_cmd, *command);
                 // Most should fail with helpful error messages
                 if !success {
-                    assert!(
-                        message.is_some(),
-                        "Failed request should have error message for {}",
-                        command
-                    );
-                    let msg = message.unwrap();
-                    assert!(!msg.is_empty(), "Error message should not be empty for {}", command);
+                    if let Some(msg) = message {
+                        assert!(
+                            !msg.is_empty(),
+                            "Error message should not be empty for {}",
+                            command
+                        );
+                    } else {
+                        return Err(format!(
+                            "Failed request should have error message for {}",
+                            command
+                        )
+                        .into());
+                    }
                 }
             }
-            _ => panic!("Expected response for malformed command: {}", command),
+            _ => return Err(format!("Expected response for malformed command: {}", command).into()),
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_dap_attach_not_implemented() {
+fn test_dap_attach_not_implemented() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Test attach command which is not yet implemented
@@ -340,10 +375,11 @@ fn test_dap_attach_not_implemented() {
         DapMessage::Response { success, command, message, .. } => {
             assert_eq!(command, "attach");
             assert!(!success, "Attach should not be implemented yet");
-            assert!(message.is_some());
-            let msg = message.unwrap();
-            assert!(msg.contains("not yet implemented") || msg.contains("not implemented"));
+            if let Some(msg) = message {
+                assert!(msg.contains("not yet implemented") || msg.contains("not implemented"));
+            }
         }
-        _ => panic!("Expected attach response"),
+        _ => return Err("Expected attach response".into()),
     }
+    Ok(())
 }

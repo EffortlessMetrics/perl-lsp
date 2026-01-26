@@ -32,7 +32,7 @@ fn check_no_cycles_rec(
 
     // Add current node to path
     let kind_str = format!("{:?}", node.kind);
-    let variant = kind_str.split(['(', '{']).next().unwrap_or(&kind_str).to_string();
+    let variant = kind_str.split(['(', '{']).next().unwrap_or_else(|| &kind_str).to_string();
     path.push(variant);
 
     // Visit children based on node kind

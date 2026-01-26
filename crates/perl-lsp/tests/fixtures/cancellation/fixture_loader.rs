@@ -94,7 +94,10 @@ impl CancellationFixtures {
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
         // Check if fixtures are already loaded (thread-safe singleton pattern)
         {
-            let loader = FIXTURE_LOADER.lock().unwrap();
+            let loader = match FIXTURE_LOADER.lock() {
+                Ok(g) => g,
+                Err(e) => e.into_inner(),
+            };
             if let Some(fixtures) = &*loader {
                 return Ok(fixtures.clone());
             }
@@ -105,7 +108,10 @@ impl CancellationFixtures {
 
         // Cache loaded fixtures for subsequent calls
         {
-            let mut loader = FIXTURE_LOADER.lock().unwrap();
+            let mut loader = match FIXTURE_LOADER.lock() {
+                Ok(g) => g,
+                Err(e) => e.into_inner(),
+            };
             *loader = Some(fixtures.clone());
         }
 
@@ -360,9 +366,11 @@ pub fn get_performance_thresholds() -> Result<HashMap<String, f64>, Box<dyn std:
 mod tests {
     use super::*;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
     #[test]
-    fn test_fixture_loading() {
-        let fixtures = CancellationFixtures::load().expect("Failed to load fixtures");
+    fn test_fixture_loading() -> TestResult {
+        let fixtures = CancellationFixtures::load()?;
 
         // Verify protocol fixtures loaded
         assert!(!fixtures.protocol.cancel_requests.is_null());
@@ -382,46 +390,56 @@ mod tests {
         // Verify edge case fixtures loaded
         assert!(!fixtures.edge_cases.race_conditions.is_null());
         assert!(!fixtures.edge_cases.recovery_scenarios_perl.is_empty());
+
+        Ok(())
     }
 
     #[test]
-    fn test_protocol_fixture_access() {
-        let fixtures = CancellationFixtures::load().expect("Failed to load fixtures");
+    fn test_protocol_fixture_access() -> TestResult {
+        let fixtures = CancellationFixtures::load()?;
 
         let valid_requests = fixtures.protocol.get_valid_cancellation_requests();
         assert!(valid_requests.is_array());
 
         let error_responses = fixtures.protocol.get_cancellation_error_responses();
         assert!(error_responses.is_array());
+
+        Ok(())
     }
 
     #[test]
-    fn test_performance_threshold_extraction() {
-        let thresholds = get_performance_thresholds().expect("Failed to extract thresholds");
+    fn test_performance_threshold_extraction() -> TestResult {
+        let thresholds = get_performance_thresholds()?;
         assert!(thresholds.contains_key("max_cancellation_check_latency_us"));
         assert!(thresholds.contains_key("max_e2e_cancellation_response_ms"));
         assert!(thresholds.contains_key("max_memory_overhead_kb"));
+
+        Ok(())
     }
 
     #[test]
-    fn test_provider_specific_fixture_access() {
+    fn test_provider_specific_fixture_access() -> TestResult {
         let completion_request = get_cancellation_request_for_provider("completion")
-            .expect("Failed to get completion cancellation request");
+            .ok_or("Failed to get completion cancellation request")?;
         assert!(!completion_request.is_null());
 
         let hover_request = get_cancellation_request_for_provider("hover")
-            .expect("Failed to get hover cancellation request");
+            .ok_or("Failed to get hover cancellation request")?;
         assert!(!hover_request.is_null());
+
+        Ok(())
     }
 
     #[test]
-    fn test_perl_code_fixture_access() {
+    fn test_perl_code_fixture_access() -> TestResult {
         let incremental_code = get_parser_integration_perl_code("incremental_parsing")
-            .expect("Failed to get incremental parsing Perl code");
+            .ok_or("Failed to get incremental parsing Perl code")?;
         assert!(incremental_code.contains("IncrementalParsing"));
 
         let workspace_code = get_workspace_module_perl_code("database_module")
-            .expect("Failed to get database module Perl code");
+            .ok_or("Failed to get database module Perl code")?;
         assert!(workspace_code.contains("MultiFileProject::Database"));
+
+        Ok(())
     }
 }

@@ -1,13 +1,14 @@
 #![allow(clippy::collapsible_if)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use perl_parser::{Parser, ast::NodeKind};
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 #[test]
-fn test_parenthesized_hash_with_fat_comma() {
+fn test_parenthesized_hash_with_fat_comma() -> TestResult {
     let code = "my %h = (a => 1, b => 2);";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("should parse");
+    let ast = parser.parse()?;
 
     // Find the variable declaration
     if let NodeKind::Program { statements } = &ast.kind {
@@ -19,7 +20,7 @@ fn test_parenthesized_hash_with_fat_comma() {
                     "Expected HashLiteral for (a => 1, b => 2), got {:?}",
                     init.kind
                 );
-                return;
+                return Ok(());
             }
         }
     }
@@ -27,10 +28,10 @@ fn test_parenthesized_hash_with_fat_comma() {
 }
 
 #[test]
-fn test_parenthesized_array_without_fat_comma() {
+fn test_parenthesized_array_without_fat_comma() -> TestResult {
     let code = "my @a = (1, 2, 3, 4);";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("should parse");
+    let ast = parser.parse()?;
 
     // Find the assignment
     if let NodeKind::Program { statements } = &ast.kind {
@@ -42,7 +43,7 @@ fn test_parenthesized_array_without_fat_comma() {
                     "Expected ArrayLiteral for (1, 2, 3, 4), got {:?}",
                     init.kind
                 );
-                return;
+                return Ok(());
             }
         }
     }
@@ -50,10 +51,10 @@ fn test_parenthesized_array_without_fat_comma() {
 }
 
 #[test]
-fn test_parenthesized_array_with_identifier_pairs() {
+fn test_parenthesized_array_with_identifier_pairs() -> TestResult {
     let code = "my @a = (a, 1, b, 2);";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("should parse");
+    let ast = parser.parse()?;
 
     // Find the assignment
     if let NodeKind::Program { statements } = &ast.kind {
@@ -65,7 +66,7 @@ fn test_parenthesized_array_with_identifier_pairs() {
                     "Expected ArrayLiteral for (a, 1, b, 2) without fat comma, got {:?}",
                     init.kind
                 );
-                return;
+                return Ok(());
             }
         }
     }
@@ -73,10 +74,10 @@ fn test_parenthesized_array_with_identifier_pairs() {
 }
 
 #[test]
-fn test_mixed_commas_still_hash() {
+fn test_mixed_commas_still_hash() -> TestResult {
     let code = "my %h = (a => 1, b, 2);";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("should parse");
+    let ast = parser.parse()?;
 
     // Find the assignment
     if let NodeKind::Program { statements } = &ast.kind {
@@ -88,7 +89,7 @@ fn test_mixed_commas_still_hash() {
                     "Expected HashLiteral for (a => 1, b, 2) with mixed separators, got {:?}",
                     init.kind
                 );
-                return;
+                return Ok(());
             }
         }
     }

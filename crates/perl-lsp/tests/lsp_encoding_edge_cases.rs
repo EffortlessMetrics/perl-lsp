@@ -49,7 +49,7 @@ fn analyze_unicode_complexity(text: &str) -> (usize, usize, usize) {
 /// Tests handling of various character encodings and Unicode edge cases
 
 #[test]
-fn test_utf8_bom() {
+fn test_utf8_bom() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -89,10 +89,11 @@ fn test_utf8_bom() {
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_mixed_line_endings() {
+fn test_mixed_line_endings() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -133,10 +134,11 @@ fn test_mixed_line_endings() {
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_unicode_normalization() {
+fn test_unicode_normalization() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -198,10 +200,11 @@ fn test_unicode_normalization() {
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_emoji_and_special_unicode() {
+fn test_emoji_and_special_unicode() -> Result<(), Box<dyn std::error::Error>> {
     use common::read_response_timeout;
     use std::time::{Duration, Instant};
 
@@ -345,10 +348,10 @@ my $test = 'hello';
         eprintln!(
             "WARNING: Unicode document symbols request exceeded timeout - may indicate performance regression"
         );
-        return; // Exit gracefully rather than panicking
+        return Ok(()); // Exit gracefully rather than panicking
     }
 
-    let response = response.expect("Response should exist after timeout check");
+    let response = response.ok_or("Response should exist after timeout check")?;
 
     let symbol_response_time = symbol_request_start.elapsed();
     let total_test_time = start_time.elapsed();
@@ -366,11 +369,11 @@ my $test = 'hello';
         response.get("error")
     );
 
-    let result = response.get("result").expect("Response missing 'result' field");
+    let result = response.get("result").ok_or("Response missing 'result' field")?;
 
     assert!(result.is_array(), "Document symbols result must be an array, got: {:?}", result);
 
-    let symbols = result.as_array().expect("Result should be array");
+    let symbols = result.as_array().ok_or("Result should be array")?;
 
     // Validate specific Unicode symbols are properly indexed
     let symbol_names: Vec<String> = symbols
@@ -424,10 +427,12 @@ my $test = 'hello';
         total_test_time,
         performance_threshold
     );
+
+    Ok(())
 }
 
 #[test]
-fn test_surrogate_pairs() {
+fn test_surrogate_pairs() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -472,10 +477,11 @@ my $emoji3 = '👨‍👩‍👧‍👦'; # Family with ZWJ sequences
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_invalid_utf8_sequences() {
+fn test_invalid_utf8_sequences() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -523,10 +529,11 @@ my $text = "valid utf-8 only";
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_encoding_pragma() {
+fn test_encoding_pragma() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -573,10 +580,11 @@ my $latin = 'café';
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_grapheme_clusters() {
+fn test_grapheme_clusters() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -626,10 +634,11 @@ my $combined = 'e̊⃝'; # Multiple combining marks
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_zero_width_characters() {
+fn test_zero_width_characters() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -674,10 +683,11 @@ fn test_zero_width_characters() {
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_bidi_text() {
+fn test_bidi_text() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -726,10 +736,11 @@ my $embed = '\u{202A}LTR embed\u{202A}';
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_confusable_characters() {
+fn test_confusable_characters() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -782,10 +793,11 @@ my $backticks = '`test`';
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_private_use_area() {
+fn test_private_use_area() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -832,10 +844,11 @@ my $spua = '󰀀';  # U+F0000
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_long_unicode_identifiers() {
+fn test_long_unicode_identifiers() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -884,10 +897,11 @@ my $mixed_中文_english_العربية_русский = 5;
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_unicode_in_regex() {
+fn test_unicode_in_regex() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -940,10 +954,11 @@ if ($text =~ /café/i) { } # Case insensitive with accents
 
     let response = read_response(&mut server);
     assert!(response.is_object());
+    Ok(())
 }
 
 #[test]
-fn test_adaptive_timeout_calculation() {
+fn test_adaptive_timeout_calculation() -> Result<(), Box<dyn std::error::Error>> {
     use std::time::Duration;
 
     // Test the adaptive timeout logic (Issue #200 regression test)
@@ -990,4 +1005,6 @@ fn test_adaptive_timeout_calculation() {
     unsafe {
         std::env::remove_var("RUST_TEST_THREADS");
     }
+
+    Ok(())
 }

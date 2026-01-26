@@ -7,11 +7,11 @@ use url::Url;
 
 /// Test that workspace index properly tracks cross-file symbols
 #[test]
-fn test_workspace_index_cross_file() {
+fn test_workspace_index_cross_file() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // File A: defines Foo::bar
-    let uri_a = Url::parse("file:///workspace/A.pm").unwrap();
+    let uri_a = Url::parse("file:///workspace/A.pm")?;
     let content_a = r#"
 package Foo;
 
@@ -27,7 +27,7 @@ sub baz {
 "#;
 
     // File B: uses Foo::bar
-    let uri_b = Url::parse("file:///workspace/B.pl").unwrap();
+    let uri_b = Url::parse("file:///workspace/B.pl")?;
     let content_b = r#"
 use Foo;
 
@@ -38,13 +38,13 @@ Foo::baz();
 "#;
 
     // Index both files
-    index.index_file(uri_a.clone(), content_a.to_string()).expect("Should index A.pm");
-    index.index_file(uri_b.clone(), content_b.to_string()).expect("Should index B.pl");
+    index.index_file(uri_a.clone(), content_a.to_string())?;
+    index.index_file(uri_b.clone(), content_b.to_string())?;
 
     // Check that Foo::bar is defined in A.pm
     let bar_def = index.find_definition("bar");
     assert!(bar_def.is_some(), "Should find definition of 'bar'");
-    let def = bar_def.unwrap();
+    let def = bar_def.ok_or("Should have definition for bar")?;
     assert_eq!(def.uri, uri_a.to_string(), "Definition should be in A.pm");
 
     // Check that references to Foo::bar are found
@@ -59,13 +59,15 @@ Foo::baz();
     index.remove_file(uri_a.as_str());
     let bar_def_after = index.find_definition("bar");
     assert!(bar_def_after.is_none(), "Definition should be removed after file removal");
+
+    Ok(())
 }
 
 /// Test that index updates when files change
 #[test]
-fn test_workspace_index_file_updates() {
+fn test_workspace_index_file_updates() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
-    let uri = Url::parse("file:///workspace/test.pl").unwrap();
+    let uri = Url::parse("file:///workspace/test.pl")?;
 
     // Initial content
     let content_v1 = r#"
@@ -74,7 +76,7 @@ sub old_name {
 }
 "#;
 
-    index.index_file(uri.clone(), content_v1.to_string()).expect("Should index v1");
+    index.index_file(uri.clone(), content_v1.to_string())?;
 
     // Check old_name exists
     let old_def = index.find_definition("old_name");
@@ -87,7 +89,7 @@ sub new_name {
 }
 "#;
 
-    index.index_file(uri.clone(), content_v2.to_string()).expect("Should index v2");
+    index.index_file(uri.clone(), content_v2.to_string())?;
 
     // Check old_name is gone and new_name exists
     let old_def_after = index.find_definition("old_name");
@@ -95,11 +97,13 @@ sub new_name {
 
     let new_def = index.find_definition("new_name");
     assert!(new_def.is_some(), "Should find new_name");
+
+    Ok(())
 }
 
 /// Test LSP workspace/symbol request with index
 #[test]
-fn test_lsp_workspace_symbols_with_index() {
+fn test_lsp_workspace_symbols_with_index() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
     // Initialize server
@@ -165,7 +169,7 @@ fn test_lsp_workspace_symbols_with_index() {
         })),
     };
 
-    let response = server.handle_request(search_request).unwrap();
+    let response = server.handle_request(search_request).ok_or("handle_request returned None")?;
     assert!(response.error.is_none(), "Should not return error");
 
     if let Some(result) = response.result {
@@ -182,16 +186,18 @@ fn test_lsp_workspace_symbols_with_index() {
             assert!(names.contains(&"bar".to_string()), "Should find 'bar'");
             assert!(names.contains(&"baz".to_string()), "Should find 'baz'");
         } else {
-            panic!("Result should be an array");
+            return Err("Result should be an array".into());
         }
     } else {
-        panic!("Should return a result");
+        return Err("Should return a result".into());
     }
+
+    Ok(())
 }
 
 /// Test cross-file go-to-definition
 #[test]
-fn test_cross_file_definition() {
+fn test_cross_file_definition() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
     // Initialize
@@ -264,7 +270,7 @@ fn test_cross_file_definition() {
         })),
     };
 
-    let response = server.handle_request(def_request).unwrap();
+    let response = server.handle_request(def_request).ok_or("handle_request returned None")?;
     assert!(response.error.is_none(), "Should not return error");
 
     if let Some(result) = response.result {
@@ -283,4 +289,6 @@ fn test_cross_file_definition() {
             }
         }
     }
+
+    Ok(())
 }

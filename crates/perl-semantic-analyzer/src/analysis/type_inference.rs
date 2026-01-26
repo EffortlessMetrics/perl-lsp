@@ -937,9 +937,11 @@ pub struct CompletionItem {
 }
 
 #[cfg(test)]
+
 mod tests {
     use super::*;
     use crate::Parser;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_scalar_type_inference() {
@@ -952,7 +954,7 @@ mod tests {
         "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let result = engine.infer(&ast);
 
         assert!(result.is_ok());
@@ -972,7 +974,7 @@ mod tests {
         "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let _result = engine.infer(&ast);
 
         assert!(matches!(engine.get_type_at("numbers"), Some(PerlType::Array(_))));
@@ -990,7 +992,7 @@ mod tests {
         "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let _result = engine.infer(&ast);
 
         // Check that hash types are properly inferred
@@ -1026,7 +1028,7 @@ mod tests {
         "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let _result = engine.infer(&ast);
 
         // Both hashes should have integer values
@@ -1057,7 +1059,7 @@ mod tests {
         "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let _result = engine.infer(&ast);
 
         // Check that get_length returns an integer
@@ -1079,7 +1081,7 @@ mod tests {
         "#;
 
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
         let _result = engine.infer(&ast);
 
         let completion = TypeBasedCompletion::new(Arc::new(engine));

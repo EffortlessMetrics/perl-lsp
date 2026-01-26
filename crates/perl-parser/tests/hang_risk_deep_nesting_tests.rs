@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Comprehensive deep nesting boundedness tests for hang/bounds risk mitigation
 //!
 //! Tests feature spec: ROADMAP.md#known-gaps-hang-bounds-risks
@@ -22,13 +21,15 @@
 
 use perl_parser::{ParseError, Parser};
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 /// Test deeply nested blocks exceed recursion limit
 ///
 /// Tests feature spec: ROADMAP.md#deep-nesting-boundedness
 #[test]
-fn parser_hang_risk_nested_blocks_exceed_limit() {
-    // Create nested blocks beyond the limit (approx 64)
-    let depth = 70;
+fn parser_hang_risk_nested_blocks_exceed_limit() -> TestResult {
+    // Create nested blocks beyond the limit (300 levels exceeds 256 limit)
+    let depth = 300;
     let mut code = String::new();
 
     for _ in 0..depth {
@@ -42,15 +43,21 @@ fn parser_hang_risk_nested_blocks_exceed_limit() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(result.is_err(), "Expected error for {} nested blocks", depth);
+    assert!(result.is_err(), "Expected RecursionLimit error for {} nested blocks", depth);
+    let err = result.err().ok_or("Expected error but got Ok")?;
+    assert!(
+        matches!(err, ParseError::RecursionLimit),
+        "Expected RecursionLimit error, got different error type"
+    );
+    Ok(())
 }
 
 /// Test deeply nested parentheses in expressions
 ///
 /// Tests feature spec: ROADMAP.md#deep-nesting-boundedness
 #[test]
-fn parser_hang_risk_nested_parentheses_exceed_limit() {
-    let depth = 70;
+fn parser_hang_risk_nested_parentheses_exceed_limit() -> TestResult {
+    let depth = 300;
     let mut code = String::new();
 
     for _ in 0..depth {
@@ -64,7 +71,13 @@ fn parser_hang_risk_nested_parentheses_exceed_limit() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(result.is_err(), "Expected error for deeply nested parentheses");
+    assert!(result.is_err(), "Expected RecursionLimit error for deeply nested parentheses");
+    let err = result.err().ok_or("Expected error but got Ok")?;
+    assert!(
+        matches!(err, ParseError::RecursionLimit),
+        "Expected RecursionLimit error for nested parentheses"
+    );
+    Ok(())
 }
 
 /// Test deeply nested array literals
@@ -78,7 +91,7 @@ fn parser_hang_risk_nested_array_literals() {
     for _ in 0..depth {
         code.push('[');
     }
-    code.push_str("1");
+    code.push('1');
     for _ in 0..depth {
         code.push(']');
     }
@@ -100,7 +113,7 @@ fn parser_hang_risk_nested_hash_literals() {
     for _ in 0..depth {
         code.push_str("{ a => ");
     }
-    code.push_str("1");
+    code.push('1');
     for _ in 0..depth {
         code.push_str(" }");
     }
@@ -260,13 +273,13 @@ fn parser_hang_risk_nested_regex_captures() {
     code.push_str("m/");
 
     for _ in 0..depth {
-        code.push_str("(");
+        code.push('(');
     }
-    code.push_str("x");
+    code.push('x');
     for _ in 0..depth {
-        code.push_str(")");
+        code.push(')');
     }
-    code.push_str("/");
+    code.push('/');
 
     let mut parser = Parser::new(&code);
     let result = parser.parse();
@@ -347,13 +360,13 @@ fn parser_hang_risk_nested_quote_delimiters() {
     code.push_str("q{");
 
     for _ in 0..depth {
-        code.push_str("{");
+        code.push('{');
     }
     code.push_str("text");
     for _ in 0..depth {
-        code.push_str("}");
+        code.push('}');
     }
-    code.push_str("}");
+    code.push('}');
 
     let mut parser = Parser::new(&code);
     let result = parser.parse();
@@ -421,8 +434,8 @@ fn parser_hang_risk_boundary_just_below_limit() {
 ///
 /// Tests feature spec: ROADMAP.md#deep-nesting-boundedness
 #[test]
-fn parser_hang_risk_boundary_just_above_limit() {
-    let depth = 70; // Just above limit (approx 64)
+fn parser_hang_risk_boundary_just_above_limit() -> TestResult {
+    let depth = 260; // Just above 256 limit
     let mut code = String::new();
 
     for _ in 0..depth {
@@ -436,8 +449,13 @@ fn parser_hang_risk_boundary_just_above_limit() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(result.is_err(), "Expected error for nesting just above limit");
-    // Accept any error (NestingTooDeep or RecursionLimit)
+    assert!(result.is_err(), "Expected RecursionLimit error for nesting just above limit");
+    let err = result.err().ok_or("Expected error but got Ok")?;
+    assert!(
+        matches!(err, ParseError::RecursionLimit),
+        "Expected RecursionLimit error type"
+    );
+    Ok(())
 }
 
 /// Test mixed control flow nesting (if/while/for combinations)
@@ -521,7 +539,7 @@ fn parser_hang_risk_nested_eval_blocks() {
     for _ in 0..depth {
         code.push_str("eval { ");
     }
-    code.push_str("1");
+    code.push('1');
     for _ in 0..depth {
         code.push_str(" }");
     }
@@ -573,7 +591,7 @@ fn parser_hang_risk_pathological_alternating_structures() {
             code.push_str("{ b => [ ");
         }
     }
-    code.push_str("1");
+    code.push('1');
     for i in 0..depth {
         if i % 2 == 0 {
             code.push_str(" ] }");
@@ -596,7 +614,7 @@ fn parser_hang_risk_pathological_alternating_structures() {
 /// Tests feature spec: ROADMAP.md#deep-nesting-boundedness
 #[test]
 #[cfg_attr(not(feature = "slow_tests"), ignore)]
-fn parser_hang_risk_no_timeout_on_pathological_input() {
+fn parser_hang_risk_no_timeout_on_pathological_input() -> TestResult {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
@@ -618,7 +636,9 @@ fn parser_hang_risk_no_timeout_on_pathological_input() {
     let handle = std::thread::spawn(move || {
         let mut parser = Parser::new(&code_arc);
         let result = parser.parse();
-        *result_clone.lock().unwrap() = Some(result);
+        if let Ok(mut guard) = result_clone.lock() {
+            *guard = Some(result);
+        }
     });
 
     // Wait max 5 seconds for parser to complete
@@ -627,11 +647,12 @@ fn parser_hang_risk_no_timeout_on_pathological_input() {
 
     assert!(completed, "Parser should complete within timeout, not hang indefinitely");
 
-    let result_guard = result_arc.lock().unwrap();
-    let result = result_guard.as_ref().expect("Parser should have returned a result");
+    let result_guard = result_arc.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+    let result = result_guard.as_ref().ok_or("Parser should have returned a result")?;
 
     // Should fail with RecursionLimit, not hang
     assert!(result.is_err(), "Parser should reject extremely deep nesting");
+    Ok(())
 }
 
 /// Test performance doesn't degrade linearly with depth

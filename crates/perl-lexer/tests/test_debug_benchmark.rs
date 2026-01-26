@@ -1,5 +1,7 @@
 use perl_lexer::{PerlLexer, TokenType};
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 #[test]
 fn debug_simple_tokens() {
     let input = "my $x = 42; print $x;";
@@ -25,15 +27,14 @@ fn debug_simple_tokens() {
 }
 
 #[test]
-fn test_format_termination() {
+fn test_format_termination() -> TestResult {
     // Test case with terminating dot
     let input = "Some format content\n.\n";
     let mut lexer = PerlLexer::new(input);
     lexer.enter_format_mode();
 
-    let token = lexer.next_token();
-    assert!(token.is_some());
-    match token.unwrap().token_type {
+    let token = lexer.next_token().ok_or("Expected token")?;
+    match token.token_type {
         TokenType::FormatBody(content) => {
             println!("Format body: {:?}", content);
         }
@@ -42,21 +43,22 @@ fn test_format_termination() {
         }
         _ => panic!("Unexpected token type"),
     }
+    Ok(())
 }
 
 #[test]
-fn test_format_no_termination() {
+fn test_format_no_termination() -> TestResult {
     // Test case without terminating dot
     let input = "Some format content\nno dot here";
     let mut lexer = PerlLexer::new(input);
     lexer.enter_format_mode();
 
-    let token = lexer.next_token();
-    assert!(token.is_some());
-    match token.unwrap().token_type {
+    let token = lexer.next_token().ok_or("Expected token")?;
+    match token.token_type {
         TokenType::Error(msg) => {
             assert_eq!(msg.as_ref(), "Unterminated format body");
         }
         _ => panic!("Expected error token"),
     }
+    Ok(())
 }

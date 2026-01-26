@@ -4,7 +4,6 @@
 //! moniker/import/export heuristics in the LSP server. It validates:
 //! - Parser correctly handles all qw delimiter styles (qw<>, qw(), qw[], qw{}, qw//, qw||, qw!!)
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 /// - AST structure for Use nodes with various import argument formats
 /// - @EXPORT and @EXPORT_OK declarations parse correctly with all delimiter forms
 ///
@@ -26,7 +25,10 @@ mod moniker_export_import_tests {
     /// Parse Perl code and return the AST root
     fn parse_code(code: &str) -> Node {
         let mut parser = Parser::new(code);
-        parser.parse().expect("Failed to parse code")
+        match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => panic!("Failed to parse code: {}", e),
+        }
     }
 
     /// Create a Use node for testing find_import_source

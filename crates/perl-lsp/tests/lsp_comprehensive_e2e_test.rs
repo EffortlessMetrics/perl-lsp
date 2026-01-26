@@ -5,7 +5,6 @@
 //! a professional IDE experience.
 
 #![allow(clippy::collapsible_if)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
 
@@ -14,6 +13,8 @@ use perl_parser::Parser;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use support::test_helpers::apply_text_edits;
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 // ======================== TEST INFRASTRUCTURE ========================
 
@@ -135,7 +136,7 @@ impl TestContext {
 
 /// Test 1: Initialization and Capabilities
 #[test]
-fn test_e2e_initialization_and_capabilities() {
+fn test_e2e_initialization_and_capabilities() -> TestResult {
     let mut ctx = TestContext::new();
     let response = ctx.initialize();
 
@@ -190,11 +191,12 @@ fn test_e2e_initialization_and_capabilities() {
             || capabilities["inlayHintProvider"].is_boolean()
             || capabilities["inlayHintProvider"].is_object()
     );
+    Ok(())
 }
 
 /// Test 2: Real-time Diagnostics
 #[test]
-fn test_e2e_real_time_diagnostics() {
+fn test_e2e_real_time_diagnostics() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -262,11 +264,12 @@ sub test {
             assert!(result.is_ok(), "Expected no diagnostic for {}", name);
         }
     }
+    Ok(())
 }
 
 /// Test 3: Code Completion
 #[test]
-fn test_e2e_code_completion() {
+fn test_e2e_code_completion() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -295,8 +298,8 @@ $us  # Complete here
     );
 
     assert!(result.is_some());
-    let result_value = result.unwrap();
-    let items = result_value["items"].as_array().unwrap();
+    let result_value = result.ok_or("No completion result")?;
+    let items = result_value["items"].as_array().ok_or("Expected items array")?;
     assert!(items.iter().any(|i| i["label"] == "$user_name"));
     assert!(items.iter().any(|i| i["label"] == "$user_email"));
 
@@ -318,8 +321,8 @@ $us  # Complete here
     );
 
     assert!(result.is_some());
-    let result_value = result.unwrap();
-    let items = result_value["items"].as_array().unwrap();
+    let result_value = result.ok_or("No builtin completion result")?;
+    let items = result_value["items"].as_array().ok_or("Expected items array")?;
     assert!(items.iter().any(|i| i["label"] == "print"));
 
     // Scenario 3: Method completion
@@ -349,11 +352,12 @@ $obj->  # Complete methods
     );
 
     assert!(result.is_some());
+    Ok(())
 }
 
 /// Test 4: Go to Definition
 #[test]
-fn test_e2e_go_to_definition() {
+fn test_e2e_go_to_definition() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -386,14 +390,15 @@ sub process_order {
     );
 
     assert!(result.is_some());
-    let locations = result.unwrap();
+    let locations = result.ok_or("No definition result")?;
     assert!(locations.is_array());
     assert_eq!(locations[0]["range"]["start"]["line"], 1);
+    Ok(())
 }
 
 /// Test 5: Find All References
 #[test]
-fn test_e2e_find_all_references() {
+fn test_e2e_find_all_references() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -433,14 +438,15 @@ sub reload_config {
     );
 
     assert!(result.is_some());
-    let result_value = result.unwrap();
-    let refs = result_value.as_array().unwrap();
+    let result_value = result.ok_or("No references result")?;
+    let refs = result_value.as_array().ok_or("Expected references array")?;
     assert!(refs.len() >= 3); // Declaration + 2 uses
+    Ok(())
 }
 
 /// Test 6: Hover Information
 #[test]
-fn test_e2e_hover_information() {
+fn test_e2e_hover_information() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -474,13 +480,14 @@ print process_data("test", { debug => 1 });
     );
 
     assert!(result.is_some());
-    let hover = result.unwrap();
+    let hover = result.ok_or("No hover result")?;
     assert!(hover["contents"].is_object() || hover["contents"].is_string());
+    Ok(())
 }
 
 /// Test 7: Signature Help
 #[test]
-fn test_e2e_signature_help() {
+fn test_e2e_signature_help() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -509,14 +516,15 @@ connect_db("localhost",   # Signature help here
     );
 
     assert!(result.is_some());
-    let sig_help = result.unwrap();
+    let sig_help = result.ok_or("No signature help result")?;
     assert!(sig_help["signatures"].is_array());
-    assert!(!sig_help["signatures"].as_array().unwrap().is_empty());
+    assert!(!sig_help["signatures"].as_array().ok_or("Expected signatures array")?.is_empty());
+    Ok(())
 }
 
 /// Test 8: Document Symbols
 #[test]
-fn test_e2e_document_symbols() {
+fn test_e2e_document_symbols() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -556,18 +564,19 @@ sub helper_function {
     );
 
     assert!(result.is_some());
-    let symbols = result.unwrap();
+    let symbols = result.ok_or("No symbols result")?;
     assert!(symbols.is_array());
 
-    let syms = symbols.as_array().unwrap();
+    let syms = symbols.as_array().ok_or("Expected symbols array")?;
     assert!(syms.iter().any(|s| s["name"] == "MyApp"));
     assert!(syms.iter().any(|s| s["name"] == "new"));
     assert!(syms.iter().any(|s| s["name"] == "method1"));
+    Ok(())
 }
 
 /// Test 9: Code Actions (Quick Fixes)
 #[test]
-fn test_e2e_code_actions() {
+fn test_e2e_code_actions() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -597,13 +606,14 @@ if ($x = 20) {  # Should be ==
     );
 
     assert!(result.is_some());
-    let actions = result.unwrap();
+    let actions = result.ok_or("No code actions result")?;
     assert!(actions.is_array());
+    Ok(())
 }
 
 /// Test 10: Rename Symbol
 #[test]
-fn test_e2e_rename_symbol() {
+fn test_e2e_rename_symbol() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -652,13 +662,14 @@ print "Value: $old_name\n";
     );
 
     assert!(result.is_some());
-    let edit = result.unwrap();
+    let edit = result.ok_or("No rename result")?;
     assert!(edit["changes"].is_object() || edit["documentChanges"].is_array());
+    Ok(())
 }
 
 /// Test 11: Semantic Tokens (Syntax Highlighting)
 #[test]
-fn test_e2e_semantic_tokens() {
+fn test_e2e_semantic_tokens() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -691,15 +702,16 @@ sub method {
     );
 
     assert!(result.is_some());
-    let tokens = result.unwrap();
+    let tokens = result.ok_or("No semantic tokens result")?;
     assert!(tokens["data"].is_array());
-    assert!(!tokens["data"].as_array().unwrap().is_empty());
+    assert!(!tokens["data"].as_array().ok_or("Expected data array")?.is_empty());
+    Ok(())
 }
 
 /// Test 12: Code Lens (Reference Counts)
 #[test]
 #[cfg(not(feature = "lsp-ga-lock"))] // Code lens disabled in GA lock builds
-fn test_e2e_code_lens() {
+fn test_e2e_code_lens() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -730,14 +742,18 @@ rarely_used();
     );
 
     assert!(result.is_some());
-    let lenses = result.unwrap();
+    let lenses = result.ok_or("No code lens result")?;
     assert!(lenses.is_array());
-    assert!(!lenses.as_array().unwrap().is_empty(), "Should return at least one code lens");
+    assert!(
+        !lenses.as_array().ok_or("Expected lenses array")?.is_empty(),
+        "Should return at least one code lens"
+    );
+    Ok(())
 }
 
 /// Test 13: Folding Ranges
 #[test]
-fn test_e2e_folding_ranges() {
+fn test_e2e_folding_ranges() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -775,15 +791,16 @@ sub another_function {
     );
 
     assert!(result.is_some());
-    let ranges = result.unwrap();
+    let ranges = result.ok_or("No folding ranges result")?;
     assert!(ranges.is_array());
-    assert!(!ranges.as_array().unwrap().is_empty());
+    assert!(!ranges.as_array().ok_or("Expected ranges array")?.is_empty());
+    Ok(())
 }
 
 /// Test 14: Call Hierarchy
 #[test]
 #[cfg(not(feature = "lsp-ga-lock"))] // Call hierarchy is not advertised by default
-fn test_e2e_call_hierarchy() {
+fn test_e2e_call_hierarchy() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -829,7 +846,7 @@ main();
     if let Some(items) = prepare {
         assert!(items.is_array());
 
-        if let Some(item) = items.as_array().unwrap().first() {
+        if let Some(item) = items.as_array().ok_or("Expected items array")?.first() {
             // Get incoming calls
             let incoming = ctx.send_request(
                 "callHierarchy/incomingCalls",
@@ -839,16 +856,17 @@ main();
             );
 
             assert!(incoming.is_some());
-            let calls = incoming.unwrap();
+            let calls = incoming.ok_or("No incoming calls result")?;
             assert!(calls.is_array());
         }
     }
     // If result is None (error), that's also OK for unadvertised feature
+    Ok(())
 }
 
 /// Test 15: Inlay Hints
 #[test]
-fn test_e2e_inlay_hints() {
+fn test_e2e_inlay_hints() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -877,13 +895,14 @@ complex_function("localhost", 5432, "admin", "secret", "mydb");
     );
 
     assert!(result.is_some());
-    let hints = result.unwrap();
+    let hints = result.ok_or("No inlay hints result")?;
     assert!(hints.is_array());
+    Ok(())
 }
 
 /// Test 16: Workspace Symbols
 #[test]
-fn test_e2e_workspace_symbols() {
+fn test_e2e_workspace_symbols() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -910,13 +929,14 @@ sub function_in_file2 { }
     );
 
     assert!(result.is_some());
-    let symbols = result.unwrap();
+    let symbols = result.ok_or("No workspace symbols result")?;
     assert!(symbols.is_array());
+    Ok(())
 }
 
 /// Test 17: Document Formatting
 #[test]
-fn test_e2e_document_formatting() {
+fn test_e2e_document_formatting() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -945,7 +965,7 @@ return$x*2}
     // Formatting returns an array of text edits or null
     if let Some(res) = result {
         if res.is_array() {
-            let edits = res.as_array().unwrap();
+            let edits = res.as_array().ok_or("Expected edits array")?;
             if !edits.is_empty() {
                 // Apply all edits to verify they produce valid Perl
                 let formatted = apply_text_edits(unformatted, edits);
@@ -956,11 +976,12 @@ return$x*2}
             assert!(res.is_null(), "Formatting should return array of text edits or null");
         }
     }
+    Ok(())
 }
 
 /// Test 18: Execute Command
 #[test]
-fn test_e2e_execute_command() {
+fn test_e2e_execute_command() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -994,11 +1015,12 @@ my $y = $x * 2;
             "Command result should be object, array, or null"
         );
     }
+    Ok(())
 }
 
 /// Test 19: Multi-file Support
 #[test]
-fn test_e2e_multi_file_support() {
+fn test_e2e_multi_file_support() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1045,11 +1067,12 @@ print "Result: $result\n";
     );
 
     assert!(result.is_some());
+    Ok(())
 }
 
 /// Test 20: Incremental Parsing
 #[test]
-fn test_e2e_incremental_parsing() {
+fn test_e2e_incremental_parsing() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1080,6 +1103,7 @@ sub test {{
         let mut parser = Parser::new(&updated_code);
         assert!(parser.parse().is_ok());
     }
+    Ok(())
 }
 
 /// Test 21: Error Recovery
@@ -1087,7 +1111,7 @@ sub test {{
 /// Tests that the parser can recover from syntax errors and continue parsing.
 /// Error recovery allows the LSP to provide partial results even when code has errors.
 #[test]
-fn test_e2e_error_recovery() {
+fn test_e2e_error_recovery() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1125,22 +1149,23 @@ sub function2 {
     );
 
     assert!(result.is_some());
-    let symbols = result.unwrap();
+    let symbols = result.ok_or("No symbols result")?;
     assert!(symbols.is_array());
 
     // Error recovery should allow function2 to be found even though function1 has errors
     // Note: function1 may not be recognized due to its malformed body
-    let syms = symbols.as_array().unwrap();
+    let syms = symbols.as_array().ok_or("Expected symbols array")?;
     assert!(
         syms.iter().any(|s| s["name"] == "function2"),
         "Parser should recover from errors in function1 and find function2. Found: {:?}",
         syms.iter().map(|s| &s["name"]).collect::<Vec<_>>()
     );
+    Ok(())
 }
 
 /// Test 22: Performance with Large Files
 #[test]
-fn test_e2e_performance_large_files() {
+fn test_e2e_performance_large_files() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1183,11 +1208,12 @@ sub function_{} {{
 
     assert!(result.is_some());
     assert!(elapsed.as_millis() < 100, "Symbol request took too long: {:?}", elapsed);
+    Ok(())
 }
 
 /// Test 23: Unicode Support
 #[test]
-fn test_e2e_unicode_support() {
+fn test_e2e_unicode_support() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1219,13 +1245,14 @@ print "Café: $café\n";
     );
 
     assert!(result.is_some());
-    let symbols = result.unwrap();
+    let symbols = result.ok_or("No symbols result")?;
     assert!(symbols.is_array());
+    Ok(())
 }
 
 /// Test 24: Modern Perl Features
 #[test]
-fn test_e2e_modern_perl_features() {
+fn test_e2e_modern_perl_features() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1267,11 +1294,12 @@ class Point {
 
     // Modern features might not all be supported yet
     assert!(result.is_ok() || result.is_err());
+    Ok(())
 }
 
 /// Test 25: Refactoring Support
 #[test]
-fn test_e2e_refactoring_support() {
+fn test_e2e_refactoring_support() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1325,13 +1353,14 @@ for (my $i = 0; $i < 10; $i++) {
             "Code actions should return array of actions or null"
         );
     }
+    Ok(())
 }
 
 // ======================== USER STORY SCENARIOS ========================
 
 /// Complete workflow: New developer onboarding
 #[test]
-fn test_user_story_developer_onboarding() {
+fn test_user_story_developer_onboarding() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1380,10 +1409,10 @@ foreach my $user (@$users) {
                 }
             })),
         )
-        .unwrap();
+        .ok_or("No symbols result")?;
 
     assert!(symbols.is_array());
-    assert!(symbols.as_array().unwrap().len() >= 2); // At least 2 functions
+    assert!(symbols.as_array().ok_or("Expected symbols array")?.len() >= 2); // At least 2 functions
 
     // Step 3: Developer hovers over DBI to understand what it is
     let hover = ctx.send_request(
@@ -1402,7 +1431,7 @@ foreach my $user (@$users) {
     // Hover might not have docs for external modules
     if let Some(h) = hover {
         if !h.is_null() {
-            let obj = h.as_object().expect("hover should be object");
+            let obj = h.as_object().ok_or("hover should be object")?;
             assert!(obj.contains_key("contents"), "Hover must have contents");
         }
     }
@@ -1428,17 +1457,18 @@ foreach my $user (@$users) {
     if let Some(refs) = refs {
         assert!(refs.is_array());
         // Variable references are complex in Perl - accept any number of results (including 0)
-        let ref_count = refs.as_array().unwrap().len();
+        let ref_count = refs.as_array().ok_or("Expected refs array")?.len();
         println!("Found {} references to $DEBUG", ref_count);
         // Test passes regardless of reference count - we're just ensuring no crash
     } else {
         println!("No references found - references feature may not be fully implemented");
     }
+    Ok(())
 }
 
 /// Complete workflow: Bug fixing with real-time feedback
 #[test]
-fn test_user_story_bug_fixing() {
+fn test_user_story_bug_fixing() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1491,11 +1521,12 @@ print "Final price: $final_price\n";  # Now shows $80
     // Step 3: Verify no syntax errors
     let mut parser = Parser::new(fixed_code);
     assert!(parser.parse().is_ok());
+    Ok(())
 }
 
 /// Complete workflow: Writing new feature with TDD
 #[test]
-fn test_user_story_tdd_development() {
+fn test_user_story_tdd_development() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1553,11 +1584,12 @@ sub is_valid {
     if let Some(def) = definition {
         assert!(def.is_array() || def.is_object(), "Definition should be array or LocationLink");
     }
+    Ok(())
 }
 
 /// Complete workflow: Refactoring legacy code
 #[test]
-fn test_user_story_legacy_refactoring() {
+fn test_user_story_legacy_refactoring() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1632,13 +1664,14 @@ say "Sum: $sum";
     let mut parser = Parser::new(modernized);
     // Modern features might not all be supported
     assert!(parser.parse().is_ok() || parser.parse().is_err());
+    Ok(())
 }
 
 // ======================== EDGE CASES & STRESS TESTS ========================
 
 /// Test handling of malformed requests
 #[test]
-fn test_edge_case_malformed_requests() {
+fn test_edge_case_malformed_requests() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1657,14 +1690,15 @@ fn test_edge_case_malformed_requests() {
     // Some LSP implementations return null for missing parameters instead of errors
     assert!(
         result.is_none()
-            || result.as_ref().unwrap().get("error").is_some()
-            || result.as_ref().unwrap().is_null()
+            || result.as_ref().ok_or("Expected Some result")?.get("error").is_some()
+            || result.as_ref().ok_or("Expected Some result")?.is_null()
     );
+    Ok(())
 }
 
 /// Test concurrent document modifications
 #[test]
-fn test_edge_case_concurrent_modifications() {
+fn test_edge_case_concurrent_modifications() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1688,11 +1722,12 @@ fn test_edge_case_concurrent_modifications() {
     );
 
     assert!(result.is_some());
+    Ok(())
 }
 
 /// Test memory pressure with many documents
 #[test]
-fn test_edge_case_memory_pressure() {
+fn test_edge_case_memory_pressure() -> TestResult {
     let mut ctx = TestContext::new();
     ctx.initialize();
 
@@ -1718,12 +1753,13 @@ fn test_edge_case_memory_pressure() {
         let uri = format!("file:///test/file_{}.pl", i);
         ctx.close_document(&uri);
     }
+    Ok(())
 }
 
 // ======================== TEST SUMMARY ========================
 
 #[test]
-fn test_coverage_summary() {
+fn test_coverage_summary() -> TestResult {
     println!("\n=== LSP Feature Coverage Summary ===");
     println!("✅ 1. Initialization and Capabilities");
     println!("✅ 2. Real-time Diagnostics");
@@ -1761,4 +1797,5 @@ fn test_coverage_summary() {
     println!("✅ Memory Pressure");
     println!("\nTotal Test Coverage: 100%");
     println!("All 25+ LSP features tested end-to-end ✅");
+    Ok(())
 }

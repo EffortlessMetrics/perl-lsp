@@ -1,5 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
@@ -43,7 +41,7 @@ fn open(server: &mut LspServer, uri: &str, text: &str) {
 }
 
 #[test]
-fn test_cross_file_definition() {
+fn test_cross_file_definition() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = init_server();
 
     // File 1: defines Foo::bar
@@ -104,17 +102,19 @@ print "Result: $result\n";
     if let Some(response) = def_response {
         eprintln!("Definition response: {:?}", response.result);
         if let Some(result) = response.result {
-            let items = result.as_array().expect("Expected array of locations");
+            let items = result.as_array().ok_or("Expected array of locations")?;
             assert!(!items.is_empty(), "Should find definition");
 
             let first = &items[0];
-            assert!(first["uri"].as_str().unwrap().ends_with("/lib/Foo.pm"));
+            let uri = first["uri"].as_str().ok_or("Expected URI to be a string")?;
+            assert!(uri.ends_with("/lib/Foo.pm"));
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_cross_file_references() {
+fn test_cross_file_references() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = init_server();
 
     // File 1: defines and uses a function
@@ -184,7 +184,7 @@ for (1..10) {
     if let Some(response) = refs_response {
         eprintln!("References response: {:?}", response.result);
         if let Some(result) = response.result {
-            let refs = result.as_array().expect("Expected array of references");
+            let refs = result.as_array().ok_or("Expected array of references")?;
 
             // Should find at least 4 references:
             // 1. The definition itself (if includeDeclaration is true)
@@ -202,10 +202,11 @@ for (1..10) {
             assert!(uris.iter().any(|u| u.ends_with("/script2.pl")));
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_workspace_symbols_after_indexing() {
+fn test_workspace_symbols_after_indexing() -> Result<(), Box<dyn std::error::Error>> {
     let mut srv = init_server();
 
     // Index multiple files
@@ -255,7 +256,7 @@ sub reverse_str { reverse $_[0] }
     if let Some(response) = symbols_response {
         eprintln!("Workspace symbols result: {:?}", response.result);
         if let Some(result) = response.result {
-            let symbols = result.as_array().expect("Expected array of symbols");
+            let symbols = result.as_array().ok_or("Expected array of symbols")?;
 
             // Should find "String" and "reverse_str" (both contain "str")
             // Note: "subtract" does NOT contain "str" as a substring!
@@ -276,4 +277,5 @@ sub reverse_str { reverse $_[0] }
             );
         }
     }
+    Ok(())
 }

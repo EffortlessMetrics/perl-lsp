@@ -1,12 +1,13 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 #[cfg(test)]
 mod builtin_empty_blocks_tests {
     use perl_parser::Parser;
 
     fn parse_and_check(input: &str, expected_contains: &str) {
         let mut parser = Parser::new(input);
-        let result = parser.parse().expect("Failed to parse");
+        let result = match parser.parse() {
+            Ok(r) => r,
+            Err(e) => panic!("Failed to parse '{}': {}", input, e),
+        };
         let sexp = result.to_sexp();
         assert!(
             sexp.contains(expected_contains),

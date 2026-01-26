@@ -505,6 +505,7 @@ impl FormatStatementGenerator {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn format_cases_have_ids() {
@@ -538,7 +539,7 @@ mod tests {
     fn format_case_lookup_by_id() {
         let case = find_format_case("format.basic.declaration");
         assert!(case.is_some());
-        assert_eq!(case.unwrap().id, "format.basic.declaration");
+        assert_eq!(must_some(case).id, "format.basic.declaration");
     }
 
     #[test]
@@ -572,14 +573,14 @@ mod tests {
     fn format_basic_declaration_exists() {
         let case = FormatStatementGenerator::find("format.basic.declaration");
         assert!(case.is_some());
-        assert!(case.unwrap().source.contains("format MYFORMAT"));
+        assert!(must_some(case).source.contains("format MYFORMAT"));
     }
 
     #[test]
     fn format_stdout_exists() {
         let case = FormatStatementGenerator::find("format.stdout");
         assert!(case.is_some());
-        assert!(case.unwrap().source.contains("format STDOUT"));
+        assert!(must_some(case).source.contains("format STDOUT"));
     }
 
     #[test]
@@ -592,23 +593,23 @@ mod tests {
         assert!(right.is_some());
         assert!(center.is_some());
 
-        assert!(left.unwrap().source.contains("@<<<<<"));
-        assert!(right.unwrap().source.contains("@>>>>>"));
-        assert!(center.unwrap().source.contains("@|||||"));
+        assert!(must_some(left).source.contains("@<<<<<"));
+        assert!(must_some(right).source.contains("@>>>>>"));
+        assert!(must_some(center).source.contains("@|||||"));
     }
 
     #[test]
     fn format_formline_exists() {
         let case = FormatStatementGenerator::find("format.formline.builtin");
         assert!(case.is_some());
-        assert!(case.unwrap().source.contains("formline"));
+        assert!(must_some(case).source.contains("formline"));
     }
 
     #[test]
     fn format_write_call_exists() {
         let case = FormatStatementGenerator::find("format.write.call");
         assert!(case.is_some());
-        assert!(case.unwrap().source.contains("write"));
+        assert!(must_some(case).source.contains("write"));
     }
 
     #[test]
@@ -627,6 +628,6 @@ mod tests {
     fn format_text_block_exists() {
         let case = FormatStatementGenerator::find("format.text.block");
         assert!(case.is_some());
-        assert!(case.unwrap().source.contains("^<<<<<"));
+        assert!(must_some(case).source.contains("^<<<<<"));
     }
 }

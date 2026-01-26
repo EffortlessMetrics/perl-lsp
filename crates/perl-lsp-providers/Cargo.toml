@@ -7,8 +7,8 @@ authors = ["Tree-sitter Perl Contributors"]
 description = "LSP provider glue and tooling integrations for Perl"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 documentation = "https://docs.rs/perl-lsp-providers"
 keywords = ["perl", "lsp", "ide", "tooling"]
 categories = ["development-tools", "text-editors"]
@@ -46,6 +46,9 @@ nix = { version = "0.31.1", features = ["signal"] }
 [features]
 default = ["lsp-compat"]
 lsp-compat = ["lsp-types"]
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
 
 [lints]
 workspace = true

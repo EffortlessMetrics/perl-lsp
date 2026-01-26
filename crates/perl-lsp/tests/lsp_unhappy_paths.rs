@@ -1,5 +1,4 @@
 #![allow(dead_code)] // Some tests are feature-gated while being fixed
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use serde_json::json;
 use std::time::Duration;
@@ -18,7 +17,7 @@ use common::read_response;
 
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
-fn test_malformed_json_request() {
+fn test_malformed_json_request() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -31,12 +30,13 @@ fn test_malformed_json_request() {
     // Any behavior is acceptable - we just verify the server doesn't crash
 
     // Server must remain alive
-    assert!(server.process.try_wait().unwrap().is_none(), "server crashed");
+    assert!(server.process.try_wait()?.is_none(), "server crashed");
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_invalid_method() {
+fn test_invalid_method() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -55,10 +55,11 @@ fn test_invalid_method() {
     assert!(response.get("error").is_some(), "expected error for invalid method");
     assert_eq!(response["error"]["code"], -32601); // Method not found
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_missing_required_params() {
+fn test_missing_required_params() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -91,8 +92,9 @@ fn test_missing_required_params() {
         // Server chose to return empty results instead of error
         // This is also valid behavior
         if let Some(items) = result.get("items") {
+            let items_array = items.as_array().ok_or("items should be an array")?;
             assert!(
-                items.as_array().map(|a| a.is_empty()).unwrap_or(false),
+                items_array.is_empty(),
                 "Expected empty items array for missing params"
             );
         }
@@ -100,10 +102,11 @@ fn test_missing_required_params() {
         panic!("Expected either error or result in response, got: {:?}", response);
     }
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_invalid_uri_format() {
+fn test_invalid_uri_format() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -145,8 +148,9 @@ fn test_invalid_uri_format() {
         assert!(error.is_object(), "Error should be a proper error object");
         // Accept various error codes for invalid URI
         if let Some(code) = error.get("code") {
+            let code_i64 = code.as_i64().ok_or("code should be an integer")?;
             assert!(
-                [-32602, -32700, -32600].contains(&code.as_i64().unwrap_or(0)),
+                [-32602, -32700, -32600].contains(&code_i64),
                 "Expected error code for invalid URI, got: {}",
                 code
             );
@@ -169,10 +173,11 @@ fn test_invalid_uri_format() {
     }
 
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_document_not_found() {
+fn test_document_not_found() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -201,8 +206,9 @@ fn test_document_not_found() {
         assert!(error.is_object(), "Error should be a proper error object");
         // Accept various error codes for missing document
         if let Some(code) = error.get("code") {
+            let code_i64 = code.as_i64().ok_or("code should be an integer")?;
             assert!(
-                [-32602, -32603, -32801].contains(&code.as_i64().unwrap_or(0)),
+                [-32602, -32603, -32801].contains(&code_i64),
                 "Expected error code for missing document, got: {}",
                 code
             );
@@ -210,8 +216,8 @@ fn test_document_not_found() {
     } else if let Some(result) = response.get("result") {
         // LSP specification allows returning empty completion for missing documents
         if let Some(items) = result.get("items") {
-            let empty_items = items.as_array().map(|a| a.is_empty()).unwrap_or(true);
-            assert!(empty_items, "Expected empty completion items for missing document");
+            let items_array = items.as_array().ok_or("items should be an array")?;
+            assert!(items_array.is_empty(), "Expected empty completion items for missing document");
         } else {
             // Some servers return null result for missing documents
             assert!(result.is_null(), "Expected null or items array for completion result");
@@ -221,10 +227,11 @@ fn test_document_not_found() {
     }
 
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_out_of_bounds_position() {
+fn test_out_of_bounds_position() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -270,8 +277,9 @@ fn test_out_of_bounds_position() {
         assert!(error.is_object(), "Error should be a proper error object");
         // Accept various error codes for invalid position
         if let Some(code) = error.get("code") {
+            let code_i64 = code.as_i64().ok_or("code should be an integer")?;
             assert!(
-                [-32602, -32603].contains(&code.as_i64().unwrap_or(0)),
+                [-32602, -32603].contains(&code_i64),
                 "Expected error code for invalid position, got: {}",
                 code
             );
@@ -291,11 +299,12 @@ fn test_out_of_bounds_position() {
     }
 
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[cfg(feature = "stress-tests")]
 #[test]
-fn test_concurrent_document_edits() {
+fn test_concurrent_document_edits() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -355,11 +364,12 @@ fn test_concurrent_document_edits() {
 
     let response = read_response(&mut server);
     assert!(response["result"].is_array());
+    Ok(())
 }
 
 #[cfg(feature = "stress-tests")]
 #[test]
-fn test_version_mismatch() {
+fn test_version_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -417,11 +427,12 @@ fn test_version_mismatch() {
 
     let response = read_response(&mut server);
     assert!(response["result"].is_array() || response["error"].is_object());
+    Ok(())
 }
 
 #[cfg(feature = "stress-tests")]
 #[test]
-fn test_invalid_regex_pattern() {
+fn test_invalid_regex_pattern() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -467,11 +478,12 @@ fn test_invalid_regex_pattern() {
     let response = read_response(&mut server);
     // Should handle parse error gracefully
     assert!(response.is_object());
+    Ok(())
 }
 
 #[cfg(feature = "stress-tests")]
 #[test]
-fn test_circular_module_dependency() {
+fn test_circular_module_dependency() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -532,11 +544,12 @@ fn test_circular_module_dependency() {
 
     let response = read_response(&mut server);
     assert!(response["result"].is_array());
+    Ok(())
 }
 
 #[cfg(feature = "stress-tests")]
 #[test]
-fn test_extremely_long_line() {
+fn test_extremely_long_line() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -582,11 +595,12 @@ fn test_extremely_long_line() {
     let response = read_response(&mut server);
     // Should handle without crashing
     assert!(response.is_object());
+    Ok(())
 }
 
 #[cfg(feature = "stress-tests")]
 #[test]
-fn test_deeply_nested_structure() {
+fn test_deeply_nested_structure() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -634,10 +648,11 @@ fn test_deeply_nested_structure() {
 
     let response = read_response(&mut server);
     assert!(response["result"].is_array());
+    Ok(())
 }
 
 #[test]
-fn test_binary_content() {
+fn test_binary_content() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -683,10 +698,11 @@ fn test_binary_content() {
         "Expected either result or error for binary content"
     );
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_binary_frame() {
+fn test_binary_frame() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -706,7 +722,7 @@ fn test_binary_frame() {
     if let Ok(Some(_exit_status)) = server.process.try_wait() {
         // Server crashed - this is acceptable for binary frame input
         eprintln!("Server crashed on binary frame (acceptable behavior)");
-        return;
+        return Ok(());
     }
 
     // If server survived, verify it's still responsive
@@ -725,10 +741,11 @@ fn test_binary_frame() {
     // Accept any valid response format
     assert!(ping_response.is_object(), "Server should respond to requests after binary frame");
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[test]
-fn test_cancel_request() {
+fn test_cancel_request() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -750,41 +767,27 @@ fn test_cancel_request() {
     );
 
     // Send a completion request without waiting for response
+    let request_json = json!({
+        "jsonrpc": "2.0",
+        "id": 42,
+        "method": "textDocument/completion",
+        "params": {
+            "textDocument": {
+                "uri": "file:///test.pl"
+            },
+            "position": {
+                "line": 1,
+                "character": 6
+            }
+        }
+    });
+    let request_str = serde_json::to_string(&request_json)?;
     send_raw(
         &mut server,
         format!(
             "Content-Length: {}\r\n\r\n{}",
-            serde_json::to_string(&json!({
-                "jsonrpc": "2.0",
-                "id": 42,
-                "method": "textDocument/completion",
-                "params": {
-                    "textDocument": {
-                        "uri": "file:///test.pl"
-                    },
-                    "position": {
-                        "line": 1,
-                        "character": 6
-                    }
-                }
-            }))
-            .unwrap()
-            .len(),
-            serde_json::to_string(&json!({
-                "jsonrpc": "2.0",
-                "id": 42,
-                "method": "textDocument/completion",
-                "params": {
-                    "textDocument": {
-                        "uri": "file:///test.pl"
-                    },
-                    "position": {
-                        "line": 1,
-                        "character": 6
-                    }
-                }
-            }))
-            .unwrap()
+            request_str.len(),
+            request_str
         )
         .as_bytes(),
     );
@@ -827,8 +830,9 @@ fn test_cancel_request() {
                 if let Some(error) = resp.get("error") {
                     assert!(error.is_object(), "Error should be a proper error object");
                     if let Some(code) = error.get("code") {
+                        let code_i64 = code.as_i64().ok_or("code should be an integer")?;
                         assert_eq!(
-                            code.as_i64().unwrap_or(0),
+                            code_i64,
                             -32800,
                             "Expected cancellation error code -32800, got: {}",
                             code
@@ -858,11 +862,12 @@ fn test_cancel_request() {
     // The cancellation might have prevented the response entirely
 
     shutdown_and_exit(&mut server);
+    Ok(())
 }
 
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
-fn test_shutdown_without_exit() {
+fn test_shutdown_without_exit() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -902,11 +907,12 @@ fn test_shutdown_without_exit() {
     // Should get error - server is shut down
     let response = read_response(&mut server);
     assert!(response["error"].is_object());
+    Ok(())
 }
 
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
-fn test_invalid_capability_request() {
+fn test_invalid_capability_request() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
 
     // Initialize without certain capabilities
@@ -954,11 +960,12 @@ fn test_invalid_capability_request() {
     let response = read_response(&mut server);
     // Should handle gracefully
     assert!(response.is_object());
+    Ok(())
 }
 
 #[cfg(feature = "stress-tests")]
 #[test]
-fn test_unicode_unhappy_paths() {
+fn test_unicode_unhappy_paths() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -1004,11 +1011,12 @@ fn test_unicode_unhappy_paths() {
 
     let response = read_response(&mut server);
     assert!(response["result"].is_array());
+    Ok(())
 }
 
 #[cfg(feature = "stress-tests")]
 #[test]
-fn test_memory_stress() {
+fn test_memory_stress() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
 
@@ -1049,4 +1057,5 @@ fn test_memory_stress() {
 
     let response = read_response(&mut server);
     assert!(response["result"].is_array());
+    Ok(())
 }

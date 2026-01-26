@@ -1,10 +1,10 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_parser::{Parser, ast::NodeKind};
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 #[allow(clippy::collapsible_if)]
-fn test_qwerty_not_quote_operator() {
+fn test_qwerty_not_quote_operator() -> TestResult {
     let code = r#"
 # This comment has qwerty in it
 use constant qw(FOO BAR);
@@ -12,7 +12,7 @@ my $qwerty = 1;
 my $x = FOO;
 "#;
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("should parse");
+    let ast = parser.parse()?;
 
     // Find the use statement and verify it has the constants
     if let NodeKind::Program { statements } = &ast.kind {
@@ -47,16 +47,17 @@ my $x = FOO;
         assert!(found_use, "Failed to find use constant statement");
         assert!(found_qwerty_var, "Failed to find $qwerty variable declaration");
     } else {
-        panic!("Expected Program node");
+        return Err("Expected Program node".into());
     }
+    Ok(())
 }
 
 #[test]
 #[allow(clippy::collapsible_if)]
-fn test_real_qw_operator() {
+fn test_real_qw_operator() -> TestResult {
     let code = "my @list = qw(foo bar baz);";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("should parse");
+    let ast = parser.parse()?;
 
     // Verify that real qw() is parsed correctly
     if let NodeKind::Program { statements } = &ast.kind {
@@ -64,23 +65,23 @@ fn test_real_qw_operator() {
             if let NodeKind::VariableDeclaration { initializer, .. } = &stmt.kind {
                 assert!(initializer.is_some(), "Expected initializer for qw() assignment");
                 // The qw() should produce some kind of list/array
-                return;
+                return Ok(());
             }
         }
     }
-    panic!("Failed to find expected structure");
+    Err("Failed to find expected structure".into())
 }
 
 #[test]
 #[allow(clippy::collapsible_if)]
-fn test_identifier_starting_with_q() {
+fn test_identifier_starting_with_q() -> TestResult {
     let code = r#"
 my $query = "SELECT * FROM users";
 my $quick = 42;
 my $question = "What?";
 "#;
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("should parse");
+    let ast = parser.parse()?;
 
     // All identifiers starting with 'q' should parse as regular identifiers
     if let NodeKind::Program { statements } = &ast.kind {
@@ -98,4 +99,5 @@ my $question = "What?";
         assert!(found_vars.contains(&"quick".to_string()), "Expected to find $quick");
         assert!(found_vars.contains(&"question".to_string()), "Expected to find $question");
     }
+    Ok(())
 }

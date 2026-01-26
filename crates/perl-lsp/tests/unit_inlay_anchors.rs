@@ -20,19 +20,17 @@ mod tests {
     }
 
     /// Drive initialize + didOpen + inlayHint(range) and return the result array (or empty array).
-    fn get_hints(server: &mut LspServer, uri: &str, text: &str) -> Vec<serde_json::Value> {
+    fn get_hints(server: &mut LspServer, uri: &str, text: &str) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
         // initialize (min caps; advertise pull diags so server won't publish)
         let _ = server.handle_request(
             serde_json::from_value(json!({
                 "jsonrpc":"2.0","id":1,"method":"initialize","params":{
                     "capabilities":{"textDocument":{"diagnostic":{}}}
                 }
-            }))
-            .unwrap(),
+            }))?,
         );
         let _ = server.handle_request(
-            serde_json::from_value(json!({"jsonrpc":"2.0","method":"initialized","params":{}}))
-                .unwrap(),
+            serde_json::from_value(json!({"jsonrpc":"2.0","method":"initialized","params":{}}))?,
         );
 
         // didOpen
@@ -41,8 +39,7 @@ mod tests {
               "jsonrpc":"2.0","method":"textDocument/didOpen","params":{
                 "textDocument":{"uri":uri,"languageId":"perl","version":1,"text":text}
               }
-            }))
-            .unwrap(),
+            }))?,
         );
 
         // full-file range (0..big)
@@ -52,12 +49,11 @@ mod tests {
                 "textDocument":{"uri":uri},
                 "range":{"start":{"line":0,"character":0},"end":{"line":999,"character":0}}
               }
-            }))
-            .unwrap(),
+            }))?,
         );
 
         // Extract result array
-        res.and_then(|r| r.result).and_then(|r| r.as_array().cloned()).unwrap_or_default()
+        Ok(res.and_then(|r| r.result).and_then(|r| r.as_array().cloned()).unwrap_or_default())
     }
 
     /// Assert that a hint with `label` is anchored at (line, char) where `needle`
@@ -69,10 +65,10 @@ mod tests {
         label: &str,
         expected_line: usize,
         needle: &str,
-    ) {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // find column of `needle` in the given line
-        let line_str = text.lines().nth(expected_line).expect("line exists");
-        let col = line_str.find(needle).expect("needle present on expected line");
+        let line_str = text.lines().nth(expected_line).ok_or("line does not exist")?;
+        let col = line_str.find(needle).ok_or("needle not present on expected line")?;
         let want_line = expected_line as u32;
         let want_char = col as u32;
 
@@ -92,10 +88,11 @@ mod tests {
             matches, 1,
             "Expected exactly one `{label}` at {want_line}:{want_char}, got {matches}.\nHints: {hints:#?}"
         );
+        Ok(())
     }
 
     #[test]
-    fn anchor_filehandle_nonparen() {
+    fn anchor_filehandle_nonparen() -> Result<(), Box<dyn std::error::Error>> {
         // Tests anchoring behavior for non-parenthesized function calls.
         // For `open my $fh, ...` we anchor at "my" to precede the variable declaration.
         // For array/hash operations, we anchor at the sigil position.
@@ -107,16 +104,17 @@ push @arr, "x";
 my %h = ();
 my $r = {};
 "#;
-        let hints = get_hints(&mut server, uri, text);
+        let hints = get_hints(&mut server, uri, text)?;
         // Lines are 0-based; first non-empty is line 1.
         // For "open my $fh", the FILEHANDLE hint anchors at "my" (column 5)
-        assert_unique_label_at(text, &hints, "FILEHANDLE:", 1, "my");
+        assert_unique_label_at(text, &hints, "FILEHANDLE:", 1, "my")?;
         // For "push @arr", the ARRAY hint anchors at "@arr" (column 5)
-        assert_unique_label_at(text, &hints, "ARRAY:", 2, "@arr");
+        assert_unique_label_at(text, &hints, "ARRAY:", 2, "@arr")?;
+        Ok(())
     }
 
     #[test]
-    fn anchor_parenthesized_calls() {
+    fn anchor_parenthesized_calls() -> Result<(), Box<dyn std::error::Error>> {
         // Tests anchoring behavior for parenthesized function calls.
         // For `open(FH, ...)` we anchor at '(' to maintain visual alignment.
         // For other args, we anchor at the variable/token position.
@@ -127,13 +125,14 @@ push(@arr, "x");
 substr($s, 0, 5);
 open(FH, "<", "file.txt");
 "#;
-        let hints = get_hints(&mut server, uri, text);
+        let hints = get_hints(&mut server, uri, text)?;
         // For "push(@arr", the ARRAY hint anchors at "@arr" (column 5)
-        assert_unique_label_at(text, &hints, "ARRAY:", 1, "@arr");
+        assert_unique_label_at(text, &hints, "ARRAY:", 1, "@arr")?;
         // For "substr($s", the str hint anchors at "$s" (column 7)
-        assert_unique_label_at(text, &hints, "str:", 2, "$s");
+        assert_unique_label_at(text, &hints, "str:", 2, "$s")?;
         // For "open(FH", the FILEHANDLE hint anchors at "(" (column 4)
         // This keeps the label visually aligned with parenthesized calls
-        assert_unique_label_at(text, &hints, "FILEHANDLE:", 3, "(");
+        assert_unique_label_at(text, &hints, "FILEHANDLE:", 3, "(")?;
+        Ok(())
     }
 }

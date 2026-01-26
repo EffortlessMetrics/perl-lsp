@@ -1,6 +1,6 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use super::*;
+use perl_tdd_support::must;
 
 #[test]
 fn test_simple_variable() {
@@ -8,7 +8,7 @@ fn test_simple_variable() {
     let result = parser.parse();
     assert!(result.is_ok());
 
-    let ast = result.unwrap();
+    let ast = must(result);
     println!("AST: {}", ast.to_sexp());
 }
 
@@ -18,7 +18,7 @@ fn test_if_statement() {
     let result = parser.parse();
     assert!(result.is_ok());
 
-    let ast = result.unwrap();
+    let ast = must(result);
     println!("AST: {}", ast.to_sexp());
 }
 
@@ -28,7 +28,7 @@ fn test_function_definition() {
     let result = parser.parse();
     assert!(result.is_ok());
 
-    let ast = result.unwrap();
+    let ast = must(result);
     println!("AST: {}", ast.to_sexp());
 }
 
@@ -38,28 +38,28 @@ fn test_list_declarations() {
     let mut parser = Parser::new("my ($x, $y);");
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     println!("List declaration AST: {}", ast.to_sexp());
 
     // Test list declaration with initialization
     let mut parser = Parser::new("state ($a, $b) = (1, 2);");
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     println!("List declaration with init AST: {}", ast.to_sexp());
 
     // Test mixed sigils
     let mut parser = Parser::new("our ($scalar, @array, %hash);");
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     println!("Mixed sigils AST: {}", ast.to_sexp());
 
     // Test empty list
     let mut parser = Parser::new("my ();");
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     println!("Empty list AST: {}", ast.to_sexp());
 }
 
@@ -69,7 +69,7 @@ fn test_qw_delimiters() {
     let mut parser = Parser::new("qw(one two three)");
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     assert_eq!(
         ast.to_sexp(),
         r#"(source_file (array (string "one") (string "two") (string "three")))"#
@@ -79,21 +79,21 @@ fn test_qw_delimiters() {
     let mut parser = Parser::new("qw[foo bar]");
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     assert_eq!(ast.to_sexp(), r#"(source_file (array (string "foo") (string "bar")))"#);
 
     // Test qw with non-paired delimiters
     let mut parser = Parser::new("qw/alpha beta/");
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     assert_eq!(ast.to_sexp(), r#"(source_file (array (string "alpha") (string "beta")))"#);
 
     // Test qw with exclamation marks
     let mut parser = Parser::new("qw!hello world!");
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     assert_eq!(ast.to_sexp(), r#"(source_file (array (string "hello") (string "world")))"#);
 }
 
@@ -103,7 +103,7 @@ fn test_block_vs_hash_context() {
     let mut parser = Parser::new("{ key => 'value' }");
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     // Statement context: block with hash inside
     let sexp = ast.to_sexp();
     assert!(
@@ -116,7 +116,7 @@ fn test_block_vs_hash_context() {
     let mut parser = Parser::new("my $x = { key => 'value' }");
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     // In expression context, should have hash
     let sexp = ast.to_sexp();
     assert!(sexp.contains("(hash"), "Expression context should have hash, got: {}", sexp);
@@ -126,7 +126,7 @@ fn test_block_vs_hash_context() {
     let mut parser = Parser::new("$ref = ( a => 1, b => 2 )");
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     // Parentheses with fat arrow should create hash
     let sexp = ast.to_sexp();
     assert!(
@@ -166,7 +166,7 @@ fn test_issue_461_variable_length_lookbehind() {
     assert!(result_nested.is_ok(), "Failed to parse nested lookbehind");
 
     // Check if the AST contains the regex pattern
-    let ast = result_nested.unwrap();
+    let ast = must(result_nested);
     println!("Nested Lookbehind AST: {}", ast.to_sexp());
 }
 
@@ -263,7 +263,7 @@ fn test_source_filter_detection() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     let sexp = ast.to_sexp();
     assert!(sexp.contains("(risk:filter)"), "Should detect filter usage in: {}", sexp);
 
@@ -272,7 +272,7 @@ fn test_source_filter_detection() {
     let mut parser_safe = Parser::new(code_safe);
     let result_safe = parser_safe.parse();
     assert!(result_safe.is_ok());
-    let ast_safe = result_safe.unwrap();
+    let ast_safe = must(result_safe);
     let sexp_safe = ast_safe.to_sexp();
     assert!(
         !sexp_safe.contains("(risk:filter)"),
@@ -288,7 +288,7 @@ fn test_regex_code_execution_detection() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
     assert!(result.is_ok());
-    let ast = result.unwrap();
+    let ast = must(result);
     let sexp = ast.to_sexp();
     assert!(sexp.contains("(risk:code)"), "Should detect regex code execution in: {}", sexp);
 
@@ -297,7 +297,7 @@ fn test_regex_code_execution_detection() {
     let mut parser_safe = Parser::new(code_safe);
     let result_safe = parser_safe.parse();
     assert!(result_safe.is_ok());
-    let ast_safe = result_safe.unwrap();
+    let ast_safe = must(result_safe);
     let sexp_safe = ast_safe.to_sexp();
     assert!(!sexp_safe.contains("(risk:code)"), "Should not flag safe regex in: {}", sexp_safe);
 }
@@ -333,7 +333,7 @@ EOF2
     let result = parser.parse();
     assert!(result.is_ok(), "Failed to parse multiple heredocs on same line");
 
-    let ast = result.unwrap();
+    let ast = must(result);
     let sexp = ast.to_sexp();
 
     // Check that both contents were captured correctly

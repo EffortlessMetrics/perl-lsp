@@ -5,9 +5,11 @@ mod tests {
     use perl_parser::position_mapper::{Position, PositionMapper, apply_edit_utf8};
     use std::time::Instant;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
     #[test]
     #[serial_test::serial]
-    fn test_big_file_edit_performance() {
+    fn test_big_file_edit_performance() -> TestResult {
         // Generate a 10k-line file
         let line = "my $x = 42; # Some comment here\n";
         let big_file = line.repeat(10_000);
@@ -26,7 +28,7 @@ mod tests {
         let start = Instant::now();
 
         // Calculate byte offset
-        let byte_offset = mapper.lsp_pos_to_byte(edit_pos).unwrap();
+        let byte_offset = mapper.lsp_pos_to_byte(edit_pos).ok_or("invalid edit position")?;
 
         // Apply edit
         let mut text = big_file.clone();
@@ -50,10 +52,11 @@ mod tests {
         // Verify the edit was applied correctly
         let lines: Vec<&str> = text.lines().collect();
         assert!(lines[middle_line as usize].contains("999"));
+        Ok(())
     }
 
     #[test]
-    fn test_emoji_edit_utf16_handling() {
+    fn test_emoji_edit_utf16_handling() -> TestResult {
         // Text with emoji (🦀 is 2 UTF-16 code units, 4 UTF-8 bytes)
         let text = "let 🦀 = rust;";
         let mapper = PositionMapper::new(text);
@@ -65,7 +68,7 @@ mod tests {
         };
 
         // Get byte offset
-        let byte_offset = mapper.lsp_pos_to_byte(pos_after_emoji).unwrap();
+        let byte_offset = mapper.lsp_pos_to_byte(pos_after_emoji).ok_or("invalid emoji position")?;
 
         // The emoji starts at byte 4 ("let ") and is 4 bytes long
         assert_eq!(byte_offset, 8, "Should be at byte 8 after 4-byte emoji");
@@ -78,13 +81,14 @@ mod tests {
         // Test round-trip
         let new_mapper = PositionMapper::new(&mutable_text);
         let pos = Position { line: 0, character: 8 }; // After "let crab"
-        let byte = new_mapper.lsp_pos_to_byte(pos).unwrap();
+        let byte = new_mapper.lsp_pos_to_byte(pos).ok_or("invalid round-trip position")?;
         let back_pos = new_mapper.byte_to_lsp_pos(byte);
         assert_eq!(back_pos.character, 8);
+        Ok(())
     }
 
     #[test]
-    fn test_crlf_fixture_windows_compatibility() {
+    fn test_crlf_fixture_windows_compatibility() -> TestResult {
         // Windows-style CRLF text
         let crlf_text = "line one\r\nline two\r\nline three";
         let mapper = PositionMapper::new(crlf_text);
@@ -93,12 +97,12 @@ mod tests {
 
         // Start of line 2 (after \r\n)
         let line2_start = Position { line: 1, character: 0 };
-        let byte = mapper.lsp_pos_to_byte(line2_start).unwrap();
+        let byte = mapper.lsp_pos_to_byte(line2_start).ok_or("invalid line2_start position")?;
         assert_eq!(byte, 10); // "line one\r\n" = 10 bytes
 
         // Middle of line 2
         let line2_mid = Position { line: 1, character: 5 };
-        let byte = mapper.lsp_pos_to_byte(line2_mid).unwrap();
+        let byte = mapper.lsp_pos_to_byte(line2_mid).ok_or("invalid line2_mid position")?;
         assert_eq!(byte, 15); // 10 + 5
 
         // Edit across CRLF boundary
@@ -115,17 +119,18 @@ mod tests {
         assert_eq!(mixed_mapper.byte_to_lsp_pos(5).line, 1); // windows
         assert_eq!(mixed_mapper.byte_to_lsp_pos(14).line, 2); // mac
         assert_eq!(mixed_mapper.byte_to_lsp_pos(18).line, 3); // end
+        Ok(())
     }
 
     #[test]
-    fn test_multibyte_char_edit() {
+    fn test_multibyte_char_edit() -> TestResult {
         // Text with various multibyte characters
         let text = "café ☕ 世界";
         let mapper = PositionMapper::new(text);
 
         // Test position in middle of multibyte sequence
         let pos = Position { line: 0, character: 5 }; // After "café "
-        let byte_offset = mapper.lsp_pos_to_byte(pos).unwrap();
+        let byte_offset = mapper.lsp_pos_to_byte(pos).ok_or("invalid multibyte position")?;
 
         // "café " = 'c'(1) + 'a'(1) + 'f'(1) + 'é'(2) + ' '(1) = 6 bytes
         assert_eq!(byte_offset, 6);
@@ -134,6 +139,7 @@ mod tests {
         let mut mutable = text.to_string();
         apply_edit_utf8(&mut mutable, 3, 5, "e"); // Replace 'é' with 'e'
         assert_eq!(mutable, "cafe ☕ 世界");
+        Ok(())
     }
 
     #[test]

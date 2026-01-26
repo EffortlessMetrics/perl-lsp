@@ -10,8 +10,6 @@
 //! - Import organization with correct action kinds
 //! - Performance validation maintaining revolutionary improvements
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use serde_json::json;
 use std::time::Duration;
 
@@ -118,9 +116,9 @@ if ($condition) {
 }
 
 /// Create enhanced code actions test server
-fn create_enhanced_code_actions_server() -> (LspHarness, TempWorkspace) {
+fn create_enhanced_code_actions_server() -> Result<(LspHarness, TempWorkspace), Box<dyn std::error::Error>> {
     // Create workspace without initializing the harness
-    let workspace = TempWorkspace::new().expect("Failed to create temp workspace");
+    let workspace = TempWorkspace::new()?;
 
     // Write all files to workspace
     let files = [
@@ -131,22 +129,20 @@ fn create_enhanced_code_actions_server() -> (LspHarness, TempWorkspace) {
     ];
 
     for (path, content) in &files {
-        workspace.write(path, content).expect("Failed to write file");
+        workspace.write(path, content)?;
     }
 
     // Create uninitialized harness for the test to initialize
     let harness = LspHarness::new_without_initialize();
 
     // Return uninitialized harness so tests can call initialize_default() themselves
-    (harness, workspace)
+    Ok((harness, workspace))
 }
 
 /// Initialize harness and open documents for enhanced code actions tests
-fn initialize_enhanced_harness(harness: &mut LspHarness, workspace: &TempWorkspace) {
+fn initialize_enhanced_harness(harness: &mut LspHarness, workspace: &TempWorkspace) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize the server
-    harness
-        .initialize_with_root(&workspace.root_uri, None)
-        .expect("Failed to initialize LSP server");
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     // Open all documents
     let files = [
@@ -157,33 +153,33 @@ fn initialize_enhanced_harness(harness: &mut LspHarness, workspace: &TempWorkspa
     ];
 
     for (file, content) in &files {
-        harness
-            .open_document(&workspace.uri(file), content)
-            .unwrap_or_else(|_| panic!("Failed to open {}", file));
+        harness.open_document(&workspace.uri(file), content)?;
         harness.did_save(&workspace.uri(file)).ok();
     }
 
     // Revolutionary performance: adaptive timeout
-    let timeout_ms = match std::env::var("RUST_TEST_THREADS")
+    let thread_count = std::env::var("RUST_TEST_THREADS")
         .ok()
         .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(8)
-    {
+        .unwrap_or(8);
+
+    let timeout_ms = match thread_count {
         n if n <= 2 => 500, // High contention
         n if n <= 4 => 300, // Medium contention
         _ => 200,           // Low contention
     };
 
     harness.wait_for_idle(Duration::from_millis(timeout_ms));
+    Ok(())
 }
 
 // ======================== AC3: Enhanced Code Action Server Capabilities ========================
 
 #[test]
 // AC3:codeActions - Enhanced server capabilities with LSP 3.17+ compliance
-fn test_enhanced_code_action_server_capabilities() {
-    let (mut harness, workspace) = create_enhanced_code_actions_server();
-    initialize_enhanced_harness(&mut harness, &workspace);
+fn test_enhanced_code_action_server_capabilities() -> Result<(), Box<dyn std::error::Error>> {
+    let (mut harness, workspace) = create_enhanced_code_actions_server()?;
+    initialize_enhanced_harness(&mut harness, &workspace)?;
 
     // Get server capabilities through a test request (server is now initialized)
     let init_result = json!({
@@ -195,8 +191,9 @@ fn test_enhanced_code_action_server_capabilities() {
         }
     });
 
-    let capabilities =
-        init_result.get("capabilities").expect("Initialize result should contain capabilities");
+    let capabilities = init_result
+        .get("capabilities")
+        .ok_or("Initialize result should contain capabilities")?;
 
     // AC3: Verify codeActionProvider is advertised with proper structure
     assert!(
@@ -216,7 +213,8 @@ fn test_enhanced_code_action_server_capabilities() {
     if code_action_provider.is_object() {
         // AC3: Check for supported code action kinds per Issue #145
         if let Some(kinds) = code_action_provider.get("codeActionKinds") {
-            let kinds_array = kinds.as_array().expect("codeActionKinds should be array");
+            let kinds_array = kinds.as_array()
+                .ok_or("codeActionKinds should be array")?;
 
             let expected_kinds =
                 vec!["quickfix", "refactor.extract", "refactor.rewrite", "source.organizeImports"];
@@ -246,36 +244,37 @@ fn test_enhanced_code_action_server_capabilities() {
             );
         }
     }
+
+    Ok(())
 }
 
 // ======================== AC3: Enhanced Extract Variable Refactoring ========================
 
 #[test]
 // AC3:codeActions - Enhanced extract variable with comprehensive validation
-fn test_enhanced_extract_variable_refactoring() {
-    let (mut harness, workspace) = create_enhanced_code_actions_server();
-    initialize_enhanced_harness(&mut harness, &workspace);
+fn test_enhanced_extract_variable_refactoring() -> Result<(), Box<dyn std::error::Error>> {
+    let (mut harness, workspace) = create_enhanced_code_actions_server()?;
+    initialize_enhanced_harness(&mut harness, &workspace)?;
 
     // Request code actions for complex expression (line 8 in extract_vars.pl)
-    let actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("extract_vars.pl")},
-                "range": {
-                    "start": {"line": 8, "character": 17}, // Start of complex expression
-                    "end": {"line": 8, "character": 85}     // End of complex expression
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["refactor.extract"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed");
+    let actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("extract_vars.pl")},
+            "range": {
+                "start": {"line": 8, "character": 17}, // Start of complex expression
+                "end": {"line": 8, "character": 85}     // End of complex expression
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["refactor.extract"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let actions = actions_result.as_array().expect("Should return action array");
+    let actions = actions_result.as_array()
+        .ok_or("Should return action array")?;
 
     // AC3: Enhanced validation - look for extract variable action
     let extract_var_action = actions.iter().find(|action| {
@@ -312,35 +311,36 @@ fn test_enhanced_extract_variable_refactoring() {
         // actions is already Vec<Value>, so just check it's valid
         eprintln!("Extract variable not implemented yet, got {} actions", actions.len());
     }
+
+    Ok(())
 }
 
 // ======================== AC3: Enhanced Import Organization ========================
 
 #[test]
 // AC3:codeActions - Enhanced organize imports with correct action kind validation
-fn test_enhanced_organize_imports_refactoring() {
-    let (mut harness, workspace) = create_enhanced_code_actions_server();
-    initialize_enhanced_harness(&mut harness, &workspace);
+fn test_enhanced_organize_imports_refactoring() -> Result<(), Box<dyn std::error::Error>> {
+    let (mut harness, workspace) = create_enhanced_code_actions_server()?;
+    initialize_enhanced_harness(&mut harness, &workspace)?;
 
-    let actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("imports_org.pl")},
-                "range": {
-                    "start": {"line": 0, "character": 0},
-                    "end": {"line": 15, "character": 0}  // Cover import section
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["source.organizeImports"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed");
+    let actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("imports_org.pl")},
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 15, "character": 0}  // Cover import section
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["source.organizeImports"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let actions = actions_result.as_array().expect("Should return action array");
+    let actions = actions_result.as_array()
+        .ok_or("Should return action array")?;
 
     // AC3: Look for organize imports action with enhanced validation
     let organize_imports_action = actions.iter().find(|action| {
@@ -384,35 +384,36 @@ fn test_enhanced_organize_imports_refactoring() {
             "Note: Organize imports not yet implemented or not matching expected title pattern"
         );
     }
+
+    Ok(())
 }
 
 // ======================== AC3: Enhanced Quickfix Actions ========================
 
 #[test]
 // AC3:codeActions - Enhanced quickfix actions with proper validation
-fn test_enhanced_quickfix_pragma_actions() {
-    let (mut harness, workspace) = create_enhanced_code_actions_server();
-    initialize_enhanced_harness(&mut harness, &workspace);
+fn test_enhanced_quickfix_pragma_actions() -> Result<(), Box<dyn std::error::Error>> {
+    let (mut harness, workspace) = create_enhanced_code_actions_server()?;
+    initialize_enhanced_harness(&mut harness, &workspace)?;
 
-    let actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("missing_pragmas.pl")},
-                "range": {
-                    "start": {"line": 0, "character": 0},
-                    "end": {"line": 5, "character": 0}   // Top of file where pragmas should go
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["quickfix"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed");
+    let actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("missing_pragmas.pl")},
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 5, "character": 0}   // Top of file where pragmas should go
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["quickfix"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let actions = actions_result.as_array().expect("Should return action array");
+    let actions = actions_result.as_array()
+        .ok_or("Should return action array")?;
 
     // AC3: Enhanced pragma detection
     let pragma_actions: Vec<_> = actions
@@ -450,15 +451,17 @@ fn test_enhanced_quickfix_pragma_actions() {
     } else {
         eprintln!("Note: Pragma quickfix actions not yet implemented (development in progress)");
     }
+
+    Ok(())
 }
 
 // ======================== AC3: Enhanced Performance Validation ========================
 
 #[test]
 // AC3:codeActions - Revolutionary performance validation with adaptive timing
-fn test_enhanced_code_actions_performance() {
-    let (mut harness, workspace) = create_enhanced_code_actions_server();
-    initialize_enhanced_harness(&mut harness, &workspace);
+fn test_enhanced_code_actions_performance() -> Result<(), Box<dyn std::error::Error>> {
+    let (mut harness, workspace) = create_enhanced_code_actions_server()?;
+    initialize_enhanced_harness(&mut harness, &workspace)?;
 
     // Revolutionary performance: thread-aware expectations
     let thread_count =
@@ -472,28 +475,26 @@ fn test_enhanced_code_actions_performance() {
 
     let start_time = std::time::Instant::now();
 
-    let _actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("refactoring_ops.pl")},
-                "range": {
-                    "start": {"line": 0, "character": 0},
-                    "end": {"line": 25, "character": 0}  // Large range
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": [] // Request all available actions
-                }
-            }),
-            Duration::from_millis(timeout_ms),
+    let _actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("refactoring_ops.pl")},
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 25, "character": 0}  // Large range
+            },
+            "context": {
+                "diagnostics": [],
+                "only": [] // Request all available actions
+            }
+        }),
+        Duration::from_millis(timeout_ms),
+    ).map_err(|e| {
+        format!(
+            "Code actions should respond within {}ms (revolutionary performance): {}",
+            timeout_ms, e
         )
-        .unwrap_or_else(|_| {
-            panic!(
-                "Code actions should respond within {}ms (revolutionary performance)",
-                timeout_ms
-            )
-        });
+    })?;
 
     let duration = start_time.elapsed();
 
@@ -505,36 +506,37 @@ fn test_enhanced_code_actions_performance() {
         duration,
         thread_count
     );
+
+    Ok(())
 }
 
 // ======================== AC3: Enhanced Code Action Resolution ========================
 
 #[test]
 // AC3:codeActions - Enhanced code action resolve capability validation
-fn test_enhanced_code_action_resolve() {
-    let (mut harness, workspace) = create_enhanced_code_actions_server();
-    initialize_enhanced_harness(&mut harness, &workspace);
+fn test_enhanced_code_action_resolve() -> Result<(), Box<dyn std::error::Error>> {
+    let (mut harness, workspace) = create_enhanced_code_actions_server()?;
+    initialize_enhanced_harness(&mut harness, &workspace)?;
 
     // Get code actions first
-    let actions_result = harness
-        .request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("extract_vars.pl")},
-                "range": {
-                    "start": {"line": 8, "character": 17},
-                    "end": {"line": 8, "character": 85}
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": ["refactor"]
-                }
-            }),
-            Duration::from_secs(2),
-        )
-        .expect("Code action request should succeed");
+    let actions_result = harness.request_with_timeout(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": {"uri": workspace.uri("extract_vars.pl")},
+            "range": {
+                "start": {"line": 8, "character": 17},
+                "end": {"line": 8, "character": 85}
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["refactor"]
+            }
+        }),
+        Duration::from_secs(2),
+    )?;
 
-    let actions = actions_result.as_array().expect("Should return action array");
+    let actions = actions_result.as_array()
+        .ok_or("Should return action array")?;
 
     if !actions.is_empty() {
         let first_action = &actions[0];
@@ -565,6 +567,8 @@ fn test_enhanced_code_action_resolve() {
             eprintln!("Actions have immediate edits, no resolve needed");
         }
     }
+
+    Ok(())
 }
 
 // ======================== AC3: Enhanced Filtering Validation ========================
@@ -572,9 +576,9 @@ fn test_enhanced_code_action_resolve() {
 #[cfg(feature = "lsp-extras")]
 #[test]
 // AC3:codeActions - Enhanced action filtering with comprehensive kind validation
-fn test_enhanced_code_actions_filtering() {
-    let (mut harness, workspace) = create_enhanced_code_actions_server();
-    initialize_enhanced_harness(&mut harness, &workspace);
+fn test_enhanced_code_actions_filtering() -> Result<(), Box<dyn std::error::Error>> {
+    let (mut harness, workspace) = create_enhanced_code_actions_server()?;
+    initialize_enhanced_harness(&mut harness, &workspace)?;
 
     // Test filtering by specific kinds
     let filter_tests = vec![
@@ -584,25 +588,26 @@ fn test_enhanced_code_actions_filtering() {
     ];
 
     for (only_kinds, expected_prefix) in filter_tests {
-        let actions_result = harness
-            .request_with_timeout(
-                "textDocument/codeAction",
-                json!({
-                    "textDocument": {"uri": workspace.uri("missing_pragmas.pl")},
-                    "range": {
-                        "start": {"line": 0, "character": 0},
-                        "end": {"line": 10, "character": 0}
-                    },
-                    "context": {
-                        "diagnostics": [],
-                        "only": only_kinds
-                    }
-                }),
-                Duration::from_secs(2),
-            )
-            .unwrap_or_else(|_| panic!("Request with filter {:?} should succeed", expected_prefix));
+        let actions_result = harness.request_with_timeout(
+            "textDocument/codeAction",
+            json!({
+                "textDocument": {"uri": workspace.uri("missing_pragmas.pl")},
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 10, "character": 0}
+                },
+                "context": {
+                    "diagnostics": [],
+                    "only": only_kinds
+                }
+            }),
+            Duration::from_secs(2),
+        ).map_err(|e| {
+            format!("Request with filter {:?} should succeed: {}", expected_prefix, e)
+        })?;
 
-        let actions = actions_result.as_array().expect("Should return action array");
+        let actions = actions_result.as_array()
+            .ok_or("Should return action array")?;
 
         // AC3: Validate filtering works correctly
         for action in actions {
@@ -616,4 +621,6 @@ fn test_enhanced_code_actions_filtering() {
             }
         }
     }
+
+    Ok(())
 }

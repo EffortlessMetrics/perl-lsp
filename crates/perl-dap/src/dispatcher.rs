@@ -321,9 +321,10 @@ impl Default for DapDispatcher {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+
 mod tests {
     use super::*;
+    use perl_tdd_support::must;
     use serde_json::json;
     use std::io::Write;
     use tempfile::NamedTempFile;
@@ -331,8 +332,7 @@ mod tests {
     /// Create a temp file with valid Perl code for testing breakpoints.
     /// NOTE: Avoid sub immediately followed by for loop (triggers parser hang - known issue)
     fn create_test_perl_file() -> (NamedTempFile, String) {
-        let mut file =
-            NamedTempFile::with_suffix(".pl").expect("Failed to create temp file for test");
+        let mut file = must(NamedTempFile::with_suffix(".pl"));
         let perl_code = r#"#!/usr/bin/perl
 use strict;
 use warnings;
@@ -361,8 +361,8 @@ print "done\n";
 my $final = process($x);
 print "result: $final\n";
 "#;
-        file.write_all(perl_code.as_bytes()).expect("Failed to write test Perl content");
-        file.flush().expect("Failed to flush temp file");
+        must(file.write_all(perl_code.as_bytes()));
+        must(file.flush());
         let path = file.path().to_string_lossy().to_string();
         (file, path)
     }
