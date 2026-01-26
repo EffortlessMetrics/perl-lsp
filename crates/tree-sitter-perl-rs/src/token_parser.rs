@@ -403,13 +403,16 @@ impl TokenParser {
                 // indicates a bug in the Pratt parser precedence configuration or operator
                 // routing logic.
                 Question => {
-                    panic!(
-                        "Unexpected ternary operator '?' in infix position. \
-                         This should be handled by the Pratt parser precedence system. \
-                         Found: operator={:?}, left={:?}, right={:?}. \
-                         This error indicates a potential bug in the parser implementation.",
-                        op, left, right
-                    );
+                    AstNode::ErrorNode {
+                        message: Arc::from(format!(
+                            "Unexpected ternary operator '?' in infix position. \
+                             This should be handled by the Pratt parser precedence system. \
+                             Found: operator={:?}, left={:?}, right={:?}. \
+                             This error indicates a potential bug in the parser implementation.",
+                            op, left, right
+                        )),
+                        content: Arc::from("?"),
+                    }
                 }
                 _ => AstNode::BinaryOp {
                     op: Arc::from(op.to_string()),
