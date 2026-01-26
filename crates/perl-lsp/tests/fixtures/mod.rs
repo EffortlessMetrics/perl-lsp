@@ -155,6 +155,14 @@ pub mod loader {
 
     /// Load fixtures by test category for organized testing
     pub fn load_fixtures_by_category(category: TestCategory) -> FixtureSet {
+        // Helper to ensure fixtures exist (fail-fast)
+        fn require_fixture(name: &str) -> PerlSyntaxFixture {
+            match get_fixture_by_name(name) {
+                Some(f) => f.clone(),
+                None => panic!("missing fixture: {name}"),
+            }
+        }
+
         match category {
             TestCategory::BasicParsing => FixtureSet {
                 perl_syntax: load_fixtures_by_category(SyntaxCategory::BasicSyntax),
@@ -165,10 +173,10 @@ pub mod loader {
                 incremental_parsing: vec![],
             },
             TestCategory::ExecuteCommand => FixtureSet {
-                perl_syntax: [
-                    get_fixture_by_name("basic_policy_violations"),
-                    get_fixture_by_name("good_practices"),
-                ].into_iter().flatten().cloned().collect(),
+                perl_syntax: vec![
+                    require_fixture("basic_policy_violations"),
+                    require_fixture("good_practices"),
+                ],
                 lsp_protocol: get_fixtures_by_navigation_type(NavigationType::ExecuteCommand),
                 dual_indexing: vec![],
                 builtin_functions: vec![],
@@ -176,9 +184,9 @@ pub mod loader {
                 incremental_parsing: vec![],
             },
             TestCategory::CodeActions => FixtureSet {
-                perl_syntax: [
-                    get_fixture_by_name("cross_file_navigation_dual_indexing"),
-                ].into_iter().flatten().cloned().collect(),
+                perl_syntax: vec![
+                    require_fixture("cross_file_navigation_dual_indexing"),
+                ],
                 lsp_protocol: get_fixtures_by_navigation_type(NavigationType::CodeAction),
                 dual_indexing: load_corpus_by_category(DualIndexingCategory::CrossFileNavigation),
                 builtin_functions: vec![],
@@ -192,9 +200,9 @@ pub mod loader {
                 substitution_ops: vec![],
             },
             TestCategory::Performance => FixtureSet {
-                perl_syntax: [
-                    get_fixture_by_name("performance_benchmark_large"),
-                ].into_iter().flatten().cloned().collect(),
+                perl_syntax: vec![
+                    require_fixture("performance_benchmark_large"),
+                ],
                 lsp_protocol: get_performance_fixtures(),
                 dual_indexing: vec![],
                 builtin_functions: load_performance_fixtures(),
@@ -208,9 +216,9 @@ pub mod loader {
                 substitution_ops: load_fixtures_by_complexity(PatternComplexity::Unicode),
             },
             TestCategory::ErrorHandling => FixtureSet {
-                perl_syntax: [
-                    get_fixture_by_name("error_scenarios_comprehensive"),
-                ].into_iter().flatten().cloned().collect(),
+                perl_syntax: vec![
+                    require_fixture("error_scenarios_comprehensive"),
+                ],
                 lsp_protocol: load_error_response_fixtures(),
                 dual_indexing: vec![],
                 builtin_functions: vec![],
@@ -222,16 +230,31 @@ pub mod loader {
 
     /// Load performance validation fixtures for revolutionary improvements testing
     pub fn load_performance_validation_set() -> PerformanceValidationSet {
+        // Helper to ensure fixtures exist (fail-fast)
+        fn require_fixture(name: &str) -> PerlSyntaxFixture {
+            match get_fixture_by_name(name) {
+                Some(f) => f.clone(),
+                None => panic!("missing fixture: {name}"),
+            }
+        }
+
+        fn require_sub_fixture(name: &str) -> SubstitutionFixture {
+            match get_substitution_fixture_by_name(name) {
+                Some(f) => f.clone(),
+                None => panic!("missing substitution fixture: {name}"),
+            }
+        }
+
         PerformanceValidationSet {
-            parsing_benchmarks: [
-                get_fixture_by_name("performance_benchmark_large"),
-                get_fixture_by_name("enhanced_builtin_functions"),
-            ].into_iter().flatten().cloned().collect(),
+            parsing_benchmarks: vec![
+                require_fixture("performance_benchmark_large"),
+                require_fixture("enhanced_builtin_functions"),
+            ],
             lsp_response_time: get_performance_fixtures(),
             builtin_performance: load_performance_fixtures(),
-            substitution_performance: [
-                get_substitution_fixture_by_name("substitution_performance_stress"),
-            ].into_iter().flatten().cloned().collect(),
+            substitution_performance: vec![
+                require_sub_fixture("substitution_performance_stress"),
+            ],
             incremental_parsing: load_fixtures_by_reuse_efficiency(90.0),
         }
     }

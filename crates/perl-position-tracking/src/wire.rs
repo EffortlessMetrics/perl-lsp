@@ -83,7 +83,7 @@ impl From<WireLocation> for lsp_types::Location {
         static FALLBACK_URI: std::sync::LazyLock<lsp_types::Uri> = std::sync::LazyLock::new(|| {
             match "file:///unknown".parse() {
                 Ok(u) => u,
-                Err(_) => panic!("valid fallback URL"),
+                Err(e) => panic!("Invariant violated: hardcoded fallback URI must be valid: {e}"),
             }
         });
         Self {

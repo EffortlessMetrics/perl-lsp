@@ -203,7 +203,8 @@ mod constant_advanced_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code)?;
 
         // FOO at position 38-41
-        let links = provider.find_declaration(38, 0);
+        let ref_pos = code.rfind("FOO").ok_or("reference position not found")?;
+        let links = provider.find_declaration(ref_pos, 0);
         assert!(links.is_some(), "Should find declaration for FOO");
         let links = links.ok_or("Expected links for FOO")?;
         assert!(!links.is_empty(), "Links should not be empty");
@@ -217,7 +218,8 @@ mod constant_advanced_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code)?;
 
         // BAR at print position
-        let links = provider.find_declaration(55, 0);
+        let ref_pos = code.rfind("BAR").ok_or("reference position not found")?;
+        let links = provider.find_declaration(ref_pos, 0);
         assert!(
             links.is_some() && !links.as_ref().ok_or("Expected links")?.is_empty(),
             "Should find declaration for BAR with options"
@@ -231,7 +233,8 @@ mod constant_advanced_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code)?;
 
         // FOO at print position
-        let links = provider.find_declaration(45, 0);
+        let ref_pos = code.rfind("FOO").ok_or("reference position not found")?;
+        let links = provider.find_declaration(ref_pos, 0);
         assert!(
             links.is_some() && !links.as_ref().ok_or("Expected links")?.is_empty(),
             "Should find FOO in +{{...}}"
@@ -245,7 +248,8 @@ mod constant_advanced_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code)?;
 
         // BAR at print position
-        let links = provider.find_declaration(58, 0);
+        let ref_pos = code.rfind("BAR").ok_or("reference position not found")?;
+        let links = provider.find_declaration(ref_pos, 0);
         assert!(
             links.is_some() && !links.as_ref().ok_or("Expected links")?.is_empty(),
             "Should find BAR despite nested braces"
@@ -259,7 +263,8 @@ mod constant_advanced_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code)?;
 
         // B at print position - should find it in second hash
-        let links = provider.find_declaration(43, 0);
+        let ref_pos = code.rfind("B").ok_or("reference position not found")?;
+        let links = provider.find_declaration(ref_pos, 0);
         assert!(
             links.is_some() && !links.as_ref().ok_or("Expected links")?.is_empty(),
             "Should find B in second hash block"
@@ -269,11 +274,12 @@ mod constant_advanced_tests {
 
     #[test]
     fn constant_options_qw_both_names_exact_spans() -> Result<(), Box<dyn std::error::Error>> {
-        let code = "use constant -strict, qw|FOO BAR|;\nprint FOO, BAR;\n";
+        // Corrected syntax: print FOO; print BAR;
+        let code = "use constant -strict, qw|FOO BAR|;\nprint FOO; print BAR;\n";
         let (provider, _pm, _ast) = parse_and_get_provider(code)?;
 
-        // offset for FOO in `print FOO, BAR;`
-        let foo_off = code.find("FOO,").ok_or("FOO, not found")?;
+        // offset for FOO in `print FOO;`
+        let foo_off = code.rfind("FOO").ok_or("FOO not found")?;
         let foo_links = provider.find_declaration(foo_off, 0);
         assert!(foo_links.is_some(), "Should find FOO");
         let foo_links = foo_links.ok_or("Expected links for FOO")?;
@@ -282,7 +288,7 @@ mod constant_advanced_tests {
         assert_eq!(&code[foo_link.0..foo_link.1], "FOO", "FOO span should be exact");
 
         // offset for BAR
-        let bar_off = code.find(" BAR;").ok_or(" BAR; not found")? + 1;
+        let bar_off = code.rfind("BAR").ok_or("BAR not found")?;
         let bar_links = provider.find_declaration(bar_off, 0);
         assert!(bar_links.is_some(), "Should find BAR");
         let bar_links = bar_links.ok_or("Expected links for BAR")?;
@@ -334,7 +340,8 @@ mod qw_variants_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code)?;
 
         // FOO at print position
-        let links = provider.find_declaration(32, 0);
+        let ref_pos = code.rfind("FOO").ok_or("reference position not found")?;
+        let links = provider.find_declaration(ref_pos, 0);
         assert!(
             links.is_some() && !links.as_ref().ok_or("Expected links")?.is_empty(),
             "Should find FOO in qw|...|"
@@ -348,7 +355,8 @@ mod qw_variants_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code)?;
 
         // QUX at print position
-        let links = provider.find_declaration(32, 0);
+        let ref_pos = code.rfind("QUX").ok_or("reference position not found")?;
+        let links = provider.find_declaration(ref_pos, 0);
         assert!(
             links.is_some() && !links.as_ref().ok_or("Expected links")?.is_empty(),
             "Should find QUX in qw!...!"
@@ -398,7 +406,8 @@ mod parser_extras_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code)?;
 
         // π at print position
-        let links = provider.find_declaration(33, 0);
+        let ref_pos = code.rfind("π").ok_or("reference position not found")?;
+        let links = provider.find_declaration(ref_pos, 0);
         assert!(
             links.is_some() && !links.as_ref().ok_or("Expected links")?.is_empty(),
             "Should find Unicode constant π"
@@ -413,7 +422,8 @@ mod parser_extras_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code)?;
 
         // $🐍 at print position
-        let links = provider.find_declaration(27, 0);
+        let ref_pos = code.rfind("$🐍").ok_or("reference position not found")?;
+        let links = provider.find_declaration(ref_pos, 0);
         assert!(
             links.is_some() && !links.as_ref().ok_or("Expected links")?.is_empty(),
             "Should find emoji variable with CRLF"

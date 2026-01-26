@@ -47,7 +47,8 @@ fn test_goto_definition_across_files() -> TestResult {
 
     // Create LSP server with test output
     use std::io::Cursor;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
+    use parking_lot::Mutex;
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
     let srv = LspServer::with_output(output.clone());
@@ -145,7 +146,8 @@ fn test_find_references_across_files() -> TestResult {
 
     // Create LSP server
     use std::io::Cursor;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
+    use parking_lot::Mutex;
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
     let srv = LspServer::with_output(output.clone());
@@ -253,7 +255,8 @@ fn test_workspace_symbol_completion() -> TestResult {
 
     // Create LSP server
     use std::io::Cursor;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
+    use parking_lot::Mutex;
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
     let srv = LspServer::with_output(output.clone());

@@ -11,11 +11,10 @@ use regex::Regex;
 lazy_static! {
     /// Regex for hex color codes: #RGB, #RRGGBB, #RRGGBBAA
     static ref HEX_COLOR_RE: Regex = Regex::new(r"#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})\b")
-        .unwrap_or_else(|_| panic!("HEX_COLOR_RE regex is invalid - this is a bug"));
+        .unwrap_or_else(|e| panic!("Invalid hex color regex: {e}"));
 
     /// Regex for ANSI escape codes: \e[31m, \e[32m, etc.
-    static ref ANSI_COLOR_RE: Regex = Regex::new(r"\\e\[([0-9;]+)m")
-        .unwrap_or_else(|_| panic!("ANSI_COLOR_RE regex is invalid - this is a bug"));
+    static ref ANSI_COLOR_RE: Regex = Regex::new(r"\\e\[([0-9;]+)m").unwrap_or_else(|e| panic!("Invalid color regex: {e}"));
 }
 
 /// Color information with range and RGBA values

@@ -353,7 +353,7 @@ fn print_error(error: &ParseError, source: &str) {
             writeln!(stderr, "Parse error: Maximum recursion depth exceeded").ok();
         }
         ParseError::NestingTooDeep { depth, max_depth } => {
-             writeln!(stderr, "Parse error: Nesting too deep: {} > {}", depth, max_depth).ok();
+            writeln!(stderr, "Parse error: Nesting too deep ({} > {})", depth, max_depth).ok();
         }
     }
 }

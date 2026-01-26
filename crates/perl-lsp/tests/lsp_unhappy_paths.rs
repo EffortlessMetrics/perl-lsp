@@ -14,7 +14,6 @@ use common::read_response;
 
 /// Test suite for unhappy paths and error scenarios
 /// Ensures the LSP server handles errors gracefully
-
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
 fn test_malformed_json_request() -> Result<(), Box<dyn std::error::Error>> {

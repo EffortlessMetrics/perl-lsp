@@ -1462,7 +1462,6 @@ impl SemanticModel {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use crate::parser::Parser;

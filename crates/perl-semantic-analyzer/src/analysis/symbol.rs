@@ -880,7 +880,6 @@ impl SymbolExtractor {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use crate::parser::Parser;

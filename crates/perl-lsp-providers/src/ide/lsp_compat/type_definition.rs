@@ -371,7 +371,6 @@ impl Default for TypeDefinitionProvider {
 }
 
 #[cfg(all(test, feature = "lsp-compat"))]
-
 mod tests {
     use super::*;
     use perl_parser_core::Parser;

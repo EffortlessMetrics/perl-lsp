@@ -179,7 +179,7 @@ fn run_highlight_test_case(
     let mut cursor = QueryCursor::new();
     let mut captures = cursor.captures(&query, tree.root_node(), test_case.source.as_bytes());
     let mut actual_counts: HashMap<String, usize> = HashMap::new();
-    while let Some((match_, capture_index)) = captures.next() {
+    while let Some((_match_, capture_index)) = captures.next() {
         let name = query.capture_names()[*capture_index].to_string();
         *actual_counts.entry(name).or_insert(0) += 1;
     }

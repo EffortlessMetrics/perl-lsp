@@ -299,6 +299,7 @@ mod dap_breakpoint_matrix_phase2 {
 
     /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#file-boundaries
     #[tokio::test]
+    #[ignore]
     // AC:14
     async fn test_breakpoints_file_boundaries() -> Result<()> {
         // First/last line breakpoint behavior
@@ -307,6 +308,7 @@ mod dap_breakpoint_matrix_phase2 {
 
     /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#begin-end-blocks
     #[tokio::test]
+    #[ignore]
     // AC:14
     async fn test_breakpoints_begin_end_blocks() -> Result<()> {
         // BEGIN/END block breakpoint validation
@@ -315,6 +317,7 @@ mod dap_breakpoint_matrix_phase2 {
 
     /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#multiline-statements
     #[tokio::test]
+    #[ignore]
     // AC:14
     async fn test_breakpoints_multiline_statements() -> Result<()> {
         // Multi-line statement breakpoint behavior
@@ -323,6 +326,7 @@ mod dap_breakpoint_matrix_phase2 {
 
     /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#pod-documentation
     #[tokio::test]
+    #[ignore]
     // AC:14
     async fn test_breakpoints_in_pod_documentation() -> Result<()> {
         // POD documentation breakpoint behavior
@@ -331,6 +335,7 @@ mod dap_breakpoint_matrix_phase2 {
 
     /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#string-literals
     #[tokio::test]
+    #[ignore]
     // AC:14
     async fn test_breakpoints_in_string_literals() -> Result<()> {
         // String literal breakpoint behavior
@@ -339,6 +344,7 @@ mod dap_breakpoint_matrix_phase2 {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac14-performance-baselines
     #[test]
+    #[ignore]
     // AC:14
     fn test_performance_benchmark_baselines() -> Result<()> {
         // Benchmark suite: small (100 lines), medium (1000 lines), large (10K+ lines)

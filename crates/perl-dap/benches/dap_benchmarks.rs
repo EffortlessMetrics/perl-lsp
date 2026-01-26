@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! DAP Performance Benchmarks (AC14, AC15) - Phase 1
 //!
 //! Performance benchmarks for Phase 1 DAP adapter operations:

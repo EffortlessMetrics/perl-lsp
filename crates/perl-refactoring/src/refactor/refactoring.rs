@@ -248,17 +248,17 @@ pub struct RefactoringResult {
 
 impl RefactoringEngine {
     /// Create a new refactoring engine with default configuration
-    pub fn new() -> ParseResult<Self> {
+    pub fn new() -> Self {
         Self::with_config(RefactoringConfig::default())
     }
 
     /// Create a new refactoring engine with custom configuration
-    pub fn with_config(config: RefactoringConfig) -> ParseResult<Self> {
-        Ok(Self {
+    pub fn with_config(config: RefactoringConfig) -> Self {
+        Self {
             #[cfg(feature = "workspace_refactor")]
             workspace_refactor: WorkspaceRefactor::new(WorkspaceIndex::default()),
             #[cfg(not(feature = "workspace_refactor"))]
-            workspace_refactor: temp_stubs::WorkspaceRefactor::new()?,
+            workspace_refactor: temp_stubs::WorkspaceRefactor::new(),
             #[cfg(feature = "modernize")]
             modernize: ModernizeEngine::new(),
             #[cfg(not(feature = "modernize"))]
@@ -266,7 +266,7 @@ impl RefactoringEngine {
             import_optimizer: ImportOptimizer::new(),
             config,
             operation_history: Vec::new(),
-        })
+        }
     }
 
     /// Perform a refactoring operation
@@ -1577,14 +1577,7 @@ impl RefactoringEngine {
 
 impl Default for RefactoringEngine {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|e| {
-            // Log the error - this shouldn't happen in normal operation
-            // as new() only fails if sub-components fail to initialize
-            eprintln!("Warning: Failed to create refactoring engine, using fallback: {}", e);
-            // Create with default config - this path is for error recovery only
-            Self::with_config(RefactoringConfig::default())
-                .unwrap_or_else(|_| panic!("RefactoringEngine fallback initialization failed - this is a critical bug in the refactoring system"))
-        })
+        Self::new()
     }
 }
 
@@ -1597,8 +1590,8 @@ mod temp_stubs {
     pub(super) struct WorkspaceRefactor;
     #[allow(dead_code)]
     impl WorkspaceRefactor {
-        pub(super) fn new() -> ParseResult<Self> {
-            Ok(Self)
+        pub(super) fn new() -> Self {
+            Self
         }
     }
 
@@ -1840,14 +1833,8 @@ mod tests {
     use perl_tdd_support::{must, must_some};
 
     #[test]
-    fn test_refactoring_engine_creation() {
-        let engine = RefactoringEngine::new();
-        assert!(engine.is_ok());
-    }
-
-    #[test]
     fn test_operation_id_generation() {
-        let engine = must(RefactoringEngine::new());
+        let engine = RefactoringEngine::new();
         let id1 = engine.generate_operation_id();
         let id2 = engine.generate_operation_id();
         assert_ne!(id1, id2);
@@ -1883,7 +1870,7 @@ sub test {
         must(write!(file, "{}", code));
         let path = file.path().to_path_buf();
 
-        let mut engine = must(RefactoringEngine::new());
+        let mut engine = RefactoringEngine::new();
         engine.config.safe_mode = false;
 
         // Lines are 0-indexed.
@@ -1930,7 +1917,7 @@ sub existing {
         must(write!(file, "{}", code));
         let path = file.path().to_path_buf();
 
-        let mut engine = must(RefactoringEngine::new());
+        let mut engine = RefactoringEngine::new();
         engine.config.safe_mode = false;
 
         // selection should include lines 8 and 9 (0-indexed)
@@ -1974,7 +1961,7 @@ sub complex {
         must(write!(file, "{}", code));
         let path = file.path().to_path_buf();
 
-        let mut engine = must(RefactoringEngine::new());
+        let mut engine = RefactoringEngine::new();
         engine.config.safe_mode = false;
 
         // Line 5: "    foreach my $item (@items) {"
@@ -2004,13 +1991,13 @@ sub complex {
 
     mod validation_tests {
         use super::*;
-        use perl_tdd_support::{must, must_some, must_err};
+        use perl_tdd_support::{must, must_err};
 
         // --- Perl identifier validation tests ---
 
         #[test]
         fn test_validate_identifier_bare_name() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_identifier("foo", "test").is_ok());
             assert!(engine.validate_perl_identifier("_private", "test").is_ok());
             assert!(engine.validate_perl_identifier("CamelCase", "test").is_ok());
@@ -2019,7 +2006,7 @@ sub complex {
 
         #[test]
         fn test_validate_identifier_with_sigils() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             // All valid Perl sigils should be accepted
             assert!(engine.validate_perl_identifier("$scalar", "test").is_ok());
             assert!(engine.validate_perl_identifier("@array", "test").is_ok());
@@ -2030,7 +2017,7 @@ sub complex {
 
         #[test]
         fn test_validate_identifier_qualified_names() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_identifier("Package::name", "test").is_ok());
             assert!(engine.validate_perl_identifier("$Package::var", "test").is_ok());
             assert!(engine.validate_perl_identifier("@Deep::Nested::array", "test").is_ok());
@@ -2039,13 +2026,13 @@ sub complex {
 
         #[test]
         fn test_validate_identifier_empty_rejected() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_identifier("", "test").is_err());
         }
 
         #[test]
         fn test_validate_identifier_sigil_only_rejected() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_identifier("$", "test").is_err());
             assert!(engine.validate_perl_identifier("@", "test").is_err());
             assert!(engine.validate_perl_identifier("%", "test").is_err());
@@ -2053,7 +2040,7 @@ sub complex {
 
         #[test]
         fn test_validate_identifier_invalid_start_char() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_identifier("123abc", "test").is_err());
             assert!(engine.validate_perl_identifier("$123abc", "test").is_err());
             assert!(engine.validate_perl_identifier("-invalid", "test").is_err());
@@ -2063,7 +2050,7 @@ sub complex {
 
         #[test]
         fn test_validate_subroutine_name_valid() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_subroutine_name("my_sub").is_ok());
             assert!(engine.validate_perl_subroutine_name("_private_sub").is_ok());
             assert!(engine.validate_perl_subroutine_name("&explicit_sub").is_ok());
@@ -2071,7 +2058,7 @@ sub complex {
 
         #[test]
         fn test_validate_subroutine_name_invalid_sigils() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             // Subs cannot have $, @, %, * sigils
             assert!(engine.validate_perl_subroutine_name("$not_a_sub").is_err());
             assert!(engine.validate_perl_subroutine_name("@not_a_sub").is_err());
@@ -2080,7 +2067,7 @@ sub complex {
 
         #[test]
         fn test_validate_subroutine_name_empty() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_subroutine_name("").is_err());
         }
 
@@ -2088,7 +2075,7 @@ sub complex {
 
         #[test]
         fn test_validate_qualified_name_valid() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_qualified_name("Package").is_ok());
             assert!(engine.validate_perl_qualified_name("Package::Sub").is_ok());
             assert!(engine.validate_perl_qualified_name("Deep::Nested::Name").is_ok());
@@ -2096,14 +2083,14 @@ sub complex {
 
         #[test]
         fn test_validate_qualified_name_empty_rejected() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_qualified_name("").is_err());
             assert!(engine.validate_perl_qualified_name("::").is_err());
         }
 
         #[test]
         fn test_validate_qualified_name_invalid_segment() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_qualified_name("Package::123invalid").is_err());
         }
 
@@ -2111,7 +2098,7 @@ sub complex {
 
         #[test]
         fn test_validate_file_count_limit() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             // Create more files than allowed
             let files: Vec<PathBuf> =
                 (0..150).map(|i| PathBuf::from(format!("/fake/{}.pl", i))).collect();
@@ -2132,7 +2119,7 @@ sub complex {
 
         #[test]
         fn test_extract_method_requires_file() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op = RefactoringType::ExtractMethod {
                 method_name: "new_method".to_string(),
                 start_position: (1, 0),
@@ -2150,7 +2137,7 @@ sub complex {
             let file1: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
             let file2: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
 
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op = RefactoringType::ExtractMethod {
                 method_name: "new_method".to_string(),
                 start_position: (1, 0),
@@ -2168,7 +2155,7 @@ sub complex {
         fn test_extract_method_invalid_range() {
             let file: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
 
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op = RefactoringType::ExtractMethod {
                 method_name: "new_method".to_string(),
                 start_position: (10, 0),
@@ -2185,7 +2172,7 @@ sub complex {
         fn test_extract_method_invalid_subroutine_name() {
             let file: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
 
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op = RefactoringType::ExtractMethod {
                 method_name: "$invalid".to_string(), // sigil not allowed for sub names
                 start_position: (1, 0),
@@ -2204,7 +2191,7 @@ sub complex {
             let mut file: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
             must(write!(file, "# source"));
 
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op = RefactoringType::MoveCode {
                 source_file: file.path().to_path_buf(),
                 target_file: PathBuf::from("target.pl"),
@@ -2225,7 +2212,7 @@ sub complex {
             let mut file: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
             must(write!(file, "my $old = 1;"));
 
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op = RefactoringType::SymbolRename {
                 old_name: "$old_var".to_string(),
                 new_name: "$new_var".to_string(),
@@ -2238,7 +2225,7 @@ sub complex {
 
         #[test]
         fn test_symbol_rename_workspace_scope_no_files_required() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op = RefactoringType::SymbolRename {
                 old_name: "old_sub".to_string(),
                 new_name: "new_sub".to_string(),
@@ -2251,7 +2238,7 @@ sub complex {
 
         #[test]
         fn test_symbol_rename_fileset_requires_files() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op = RefactoringType::SymbolRename {
                 old_name: "old_sub".to_string(),
                 new_name: "new_sub".to_string(),
@@ -2268,7 +2255,7 @@ sub complex {
 
         #[test]
         fn test_inline_requires_files() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op =
                 RefactoringType::Inline { symbol_name: "$var".to_string(), all_occurrences: true };
 
@@ -2282,7 +2269,7 @@ sub complex {
 
         #[test]
         fn test_modernize_requires_patterns() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op = RefactoringType::Modernize { patterns: vec![] };
 
             let result = engine.validate_operation(&op, &[]);
@@ -2295,7 +2282,7 @@ sub complex {
 
         #[test]
         fn test_symbol_rename_sigil_consistency_required() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             // $foo -> @foo should fail (different sigils)
             let op = RefactoringType::SymbolRename {
                 old_name: "$foo".to_string(),
@@ -2311,7 +2298,7 @@ sub complex {
 
         #[test]
         fn test_symbol_rename_sigil_consistency_no_sigil_to_sigil() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             // bare name -> sigiled name should fail
             let op = RefactoringType::SymbolRename {
                 old_name: "foo".to_string(),
@@ -2327,7 +2314,7 @@ sub complex {
 
         #[test]
         fn test_symbol_rename_same_name_rejected() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op = RefactoringType::SymbolRename {
                 old_name: "$foo".to_string(),
                 new_name: "$foo".to_string(),
@@ -2344,7 +2331,7 @@ sub complex {
 
         #[test]
         fn test_validate_identifier_double_separator_rejected() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             // Double :: should be rejected
             assert!(engine.validate_perl_identifier("Foo::::Bar", "test").is_err());
             assert!(engine.validate_perl_identifier("$Foo::::Bar", "test").is_err());
@@ -2352,7 +2339,7 @@ sub complex {
 
         #[test]
         fn test_validate_identifier_trailing_separator_rejected() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             // Trailing :: should be rejected
             assert!(engine.validate_perl_identifier("Foo::", "test").is_err());
             assert!(engine.validate_perl_identifier("$Foo::Bar::", "test").is_err());
@@ -2360,7 +2347,7 @@ sub complex {
 
         #[test]
         fn test_validate_identifier_leading_separator_allowed() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             // Leading :: should be allowed (for main package/absolute names)
             assert!(engine.validate_perl_identifier("::Foo", "test").is_ok());
             assert!(engine.validate_perl_identifier("::Foo::Bar", "test").is_ok());
@@ -2369,27 +2356,27 @@ sub complex {
 
         #[test]
         fn test_validate_qualified_name_double_separator_rejected() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_qualified_name("Foo::::Bar").is_err());
         }
 
         #[test]
         fn test_validate_qualified_name_trailing_separator_rejected() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_qualified_name("Foo::").is_err());
             assert!(engine.validate_perl_qualified_name("Foo::Bar::").is_err());
         }
 
         #[test]
         fn test_validate_qualified_name_leading_separator_rejected() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             // For qualified names (MoveCode elements), leading :: is also rejected
             assert!(engine.validate_perl_qualified_name("::Foo").is_err());
         }
 
         #[test]
         fn test_validate_qualified_name_sigil_rejected() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             // Qualified names (for MoveCode) should not have sigils
             assert!(engine.validate_perl_qualified_name("$foo").is_err());
             assert!(engine.validate_perl_qualified_name("@array").is_err());
@@ -2399,7 +2386,7 @@ sub complex {
 
         #[test]
         fn test_validate_identifier_unicode_allowed() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             // Perl supports Unicode identifiers
             assert!(engine.validate_perl_identifier("$π", "test").is_ok());
             assert!(engine.validate_perl_identifier("$αβγ", "test").is_ok());
@@ -2408,7 +2395,7 @@ sub complex {
 
         #[test]
         fn test_validate_qualified_name_unicode_allowed() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             // Unicode package names should be allowed
             assert!(engine.validate_perl_qualified_name("Müller").is_ok());
             assert!(engine.validate_perl_qualified_name("Müller::Util").is_ok());
@@ -2421,7 +2408,7 @@ sub complex {
         fn test_extract_method_ampersand_prefix_rejected() {
             let file: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
 
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op = RefactoringType::ExtractMethod {
                 method_name: "&foo".to_string(), // leading & should be rejected
                 start_position: (1, 0),
@@ -2443,7 +2430,7 @@ sub complex {
             let mut file: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
             must(write!(file, "# source"));
 
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
             let op = RefactoringType::MoveCode {
                 source_file: file.path().to_path_buf(),
                 target_file: file.path().to_path_buf(), // same as source
@@ -2469,7 +2456,7 @@ sub complex {
                 max_files_per_operation: 3,
                 ..RefactoringConfig::default()
             };
-            let engine = must(RefactoringEngine::with_config(config));
+            let engine = RefactoringEngine::with_config(config);
 
             let op = RefactoringType::SymbolRename {
                 old_name: "old_sub".to_string(),
@@ -2487,7 +2474,7 @@ sub complex {
 
         #[test]
         fn test_cleanup_no_backups() {
-            let mut engine = must(RefactoringEngine::new());
+            let mut engine = RefactoringEngine::new();
             let result = must(engine.clear_history());
             assert_eq!(result.directories_removed, 0);
             assert_eq!(result.space_reclaimed, 0);
@@ -2498,7 +2485,7 @@ sub complex {
         fn test_cleanup_backup_directories() {
             use std::io::Write;
 
-            let mut engine = must(RefactoringEngine::new());
+            let mut engine = RefactoringEngine::new();
             engine.config.create_backups = true;
 
             // Create a temp file to trigger backup creation
@@ -2538,7 +2525,7 @@ sub complex {
                 ..RefactoringConfig::default()
             };
 
-            let mut engine = must(RefactoringEngine::with_config(config));
+            let mut engine = RefactoringEngine::with_config(config);
 
             // Create multiple backups
             for i in 0..4 {
@@ -2587,7 +2574,7 @@ sub complex {
                 ..RefactoringConfig::default()
             };
 
-            let mut engine = must(RefactoringEngine::with_config(config));
+            let mut engine = RefactoringEngine::with_config(config);
 
             // Wait to ensure backup is older than 1 second
             std::thread::sleep(std::time::Duration::from_secs(2));
@@ -2603,7 +2590,7 @@ sub complex {
 
         #[test]
         fn test_validate_backup_directory_structure() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
 
             let backup_root = std::env::temp_dir().join("perl_refactor_backups");
             let _ = std::fs::create_dir_all(&backup_root);
@@ -2624,7 +2611,7 @@ sub complex {
 
         #[test]
         fn test_calculate_directory_size() {
-            let engine = must(RefactoringEngine::new());
+            let engine = RefactoringEngine::new();
 
             let temp_dir = must(tempfile::tempdir());
             let dir_path = temp_dir.path().to_path_buf();
@@ -2645,7 +2632,7 @@ sub complex {
         fn test_backup_cleanup_result_space_reclaimed() {
             use std::io::Write;
 
-            let mut engine = must(RefactoringEngine::new());
+            let mut engine = RefactoringEngine::new();
             engine.config.create_backups = true;
 
             // Create a file with known size

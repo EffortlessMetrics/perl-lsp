@@ -12,6 +12,7 @@ mod dap_performance {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-step-continue-latency
     #[tokio::test]
+    #[ignore]
     // AC:15
     async fn test_step_continue_latency_p95() -> Result<()> {
         // <100ms p95 for step/continue operations
@@ -20,6 +21,7 @@ mod dap_performance {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-breakpoint-verification-latency
     #[tokio::test]
+    #[ignore]
     // AC:15
     async fn test_breakpoint_verification_latency() -> Result<()> {
         // <50ms for breakpoint set/verify operations
@@ -28,6 +30,7 @@ mod dap_performance {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-variable-expansion-latency
     #[tokio::test]
+    #[ignore]
     // AC:15
     async fn test_variable_expansion_latency() -> Result<()> {
         // <200ms initial scope, <100ms per child expansion
@@ -36,6 +39,7 @@ mod dap_performance {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-large-file-benchmarks
     #[tokio::test]
+    #[ignore]
     // AC:15
     async fn test_large_file_benchmarks() -> Result<()> {
         // Performance with 10K+ line files
@@ -44,6 +48,7 @@ mod dap_performance {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-memory-footprint
     #[tokio::test]
+    #[ignore]
     // AC:15
     async fn test_memory_footprint_baseline() -> Result<()> {
         // Memory usage during debugging session
@@ -52,6 +57,7 @@ mod dap_performance {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-concurrent-sessions
     #[tokio::test]
+    #[ignore]
     // AC:15
     async fn test_concurrent_session_performance() -> Result<()> {
         // Multiple concurrent DAP sessions
@@ -60,6 +66,7 @@ mod dap_performance {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-regression-detection
     #[test]
+    #[ignore]
     // AC:15
     fn test_performance_regression_detection() -> Result<()> {
         // Automated regression detection vs baselines

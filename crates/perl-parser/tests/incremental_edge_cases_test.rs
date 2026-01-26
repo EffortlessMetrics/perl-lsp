@@ -84,7 +84,7 @@ fn test_deeply_nested_structures() -> TestResult {
 fn test_complex_string_handling() -> TestResult {
     println!("\n🔤 Testing complex string handling...");
 
-    let complex_strings = vec![
+    let complex_strings = [
         (r#"my $single = 'hello world';"#, "hello world", "modified"),
         (r#"my $double = "hello \"quoted\" world";"#, "hello \\\"quoted\\\" world", "new content"),
         (r#"my $backtick = `echo hello`;"#, "echo hello", "echo modified"),
@@ -138,7 +138,7 @@ fn test_complex_string_handling() -> TestResult {
 fn test_whitespace_sensitivity() -> TestResult {
     println!("\n⚪ Testing whitespace sensitivity...");
 
-    let whitespace_cases = vec![
+    let whitespace_cases = [
         // Tabs vs spaces
         ("my\t$x\t=\t42;", "42", "99"),
         ("my $x = 42  ;", "42", "99"),         // Extra spaces
@@ -309,7 +309,7 @@ fn test_very_large_statements() -> TestResult {
 fn test_complex_regex_handling() -> TestResult {
     println!("\n🔍 Testing complex regex handling...");
 
-    let regex_cases = vec![
+    let regex_cases = [
         (r#"$text =~ /simple/;"#, "simple", "complex"),
         (r#"$text =~ m{complex{2,3}}i;"#, "complex", "pattern"),
         (r#"$text =~ s/old/new/g;"#, "old", "modified"),
@@ -584,7 +584,7 @@ fn test_rapid_fire_edits() -> TestResult {
 fn test_unicode_edge_cases() {
     println!("\n🌐 Testing Unicode edge cases...");
 
-    let unicode_edge_cases = vec![
+    let unicode_edge_cases = [
         // Zero-width characters
         ("my $invisible = 'text\u{200B}here';", "text", "modified"),
         // Combined characters

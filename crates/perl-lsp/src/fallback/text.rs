@@ -11,11 +11,9 @@ use serde_json::json;
 
 lazy_static! {
     /// Matches package declarations: `package Foo::Bar`
-    static ref PACKAGE_RE: Regex = Regex::new(r"^\s*package\s+([\w:]+)")
-        .unwrap_or_else(|_| panic!("PACKAGE_RE regex is invalid - this is a bug in the LSP parser"));
+    static ref PACKAGE_RE: Regex = Regex::new(r"^\s*package\s+([\w:]+)").unwrap_or_else(|e| panic!("Invariant violated: invalid package regex: {e}"));
     /// Matches subroutine definitions: `sub foo`
-    static ref SUB_RE: Regex = Regex::new(r"^\s*sub\s+(\w+)")
-        .unwrap_or_else(|_| panic!("SUB_RE regex is invalid - this is a bug in the LSP parser"));
+    static ref SUB_RE: Regex = Regex::new(r"^\s*sub\s+(\w+)").unwrap_or_else(|e| panic!("Invariant violated: invalid sub regex: {e}"));
 }
 
 /// Extract code lenses from text when AST parsing fails

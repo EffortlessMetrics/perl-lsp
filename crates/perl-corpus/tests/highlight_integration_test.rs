@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Highlight integration tests for perl-corpus
 //!
 //! This module tests the integration between the tree-sitter highlight test runner
@@ -20,7 +19,7 @@ fn test_highlight_runner_integration() {
 
     for (source, expected_kinds) in test_cases {
         let mut parser = Parser::new(source);
-        let ast = parser.parse().expect("Failed to parse test source");
+        let ast = parser.parse().unwrap_or_else(|e| panic!("Failed to parse test source: {:?}", e));
 
         let mut actual_kinds = HashMap::new();
         collect_node_kinds(&ast, &mut actual_kinds);
@@ -137,7 +136,7 @@ print "Processed items";
 
     let start = Instant::now();
     let mut parser = Parser::new(large_source);
-    let ast = parser.parse().expect("Failed to parse large source");
+    let ast = parser.parse().unwrap_or_else(|e| panic!("Failed to parse large source: {:?}", e));
 
     let mut actual_kinds = HashMap::new();
     collect_node_kinds(&ast, &mut actual_kinds);

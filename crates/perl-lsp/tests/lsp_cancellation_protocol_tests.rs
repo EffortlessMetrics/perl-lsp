@@ -461,7 +461,7 @@ fn test_atomic_cancellation_token_operations_ac2() -> Result<(), Box<dyn std::er
 
     // Verify cancellation propagated correctly
     assert!(cancel_handle.join().is_ok(), "Cancellation should succeed");
-    assert!(token.is_cancelled().unwrap(), "Token should be in cancelled state");
+    assert!(token.is_cancelled().expect("Token state check failed"), "Token should be in cancelled state");
 
     // Analyze results for thread safety
     let cancelled_results: Vec<_> = all_results.iter()
@@ -629,17 +629,17 @@ fn test_provider_cleanup_thread_safety_ac2() -> Result<(), Box<dyn std::error::E
                 let cleanup_result = match provider_type {
                     0 => {
                         // Completion provider cleanup
-                        let mut provider = completion_clone.lock().unwrap();
+                        let mut provider = completion_clone.lock().expect("Mutex poisoned");
                         provider.handle_cancellation(&token_clone)
                     },
                     1 => {
                         // Workspace provider cleanup
-                        let mut provider = workspace_clone.lock().unwrap();
+                        let mut provider = workspace_clone.lock().expect("Mutex poisoned");
                         provider.handle_cancellation(&token_clone)
                     },
                     _ => {
                         // References provider cleanup
-                        let mut provider = references_clone.lock().unwrap();
+                        let mut provider = references_clone.lock().expect("Mutex poisoned");
                         provider.handle_cancellation(&token_clone)
                     },
                 };
@@ -666,7 +666,7 @@ fn test_provider_cleanup_thread_safety_ac2() -> Result<(), Box<dyn std::error::E
 
     // Validate provider cleanup coordination
     assert!(!cleanup_results.is_empty(), "Provider cleanup operations should complete");
-    assert!(token.is_cancelled().unwrap(), "Token should be cancelled");
+    assert!(token.is_cancelled().expect("Token state check failed"), "Token should be cancelled");
 
     // Validate cleanup performance and thread safety
     let failed_cleanups: Vec<_> = cleanup_results.iter()

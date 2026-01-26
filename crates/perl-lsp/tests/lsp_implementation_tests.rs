@@ -162,7 +162,7 @@ my $obj = Standalone->new();
 
     // Should return empty array or null
     assert!(
-        response.is_null() || (response.is_array() && response.as_array().map_or(false, |arr| arr.is_empty())),
+        response.is_null() || (response.is_array() && response.as_array().is_some_and(|arr| arr.is_empty())),
         "Should return null or empty array for no implementations"
     );
 

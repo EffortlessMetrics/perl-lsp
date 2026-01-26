@@ -1,4 +1,5 @@
 use perl_dap::{DapMessage, DebugAdapter};
+use perl_tdd_support::must_some;
 use serde_json::json;
 use std::fs::write;
 use std::sync::mpsc::{Receiver, channel};
@@ -52,7 +53,7 @@ fn test_dap_initialize() {
             assert!(body.is_some());
 
             // Verify capabilities
-            let body = body.unwrap();
+            let body = must_some(body);
             assert!(
                 body.get("supportsConfigurationDoneRequest")
                     .and_then(|v| v.as_bool())
@@ -90,7 +91,7 @@ fn test_dap_launch_with_invalid_program() {
             assert!(!success);
             assert_eq!(command, "launch");
             assert!(message.is_some());
-            assert!(message.unwrap().contains("Failed to launch debugger"));
+            assert!(must_some(message).contains("Failed to launch debugger"));
         }
         _ => panic!("Expected response message"),
     }
@@ -109,7 +110,7 @@ fn test_dap_launch_missing_arguments() {
             assert!(!success);
             assert_eq!(command, "launch");
             assert!(message.is_some());
-            assert_eq!(message.unwrap(), "Missing launch arguments");
+            assert_eq!(must_some(message), "Missing launch arguments");
         }
         _ => panic!("Expected response message"),
     }
@@ -134,8 +135,8 @@ fn test_dap_breakpoints_no_session() {
             assert!(success);
             assert_eq!(command, "setBreakpoints");
 
-            let body = body.unwrap();
-            let breakpoints = body.get("breakpoints").and_then(|b| b.as_array()).unwrap();
+            let body = must_some(body);
+            let breakpoints = must_some(body.get("breakpoints").and_then(|b| b.as_array()));
             assert_eq!(breakpoints.len(), 2);
 
             // Without active session, breakpoints should not be verified
@@ -161,7 +162,7 @@ fn test_dap_breakpoints_missing_source() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
             assert_eq!(command, "setBreakpoints");
-            assert_eq!(message.unwrap(), "Missing source path");
+            assert_eq!(must_some(message), "Missing source path");
         }
         _ => panic!("Expected response message"),
     }
@@ -186,8 +187,8 @@ fn test_dap_breakpoints_invalid_line() {
             assert!(success); // Request succeeds but breakpoints are not verified
             assert_eq!(command, "setBreakpoints");
 
-            let body = body.unwrap();
-            let breakpoints = body.get("breakpoints").and_then(|b| b.as_array()).unwrap();
+            let body = must_some(body);
+            let breakpoints = must_some(body.get("breakpoints").and_then(|b| b.as_array()));
             assert_eq!(breakpoints.len(), 2);
 
             // Invalid line breakpoints should not be verified
@@ -214,7 +215,7 @@ fn test_dap_evaluate_empty_expression() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
             assert_eq!(command, "evaluate");
-            assert_eq!(message.unwrap(), "Empty expression");
+            assert_eq!(must_some(message), "Empty expression");
         }
         _ => panic!("Expected response message"),
     }
@@ -234,7 +235,7 @@ fn test_dap_evaluate_no_session() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
             assert_eq!(command, "evaluate");
-            assert!(message.unwrap().contains("No debugger session"));
+            assert!(must_some(message).contains("No debugger session"));
         }
         _ => panic!("Expected response message"),
     }
@@ -251,8 +252,8 @@ fn test_dap_threads_no_session() {
             assert!(success);
             assert_eq!(command, "threads");
 
-            let body = body.unwrap();
-            let threads = body.get("threads").and_then(|t| t.as_array()).unwrap();
+            let body = must_some(body);
+            let threads = must_some(body.get("threads").and_then(|t| t.as_array()));
             assert_eq!(threads.len(), 0); // No threads without session
         }
         _ => panic!("Expected response message"),
@@ -270,11 +271,11 @@ fn test_dap_stacktrace_no_session() {
             assert!(success);
             assert_eq!(command, "stackTrace");
 
-            let body = body.unwrap();
-            let frames = body.get("stackFrames").and_then(|f| f.as_array()).unwrap();
+            let body = must_some(body);
+            let frames = must_some(body.get("stackFrames").and_then(|f| f.as_array()));
             assert_eq!(frames.len(), 0); // No frames without session
 
-            let total = body.get("totalFrames").and_then(|t| t.as_u64()).unwrap();
+            let total = must_some(body.get("totalFrames").and_then(|t| t.as_u64()));
             assert_eq!(total, 0);
         }
         _ => panic!("Expected response message"),
@@ -291,7 +292,7 @@ fn test_dap_pause_no_session() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
             assert_eq!(command, "pause");
-            assert_eq!(message.unwrap(), "Failed to pause debugger");
+            assert_eq!(must_some(message), "Failed to pause debugger");
         }
         _ => panic!("Expected response message"),
     }
@@ -325,7 +326,7 @@ fn test_dap_unknown_command() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
             assert_eq!(command, "unknownCommand");
-            assert!(message.unwrap().starts_with("Unknown command"));
+            assert!(must_some(message).starts_with("Unknown command"));
         }
         _ => panic!("Expected response message"),
     }
@@ -341,7 +342,7 @@ fn test_dap_variables_missing_reference() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
             assert_eq!(command, "variables");
-            assert_eq!(message.unwrap(), "Missing variablesReference");
+            assert_eq!(must_some(message), "Missing variablesReference");
         }
         _ => panic!("Expected response message"),
     }
@@ -362,14 +363,14 @@ fn test_dap_variables_default_scope() {
             assert!(success);
             assert_eq!(command, "variables");
 
-            let body = body.unwrap();
-            let variables = body.get("variables").and_then(|v| v.as_array()).unwrap();
+            let body = must_some(body);
+            let variables = must_some(body.get("variables").and_then(|v| v.as_array()));
 
             // Should return default Perl variables (@_, $_)
             assert_eq!(variables.len(), 2);
 
             let var_names: Vec<&str> =
-                variables.iter().map(|v| v.get("name").and_then(|n| n.as_str()).unwrap()).collect();
+                variables.iter().map(|v| must_some(v.get("name").and_then(|n| n.as_str()))).collect();
             assert!(var_names.contains(&"@_"));
             assert!(var_names.contains(&"$_"));
         }
@@ -387,7 +388,7 @@ fn test_dap_scopes_missing_frame() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
             assert_eq!(command, "scopes");
-            assert_eq!(message.unwrap(), "Missing frameId");
+            assert_eq!(must_some(message), "Missing frameId");
         }
         _ => panic!("Expected response message"),
     }
@@ -408,13 +409,13 @@ fn test_dap_scopes_valid_frame() {
             assert!(success);
             assert_eq!(command, "scopes");
 
-            let body = body.unwrap();
-            let scopes = body.get("scopes").and_then(|s| s.as_array()).unwrap();
+            let body = must_some(body);
+            let scopes = must_some(body.get("scopes").and_then(|s| s.as_array()));
             assert_eq!(scopes.len(), 1);
 
             let scope = &scopes[0];
-            assert_eq!(scope.get("name").and_then(|n| n.as_str()).unwrap(), "Local");
-            assert_eq!(scope.get("variablesReference").and_then(|v| v.as_i64()).unwrap(), 1);
+            assert_eq!(must_some(scope.get("name").and_then(|n| n.as_str())), "Local");
+            assert_eq!(must_some(scope.get("variablesReference").and_then(|v| v.as_i64())), 1);
         }
         _ => panic!("Expected response message"),
     }
@@ -507,8 +508,8 @@ print "Result: $result\n";
     match bp_response {
         DapMessage::Response { success, body, .. } => {
             assert!(success, "setBreakpoints should succeed");
-            let body = body.unwrap();
-            let breakpoints = body.get("breakpoints").and_then(|b| b.as_array()).unwrap();
+            let body = must_some(body);
+            let breakpoints = must_some(body.get("breakpoints").and_then(|b| b.as_array()));
             assert_eq!(breakpoints.len(), 1);
 
             // Breakpoint might not be verified without active session
@@ -524,8 +525,8 @@ print "Result: $result\n";
     match threads_response {
         DapMessage::Response { success, body, .. } => {
             assert!(success, "threads request should succeed");
-            let body = body.unwrap();
-            let threads = body.get("threads").and_then(|t| t.as_array()).unwrap();
+            let body = must_some(body);
+            let threads = must_some(body.get("threads").and_then(|t| t.as_array()));
             // May have 0 or 1 threads depending on launch success
             assert!(threads.len() <= 1, "Should have 0 or 1 thread");
         }

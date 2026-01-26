@@ -11,7 +11,7 @@ fn locked_capabilities_are_conservative() -> Result<(), Box<dyn std::error::Erro
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
-    let res = srv.handle_request(init)?;
+    let res = srv.handle_request(init).ok_or("Request handling failed")?;
     let result = res.result.ok_or("missing result field")?;
     let caps = &result["capabilities"];
 
@@ -25,7 +25,7 @@ fn locked_capabilities_are_conservative() -> Result<(), Box<dyn std::error::Erro
     assert_eq!(caps["documentSymbolProvider"], json!(true));
     assert_eq!(caps["foldingRangeProvider"], json!(true));
 
-    // NOT advertised in lock mode
+    // ADVERTISED in lock mode (now considered stable)
     for k in [
         "workspaceSymbolProvider",
         "renameProvider",
@@ -35,23 +35,33 @@ fn locked_capabilities_are_conservative() -> Result<(), Box<dyn std::error::Erro
         "documentLinkProvider",
         "selectionRangeProvider",
         "documentOnTypeFormattingProvider",
+        "executeCommandProvider",
+        "typeHierarchyProvider",
+        "callHierarchyProvider",
+    ] {
+        assert!(
+            caps.get(k).is_some() && !caps.get(k).unwrap().is_null(),
+            "locked mode SHOULD advertise {} (now stable)",
+            k
+        );
+    }
+
+    // NOT advertised in lock mode (still experimental/risky)
+    for k in [
+        "typeDefinitionProvider",
+        "implementationProvider",
+        "linkedEditingRangeProvider",
+        "inlineValueProvider",
+        "monikerProvider",
+        "colorProvider",
     ] {
         assert!(caps.get(k).is_none(), "locked mode should not advertise {}", k);
     }
 
-    // Also ensure these are never advertised in GA lock mode
-    assert!(
-        caps["codeLensProvider"].is_null(),
-        "codeLensProvider must NOT be advertised in lock mode"
-    );
-    assert!(
-        caps["typeHierarchyProvider"].is_null(),
-        "typeHierarchyProvider must NOT be advertised"
-    );
-    assert!(
-        caps["executeCommandProvider"].is_null(),
-        "executeCommandProvider must NOT be advertised"
-    );
+    // codeLens is explicitly null or missing
+    if let Some(cl) = caps.get("codeLensProvider") {
+        assert!(cl.is_null(), "codeLensProvider must be null in lock mode");
+    }
 
     Ok(())
 }

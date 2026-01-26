@@ -73,7 +73,7 @@ pub struct AntiPatternDetector {
 
 trait PatternDetector: Send + Sync {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)>;
-    fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic;
+    fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic>;
 }
 
 // Format heredoc detector
@@ -130,13 +130,12 @@ impl PatternDetector for FormatHeredocDetector {
         results
     }
 
-    fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
+    fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic> {
         let AntiPattern::FormatHeredoc { format_name, .. } = pattern else {
-            // Defensive programming
-            panic!("FormatHeredocDetector received incompatible pattern type.");
+            return None;
         };
 
-        Diagnostic {
+        Some(Diagnostic {
             severity: Severity::Warning,
             pattern: pattern.clone(),
             message: format!("Format '{}' uses heredoc syntax", format_name),
@@ -146,7 +145,7 @@ impl PatternDetector for FormatHeredocDetector {
                 "perldoc perlform".to_string(),
                 "https://perldoc.perl.org/perldiag#Use-of-uninitialized-value-in-format".to_string(),
             ],
-        }
+        })
     }
 }
 
@@ -199,9 +198,9 @@ impl PatternDetector for BeginTimeHeredocDetector {
         results
     }
 
-    fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
+    fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic> {
         let AntiPattern::BeginTimeHeredoc { side_effects, .. } = pattern else {
-            panic!("BeginTimeHeredocDetector received incompatible pattern type.");
+            return None;
         };
 
         let effects_str = if side_effects.is_empty() {
@@ -210,7 +209,7 @@ impl PatternDetector for BeginTimeHeredocDetector {
             format!("Detected side effects: {}", side_effects.join(", "))
         };
 
-        Diagnostic {
+        Some(Diagnostic {
             severity: Severity::Warning,
             pattern: pattern.clone(),
             message: "Heredoc in BEGIN block detected".to_string(),
@@ -219,7 +218,7 @@ impl PatternDetector for BeginTimeHeredocDetector {
             references: vec![
                 "perldoc perlmod#BEGIN,-UNITCHECK,-CHECK,-INIT-and-END".to_string(),
             ],
-        }
+        })
     }
 }
 
@@ -252,12 +251,12 @@ impl PatternDetector for DynamicDelimiterDetector {
         results
     }
 
-    fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
+    fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic> {
         let AntiPattern::DynamicHeredocDelimiter { expression, .. } = pattern else {
-            panic!("DynamicDelimiterDetector received incompatible pattern type.");
+            return None;
         };
 
-        Diagnostic {
+        Some(Diagnostic {
             severity: Severity::Error,
             pattern: pattern.clone(),
             message: format!("Dynamic heredoc delimiter: {}", expression),
@@ -266,7 +265,7 @@ impl PatternDetector for DynamicDelimiterDetector {
             references: vec![
                 "perldoc perlop#'<<EOF'".to_string(),
             ],
-        }
+        })
     }
 }
 
@@ -303,19 +302,19 @@ impl PatternDetector for SourceFilterDetector {
         results
     }
 
-    fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
+    fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic> {
         let AntiPattern::SourceFilterHeredoc { filter_module, .. } = pattern else {
-            panic!("SourceFilterDetector received incompatible pattern type.");
+            return None;
         };
 
-        Diagnostic {
+        Some(Diagnostic {
             severity: Severity::Error,
             pattern: pattern.clone(),
             message: format!("Source filter 'Filter::{}' detected", filter_module),
             explanation: "Source filters can transform code before parsing, making static analysis unreliable or impossible.".to_string(),
             suggested_fix: Some("Avoid source filters if possible, or expect limited IDE functionality.".to_string()),
             references: vec!["perldoc Filter::Simple".to_string()],
-        }
+        })
     }
 }
 
@@ -350,19 +349,19 @@ impl PatternDetector for RegexHeredocDetector {
         results
     }
 
-    fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
+    fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic> {
         let AntiPattern::RegexCodeBlockHeredoc { .. } = pattern else {
-            panic!("RegexHeredocDetector received incompatible pattern type.");
+            return None;
         };
 
-        Diagnostic {
+        Some(Diagnostic {
             severity: Severity::Error,
             pattern: pattern.clone(),
             message: "Heredoc detected inside regex code block (?{...})".to_string(),
             explanation: "Code blocks inside regexes are executed during pattern matching. Containing heredocs within them is highly problematic for static analysis and parsing.".to_string(),
             suggested_fix: Some("Refactor the code to construct the string outside the regex.".to_string()),
             references: vec!["perldoc perlre".to_string()],
-        }
+        })
     }
 }
 
@@ -399,19 +398,19 @@ impl PatternDetector for EvalHeredocDetector {
         results
     }
 
-    fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
+    fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic> {
         let AntiPattern::EvalStringHeredoc { .. } = pattern else {
-            panic!("EvalHeredocDetector received incompatible pattern type.");
+            return None;
         };
 
-        Diagnostic {
+        Some(Diagnostic {
             severity: Severity::Warning,
             pattern: pattern.clone(),
             message: "Heredoc detected inside eval string".to_string(),
             explanation: "Code inside string eval is parsed at runtime. Static analysis cannot reliably determine the behavior of heredocs within it.".to_string(),
             suggested_fix: Some("Use block eval or avoid heredocs inside eval strings.".to_string()),
             references: vec!["perldoc -f eval".to_string()],
-        }
+        })
     }
 }
 
@@ -459,19 +458,19 @@ impl PatternDetector for TiedHandleDetector {
         results
     }
 
-    fn diagnose(&self, pattern: &AntiPattern) -> Diagnostic {
+    fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic> {
         let AntiPattern::TiedHandleHeredoc { handle_name, .. } = pattern else {
-            panic!("TiedHandleDetector received incompatible pattern type.");
+            return None;
         };
 
-        Diagnostic {
+        Some(Diagnostic {
             severity: Severity::Info,
             pattern: pattern.clone(),
             message: format!("Heredoc written to tied handle '{}'", handle_name),
             explanation: "Writing to a tied handle invokes custom code. The behavior of heredoc output depends on the tied class implementation.".to_string(),
             suggested_fix: None,
             references: vec!["perldoc -f tie".to_string()],
-        }
+        })
     }
 }
 
@@ -496,7 +495,9 @@ impl AntiPatternDetector {
         for detector in &self.patterns {
             let patterns = detector.detect(code, 0);
             for (pattern, _) in patterns {
-                diagnostics.push(detector.diagnose(&pattern));
+                if let Some(diagnostic) = detector.diagnose(&pattern) {
+                    diagnostics.push(diagnostic);
+                }
             }
         }
 

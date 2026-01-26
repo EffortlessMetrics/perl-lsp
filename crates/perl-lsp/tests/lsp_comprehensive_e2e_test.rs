@@ -156,9 +156,16 @@ fn test_e2e_initialization_and_capabilities() -> TestResult {
         capabilities["codeActionProvider"].is_boolean()
             || capabilities["codeActionProvider"].is_object()
     );
-    // Code lens should be advertised
-    assert!(capabilities["codeLensProvider"].is_object());
-    assert_eq!(capabilities["codeLensProvider"]["resolveProvider"], json!(true));
+    // Code lens should be advertised (except in GA lock)
+    #[cfg(not(feature = "lsp-ga-lock"))]
+    {
+        assert!(capabilities["codeLensProvider"].is_object());
+        assert_eq!(capabilities["codeLensProvider"]["resolveProvider"], json!(true));
+    }
+    #[cfg(feature = "lsp-ga-lock")]
+    {
+        assert!(capabilities["codeLensProvider"].is_null());
+    }
     assert!(
         capabilities["documentFormattingProvider"].is_boolean()
             || capabilities["documentFormattingProvider"].is_null()

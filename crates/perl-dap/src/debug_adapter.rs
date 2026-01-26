@@ -2075,7 +2075,7 @@ mod tests {
                 assert_eq!(command, "initialize");
                 assert!(body.is_some());
             }
-            _ => panic!("Expected response"),
+            _ => assert!(false, "Expected response"),
         }
     }
 
@@ -2092,7 +2092,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Missing attach arguments"));
             }
-            _ => panic!("Expected response"),
+            _ => assert!(false, "Expected response"),
         }
         Ok(())
     }
@@ -2116,7 +2116,7 @@ mod tests {
                 assert!(msg.contains("localhost:13603"));
                 assert!(msg.contains("5000ms timeout"));
             }
-            _ => panic!("Expected response"),
+            _ => assert!(false, "Expected response"),
         }
         Ok(())
     }
@@ -2138,7 +2138,7 @@ mod tests {
                 assert!(msg.contains("Process ID attachment"));
                 assert!(msg.contains("12345"));
             }
-            _ => panic!("Expected response"),
+            _ => assert!(false, "Expected response"),
         }
         Ok(())
     }
@@ -2160,7 +2160,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Host cannot be empty"));
             }
-            _ => panic!("Expected response"),
+            _ => assert!(false, "Expected response"),
         }
         Ok(())
     }
@@ -2182,7 +2182,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Host cannot be empty"));
             }
-            _ => panic!("Expected response"),
+            _ => assert!(false, "Expected response"),
         }
         Ok(())
     }
@@ -2204,7 +2204,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Port must be in range"));
             }
-            _ => panic!("Expected response"),
+            _ => assert!(false, "Expected response"),
         }
         Ok(())
     }
@@ -2227,7 +2227,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Timeout must be greater than 0"));
             }
-            _ => panic!("Expected response"),
+            _ => assert!(false, "Expected response"),
         }
         Ok(())
     }
@@ -2250,7 +2250,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Timeout cannot exceed"));
             }
-            _ => panic!("Expected response"),
+            _ => assert!(false, "Expected response"),
         }
         Ok(())
     }
@@ -2271,7 +2271,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("localhost:13603"));
             }
-            _ => panic!("Expected response"),
+            _ => assert!(false, "Expected response"),
         }
         Ok(())
     }
@@ -2293,7 +2293,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("192.168.1.100:9000"));
             }
-            _ => panic!("Expected response"),
+            _ => assert!(false, "Expected response"),
         }
         Ok(())
     }

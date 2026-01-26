@@ -163,7 +163,7 @@ fn benchmark_scope_analysis(c: &mut Criterion) {
                         analyzer.analyze(
                             black_box(&fallback_ast),
                             black_box("my $x = 1;"),
-                            black_box(&vec![]),
+                            black_box(&[]),
                         );
                     }
                 });

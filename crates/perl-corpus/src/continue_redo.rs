@@ -462,7 +462,7 @@ pub fn invalid_cases() -> Vec<&'static ContinueRedoCase> {
 mod tests {
     use super::*;
     use std::collections::HashSet;
-    use perl_tdd_support::{must, must_some};
+    use perl_tdd_support::must_some;
 
     #[test]
     fn all_cases_have_ids() {

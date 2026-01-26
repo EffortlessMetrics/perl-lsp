@@ -1,4 +1,5 @@
 //! LSP Color Detection Tests
+#![cfg(not(feature = "lsp-ga-lock"))]
 //!
 //! Tests for textDocument/documentColor and textDocument/colorPresentation
 //! LSP 3.18 features for detecting and presenting color literals in Perl code.

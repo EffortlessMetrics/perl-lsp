@@ -410,7 +410,6 @@ impl TypeHierarchyProvider {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use perl_parser_core::parser::Parser;

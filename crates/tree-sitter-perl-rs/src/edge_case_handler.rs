@@ -7,7 +7,9 @@ use crate::anti_pattern_detector::{AntiPatternDetector, Diagnostic};
 use crate::dynamic_delimiter_recovery::{DynamicDelimiterRecovery, ParseContext, RecoveryMode};
 use crate::partial_parse_ast::ExtendedAstNode;
 use crate::phase_aware_parser::{PerlPhase, PhaseAwareParser};
-use crate::understanding_parser::UnderstandingParser;
+use crate::pure_rust_parser::AstNode;
+use crate::understanding_parser::{ParseResult, UnderstandingParser};
+use std::sync::Arc;
 
 pub struct EdgeCaseHandler {
     anti_pattern_detector: AntiPatternDetector,
@@ -111,7 +113,15 @@ impl EdgeCaseHandler {
         let mut understanding_parser = UnderstandingParser::new();
         let parse_result = understanding_parser
             .parse_with_understanding(code)
-            .unwrap_or_else(|e| panic!("Parse failed: {}", e));
+            .unwrap_or_else(|e| ParseResult {
+                ast: ExtendedAstNode::Normal(AstNode::ErrorNode {
+                    message: Arc::from(format!("Parse failed: {}", e)),
+                    content: Arc::from(""),
+                }),
+                diagnostics: vec![],
+                parse_coverage: 0.0,
+                recovery_points: vec![],
+            });
 
         // Phase 5: Generate recommendations
         self.generate_recommendations(&mut recommended_actions, &diagnostics);

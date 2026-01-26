@@ -1,4 +1,5 @@
 //! Tests for CodeLens reference counting functionality
+#![cfg(not(feature = "lsp-ga-lock"))]
 
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
