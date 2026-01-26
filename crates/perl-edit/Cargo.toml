@@ -1,0 +1,14 @@
+[package]
+name = "perl-edit"
+version = "0.8.8"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+perl-position-tracking = { workspace = true }
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[lints]
+workspace = true

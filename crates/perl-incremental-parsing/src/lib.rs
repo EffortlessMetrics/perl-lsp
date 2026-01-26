@@ -67,7 +67,8 @@
 )]
 
 pub use perl_parser_core::{Node, NodeKind, SourceLocation};
-pub use perl_parser_core::{Parser, ast, edit, error, parser, position};
+pub use perl_parser_core::{Parser, ast, error, parser, position};
+pub use perl_edit as edit;
 
 /// Incremental parsing implementation and helpers.
 pub mod incremental;

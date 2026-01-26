@@ -1441,6 +1441,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-builtins"
+version = "0.8.8"
+dependencies = [
+ "phf",
+]
+
+[[package]]
 name = "perl-corpus"
 version = "0.8.8"
 dependencies = [
@@ -1492,11 +1499,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-edit"
+version = "0.8.8"
+dependencies = [
+ "perl-position-tracking",
+ "perl-tdd-support",
+]
+
+[[package]]
 name = "perl-incremental-parsing"
 version = "0.8.8"
 dependencies = [
  "anyhow",
  "lsp-types",
+ "perl-edit",
  "perl-lexer",
  "perl-parser-core",
  "perl-tdd-support",
@@ -1643,9 +1659,15 @@ name = "perl-parser-core"
 version = "0.8.8"
 dependencies = [
  "perl-ast",
+ "perl-builtins",
+ "perl-edit",
  "perl-lexer",
  "perl-position-tracking",
+ "perl-pragma",
+ "perl-quote",
+ "perl-regex",
  "perl-tdd-support",
+ "perl-token",
  "phf",
  "ropey",
  "serde",
@@ -1679,6 +1701,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-pragma"
+version = "0.8.8"
+dependencies = [
+ "perl-ast",
+]
+
+[[package]]
+name = "perl-quote"
+version = "0.8.8"
+
+[[package]]
 name = "perl-refactoring"
 version = "0.8.8"
 dependencies = [
@@ -1688,6 +1721,13 @@ dependencies = [
  "regex",
  "serde",
  "tempfile",
+]
+
+[[package]]
+name = "perl-regex"
+version = "0.8.8"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
@@ -1729,6 +1769,10 @@ dependencies = [
  "serde_json",
  "url",
 ]
+
+[[package]]
+name = "perl-token"
+version = "0.8.8"
 
 [[package]]
 name = "perl-uri"

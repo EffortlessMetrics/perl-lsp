@@ -44,7 +44,7 @@
 )]
 
 /// Builtin function signatures and metadata.
-pub mod builtins;
+pub use perl_builtins as builtins;
 /// Parser engine components and supporting utilities.
 pub mod engine;
 /// Token stream and trivia utilities for the parser.
