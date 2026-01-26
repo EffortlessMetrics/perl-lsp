@@ -141,6 +141,10 @@ export class BinaryDownloader {
             }
             
             this.outputChannel.appendLine(`Found matching asset: ${assetName}`);
+
+            if (assetName.includes('/') || assetName.includes('\\') || assetName.includes('..')) {
+                throw new Error(`Invalid asset name (path traversal detected): ${assetName}`);
+            }
             
             // Find checksum file (SHA256SUMS file contains all checksums)
             const checksumAsset = release.assets.find(a => a.name === 'SHA256SUMS');
