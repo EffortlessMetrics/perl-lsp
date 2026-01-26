@@ -109,7 +109,7 @@ mod declaration_micro_tests {
 
     #[test]
     fn crlf_with_trailing_emoji_clamp_and_roundtrip() {
-        use perl_parser::positions::LineStartsCache;
+        use perl_parser::position::LineStartsCache;
 
         // "A🐍\r\n" — UTF-16 columns: 'A'->1, '🐍'->+2, total line len = 3 before CR
         let text = "A🐍\r\n";

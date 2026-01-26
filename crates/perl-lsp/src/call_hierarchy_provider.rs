@@ -1,5 +1,5 @@
 use perl_parser::ast::{Node, NodeKind};
-use perl_parser::position_mapper::{Position as ParserPosition, PositionMapper};
+use perl_parser::PositionMapper;
 use perl_position_tracking::{WirePosition, WireRange};
 use serde_json::{Value, json};
 
@@ -513,7 +513,7 @@ impl CallHierarchyProvider {
 
     /// Convert line/character position to byte offset using PositionMapper for UTF-16 compliance
     fn position_to_offset(&self, line: u32, character: u32) -> usize {
-        let pos = ParserPosition { line, character };
+        let pos = WirePosition { line, character };
         self.position_mapper.lsp_pos_to_byte(pos).unwrap_or(self.source.len())
     }
 

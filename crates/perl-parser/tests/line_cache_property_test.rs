@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod line_cache_property_tests {
-    use perl_parser::positions::LineStartsCache;
+    use perl_parser::position::LineStartsCache;
 
     /// Test that cached position conversions match the slow path exactly
     #[test]

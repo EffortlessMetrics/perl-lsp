@@ -28,7 +28,7 @@ use perl_parser::{
     declaration::ParentMap,
     performance::{AstCache, SymbolIndex},
     perl_critic::BuiltInAnalyzer,
-    positions::LineStartsCache,
+    position::LineStartsCache,
     tdd_basic::TestGenerator,
     test_runner::{TestKind, TestRunner},
 };

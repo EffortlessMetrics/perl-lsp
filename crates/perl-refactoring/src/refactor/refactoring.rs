@@ -37,7 +37,7 @@ use crate::modernize::PerlModernizer as ModernizeEngine;
 use crate::workspace_index::WorkspaceIndex;
 #[cfg(feature = "workspace_refactor")]
 use crate::workspace_refactor::WorkspaceRefactor;
-use perl_parser_core::position::line_index::LineIndex;
+use perl_parser_core::line_index::LineIndex;
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
