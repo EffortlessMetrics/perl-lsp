@@ -327,84 +327,84 @@
         "description": "Start a new test file with Test::More"
     },
     "Test Ok": {
-        "prefix": "tm-ok",
+        "prefix": ["tm-ok", "ok"],
         "body": [
             "ok(${1:$got}, '${2:test description}');"
         ],
         "description": "Simple boolean test (Test::More)"
     },
     "Test Is": {
-        "prefix": "tm-is",
+        "prefix": ["tm-is", "is"],
         "body": [
             "is(${1:$got}, ${2:$expected}, '${3:test description}');"
         ],
         "description": "Test if two values are equal (Test::More)"
     },
     "Test Isnt": {
-        "prefix": "tm-isnt",
+        "prefix": ["tm-isnt", "isnt"],
         "body": [
             "isnt(${1:$got}, ${2:$expected}, '${3:test description}');"
         ],
         "description": "Test if two values are not equal (Test::More)"
     },
     "Test Is Deeply": {
-        "prefix": "tm-is_deeply",
+        "prefix": ["tm-is_deeply", "is_deeply"],
         "body": [
             "is_deeply(${1:$got}, ${2:$expected}, '${3:test description}');"
         ],
         "description": "Test if two data structures are identical (Test::More)"
     },
     "Test Like": {
-        "prefix": "tm-like",
+        "prefix": ["tm-like", "like"],
         "body": [
             "like(${1:$got}, qr/${2:pattern}/, '${3:test description}');"
         ],
         "description": "Test if value matches regex (Test::More)"
     },
     "Test Unlike": {
-        "prefix": "tm-unlike",
+        "prefix": ["tm-unlike", "unlike"],
         "body": [
             "unlike(${1:$got}, qr/${2:pattern}/, '${3:test description}');"
         ],
         "description": "Test if value does not match regex (Test::More)"
     },
     "Test Cmp Ok": {
-        "prefix": "tm-cmp_ok",
+        "prefix": ["tm-cmp_ok", "cmp_ok"],
         "body": [
             "cmp_ok(${1:$got}, '${2:op}', ${3:$expected}, '${4:test description}');"
         ],
         "description": "Compare two arguments using an operator (Test::More)"
     },
     "Test Isa Ok": {
-        "prefix": "tm-isa_ok",
+        "prefix": ["tm-isa_ok", "isa_ok"],
         "body": [
             "isa_ok(${1:$obj}, '${2:Class::Name}', '${3:object name}');"
         ],
         "description": "Test if object is of a given class (Test::More)"
     },
     "Test Can Ok": {
-        "prefix": "tm-can_ok",
+        "prefix": ["tm-can_ok", "can_ok"],
         "body": [
             "can_ok(${1:$obj}, qw(${2:methods}));"
         ],
         "description": "Test if object or class has methods (Test::More)"
     },
     "Test Pass": {
-        "prefix": "tm-pass",
+        "prefix": ["tm-pass", "pass"],
         "body": [
             "pass('${1:test description}');"
         ],
         "description": "Explicitly pass a test (Test::More)"
     },
     "Test Fail": {
-        "prefix": "tm-fail",
+        "prefix": ["tm-fail", "fail"],
         "body": [
             "fail('${1:test description}');"
         ],
         "description": "Explicitly fail a test (Test::More)"
     },
     "Test Subtest": {
-        "prefix": "tm-subtest",
+        "prefix": ["tm-subtest", "subtest"],
         "body": [
             "subtest '${1:group name}' => sub {",
             "    ${0}",
@@ -413,14 +413,14 @@
         "description": "Group tests in a subtest (Test::More)"
     },
     "Test Diag": {
-        "prefix": "tm-diag",
+        "prefix": ["tm-diag", "diag"],
         "body": [
             "diag('${1:message}');"
         ],
         "description": "Print diagnostic message (Test::More)"
     },
     "Done Testing": {
-        "prefix": "tm-done",
+        "prefix": ["tm-done", "done_testing"],
         "body": [
             "done_testing();"
         ],
