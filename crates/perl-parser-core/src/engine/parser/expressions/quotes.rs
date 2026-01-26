@@ -265,11 +265,11 @@ impl<'a> Parser<'a> {
         // Grab the opening delimiter as a single *token* (whatever it is).
         // This could be (, [, {, <, or any single character like |, !, #, etc.
         let open = self.tokens.next()?; // e.g., '(', '{', '|', '#', '!'
-        let open_txt = open.text.as_str();
+        let open_txt = &open.text;
 
         // Special case for # - it causes lexer issues as it starts comments
         // When we see qw#, we need to consume carefully
-        if open_txt == "#" {
+        if open_txt.as_ref() == "#" {
             let mut words = Vec::<String>::new();
 
             // The lexer will treat the closing # as starting a comment,
@@ -303,12 +303,12 @@ impl<'a> Parser<'a> {
                 match peek.kind {
                     TokenKind::Identifier | TokenKind::Number => {
                         // Check if this is a keyword that likely isn't part of the qw list
-                        if matches!(peek.text.as_str(), "use" | "constant" | "my" | "our" | "sub") {
+                        if matches!(peek.text.as_ref(), "use" | "constant" | "my" | "our" | "sub") {
                             // Don't consume it, just stop here
                             break;
                         }
                         let t = self.tokens.next()?;
-                        words.push(t.text.clone());
+                        words.push(t.text.to_string());
                     }
                     _ => {
                         // Skip other tokens
@@ -333,7 +333,7 @@ impl<'a> Parser<'a> {
         // acts as a separator or gets skipped.
         while !self.tokens.is_eof() {
             let peek = self.tokens.peek()?;
-            if peek.text == close_txt.as_str() {
+            if &*peek.text == close_txt.as_str() {
                 self.tokens.next()?; // consume closer
                 break;
             }
@@ -341,7 +341,7 @@ impl<'a> Parser<'a> {
             match self.peek_kind() {
                 Some(TokenKind::Identifier) | Some(TokenKind::Number) => {
                     let t = self.tokens.next()?;
-                    words.push(t.text.clone());
+                    words.push(t.text.to_string());
                 }
                 Some(TokenKind::String) => {
                     let t = self.tokens.next()?;

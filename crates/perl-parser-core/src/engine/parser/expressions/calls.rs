@@ -67,7 +67,7 @@ impl<'a> Parser<'a> {
                     }
 
                     // Allow classic argument starts and sigiled variables ($x, @arr, %hash)
-                    let third_text = third.text.as_str();
+                    let third_text = &third.text;
                     return matches!(
                         third.kind,
                         TokenKind::String       // print $fh "x"
@@ -113,7 +113,7 @@ impl<'a> Parser<'a> {
         
         let start = self.current_position();
         let method_token = self.consume_token()?; // consume method name
-        let method = method_token.text;
+        let method = method_token.text.to_string();
 
         // We're consuming the function name, no longer at statement start
         self.mark_not_stmt_start();
