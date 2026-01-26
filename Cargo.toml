@@ -21,7 +21,7 @@ members = [
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
-    "xtask",
+    "xtask", "crates/perl-ast",
 ]
 exclude = [
     "tree-sitter-perl",
