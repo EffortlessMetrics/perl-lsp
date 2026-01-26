@@ -77,7 +77,7 @@ export class BinaryDownloader {
                     'Install Manually'
                 ).then(choice => {
                     if (choice === 'Install Manually') {
-                        vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessSteven/tree-sitter-perl#quick-install'));
+                        vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/tree-sitter-perl#quick-install'));
                     }
                 });
             } else {

@@ -60,4 +60,4 @@ at your option.
 
 ## Contributing
 
-See the main [perl-lsp](https://github.com/EffortlessSteven/tree-sitter-perl-rs) repository for contribution guidelines.
+See the main [perl-lsp](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) repository for contribution guidelines.

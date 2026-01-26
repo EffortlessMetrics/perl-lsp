@@ -26,7 +26,7 @@ cargo install perl-lsp
 ### From Source
 
 ```bash
-git clone https://github.com/EffortlessSteven/tree-sitter-perl-rs
+git clone https://github.com/EffortlessMetrics/tree-sitter-perl-rs
 cd tree-sitter-perl-rs
 cargo install --path crates/perl-lsp
 ```
@@ -113,7 +113,7 @@ This LSP server is built on top of the [perl-parser](https://crates.io/crates/pe
 - **textDocument/codeLens**: ~20% functional
 - **callHierarchy/**: ~15% functional
 
-See the [LSP Capability Documentation](https://github.com/EffortlessSteven/tree-sitter-perl-rs/blob/master/docs/LSP_ACTUAL_STATUS.md) for complete feature status.
+See the [LSP Capability Documentation](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/blob/master/docs/LSP_ACTUAL_STATUS.md) for complete feature status.
 
 ## Performance
 
@@ -124,7 +124,7 @@ See the [LSP Capability Documentation](https://github.com/EffortlessSteven/tree-
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://github.com/EffortlessSteven/tree-sitter-perl-rs/blob/master/CONTRIBUTING.md) for development setup and contribution guidelines.
+See [CONTRIBUTING.md](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/blob/master/CONTRIBUTING.md) for development setup and contribution guidelines.
 
 ## License
 

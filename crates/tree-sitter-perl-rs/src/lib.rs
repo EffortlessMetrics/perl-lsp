@@ -39,7 +39,7 @@
 //! 2. **AST Building**: Type-safe AST construction with position tracking
 //! 3. **S-Expression Output**: Tree-sitter compatible format generation
 //!
-//! See [ARCHITECTURE.md](https://github.com/EffortlessSteven/tree-sitter-perl/blob/main/ARCHITECTURE.md) for details.
+//! See [ARCHITECTURE.md](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/main/ARCHITECTURE.md) for details.
 
 pub mod error;
 pub mod scanner;

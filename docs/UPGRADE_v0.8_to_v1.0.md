@@ -28,7 +28,7 @@ For most users, upgrading is straightforward:
 
 ```bash
 # Binary users: Download new version
-# GitHub releases: https://github.com/EffortlessSteven/tree-sitter-perl/releases
+# GitHub releases: https://github.com/EffortlessMetrics/tree-sitter-perl/releases
 
 # Cargo users: Update dependencies
 cargo install perl-lsp --force
@@ -310,14 +310,14 @@ cargo install perl-lsp --force
 #### Option C: From Source
 
 ```bash
-git clone https://github.com/EffortlessSteven/tree-sitter-perl
+git clone https://github.com/EffortlessMetrics/tree-sitter-perl
 cd tree-sitter-perl
 cargo install --path crates/perl-lsp
 ```
 
 #### Option D: Pre-built Binary
 
-Download from [GitHub Releases](https://github.com/EffortlessSteven/tree-sitter-perl/releases):
+Download from [GitHub Releases](https://github.com/EffortlessMetrics/tree-sitter-perl/releases):
 
 ```bash
 # Linux x86_64
@@ -552,8 +552,8 @@ Update lsp-mode configuration:
 
 ### Resources
 
-- **Documentation**: [docs/](https://github.com/EffortlessSteven/tree-sitter-perl/tree/master/docs)
-- **Issues**: [GitHub Issues](https://github.com/EffortlessSteven/tree-sitter-perl/issues)
+- **Documentation**: [docs/](https://github.com/EffortlessMetrics/tree-sitter-perl/tree/master/docs)
+- **Issues**: [GitHub Issues](https://github.com/EffortlessMetrics/tree-sitter-perl/issues)
 - **CHANGELOG**: [CHANGELOG.md](../CHANGELOG.md)
 - **Stability Policy**: [STABILITY.md](STABILITY.md)
 

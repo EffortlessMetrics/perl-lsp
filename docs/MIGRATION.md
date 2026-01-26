@@ -192,6 +192,6 @@ Known limitation: `\r` in CRLF sequences may not round-trip perfectly through po
 
 ## Getting Help
 
-- **Upgrade issues**: [GitHub Issues](https://github.com/EffortlessSteven/tree-sitter-perl/issues)
+- **Upgrade issues**: [GitHub Issues](https://github.com/EffortlessMetrics/tree-sitter-perl/issues)
 - **API questions**: See rustdoc: `cargo doc --open`
 - **Performance**: Run benchmarks: `cargo bench`

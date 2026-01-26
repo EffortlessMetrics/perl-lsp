@@ -212,7 +212,7 @@ jobs:
           | Windows | x86_64 | ✅ MSVC |
           
           ### Changes
-          See [CHANGELOG.md](https://github.com/EffortlessSteven/tree-sitter-perl/blob/main/CHANGELOG.md) for details.
+          See [CHANGELOG.md](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/main/CHANGELOG.md) for details.
           
           ### Checksums
           Verify downloads with the SHA256SUMS file.
