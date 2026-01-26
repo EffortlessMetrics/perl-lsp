@@ -1678,12 +1678,52 @@ fn is_core_qualified(s: &str, op_start: usize) -> bool {
 }
 
 /// Check if the match is a sigil-prefixed identifier ($print, @say, %exit, *dump)
+/// BUT NOT if it's a dereference call (&$print) or method call (->$print)
 fn is_sigil_prefixed_identifier(s: &str, op_start: usize) -> bool {
     let bytes = s.as_bytes();
     if op_start == 0 {
         return false;
     }
-    matches!(bytes[op_start - 1], b'$' | b'@' | b'%' | b'*')
+
+    // Must be preceded by a sigil
+    if !matches!(bytes[op_start - 1], b'$' | b'@' | b'%' | b'*') {
+        return false;
+    }
+
+    // Security: If it's a sigil, we must ensure it's not being used in a way
+    // that triggers execution (like &$sub or ->$method).
+    // We scan backwards from the sigil (op_start - 1) skipping whitespace.
+    let mut i = op_start - 1;
+    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+        i -= 1;
+    }
+
+    if i > 0 {
+        let prev = bytes[i - 1];
+
+        // Block dereference execution (&$sub)
+        if prev == b'&' {
+            return false;
+        }
+
+        // Block method call (->$method)
+        if prev == b'>' && i > 1 && bytes[i - 2] == b'-' {
+            return false;
+        }
+
+        // Handle braced dereference &{ $sub }
+        if prev == b'{' {
+            i -= 1;
+            while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+                i -= 1;
+            }
+            if i > 0 && bytes[i - 1] == b'&' {
+                return false;
+            }
+        }
+    }
+
+    true
 }
 
 /// Check if the match is a simple braced scalar variable ${print}
@@ -2409,6 +2449,37 @@ mod tests {
             "setsockopt $s, 1, 1, 1",
             "utime 1, 1, 'file'",
             "readdir $dh",
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_blocks_dereference_execution() {
+        // These are variables (safe to access)
+        let allowed = [
+            "$system",
+            "@exec",
+            "%fork",
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "unexpected block for {expr:?}: {err:?}");
+        }
+
+        // These are dereference calls (NOT safe)
+        // &$system calls the sub ref in $system
+        // ->$system calls the method named in $system
+        let blocked = [
+            "&$system",
+            "& $system",
+            "&{$system}", // Braced form
+            "$obj->$system",
+            "$obj-> $system",
         ];
 
         for expr in blocked {
