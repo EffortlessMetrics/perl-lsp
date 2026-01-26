@@ -3,7 +3,7 @@
 //! This module provides an updated AST that uses Range instead of SourceLocation
 //! to support incremental parsing and better error reporting.
 
-use crate::position::Range;
+use perl_position_tracking::Range;
 
 /// A unique identifier for AST nodes to support incremental parsing.
 pub type NodeId = usize;
@@ -305,7 +305,7 @@ impl Default for NodeIdGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::position::Position;
+    use perl_position_tracking::{Position, Range};
 
     #[test]
     fn test_node_creation() {

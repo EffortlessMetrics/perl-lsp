@@ -25,13 +25,15 @@
 //! assert_eq!(col, 0);
 //! ```
 
-mod convert;
-mod line_index;
-mod span;
-
 pub use convert::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 pub use line_index::LineStartsCache;
 pub use span::{ByteSpan, SourceLocation};
+pub use position::{Position, Range};
+
+mod convert;
+mod line_index;
+mod span;
+mod position;
 
 #[cfg(feature = "lsp-compat")]
 mod wire;

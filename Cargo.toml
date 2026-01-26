@@ -39,6 +39,7 @@ rust-version = "1.89"
 [workspace.dependencies]
 # Tier 1: Leaf crates (no internal dependencies)
 perl-lexer = { path = "crates/perl-lexer", version = "0.8.8" }
+perl-ast = { path = "crates/perl-ast", version = "0.8.8" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.8.8" }
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.8.8" }
 perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.8.8" }

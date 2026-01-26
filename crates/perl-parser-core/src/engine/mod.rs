@@ -1,10 +1,10 @@
 //! Parser engine components and supporting utilities.
 
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
-pub mod ast;
+pub use perl_ast::ast;
 /// Experimental second-generation AST (work in progress).
 #[allow(missing_docs)]
-pub mod ast_v2;
+pub use perl_ast::v2 as ast_v2;
 /// Edit tracking for incremental parsing.
 pub mod edit;
 /// Error types and recovery strategies for parser failures.
