@@ -3,7 +3,7 @@
 //! This module provides types and algorithms for tracking edits to source code
 //! and applying them to an existing parse tree.
 
-use crate::position::{Position, Range};
+use perl_position_tracking::{Position, Range};
 
 /// Represents an edit to the source text
 #[derive(Debug, Clone, PartialEq)]

@@ -115,6 +115,16 @@
 
 use thiserror::Error;
 
+impl From<perl_regex::RegexError> for ParseError {
+    fn from(err: perl_regex::RegexError) -> Self {
+        match err {
+            perl_regex::RegexError::Syntax { message, offset } => {
+                ParseError::syntax(message, offset)
+            }
+        }
+    }
+}
+
 /// Budget limits for parser operations to prevent runaway parsing.
 ///
 /// These limits ensure the parser terminates in bounded time even when

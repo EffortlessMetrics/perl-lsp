@@ -24,9 +24,15 @@ doctest = false
 
 [dependencies]
 perl-lexer = { workspace = true }
+perl-token = { workspace = true }
 perl-position-tracking = { workspace = true }
 perl-ast = { workspace = true }
-thiserror = "2.0.17"
+perl-quote = { workspace = true }
+perl-pragma = { workspace = true }
+perl-edit = { workspace = true }
+perl-builtins = { workspace = true }
+perl-regex = { workspace = true }
+thiserror = "2.0.18"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 phf = { version = "0.13.1", features = ["macros"] }
