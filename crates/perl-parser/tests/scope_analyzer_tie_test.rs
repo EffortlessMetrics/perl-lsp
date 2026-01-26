@@ -67,3 +67,17 @@ tie my $y, 'Some::Package', $x;
     // $x is used in tie args, so it shouldn't be unused
     assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UnusedVariable) && i.variable_name == "$x"));
 }
+
+#[test]
+fn test_tied_function() {
+    let code = r#"
+use strict;
+my %hash;
+tie %hash, 'Some::Package';
+if (tied %hash) {
+    print "Tied";
+}
+"#;
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+}
