@@ -13,8 +13,6 @@
 //! - Thread-safety and Clone safety
 //! - IndexCoordinator initialization patterns
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -199,8 +197,16 @@ impl IndexCoordinator {
     #[cfg(test)]
     pub fn new_ready(file_count: usize, symbol_count: usize) -> Self {
         let coord = Self::new();
-        *coord.state.write().unwrap() =
-            IndexState::Ready { file_count, symbol_count, completed_at: Instant::now() };
+        match coord.state.write() {
+            Ok(mut guard) => {
+                *guard =
+                    IndexState::Ready { file_count, symbol_count, completed_at: Instant::now() };
+            }
+            Err(e) => {
+                *e.into_inner() =
+                    IndexState::Ready { file_count, symbol_count, completed_at: Instant::now() };
+            }
+        }
         coord.current_file_count.store(file_count, std::sync::atomic::Ordering::SeqCst);
         coord.current_symbol_count.store(symbol_count, std::sync::atomic::Ordering::SeqCst);
         coord
@@ -221,8 +227,16 @@ impl IndexCoordinator {
                 .store(*pending_parses, std::sync::atomic::Ordering::SeqCst);
         }
 
-        *coord.state.write().unwrap() =
-            IndexState::Degraded { reason, available_symbols: 0, since: Instant::now() };
+        match coord.state.write() {
+            Ok(mut guard) => {
+                *guard =
+                    IndexState::Degraded { reason, available_symbols: 0, since: Instant::now() };
+            }
+            Err(e) => {
+                *e.into_inner() =
+                    IndexState::Degraded { reason, available_symbols: 0, since: Instant::now() };
+            }
+        }
         coord
     }
 
@@ -230,14 +244,20 @@ impl IndexCoordinator {
     ///
     /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#test_state_is_clone_safe
     pub fn state(&self) -> IndexState {
-        self.state.read().unwrap().clone()
+        match self.state.read() {
+            Ok(guard) => guard.clone(),
+            Err(e) => e.into_inner().clone(),
+        }
     }
 
     /// Complete initial workspace scan
     ///
     /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#test_building_to_ready_transition
     pub fn complete_initial_scan(&self, file_count: usize, symbol_count: usize) {
-        let mut state = self.state.write().unwrap();
+        let mut state = match self.state.write() {
+            Ok(guard) => guard,
+            Err(e) => e.into_inner(),
+        };
         *state = IndexState::Ready { file_count, symbol_count, completed_at: Instant::now() };
 
         // Update internal counters
@@ -284,7 +304,10 @@ impl IndexCoordinator {
     fn transition_to_degraded(&self, reason: DegradationReason) {
         let available_symbols = self.current_symbol_count.load(std::sync::atomic::Ordering::SeqCst);
 
-        let mut state = self.state.write().unwrap();
+        let mut state = match self.state.write() {
+            Ok(guard) => guard,
+            Err(e) => e.into_inner(),
+        };
         *state = IndexState::Degraded { reason, available_symbols, since: Instant::now() };
     }
 
@@ -295,7 +318,10 @@ impl IndexCoordinator {
         let file_count = self.current_file_count.load(std::sync::atomic::Ordering::SeqCst);
         let symbol_count = self.current_symbol_count.load(std::sync::atomic::Ordering::SeqCst);
 
-        let mut state = self.state.write().unwrap();
+        let mut state = match self.state.write() {
+            Ok(guard) => guard,
+            Err(e) => e.into_inner(),
+        };
         *state = IndexState::Ready { file_count, symbol_count, completed_at: Instant::now() };
     }
 
@@ -568,8 +594,22 @@ mod tests {
         );
 
         // Attempt recovery by transitioning to Building (simulating re-scan)
-        *coord.state.write().unwrap() =
-            IndexState::Building { indexed_count: 0, total_count: 100, started_at: Instant::now() };
+        match coord.state.write() {
+            Ok(mut guard) => {
+                *guard = IndexState::Building {
+                    indexed_count: 0,
+                    total_count: 100,
+                    started_at: Instant::now(),
+                };
+            }
+            Err(e) => {
+                *e.into_inner() = IndexState::Building {
+                    indexed_count: 0,
+                    total_count: 100,
+                    started_at: Instant::now(),
+                };
+            }
+        }
 
         // Verify transition to Building
         assert!(

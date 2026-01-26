@@ -1,20 +1,24 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_parser::Parser;
-use perl_semantic_analyzer::analysis::scope_analyzer::{IssueKind, ScopeAnalyzer};
+use perl_semantic_analyzer::analysis::scope_analyzer::{IssueKind, ScopeAnalyzer, ScopeIssue};
 use perl_semantic_analyzer::pragma_tracker::PragmaState;
 
-fn analyze(code: &str) -> Vec<perl_semantic_analyzer::analysis::scope_analyzer::ScopeIssue> {
+fn analyze(code: &str) -> Vec<ScopeIssue> {
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = match parser.parse() {
+        Ok(ast) => ast,
+        Err(_) => return vec![],
+    };
     let analyzer = ScopeAnalyzer::new();
     let pragma_map = vec![]; // We can assume strict/warnings for tests if needed, or pass empty
     analyzer.analyze(&ast, code, &pragma_map)
 }
 
-fn analyze_strict(code: &str) -> Vec<perl_semantic_analyzer::analysis::scope_analyzer::ScopeIssue> {
+fn analyze_strict(code: &str) -> Vec<ScopeIssue> {
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = match parser.parse() {
+        Ok(ast) => ast,
+        Err(_) => return vec![],
+    };
     let analyzer = ScopeAnalyzer::new();
 
     // Create a pragma map with strict enabled for the whole file

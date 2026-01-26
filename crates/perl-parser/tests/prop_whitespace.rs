@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Metamorphic property tests for whitespace and comment insertion
 
 use perl_parser::Parser;
@@ -82,9 +81,9 @@ proptest! {
                 "Failed to parse after whitespace insertion:\nOriginal: {}\nTransformed: {}",
                 original, transformed);
 
-            // Compare shapes
-            let shape1 = extract_ast_shape(&ast1.unwrap());
-            let shape2 = extract_ast_shape(&ast2.unwrap());
+            // Compare shapes - we already checked is_ok() above with prop_assume!
+            let shape1 = ast1.ok().map(|a| extract_ast_shape(&a));
+            let shape2 = ast2.ok().map(|a| extract_ast_shape(&a));
 
             prop_assert_eq!(shape1, shape2,
                 "Different AST shape after whitespace insertion.\nOriginal: {}\nTransformed: {}",

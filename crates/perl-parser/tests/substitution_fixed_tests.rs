@@ -1,8 +1,8 @@
 //! Fixed substitution operator tests with correct AST structure
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_parser::{Parser, ast::NodeKind};
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 // Helper function to extract substitution node from AST
 fn extract_substitution(ast: &perl_parser::ast::Node) -> Option<(&str, &str, &str)> {
@@ -17,22 +17,23 @@ fn extract_substitution(ast: &perl_parser::ast::Node) -> Option<(&str, &str, &st
 }
 
 #[test]
-fn test_basic_substitution() {
+fn test_basic_substitution() -> TestResult {
     let code = "s/foo/bar/";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("parse");
+    let ast = parser.parse()?;
 
     if let Some((pattern, replacement, modifiers)) = extract_substitution(&ast) {
         assert_eq!(pattern, "foo");
         assert_eq!(replacement, "bar");
         assert_eq!(modifiers, "");
     } else {
-        panic!("Expected Substitution node");
+        return Err("Expected Substitution node".into());
     }
+    Ok(())
 }
 
 #[test]
-fn test_substitution_with_modifiers() {
+fn test_substitution_with_modifiers() -> TestResult {
     let test_cases = vec![
         ("s/foo/bar/g", "g"),
         ("s/foo/bar/i", "i"),
@@ -45,18 +46,19 @@ fn test_substitution_with_modifiers() {
 
     for (code, expected_modifiers) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("parse");
+        let ast = parser.parse()?;
 
         if let Some((_pattern, _replacement, modifiers)) = extract_substitution(&ast) {
             assert_eq!(modifiers, expected_modifiers, "Failed for {}", code);
         } else {
-            panic!("Expected Substitution node for {}", code);
+            return Err(format!("Expected Substitution node for {}", code).into());
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_substitution_with_different_delimiters() {
+fn test_substitution_with_different_delimiters() -> TestResult {
     let test_cases = vec![
         ("s(foo)(bar)", "foo", "bar"),
         ("s{foo}{bar}", "foo", "bar"),
@@ -71,30 +73,32 @@ fn test_substitution_with_different_delimiters() {
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
+        let ast = parser.parse().map_err(|e| format!("parse {}: {:?}", code, e))?;
 
         if let Some((pattern, replacement, _modifiers)) = extract_substitution(&ast) {
             assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
             assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
         } else {
-            panic!("Expected Substitution node for {}", code);
+            return Err(format!("Expected Substitution node for {}", code).into());
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_substitution_empty_pattern_or_replacement() {
+fn test_substitution_empty_pattern_or_replacement() -> TestResult {
     let test_cases = vec![("s///", "", ""), ("s/foo//", "foo", ""), ("s//bar/", "", "bar")];
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
+        let ast = parser.parse().map_err(|e| format!("parse {}: {:?}", code, e))?;
 
         if let Some((pattern, replacement, _modifiers)) = extract_substitution(&ast) {
             assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
             assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
         } else {
-            panic!("Expected Substitution node for {}", code);
+            return Err(format!("Expected Substitution node for {}", code).into());
         }
     }
+    Ok(())
 }

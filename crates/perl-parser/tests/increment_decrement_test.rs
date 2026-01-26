@@ -1,11 +1,11 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_parser::{NodeKind, Parser};
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 #[test]
-fn test_pre_increment() {
+fn test_pre_increment() -> TestResult {
     let mut parser = Parser::new("++$x");
-    let ast = parser.parse().expect("Failed to parse pre-increment");
+    let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
@@ -27,12 +27,13 @@ fn test_pre_increment() {
     } else {
         panic!("Expected program node");
     }
+    Ok(())
 }
 
 #[test]
-fn test_pre_decrement() {
+fn test_pre_decrement() -> TestResult {
     let mut parser = Parser::new("--$y");
-    let ast = parser.parse().expect("Failed to parse pre-decrement");
+    let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
@@ -54,12 +55,13 @@ fn test_pre_decrement() {
     } else {
         panic!("Expected program node");
     }
+    Ok(())
 }
 
 #[test]
-fn test_post_increment() {
+fn test_post_increment() -> TestResult {
     let mut parser = Parser::new("$x++");
-    let ast = parser.parse().expect("Failed to parse post-increment");
+    let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
@@ -81,12 +83,13 @@ fn test_post_increment() {
     } else {
         panic!("Expected program node");
     }
+    Ok(())
 }
 
 #[test]
-fn test_post_decrement() {
+fn test_post_decrement() -> TestResult {
     let mut parser = Parser::new("$y--");
-    let ast = parser.parse().expect("Failed to parse post-decrement");
+    let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
@@ -108,12 +111,13 @@ fn test_post_decrement() {
     } else {
         panic!("Expected program node");
     }
+    Ok(())
 }
 
 #[test]
-fn test_complex_increment_decrement() {
+fn test_complex_increment_decrement() -> TestResult {
     let mut parser = Parser::new("++$a + --$b");
-    let ast = parser.parse().expect("Failed to parse complex expression");
+    let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
@@ -155,13 +159,14 @@ fn test_complex_increment_decrement() {
     } else {
         panic!("Expected program node");
     }
+    Ok(())
 }
 
 #[test]
-fn test_chained_increment() {
+fn test_chained_increment() -> TestResult {
     // Test that +++$x is parsed as ++(+$x) not as ++ +$x
     let mut parser = Parser::new("+++$x");
-    let ast = parser.parse().expect("Failed to parse chained increment");
+    let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
@@ -189,4 +194,5 @@ fn test_chained_increment() {
     } else {
         panic!("Expected program node");
     }
+    Ok(())
 }

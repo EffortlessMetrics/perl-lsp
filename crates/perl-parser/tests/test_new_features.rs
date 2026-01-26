@@ -1,7 +1,9 @@
 use perl_parser::Parser;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 #[test]
-fn test_isa_operator() {
+fn test_isa_operator() -> TestResult {
     let test_cases = vec![
         ("$obj ISA 'MyClass'", "ISA with string literal"),
         ("$x ISA $class", "ISA with variable"),
@@ -15,12 +17,13 @@ fn test_isa_operator() {
         let result = parser.parse();
 
         assert!(result.is_ok(), "Failed to parse '{}': {:?}", code, result);
-        let ast = result.unwrap();
+        let ast = result?;
         let sexp = ast.to_sexp();
 
         println!("  Result: {}", sexp);
         assert!(sexp.contains("ISA"), "ISA operator not found in output for '{}'", code);
     }
+    Ok(())
 }
 
 // =============================================================================
@@ -30,7 +33,7 @@ fn test_isa_operator() {
 // =============================================================================
 #[cfg(feature = "parser-extras")]
 #[test]
-fn test_all_improvements() {
+fn test_all_improvements() -> TestResult {
     // Comprehensive test of all the features we've implemented
     let code = r#"
 # Regex with modifiers
@@ -82,7 +85,7 @@ my $x :shared;
     let result = parser.parse();
 
     assert!(result.is_ok(), "Failed to parse comprehensive test: {:?}", result);
-    let ast = result.unwrap();
+    let ast = result?;
     let sexp = ast.to_sexp();
 
     // Verify key features are present
@@ -98,4 +101,5 @@ my $x :shared;
     assert!(sexp.contains("lvalue"), "Attributes not found");
 
     println!("All features successfully parsed!");
+    Ok(())
 }

@@ -5,8 +5,10 @@
 /// These tests are designed to catch mutations and improve test quality.
 use perl_parser::Parser;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 #[test]
-fn test_deeply_nested_structures() {
+fn test_deeply_nested_structures() -> TestResult {
     // Test deeply nested hash and array references
     let test_cases = [
         // Deeply nested hash references
@@ -25,10 +27,9 @@ fn test_deeply_nested_structures() {
 
     for (i, input) in test_cases.iter().enumerate() {
         let mut parser = Parser::new(input);
-        let result = parser.parse();
-        assert!(result.is_ok(), "Test case {} failed to parse: {}", i, input);
-
-        let ast = result.unwrap();
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("Test case {} failed to parse: {} - error: {}", i, input, e))?;
         let sexp = ast.to_sexp();
 
         // Ensure the AST contains expected elements based on the input
@@ -47,10 +48,11 @@ fn test_deeply_nested_structures() {
             );
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_complex_subroutine_signatures() {
+fn test_complex_subroutine_signatures() -> TestResult {
     // Test modern Perl subroutine signatures with various parameter types
     let test_cases = [
         // Basic signatures
@@ -71,10 +73,9 @@ fn test_complex_subroutine_signatures() {
 
     for (i, input) in test_cases.iter().enumerate() {
         let mut parser = Parser::new(input);
-        let result = parser.parse();
-        assert!(result.is_ok(), "Test case {} failed to parse: {}", i, input);
-
-        let ast = result.unwrap();
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("Test case {} failed to parse: {} - error: {}", i, input, e))?;
         let sexp = ast.to_sexp();
 
         // Verify subroutine structure is captured
@@ -93,6 +94,7 @@ fn test_complex_subroutine_signatures() {
             );
         }
     }
+    Ok(())
 }
 
 // =============================================================================
@@ -102,7 +104,7 @@ fn test_complex_subroutine_signatures() {
 // =============================================================================
 #[cfg(feature = "parser-extras")]
 #[test]
-fn test_complex_regex_patterns() {
+fn test_complex_regex_patterns() -> TestResult {
     // Test complex regular expression patterns that stress the parser
     let test_cases = [
         // Basic regex with modifiers
@@ -128,10 +130,9 @@ fn test_complex_regex_patterns() {
 
     for (i, input) in test_cases.iter().enumerate() {
         let mut parser = Parser::new(input);
-        let result = parser.parse();
-        assert!(result.is_ok(), "Test case {} failed to parse: {}", i, input);
-
-        let ast = result.unwrap();
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("Test case {} failed to parse: {} - error: {}", i, input, e))?;
         let sexp = ast.to_sexp();
 
         // Verify regex operation is captured
@@ -141,10 +142,11 @@ fn test_complex_regex_patterns() {
             input
         );
     }
+    Ok(())
 }
 
 #[test]
-fn test_unicode_and_encoding_edge_cases() {
+fn test_unicode_and_encoding_edge_cases() -> TestResult {
     // Test Unicode handling and encoding edge cases
     let test_cases = [
         // Unicode identifiers
@@ -167,15 +169,15 @@ fn test_unicode_and_encoding_edge_cases() {
 
     for (i, input) in test_cases.iter().enumerate() {
         let mut parser = Parser::new(input);
-        let result = parser.parse();
-        assert!(result.is_ok(), "Test case {} failed to parse: {}", i, input);
-
-        let ast = result.unwrap();
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("Test case {} failed to parse: {} - error: {}", i, input, e))?;
         let sexp = ast.to_sexp();
 
         // Basic validation that structure is captured
         assert!(!sexp.is_empty(), "Empty AST for Unicode test case: {}", input);
     }
+    Ok(())
 }
 
 #[test]
@@ -220,7 +222,7 @@ fn test_error_recovery_scenarios() {
 }
 
 #[test]
-fn test_large_literal_handling() {
+fn test_large_literal_handling() -> TestResult {
     // Test handling of large literals and edge cases
     let long_string = format!("my $long = '{}';", "x".repeat(1000));
     let large_array =
@@ -247,16 +249,16 @@ fn test_large_literal_handling() {
 
     for (i, input) in test_cases.iter().enumerate() {
         let mut parser = Parser::new(input);
-        let result = parser.parse();
-        assert!(result.is_ok(), "Test case {} failed to parse: {}", i, input);
-
-        let ast = result.unwrap();
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("Test case {} failed to parse: {} - error: {}", i, input, e))?;
         let sexp = ast.to_sexp();
 
         // Ensure parsing completes and produces reasonable output
         assert!(!sexp.is_empty(), "Empty AST for large literal test case: {}", input);
         assert!(sexp.len() > 10, "AST too small for input: {}", input);
     }
+    Ok(())
 }
 
 #[test]

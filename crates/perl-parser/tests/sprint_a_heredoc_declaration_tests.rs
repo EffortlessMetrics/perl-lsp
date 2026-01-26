@@ -35,9 +35,13 @@ fn parse_to_sexp(input: &str) -> String {
 /// Helper function to parse code and verify it succeeds
 fn parse_and_verify_success(input: &str, test_name: &str) {
     let mut parser = Parser::new(input);
-    parser.parse().unwrap_or_else(|e| {
-        panic!("Test '{}' failed to parse heredoc declaration: {}\nInput: {}", test_name, e, input)
-    });
+    match parser.parse() {
+        Ok(_) => {}
+        Err(e) => panic!(
+            "Test '{}' failed to parse heredoc declaration: {}\nInput: {}",
+            test_name, e, input
+        ),
+    }
 }
 
 // ============================================================================
@@ -418,7 +422,10 @@ fn test_heredoc_decl_empty_label() {
     let result = parser.parse();
 
     assert!(result.is_ok(), "Empty label (<<;) should be accepted");
-    let sexp = result.unwrap().to_sexp();
+    let sexp = match result {
+        Ok(ast) => ast.to_sexp(),
+        Err(e) => panic!("Empty label (<<;) should be accepted: {}", e),
+    };
     assert!(
         sexp.contains("(heredoc_interpolated \"\" \"content\")"),
         "Empty label missing in AST: {}",

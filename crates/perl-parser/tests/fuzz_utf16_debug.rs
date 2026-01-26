@@ -70,7 +70,13 @@ fn debug_utf16_roundtrip_failure() {
                         }
                         println!("Found char start at: {}", char_start);
                         let char_at_start = &line_text[char_start..];
-                        let first_char = char_at_start.chars().next().unwrap();
+                        let first_char = match char_at_start.chars().next() {
+                            Some(c) => c,
+                            None => {
+                                println!("No character found at start position");
+                                continue;
+                            }
+                        };
                         println!("Character: {:?}", first_char);
                         println!("UTF-16 units: {}", first_char.len_utf16());
                     }

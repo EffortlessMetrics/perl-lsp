@@ -2,16 +2,16 @@
 //! This test module ensures complete coverage of the substitution operator
 //! including edge cases, modifiers, and special delimiters
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_parser::{Parser, ast::NodeKind};
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 // #[ignore = "substitution operator not implemented"]
-fn test_basic_substitution() {
+fn test_basic_substitution() -> TestResult {
     let code = "s/foo/bar/";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("parse");
+    let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
@@ -30,11 +30,12 @@ fn test_basic_substitution() {
     } else {
         panic!("Expected Program node");
     }
+    Ok(())
 }
 
 #[test]
 // #[ignore = "substitution operator not implemented"]
-fn test_substitution_with_modifiers() {
+fn test_substitution_with_modifiers() -> TestResult {
     let test_cases = vec![
         ("s/foo/bar/g", "g"),
         ("s/foo/bar/i", "i"),
@@ -49,7 +50,7 @@ fn test_substitution_with_modifiers() {
 
     for (code, expected_modifiers) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("parse");
+        let ast = parser.parse()?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
@@ -63,11 +64,12 @@ fn test_substitution_with_modifiers() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
 // #[ignore = "substitution operator not implemented"]
-fn test_substitution_with_different_delimiters() {
+fn test_substitution_with_different_delimiters() -> TestResult {
     let test_cases = vec![
         ("s(foo)(bar)", "foo", "bar"),
         ("s{foo}{bar}", "foo", "bar"),
@@ -82,7 +84,7 @@ fn test_substitution_with_different_delimiters() {
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
+        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
@@ -101,11 +103,12 @@ fn test_substitution_with_different_delimiters() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
 // #[ignore = "substitution operator not implemented"]
-fn test_substitution_with_nested_delimiters() {
+fn test_substitution_with_nested_delimiters() -> TestResult {
     let test_cases = vec![
         ("s{f{o}o}{b{a}r}", "f{o}o", "b{a}r"),
         ("s[f[o]o][b[a]r]", "f[o]o", "b[a]r"),
@@ -115,7 +118,7 @@ fn test_substitution_with_nested_delimiters() {
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
+        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
@@ -134,11 +137,12 @@ fn test_substitution_with_nested_delimiters() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
 // #[ignore = "substitution operator not implemented"]
-fn test_substitution_with_special_chars() {
+fn test_substitution_with_special_chars() -> TestResult {
     let test_cases = vec![
         (r#"s/\n/\\n/"#, r"\n", r"\\n"),
         (r#"s/\t/\s/"#, r"\t", r"\s"),
@@ -148,7 +152,7 @@ fn test_substitution_with_special_chars() {
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
+        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
@@ -167,16 +171,17 @@ fn test_substitution_with_special_chars() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
 // #[ignore = "substitution operator not implemented"]
-fn test_substitution_empty_pattern_or_replacement() {
+fn test_substitution_empty_pattern_or_replacement() -> TestResult {
     let test_cases = vec![("s///", "", ""), ("s/foo//", "foo", ""), ("s//bar/", "", "bar")];
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
+        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
@@ -195,11 +200,12 @@ fn test_substitution_empty_pattern_or_replacement() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
 // MUT_002: Fixed in quote_parser.rs - balanced delimiters now use per-segment delimiter detection
-fn test_substitution_empty_replacement_balanced_delimiters() {
+fn test_substitution_empty_replacement_balanced_delimiters() -> TestResult {
     // These test cases specifically target the empty replacement parsing logic
     // for paired delimiters in quote_parser.rs line 80
     let test_cases = vec![
@@ -219,7 +225,7 @@ fn test_substitution_empty_replacement_balanced_delimiters() {
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
+        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
@@ -238,6 +244,7 @@ fn test_substitution_empty_replacement_balanced_delimiters() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
@@ -245,7 +252,7 @@ fn test_substitution_empty_replacement_balanced_delimiters() {
 // Fixed in lexer: parse_substitution now detects replacement delimiter independently
 // This is critical to prevent the lexer from swallowing trailing code after balanced delimiters
 // NOTE: Real Perl supports this syntax: `s[foo]{bar}; $x = 1;` - both statements should be parsed
-fn test_substitution_balanced_delimiters_with_trailing_code() {
+fn test_substitution_balanced_delimiters_with_trailing_code() -> TestResult {
     // Test cases that specifically target the trailing code parsing after balanced delimiters
     // Each case verifies that both the substitution and subsequent statements are properly parsed
     let test_cases = vec![
@@ -267,9 +274,9 @@ fn test_substitution_balanced_delimiters_with_trailing_code() {
 
     for (code, expected_stmt_count, description) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|err| {
-            panic!("Parse failed for test case '{}': {}\nCode: {}", description, err, code)
-        });
+        let ast = parser.parse().map_err(|err| {
+            format!("Parse failed for test case '{}': {}\nCode: {}", description, err, code)
+        })?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             assert_eq!(
@@ -317,15 +324,16 @@ fn test_substitution_balanced_delimiters_with_trailing_code() {
             );
         }
     }
+    Ok(())
 }
 
 #[test]
 // #[ignore = "substitution operator not implemented"]
-fn test_substitution_with_expressions() {
+fn test_substitution_with_expressions() -> TestResult {
     // Test the /e modifier which evaluates replacement as Perl code
     let code = r#"s/(\d+)/sprintf("%02d", $1)/eg"#;
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("parse");
+    let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
         if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
@@ -341,11 +349,12 @@ fn test_substitution_with_expressions() {
             panic!("Expected ExpressionStatement node");
         }
     }
+    Ok(())
 }
 
 #[test]
 // #[ignore = "substitution operator not implemented"]
-fn test_substitution_in_context() {
+fn test_substitution_in_context() -> TestResult {
     let test_cases = vec![
         ("$str =~ s/foo/bar/g;", "foo", "bar", "g"),
         ("if ($line =~ s/^\\s+//) { }", r"^\s+", "", ""),
@@ -354,22 +363,22 @@ fn test_substitution_in_context() {
 
     for (code, expected_pattern, expected_replacement, expected_modifiers) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
+        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         // Find the substitution node (might be nested)
         let found = find_substitution_node(&ast);
-        assert!(found.is_some(), "No Substitution node found in {}", code);
-
-        let (pattern, replacement, modifiers) = found.unwrap();
+        let (pattern, replacement, modifiers) =
+            found.ok_or_else(|| format!("No Substitution node found in {}", code))?;
         assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
         assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
         assert_eq!(modifiers, expected_modifiers, "Modifiers mismatch for {}", code);
     }
+    Ok(())
 }
 
 #[test]
 // #[ignore = "substitution operator not implemented"]
-fn test_substitution_unicode() {
+fn test_substitution_unicode() -> TestResult {
     let test_cases = vec![
         ("s/café/coffee/", "café", "coffee"),
         ("s/😀/😎/g", "😀", "😎"),
@@ -378,7 +387,7 @@ fn test_substitution_unicode() {
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
+        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
@@ -397,6 +406,7 @@ fn test_substitution_unicode() {
             }
         }
     }
+    Ok(())
 }
 
 // Helper function to find substitution node in AST
@@ -493,7 +503,7 @@ fn test_substitution_invalid_modifier_characters() {
 
 #[test]
 // Ensure valid modifiers still work after hardening invalid modifier detection
-fn test_substitution_valid_modifier_combinations() {
+fn test_substitution_valid_modifier_combinations() -> TestResult {
     // Test all valid single and combination modifiers to ensure they still work
     let valid_modifier_cases = vec![
         ("s/foo/bar/g", "g"),
@@ -543,8 +553,9 @@ fn test_substitution_valid_modifier_combinations() {
 
     for (code, expected_modifiers) in valid_modifier_cases {
         let mut parser = Parser::new(code);
-        let ast =
-            parser.parse().unwrap_or_else(|_| panic!("Valid modifiers should parse: {}", code));
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("Valid modifiers should parse: {} - error: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
@@ -558,11 +569,12 @@ fn test_substitution_valid_modifier_combinations() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
 // Property-based testing for delimiter edge cases
-fn test_substitution_delimiter_edge_cases() {
+fn test_substitution_delimiter_edge_cases() -> TestResult {
     // Test edge cases with different delimiter combinations
     let edge_cases = vec![
         // Single delimiter character edge cases
@@ -595,7 +607,7 @@ fn test_substitution_delimiter_edge_cases() {
 
     for (code, expected_pattern, expected_replacement) in edge_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
+        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
@@ -614,11 +626,12 @@ fn test_substitution_delimiter_edge_cases() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
 // Test complex nested delimiter scenarios that could trigger edge cases
-fn test_substitution_complex_nested_scenarios() {
+fn test_substitution_complex_nested_scenarios() -> TestResult {
     let complex_cases = vec![
         // Deep nesting
         ("s{a{b{c}d}e}{x{y{z}w}v}", "a{b{c}d}e", "x{y{z}w}v"),
@@ -639,7 +652,7 @@ fn test_substitution_complex_nested_scenarios() {
 
     for (code, expected_pattern, expected_replacement) in complex_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("parse {}", code));
+        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
@@ -658,11 +671,12 @@ fn test_substitution_complex_nested_scenarios() {
             }
         }
     }
+    Ok(())
 }
 
 // TARGETED MUTATION KILLER TESTS - Kill MUT_005 modifier validation mutation
 #[test]
-fn test_kill_mutation_modifier_character_matching() {
+fn test_kill_mutation_modifier_character_matching() -> TestResult {
     // This test specifically targets the modifier character pattern in parser_backup.rs
     // Original: 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' => {
     // Mutated:  'z' | 'q' | 'w' | 'n' | 'p' | 'k' | 'l' | 'v' => {
@@ -683,8 +697,9 @@ fn test_kill_mutation_modifier_character_matching() {
 
     for (code, expected_modifiers) in valid_cases {
         let mut parser = Parser::new(code);
-        let ast =
-            parser.parse().unwrap_or_else(|_| panic!("Valid modifier '{}' should parse", code));
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("Valid modifier '{}' should parse: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind
             && let NodeKind::ExpressionStatement { expression } = &statements[0].kind
@@ -725,6 +740,7 @@ fn test_kill_mutation_modifier_character_matching() {
             code
         );
     }
+    Ok(())
 }
 
 // Additional targeted test for mixed valid/invalid modifiers to ensure precise character matching
