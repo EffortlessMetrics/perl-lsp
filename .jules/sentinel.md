@@ -45,3 +45,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The `BinaryDownloader` constructed file paths using `path.join(tempDir, assetName)` where `assetName` was derived from a user-configurable version tag (`perl-lsp.versionTag`). An attacker could supply a malicious tag (e.g., `../../etc/passwd`) to write files outside the intended temporary directory.
 **Learning:** Never trust that `path.join` with a "filename" will stay within a directory. If the filename part comes from user input (even indirectly via configuration), it must be validated to ensure it contains no path separators.
 **Prevention:** Explicitly validate that constructed filenames match a strict allowlist (e.g., `^[a-zA-Z0-9_.-]+$`) and reject any input containing path separators or `..`.
+
+## 2026-10-25 - Safe Evaluation Bypass via Dereference
+**Vulnerability:** The `perl-dap` safe evaluation logic exempted variables (e.g., `$system`) from the dangerous operations blacklist, but failed to check if those variables were being used in an execution context (e.g., `&$system` or `&{$system}`). This allowed invoking blocked builtins (like `system`) indirectly via variable dereference.
+**Learning:** Allow-listing variables based on sigils alone is insufficient for languages where sigils are also used for dereference calls. Context matters: `$var` is safe, `&$var` is a function call.
+**Prevention:** When exempting identifiers from a blacklist based on syntax (like sigils), explicitly verify that the surrounding syntax does not imply execution (e.g., preceding `&` or `->`).
