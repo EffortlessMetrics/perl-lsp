@@ -1507,6 +1507,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-error"
+version = "0.8.8"
+dependencies = [
+ "perl-ast",
+ "perl-lexer",
+ "perl-position-tracking",
+ "perl-regex",
+ "thiserror",
+]
+
+[[package]]
 name = "perl-heredoc"
 version = "0.0.1"
 dependencies = [
@@ -1668,6 +1679,7 @@ dependencies = [
  "perl-ast",
  "perl-builtins",
  "perl-edit",
+ "perl-error",
  "perl-heredoc",
  "perl-lexer",
  "perl-position-tracking",
@@ -1676,6 +1688,7 @@ dependencies = [
  "perl-regex",
  "perl-tdd-support",
  "perl-token",
+ "perl-tokenizer",
  "phf",
  "ropey",
  "serde",
@@ -1782,6 +1795,17 @@ dependencies = [
 [[package]]
 name = "perl-token"
 version = "0.8.8"
+
+[[package]]
+name = "perl-tokenizer"
+version = "0.8.8"
+dependencies = [
+ "perl-ast",
+ "perl-error",
+ "perl-lexer",
+ "perl-position-tracking",
+ "perl-token",
+]
 
 [[package]]
 name = "perl-uri"

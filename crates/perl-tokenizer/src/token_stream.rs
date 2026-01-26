@@ -27,7 +27,7 @@
 //! ## Basic Token Stream Creation
 //!
 //! ```
-//! use perl_parser::token_stream::{TokenStream, Token, TokenKind};
+//! use perl_tokenizer::{TokenStream, Token, TokenKind};
 //!
 //! let code = "my $x = 42;";
 //! let mut stream = TokenStream::new(code);
@@ -47,7 +47,7 @@
 //! ## Advanced Token Manipulation
 //!
 //! ```
-//! use perl_parser::token_stream::{TokenStream, TokenKind};
+//! use perl_tokenizer::{TokenStream, TokenKind};
 //!
 //! let code = "sub hello { print \"world\"; }";
 //! let mut stream = TokenStream::new(code);
@@ -78,7 +78,7 @@
 //! ## Position Tracking and Error Reporting
 //!
 //! ```
-//! use perl_parser::token_stream::{TokenStream, TokenKind};
+//! use perl_tokenizer::{TokenStream, TokenKind};
 //!
 //! let code = "my $invalid = ;"; // Syntax error
 //! let mut stream = TokenStream::new(code);
@@ -86,7 +86,7 @@
 //! while let Ok(token) = stream.next() {
 //!     if token.kind == TokenKind::Eof { break; }
 //!     // Use position information for precise error reporting
-//!     if token.text == ";" {
+//!     if token.text.as_ref() == ";" {
 //!         eprintln!("Found semicolon at position {}-{}",
 //!                  token.start, token.end);
 //!     }
@@ -95,7 +95,7 @@
 //!
 //! ## LSP Integration Example
 //!
-//! ```no_run
+//! ```ignore
 //! use perl_parser::{Parser, token_stream::TokenStream};
 //! use perl_parser::SemanticTokensProvider;
 //!
@@ -114,7 +114,7 @@
 //! }
 //! ```
 
-use crate::error::{ParseError, ParseResult};
+use perl_error::{ParseError, ParseResult};
 use perl_lexer::{LexerMode, PerlLexer, Token as LexerToken, TokenType as LexerTokenType};
 pub use perl_token::{Token, TokenKind};
 
@@ -147,6 +147,7 @@ impl<'a> TokenStream<'a> {
     }
 
     /// Consume and return the next token
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> ParseResult<Token> {
         // If we have a peeked token, return it and shift the peek chain down
 

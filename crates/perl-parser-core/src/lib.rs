@@ -48,7 +48,12 @@ pub use perl_builtins as builtins;
 /// Parser engine components and supporting utilities.
 pub mod engine;
 /// Token stream and trivia utilities for the parser.
-pub mod tokens;
+pub mod tokens {
+    pub use perl_tokenizer::token_stream;
+    pub use perl_tokenizer::token_wrapper;
+    pub use perl_tokenizer::trivia;
+    pub use perl_tokenizer::trivia_parser;
+}
 
 pub use ast_v2::{DiagnosticId, MissingKind};
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
@@ -66,7 +71,7 @@ pub use engine::pragma_tracker;
 /// Parser for Perl quote and quote-like operators.
 pub use engine::quote_parser;
 /// Parser utilities and helpers.
-pub use engine::util;
+pub use perl_tokenizer::util;
 /// Legacy module aliases for moved engine components.
 pub use engine::{error, parser, position};
 
@@ -79,7 +84,10 @@ pub use error::recovery as error_recovery;
 pub use error::recovery_parser;
 pub use error_recovery::RecoveryResult;
 
-pub use position::line_index;
+/// Line indexing and position mapping utilities.
+pub mod line_index {
+    pub use perl_position_tracking::LineIndex;
+}
 pub use position::{LineEnding, PositionMapper};
 
 pub use ast::{Node, NodeKind, SourceLocation};
