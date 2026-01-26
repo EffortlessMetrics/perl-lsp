@@ -1435,7 +1435,10 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "perl-ast"
-version = "0.1.0"
+version = "0.8.8"
+dependencies = [
+ "perl-position-tracking",
+]
 
 [[package]]
 name = "perl-corpus"
@@ -1508,6 +1511,7 @@ version = "0.8.8"
 dependencies = [
  "criterion",
  "memchr",
+ "perl-position-tracking",
  "pretty_assertions",
  "proptest",
  "thiserror",
@@ -1638,6 +1642,7 @@ dependencies = [
 name = "perl-parser-core"
 version = "0.8.8"
 dependencies = [
+ "perl-ast",
  "perl-lexer",
  "perl-position-tracking",
  "perl-tdd-support",
