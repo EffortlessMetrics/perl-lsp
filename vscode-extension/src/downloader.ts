@@ -48,8 +48,10 @@ export class BinaryDownloader {
         }
         
         // Show status bar while downloading
-        const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+        const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
         statusBar.text = '$(sync~spin) Perl LSP: downloading binary...';
+        statusBar.tooltip = 'Downloading Perl Language Server... Click to show logs';
+        statusBar.command = 'perl-lsp.showOutput';
         statusBar.show();
         
         // Download binary

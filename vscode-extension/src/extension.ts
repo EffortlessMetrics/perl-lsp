@@ -18,6 +18,12 @@ let testAdapter: PerlTestAdapter | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
+
+    // Register showOutput command early so it's available during binary download and initialization
+    const showOutputCommand = vscode.commands.registerCommand('perl-lsp.showOutput', () => {
+        outputChannel.show();
+    });
+    context.subscriptions.push(showOutputCommand);
     
     // Get the path to perl-lsp
     const serverPath = await getServerPath(context);
@@ -167,10 +173,6 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
     
-    const showOutputCommand = vscode.commands.registerCommand('perl-lsp.showOutput', () => {
-        outputChannel.show();
-    });
-    
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
         const { execFile } = require('child_process');
         execFile(serverPath, ['--version'], (error: any, stdout: string, stderr: string) => {
@@ -203,7 +205,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
     
-    context.subscriptions.push(restartCommand, runTestsCommand, showOutputCommand, showVersionCommand, statusMenuCommand);
+    context.subscriptions.push(restartCommand, runTestsCommand, showVersionCommand, statusMenuCommand);
     
     outputChannel.appendLine('Perl Language Server started successfully');
 }
