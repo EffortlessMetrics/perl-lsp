@@ -8,10 +8,10 @@ use crate::{
     error::{BudgetTracker, ParseBudget},
     error_recovery::ParseError,
     position::{Position, Range},
-    positions::LineStartsCache,
     token_wrapper::TokenWithPosition,
 };
 use perl_lexer::TokenType;
+use perl_position_tracking::LineStartsCache;
 use std::collections::VecDeque;
 
 /// Parser context with error tracking and recovery

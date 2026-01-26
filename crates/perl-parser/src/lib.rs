@@ -398,9 +398,7 @@ pub use error::recovery as error_recovery;
 pub use error::recovery_parser;
 
 pub use position::line_index;
-pub use position::position_mapper;
-#[doc(hidden)]
-pub use position::positions;
+pub use position::{LineEnding, PositionMapper};
 
 pub mod analysis;
 pub mod builtins;

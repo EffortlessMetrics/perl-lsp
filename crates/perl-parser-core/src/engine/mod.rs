@@ -10,7 +10,7 @@ pub use perl_edit as edit;
 /// Error types and recovery strategies for parser failures.
 pub mod error;
 /// Heredoc content collector with FIFO ordering and indent stripping.
-pub mod heredoc_collector;
+pub use perl_heredoc as heredoc_collector;
 /// Core parser implementation for Perl source.
 pub mod parser;
 /// Parser context with error recovery support.

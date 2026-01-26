@@ -4,8 +4,6 @@
 
 pub use perl_position_tracking::{Position, Range};
 pub use perl_position_tracking::{offset_to_utf16_line_col, utf16_line_col_to_offset};
+pub use perl_position_tracking::mapper::{LineEnding, PositionMapper};
 
 pub mod line_index;
-pub mod position_mapper;
-#[doc(hidden)]
-pub mod positions;

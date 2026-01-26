@@ -1507,6 +1507,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-heredoc"
+version = "0.0.1"
+dependencies = [
+ "perl-position-tracking",
+]
+
+[[package]]
 name = "perl-incremental-parsing"
 version = "0.8.8"
 dependencies = [
@@ -1661,6 +1668,7 @@ dependencies = [
  "perl-ast",
  "perl-builtins",
  "perl-edit",
+ "perl-heredoc",
  "perl-lexer",
  "perl-position-tracking",
  "perl-pragma",
@@ -1697,6 +1705,7 @@ dependencies = [
  "lsp-types",
  "ropey",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 

@@ -8,15 +8,7 @@
 
 use ropey::Rope;
 use serde_json::Value;
-
-/// Position in the document
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Position {
-    /// Zero-based line number
-    pub line: u32,
-    /// Zero-based character offset (UTF-16 code units)
-    pub character: u32,
-}
+use crate::WirePosition as Position;
 
 /// Centralized position mapper using rope for efficiency
 pub struct PositionMapper {
