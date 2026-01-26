@@ -313,48 +313,6 @@ impl<'a> Parser<'a> {
                             }
 
                             // Parse remaining arguments
-                            while self.peek_kind() == Some(TokenKind::Comma) {
-                                self.consume_token()?; // consume comma
-
-                                // Check if we hit a statement modifier
-                                match self.peek_kind() {
-                                    Some(TokenKind::If)
-                                    | Some(TokenKind::Unless)
-                                    | Some(TokenKind::While)
-                                    | Some(TokenKind::Until)
-                                    | Some(TokenKind::For)
-                                    | Some(TokenKind::Foreach) => break,
-                                    _ => args.push(self.parse_assignment()?),
-                                }
-                            }
-
-                            {
-                                args.push(self.parse_variable_declaration()?);
-                            } else if matches!(func_name.as_ref(), "map" | "grep" | "sort")
-                                && self.peek_kind() == Some(TokenKind::LeftBrace)
-                            {
-                                // Special handling for map/grep/sort with block first argument
-                                args.push(self.parse_builtin_block()?);
-                                parsed_block_arg = true;
-                            } else {
-                                // For builtins, use parse_assignment to avoid consuming comma operators
-                                args.push(self.parse_assignment()?);
-                            }
-
-                            // Handle map/grep/sort { block } LIST case where no comma separates block and list
-                            if parsed_block_arg 
-                                && self.peek_kind() != Some(TokenKind::Comma) 
-                                && !self.is_at_statement_end() 
-                            {
-                                args.push(self.parse_assignment()?);
-                            }
-
-                            // Parse remaining arguments
-<<<<<<< HEAD
-                            while self.peek_kind() == Some(TokenKind::Comma) {
-                                self.consume_token()?; // consume ,
-                                args.push(self.parse_assignment()?);
-=======
                             // For map/grep/sort, parse list arguments without requiring commas
                             if matches!(func_name.as_ref(), "map" | "grep" | "sort") {
                                 // Parse list arguments until statement boundary
@@ -383,7 +341,6 @@ impl<'a> Parser<'a> {
                                         _ => args.push(self.parse_assignment()?),
                                     }
                                 }
->>>>>>> 5d720f4c (⚡ Bolt: Optimize Token string storage with Arc<str>)
                             }
 
                             let end = self.previous_position();
