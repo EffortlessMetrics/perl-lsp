@@ -147,7 +147,21 @@ export async function activate(context: vscode.ExtensionContext) {
         }
 
         if (testAdapter) {
-            await testAdapter.runFileTests(editor.document.uri);
+            // Store original state
+            const originalText = statusBarItem.text;
+            const originalTooltip = statusBarItem.tooltip;
+
+            // Show running state
+            statusBarItem.text = '$(beaker~spin) Running Tests...';
+            statusBarItem.tooltip = 'Executing Perl tests in current file';
+
+            try {
+                await testAdapter.runFileTests(editor.document.uri);
+            } finally {
+                // Restore original state
+                statusBarItem.text = originalText;
+                statusBarItem.tooltip = originalTooltip;
+            }
         } else {
             vscode.window.showWarningMessage('Test adapter is not available. It might still be initializing.');
         }

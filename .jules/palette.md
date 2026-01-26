@@ -22,3 +22,7 @@
 ## 2026-01-26 - Communicating Unimplemented Features
 **Learning:** When a feature is visible but not yet ready (e.g., in a development build), a polite "Under Development" message is superior to silence. It converts a "bug" (nothing happened) into a "roadmap communication" (this is coming soon).
 **Action:** Register placeholder handlers for planned commands that show a friendly message and link to the project roadmap or repository.
+
+## 2026-01-27 - Transient Status Bar Feedback
+**Learning:** For long-running operations like tests where the "Output" panel is too hidden and "Notifications" are too intrusive, temporarily hijacking the Status Bar Item provides excellent, non-disruptive feedback.
+**Action:** When implementing async commands that have a corresponding Status Bar Item, use a `try...finally` block to temporarily update the item's text (e.g., `$(sync~spin) Processing...`) and restore it afterwards.
