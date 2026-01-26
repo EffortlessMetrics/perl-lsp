@@ -330,6 +330,7 @@ impl ScopeAnalyzer {
                     is_our,
                     is_initialized,
                 ) {
+                    let line = self.get_line_from_node(variable, code);
                     // Optimization: Only allocate full name string when we actually have an issue to report
                     let full_name = extracted.as_string();
                     // Build description first (borrows full_name), then move full_name into struct
@@ -372,6 +373,7 @@ impl ScopeAnalyzer {
                         is_our,
                         is_initialized,
                     ) {
+                        let line = self.get_line_from_node(variable, code);
                         // Optimization: Only allocate full name string when we actually have an issue to report
                         let full_name = extracted.as_string();
                         // Build description first (borrows full_name), then move full_name into struct
