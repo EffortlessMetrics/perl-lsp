@@ -1194,7 +1194,10 @@ fn test_concurrent_cancellation_thread_safety_ac10() {
                         }
 
                         {
-                            let mut resource_guard = resource_clone.write().unwrap();
+                            let mut resource_guard = match resource_clone.write() {
+                                Ok(g) => g,
+                                Err(e) => e.into_inner(),
+                            };
                             resource_guard.insert(resource_key, format!("value_{}_{}", thread_id, operation_id));
                         }
 
@@ -1270,7 +1273,10 @@ fn test_concurrent_cancellation_thread_safety_ac10() {
                scenario.thread_count * scenario.operations_per_thread, total_operations);
 
         // Validate shared resource consistency
-        let final_resource_state = shared_resource.read().unwrap();
+        let final_resource_state = match shared_resource.read() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
         let expected_entries = total_successful + total_cancelled; // Cancelled operations still insert
         assert!(final_resource_state.len() == expected_entries,
                "Shared resource should have {} entries, got {}",
