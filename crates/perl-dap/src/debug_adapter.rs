@@ -97,16 +97,17 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "push", "pop", "shift", "unshift", "splice", "delete", "undef", "srand", "bless",
                 "reset", // Process control
                 "system", "exec", "fork", "exit", "dump", "kill", "alarm", "sleep", "wait",
-                "waitpid", "setpgrp", "setpriority", "umask", // I/O
+                "waitpid", "setpgrp", "setpriority", "umask", "lock", // I/O
                 "qx", "readpipe", "syscall", "open", "close", "print", "say", "printf", "sysread",
                 "syswrite", "glob", "readline", "ioctl", "fcntl", "flock", "select", "dbmopen",
-                "dbmclose", "binmode", "opendir", "closedir", "seek", "sysseek", "formline",
-                "write", // Filesystem
+                "dbmclose", "binmode", "opendir", "closedir", "readdir", "rewinddir", "seekdir",
+                "telldir", "seek", "sysseek", "formline", "write", "pipe", "socketpair", // Filesystem
                 "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown", "chroot",
-                "truncate", "symlink", "link", // Code loading/execution
+                "truncate", "utime", "symlink", "link", // Code loading/execution
                 "eval", "require", "do", // Tie mechanism (can execute arbitrary code)
                 "tie", "untie", // Network
                 "socket", "connect", "bind", "listen", "accept", "send", "recv", "shutdown",
+                "setsockopt",
                 // IPC
                 "msgget", "msgsnd", "msgrcv", "msgctl", "semget", "semop", "semctl", "shmget",
                 "shmat", "shmdt", "shmctl",
@@ -2402,6 +2403,12 @@ mod tests {
             "setpriority 0, 0, 10",
             "formline",
             "write",
+            "lock $ref",
+            "pipe $r, $w",
+            "socketpair $r, $w, 1, 1, 1",
+            "setsockopt $s, 1, 1, 1",
+            "utime 1, 1, 'file'",
+            "readdir $dh",
         ];
 
         for expr in blocked {
