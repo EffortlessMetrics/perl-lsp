@@ -51,7 +51,7 @@
    - Copy the token
 
 ### 2. Add GitHub Secrets (2 mins)
-1. Go to https://github.com/EffortlessSteven/tree-sitter-perl/settings/secrets/actions
+1. Go to https://github.com/EffortlessMetrics/tree-sitter-perl/settings/secrets/actions
 2. Click "New repository secret"
 3. Add:
    - Name: `VSCE_PAT`, Value: [your VSCode token]
@@ -82,7 +82,7 @@ Once you push the tag:
 ## 📊 Post-Launch Monitoring
 
 ### Check Build Status
-- https://github.com/EffortlessSteven/tree-sitter-perl/actions
+- https://github.com/EffortlessMetrics/tree-sitter-perl/actions
 
 ### Verify Extension Live
 - VSCode: https://marketplace.visualstudio.com/items?itemName=tree-sitter-perl.perl-lsp

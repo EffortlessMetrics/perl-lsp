@@ -1,6 +1,6 @@
 use perl_parser::ast::{Node, NodeKind};
 use perl_parser::builtin_signatures_phf::get_param_names;
-use perl_parser::positions::{Position as LspPosition, Range, pos_in_range};
+use perl_parser::position::{Position as LspPosition, Range};
 use perl_position_tracking::WirePosition;
 use serde_json::{Value, json};
 
@@ -181,8 +181,12 @@ impl InlayHintsProvider {
 
             // Filter by range if specified
             if let Some(filter_range) = range {
-                let lsp_pos = LspPosition::new(position.line, position.character);
-                if !pos_in_range(lsp_pos, filter_range) {
+                let lsp_pos = LspPosition::new(
+                    arg.location.start,
+                    position.line + 1,
+                    position.character + 1,
+                );
+                if !filter_range.contains(lsp_pos) {
                     continue;
                 }
             }
@@ -216,8 +220,12 @@ impl InlayHintsProvider {
 
             // Filter by range if specified
             if let Some(filter_range) = range {
-                let lsp_pos = LspPosition::new(position.line, position.character);
-                if !pos_in_range(lsp_pos, filter_range) {
+                let lsp_pos = LspPosition::new(
+                    variable.location.end,
+                    position.line + 1,
+                    position.character + 1,
+                );
+                if !filter_range.contains(lsp_pos) {
                     return;
                 }
             }
@@ -244,8 +252,12 @@ impl InlayHintsProvider {
 
             // Filter by range if specified
             if let Some(filter_range) = range {
-                let lsp_pos = LspPosition::new(position.line, position.character);
-                if !pos_in_range(lsp_pos, filter_range) {
+                let lsp_pos = LspPosition::new(
+                    expr.location.end,
+                    position.line + 1,
+                    position.character + 1,
+                );
+                if !filter_range.contains(lsp_pos) {
                     return;
                 }
             }

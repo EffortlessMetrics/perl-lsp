@@ -4,7 +4,7 @@
 
 ```bash
 # Install LSP server
-cargo install --git https://github.com/EffortlessSteven/tree-sitter-perl --bin perl-lsp
+cargo install --git https://github.com/EffortlessMetrics/tree-sitter-perl --bin perl-lsp
 
 # Use parser library
 cargo add perl-parser
@@ -104,9 +104,9 @@ cargo run -p perl-parser --example lsp_capabilities
 
 ## 🔗 Links
 
-- [Repository](https://github.com/EffortlessSteven/tree-sitter-perl)
-- [Issues](https://github.com/EffortlessSteven/tree-sitter-perl/issues)
-- [Discussions](https://github.com/EffortlessSteven/tree-sitter-perl/discussions)
+- [Repository](https://github.com/EffortlessMetrics/tree-sitter-perl)
+- [Issues](https://github.com/EffortlessMetrics/tree-sitter-perl/issues)
+- [Discussions](https://github.com/EffortlessMetrics/tree-sitter-perl/discussions)
 
 ## ⚡ Performance Tips
 

@@ -50,7 +50,7 @@ git push origin v0.8.3
 
 ### 3. Monitor CI Release (10-15 min)
 
-1. Go to: https://github.com/EffortlessSteven/tree-sitter-perl/actions
+1. Go to: https://github.com/EffortlessMetrics/tree-sitter-perl/actions
 2. Watch the "Release" workflow triggered by the tag
 3. Verify all platform builds succeed
 4. Check that artifacts are attached to the release
@@ -59,7 +59,7 @@ git push origin v0.8.3
 
 Once the GitHub release is created:
 
-1. Go to: https://github.com/EffortlessSteven/tree-sitter-perl/releases/tag/v0.8.3
+1. Go to: https://github.com/EffortlessMetrics/tree-sitter-perl/releases/tag/v0.8.3
 2. Download `SHA256SUMS` file
 3. Extract checksums for each platform:
 
@@ -105,28 +105,28 @@ Create `Formula/perl-lsp.rb`:
 ```ruby
 class PerlLsp < Formula
   desc "Perl language server with 100% edge case coverage"
-  homepage "https://github.com/EffortlessSteven/tree-sitter-perl"
+  homepage "https://github.com/EffortlessMetrics/tree-sitter-perl"
   version "0.8.3"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/EffortlessSteven/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-apple-darwin.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
     on_intel do
-      url "https://github.com/EffortlessSteven/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-apple-darwin.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/EffortlessSteven/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-unknown-linux-musl.tar.gz"
+      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-unknown-linux-musl.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
     on_intel do
-      url "https://github.com/EffortlessSteven/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-unknown-linux-musl.tar.gz"
+      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-unknown-linux-musl.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
   end
@@ -146,7 +146,7 @@ Push the tap:
 ```bash
 git add Formula/perl-lsp.rb
 git commit -m "Add perl-lsp v0.8.3"
-git remote add origin https://github.com/EffortlessSteven/homebrew-tap.git
+git remote add origin https://github.com/EffortlessMetrics/homebrew-tap.git
 git push -u origin main
 ```
 
@@ -195,7 +195,7 @@ brew install perl-lsp
 
 ### Manual Download
 
-Download the appropriate binary for your platform from the [releases page](https://github.com/EffortlessSteven/tree-sitter-perl/releases/latest).
+Download the appropriate binary for your platform from the [releases page](https://github.com/EffortlessMetrics/tree-sitter-perl/releases/latest).
 ```
 
 ### 9. Announce Release (10 min)
@@ -289,7 +289,7 @@ Features:
 Installation is now one line:
 curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
 
-GitHub: https://github.com/EffortlessSteven/tree-sitter-perl
+GitHub: https://github.com/EffortlessMetrics/tree-sitter-perl
 ```
 
 ## Post-Release Checklist
@@ -324,7 +324,7 @@ git revert HEAD
 
 ## Contact for Issues
 
-- GitHub Issues: https://github.com/EffortlessSteven/tree-sitter-perl/issues
+- GitHub Issues: https://github.com/EffortlessMetrics/tree-sitter-perl/issues
 - Discord: [Create invite link]
 - Email: [Your email]
 

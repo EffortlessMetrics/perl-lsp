@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod fuzz {
-    use perl_parser::positions::LineStartsCache;
+    use perl_parser::position::LineStartsCache;
 
     // Quick property test without proptest dependency for now
     // Can upgrade to proptest later if desired

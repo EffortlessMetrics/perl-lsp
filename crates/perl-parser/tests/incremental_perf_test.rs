@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use perl_parser::position_mapper::{Position, PositionMapper, apply_edit_utf8};
+    use perl_parser::position::{WirePosition as Position, PositionMapper, apply_edit_utf8};
     use std::time::Instant;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;

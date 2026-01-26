@@ -47,7 +47,7 @@
 
 ### 2. Add GitHub Secrets (2 mins)
 
-1. Go to: https://github.com/EffortlessSteven/tree-sitter-perl/settings/secrets/actions
+1. Go to: https://github.com/EffortlessMetrics/tree-sitter-perl/settings/secrets/actions
 2. Click "New repository secret"
 3. Add:
    - Name: `VSCE_PAT`, Value: [your VSCode PAT]
@@ -69,7 +69,7 @@ This will trigger:
 
 ### 4. Monitor Workflows
 
-1. Check Actions: https://github.com/EffortlessSteven/tree-sitter-perl/actions
+1. Check Actions: https://github.com/EffortlessMetrics/tree-sitter-perl/actions
 2. Verify all workflows complete:
    - [ ] Release workflow (binaries)
    - [ ] Linux packages workflow
@@ -107,7 +107,7 @@ This will trigger:
 
 Install: ext install tree-sitter-perl.perl-lsp
 
-Details: https://github.com/EffortlessSteven/tree-sitter-perl
+Details: https://github.com/EffortlessMetrics/tree-sitter-perl
 ```
 
 ## Troubleshooting

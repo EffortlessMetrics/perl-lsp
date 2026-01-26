@@ -80,7 +80,7 @@ jobs:
            A production-ready Language Server Protocol implementation for Perl,
            providing comprehensive IDE features including auto-completion,
            diagnostics, refactoring, and more.
-          Homepage: https://github.com/EffortlessSteven/tree-sitter-perl
+          Homepage: https://github.com/EffortlessMetrics/tree-sitter-perl
           Section: devel
           Priority: optional
           Depends: libc6 (>= 2.31)
@@ -100,7 +100,7 @@ jobs:
           Release:        1%{?dist}
           Summary:        Lightning-fast Perl LSP server with 26+ IDE features
           License:        MIT
-          URL:            https://github.com/EffortlessSteven/tree-sitter-perl
+          URL:            https://github.com/EffortlessMetrics/tree-sitter-perl
           
           %description
           A production-ready Language Server Protocol implementation for Perl,
@@ -131,7 +131,7 @@ jobs:
             -v ${{ steps.version.outputs.version }} \
             -a ${{ matrix.rpm_arch }} \
             --description "Lightning-fast Perl LSP server with 26+ IDE features" \
-            --url "https://github.com/EffortlessSteven/tree-sitter-perl" \
+            --url "https://github.com/EffortlessMetrics/tree-sitter-perl" \
             --license MIT \
             --maintainer "Tree-sitter Perl Team" \
             -p perl-lsp-${{ steps.version.outputs.version }}-1.${{ matrix.rpm_arch }}.rpm \

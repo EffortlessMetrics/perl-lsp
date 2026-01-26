@@ -360,7 +360,7 @@ pub(crate) mod position {
 
 /// Positions module re-export (LSP-style line/character based)
 pub(crate) mod positions {
-    pub use perl_parser::positions::*;
+    pub use perl_parser::position::*;
 }
 
 /// Declaration types re-export

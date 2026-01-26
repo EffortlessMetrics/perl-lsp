@@ -1,6 +1,6 @@
 // Benchmark for position conversion performance
 use criterion::{Criterion, criterion_group, criterion_main};
-use perl_parser::positions::LineStartsCache;
+use perl_parser::position::LineStartsCache;
 
 fn big_text() -> String {
     let mut s = String::new();

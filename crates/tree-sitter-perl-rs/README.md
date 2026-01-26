@@ -205,4 +205,4 @@ MIT License - see [LICENSE](../../LICENSE) for details.
 
 ---
 
-For more information, see the [main repository](https://github.com/EffortlessSteven/tree-sitter-perl).
+For more information, see the [main repository](https://github.com/EffortlessMetrics/tree-sitter-perl).

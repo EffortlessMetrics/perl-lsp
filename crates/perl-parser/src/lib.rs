@@ -382,7 +382,7 @@ pub use engine::pragma_tracker;
 /// Parser for Perl quote and quote-like operators.
 pub use engine::quote_parser;
 /// Parser utilities and helpers.
-pub use engine::util;
+pub use perl_parser_core::util;
 /// LSP call hierarchy provider for function call navigation.
 pub use ide::call_hierarchy_provider;
 /// Enhanced LSP cancellation infrastructure.
@@ -397,7 +397,7 @@ pub use error::classifier as error_classifier;
 pub use error::recovery as error_recovery;
 pub use error::recovery_parser;
 
-pub use position::line_index;
+pub use perl_parser_core::line_index;
 pub use position::{LineEnding, PositionMapper};
 
 pub mod analysis;

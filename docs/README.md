@@ -1,7 +1,7 @@
 # tree-sitter-perl
 
-[![CI](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/ci.yml/badge.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/ci.yml)
-[![Benchmarks](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/benchmark.yml/badge.svg)](https://github.com/EffortlessSteven/tree-sitter-perl/actions/workflows/benchmark.yml)
+[![CI](https://github.com/EffortlessMetrics/tree-sitter-perl/actions/workflows/ci.yml/badge.svg)](https://github.com/EffortlessMetrics/tree-sitter-perl/actions/workflows/ci.yml)
+[![Benchmarks](https://github.com/EffortlessMetrics/tree-sitter-perl/actions/workflows/benchmark.yml/badge.svg)](https://github.com/EffortlessMetrics/tree-sitter-perl/actions/workflows/benchmark.yml)
 [![Crates.io](https://img.shields.io/crates/v/perl-parser.svg)](https://crates.io/crates/perl-parser)
 [![Documentation](https://docs.rs/perl-parser/badge.svg)](https://docs.rs/perl-parser)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -315,7 +315,7 @@ brew install perl-lsp
 ```
 
 #### Option 4: Download Binary
-Download pre-built binaries from the [latest release](https://github.com/EffortlessSteven/tree-sitter-perl/releases/latest).
+Download pre-built binaries from the [latest release](https://github.com/EffortlessMetrics/tree-sitter-perl/releases/latest).
 
 #### Option 5: Build from Source
 ```bash
@@ -323,7 +323,7 @@ Download pre-built binaries from the [latest release](https://github.com/Effortl
 cargo install perl-lsp
 
 # Or, build from this repository
-git clone https://github.com/EffortlessSteven/tree-sitter-perl
+git clone https://github.com/EffortlessMetrics/tree-sitter-perl
 cd tree-sitter-perl
 cargo build --release -p perl-lsp
 # The binary will be in target/release/perl-lsp
@@ -799,7 +799,7 @@ RustScanner {       // Core scanning implementation
 
 ```shell
 # Clone the repository
-git clone https://github.com/EffortlessSteven/tree-sitter-perl
+git clone https://github.com/EffortlessMetrics/tree-sitter-perl
 cd tree-sitter-perl
 
 # Build the native parser
@@ -1275,7 +1275,7 @@ cargo install perl-lsp
 ### From Source
 
 ```bash
-git clone https://github.com/EffortlessSteven/tree-sitter-perl.git
+git clone https://github.com/EffortlessMetrics/tree-sitter-perl.git
 cd tree-sitter-perl
 cargo add --path crates/perl-parser
 ```
@@ -1290,7 +1290,7 @@ cargo add --path crates/perl-parser
 local parser_config = require "nvim-treesitter.parsers".get_parser_configs()
 parser_config.perl = {
   install_info = {
-    url = 'https://github.com/EffortlessSteven/tree-sitter-perl-rs',
+    url = 'https://github.com/EffortlessMetrics/tree-sitter-perl-rs',
     revision = 'main',
     files = { "crates/tree-sitter-perl-rs/src/lib.rs" },
   },
@@ -1304,7 +1304,7 @@ parser_config.perl = {
 {
   "tree-sitter.parsers": {
     "perl": {
-      "url": "https://github.com/EffortlessSteven/tree-sitter-perl-rs",
+      "url": "https://github.com/EffortlessMetrics/tree-sitter-perl-rs",
       "branch": "main"
     }
   }
@@ -1315,7 +1315,7 @@ parser_config.perl = {
 
 ```elisp
 (setq treesit-language-source-alist
-  '((perl . ("https://github.com/EffortlessSteven/tree-sitter-perl-rs" "main"))))
+  '((perl . ("https://github.com/EffortlessMetrics/tree-sitter-perl-rs" "main"))))
 (treesit-install-language-grammar 'perl)
 ```
 
@@ -1408,7 +1408,7 @@ If you're not launching through a real shell, don't include shell syntax (`2>&1`
 
 If you use `tree-sitter-perl-rs` in academic work, please cite:
 
-Steven Zimmerman, The tree-sitter-perl-rs Team. *tree-sitter-perl-rs: High-Performance Perl Parser in Rust*. EffortlessMetrics. https://github.com/EffortlessSteven/tree-sitter-perl-rs, v0.6.0, 2025.
+Steven Zimmerman, The tree-sitter-perl-rs Team. *tree-sitter-perl-rs: High-Performance Perl Parser in Rust*. EffortlessMetrics. https://github.com/EffortlessMetrics/tree-sitter-perl-rs, v0.6.0, 2025.
 
 **BibTeX:**
 ```bibtex
@@ -1417,7 +1417,7 @@ Steven Zimmerman, The tree-sitter-perl-rs Team. *tree-sitter-perl-rs: High-Perfo
   title = {tree-sitter-perl-rs: High-Performance Perl Parser in Rust},
   year = {2025},
   publisher = {EffortlessMetrics},
-  howpublished = {\url{https://github.com/EffortlessSteven/tree-sitter-perl-rs}},
+  howpublished = {\url{https://github.com/EffortlessMetrics/tree-sitter-perl-rs}},
   note = {Version 0.6.0}
 }
 ```

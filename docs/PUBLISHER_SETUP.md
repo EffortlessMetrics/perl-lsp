@@ -22,7 +22,7 @@
 5. **Save the token!**
 
 ### 3. Add GitHub Secrets (2 mins)
-1. Go to https://github.com/EffortlessSteven/tree-sitter-perl/settings/secrets/actions
+1. Go to https://github.com/EffortlessMetrics/tree-sitter-perl/settings/secrets/actions
 2. Click "New repository secret"
 3. Add these two secrets:
    - Name: `VSCE_PAT`, Value: (your VSCode token)
