@@ -11,7 +11,7 @@ impl<'a> Parser<'a> {
                     let end = op_token.end;
 
                     expr = Node::new(
-                        NodeKind::Unary { op: op_token.text.clone(), operand: Box::new(expr) },
+                        NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(expr) },
                         SourceLocation { start, end },
                     );
                 }
@@ -156,7 +156,7 @@ impl<'a> Parser<'a> {
 
                         Some(TokenKind::Identifier | TokenKind::Method) => {
                             // Method call
-                            let method = self.tokens.next()?.text.clone();
+                            let method = self.tokens.next()?.text.to_string();
 
                             let args = if self.peek_kind() == Some(TokenKind::LeftParen) {
                                 self.parse_args()?
