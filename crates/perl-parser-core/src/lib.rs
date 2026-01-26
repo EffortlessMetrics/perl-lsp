@@ -56,9 +56,9 @@ pub use engine::ast;
 /// Experimental second-generation AST (work in progress).
 pub use engine::ast_v2;
 /// Edit tracking for incremental parsing.
-pub use engine::edit;
+pub use perl_edit as edit;
 /// Heredoc content collector with FIFO ordering and indent stripping.
-pub use engine::heredoc_collector;
+pub use perl_heredoc as heredoc_collector;
 /// Parser context with error recovery support.
 pub use engine::parser_context;
 /// Pragma tracking for `use` and related directives.
@@ -80,9 +80,7 @@ pub use error::recovery_parser;
 pub use error_recovery::RecoveryResult;
 
 pub use position::line_index;
-pub use position::position_mapper;
-#[doc(hidden)]
-pub use position::positions;
+pub use position::{LineEnding, PositionMapper};
 
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{BudgetTracker, ParseBudget, ParseError, ParseOutput, ParseResult};

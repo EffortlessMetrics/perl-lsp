@@ -1,14 +1,13 @@
+//! Heredoc collector and processor for Perl.
+//!
+//! This module handles the logic of collecting heredoc content from source code,
+//! dealing with indentation stripping (`<<~`), and line termination.
+
 use std::collections::VecDeque;
 use std::sync::Arc;
+use perl_position_tracking::ByteSpan;
 
-/// Half-open byte offsets into the source buffer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Span {
-    /// Inclusive start byte offset.
-    pub start: usize,
-    /// Exclusive end byte offset.
-    pub end: usize,
-}
+pub use perl_position_tracking::ByteSpan as Span;
 
 /// Quoting style used in a heredoc declaration.
 #[derive(Debug, Copy, Clone)]
@@ -33,7 +32,7 @@ pub struct PendingHeredoc {
     /// Quoting style determining interpolation behavior.
     pub quote: QuoteKind,
     /// Source span of the heredoc declaration (e.g., `<<EOF`).
-    pub decl_span: Span,
+    pub decl_span: ByteSpan,
     // Optional: add your node id here if convenient for AST attachment.
     // pub node_id: NodeId,
 }
@@ -42,9 +41,9 @@ pub struct PendingHeredoc {
 #[derive(Debug)]
 pub struct HeredocContent {
     /// Individual line spans after indent stripping, excluding line terminators.
-    pub segments: Vec<Span>,
+    pub segments: Vec<ByteSpan>,
     /// Span from start of first segment to end of last segment (empty span if no content).
-    pub full_span: Span,
+    pub full_span: ByteSpan,
 }
 
 /// Result of collecting one or more heredocs from source.
@@ -116,22 +115,22 @@ fn collect_one(src: &[u8], mut off: usize, hd: &PendingHeredoc) -> (HeredocConte
         off = next;
     }
 
-    let segments: Vec<Span> = raw_lines
+    let segments: Vec<ByteSpan> = raw_lines
         .iter()
         .map(|ln| {
             if baseline_indent.is_empty() {
-                Span { start: ln.start, end: ln.end_no_eol }
+                ByteSpan { start: ln.start, end: ln.end_no_eol }
             } else {
                 let bytes = &src[ln.start..ln.end_no_eol];
                 let strip = common_prefix_len(bytes, &baseline_indent);
-                Span { start: ln.start + strip, end: ln.end_no_eol }
+                ByteSpan { start: ln.start + strip, end: ln.end_no_eol }
             }
         })
         .collect();
 
     let full_span = match (segments.first(), segments.last()) {
-        (Some(f), Some(l)) => Span { start: f.start, end: l.end },
-        _ => Span { start: off, end: off }, // empty heredoc
+        (Some(f), Some(l)) => ByteSpan { start: f.start, end: l.end },
+        _ => ByteSpan { start: off, end: off }, // empty heredoc
     };
 
     if !found {

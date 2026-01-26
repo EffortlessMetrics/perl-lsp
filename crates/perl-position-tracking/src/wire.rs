@@ -53,26 +53,31 @@ impl WireLocation {
         Self { uri, range }
     }
 }
+#[cfg(feature = "lsp-compat")]
 impl From<WirePosition> for lsp_types::Position {
     fn from(p: WirePosition) -> Self {
         Self { line: p.line, character: p.character }
     }
 }
+#[cfg(feature = "lsp-compat")]
 impl From<lsp_types::Position> for WirePosition {
     fn from(p: lsp_types::Position) -> Self {
         Self { line: p.line, character: p.character }
     }
 }
+#[cfg(feature = "lsp-compat")]
 impl From<WireRange> for lsp_types::Range {
     fn from(r: WireRange) -> Self {
         Self { start: r.start.into(), end: r.end.into() }
     }
 }
+#[cfg(feature = "lsp-compat")]
 impl From<lsp_types::Range> for WireRange {
     fn from(r: lsp_types::Range) -> Self {
         Self { start: r.start.into(), end: r.end.into() }
     }
 }
+#[cfg(feature = "lsp-compat")]
 impl From<WireLocation> for lsp_types::Location {
     fn from(l: WireLocation) -> Self {
         static FALLBACK_URI: std::sync::LazyLock<lsp_types::Uri> = std::sync::LazyLock::new(|| {
