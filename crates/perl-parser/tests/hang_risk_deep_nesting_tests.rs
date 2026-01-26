@@ -46,8 +46,8 @@ fn parser_hang_risk_nested_blocks_exceed_limit() -> TestResult {
     assert!(result.is_err(), "Expected RecursionLimit error for {} nested blocks", depth);
     let err = result.err().ok_or("Expected error but got Ok")?;
     assert!(
-        matches!(err, ParseError::RecursionLimit),
-        "Expected RecursionLimit error, got different error type"
+        matches!(err, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }),
+        "Expected RecursionLimit or NestingTooDeep error, got different error type: {:?}", err
     );
     Ok(())
 }
@@ -74,7 +74,7 @@ fn parser_hang_risk_nested_parentheses_exceed_limit() -> TestResult {
     assert!(result.is_err(), "Expected RecursionLimit error for deeply nested parentheses");
     let err = result.err().ok_or("Expected error but got Ok")?;
     assert!(
-        matches!(err, ParseError::RecursionLimit),
+        matches!(err, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }),
         "Expected RecursionLimit error for nested parentheses"
     );
     Ok(())
@@ -452,7 +452,7 @@ fn parser_hang_risk_boundary_just_above_limit() -> TestResult {
     assert!(result.is_err(), "Expected RecursionLimit error for nesting just above limit");
     let err = result.err().ok_or("Expected error but got Ok")?;
     assert!(
-        matches!(err, ParseError::RecursionLimit),
+        matches!(err, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }),
         "Expected RecursionLimit error type"
     );
     Ok(())

@@ -350,7 +350,8 @@ impl<'a> Parser<'a> {
             | TokenKind::ArraySigil
             | TokenKind::HashSigil
             | TokenKind::SubSigil
-            | TokenKind::GlobSigil => self.parse_variable_from_sigil(),
+            | TokenKind::GlobSigil
+            | TokenKind::Percent => self.parse_variable_from_sigil(),
 
             TokenKind::LeftParen => {
                 let start_token = self.tokens.next()?; // consume (

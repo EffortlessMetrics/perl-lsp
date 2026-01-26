@@ -149,6 +149,25 @@ impl<'a> Parser<'a> {
 
     /// Parse a variable ($foo, @bar, %baz)
     fn parse_variable(&mut self) -> ParseResult<Node> {
+        // If the next token is a sigil token, delegate to parse_variable_from_sigil
+        // This handles cases where the lexer splits sigil and name (e.g. "%" "hash" vs "%hash")
+        // Also handles operators that can act as sigils in this context (%, &, *)
+        if let Some(kind) = self.peek_kind() {
+            match kind {
+                TokenKind::ScalarSigil
+                | TokenKind::ArraySigil
+                | TokenKind::HashSigil
+                | TokenKind::SubSigil
+                | TokenKind::GlobSigil
+                | TokenKind::Percent     // %hash
+                | TokenKind::BitwiseAnd  // &sub
+                | TokenKind::Star => {   // *glob
+                    return self.parse_variable_from_sigil();
+                }
+                _ => {}
+            }
+        }
+
         let token = self.consume_token()?;
 
         // The lexer returns variables as identifiers like "$x", "@array", etc.
