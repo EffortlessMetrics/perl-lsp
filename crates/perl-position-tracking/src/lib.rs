@@ -26,7 +26,7 @@
 //! ```
 
 pub use convert::{offset_to_utf16_line_col, utf16_line_col_to_offset};
-pub use line_index::LineStartsCache;
+pub use line_index::{LineStartsCache, LineIndex};
 pub use span::{ByteSpan, SourceLocation};
 pub use mapper::{
     apply_edit_utf8, json_to_position, last_line_column_utf8, newline_count, position_to_json,

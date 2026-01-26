@@ -3,10 +3,8 @@
 //! This module provides support for preserving comments and whitespace
 //! in the AST, which is essential for code formatting and refactoring tools.
 
-use crate::{
-    ast_v2::{Node, NodeKind},
-    position::Range,
-};
+use perl_ast::v2::{Node, NodeKind};
+use perl_position_tracking::Range;
 use perl_lexer::TokenType;
 
 /// Trivia represents non-semantic tokens like comments and whitespace
@@ -147,16 +145,16 @@ impl TriviaLexer {
                     trivia.push(TriviaToken::new(
                         Trivia::Newline,
                         Range::new(
-                            crate::position::Position::new(start, 0, 0),
-                            crate::position::Position::new(end, 0, 0),
+                            perl_position_tracking::Position::new(start, 0, 0),
+                            perl_position_tracking::Position::new(end, 0, 0),
                         ),
                     ));
                 } else {
                     trivia.push(TriviaToken::new(
                         Trivia::Whitespace(ws.to_string()),
                         Range::new(
-                            crate::position::Position::new(start, 0, 0),
-                            crate::position::Position::new(end, 0, 0),
+                            perl_position_tracking::Position::new(start, 0, 0),
+                            perl_position_tracking::Position::new(end, 0, 0),
                         ),
                     ));
                 }
@@ -175,8 +173,8 @@ impl TriviaLexer {
                 trivia.push(TriviaToken::new(
                     Trivia::LineComment(comment.to_string()),
                     Range::new(
-                        crate::position::Position::new(start, 0, 0),
-                        crate::position::Position::new(end, 0, 0),
+                        perl_position_tracking::Position::new(start, 0, 0),
+                        perl_position_tracking::Position::new(end, 0, 0),
                     ),
                 ));
 
@@ -196,8 +194,8 @@ impl TriviaLexer {
                     trivia.push(TriviaToken::new(
                         Trivia::PodComment(pod.to_string()),
                         Range::new(
-                            crate::position::Position::new(start, 0, 0),
-                            crate::position::Position::new(end, 0, 0),
+                            perl_position_tracking::Position::new(start, 0, 0),
+                            perl_position_tracking::Position::new(end, 0, 0),
                         ),
                     ));
 
@@ -266,7 +264,7 @@ pub struct TriviaPreservingParser {
     /// Current lookahead token
     current: Option<(perl_lexer::Token, Vec<TriviaToken>)>,
     /// Node ID generator
-    id_generator: crate::ast_v2::NodeIdGenerator,
+    id_generator: perl_ast::v2::NodeIdGenerator,
 }
 
 impl TriviaPreservingParser {
@@ -275,7 +273,7 @@ impl TriviaPreservingParser {
         let mut parser = TriviaPreservingParser {
             lexer: TriviaLexer::new(source),
             current: None,
-            id_generator: crate::ast_v2::NodeIdGenerator::new(),
+            id_generator: perl_ast::v2::NodeIdGenerator::new(),
         };
         // Prime the lookahead
         parser.advance();
@@ -299,8 +297,8 @@ impl TriviaPreservingParser {
             self.id_generator.next_id(),
             NodeKind::Program { statements: Vec::new() },
             Range::new(
-                crate::position::Position::new(0, 1, 1),
-                crate::position::Position::new(0, 1, 1),
+                perl_position_tracking::Position::new(0, 1, 1),
+                perl_position_tracking::Position::new(0, 1, 1),
             ),
         );
 
@@ -311,7 +309,10 @@ impl TriviaPreservingParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_tdd_support::must_some;
+    
+    fn must_some<T>(opt: Option<T>) -> T {
+        opt.expect("Expected Some, got None")
+    }
 
     #[test]
     fn test_trivia_collection() {
