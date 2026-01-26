@@ -778,7 +778,6 @@ impl LspServer {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
 
@@ -795,7 +794,7 @@ mod tests {
 
         assert!(result.is_ok());
         let resolved =
-            result.map_err(|e| format!("{}", e.message))?.ok_or("expected resolved value")?;
+            result.map_err(|e| e.message.to_string())?.ok_or("expected resolved value")?;
 
         // Check that documentation was added
         assert!(resolved.get("documentation").is_some());
@@ -821,7 +820,7 @@ mod tests {
 
         assert!(result.is_ok());
         let resolved =
-            result.map_err(|e| format!("{}", e.message))?.ok_or("expected resolved value")?;
+            result.map_err(|e| e.message.to_string())?.ok_or("expected resolved value")?;
 
         // Check that documentation was added
         assert!(resolved.get("documentation").is_some());
@@ -844,7 +843,7 @@ mod tests {
 
         assert!(result.is_ok());
         let resolved =
-            result.map_err(|e| format!("{}", e.message))?.ok_or("expected resolved value")?;
+            result.map_err(|e| e.message.to_string())?.ok_or("expected resolved value")?;
 
         // Check that documentation was added
         assert!(resolved.get("documentation").is_some());
@@ -867,7 +866,7 @@ mod tests {
 
         assert!(result.is_ok());
         let resolved =
-            result.map_err(|e| format!("{}", e.message))?.ok_or("expected resolved value")?;
+            result.map_err(|e| e.message.to_string())?.ok_or("expected resolved value")?;
 
         // Check that documentation was added
         assert!(resolved.get("documentation").is_some());
@@ -890,7 +889,7 @@ mod tests {
 
         assert!(result.is_ok());
         let resolved =
-            result.map_err(|e| format!("{}", e.message))?.ok_or("expected resolved value")?;
+            result.map_err(|e| e.message.to_string())?.ok_or("expected resolved value")?;
 
         // Label should be preserved
         assert_eq!(resolved.get("label").and_then(|v| v.as_str()), Some("some_custom_function"));

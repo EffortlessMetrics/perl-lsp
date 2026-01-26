@@ -199,7 +199,7 @@ fn test_directory_completion_with_slash() -> TestResult {
     // Should find lib directory with trailing slash
     assert!(
         completions.iter().any(
-            |c| c.label == "lib/" && c.detail.as_ref().map(|d| d.as_str()) == Some("directory")
+            |c| c.label == "lib/" && c.detail.as_deref() == Some("directory")
         )
     );
 

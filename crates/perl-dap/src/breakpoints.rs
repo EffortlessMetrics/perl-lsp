@@ -349,7 +349,6 @@ impl Default for BreakpointStore {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use crate::protocol::{SetBreakpointsArguments, Source, SourceBreakpoint};

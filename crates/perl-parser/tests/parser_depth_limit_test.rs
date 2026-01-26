@@ -73,7 +73,7 @@ fn parser_depth_limit_nested_arrays() {
     for _ in 0..depth {
         code.push('[');
     }
-    code.push_str("1");
+    code.push('1');
     // Closing brackets
     for _ in 0..depth {
         code.push(']');

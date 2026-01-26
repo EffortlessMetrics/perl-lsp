@@ -217,7 +217,10 @@ proptest! {
 
     #[test]
     fn parser_doesnt_panic(
-        input in prop::string::string_regex("[^\0]{0,200}").unwrap()
+        input in match prop::string::string_regex("[^\0]{0,200}") {
+            Ok(strat) => strat,
+            Err(e) => panic!("invalid proptest regex pattern: {e:?}"),
+        }
     ) {
         let mut parser = Parser::new(&input);
         // Parser should either succeed or return an error, never panic

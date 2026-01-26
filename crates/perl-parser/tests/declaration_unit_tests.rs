@@ -138,11 +138,11 @@ print QUX;
 
     // Test BAR (hash form)
     let bar_usage = content.rfind("BAR").ok_or("Could not find BAR usage")?;
-    let links = provider.find_declaration(bar_usage, 0).ok_or("Should find BAR declaration")?;
+    let _links = provider.find_declaration(bar_usage, 0).ok_or("Should find BAR declaration")?;
 
     // Test QUX (qw form)
     let qux_usage = content.rfind("QUX").ok_or("Could not find QUX usage")?;
-    let links = provider.find_declaration(qux_usage, 0).ok_or("Should find QUX declaration")?;
+    let _links = provider.find_declaration(qux_usage, 0).ok_or("Should find QUX declaration")?;
     Ok(())
 }
 
@@ -196,11 +196,11 @@ métód_π();
 
     // Test _priv (private sub with underscore)
     let priv_call = content.rfind("_priv()").ok_or("Could not find _priv call")?;
-    let links = provider.find_declaration(priv_call, 0).ok_or("Should find _priv declaration")?;
+    let _links = provider.find_declaration(priv_call, 0).ok_or("Should find _priv declaration")?;
 
     // Test métód_π (unicode method name)
     let unicode_call = content.rfind("métód_π()").ok_or("Could not find unicode call")?;
-    let links = provider
+    let _links = provider
         .find_declaration(unicode_call, 0)
         .ok_or("Should find unicode method declaration")?;
     Ok(())

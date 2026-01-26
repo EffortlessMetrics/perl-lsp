@@ -321,7 +321,6 @@ impl Default for DapDispatcher {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use perl_tdd_support::must;

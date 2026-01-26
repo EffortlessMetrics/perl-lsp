@@ -383,7 +383,6 @@ impl WorkspaceSymbolsProvider {
 // which correctly counts UTF-16 code units as required by the LSP protocol.
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use perl_parser_core::Parser;

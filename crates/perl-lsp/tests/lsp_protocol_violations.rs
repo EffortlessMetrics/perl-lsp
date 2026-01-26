@@ -7,7 +7,6 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 
 /// Comprehensive protocol violation tests
 /// Tests all possible ways the LSP protocol can be violated
-
 // Run with: cargo test -p perl-lsp --features strict-jsonrpc
 #[cfg(feature = "strict-jsonrpc")]
 #[test]

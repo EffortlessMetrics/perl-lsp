@@ -2004,7 +2004,7 @@ sub complex {
 
     mod validation_tests {
         use super::*;
-        use perl_tdd_support::{must, must_some, must_err};
+        use perl_tdd_support::{must, must_err};
 
         // --- Perl identifier validation tests ---
 

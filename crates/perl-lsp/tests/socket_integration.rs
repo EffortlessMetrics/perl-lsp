@@ -26,14 +26,14 @@ fn test_socket_connection() -> Result<(), Box<dyn std::error::Error>> {
     // Read stderr to find the port
     let mut lines = reader.lines();
     let mut port = 0;
-    while let Some(line_res) = lines.next() {
+    for line_res in lines.by_ref() {
         let line = line_res?;
         println!("Server startup: {}", line); // Debug output
         if line.contains("Perl LSP listening on") {
             // Parse port from "Perl LSP listening on 127.0.0.1:12345"
             let parts: Vec<&str> = line.split_whitespace().collect();
             if let Some(addr) = parts.last() {
-                if let Some(port_str) = addr.split(':').last() {
+                if let Some(port_str) = addr.split(':').next_back() {
                     port = port_str.parse()?;
                     break;
                 }
@@ -45,10 +45,8 @@ fn test_socket_connection() -> Result<(), Box<dyn std::error::Error>> {
 
     // Spawn thread to continue reading stderr
     thread::spawn(move || {
-        for line in lines {
-            if let Ok(l) = line {
-                println!("SERVER LOG: {}", l);
-            }
+        for l in lines.map_while(Result::ok) {
+            println!("SERVER LOG: {}", l);
         }
     });
 

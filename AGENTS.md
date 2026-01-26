@@ -580,3 +580,4 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 - Use `or_default()` instead of `or_insert_with(Vec::new)` for default values
 - Avoid unnecessary `.clone()` on types that implement Copy
 - Add `#[allow(clippy::only_used_in_recursion)]` for recursive tree traversal functions
+- Ban `.unwrap()` in tests and production: do not use `.unwrap()` anywhere. In tests prefer returning `Result` and using the `?` operator, or use `expect()` with a clear, descriptive message only when absolutely necessary.

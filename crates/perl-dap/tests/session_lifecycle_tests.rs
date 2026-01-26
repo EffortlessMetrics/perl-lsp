@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! DAP Session Lifecycle Tests (AC5.5)
 //!
 //! Comprehensive tests for DAP session management including:

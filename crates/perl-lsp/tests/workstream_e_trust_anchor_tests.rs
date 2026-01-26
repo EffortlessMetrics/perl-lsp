@@ -161,7 +161,7 @@ sub main {
                 result.get("items").and_then(|i| i.as_array()).or_else(|| result.as_array());
 
             assert!(
-                items.map_or(false, |arr| !arr.is_empty()) || !result.is_null(),
+                items.is_some_and(|arr| !arr.is_empty()) || !result.is_null(),
                 "Completion should return results even in Building state"
             );
         }

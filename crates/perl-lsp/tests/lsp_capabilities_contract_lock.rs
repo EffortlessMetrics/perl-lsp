@@ -11,7 +11,7 @@ fn locked_capabilities_are_conservative() -> Result<(), Box<dyn std::error::Erro
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
-    let res = srv.handle_request(init)?;
+    let res = srv.handle_request(init).ok_or("Request handling failed")?;
     let result = res.result.ok_or("missing result field")?;
     let caps = &result["capabilities"];
 

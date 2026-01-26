@@ -2004,7 +2004,7 @@ pub mod lsp_adapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_tdd_support::{must, must_some};
+    use perl_tdd_support::must;
 
     #[test]
     fn test_basic_indexing() {

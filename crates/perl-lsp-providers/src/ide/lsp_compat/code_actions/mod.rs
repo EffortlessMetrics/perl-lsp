@@ -144,7 +144,6 @@ impl CodeActionsProvider {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use crate::ide::lsp_compat::diagnostics::DiagnosticsProvider;
