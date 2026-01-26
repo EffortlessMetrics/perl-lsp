@@ -7,8 +7,8 @@ authors = ["Tree-sitter Perl Contributors"]
 description = "Semantic analysis and symbol extraction for Perl"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessSteven/tree-sitter-perl-rs"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 documentation = "https://docs.rs/perl-semantic-analyzer"
 keywords = ["perl", "semantic", "analysis", "ast"]
 categories = ["parsing", "development-tools", "text-editors"]
@@ -29,6 +29,9 @@ perl-symbol-types = { workspace = true }
 regex = "1.12.2"
 rustc-hash = "2.1.1"
 serde = { version = "1.0.228", features = ["derive"] }
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
 
 [lints]
 workspace = true

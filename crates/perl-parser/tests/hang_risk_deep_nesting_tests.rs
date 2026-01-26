@@ -91,7 +91,7 @@ fn parser_hang_risk_nested_array_literals() {
     for _ in 0..depth {
         code.push('[');
     }
-    code.push_str("1");
+    code.push('1');
     for _ in 0..depth {
         code.push(']');
     }
@@ -113,7 +113,7 @@ fn parser_hang_risk_nested_hash_literals() {
     for _ in 0..depth {
         code.push_str("{ a => ");
     }
-    code.push_str("1");
+    code.push('1');
     for _ in 0..depth {
         code.push_str(" }");
     }
@@ -273,13 +273,13 @@ fn parser_hang_risk_nested_regex_captures() {
     code.push_str("m/");
 
     for _ in 0..depth {
-        code.push_str("(");
+        code.push('(');
     }
-    code.push_str("x");
+    code.push('x');
     for _ in 0..depth {
-        code.push_str(")");
+        code.push(')');
     }
-    code.push_str("/");
+    code.push('/');
 
     let mut parser = Parser::new(&code);
     let result = parser.parse();
@@ -360,13 +360,13 @@ fn parser_hang_risk_nested_quote_delimiters() {
     code.push_str("q{");
 
     for _ in 0..depth {
-        code.push_str("{");
+        code.push('{');
     }
     code.push_str("text");
     for _ in 0..depth {
-        code.push_str("}");
+        code.push('}');
     }
-    code.push_str("}");
+    code.push('}');
 
     let mut parser = Parser::new(&code);
     let result = parser.parse();
@@ -539,7 +539,7 @@ fn parser_hang_risk_nested_eval_blocks() {
     for _ in 0..depth {
         code.push_str("eval { ");
     }
-    code.push_str("1");
+    code.push('1');
     for _ in 0..depth {
         code.push_str(" }");
     }
@@ -591,7 +591,7 @@ fn parser_hang_risk_pathological_alternating_structures() {
             code.push_str("{ b => [ ");
         }
     }
-    code.push_str("1");
+    code.push('1');
     for i in 0..depth {
         if i % 2 == 0 {
             code.push_str(" ] }");

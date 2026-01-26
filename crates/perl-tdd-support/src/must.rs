@@ -26,3 +26,15 @@ pub fn must_some<T>(o: Option<T>) -> T {
         None => panic!("unexpected None"),
     }
 }
+
+/// Extract the error from a Result, or panic if Ok.
+///
+/// This is a test-only replacement for `.unwrap_err()` that is compliant
+/// with the "no unwrap/expect" policy.
+#[track_caller]
+pub fn must_err<T: std::fmt::Debug, E>(r: Result<T, E>) -> E {
+    match r {
+        Err(e) => e,
+        Ok(v) => panic!("expected Err, got Ok({:?})", v),
+    }
+}

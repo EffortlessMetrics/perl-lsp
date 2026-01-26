@@ -1999,9 +1999,9 @@ pub mod lsp_adapter {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_basic_indexing() {
@@ -2110,7 +2110,7 @@ use Data::Dumper;
         // Test basic path to URI conversion
         let result = fs_path_to_uri("/tmp/test.pl");
         assert!(result.is_ok());
-        let uri = result.unwrap();
+        let uri = must(result);
         assert!(uri.starts_with("file://"));
         assert!(uri.contains("/tmp/test.pl"));
     }
@@ -2120,7 +2120,7 @@ use Data::Dumper;
         // Test path with spaces
         let result = fs_path_to_uri("/tmp/path with spaces/test.pl");
         assert!(result.is_ok());
-        let uri = result.unwrap();
+        let uri = must(result);
         assert!(uri.starts_with("file://"));
         // Should contain percent-encoded spaces
         assert!(uri.contains("path%20with%20spaces"));
@@ -2131,7 +2131,7 @@ use Data::Dumper;
         // Test path with Unicode characters
         let result = fs_path_to_uri("/tmp/café/test.pl");
         assert!(result.is_ok());
-        let uri = result.unwrap();
+        let uri = must(result);
         assert!(uri.starts_with("file://"));
         // Should contain percent-encoded Unicode
         assert!(uri.contains("caf%C3%A9"));
@@ -2187,13 +2187,13 @@ use Data::Dumper;
         // Test Windows-style paths
         let result = fs_path_to_uri(r"C:\Users\test\Documents\script.pl");
         assert!(result.is_ok());
-        let uri = result.unwrap();
+        let uri = must(result);
         assert!(uri.starts_with("file://"));
 
         // Test Windows path with spaces
         let result = fs_path_to_uri(r"C:\Program Files\My App\script.pl");
         assert!(result.is_ok());
-        let uri = result.unwrap();
+        let uri = must(result);
         assert!(uri.starts_with("file://"));
         assert!(uri.contains("Program%20Files"));
     }
@@ -2351,9 +2351,9 @@ use Data::Dumper;
         // Index 10 files (exceeds limit of 5)
         for i in 0..10 {
             let uri_str = format!("file:///test{}.pl", i);
-            let uri = url::Url::parse(&uri_str).unwrap();
+            let uri = must(url::Url::parse(&uri_str));
             let code = "sub test { }";
-            coordinator.index().index_file(uri, code.to_string()).unwrap();
+            must(coordinator.index().index_file(uri, code.to_string()));
         }
 
         // Enforce limits
@@ -2390,7 +2390,7 @@ use Data::Dumper;
         // Index files with many symbols to exceed total symbol limit
         for i in 0..10 {
             let uri_str = format!("file:///test{}.pl", i);
-            let uri = url::Url::parse(&uri_str).unwrap();
+            let uri = must(url::Url::parse(&uri_str));
             // Each file has 10 subroutines = 100 total symbols (exceeds limit of 50)
             let code = r#"
 package Test;
@@ -2405,7 +2405,7 @@ sub sub8 { }
 sub sub9 { }
 sub sub10 { }
 "#;
-            coordinator.index().index_file(uri, code.to_string()).unwrap();
+            must(coordinator.index().index_file(uri, code.to_string()));
         }
 
         // Enforce limits
@@ -2433,9 +2433,9 @@ sub sub10 { }
         // Index a few files well within default limits
         for i in 0..5 {
             let uri_str = format!("file:///test{}.pl", i);
-            let uri = url::Url::parse(&uri_str).unwrap();
+            let uri = must(url::Url::parse(&uri_str));
             let code = "sub test { }";
-            coordinator.index().index_file(uri, code.to_string()).unwrap();
+            must(coordinator.index().index_file(uri, code.to_string()));
         }
 
         // Should not trigger degradation
@@ -2465,9 +2465,9 @@ sub sub10 { }
         // Index files before transitioning to ready
         for i in 0..5 {
             let uri_str = format!("file:///test{}.pl", i);
-            let uri = url::Url::parse(&uri_str).unwrap();
+            let uri = must(url::Url::parse(&uri_str));
             let code = "sub test { }";
-            coordinator.index().index_file(uri, code.to_string()).unwrap();
+            must(coordinator.index().index_file(uri, code.to_string()));
         }
 
         // Transition to ready - should automatically enforce limits
@@ -2652,7 +2652,7 @@ sub sub10 { }
     #[test]
     fn test_early_exit_optimization_unchanged_content() {
         let index = WorkspaceIndex::new();
-        let uri = url::Url::parse("file:///test.pl").unwrap();
+        let uri = must(url::Url::parse("file:///test.pl"));
         let code = r#"
 package MyPackage;
 
@@ -2662,14 +2662,14 @@ sub hello {
 "#;
 
         // First indexing should parse and index
-        index.index_file(uri.clone(), code.to_string()).unwrap();
+        must(index.index_file(uri.clone(), code.to_string()));
         let symbols1 = index.file_symbols(uri.as_str());
         assert!(symbols1.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
         assert!(symbols1.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
 
         // Second indexing with same content should early-exit
         // We can verify this by checking that the index still works correctly
-        index.index_file(uri.clone(), code.to_string()).unwrap();
+        must(index.index_file(uri.clone(), code.to_string()));
         let symbols2 = index.file_symbols(uri.as_str());
         assert_eq!(symbols1.len(), symbols2.len());
         assert!(symbols2.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
@@ -2679,7 +2679,7 @@ sub hello {
     #[test]
     fn test_early_exit_optimization_changed_content() {
         let index = WorkspaceIndex::new();
-        let uri = url::Url::parse("file:///test.pl").unwrap();
+        let uri = must(url::Url::parse("file:///test.pl"));
         let code1 = r#"
 package MyPackage;
 
@@ -2697,13 +2697,13 @@ sub goodbye {
 "#;
 
         // First indexing
-        index.index_file(uri.clone(), code1.to_string()).unwrap();
+        must(index.index_file(uri.clone(), code1.to_string()));
         let symbols1 = index.file_symbols(uri.as_str());
         assert!(symbols1.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
         assert!(!symbols1.iter().any(|s| s.name == "goodbye"));
 
         // Second indexing with different content should re-parse
-        index.index_file(uri.clone(), code2.to_string()).unwrap();
+        must(index.index_file(uri.clone(), code2.to_string()));
         let symbols2 = index.file_symbols(uri.as_str());
         assert!(!symbols2.iter().any(|s| s.name == "hello"));
         assert!(symbols2.iter().any(|s| s.name == "goodbye" && s.kind == SymbolKind::Subroutine));
@@ -2712,7 +2712,7 @@ sub goodbye {
     #[test]
     fn test_early_exit_optimization_whitespace_only_change() {
         let index = WorkspaceIndex::new();
-        let uri = url::Url::parse("file:///test.pl").unwrap();
+        let uri = must(url::Url::parse("file:///test.pl"));
         let code1 = r#"
 package MyPackage;
 
@@ -2731,12 +2731,12 @@ sub hello {
 "#;
 
         // First indexing
-        index.index_file(uri.clone(), code1.to_string()).unwrap();
+        must(index.index_file(uri.clone(), code1.to_string()));
         let symbols1 = index.file_symbols(uri.as_str());
         assert!(symbols1.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
 
         // Second indexing with whitespace change should re-parse (hash will differ)
-        index.index_file(uri.clone(), code2.to_string()).unwrap();
+        must(index.index_file(uri.clone(), code2.to_string()));
         let symbols2 = index.file_symbols(uri.as_str());
         // Symbols should still be found, but content hash differs so it re-indexed
         assert!(symbols2.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));

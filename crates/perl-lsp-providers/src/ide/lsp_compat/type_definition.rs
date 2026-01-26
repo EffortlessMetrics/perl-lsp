@@ -371,7 +371,7 @@ impl Default for TypeDefinitionProvider {
 }
 
 #[cfg(all(test, feature = "lsp-compat"))]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+
 mod tests {
     use super::*;
     use perl_parser_core::Parser;

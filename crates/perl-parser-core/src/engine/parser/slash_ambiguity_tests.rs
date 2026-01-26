@@ -1,7 +1,7 @@
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use crate::parser::Parser;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_division_vs_regex() {
@@ -10,7 +10,7 @@ mod tests {
         let mut parser = Parser::new(code_div);
         let result = parser.parse();
         assert!(result.is_ok(), "Failed to parse division");
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
         // Should contain binary division operator
         assert!(sexp.contains("binary_/"), "Should be parsed as division: {}", sexp);
@@ -43,7 +43,7 @@ mod tests {
         let mut parser = Parser::new(code);
         let result = parser.parse();
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
 
         // Should see two division operations
@@ -67,7 +67,7 @@ mod tests {
         let mut parser = Parser::new(code);
         let result = parser.parse();
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
         assert!(sexp.contains("regex"), "Should be regex: {}", sexp);
     }
@@ -80,7 +80,7 @@ mod tests {
         let mut parser = Parser::new(code);
         let result = parser.parse();
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
         assert!(sexp.contains("binary_/"), "Should be division after nullary function: {}", sexp);
     }

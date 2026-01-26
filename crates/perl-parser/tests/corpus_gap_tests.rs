@@ -26,58 +26,58 @@ mod corpus_gap_tests {
     }
 
     #[test]
-    fn test_source_filters() {
-        test_corpus_file("source_filters.pl").expect("source filters test failed");
+    fn test_source_filters() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("source_filters.pl")
     }
 
     #[test]
-    fn test_xs_inline_ffi() {
-        test_corpus_file("xs_inline_ffi.pl").expect("xs/ffi test failed");
+    fn test_xs_inline_ffi() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("xs_inline_ffi.pl")
     }
 
     #[test]
-    fn test_modern_perl_features() {
-        test_corpus_file("modern_perl_features.pl").expect("modern perl test failed");
+    fn test_modern_perl_features() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("modern_perl_features.pl")
     }
 
     #[test]
-    fn test_advanced_regex() {
-        test_corpus_file("advanced_regex.pl").expect("advanced regex test failed");
+    fn test_advanced_regex() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("advanced_regex.pl")
     }
 
     #[test]
-    fn test_data_end_sections() {
-        test_corpus_file("data_end_sections.pl").expect("data/end sections test failed");
+    fn test_data_end_sections() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("data_end_sections.pl")
     }
 
     #[test]
-    fn test_packages_versions() {
-        test_corpus_file("packages_versions.pl").expect("packages/versions test failed");
+    fn test_packages_versions() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("packages_versions.pl")
     }
 
     #[test]
-    fn test_legacy_syntax() {
-        test_corpus_file("legacy_syntax.pl").expect("legacy syntax test failed");
+    fn test_legacy_syntax() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("legacy_syntax.pl")
     }
 
     #[test]
-    fn test_continue_redo_statements() {
-        test_corpus_file("continue_redo_statements.pl").expect("continue/redo test failed");
+    fn test_continue_redo_statements() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("continue_redo_statements.pl")
     }
 
     #[test]
-    fn test_format_statements() {
-        test_corpus_file("format_statements.pl").expect("format statements test failed");
+    fn test_format_statements() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("format_statements.pl")
     }
 
     #[test]
-    fn test_glob_expressions() {
-        test_corpus_file("glob_expressions.pl").expect("glob expressions test failed");
+    fn test_glob_expressions() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("glob_expressions.pl")
     }
 
     #[test]
-    fn test_tie_interface() {
-        test_corpus_file("tie_interface.pl").expect("tie interface test failed");
+    fn test_tie_interface() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("tie_interface.pl")
     }
 
     // Property-based test for delimiters
@@ -119,7 +119,10 @@ mod corpus_gap_tests {
         
         for file in files {
             let path = Path::new("test_corpus").join(file);
-            let content = fs::read_to_string(&path).expect("Failed to read file");
+            let content = match fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(e) => panic!("Failed to read file {}: {}", file, e),
+            };
             
             let start = Instant::now();
             for _ in 0..100 {

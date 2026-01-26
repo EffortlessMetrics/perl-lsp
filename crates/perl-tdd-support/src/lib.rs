@@ -76,4 +76,4 @@ pub use tdd::test_runner;
 
 /// Safe unwrap replacements for tests.
 pub mod must;
-pub use must::{must, must_some};
+pub use must::{must, must_some, must_err};

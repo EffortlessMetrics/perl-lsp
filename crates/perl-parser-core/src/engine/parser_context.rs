@@ -269,9 +269,9 @@ impl ParserContext {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn test_parser_context_creation() {
@@ -319,21 +319,20 @@ mod tests {
         let source = "my $x = 42;\nmy $y = 43;".to_string();
         let ctx = ParserContext::new(source.clone());
 
-        let first_offset = source.find("my").unwrap();
-        let second_offset = source.rfind("my").unwrap();
+        let first_offset = must_some(source.find("my"));
+        let second_offset = must_some(source.rfind("my"));
 
         let first =
-            ctx.tokens.iter().find(|t| t.range().start.byte == first_offset).expect("first token");
+            must_some(ctx.tokens.iter().find(|t| t.range().start.byte == first_offset));
         assert_eq!(first.range().start.line, 1);
         assert_eq!(first.range().start.column, 1);
         assert_eq!(first.range().end.line, 1);
         assert_eq!(first.range().end.column, 3);
 
-        let second = ctx
+        let second = must_some(ctx
             .tokens
             .iter()
-            .find(|t| t.range().start.byte == second_offset)
-            .expect("second token");
+            .find(|t| t.range().start.byte == second_offset));
         assert_eq!(second.range().start.line, 2);
         assert_eq!(second.range().start.column, 1);
         assert_eq!(second.range().end.line, 2);
@@ -345,12 +344,11 @@ mod tests {
         let source = "my $s = \"a\nb\";".to_string();
         let ctx = ParserContext::new(source.clone());
 
-        let string_offset = source.find('"').unwrap();
-        let token = ctx
+        let string_offset = must_some(source.find('"'));
+        let token = must_some(ctx
             .tokens
             .iter()
-            .find(|t| t.range().start.byte == string_offset)
-            .expect("string token");
+            .find(|t| t.range().start.byte == string_offset));
 
         assert_eq!(token.range().start.line, 1);
         assert_eq!(token.range().start.column, 9);
@@ -366,12 +364,11 @@ mod tests {
 
         // Find the emoji token (if lexer produces it as separate token)
         // For now, test that positions are computed correctly for the = token
-        let equals_offset = source.find('=').unwrap();
-        let equals_token = ctx
+        let equals_offset = must_some(source.find('='));
+        let equals_token = must_some(ctx
             .tokens
             .iter()
-            .find(|t| t.range().start.byte == equals_offset)
-            .expect("equals token");
+            .find(|t| t.range().start.byte == equals_offset));
 
         // Before emoji: "my $emoji "  = 10 characters but the emoji counts as 2 UTF-16 units
         // So column should account for UTF-16 encoding
@@ -385,19 +382,18 @@ mod tests {
         let source = "my $x = 42;\r\nmy $y = 43;".to_string();
         let ctx = ParserContext::new(source.clone());
 
-        let first_offset = source.find("my").unwrap();
-        let second_offset = source.rfind("my").unwrap();
+        let first_offset = must_some(source.find("my"));
+        let second_offset = must_some(source.rfind("my"));
 
         let first =
-            ctx.tokens.iter().find(|t| t.range().start.byte == first_offset).expect("first token");
+            must_some(ctx.tokens.iter().find(|t| t.range().start.byte == first_offset));
         assert_eq!(first.range().start.line, 1);
         assert_eq!(first.range().start.column, 1);
 
-        let second = ctx
+        let second = must_some(ctx
             .tokens
             .iter()
-            .find(|t| t.range().start.byte == second_offset)
-            .expect("second token");
+            .find(|t| t.range().start.byte == second_offset));
         assert_eq!(second.range().start.line, 2);
         assert_eq!(second.range().start.column, 1);
     }

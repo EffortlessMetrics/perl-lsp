@@ -1,7 +1,7 @@
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use crate::parser::Parser;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_ambiguous_brace_context() {
@@ -10,7 +10,7 @@ mod tests {
         let mut parser = Parser::new(code_hash);
         let result = parser.parse();
         assert!(result.is_ok(), "Failed to parse hash reference");
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
         assert!(sexp.contains("(hash"), "Should parse as hash: {}", sexp);
 
@@ -34,7 +34,7 @@ sub my_sub {
         let mut parser = Parser::new(code);
         let result = parser.parse();
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
 
         // In statement context, { ... } is a block.
@@ -56,7 +56,7 @@ sub my_sub {
         let mut parser = Parser::new(code);
         let result = parser.parse();
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
         assert!(sexp.contains("(block"), "map should take a block: {}", sexp);
 

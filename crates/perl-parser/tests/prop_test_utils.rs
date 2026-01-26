@@ -489,7 +489,7 @@ pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
     // Also check if the left token is a contextual token that loses meaning when isolated
     let left_alone = lex_core_spans(&left.text);
     if left_alone.len() != 1
-        || left_alone.first().map_or(true, |t| t.text != left.text || t.kind != left.kind)
+        || left_alone.first().is_none_or(|t| t.text != left.text || t.kind != left.kind)
     {
         // The left token behaves differently when lexed alone vs in context
         return false;
@@ -498,8 +498,8 @@ pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
     let joined = format!("{}{}", left.text, right.text);
     let re = lex_core_spans(&joined);
     re.len() == 2
-        && re.first().map_or(false, |t| t.kind == left.kind && t.text == left.text)
-        && re.get(1).map_or(false, |t| t.kind == right.kind && t.text == right.text)
+        && re.first().is_some_and(|t| t.kind == left.kind && t.text == left.text)
+        && re.get(1).is_some_and(|t| t.kind == right.kind && t.text == right.text)
 }
 
 /// Neighbor-aware: would inserting `ws` between toks[i] and toks[i+1]

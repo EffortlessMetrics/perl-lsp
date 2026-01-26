@@ -1,7 +1,7 @@
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use crate::parser::Parser;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_indirect_method_call() {
@@ -14,7 +14,7 @@ $method $object;
         let result = parser.parse();
         assert!(result.is_ok(), "Failed to parse indirect method call");
 
-        let ast = result.unwrap();
+        let ast = must(result);
         let _sexp = ast.to_sexp();
         // Should parse as variable followed by variable if not detected as indirect call,
         // OR as indirect call if our heuristics match.
@@ -44,7 +44,7 @@ $method $object;
         let result = parser.parse();
         assert!(result.is_ok());
 
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
         assert!(sexp.contains("indirect_call"), "Should detect indirect constructor in: {}", sexp);
     }
@@ -56,7 +56,7 @@ $method $object;
         let result = parser.parse();
         assert!(result.is_ok());
 
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = ast.to_sexp();
         // Should be binary operation, NOT indirect call
         assert!(
