@@ -114,6 +114,22 @@
 //! ```
 
 use thiserror::Error;
+use perl_position_tracking::LineIndex;
+
+#[derive(Debug, Clone)]
+/// Rich error context with source line and fix suggestions
+pub struct ErrorContext {
+    /// The original parse error
+    pub error: ParseError,
+    /// Line number (0-indexed)
+    pub line: usize,
+    /// Column number (0-indexed)
+    pub column: usize,
+    /// The actual source line text
+    pub source_line: String,
+    /// Optional fix suggestion
+    pub suggestion: Option<String>,
+}
 
 impl From<perl_regex::RegexError> for ParseError {
     fn from(err: perl_regex::RegexError) -> Self {
@@ -568,6 +584,63 @@ impl ParseError {
     ) -> Self {
         ParseError::UnexpectedToken { expected: expected.into(), found: found.into(), location }
     }
+
+    /// Get the byte location of the error if available
+    pub fn location(&self) -> Option<usize> {
+        match self {
+            ParseError::UnexpectedToken { location, .. } => Some(*location),
+            ParseError::SyntaxError { location, .. } => Some(*location),
+            _ => None,
+        }
+    }
+
+    /// Generate a fix suggestion based on the error type
+    pub fn suggestion(&self) -> Option<String> {
+        match self {
+            ParseError::UnexpectedToken { expected, .. } => {
+                // Check for common missing delimiters
+                if expected.contains("Semicolon") || expected.contains(';') {
+                    return Some("Add a semicolon ';' at the end of the statement".to_string());
+                }
+                if expected.contains("RightBrace") || expected.contains('}') {
+                    return Some("Add a closing brace '}' to end the block".to_string());
+                }
+                if expected.contains("RightParen") || expected.contains(')') {
+                    return Some("Add a closing parenthesis ')'".to_string());
+                }
+                None
+            }
+            ParseError::UnclosedDelimiter { delimiter } => {
+                Some(format!("Add closing '{}' to complete the literal", delimiter))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Enrich a list of errors with source context
+pub fn get_error_contexts(errors: &[ParseError], source: &str) -> Vec<ErrorContext> {
+    let index = LineIndex::new(source.to_string());
+    
+    errors.iter().map(|error| {
+        let loc = error.location().unwrap_or_else(|| source.len());
+        // Handle EOF/out-of-bounds safely
+        let safe_loc = std::cmp::min(loc, source.len());
+        
+        let (line_u32, col_u32) = index.offset_to_position(safe_loc);
+        let line = line_u32 as usize;
+        let col = col_u32 as usize;
+        
+        let source_line = source.lines().nth(line).unwrap_or("").to_string();
+        
+        ErrorContext {
+            error: error.clone(),
+            line,
+            column: col,
+            source_line,
+            suggestion: error.suggestion(),
+        }
+    }).collect()
 }
 
 #[cfg(test)]
@@ -742,5 +815,20 @@ mod tests {
         // At limit, cannot skip any more
         assert!(!tracker.can_skip_more(&budget, 1));
         assert!(tracker.can_skip_more(&budget, 0));
+    }
+
+    #[test]
+    fn test_error_context_enrichment() {
+        let source = "line1\nline2;\nline3";
+        // 'e' of line1 is at 4. 5 is newline.
+        let errors = vec![
+            ParseError::unexpected("Semicolon", "newline", 5)
+        ];
+        
+        let contexts = get_error_contexts(&errors, source);
+        assert_eq!(contexts.len(), 1);
+        assert_eq!(contexts[0].line, 0); // line1 is line 0
+        assert_eq!(contexts[0].source_line, "line1");
+        assert!(contexts[0].suggestion.as_ref().unwrap().contains("semicolon"));
     }
 }

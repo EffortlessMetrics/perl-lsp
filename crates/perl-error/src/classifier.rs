@@ -353,6 +353,9 @@ mod tests {
         let error_node = Node::new(
             NodeKind::Error { 
                 message: "Unclosed string".to_string(), 
+                expected: vec![],
+                found: None,
+                partial: None,
             },
             SourceLocation { start: 9, end: 15 } // "hello
         );
@@ -370,6 +373,9 @@ mod tests {
         let error = Node::new(
             NodeKind::Error { 
                 message: "Unexpected token".to_string(), 
+                expected: vec![],
+                found: None,
+                partial: None,
             },
             SourceLocation { start: 10, end: 11 }, // newline char
         );
