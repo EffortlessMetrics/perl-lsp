@@ -38,14 +38,14 @@ fn test_recursive_heredoc_terminator_hang() {
 #[test]
 fn test_excessive_pending_heredocs() {
     // Test that we limit the number of pending heredocs (recursion depth limit)
-    // 60 heredocs on one line (limit is 50)
+    // 110 heredocs on one line (limit is 100)
     let mut code = String::from("print ");
-    let heredocs: Vec<&str> = (0..60).map(|_| "<<EOF").collect();
+    let heredocs: Vec<&str> = (0..110).map(|_| "<<EOF").collect();
     code.push_str(&heredocs.join(", "));
     code.push_str(";\n");
     // We don't even need to provide bodies if the declaration parsing fails early
     // But let's provide them to be valid if it were allowed
-    for _ in 0..60 {
+    for _ in 0..110 {
         code.push_str("content\nEOF\n");
     }
 

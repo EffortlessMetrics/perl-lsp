@@ -1525,12 +1525,14 @@ impl RefactoringEngine {
                             let edits = refactor_result.file_edits;
                             if !edits.is_empty() {
                                 let mod_count = self.apply_file_edits(&edits)?;
-                                files_modified += mod_count;
-                                changes_made += edits.iter().map(|e| e.edits.len()).sum::<usize>();
-                                applied = true;
-                                // AC1: If not all_occurrences, stop after first successful inlining
-                                if !all_occurrences {
-                                    break;
+                                if mod_count > 0 {
+                                    files_modified += mod_count;
+                                    changes_made += edits.iter().map(|e| e.edits.len()).sum::<usize>();
+                                    applied = true;
+                                    // AC1: If not all_occurrences, stop after first successful inlining
+                                    if !all_occurrences {
+                                        break;
+                                    }
                                 }
                             }
                         }

@@ -109,7 +109,7 @@ fn map_heredoc_quote_kind(text: &str, _interpolated: bool) -> heredoc_collector:
     }
 }
 
-const MAX_HEREDOC_DEPTH: usize = 50;
+const MAX_HEREDOC_DEPTH: usize = 100;
 const HEREDOC_TIMEOUT_MS: u64 = 5000;
 
 impl<'a> Parser<'a> {

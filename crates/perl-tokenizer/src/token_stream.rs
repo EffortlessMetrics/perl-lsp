@@ -428,12 +428,17 @@ impl<'a> TokenStream<'a> {
             }
 
             // Handle error tokens that might be valid syntax
-            LexerTokenType::Error(_msg) => {
-                // Check if it's a brace that the lexer couldn't recognize
-                match token.text.as_ref() {
-                    "{" => TokenKind::LeftBrace,
-                    "}" => TokenKind::RightBrace,
-                    _ => TokenKind::Unknown,
+            LexerTokenType::Error(msg) => {
+                // Check if it's a specific error we want to handle specially
+                if msg.as_ref() == "Heredoc nesting too deep" {
+                    TokenKind::HeredocDepthLimit
+                } else {
+                    // Check if it's a brace that the lexer couldn't recognize
+                    match token.text.as_ref() {
+                        "{" => TokenKind::LeftBrace,
+                        "}" => TokenKind::RightBrace,
+                        _ => TokenKind::Unknown,
+                    }
                 }
             }
 

@@ -255,6 +255,14 @@ impl<'a> Parser<'a> {
                 ))
             }
 
+            TokenKind::HeredocDepthLimit => {
+                let token = self.tokens.next()?;
+                Err(ParseError::syntax(
+                    format!("Heredoc depth limit exceeded (max {})", MAX_HEREDOC_DEPTH),
+                    token.start,
+                ))
+            }
+
             TokenKind::Eval => self.parse_eval(),
 
             TokenKind::Do => self.parse_do(),

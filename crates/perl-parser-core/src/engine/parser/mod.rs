@@ -43,7 +43,7 @@
 
 use crate::{
     ast::{Node, NodeKind, SourceLocation},
-    error::{ParseError, ParseResult},
+    error::{ParseError, ParseResult, ParseOutput},
     heredoc_collector::{self, HeredocContent, PendingHeredoc, collect_all},
     quote_parser,
     token_stream::{Token, TokenKind, TokenStream},
@@ -213,6 +213,33 @@ impl<'a> Parser<'a> {
     /// ```
     pub fn errors(&self) -> &[ParseError] {
         &self.errors
+    }
+
+    /// Parse with error recovery and return comprehensive output
+    ///
+    /// This method is preferred for IDE/LSP usage as it returns both the
+    /// potentially partial AST and all diagnostics collected during parsing.
+    /// It never returns Err, but instead provides an AST that may contain
+    /// error nodes.
+    pub fn parse_with_recovery(&mut self) -> ParseOutput {
+        let ast = match self.parse() {
+            Ok(node) => node,
+            Err(e) => {
+                // If parse() returned Err, it was a non-recoverable error (e.g. recursion limit)
+                // Ensure it's recorded if not already
+                if !self.errors.contains(&e) {
+                    self.errors.push(e.clone());
+                }
+                
+                // Return a dummy Program node with the error
+                Node::new(
+                    NodeKind::Program { statements: vec![] },
+                    SourceLocation { start: 0, end: 0 }
+                )
+            }
+        };
+
+        ParseOutput::with_errors(ast, self.errors.clone())
     }
 }
 

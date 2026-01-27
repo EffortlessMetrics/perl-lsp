@@ -304,6 +304,8 @@ pub enum TokenKind {
     DataBody,
     /// Unparsed remainder (budget exceeded)
     UnknownRest,
+    /// Heredoc depth limit exceeded (special error token)
+    HeredocDepthLimit,
 
     // ===== Identifiers and Variables =====
     /// Bareword identifier or function name
