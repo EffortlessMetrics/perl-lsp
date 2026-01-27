@@ -61,3 +61,8 @@ pub use perl_parser_core::{Parser, ast, position};
 pub mod ide;
 /// Tooling integrations and performance helpers.
 pub mod tooling;
+
+// Re-export tooling for backward compatibility
+pub mod tooling_export {
+    pub use perl_lsp_tooling::*;
+}
