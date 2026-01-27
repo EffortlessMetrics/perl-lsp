@@ -1612,6 +1612,7 @@ dependencies = [
  "nix",
  "perl-incremental-parsing",
  "perl-lexer",
+ "perl-lsp-tooling",
  "perl-parser-core",
  "perl-position-tracking",
  "perl-refactoring",
@@ -1624,6 +1625,14 @@ dependencies = [
  "serde_json",
  "url",
  "walkdir",
+]
+
+[[package]]
+name = "perl-lsp-tooling"
+version = "0.8.8"
+dependencies = [
+ "perl-parser-core",
+ "perl-tdd-support",
 ]
 
 [[package]]
