@@ -1,5 +1,9 @@
 use super::*;
 
+fn errors_contain(errors: &[ParseError], needle: &str) -> bool {
+    errors.iter().any(|e| e.to_string().contains(needle))
+}
+
 #[test]
 fn test_recursive_heredoc_terminator_hang() {
     // Issue #443: Recursive heredoc terminators hang risk
@@ -14,25 +18,19 @@ fn test_recursive_heredoc_terminator_hang() {
         END
     "#;
     
-    // Use a separate thread or rely on test runner timeout to catch hangs
-    // But unit tests run sequentially usually. 
-    // The internal timeout mechanism we implement will prevent the hang.
-    
     let mut parser = Parser::new(code);
     let result = parser.parse();
-    
-    // This valid Perl (outer heredoc consumes everything up to first END)
-    // The second END is then a syntax error or just extra tokens depending on context.
-    // In this case, after first END, we are at "Content after inner\nEND". 
-    // "Content" is a bareword (syntax error if not strict? or function call).
-    // The parser should at least finish.
-    
-    // We check that it didn't panic and returned a result (Ok or Err)
-    // Ideally it's Ok with errors, or Err.
-    // Currently checking is_ok() just to ensure it returns.
-    if let Err(e) = &result {
-        println!("Parse error (expected for trailing content): {}", e);
+
+    match result {
+        Ok(_) => {}
+        Err(err) => panic!("parse should complete without fatal error: {}", err),
     }
+
+    let errors = parser.errors();
+    assert!(
+        !errors_contain(errors, "Heredoc parsing timed out"),
+        "unexpected heredoc timeout: {errors:?}"
+    );
 }
 
 #[test]
@@ -52,27 +50,34 @@ fn test_excessive_pending_heredocs() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    // Expect an error about depth limit
-    if let Err(e) = result {
-        assert!(e.to_string().contains("Heredoc depth limit exceeded"), "Unexpected error: {}", e);
-    } else {
-        let errors = parser.errors();
-        let found = errors.iter().any(|e| e.to_string().contains("Heredoc depth limit exceeded"));
-        if !found {
-            println!("Errors found: {:?}", errors);
-        }
-        assert!(found, "Should report Heredoc depth limit exceeded");
+    if let Err(err) = result {
+        assert!(
+            err.to_string().contains("Heredoc depth limit exceeded"),
+            "Unexpected error: {}",
+            err
+        );
+        return;
     }
+
+    let errors = parser.errors();
+    assert!(
+        errors_contain(errors, "Heredoc depth limit exceeded"),
+        "Expected heredoc depth limit error, got: {errors:?}"
+    );
 }
 
 #[test]
 fn test_heredoc_parsing_timeout() {
     // To test timeout, we need a very long heredoc declaration process or infinite loop
     // Simulating time passage is hard in unit tests without mocking Instant.
-    // We will trust the implementation logic for timeout, but we can verify the check exists.
-    // This test just ensures normal parsing works.
     let code = "my $x = <<EOF;\ncontent\nEOF";
     let mut parser = Parser::new(code);
     let result = parser.parse();
-    assert!(result.is_ok());
+    assert!(result.is_ok(), "expected parse to succeed for simple heredoc");
+
+    let errors = parser.errors();
+    assert!(
+        !errors_contain(errors, "Heredoc parsing timed out"),
+        "unexpected heredoc timeout: {errors:?}"
+    );
 }

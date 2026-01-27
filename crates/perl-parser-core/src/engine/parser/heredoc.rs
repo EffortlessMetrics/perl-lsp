@@ -92,7 +92,7 @@ fn parse_heredoc_delimiter(s: &str) -> (String, bool, bool, bool) {
     (delimiter, interpolated, indented, command)
 }
 
-/// Map heredoc delimiter text to collector QuoteKind (Sprint A Day 4)
+/// Map heredoc delimiter text to collector QuoteKind
 fn map_heredoc_quote_kind(text: &str, _interpolated: bool) -> heredoc_collector::QuoteKind {
     // Skip << and optional ~
     let rest = text.trim_start_matches('<').trim_start_matches('~').trim();

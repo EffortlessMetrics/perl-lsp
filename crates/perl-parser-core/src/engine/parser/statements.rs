@@ -184,7 +184,7 @@ impl<'a> Parser<'a> {
             self.byte_cursor = semi_token.end;
         }
 
-        // Drain pending heredocs after statement completion (Sprint A Day 5 - with AST attachment)
+        // Drain pending heredocs after statement completion (attach content to AST)
         self.drain_pending_heredocs(&mut stmt);
 
         Ok(stmt)
