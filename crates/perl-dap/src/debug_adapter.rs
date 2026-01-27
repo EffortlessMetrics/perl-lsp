@@ -38,6 +38,8 @@ static VARIABLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static ERROR_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static DANGEROUS_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static REGEX_MUTATION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static DEREF_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static GLOB_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 
 fn context_re() -> Option<&'static Regex> {
     CONTEXT_RE
@@ -132,6 +134,14 @@ fn regex_mutation_re() -> Option<&'static Regex> {
         })
         .as_ref()
         .ok()
+}
+
+fn deref_re() -> Option<&'static Regex> {
+    DEREF_RE.get_or_init(|| Regex::new(r"&[\s]*\{")).as_ref().ok()
+}
+
+fn glob_re() -> Option<&'static Regex> {
+    GLOB_RE.get_or_init(|| Regex::new(r"<\*[^>]*>")).as_ref().ok()
 }
 
 /// Check if the match is an escape sequence (preceded by backslash)
@@ -1795,6 +1805,28 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
         }
     }
 
+    // Check for dynamic subroutine calls &{...}
+    // This blocks tricks like &{"sys"."tem"}("ls")
+    if let Some(re) = deref_re() {
+        if re.is_match(expression) {
+            return Some(
+                "Safe evaluation mode: dynamic subroutine calls (&{...}) not allowed (use allowSideEffects: true)"
+                    .to_string(),
+            );
+        }
+    }
+
+    // Check for glob operations <*...>
+    // This blocks filesystem access via globs
+    if let Some(re) = glob_re() {
+        if re.is_match(expression) {
+            return Some(
+                "Safe evaluation mode: glob operations (<*...>) not allowed (use allowSideEffects: true)"
+                    .to_string(),
+            );
+        }
+    }
+
     // Check for mutating operations using pre-compiled regex
     if let Some(re) = dangerous_ops_re() {
         for mat in re.find_iter(expression) {
@@ -2485,6 +2517,26 @@ mod tests {
         for expr in blocked {
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_bypass_prevention() {
+        // These are currently allowed but probably shouldn't be
+        let bypasses = [
+            "&{'sys'.'tem'}('ls')", // Dynamic function name
+            "& { 'sys' . 'tem' }",  // Dynamic function name with spaces
+            "<*.txt>",               // Glob operator
+            "CORE::print",          // Explicitly blocked by regex
+        ];
+
+        for expr in bypasses {
+            let err = validate_safe_expression(expr);
+            assert!(
+                err.is_some(),
+                "Expression '{}' should be blocked but was allowed",
+                expr
+            );
         }
     }
 }
