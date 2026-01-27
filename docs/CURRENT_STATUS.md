@@ -93,11 +93,21 @@ Key terms:
 
 ## What's Next
 
-1. **v0.9.1 Release**: Nearing completion - security hardening and performance optimizations complete
-2. **v1.0 Preparation**: Benchmarks, documentation, and code quality improvements in progress
-3. **Index State Machine**: Workspace indexing state transitions and early-exit optimization
-4. **Documentation Cleanup**: Address remaining `missing_docs` violations
-5. **Production v1.0**: #210 (merge gates), #208 (batteries-included UX), benchmark publication
+**Now (v0.9.1 close-out)**
+- Index state machine for workspace indexing (state transitions, early-exit optimization, performance caps)
+- Documentation cleanup: reduce `missing_docs` violations and complete module-level docs
+
+**Next (v1.0.0 readiness)**
+- Stability statement (GA-lock + versioning rules)
+- Packaging stance (what ships; supported platforms)
+- Benchmark publication with receipts under `benchmarks/results/`
+- Upgrade notes from v0.8.x → v1.0
+- Merge gates (#210) after CI pipeline cleanup (#211)
+
+**Later (post v1.0)**
+- Native DAP completeness (attach, variables/evaluate, safe eval)
+- Full LSP 3.18 compliance
+- Package manager distribution (Homebrew/apt/etc.)
 
 See [ROADMAP.md](ROADMAP.md) for milestone details.
 
@@ -134,5 +144,5 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-01-23*
+*Last Updated: 2026-01-27 (narrative sections only; run `just status-update` to refresh metrics)*
 *Canonical docs: [ROADMAP.md](ROADMAP.md), [features.toml](../features.toml)*

@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Next release changes go here -->
 
+### Roadmap (Now / Next / Later)
+
+**Now (v0.9.1 close-out)**
+- Index state machine for workspace indexing (state transitions, early-exit, performance caps)
+- Documentation cleanup: reduce `missing_docs` violations and complete module-level docs
+
+**Next (v1.0.0)**
+- Stability statement (GA-lock + versioning rules)
+- Packaging stance (what ships; supported platforms)
+- Benchmark publication with receipts under `benchmarks/results/`
+- Upgrade notes from v0.8.x → v1.0
+
+**Later (post v1.0)**
+- Native DAP completeness (attach, variables/evaluate, safe eval)
+- Full LSP 3.18 compliance
+- Package manager distribution (Homebrew/apt/etc.)
+
+See `docs/ROADMAP.md` for status receipts and exit criteria.
+
 ### Added - Semantic Analyzer Phase 2-6 Complete (PR #389)
 
 - **Complete NodeKind Coverage**: All remaining AST node handlers implemented

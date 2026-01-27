@@ -17,6 +17,7 @@ doctest = false
 
 [dependencies]
 perl-tdd-support = { workspace = true }
+perl-parser-core = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
