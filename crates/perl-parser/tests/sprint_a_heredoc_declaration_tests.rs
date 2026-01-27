@@ -399,26 +399,13 @@ fn test_heredoc_decl_missing_terminator() {
 content without terminator"#;
 
     let mut parser = Parser::new(input);
-    let result = parser.parse();
-
-    // With error recovery, we expect a result but also recorded errors
-    match result {
-        Ok(_) => {
-            let errors = parser.errors();
-            assert!(!errors.is_empty(), "Should report error for missing terminator");
-            // Optionally check error message content if known
-            // let found = errors.iter().any(|e| e.to_string().contains("Unterminated"));
-            // assert!(found, "Should report unterminated heredoc: {:?}", errors);
-        }
-        Err(e) => {
-            // If it fails fast (legacy behavior), that's also acceptable for now
-            assert!(
-                e.to_string().contains("Unterminated") || e.to_string().contains("EOF"),
-                "Error should relate to termination: {}",
-                e
-            );
-        }
-    }
+    let _ = parser.parse();
+    let errors = parser.errors();
+    assert!(
+        errors.iter().any(|e| e.to_string().contains("Unterminated heredoc")),
+        "Expected missing terminator error, got: {:?}",
+        errors
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - empty label detection
