@@ -60,7 +60,6 @@ perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.8.8" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.8.8" }
 perl-uri = { path = "crates/perl-uri", version = "0.8.8" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.8.8" }
-perl-lsp-tooling = { path = "crates/perl-lsp-tooling", version = "0.8.8" }
 perl-dap = { path = "crates/perl-dap", version = "0.1.0" }
 
 # Tier 2: Single-level dependencies
