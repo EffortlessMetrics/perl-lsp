@@ -50,3 +50,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The `perl-dap` safe evaluation logic exempted variables (e.g., `$system`) from the dangerous operations blacklist, but failed to check if those variables were being used in an execution context (e.g., `&$system` or `&{$system}`). This allowed invoking blocked builtins (like `system`) indirectly via variable dereference.
 **Learning:** Allow-listing variables based on sigils alone is insufficient for languages where sigils are also used for dereference calls. Context matters: `$var` is safe, `&$var` is a function call.
 **Prevention:** When exempting identifiers from a blacklist based on syntax (like sigils), explicitly verify that the surrounding syntax does not imply execution (e.g., preceding `&` or `->`).
+
+## 2026-10-25 - Weak Checksum Verification in Binary Downloader
+**Vulnerability:** The binary downloader for the VS Code extension allowed installation of unverified binaries if the `SHA256SUMS` file was missing from the release assets or if the specific file entry was absent. It treated checksum verification as optional ("if available") and only logged a warning on failure to find the checksum.
+**Learning:** Security controls like checksum verification must be mandatory ("fail-secure"), not optional ("fail-open"). Relying on the presence of a security artifact (like a checksum file) without enforcing it allows attackers to bypass the check by simply omitting the artifact.
+**Prevention:** Always enforce strict verification. If a security check cannot be performed (e.g., missing checksum file), the operation must fail, not proceed with a warning.
