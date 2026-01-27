@@ -186,9 +186,19 @@ impl Scope {
     }
 
     fn use_variable_parts(&self, sigil: &str, name: &str) -> (bool, bool) {
-        if let Some(var) = self.lookup_variable_parts(sigil, name) {
-            *var.is_used.borrow_mut() = true;
-            (true, *var.is_initialized.borrow())
+        let idx = sigil_to_index(sigil);
+        {
+            let vars = self.variables.borrow();
+            if let Some(map) = &vars[idx] {
+                if let Some(var) = map.get(name) {
+                    *var.is_used.borrow_mut() = true;
+                    return (true, *var.is_initialized.borrow());
+                }
+            }
+        }
+
+        if let Some(ref parent) = self.parent {
+            parent.use_variable_parts(sigil, name)
         } else {
             (false, false)
         }
@@ -1061,6 +1071,14 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
 
 /// Check if an identifier is a known Perl built-in function
 fn is_known_function(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    // Optimization: All known functions are lowercase or start with non-uppercase chars
+    if name.as_bytes()[0].is_ascii_uppercase() {
+        return false;
+    }
+
     match name {
         // I/O functions
         "print" | "printf" | "say" | "open" | "close" | "read" | "write" | "seek" | "tell"
