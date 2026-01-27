@@ -1061,6 +1061,15 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
 
 /// Check if an identifier is a known Perl built-in function
 fn is_known_function(name: &str) -> bool {
+    // Fast path: most built-in functions are lowercase.
+    // If it starts with uppercase (and is not a file test op), it's likely a user type/function.
+    if !name.is_empty() {
+        let first = name.as_bytes()[0];
+        if first.is_ascii_uppercase() {
+            return false;
+        }
+    }
+
     match name {
         // I/O functions
         "print" | "printf" | "say" | "open" | "close" | "read" | "write" | "seek" | "tell"

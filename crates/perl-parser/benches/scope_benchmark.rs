@@ -50,5 +50,29 @@ fn benchmark_scope_analysis(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, benchmark_scope_analysis);
+fn benchmark_scope_analysis_barewords(c: &mut Criterion) {
+    let mut script = String::from("use strict;\n");
+    for i in 0..5000 {
+        // Generate many class method calls to stress bareword detection
+        // These will hit NodeKind::Identifier and call is_known_function
+        script.push_str(&format!("MyClass{}->method();\n", i));
+        script.push_str(&format!("AnotherClass{}->static_method();\n", i));
+    }
+
+    let mut parser = Parser::new(&script);
+    let ast = parser.parse().expect("Failed to parse");
+    let analyzer = ScopeAnalyzer::new();
+    // Enable strict mode via pragma map
+    let pragma_map = vec![
+        (0..script.len(), perl_parser::PragmaState { strict_subs: true, ..Default::default() })
+    ];
+
+    c.bench_function("scope_analysis_barewords", |b| {
+        b.iter(|| {
+            let _ = analyzer.analyze(black_box(&ast), black_box(&script), &pragma_map);
+        });
+    });
+}
+
+criterion_group!(benches, benchmark_scope_analysis, benchmark_scope_analysis_barewords);
 criterion_main!(benches);
