@@ -11,6 +11,7 @@ homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 
 [dependencies]
 perl-position-tracking = { workspace = true }
+perl-token = { workspace = true }
 
 [lints]
 workspace = true

@@ -241,3 +241,5 @@ mod slash_ambiguity_tests;
 mod tests;
 #[cfg(test)]
 mod heredoc_security_tests;
+#[cfg(test)]
+mod error_recovery_tests;

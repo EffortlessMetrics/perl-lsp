@@ -1438,6 +1438,7 @@ name = "perl-ast"
 version = "0.8.8"
 dependencies = [
  "perl-position-tracking",
+ "perl-token",
 ]
 
 [[package]]

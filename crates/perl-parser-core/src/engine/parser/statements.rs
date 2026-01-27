@@ -451,10 +451,47 @@ impl<'a> Parser<'a> {
             let mut statements = Vec::new();
 
             while s.peek_kind() != Some(TokenKind::RightBrace) && !s.tokens.is_eof() {
-                let stmt = s.parse_statement()?;
-                // Don't add empty blocks (from lone semicolons) to the statement list
-                if !matches!(stmt.kind, NodeKind::Block { ref statements } if statements.is_empty()) {
-                    statements.push(stmt);
+                // Parse statement with error recovery (AC3: Panic Mode Recovery inside blocks)
+                let stmt_result = s.parse_statement();
+                match stmt_result {
+                    Ok(stmt) => {
+                        // Don't add empty blocks (from lone semicolons) to the statement list
+                        if !matches!(stmt.kind, NodeKind::Block { ref statements } if statements.is_empty()) {
+                            statements.push(stmt);
+                        }
+                    }
+                    Err(e) => {
+                        // Don't recover from recursion/nesting limits - propagate immediately
+                        if matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }) {
+                            return Err(e);
+                        }
+
+                        // Record the actual error
+                        s.errors.push(e.clone());
+
+                        // Create error node for failed statement
+                        let error_location = s.current_position();
+                        let error_msg = format!("{}", e);
+                        // Collect peek_kind before mutable borrow in recover_from_error
+                        let peek_kind = format!("{:?}", s.peek_kind());
+                        let error_node = s.recover_from_error(
+                            error_msg,
+                            "statement".to_string(),
+                            peek_kind,
+                            error_location
+                        );
+                        statements.push(error_node);
+
+                        // Try to synchronize to next statement
+                        if !s.synchronize() {
+                            // If synchronization fails, we check if we're at block end or EOF
+                            if s.peek_kind() == Some(TokenKind::RightBrace) || s.tokens.is_eof() {
+                                break;
+                            }
+                            // Otherwise stop to prevent infinite loop
+                            break; 
+                        }
+                    }
                 }
 
                 // parse_statement already invalidates peek, so we don't need to do it again

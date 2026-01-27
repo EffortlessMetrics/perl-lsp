@@ -106,6 +106,8 @@
 
 // Re-export SourceLocation from perl-position-tracking for unified span handling
 pub use perl_position_tracking::SourceLocation;
+// Re-export Token and TokenKind from perl-token for AST error nodes
+pub use perl_token::{Token, TokenKind};
 
 /// Core AST node representing any Perl language construct within Perl parsing workflows
 ///
@@ -675,9 +677,17 @@ impl Node {
                 format!("(identifier {})", name)
             }
 
-            NodeKind::Error { message } => {
-                format!("(ERROR {})", message)
+            NodeKind::Error { message, partial, .. } => {
+                if let Some(node) = partial {
+                    format!("(ERROR \"{}\" {})", message.escape_default(), node.to_sexp())
+                } else {
+                    format!("(ERROR \"{}\")", message.escape_default())
+                }
             }
+            NodeKind::MissingExpression => "(missing_expression)".to_string(),
+            NodeKind::MissingStatement => "(missing_statement)".to_string(),
+            NodeKind::MissingIdentifier => "(missing_identifier)".to_string(),
+            NodeKind::MissingBlock => "(missing_block)".to_string(),
             NodeKind::UnknownRest => "(UNKNOWN_REST)".to_string(),
         }
     }
@@ -915,6 +925,13 @@ impl Node {
             NodeKind::PhaseBlock { block, .. } => f(block),
             NodeKind::Class { body, .. } => f(body),
 
+            // Error node might have a partial valid tree
+            NodeKind::Error { partial, .. } => {
+                if let Some(node) = partial {
+                    f(node);
+                }
+            }
+
             // Leaf nodes (no children to traverse)
             NodeKind::Variable { .. }
             | NodeKind::Identifier { .. }
@@ -932,7 +949,10 @@ impl Node {
             | NodeKind::Prototype { .. }
             | NodeKind::DataSection { .. }
             | NodeKind::Format { .. }
-            | NodeKind::Error { .. }
+            | NodeKind::MissingExpression
+            | NodeKind::MissingStatement
+            | NodeKind::MissingIdentifier
+            | NodeKind::MissingBlock
             | NodeKind::UnknownRest => {}
         }
     }
@@ -1147,6 +1167,13 @@ impl Node {
             NodeKind::PhaseBlock { block, .. } => f(block),
             NodeKind::Class { body, .. } => f(body),
 
+            // Error node might have a partial valid tree
+            NodeKind::Error { partial, .. } => {
+                if let Some(node) = partial {
+                    f(node);
+                }
+            }
+
             // Leaf nodes (no children to traverse)
             NodeKind::Variable { .. }
             | NodeKind::Identifier { .. }
@@ -1164,7 +1191,10 @@ impl Node {
             | NodeKind::Prototype { .. }
             | NodeKind::DataSection { .. }
             | NodeKind::Format { .. }
-            | NodeKind::Error { .. }
+            | NodeKind::MissingExpression
+            | NodeKind::MissingStatement
+            | NodeKind::MissingIdentifier
+            | NodeKind::MissingBlock
             | NodeKind::UnknownRest => {}
         }
     }
@@ -1772,11 +1802,26 @@ pub enum NodeKind {
         name: String,
     },
 
-    /// Parse error placeholder with error message
+    /// Parse error placeholder with error message and recovery context
     Error {
         /// Error description
         message: String,
+        /// Expected token types (if any)
+        expected: Vec<TokenKind>,
+        /// The token actually found (if any)
+        found: Option<Token>,
+        /// Partial AST node parsed before error (if any)
+        partial: Option<Box<Node>>,
     },
+
+    /// Missing expression where one was expected
+    MissingExpression,
+    /// Missing statement where one was expected
+    MissingStatement,
+    /// Missing identifier where one was expected
+    MissingIdentifier,
+    /// Missing block where one was expected
+    MissingBlock,
 
     /// Lexer budget exceeded marker preserving partial parse results
     ///
@@ -1848,6 +1893,10 @@ impl NodeKind {
             NodeKind::Format { .. } => "Format",
             NodeKind::Identifier { .. } => "Identifier",
             NodeKind::Error { .. } => "Error",
+            NodeKind::MissingExpression => "MissingExpression",
+            NodeKind::MissingStatement => "MissingStatement",
+            NodeKind::MissingIdentifier => "MissingIdentifier",
+            NodeKind::MissingBlock => "MissingBlock",
             NodeKind::UnknownRest => "UnknownRest",
         }
     }

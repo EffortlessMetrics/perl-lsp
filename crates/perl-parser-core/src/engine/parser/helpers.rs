@@ -382,14 +382,38 @@ impl<'a> Parser<'a> {
     /// Create an error node and record the error
     fn recover_from_error(&mut self, message: String, expected: String, found: String, location: usize) -> Node {
         // Record the error
-        let error = ParseError::unexpected(expected, found.clone(), location);
+        let error = ParseError::unexpected(expected, found, location);
         self.record_error(error);
 
         // Create error node
         let end = self.current_position();
+        let found_token = self.tokens.peek().ok().cloned();
+        
         Node::new(
-            NodeKind::Error { message },
+            NodeKind::Error { 
+                message,
+                expected: vec![],
+                found: found_token,
+                partial: None,
+            },
             SourceLocation { start: location, end }
+        )
+    }
+
+    /// AC4: Error node creation with precise token info
+    #[allow(dead_code)]
+    fn create_error_node(&mut self, message: String, expected: Vec<TokenKind>) -> Node {
+        let start = self.current_position();
+        let found = self.tokens.peek().ok().cloned();
+        
+        Node::new(
+            NodeKind::Error {
+                message,
+                expected,
+                found,
+                partial: None,
+            },
+            SourceLocation { start, end: start }
         )
     }
 
