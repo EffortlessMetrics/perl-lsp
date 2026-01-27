@@ -3,9 +3,9 @@
 //! This module provides the ability to rename symbols across a document,
 //! ensuring all references are updated correctly.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! Rename operations integrate with the PSTX (Parse → Index → Navigate → Complete → Analyze) pipeline:
+//! Rename operations integrate with the Parse → Index → Navigate → Complete → Analyze workflow:
 //!
 //! - **Parse**: AST analysis identifies symbol definitions and usage patterns
 //! - **Index**: Symbol tables provide comprehensive reference mapping for rename validation

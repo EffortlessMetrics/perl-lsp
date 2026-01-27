@@ -19,7 +19,7 @@ This guide documents the **revolutionary performance preservation** achieved dur
 - **Parsing Speed**: 1-150µs per parse (maintained during robustness testing)
 - **Memory Efficiency**: O(log n) parse tree construction (unchanged)
 - **Incremental Updates**: <1ms for 99% of edits (preserved)
-- **Large File Support**: Up to 50GB codebases (performance maintained)
+- **Large File Support**: Scales to large codebases (performance maintained)
 - **UTF-16 Position Mapping**: Sub-microsecond conversion (enhanced security without speed penalty)
 
 ### Error Handling Performance Impact (Issue #144) ✅ **ZERO REGRESSION**

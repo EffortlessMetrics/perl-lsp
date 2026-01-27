@@ -15,9 +15,9 @@ documentation_templates:
       ///
       /// {detailed_description}
       ///
-      /// ## PSTX Pipeline Integration
+      /// ## LSP Workflow Integration
       ///
-      /// This struct is used in the {pipeline_stages} stage(s) of the PSTX email processing pipeline:
+      /// This struct is used in the {pipeline_stages} stage(s) of the LSP workflow:
       /// {pipeline_integration_details}
       ///
       /// ## Key Features
@@ -50,7 +50,7 @@ documentation_templates:
     required_sections:
       - brief_description: "Single sentence describing the struct's purpose"
       - detailed_description: "2-3 paragraph comprehensive explanation"
-      - pipeline_integration_details: "Specific role in Extract/Normalize/Thread/Render/Index stages"
+      - pipeline_integration_details: "Specific role in Parse/Index/Navigate/Complete/Analyze stages"
       - key_features_list: "Bullet points of main capabilities"
       - usage_example: "Working Rust code example"
       - performance_notes: "Memory usage, time complexity, scalability considerations"
@@ -72,7 +72,7 @@ documentation_templates:
       ///
       /// {variant_descriptions}
       ///
-      /// ## Usage in PSTX Pipeline
+      /// ## Usage in LSP Workflow
       ///
       /// {pipeline_usage}
       ///
@@ -102,7 +102,7 @@ documentation_templates:
       - brief_description: "Purpose of the enum and what it represents"
       - detailed_description: "Context and usage scenarios"
       - variant_descriptions: "Documentation for each variant's purpose and usage"
-      - pipeline_usage: "How enum is used in PSTX email processing stages"
+      - pipeline_usage: "How enum is used in LSP workflow stages"
       - example_handling: "Practical usage with pattern matching"
       - cross_references: "Related enums, structs, and functions"
 
@@ -140,7 +140,7 @@ documentation_templates:
       /// {usage_example}
       /// ```
       ///
-      /// ## PSTX Integration
+      /// ## LSP Workflow Integration
       ///
       /// {pipeline_integration}
       ///
@@ -160,7 +160,7 @@ documentation_templates:
       - panic_documentation: "Conditions that cause panics (if any)"
       - performance_characteristics: "Time complexity, memory usage, scalability"
       - usage_example: "Working code example showing typical usage"
-      - pipeline_integration: "How function fits into PSTX email processing workflow"
+      - pipeline_integration: "How function fits into LSP workflow"
       - cross_references: "Related functions and types"
 
   public_trait:
@@ -189,7 +189,7 @@ documentation_templates:
       /// {implementation_example}
       /// ```
       ///
-      /// ## PSTX Pipeline Usage
+      /// ## LSP Workflow Usage
       ///
       /// {pipeline_usage}
       ///
@@ -207,7 +207,7 @@ documentation_templates:
       - provided_methods_overview: "Default implementations and their behavior"
       - implementation_requirements: "Constraints and contracts for implementors"
       - implementation_example: "Complete example of trait implementation"
-      - pipeline_usage: "How trait fits into PSTX email processing architecture"
+      - pipeline_usage: "How trait fits into LSP workflow architecture"
       - cross_references: "Related traits, structs, and functions"
 
   module_documentation:
@@ -220,9 +220,9 @@ documentation_templates:
       //!
       //! {comprehensive_module_description}
       //!
-      //! ## PSTX Pipeline Integration
+      //! ## LSP Workflow Integration
       //!
-      //! This module supports the following pipeline stages:
+      //! This module supports the following workflow stages:
       //!
       //! {pipeline_stage_details}
       //!
@@ -257,12 +257,12 @@ documentation_templates:
     required_sections:
       - brief_module_description: "Single sentence describing module purpose"
       - comprehensive_module_description: "Detailed explanation of module functionality"
-      - pipeline_stage_details: "Specific roles in Extract/Normalize/Thread/Render/Index stages"
+      - pipeline_stage_details: "Specific roles in Parse/Index/Navigate/Complete/Analyze stages"
       - architecture_description: "How components interact within the module"
       - component_list: "Key structs, enums, functions with brief descriptions"
       - module_usage_example: "Complete working example of module usage"
-      - performance_notes: "Performance characteristics relevant to email processing"
-      - security_notes: "Security considerations for enterprise email processing"
+      - performance_notes: "Performance characteristics relevant to large workspaces"
+      - security_notes: "Security considerations for workspace file handling"
       - related_modules: "Cross-references to related modules and external crates"
 
 ## Validation Rules
@@ -296,10 +296,10 @@ validation_rules:
       validation: "Documentation generation validates external references"
       maintenance: "Periodic link validation in CI"
 
-    pipeline_references:
-      rule: "PSTX pipeline stage references must use standard terminology"
-      validation: "Custom linting ensures consistent pipeline stage naming"
-      terminology: "Extract, Normalize, Thread, Render, Index (exact capitalization)"
+    workflow_references:
+      rule: "LSP workflow stage references must use standard terminology"
+      validation: "Custom linting ensures consistent workflow stage naming"
+      terminology: "Parse, Index, Navigate, Complete, Analyze (exact capitalization)"
 
   example_validation:
     code_compilation:
@@ -349,9 +349,9 @@ formatting_standards:
       parameter_references: "`param_name` for parameter names in descriptions"
 
   terminology_standards:
-    pstx_pipeline:
-      stages: "Extract, Normalize, Thread, Render, Index (exact capitalization)"
-      workflow: "PSTX email processing pipeline or email processing workflow"
+    lsp_workflow:
+      stages: "Parse, Index, Navigate, Complete, Analyze (exact capitalization)"
+      workflow: "LSP workflow or Perl tooling workflow"
       consistency: "Use consistent terminology across all documentation"
 
     perl_terminology:
@@ -373,7 +373,7 @@ documentation_quality_metrics:
     clarity_score: "Manual review assesses explanation clarity (scale 1-5)"
     completeness_score: "Information completeness for developer needs (scale 1-5)"
     accuracy_score: "Technical accuracy verified through testing (scale 1-5)"
-    relevance_score: "Relevance to PSTX enterprise use cases (scale 1-5)"
+    relevance_score: "Relevance to Perl tooling use cases (scale 1-5)"
 
   maintenance_metrics:
     freshness: "Documentation updated within 30 days of API changes"
@@ -388,7 +388,7 @@ documentation_tools:
   generation_tools:
     cargo_doc: "Primary documentation generation with --no-deps flag"
     rustdoc: "Standard Rust documentation generation tool"
-    custom_preprocessing: "Custom scripts for PSTX-specific formatting"
+    custom_preprocessing: "Custom scripts for workflow-specific formatting"
 
   validation_tools:
     missing_docs_check: "cargo build with #![warn(missing_docs)] enabled"
@@ -404,7 +404,7 @@ documentation_tools:
 
 ## Specialized Documentation Patterns
 
-pstx_specific_patterns:
+workflow_specific_patterns:
 
   performance_documentation:
     pattern: |
@@ -412,7 +412,7 @@ pstx_specific_patterns:
 
       - **Time Complexity**: {big_o_notation}
       - **Memory Usage**: {memory_characteristics}
-      - **50GB PST Processing**: {large_file_performance}
+      - **Large Workspace Scaling**: {large_file_performance}
       - **Concurrency**: {thread_safety_and_scaling}
       - **Incremental Updates**: {incremental_performance}
 
@@ -438,11 +438,11 @@ pstx_specific_patterns:
       {error_recovery_strategies}
 
     pipeline_integration:
-      extract_stage: "Document parsing errors in email extraction context"
-      normalize_stage: "Document transformation and validation errors"
-      thread_stage: "Document symbol resolution and indexing errors"
-      render_stage: "Document LSP provider and rendering errors"
-      index_stage: "Document search and indexing errors"
+      parse_stage: "Document parsing errors in syntax analysis context"
+      index_stage: "Document symbol extraction and indexing errors"
+      navigate_stage: "Document definition/reference resolution errors"
+      complete_stage: "Document completion and signature help errors"
+      analyze_stage: "Document diagnostics and semantic analysis errors"
 
   security_documentation:
     pattern: |
@@ -453,7 +453,7 @@ pstx_specific_patterns:
       - **Memory Safety**: {memory_safety_guarantees}
       - **Denial of Service**: {dos_protection}
 
-      ## Enterprise Email Processing
+      ## Enterprise Workspace Processing
 
       {enterprise_security_considerations}
 

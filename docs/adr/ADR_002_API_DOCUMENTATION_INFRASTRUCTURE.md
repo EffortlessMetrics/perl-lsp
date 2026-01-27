@@ -10,7 +10,7 @@ The project required enterprise-grade documentation standards to support:
 - **Production API Stability**: Clear contracts for 5 published crates with semantic versioning
 - **Developer Onboarding**: Comprehensive examples and usage patterns for complex Perl parsing APIs
 - **Enterprise Integration**: Documentation supporting LSP integration across VSCode, Neovim, Emacs, and other editors
-- **Performance-Critical APIs**: Documentation of memory usage, scaling characteristics, and optimization requirements for 50GB PST processing
+- **Performance-Critical APIs**: Documentation of memory usage, scaling characteristics, and optimization requirements for large workspace processing
 - **Security-Conscious Development**: Error handling documentation with recovery strategies and vulnerability mitigation
 - **Cross-File Navigation**: Documentation of dual indexing architecture and enhanced workspace navigation
 
@@ -46,11 +46,11 @@ We will implement comprehensive API documentation infrastructure through systema
 **Performance-Critical APIs Additionally Require**:
 - **Time and Space Complexity**: Big O notation for algorithmic performance
 - **Memory Usage Patterns**: Scaling characteristics and optimization strategies
-- **50GB Processing Documentation**: Performance implications for enterprise-scale PST processing
+- **Large Workspace Documentation**: Performance implications for enterprise-scale codebase processing
 - **Benchmark Information**: Real-world performance data and scaling characteristics
 
 **Error Types Must Document**:
-- **Workflow Context**: When errors occur in the LSP or PSTX pipeline stages
+- **Workflow Context**: When errors occur in the LSP workflow stages
 - **Recovery Strategies**: Practical guidance for error handling and mitigation
 - **Diagnostic Information**: Available context for debugging and troubleshooting
 
@@ -79,13 +79,13 @@ We will implement comprehensive API documentation infrastructure through systema
 
 **12 Acceptance Criteria**:
 1. **AC1**: `#![warn(missing_docs)]` enabled and compiles successfully
-2. **AC2**: All public structs/enums have comprehensive documentation including PSTX pipeline role
+2. **AC2**: All public structs/enums have comprehensive documentation including workflow role
 3. **AC3**: All public functions have complete documentation with required sections
-4. **AC4**: Performance-critical APIs document memory usage and 50GB PST processing
-5. **AC5**: Module-level documentation explains purpose and PSTX architecture relationship
+4. **AC4**: Performance-critical APIs document memory usage and large workspace scaling
+5. **AC5**: Module-level documentation explains purpose and LSP architecture relationship
 6. **AC6**: Complex APIs include working usage examples
 7. **AC7**: Doctests are present for critical functionality and pass `cargo test --doc`
-8. **AC8**: Error types document email processing workflow context and recovery strategies
+8. **AC8**: Error types document parsing and analysis workflow context and recovery strategies
 9. **AC9**: Related functions include cross-references using Rust documentation linking
 10. **AC10**: Documentation follows Rust best practices with consistent style
 11. **AC11**: `cargo doc` generates complete documentation without warnings

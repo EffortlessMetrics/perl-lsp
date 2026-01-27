@@ -2,9 +2,9 @@
 //!
 //! This module provides automated fixes for common issues and refactoring actions.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! Code actions integrate with the PSTX (Parse → Index → Navigate → Complete → Analyze) pipeline:
+//! Code actions integrate with the Parse → Index → Navigate → Complete → Analyze workflow:
 //!
 //! - **Parse**: AST analysis identifies code patterns requiring fixes or refactoring
 //! - **Index**: Symbol tables provide context for variable and function renaming actions

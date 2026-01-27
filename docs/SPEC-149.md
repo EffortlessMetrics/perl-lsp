@@ -15,14 +15,14 @@ This specification is scoped to the following components within the perl-lsp wor
 
 ## Overview
 
-This specification defines the comprehensive documentation strategy for the perl-parser crate to enable missing documentation warnings and provide complete API documentation for enterprise-scale PSTX email processing workflows.
+This specification defines the comprehensive documentation strategy for the perl-parser crate to enable missing documentation warnings and provide complete API documentation for enterprise-scale Perl codebase analysis and LSP workflows.
 
 ## Primary User Story
 
-**Role**: PSTX developer integrating with perl-parser crate for enterprise email processing workflows
+**Role**: Perl tooling developer integrating with perl-parser crate for IDE and LSP workflows
 **Goal**: Comprehensive API documentation for all public interfaces
-**Benefit**: Efficiently implement email extraction, normalization, threading, rendering, and indexing components without reverse-engineering undocumented APIs
-**Business Value**: Reduced integration time and improved developer experience for enterprise-scale email processing workflows
+**Benefit**: Implement parsing, indexing, navigation, completion, and analysis components without reverse-engineering undocumented APIs
+**Business Value**: Reduced integration time and improved developer experience for large-scale Perl tooling workflows
 
 ## Acceptance Criteria
 
@@ -31,9 +31,9 @@ This specification defines the comprehensive documentation strategy for the perl
 - **Validation**: cargo build completes without documentation warnings
 - **Test Tag**: // AC:AC1
 
-### AC2: Document all public structs and enums with comprehensive descriptions including PSTX pipeline role
-- Document all public structs and enums with comprehensive descriptions including PSTX pipeline role
-- **Validation**: All public structs/enums have module documentation describing Extract → Normalize → Thread → Render → Index pipeline integration
+### AC2: Document all public structs and enums with comprehensive descriptions including LSP workflow role
+- Document all public structs and enums with comprehensive descriptions including LSP workflow role
+- **Validation**: All public structs/enums have module documentation describing Parse → Index → Navigate → Complete → Analyze workflow integration
 - **Test Tag**: // AC:AC2
 
 ### AC3: Add function documentation for all public functions with comprehensive details
@@ -43,11 +43,11 @@ This specification defines the comprehensive documentation strategy for the perl
 
 ### AC4: Document performance characteristics for optimization APIs like AstCache
 - Document performance characteristics for optimization APIs like AstCache
-- **Validation**: Performance-critical APIs document memory usage and 50GB PST processing performance implications
+- **Validation**: Performance-critical APIs document memory usage and large workspace processing performance implications
 - **Test Tag**: // AC:AC4
 
-### AC5: Add module-level documentation explaining purpose and PSTX architecture relationship
-- Add module-level documentation explaining purpose and PSTX architecture relationship
+### AC5: Add module-level documentation explaining purpose and LSP architecture relationship
+- Add module-level documentation explaining purpose and LSP architecture relationship
 - **Validation**: Each module has comprehensive module-level docs with //! comments
 - **Test Tag**: // AC:AC5
 
@@ -61,9 +61,9 @@ This specification defines the comprehensive documentation strategy for the perl
 - **Validation**: Doctests present and passing for critical functionality
 - **Test Tag**: // AC:AC7
 
-### AC8: Document error types and panic conditions with email processing workflow context
-- Document error types and panic conditions with email processing workflow context
-- **Validation**: Error types documented with when they occur in email processing workflows
+### AC8: Document error types and panic conditions with workflow context
+- Document error types and panic conditions with parsing and analysis workflow context
+- **Validation**: Error types documented with when they occur in parsing and analysis workflows
 - **Test Tag**: // AC:AC8
 
 ### AC9: Add cross-references between related functions using Rust documentation linking
@@ -92,12 +92,12 @@ This specification defines the comprehensive documentation strategy for the perl
 - **Primary**: perl-parser
 - **Dependencies**: perl-lexer (for cross-references), perl-corpus (for examples)
 
-### Pipeline Stages
-- **Extract**: Parser API integration for PST email extraction
-- **Normalize**: AST transformation and normalization components
-- **Thread**: Symbol resolution and workspace indexing for threading
-- **Render**: LSP providers for email content rendering
-- **Index**: Semantic analysis and workspace indexing for search
+### Workflow Stages
+- **Parse**: Parser API integration for building ASTs from Perl source
+- **Index**: Symbol extraction and workspace indexing for fast lookup
+- **Navigate**: Definition/reference resolution across files
+- **Complete**: Completion, hover, and signature help providers
+- **Analyze**: Semantic analysis, diagnostics, and refactoring inputs
 
 ### Core Modules Requiring Documentation
 - lib.rs: Primary crate entry point with comprehensive overview
@@ -147,7 +147,7 @@ This specification defines the comprehensive documentation strategy for the perl
 ### Phase 4: Workspace and Indexing Documentation (2-3 days)
 - Documentation for workspace indexing and symbol resolution
 - Performance characteristics for large workspace processing
-- Integration examples for enterprise email threading workflows
+- Integration examples for large workspace navigation and refactoring workflows
 - Cross-file navigation and reference documentation
 
 ### Phase 5: Enterprise and Performance Features (2-3 days)
@@ -165,7 +165,7 @@ This specification defines the comprehensive documentation strategy for the perl
 ## Technical Constraints
 
 ### Performance Constraints
-- 50GB PST processing performance must be documented for relevant APIs
+- Large workspace processing performance must be documented for relevant APIs
 - Memory consumption patterns documented for large file processing
 - Sub-millisecond parsing update performance documented
 
@@ -176,7 +176,7 @@ This specification defines the comprehensive documentation strategy for the perl
 - Existing public API contracts must remain unchanged
 
 ### Enterprise Requirements
-- Document security considerations for email processing
+- Document security considerations for workspace file handling and execution
 - Document error recovery patterns for enterprise workflows
 - Document thread safety guarantees for concurrent processing
 - Document Unicode and internationalization support
@@ -193,7 +193,7 @@ This specification defines the comprehensive documentation strategy for the perl
 - Clear explanations accessible to enterprise developers
 - Complete information for integration needs
 - Technical accuracy verified through testing
-- Relevance to PSTX enterprise use cases
+- Relevance to Perl tooling use cases
 
 ### Maintenance Standards
 - Documentation updated within 30 days of API changes
@@ -218,7 +218,7 @@ The implementation is successful when:
 1. `cargo build` completes without missing_docs warnings
 2. `cargo doc --no-deps --package perl-parser` generates without warnings
 3. All 12 acceptance criteria pass validation
-4. Documentation provides complete coverage for PSTX enterprise integration
+4. Documentation provides complete coverage for Perl tooling integration
 5. CI pipeline enforces documentation standards for future development
 
 ## Related Documents

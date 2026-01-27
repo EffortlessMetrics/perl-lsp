@@ -154,7 +154,7 @@ src/hover.rs                    # Hover information - ~30 violations
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_lsp_provider_documentation_critical_paths
 
 # Validate specific LSP components
-cargo test -p perl-parser --test missing_docs_ac_tests -- test_comprehensive_pstx_pipeline_documentation
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_comprehensive_workflow_documentation
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_performance_documentation_presence
 ```
 

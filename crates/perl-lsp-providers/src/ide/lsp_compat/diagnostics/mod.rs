@@ -2,9 +2,9 @@
 //!
 //! This module provides syntax error detection, linting, and code quality checks.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! Diagnostics are generated throughout the PSTX (Parse → Index → Navigate → Complete → Analyze) pipeline:
+//! Diagnostics are generated throughout the Parse → Index → Navigate → Complete → Analyze workflow:
 //!
 //! - **Parse**: Syntax errors and parsing issues are detected during AST construction
 //! - **Index**: Symbol resolution errors identified during workspace symbol indexing
@@ -106,7 +106,7 @@ impl DiagnosticsProvider {
     ///
     /// Constructs a diagnostics provider capable of analyzing Perl scripts
     /// for syntax errors, semantic issues, and Perl parsing best practices
-    /// within the LSP workflow workflow.
+    /// within the LSP workflow.
     ///
     /// # Arguments
     ///

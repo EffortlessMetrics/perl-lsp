@@ -6,7 +6,7 @@
 //!
 //! ## LSP Workflow Integration
 //!
-//! The executeCommand implementation follows the PSTX (Parse → Index → Navigate → Complete → Analyze) pipeline:
+//! The executeCommand implementation follows the Parse → Index → Navigate → Complete → Analyze workflow:
 //! - **Parse**: Source files are parsed using the perl-parser for syntax validation
 //! - **Index**: Command metadata is indexed for efficient command resolution
 //! - **Navigate**: Commands provide navigation to test results and diagnostic locations
@@ -219,7 +219,7 @@ pub struct CommandResult {
 ///
 /// This provider handles all supported Perl LSP commands with comprehensive error
 /// handling, dual analyzer strategy for code quality, and performance optimization.
-/// It integrates seamlessly with the PSTX pipeline for enterprise-grade LSP functionality.
+/// It integrates seamlessly with the LSP workflow for enterprise-grade functionality.
 ///
 /// # Performance
 ///

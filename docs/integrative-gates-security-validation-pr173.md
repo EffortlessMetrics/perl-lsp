@@ -110,7 +110,7 @@ SPEC-149 Documentation Validation Results:
 ├── AC Tests Failed: 7 out of 25 acceptance criteria (28% failure rate)
 ├── Public Function Documentation: MISSING - critical parser infrastructure lacks docs
 ├── Public Struct Documentation: MISSING - core LSP providers undocumented
-├── Performance Documentation: MISSING - 50GB PST processing characteristics
+├── Performance Documentation: MISSING - large workspace scaling characteristics
 ├── Error Types Documentation: MISSING - Perl parsing context and recovery
 ├── LSP Provider Documentation: MISSING - critical path workflow integration
 ├── Module Documentation: MISSING - LSP workflow integration (Parse → Index → Navigate → Complete → Analyze)
@@ -154,7 +154,7 @@ LSP Integration Documentation Issues:
 ├── Complete Stage: Missing completion provider API integration patterns
 ├── Analyze Stage: Missing semantic analysis and diagnostic workflow
 ├── Error Recovery: Missing Perl parsing context and recovery strategies
-└── Performance SLO: Missing 50GB PST processing documentation
+└── Performance SLO: Missing large workspace scaling documentation
 ```
 
 **Evidence**: Manual validation of docs/ structure reveals gaps in LSP workflow integration documentation
@@ -214,7 +214,7 @@ The security validation confirms no performance degradation from enhanced securi
 1. **SPEC-149 AC Failures**: 7/25 acceptance criteria failed (28% failure rate)
 2. **missing_docs Violations**: 605+ warnings requiring systematic resolution
 3. **LSP Workflow Gaps**: Missing Parse → Index → Navigate → Complete → Analyze documentation
-4. **Performance Documentation**: Missing ≤1ms SLO and 50GB PST processing characteristics
+4. **Performance Documentation**: Missing ≤1ms SLO and large workspace scaling characteristics
 5. **API Coverage**: Critical parser infrastructure and LSP providers undocumented
 
 **Next Steps**:

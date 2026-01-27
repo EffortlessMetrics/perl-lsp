@@ -73,7 +73,7 @@ This document outlines the implementation strategy for addressing missing docume
 /// - Time complexity: O(n) where n is input size
 /// - Memory usage: ~2MB baseline + O(n) for AST nodes
 /// - Supports incremental parsing with <1ms updates for typical edits
-/// - Optimized for large Perl codebases up to 50GB total size
+/// - Optimized for large Perl codebases
 ///
 /// # Arguments
 /// * `source` - The Perl source code to parse
@@ -169,7 +169,7 @@ For performance-critical modules (`parser.rs`, `incremental_v2.rs`, `workspace_i
 /// - Time complexity: O(log n) where n is workspace size
 /// - Memory usage: ~50MB for 10,000 files, scales linearly
 /// - Cache hit ratio: 85-95% for typical editing workflows
-/// - Large file support: Tested with Perl codebases up to 50GB
+/// - Large file support: Tested with large multi-file workspaces
 /// - Incremental updates: <1ms for 99% of edits
 ```
 

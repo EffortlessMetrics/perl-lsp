@@ -314,7 +314,7 @@ impl BudgetTracker {
 pub type ParseResult<T> = Result<T, ParseError>;
 
 #[derive(Error, Debug, Clone, PartialEq)]
-/// Comprehensive error types that can occur during Perl parsing within Perl parsing workflow workflows
+/// Comprehensive error types that can occur during Perl parsing workflows
 ///
 /// These errors are designed to provide detailed context about parsing failures that occur during
 /// Perl code analysis, script processing, and metadata extraction. Each error variant includes
@@ -329,8 +329,8 @@ pub type ParseResult<T> = Result<T, ParseError>;
 ///
 /// # Enterprise Scale Considerations
 ///
-/// Error handling is optimized for processing 50GB+ Perl files with thousands of Perl scripts
-/// and embedded Perl content, ensuring memory-efficient error propagation and logging.
+/// Error handling is optimized for large Perl files and multi-file workspaces, ensuring
+/// memory-efficient error propagation and logging.
 pub enum ParseError {
     /// Parser encountered unexpected end of input during Perl code analysis
     ///

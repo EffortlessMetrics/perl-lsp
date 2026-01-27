@@ -297,8 +297,8 @@ Enterprise-grade quality validation and regression prevention:
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_documentation_quality_regression
 # ✅ Prevents documentation quality degradation over time
 
-# Comprehensive PSTX pipeline documentation
-cargo test -p perl-parser --test missing_docs_ac_tests -- test_comprehensive_pstx_pipeline_documentation
+# Comprehensive LSP workflow documentation
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_comprehensive_workflow_documentation
 # ✅ Validates enterprise integration documentation patterns
 ```
 
