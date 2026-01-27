@@ -13,7 +13,7 @@
 
 ### Problem Statement
 
-The Perl LSP project has grown to 26 crates with a well-structured dependency hierarchy. However, the [`perl-lsp-providers`](../crates/perl-lsp-providers/) crate has become a bottleneck containing approximately 10,235 lines of code across 100+ files. This monolithic structure creates several critical issues:
+The Perl LSP project has grown to 31 crates with a well-structured dependency hierarchy (current as of commit in workspace Cargo.toml). However, the [`perl-lsp-providers`](../crates/perl-lsp-providers/) crate has become a bottleneck containing approximately 10,235 lines of code across 100+ files. This monolithic structure creates several critical issues:
 
 - **Long compilation times**: Changes to any LSP feature trigger recompilation of the entire providers crate
 - **Difficult testing**: Feature-specific tests are mixed together, making isolation challenging
@@ -34,9 +34,9 @@ Extract 9 microcrates from [`perl-lsp-providers`](../crates/perl-lsp-providers/)
 
 ### Expected Benefits
 
-**Performance Improvements:**
-- **40% faster** full workspace builds (~5 min → ~3 min)
-- **67% faster** incremental builds for feature changes (~30s → ~10s)
+**Performance Improvements (Targets):**
+- **Target: 40% faster** full workspace builds (~5 min → ~3 min)
+- **Target: 67% faster** incremental builds for feature changes (~30s → ~10s)
 
 **Maintainability Improvements:**
 - Clear module boundaries with well-defined APIs
@@ -69,10 +69,10 @@ Phase 5 (Weeks 11-12): Complex Extraction
 
 | Metric | Before | After | Improvement |
 |--------|---------|--------|-------------|
-| Full workspace build | ~5 min | ~3 min | 40% faster |
-| Incremental build (feature) | ~30s | ~10s | 67% faster |
+| Full workspace build | ~5 min | ~3 min | Target: 40% faster |
+| Incremental build (feature) | ~30s | ~10s | Target: 67% faster |
 | perl-lsp-providers size | ~10,235 lines | ~3,000 lines | 71% reduction |
-| Number of crates | 26 | 35 | +9 microcrates |
+| Number of crates | 31 | 40 | +9 microcrates |
 
 ### Backward Compatibility
 
@@ -91,7 +91,7 @@ The Perl LSP workspace currently contains **26 crates** organized in a 5-tier de
 
 ```mermaid
 graph TB
-    subgraph Tier1["Tier 1: Leaf Crates (18 crates)"]
+    subgraph Tier1["Tier 1: Leaf Crates (19 crates)"]
         PT[perl-token]
         PQ[perl-quote]
         PE[perl-edit]
@@ -106,7 +106,7 @@ graph TB
         PPos[perl-position-tracking]
         PST[perl-symbol-types]
         PSTb[perl-symbol-table]
-        PLP[perl-lsp-protocol]
+        PLProto[perl-lsp-protocol]
         PU[perl-uri]
         PDC[perl-diagnostics-codes]
         PC[perl-corpus]
@@ -126,7 +126,7 @@ graph TB
 
     subgraph Tier4["Tier 4: Three-Level Dependencies (2 crates)"]
         PSA[perl-semantic-analyzer]
-        PLP[perl-lsp-providers<br/>~10,235 lines]
+        PLProviders[perl-lsp-providers<br/>~10,235 lines]
     end
 
     subgraph Tier5["Tier 5: Application Crates (3 crates)"]
@@ -149,7 +149,7 @@ graph TB
     PPos --> PPC
     PST --> PSTb
     PSTb --> PSA
-    PLP --> PSA
+    PLProto --> PSA
     PLT --> PLsp
     PTS --> PPC
     PWI --> PSA
@@ -163,19 +163,19 @@ graph TB
     PPC --> PIP
     PPC --> PRf
     PPC --> PSA
-    PPC --> PLP
+    PPC --> PLProviders
 
-    PWI --> PLP
-    PIP --> PLP
-    PRf --> PLP
-    PSA --> PLP
+    PWI --> PLProviders
+    PIP --> PLProviders
+    PRf --> PLProviders
+    PSA --> PLProviders
 
-    PLP --> PPar
-    PLP --> PLsp
+    PLProviders --> PPar
+    PLProviders --> PLsp
     PSA --> PPar
     PPar --> PDap
 
-    style PLP fill:#f99,stroke:#c33,stroke-width:3px
+    style PLProviders fill:#f99,stroke:#c33,stroke-width:3px
 ```
 
 ### perl-lsp-providers: Primary Extraction Target
@@ -383,7 +383,7 @@ graph TB
         PPos[perl-position-tracking]
         PST[perl-symbol-types]
         PSTb[perl-symbol-table]
-        PLP[perl-lsp-protocol]
+        PLProto[perl-lsp-protocol]
         PU[perl-uri]
         PDC[perl-diagnostics-codes]
         PC[perl-corpus]
@@ -408,7 +408,7 @@ graph TB
 
     subgraph Tier4["Tier 4: Three-Level Dependencies (6 crates)"]
         PSA[perl-semantic-analyzer]
-        PLP[perl-lsp-providers<br/>REDUCED]
+        PLProviders[perl-lsp-providers<br/>REDUCED]
         PLC[perl-lsp-completion<br/>NEW]
         PLR[perl-lsp-rename<br/>NEW]
         PLCA[perl-lsp-code-actions<br/>NEW]
@@ -436,7 +436,7 @@ graph TB
     PPos --> PPC
     PST --> PSTb
     PSTb --> PSA
-    PLP --> PSA
+    PLProto --> PSA
     PLT --> PLsp
     PTS --> PPC
     PWI --> PSA
@@ -465,7 +465,7 @@ graph TB
     PWI --> PLC
     PWI --> PLR
     PWI --> PLN
-    PIP --> PLP
+    PIP --> PLProviders
     PRf --> PLCA
     PSA --> PLC
     PSA --> PLD
@@ -477,16 +477,16 @@ graph TB
 
     %% Tier 5 connections
     PLTooling --> PLF
-    PLD --> PLP
-    PLF --> PLP
-    PLST --> PLP
-    PLIH --> PLP
-    PLC --> PLP
-    PLR --> PLP
-    PLCA --> PLP
-    PLN --> PLP
-    PLP --> PPar
-    PLP --> PLsp
+    PLD --> PLProviders
+    PLF --> PLProviders
+    PLST --> PLProviders
+    PLIH --> PLProviders
+    PLC --> PLProviders
+    PLR --> PLProviders
+    PLCA --> PLProviders
+    PLN --> PLProviders
+    PLProviders --> PPar
+    PLProviders --> PLsp
     PSA --> PPar
     PPar --> PDap
 
@@ -499,7 +499,7 @@ graph TB
     style PLR fill:#9cf,stroke:#36c,stroke-width:2px
     style PLCA fill:#9cf,stroke:#36c,stroke-width:2px
     style PLN fill:#9cf,stroke:#36c,stroke-width:2px
-    style PLP fill:#fc9,stroke:#c63,stroke-width:2px
+    style PLProviders fill:#fc9,stroke:#c63,stroke-width:2px
 ```
 
 ### New Microcrates Overview
@@ -1264,10 +1264,10 @@ jobs:
 
 | Metric | Before | After | Target | Status |
 |--------|---------|--------|--------|--------|
-| Full workspace build | ~5 min | ~3 min | 40% faster | TBD |
-| Incremental build (completion) | ~30s | ~10s | 67% faster | TBD |
-| Incremental build (diagnostics) | ~30s | ~10s | 67% faster | TBD |
-| Incremental build (formatting) | ~30s | ~10s | 67% faster | TBD |
+| Full workspace build | ~5 min | ~3 min | Target: 40% faster | TBD |
+| Incremental build (completion) | ~30s | ~10s | Target: 67% faster | TBD |
+| Incremental build (diagnostics) | ~30s | ~10s | Target: 67% faster | TBD |
+| Incremental build (formatting) | ~30s | ~10s | Target: 67% faster | TBD |
 
 #### Code Size Reduction
 
@@ -1475,7 +1475,7 @@ This proposal presents a comprehensive plan for extracting 9 microcrates from [`
 
 ### Key Benefits
 
-1. **Reduced compilation times** - 40% faster full builds, 67% faster incremental builds
+1. **Reduced compilation times** - Target: 40% faster full builds, 67% faster incremental builds
 2. **Improved testability** - Isolated unit tests, better test coverage
 3. **Clearer architecture** - Well-defined boundaries, explicit dependencies
 4. **Better reusability** - CLI tool support, external project usage

@@ -43,7 +43,7 @@ graph TB
         PPos[perl-position-tracking]
         PST[perl-symbol-types]
         PSTb[perl-symbol-table]
-        PLP[perl-lsp-protocol]
+        PLProto[perl-lsp-protocol]
         PU[perl-uri]
         PDC[perl-diagnostics-codes]
         PC[perl-corpus]
@@ -63,7 +63,7 @@ graph TB
 
     subgraph Tier4["Tier 4: Three-Level Dependencies"]
         PSA[perl-semantic-analyzer]
-        PLP[perl-lsp-providers<br/>~10,235 lines]
+        PLProviders[perl-lsp-providers<br/>~10,235 lines]
     end
 
     subgraph Tier5["Tier 5: Application Crates"]
@@ -86,7 +86,7 @@ graph TB
     PPos --> PPC
     PST --> PSTb
     PSTb --> PSA
-    PLP --> PSA
+    PLProto --> PSA
     PLT --> PLsp
     PTS --> PPC
     PWI --> PSA
@@ -100,19 +100,19 @@ graph TB
     PPC --> PIP
     PPC --> PRf
     PPC --> PSA
-    PPC --> PLP
+    PPC --> PLProviders
 
-    PWI --> PLP
-    PIP --> PLP
-    PRf --> PLP
-    PSA --> PLP
+    PWI --> PLProviders
+    PIP --> PLProviders
+    PRf --> PLProviders
+    PSA --> PLProviders
 
-    PLP --> PPar
-    PLP --> PLsp
+    PLProviders --> PPar
+    PLProviders --> PLsp
     PSA --> PPar
     PPar --> PDap
 
-    style PLP fill:#f99,stroke:#c33,stroke-width:3px
+    style PLProviders fill:#f99,stroke:#c33,stroke-width:3px
 ```
 
 ### 1.2 Proposed Architecture (After Extraction)
@@ -134,7 +134,7 @@ graph TB
         PPos[perl-position-tracking]
         PST[perl-symbol-types]
         PSTb[perl-symbol-table]
-        PLP[perl-lsp-protocol]
+        PLProto[perl-lsp-protocol]
         PU[perl-uri]
         PDC[perl-diagnostics-codes]
         PC[perl-corpus]
@@ -159,7 +159,7 @@ graph TB
 
     subgraph Tier4["Tier 4: Three-Level Dependencies"]
         PSA[perl-semantic-analyzer]
-        PLP[perl-lsp-providers<br/>REDUCED]
+        PLProviders[perl-lsp-providers<br/>REDUCED]
         PLC[perl-lsp-completion<br/>NEW]
         PLR[perl-lsp-rename<br/>NEW]
         PLCA[perl-lsp-code-actions<br/>NEW]
@@ -187,7 +187,7 @@ graph TB
     PPos --> PPC
     PST --> PSTb
     PSTb --> PSA
-    PLP --> PSA
+    PLProto --> PSA
     PLT --> PLsp
     PTS --> PPC
     PWI --> PSA
@@ -216,7 +216,7 @@ graph TB
     PWI --> PLC
     PWI --> PLR
     PWI --> PLN
-    PIP --> PLP
+    PIP --> PLProviders
     PRf --> PLCA
     PSA --> PLC
     PSA --> PLD
@@ -228,16 +228,16 @@ graph TB
 
     %% Tier 5 connections
     PLTooling --> PLF
-    PLD --> PLP
-    PLF --> PLP
-    PLST --> PLP
-    PLIH --> PLP
-    PLC --> PLP
-    PLR --> PLP
-    PLCA --> PLP
-    PLN --> PLP
-    PLP --> PPar
-    PLP --> PLsp
+    PLD --> PLProviders
+    PLF --> PLProviders
+    PLST --> PLProviders
+    PLIH --> PLProviders
+    PLC --> PLProviders
+    PLR --> PLProviders
+    PLCA --> PLProviders
+    PLN --> PLProviders
+    PLProviders --> PPar
+    PLProviders --> PLsp
     PSA --> PPar
     PPar --> PDap
 
@@ -250,7 +250,7 @@ graph TB
     style PLR fill:#9cf,stroke:#36c,stroke-width:2px
     style PLCA fill:#9cf,stroke:#36c,stroke-width:2px
     style PLN fill:#9cf,stroke:#36c,stroke-width:2px
-    style PLP fill:#fc9,stroke:#c63,stroke-width:2px
+    style PLProviders fill:#fc9,stroke:#c63,stroke-width:2px
 ```
 
 ### 1.3 Dependency Flow Summary
@@ -1736,11 +1736,11 @@ use perl_lsp_completion::CompletionProvider;
 
 Target improvements:
 
-| Metric | Before | After | Improvement |
-|--------|---------|--------|-------------|
-| Full workspace build | ~5 min | ~3 min | 40% faster |
-| Incremental build (completion) | ~30s | ~10s | 67% faster |
-| Incremental build (diagnostics) | ~30s | ~10s | 67% faster |
+| Metric | Before | After | Target |
+|--------|---------|--------|--------|
+| Full workspace build | ~5 min | ~3 min | Target: 40% faster |
+| Incremental build (completion) | ~30s | ~10s | Target: 67% faster |
+| Incremental build (diagnostics) | ~30s | ~10s | Target: 67% faster |
 
 ### 9.2 Test Coverage
 
