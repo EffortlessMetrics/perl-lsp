@@ -26,3 +26,7 @@
 ## 2026-01-27 - Transient Status Bar Feedback
 **Learning:** For long-running operations like tests where the "Output" panel is too hidden and "Notifications" are too intrusive, temporarily hijacking the Status Bar Item provides excellent, non-disruptive feedback.
 **Action:** When implementing async commands that have a corresponding Status Bar Item, use a `try...finally` block to temporarily update the item's text (e.g., `$(sync~spin) Processing...`) and restore it afterwards.
+
+## 2026-02-12 - Structured QuickPick Menus
+**Learning:** Flat lists in `showQuickPick` menus can be overwhelming and hard to scan. Using `QuickPickItemKind.Separator` to group related actions (e.g., Actions vs. Information vs. Configuration) instantly improves scannability and professionalism.
+**Action:** Audit `showQuickPick` menus and introduce separators to logically group items, and consider adding a "Configuration" group for easy access to settings.
