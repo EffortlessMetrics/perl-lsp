@@ -1,0 +1,17 @@
+   Compiling perl-semantic-analyzer v0.8.8 (/app/crates/perl-semantic-analyzer)
+   Compiling perl-lsp-providers v0.8.8 (/app/crates/perl-lsp-providers)
+   Compiling perl-parser v0.8.8 (/app/crates/perl-parser)
+    Finished `bench` profile [optimized] target(s) in 1m 06s
+     Running benches/scope_benchmark.rs (target/release/deps/scope_benchmark-644a27e211de0e2c)
+Gnuplot not found, using plotters backend
+Benchmarking scope_analysis_many_vars
+Benchmarking scope_analysis_many_vars: Warming up for 3.0000 s
+Benchmarking scope_analysis_many_vars: Collecting 100 samples in estimated 6.4049 s (10k iterations)
+Benchmarking scope_analysis_many_vars: Analyzing
+scope_analysis_many_vars
+                        time:   [626.76 µs 627.98 µs 629.39 µs]
+                        change: [−98.459% −98.419% −98.381%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 12 outliers among 100 measurements (12.00%)
+  7 (7.00%) high mild
+  5 (5.00%) high severe

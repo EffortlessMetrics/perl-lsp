@@ -1,0 +1,112 @@
+   Compiling proc-macro2 v1.0.101
+   Compiling unicode-ident v1.0.22
+   Compiling smallvec v1.15.1
+   Compiling serde_core v1.0.228
+   Compiling memchr v2.7.6
+   Compiling serde v1.0.228
+   Compiling stable_deref_trait v1.2.0
+   Compiling thiserror v2.0.18
+   Compiling quote v1.0.40
+   Compiling syn v2.0.106
+   Compiling serde_json v1.0.149
+   Compiling bitflags v1.3.2
+   Compiling zmij v1.0.0
+   Compiling itoa v1.0.15
+   Compiling fluent-uri v0.1.4
+   Compiling str_indices v0.4.4
+   Compiling ropey v1.6.1
+   Compiling writeable v0.6.1
+   Compiling litemap v0.8.0
+   Compiling icu_properties_data v2.0.1
+   Compiling icu_normalizer_data v2.0.0
+   Compiling siphasher v1.0.1
+   Compiling phf_shared v0.13.1
+   Compiling fastrand v2.3.0
+   Compiling phf_generator v0.13.1
+   Compiling synstructure v0.13.2
+   Compiling libc v0.2.180
+   Compiling utf8_iter v1.0.4
+   Compiling percent-encoding v2.3.2
+   Compiling parking_lot_core v0.9.12
+   Compiling zerofrom-derive v0.1.6
+   Compiling yoke-derive v0.8.0
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling zerovec-derive v0.11.1
+   Compiling zerofrom v0.1.6
+   Compiling yoke v0.8.0
+   Compiling displaydoc v0.2.5
+   Compiling serde_repr v0.1.20
+   Compiling zerovec v0.11.4
+   Compiling zerotrie v0.2.2
+   Compiling perl-regex v0.8.8 (/app/crates/perl-regex)
+   Compiling phf_macros v0.13.1
+   Compiling perl-token v0.8.8 (/app/crates/perl-token)
+   Compiling form_urlencoded v1.2.2
+   Compiling tinystr v0.8.1
+   Compiling potential_utf v0.1.3
+   Compiling icu_locale_core v2.0.0
+   Compiling icu_collections v2.0.0
+   Compiling phf v0.13.1
+   Compiling lsp-types v0.97.0
+   Compiling icu_provider v2.0.0
+   Compiling icu_normalizer v2.0.0
+   Compiling icu_properties v2.0.1
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.1.0
+   Compiling perl-builtins v0.8.8 (/app/crates/perl-builtins)
+   Compiling aho-corasick v1.1.3
+   Compiling perl-quote v0.8.8 (/app/crates/perl-quote)
+   Compiling scopeguard v1.2.0
+   Compiling cfg-if v1.0.3
+   Compiling regex-syntax v0.8.6
+   Compiling lock_api v0.4.14
+   Compiling url v2.5.8
+   Compiling perl-position-tracking v0.8.8 (/app/crates/perl-position-tracking)
+   Compiling perl-ast v0.8.8 (/app/crates/perl-ast)
+   Compiling perl-lexer v0.8.8 (/app/crates/perl-lexer)
+   Compiling perl-pragma v0.8.8 (/app/crates/perl-pragma)
+   Compiling perl-error v0.8.8 (/app/crates/perl-error)
+   Compiling perl-tokenizer v0.8.8 (/app/crates/perl-tokenizer)
+   Compiling perl-heredoc v0.0.1 (/app/crates/perl-heredoc)
+   Compiling perl-edit v0.8.8 (/app/crates/perl-edit)
+   Compiling regex-automata v0.4.13
+   Compiling perl-parser-core v0.8.8 (/app/crates/perl-parser-core)
+   Compiling perl-uri v0.8.8 (/app/crates/perl-uri)
+   Compiling parking_lot v0.12.5
+   Compiling perl-symbol-types v0.8.8 (/app/crates/perl-symbol-types)
+   Compiling perl-tdd-support v0.8.8 (/app/crates/perl-tdd-support)
+   Compiling rustc-hash v2.1.1
+   Compiling regex v1.12.2
+   Compiling perl-workspace-index v0.8.8 (/app/crates/perl-workspace-index)
+   Compiling perl-semantic-analyzer v0.8.8 (/app/crates/perl-semantic-analyzer)
+    Finished `test` profile [optimized + debuginfo] target(s) in 50.30s
+     Running unittests src/lib.rs (target/debug/deps/perl_semantic_analyzer-56e66591ed9136c8)
+
+running 24 tests
+test analysis::semantic::tests::test_anonymous_subroutine_hover_info ... ignored, anonymous subroutine hover info not yet implemented
+test analysis::semantic::tests::test_anonymous_subroutine_semantic_tokens ... ignored, anonymous subroutine semantic tokens not yet implemented
+test analysis::index::tests::test_workspace_index ... ok
+test analysis::semantic::tests::test_empty_source_handling ... ok
+test analysis::semantic::tests::test_analyzer_find_definition_scalar ... ok
+test analysis::semantic::tests::test_comment_doc_extraction ... ok
+test analysis::semantic::tests::test_hover_doc_from_pod ... ok
+test analysis::semantic::tests::test_cross_package_navigation ... ok
+test analysis::semantic::tests::test_hover_info ... ok
+test analysis::semantic::tests::test_multiple_comment_lines ... ok
+test analysis::semantic::tests::test_scope_identification ... ok
+test analysis::semantic::tests::test_semantic_model_definition_at ... ok
+test analysis::semantic::tests::test_semantic_model_build_and_tokens ... ok
+test analysis::semantic::tests::test_semantic_model_hover_info ... ok
+test analysis::semantic::tests::test_semantic_tokens ... ok
+test analysis::semantic::tests::test_semantic_model_symbol_table_access ... ok
+test analysis::type_inference::tests::test_array_type_inference ... ok
+test analysis::type_inference::tests::test_function_return_type ... ok
+test analysis::type_inference::tests::test_hash_merge_type_inference ... ok
+test analysis::type_inference::tests::test_hash_type_inference ... ok
+test analysis::type_inference::tests::test_scalar_type_inference ... ok
+test analysis::type_inference::tests::test_type_based_completions ... ok
+test analysis::symbol::tests::test_symbol_extraction ... ok
+test analysis::semantic::tests::test_pod_documentation_extraction ... ok
+
+test result: ok. 22 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.01s

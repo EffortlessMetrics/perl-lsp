@@ -262,6 +262,44 @@ impl<'a> ExtractedName<'a> {
     }
 }
 
+struct AnalysisContext<'a> {
+    issues: Vec<ScopeIssue>,
+    code: &'a str,
+    pragma_map: &'a [(Range<usize>, PragmaState)],
+    ancestors: Vec<&'a Node>,
+    line_starts: Option<Vec<usize>>,
+}
+
+impl<'a> AnalysisContext<'a> {
+    fn new(code: &'a str, pragma_map: &'a [(Range<usize>, PragmaState)]) -> Self {
+        Self {
+            issues: Vec::new(),
+            code,
+            pragma_map,
+            ancestors: Vec::new(),
+            line_starts: None,
+        }
+    }
+
+    fn get_line(&mut self, offset: usize) -> usize {
+        if self.line_starts.is_none() {
+            let mut starts = vec![0];
+            for (i, c) in self.code.char_indices() {
+                if c == '\n' {
+                    starts.push(i + 1);
+                }
+            }
+            self.line_starts = Some(starts);
+        }
+
+        let starts = self.line_starts.as_ref().unwrap();
+        match starts.binary_search(&offset) {
+            Ok(idx) => idx + 1,
+            Err(idx) => idx,
+        }
+    }
+}
+
 pub struct ScopeAnalyzer;
 
 impl Default for ScopeAnalyzer {
@@ -281,31 +319,25 @@ impl ScopeAnalyzer {
         code: &str,
         pragma_map: &[(Range<usize>, PragmaState)],
     ) -> Vec<ScopeIssue> {
-        let mut issues = Vec::new();
+        let mut context = AnalysisContext::new(code, pragma_map);
         let root_scope = Rc::new(Scope::new());
 
-        // Use a vector as a stack for ancestors to avoid O(N) HashMap allocation
-        let mut ancestors: Vec<&Node> = Vec::new();
-
-        self.analyze_node(ast, &root_scope, &mut ancestors, &mut issues, code, pragma_map);
+        self.analyze_node(ast, &root_scope, &mut context);
 
         // Collect all unused variables from all scopes
-        self.collect_unused_variables(&root_scope, &mut issues, code);
+        self.collect_unused_variables(&root_scope, &mut context);
 
-        issues
+        context.issues
     }
 
     fn analyze_node<'a>(
         &self,
         node: &'a Node,
         scope: &Rc<Scope>,
-        ancestors: &mut Vec<&'a Node>,
-        issues: &mut Vec<ScopeIssue>,
-        code: &str,
-        pragma_map: &[(Range<usize>, PragmaState)],
+        context: &mut AnalysisContext<'a>,
     ) {
         // Get effective pragma state at this node's location
-        let pragma_state = PragmaTracker::state_for_offset(pragma_map, node.location.start);
+        let pragma_state = PragmaTracker::state_for_offset(context.pragma_map, node.location.start);
         let strict_mode = pragma_state.strict_subs;
         match &node.kind {
             NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
@@ -320,7 +352,7 @@ impl ScopeAnalyzer {
                 // Actually Perl evaluates RHS before LHS assignment, so usages in initializer refer to OUTER scope.
                 // So we analyze initializer first.
                 if let Some(init) = initializer {
-                    self.analyze_node(init, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(init, scope, context);
                 }
 
                 if let Some(issue_kind) = scope.declare_variable_parts(
@@ -330,7 +362,7 @@ impl ScopeAnalyzer {
                     is_our,
                     is_initialized,
                 ) {
-                    let line = self.get_line_from_node(variable, code);
+                    let line = context.get_line(variable.location.start);
                     // Optimization: Only allocate full name string when we actually have an issue to report
                     let full_name = extracted.as_string();
                     // Build description first (borrows full_name), then move full_name into struct
@@ -343,7 +375,7 @@ impl ScopeAnalyzer {
                         }
                         _ => String::new(),
                     };
-                    issues.push(ScopeIssue {
+                    context.issues.push(ScopeIssue {
                         kind: issue_kind,
                         variable_name: full_name,
                         line,
@@ -359,7 +391,7 @@ impl ScopeAnalyzer {
 
                 // Analyze initializer first
                 if let Some(init) = initializer {
-                    self.analyze_node(init, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(init, scope, context);
                 }
 
                 for variable in variables {
@@ -373,7 +405,7 @@ impl ScopeAnalyzer {
                         is_our,
                         is_initialized,
                     ) {
-                        let line = self.get_line_from_node(variable, code);
+                        let line = context.get_line(variable.location.start);
                         // Optimization: Only allocate full name string when we actually have an issue to report
                         let full_name = extracted.as_string();
                         // Build description first (borrows full_name), then move full_name into struct
@@ -392,7 +424,7 @@ impl ScopeAnalyzer {
                             }
                             _ => String::new(),
                         };
-                        issues.push(ScopeIssue {
+                        context.issues.push(ScopeIssue {
                             kind: issue_kind,
                             variable_name: full_name,
                             line,
@@ -474,10 +506,11 @@ impl ScopeAnalyzer {
                 if !variable_used {
                     if strict_mode {
                         let full_name = format!("{}{}", sigil, name);
-                        issues.push(ScopeIssue {
+                        let line = context.get_line(node.location.start);
+                        context.issues.push(ScopeIssue {
                             kind: IssueKind::UndeclaredVariable,
                             variable_name: full_name.clone(),
-                            line: self.get_line_from_node(node, code),
+                            line,
                             range: (node.location.start, node.location.end),
                             description: format!(
                                 "Variable '{}' is used but not declared",
@@ -488,10 +521,11 @@ impl ScopeAnalyzer {
                 } else if !is_initialized {
                     // Variable found but used before initialization
                     let full_name = format!("{}{}", sigil, name);
-                    issues.push(ScopeIssue {
+                    let line = context.get_line(node.location.start);
+                    context.issues.push(ScopeIssue {
                         kind: IssueKind::UninitializedVariable,
                         variable_name: full_name.clone(),
-                        line: self.get_line_from_node(node, code),
+                        line,
                         range: (node.location.start, node.location.end),
                         description: format!(
                             "Variable '{}' is used before being initialized",
@@ -503,7 +537,7 @@ impl ScopeAnalyzer {
             NodeKind::Assignment { lhs, rhs, op: _ } => {
                 // Handle assignment: LHS variable becomes initialized
                 // First analyze RHS (usages)
-                self.analyze_node(rhs, scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(rhs, scope, context);
 
                 // Then analyze LHS
                 // We need to recursively mark variables as initialized in the LHS structure
@@ -512,48 +546,49 @@ impl ScopeAnalyzer {
 
                 // Recurse into LHS to trigger UndeclaredVariable checks
                 // Note: 'use_variable' marks as used, which is technically correct for assignment too (write usage)
-                self.analyze_node(lhs, scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(lhs, scope, context);
             }
 
             NodeKind::Tie { variable, package, args } => {
-                ancestors.push(node);
+                context.ancestors.push(node);
                 // Analyze arguments first
-                self.analyze_node(package, scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(package, scope, context);
                 for arg in args {
-                    self.analyze_node(arg, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(arg, scope, context);
                 }
 
                 if let NodeKind::VariableDeclaration { .. } = variable.kind {
                      // Must analyze declaration FIRST to declare it, then mark initialized
-                     self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
+                     self.analyze_node(variable, scope, context);
                      self.mark_initialized(variable, scope);
                 } else {
                      // For existing variables, mark initialized then analyze (usage)
                      self.mark_initialized(variable, scope);
-                     self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
+                     self.analyze_node(variable, scope, context);
                 }
                 
-                ancestors.pop();
+                context.ancestors.pop();
             }
 
             NodeKind::Untie { variable } => {
-                ancestors.push(node);
-                self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
-                ancestors.pop();
+                context.ancestors.push(node);
+                self.analyze_node(variable, scope, context);
+                context.ancestors.pop();
             }
 
             NodeKind::Identifier { name } => {
                 // Check for barewords under strict mode, excluding hash keys
                 // Hybrid check: Fast path for immediate hash keys (depth 1), then known functions, then deep check
                 if strict_mode
-                    && !self.is_in_hash_key_context(node, ancestors, 1)
+                    && !self.is_in_hash_key_context(node, &context.ancestors, 1)
                     && !is_known_function(name)
-                    && !self.is_in_hash_key_context(node, ancestors, 10)
+                    && !self.is_in_hash_key_context(node, &context.ancestors, 10)
                 {
-                    issues.push(ScopeIssue {
+                    let line = context.get_line(node.location.start);
+                    context.issues.push(ScopeIssue {
                         kind: IssueKind::UnquotedBareword,
                         variable_name: name.clone(),
-                        line: self.get_line_from_node(node, code),
+                        line,
                         range: (node.location.start, node.location.end),
                         description: format!("Bareword '{}' not allowed under 'use strict'", name),
                     });
@@ -573,10 +608,10 @@ impl ScopeAnalyzer {
                             }
                         }
                         // Always process both children to ensure undefined variables are caught
-                        ancestors.push(node);
-                        self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                        self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
-                        ancestors.pop();
+                        context.ancestors.push(node);
+                        self.analyze_node(left, scope, context);
+                        self.analyze_node(right, scope, context);
+                        context.ancestors.pop();
                     }
                     "[]" => {
                         // Array access: $array[index] -> mark @array as used if it exists
@@ -589,73 +624,73 @@ impl ScopeAnalyzer {
                             }
                         }
                         // Always process both children to ensure undefined variables are caught
-                        ancestors.push(node);
-                        self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                        self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
-                        ancestors.pop();
+                        context.ancestors.push(node);
+                        self.analyze_node(left, scope, context);
+                        self.analyze_node(right, scope, context);
+                        context.ancestors.pop();
                     }
                     _ => {
                         // Other binary operations
-                        ancestors.push(node);
-                        self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                        self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
-                        ancestors.pop();
+                        context.ancestors.push(node);
+                        self.analyze_node(left, scope, context);
+                        self.analyze_node(right, scope, context);
+                        context.ancestors.pop();
                     }
                 }
             }
 
             NodeKind::ArrayLiteral { elements } => {
-                ancestors.push(node);
+                context.ancestors.push(node);
                 for element in elements {
-                    self.analyze_node(element, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(element, scope, context);
                 }
-                ancestors.pop();
+                context.ancestors.pop();
             }
 
             NodeKind::Block { statements } => {
                 let block_scope = Rc::new(Scope::with_parent(scope.clone()));
-                ancestors.push(node);
+                context.ancestors.push(node);
                 for stmt in statements {
-                    self.analyze_node(stmt, &block_scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(stmt, &block_scope, context);
                 }
-                ancestors.pop();
-                self.collect_unused_variables(&block_scope, issues, code);
+                context.ancestors.pop();
+                self.collect_unused_variables(&block_scope, context);
             }
 
             NodeKind::For { init, condition, update, body, .. } => {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
-                ancestors.push(node);
+                context.ancestors.push(node);
 
                 if let Some(init_node) = init {
-                    self.analyze_node(init_node, &loop_scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(init_node, &loop_scope, context);
                 }
                 if let Some(cond) = condition {
-                    self.analyze_node(cond, &loop_scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(cond, &loop_scope, context);
                 }
                 if let Some(upd) = update {
-                    self.analyze_node(upd, &loop_scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(upd, &loop_scope, context);
                 }
-                self.analyze_node(body, &loop_scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(body, &loop_scope, context);
 
-                ancestors.pop();
+                context.ancestors.pop();
 
-                self.collect_unused_variables(&loop_scope, issues, code);
+                self.collect_unused_variables(&loop_scope, context);
             }
 
             NodeKind::Foreach { variable, list, body } => {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
-                ancestors.push(node);
+                context.ancestors.push(node);
 
                 // Declare the loop variable
-                self.analyze_node(variable, &loop_scope, ancestors, issues, code, pragma_map);
-                self.analyze_node(list, &loop_scope, ancestors, issues, code, pragma_map);
-                self.analyze_node(body, &loop_scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(variable, &loop_scope, context);
+                self.analyze_node(list, &loop_scope, context);
+                self.analyze_node(body, &loop_scope, context);
 
-                ancestors.pop();
+                context.ancestors.pop();
 
-                self.collect_unused_variables(&loop_scope, issues, code);
+                self.collect_unused_variables(&loop_scope, context);
             }
 
             NodeKind::Subroutine { signature, body, .. } => {
@@ -682,10 +717,11 @@ impl ScopeAnalyzer {
 
                         // Check for duplicate parameters
                         if !param_names.insert(full_name.clone()) {
-                            issues.push(ScopeIssue {
+                            let line = context.get_line(param.location.start);
+                            context.issues.push(ScopeIssue {
                                 kind: IssueKind::DuplicateParameter,
                                 variable_name: full_name.clone(),
-                                line: self.get_line_from_node(param, code),
+                                line,
                                 range: (param.location.start, param.location.end),
                                 description: format!(
                                     "Duplicate parameter '{}' in subroutine signature",
@@ -696,10 +732,11 @@ impl ScopeAnalyzer {
 
                         // Check if parameter shadows a global or parent scope variable
                         if scope.lookup_variable_parts(sigil, name).is_some() {
-                            issues.push(ScopeIssue {
+                            let line = context.get_line(param.location.start);
+                            context.issues.push(ScopeIssue {
                                 kind: IssueKind::ParameterShadowsGlobal,
                                 variable_name: full_name.clone(),
-                                line: self.get_line_from_node(param, code),
+                                line,
                                 range: (param.location.start, param.location.end),
                                 description: format!(
                                     "Parameter '{}' shadows a variable from outer scope",
@@ -720,9 +757,9 @@ impl ScopeAnalyzer {
                     }
                 }
 
-                ancestors.push(node);
-                self.analyze_node(body, &sub_scope, ancestors, issues, code, pragma_map);
-                ancestors.pop();
+                context.ancestors.push(node);
+                self.analyze_node(body, &sub_scope, context);
+                context.ancestors.pop();
 
                 // Check for unused parameters
                 if let Some(sig) = signature {
@@ -739,10 +776,11 @@ impl ScopeAnalyzer {
                                 }
                                 if let Some(var) = sub_scope.lookup_variable_parts(sigil, name) {
                                     if !*var.is_used.borrow() {
-                                        issues.push(ScopeIssue {
+                                        let line = context.get_line(param.location.start);
+                                        context.issues.push(ScopeIssue {
                                             kind: IssueKind::UnusedParameter,
                                             variable_name: full_name.clone(),
-                                            line: self.get_line_from_node(param, code),
+                                            line,
                                             range: (param.location.start, param.location.end),
                                             description: format!(
                                                 "Parameter '{}' is declared but never used",
@@ -756,25 +794,25 @@ impl ScopeAnalyzer {
                     }
                 }
 
-                self.collect_unused_variables(&sub_scope, issues, code);
+                self.collect_unused_variables(&sub_scope, context);
             }
 
             NodeKind::FunctionCall { args, .. } => {
                 // Handle function arguments, which may contain complex variable patterns
-                ancestors.push(node);
+                context.ancestors.push(node);
                 for arg in args {
-                    self.analyze_node(arg, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(arg, scope, context);
                 }
-                ancestors.pop();
+                context.ancestors.pop();
             }
 
             _ => {
                 // Recursively analyze children
-                ancestors.push(node);
+                context.ancestors.push(node);
                 for child in node.children() {
-                    self.analyze_node(child, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(child, scope, context);
                 }
-                ancestors.pop();
+                context.ancestors.pop();
             }
         }
     }
@@ -801,16 +839,17 @@ impl ScopeAnalyzer {
     fn collect_unused_variables(
         &self,
         scope: &Rc<Scope>,
-        issues: &mut Vec<ScopeIssue>,
-        code: &str,
+        context: &mut AnalysisContext<'_>,
     ) {
+        let code_len = context.code.len();
         scope.for_each_reportable_unused_variable(|var_name, offset| {
-            let start = offset.min(code.len());
-            let end = (start + var_name.len()).min(code.len());
-            issues.push(ScopeIssue {
+            let start = offset.min(code_len);
+            let end = (start + var_name.len()).min(code_len);
+            let line = context.get_line(offset);
+            context.issues.push(ScopeIssue {
                 kind: IssueKind::UnusedVariable,
                 variable_name: var_name.clone(),
-                line: self.get_line_number(code, offset),
+                line,
                 range: (start, end),
                 description: format!("Variable '{}' is declared but never used", var_name),
             });
@@ -842,19 +881,6 @@ impl ScopeAnalyzer {
                 }
             }
         }
-    }
-
-    fn get_line_from_node(&self, node: &Node, code: &str) -> usize {
-        self.get_line_number(code, node.location.start)
-    }
-
-    #[allow(dead_code)]
-    fn get_line_from_position(&self, offset: usize, code: &str) -> usize {
-        self.get_line_number(code, offset)
-    }
-
-    fn get_line_number(&self, code: &str, offset: usize) -> usize {
-        code[..offset.min(code.len())].chars().filter(|&c| c == '\n').count() + 1
     }
 
     /// Determines if a node is in a hash key context, where barewords are legitimate.

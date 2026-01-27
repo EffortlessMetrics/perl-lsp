@@ -1,0 +1,189 @@
+   Compiling perl-semantic-analyzer v0.8.8 (/app/crates/perl-semantic-analyzer)
+warning: hidden lifetime parameters in types are deprecated
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:836:23
+    |
+836 |         context: &mut AnalysisContext,
+    |                       ^^^^^^^^^^^^^^^ expected lifetime parameter
+    |
+note: the lint level is defined here
+   --> crates/perl-semantic-analyzer/src/lib.rs:5:9
+    |
+5   | #![warn(rust_2018_idioms)]
+    |         ^^^^^^^^^^^^^^^^
+    = note: `#[warn(elided_lifetimes_in_paths)]` implied by `#[warn(rust_2018_idioms)]`
+help: indicate the anonymous lifetime
+    |
+836 |         context: &mut AnalysisContext<'_>,
+    |                                      ++++
+
+error[E0499]: cannot borrow `*context` as mutable more than once at a time
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:512:35
+    |
+509 |                         context.issues.push(ScopeIssue {
+    |                         -------------- ---- first borrow later used by call
+    |                         |
+    |                         first mutable borrow occurs here
+...
+512 |                             line: context.get_line(node.location.start),
+    |                                   ^^^^^^^ second mutable borrow occurs here
+    |
+help: try adding a local storing this argument...
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:512:35
+    |
+512 | ...                   line: context.get_line(node.location.start),
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: ...and then using that local as the argument to this call
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:509:25
+    |
+509 | /                         context.issues.push(ScopeIssue {
+510 | |                             kind: IssueKind::UndeclaredVariable,
+511 | |                             variable_name: full_name.clone(),
+512 | |                             line: context.get_line(node.location.start),
+...   |
+517 | |                             ),
+518 | |                         });
+    | |__________________________^
+
+error[E0499]: cannot borrow `*context` as mutable more than once at a time
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:526:31
+    |
+523 |                     context.issues.push(ScopeIssue {
+    |                     -------------- ---- first borrow later used by call
+    |                     |
+    |                     first mutable borrow occurs here
+...
+526 |                         line: context.get_line(node.location.start),
+    |                               ^^^^^^^ second mutable borrow occurs here
+    |
+help: try adding a local storing this argument...
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:526:31
+    |
+526 |                         line: context.get_line(node.location.start),
+    |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: ...and then using that local as the argument to this call
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:523:21
+    |
+523 | /                     context.issues.push(ScopeIssue {
+524 | |                         kind: IssueKind::UninitializedVariable,
+525 | |                         variable_name: full_name.clone(),
+526 | |                         line: context.get_line(node.location.start),
+...   |
+531 | |                         ),
+532 | |                     });
+    | |______________________^
+
+error[E0499]: cannot borrow `*context` as mutable more than once at a time
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:588:31
+    |
+585 |                     context.issues.push(ScopeIssue {
+    |                     -------------- ---- first borrow later used by call
+    |                     |
+    |                     first mutable borrow occurs here
+...
+588 |                         line: context.get_line(node.location.start),
+    |                               ^^^^^^^ second mutable borrow occurs here
+    |
+help: try adding a local storing this argument...
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:588:31
+    |
+588 |                         line: context.get_line(node.location.start),
+    |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: ...and then using that local as the argument to this call
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:585:21
+    |
+585 | /                     context.issues.push(ScopeIssue {
+586 | |                         kind: IssueKind::UnquotedBareword,
+587 | |                         variable_name: name.clone(),
+588 | |                         line: context.get_line(node.location.start),
+589 | |                         range: (node.location.start, node.location.end),
+590 | |                         description: format!("Bareword '{}' not allowed under 'use strict'", name),
+591 | |                     });
+    | |______________________^
+
+error[E0499]: cannot borrow `*context` as mutable more than once at a time
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:720:39
+    |
+717 | ...                   context.issues.push(ScopeIssue {
+    |                       -------------- ---- first borrow later used by call
+    |                       |
+    |                       first mutable borrow occurs here
+...
+720 | ...                       line: context.get_line(param.location.start),
+    |                                 ^^^^^^^ second mutable borrow occurs here
+    |
+help: try adding a local storing this argument...
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:720:39
+    |
+720 | ...                   line: context.get_line(param.location.start),
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: ...and then using that local as the argument to this call
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:717:29
+    |
+717 | / ...                   context.issues.push(ScopeIssue {
+718 | | ...                       kind: IssueKind::DuplicateParameter,
+719 | | ...                       variable_name: full_name.clone(),
+720 | | ...                       line: context.get_line(param.location.start),
+...   |
+725 | | ...                       ),
+726 | | ...                   });
+    | |________________________^
+
+error[E0499]: cannot borrow `*context` as mutable more than once at a time
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:734:39
+    |
+731 | ...                   context.issues.push(ScopeIssue {
+    |                       -------------- ---- first borrow later used by call
+    |                       |
+    |                       first mutable borrow occurs here
+...
+734 | ...                       line: context.get_line(param.location.start),
+    |                                 ^^^^^^^ second mutable borrow occurs here
+    |
+help: try adding a local storing this argument...
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:734:39
+    |
+734 | ...                   line: context.get_line(param.location.start),
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: ...and then using that local as the argument to this call
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:731:29
+    |
+731 | / ...                   context.issues.push(ScopeIssue {
+732 | | ...                       kind: IssueKind::ParameterShadowsGlobal,
+733 | | ...                       variable_name: full_name.clone(),
+734 | | ...                       line: context.get_line(param.location.start),
+...   |
+739 | | ...                       ),
+740 | | ...                   });
+    | |________________________^
+
+error[E0499]: cannot borrow `*context` as mutable more than once at a time
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:777:51
+    |
+774 | ...                   context.issues.push(ScopeIssue {
+    |                       -------------- ---- first borrow later used by call
+    |                       |
+    |                       first mutable borrow occurs here
+...
+777 | ...                       line: context.get_line(param.location.start),
+    |                                 ^^^^^^^ second mutable borrow occurs here
+    |
+help: try adding a local storing this argument...
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:777:51
+    |
+777 | ...                   line: context.get_line(param.location.start),
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: ...and then using that local as the argument to this call
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:774:41
+    |
+774 | / ...                   context.issues.push(ScopeIssue {
+775 | | ...                       kind: IssueKind::UnusedParameter,
+776 | | ...                       variable_name: full_name.clone(),
+777 | | ...                       line: context.get_line(param.location.start),
+...   |
+782 | | ...                       ),
+783 | | ...                   });
+    | |________________________^
+
+For more information about this error, try `rustc --explain E0499`.
+warning: `perl-semantic-analyzer` (lib) generated 1 warning
+error: could not compile `perl-semantic-analyzer` (lib) due to 6 previous errors; 1 warning emitted

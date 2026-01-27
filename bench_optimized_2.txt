@@ -1,0 +1,11 @@
+   Compiling perl-semantic-analyzer v0.8.8 (/app/crates/perl-semantic-analyzer)
+error: this file contains an unclosed delimiter
+   --> crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs:886:25
+    |
+311 | impl ScopeAnalyzer {
+    |                    - unclosed delimiter
+...
+886 | // ... rest of file ...
+    |                        ^
+
+error: could not compile `perl-semantic-analyzer` (lib) due to 1 previous error
