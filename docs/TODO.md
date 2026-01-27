@@ -1,145 +1,103 @@
-# TODO: Tree-sitter Perl v3 Parser Improvements
+# TODOs & Missing Features
 
-**Last Updated: v0.7.1 (January 2025)**
+> **Last Updated**: 2026-01-27
+> **Sources of truth**: `docs/ROADMAP.md` (plans), `docs/CURRENT_STATUS.md` (metrics), `features.toml` (capabilities)
+> **Rule**: If this file conflicts with those sources, update this file (not the sources).
 
-While the v3 parser achieves 100% edge case coverage and is production-ready, here are prioritized improvements that would enhance its value:
+---
 
-## ✅ Recently Completed (v0.7.1)
-- Fixed `bless {}` parsing (now correctly handled as function call)
-- Fixed `sort {}`, `map {}`, `grep {}` empty block parsing
-- Enhanced builtin function argument handling
-- Added 25+ test cases for edge cases
+## How to Use This List
 
-## 🔴 High Priority - Essential for IDE Integration
+- Treat this as an **actionable backlog**, not a status report.
+- Do **not** add metrics here; metrics live in `docs/CURRENT_STATUS.md`.
+- For LSP capability truth, update `features.toml` and run `just status-update`.
 
-### 1. Incremental Parsing Support ✅ (Infrastructure Complete)
-- [x] Implement position tracking with line/column information
-- [x] Add edit tracking and position adjustment
-- [x] Cache parse trees between edits
-- [x] Create incremental parsing API
-- [ ] Complete tree reuse implementation (currently falls back to full parse)
-- [ ] Add lexer checkpointing for context-sensitive features
-- **Status**: Infrastructure 100% complete, optimization pending
-- **Impact**: Essential for real-time IDE features
-- **Effort**: High (architecture complete, optimization remaining)
+---
 
-### 2. Error Recovery & Diagnostics
-- [ ] Continue parsing after syntax errors
-- [ ] Generate partial ASTs for incomplete code
-- [ ] Provide helpful error messages with fix suggestions
-- [ ] Track multiple errors in single parse
-- **Impact**: Critical for IDE experience
-- **Effort**: Medium-High
+## Now (v0.9.1 Close-Out) - TODOs
 
-### 3. Comment & Whitespace Preservation
-- [ ] Add trivia nodes to AST
-- [ ] Preserve exact formatting
-- [ ] Support comment attachment to nodes
-- [ ] Enable whitespace-sensitive transformations
-- **Impact**: Required for refactoring tools
-- **Effort**: Medium
+### Workspace Index State Machine
 
-## 🟡 Medium Priority - Performance & Integration
+- [x] Define explicit indexing states + transitions (Idle -> Scanning -> Indexing -> Ready -> Error)
+- [x] Wire transitions into workspace indexing and file-change flows
+- [x] Add early-exit heuristics and performance caps (target: <100ms initial, <10ms incremental)
+- [x] Add instrumentation (state durations, early-exit reasons, transition counts)
+- [x] Add targeted tests + benchmarks (small/medium/large workspaces)
+- [x] Document invariants and failure modes (docs + inline commentary)
+- [ ] Capture receipts (ci-gate + targeted tests/benchmarks)
 
-### 4. Performance Optimizations
-- [ ] Replace HashMap lookups with static tables
-- [ ] Optimize string allocations (use string interning)
-- [ ] Add SIMD optimizations for lexer
-- [ ] Profile and optimize hot paths
-- **Target**: 10-20% speedup
-- **Current**: Already 4-19x faster than v1
+### Documentation Cleanup (missing_docs + module-level docs)
 
-### 5. Native Tree-sitter Integration
-- [ ] Generate actual Tree-sitter nodes (not just S-expressions)
-- [ ] Add field names to all nodes
-- [ ] Support Tree-sitter queries directly
-- [ ] Enable syntax highlighting queries
-- **Impact**: Better ecosystem compatibility
-- **Effort**: Medium
+- [ ] Run `cargo test -p perl-parser --test missing_docs_ac_tests` and capture receipts
+- [ ] Add or verify module-level docs for public modules (perl-parser + other public crates)
+- [ ] Ensure `cargo doc --no-deps -p perl-parser` is clean
+- [ ] Align wording across `START_HERE.md`, `CURRENT_STATUS.md`, `ROADMAP.md`, `CHANGELOG.md`
 
-### 6. Language Server Protocol (LSP) Implementation
-- [ ] Build LSP server using perl-parser
-- [ ] Implement completion, hover, goto-definition
-- [ ] Add refactoring commands
-- [ ] Support workspace-wide analysis
-- **Impact**: Showcase parser capabilities
-- **Effort**: High (but high reward)
+### Release Notes + Doc Alignment
 
-## 🟢 Low Priority - Nice to Have
+- [ ] v0.9.1 release notes draft (CHANGELOG + release summary)
+- [ ] Ensure `features.toml` and capability snapshots remain consistent
+- [ ] Verify `docs/CURRENT_STATUS.md` narrative matches receipts
 
-### 7. Remaining Edge Cases (0.1%)
-- [ ] Source filters (BEGIN { use Filter::Simple })
-- [ ] Full format declaration parsing
-- [ ] Tied variables in string eval
-- [ ] Autoloader edge cases
-- **Impact**: Completeness for obscure code
-- **Effort**: Low-Medium per case
+---
 
-### 8. Perl 5.40+ Features
-- [ ] Latest class/method syntax changes
-- [ ] New builtin functions
-- [ ] Experimental features tracking
-- [ ] Future-proof grammar updates
-- **Impact**: Stay current with Perl evolution
-- **Effort**: Ongoing maintenance
+## Missing Features (Derived from `features.toml`)
 
-### 9. Developer Tooling
-- [ ] Perl formatter (perltidy alternative)
-- [ ] Static analyzer with taint checking
-- [ ] Code metrics calculator
-- [ ] Dependency analyzer
-- [ ] Documentation generator
-- **Impact**: Ecosystem improvement
-- **Effort**: Medium per tool
+### LSP (Not Advertised / Preview)
 
-## 📊 Architecture Improvements
+- **`lsp.notebook_document_sync`** (preview, not advertised)
+  - [x] Implement notebook document sync handlers
+  - [x] Add capability gating and tests
 
-### 10. Parser Architecture
-- [ ] Implement visitor pattern for AST traversal
-- [ ] Add AST transformation framework
-- [ ] Create plugin system for custom parsing
-- [ ] Support dialect configuration (Perl 5.8 vs 5.38)
+- **`lsp.notebook_cell_execution`** (preview, not advertised)
+  - [x] Track execution summary metadata
+  - [x] Add tests for notebook execution summary updates
 
-### 11. Testing Infrastructure
-- [ ] Property-based testing with proptest
-- [ ] Fuzzing harness for robustness
-- [ ] Differential testing against perl -c
-- [ ] Performance regression tests
+### DAP (Preview / Not Advertised)
 
-### 12. Documentation
-- [ ] API documentation with examples
-- [ ] Parser internals guide
-- [ ] Contributing guidelines
-- [ ] Video tutorials for integration
+- **`dap.breakpoints`** (preview, not advertised)
+  - [x] Confirm semantics (REPLACE behavior, storage, validation)
+  - [x] Add integration tests around breakpoint lifecycle
 
-## 🚀 Quick Wins (Could do now)
+- **`dap.inline_values`** (preview, not advertised)
+  - [x] Decide mapping to LSP `inlineValue`
+  - [x] Add handler(s) and tests
 
-### Immediate Improvements
-- [ ] Add more examples to perl-parser crate
-- [ ] Create simple CLI tool for parsing
-- [ ] Add JSON output format option
-- [ ] Improve error messages
-- [ ] Add --version flag to binaries
+---
 
-## 📈 Success Metrics
+## Next (v1.0.0 Readiness) - TODOs
 
-When complete, the parser should:
-- Parse 1MB files in <100ms
-- Recover from 95%+ of common syntax errors  
-- Support real-time editing (60fps)
-- Handle 100% of CPAN modules
-- Integrate seamlessly with major editors
+- [ ] Stability statement (GA-lock + versioning rules)
+- [ ] Packaging stance (what ships; supported platforms)
+- [ ] Benchmark receipts committed under `benchmarks/results/`
+- [ ] Upgrade notes from v0.8.x -> v1.0
+- [ ] Merge-gate work unblocked by CI pipeline cleanup (#211 -> #210)
 
-## 🎯 Recommended Next Steps
+---
 
-1. **For IDE Integration**: Focus on incremental parsing + error recovery
-2. **For Tooling**: Add comment preservation + visitor pattern
-3. **For Adoption**: Build LSP server + formatter demo
-4. **For Performance**: Implement string interning + static tables
+## Later (Post v1.0)
 
-## 📝 Notes
+- [ ] Native DAP completeness: attach, variables/evaluate, safe eval
+- [ ] Full LSP 3.18 compliance audit vs spec (add missing catalog items to `features.toml`)
+- [ ] Package manager distribution (Homebrew/apt/etc.)
 
-- The parser is already production-ready as-is
-- These improvements are "nice to have" not "must have"
-- Focus on real user needs vs theoretical completeness
-- Maintain backwards compatibility with v0.4.0 API
+---
+
+## Quick Receipts / Checks
+
+```bash
+# Gate + metrics
+nix develop -c just ci-gate
+just status-check
+
+# Missing docs validation
+cargo test -p perl-parser --test missing_docs_ac_tests
+cargo doc --no-deps -p perl-parser
+```
+
+---
+
+## Notes
+
+- If a TODO becomes a claim (\"done\", \"complete\"), move it into `docs/CURRENT_STATUS.md` with receipts.
+- If a capability is missing, update `features.toml` first; then regenerate computed docs via `just status-update`.

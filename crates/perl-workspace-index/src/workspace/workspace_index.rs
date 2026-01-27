@@ -65,7 +65,7 @@ use crate::Parser;
 use crate::ast::{Node, NodeKind};
 use crate::document_store::{Document, DocumentStore};
 use crate::position::{Position, Range};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -86,7 +86,20 @@ pub use perl_uri::{is_file_uri, is_special_scheme, uri_extension, uri_key};
 // Index Lifecycle Types (Index Lifecycle v1 Specification)
 // ============================================================================
 
-#[derive(Clone, Debug, PartialEq)]
+/// Index build phase while the index is in `Building` state
+///
+/// The build phase makes the lifecycle explicit without forcing LSP handlers
+/// to reason about implicit progress signals.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum IndexPhase {
+    /// No scan has started yet
+    Idle,
+    /// Workspace file discovery is in progress
+    Scanning,
+    /// Symbol indexing is in progress
+    Indexing,
+}
+
 /// Index readiness state - explicit lifecycle management
 ///
 /// Represents the current operational state of the workspace index, enabling
@@ -103,13 +116,21 @@ pub use perl_uri::{is_file_uri, is_special_scheme, uri_extension, uri_key};
 /// - `Degraded` → `Building`: Recovery attempt after cooldown
 /// - `Degraded` → `Ready`: Successful re-scan after recovery
 ///
+/// # Invariants
+///
+/// - During a single build attempt, `phase` advances monotonically
+///   (`Idle` → `Scanning` → `Indexing`).
+/// - `indexed_count` must not exceed `total_count`; callers should keep totals updated.
+/// - `Ready` and `Degraded` counts are snapshots captured at transition time.
+///
 /// # Usage
 ///
 /// ```rust
-/// use perl_parser::workspace_index::IndexState;
+/// use perl_parser::workspace_index::{IndexPhase, IndexState};
 /// use std::time::Instant;
 ///
 /// let state = IndexState::Building {
+///     phase: IndexPhase::Indexing,
 ///     indexed_count: 50,
 ///     total_count: 100,
 ///     started_at: Instant::now(),
@@ -118,6 +139,8 @@ pub use perl_uri::{is_file_uri, is_special_scheme, uri_extension, uri_key};
 pub enum IndexState {
     /// Index is being constructed (workspace scan in progress)
     Building {
+        /// Current build phase (Idle → Scanning → Indexing)
+        phase: IndexPhase,
         /// Files indexed so far
         indexed_count: usize,
         /// Total files discovered
@@ -147,7 +170,104 @@ pub enum IndexState {
     },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+impl IndexState {
+    /// Return the coarse state kind for instrumentation and routing decisions
+    pub fn kind(&self) -> IndexStateKind {
+        match self {
+            IndexState::Building { .. } => IndexStateKind::Building,
+            IndexState::Ready { .. } => IndexStateKind::Ready,
+            IndexState::Degraded { .. } => IndexStateKind::Degraded,
+        }
+    }
+
+    /// Return the current build phase when in `Building` state
+    pub fn phase(&self) -> Option<IndexPhase> {
+        match self {
+            IndexState::Building { phase, .. } => Some(*phase),
+            _ => None,
+        }
+    }
+
+    /// Timestamp of when the current state began
+    pub fn state_started_at(&self) -> Instant {
+        match self {
+            IndexState::Building { started_at, .. } => *started_at,
+            IndexState::Ready { completed_at, .. } => *completed_at,
+            IndexState::Degraded { since, .. } => *since,
+        }
+    }
+}
+
+/// Coarse index state kinds for instrumentation and transition tracking
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum IndexStateKind {
+    /// Index is being built
+    Building,
+    /// Index is ready for full queries
+    Ready,
+    /// Index is degraded and serving partial results
+    Degraded,
+}
+
+/// A state transition for index lifecycle instrumentation
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct IndexStateTransition {
+    /// Transition start state
+    pub from: IndexStateKind,
+    /// Transition end state
+    pub to: IndexStateKind,
+}
+
+/// A phase transition while building the workspace index
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct IndexPhaseTransition {
+    /// Transition start phase
+    pub from: IndexPhase,
+    /// Transition end phase
+    pub to: IndexPhase,
+}
+
+/// Early-exit reasons for workspace indexing
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum EarlyExitReason {
+    /// Initial scan exceeded the configured time budget
+    InitialTimeBudget,
+    /// Incremental update exceeded the configured time budget
+    IncrementalTimeBudget,
+    /// Workspace contained too many files to index within limits
+    FileLimit,
+}
+
+/// Record describing the latest early-exit event
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EarlyExitRecord {
+    /// Why the early exit occurred
+    pub reason: EarlyExitReason,
+    /// Elapsed time in milliseconds when the exit occurred
+    pub elapsed_ms: u64,
+    /// Files indexed when the exit occurred
+    pub indexed_files: usize,
+    /// Total files discovered when the exit occurred
+    pub total_files: usize,
+}
+
+/// Snapshot of index lifecycle instrumentation
+#[derive(Clone, Debug)]
+pub struct IndexInstrumentationSnapshot {
+    /// Accumulated time spent per state (milliseconds)
+    pub state_durations_ms: HashMap<IndexStateKind, u64>,
+    /// Accumulated time spent per build phase (milliseconds)
+    pub phase_durations_ms: HashMap<IndexPhase, u64>,
+    /// Counts of state transitions
+    pub state_transition_counts: HashMap<IndexStateTransition, u64>,
+    /// Counts of phase transitions
+    pub phase_transition_counts: HashMap<IndexPhaseTransition, u64>,
+    /// Counts of early exit reasons
+    pub early_exit_counts: HashMap<EarlyExitReason, u64>,
+    /// Most recent early exit record
+    pub last_early_exit: Option<EarlyExitRecord>,
+}
+
 /// Reason for index degradation
 ///
 /// Categorizes the various failure modes that can cause the workspace index
@@ -266,7 +386,24 @@ impl Default for IndexResourceLimits {
     }
 }
 
-#[derive(Debug)]
+/// Performance caps for workspace indexing operations
+///
+/// These caps are soft budgets that enable early-exit heuristics to keep
+/// indexing responsive on constrained machines.
+#[derive(Clone, Debug)]
+pub struct IndexPerformanceCaps {
+    /// Initial workspace scan budget in milliseconds (default: 100ms)
+    pub initial_scan_budget_ms: u64,
+    /// Incremental update budget in milliseconds (default: 10ms)
+    pub incremental_budget_ms: u64,
+}
+
+impl Default for IndexPerformanceCaps {
+    fn default() -> Self {
+        Self { initial_scan_budget_ms: 100, incremental_budget_ms: 10 }
+    }
+}
+
 /// Metrics for index lifecycle management and degradation detection
 ///
 /// Tracks runtime statistics about index operations to detect parse storms
@@ -382,6 +519,123 @@ impl Default for IndexMetrics {
     }
 }
 
+#[derive(Debug)]
+struct IndexInstrumentationState {
+    current_state: IndexStateKind,
+    current_phase: IndexPhase,
+    state_started_at: Instant,
+    phase_started_at: Instant,
+    state_durations_ms: HashMap<IndexStateKind, u64>,
+    phase_durations_ms: HashMap<IndexPhase, u64>,
+    state_transition_counts: HashMap<IndexStateTransition, u64>,
+    phase_transition_counts: HashMap<IndexPhaseTransition, u64>,
+    early_exit_counts: HashMap<EarlyExitReason, u64>,
+    last_early_exit: Option<EarlyExitRecord>,
+}
+
+impl IndexInstrumentationState {
+    fn new() -> Self {
+        let now = Instant::now();
+        Self {
+            current_state: IndexStateKind::Building,
+            current_phase: IndexPhase::Idle,
+            state_started_at: now,
+            phase_started_at: now,
+            state_durations_ms: HashMap::new(),
+            phase_durations_ms: HashMap::new(),
+            state_transition_counts: HashMap::new(),
+            phase_transition_counts: HashMap::new(),
+            early_exit_counts: HashMap::new(),
+            last_early_exit: None,
+        }
+    }
+}
+
+/// Index lifecycle instrumentation for state durations and transitions
+#[derive(Debug)]
+struct IndexInstrumentation {
+    inner: Mutex<IndexInstrumentationState>,
+}
+
+impl IndexInstrumentation {
+    fn new() -> Self {
+        Self { inner: Mutex::new(IndexInstrumentationState::new()) }
+    }
+
+    fn record_state_transition(&self, from: IndexStateKind, to: IndexStateKind) {
+        let now = Instant::now();
+        let mut inner = self.inner.lock();
+
+        // Record time spent in the previous state
+        let elapsed_ms = now.duration_since(inner.state_started_at).as_millis() as u64;
+        *inner.state_durations_ms.entry(from).or_insert(0) += elapsed_ms;
+
+        let transition = IndexStateTransition { from, to };
+        *inner.state_transition_counts.entry(transition).or_insert(0) += 1;
+
+        // If we were building, also close out the active phase timer
+        if from == IndexStateKind::Building {
+            let phase_elapsed = now.duration_since(inner.phase_started_at).as_millis() as u64;
+            *inner.phase_durations_ms.entry(inner.current_phase).or_insert(0) += phase_elapsed;
+        }
+
+        inner.current_state = to;
+        inner.state_started_at = now;
+
+        if to == IndexStateKind::Building && from != IndexStateKind::Building {
+            inner.current_phase = IndexPhase::Idle;
+            inner.phase_started_at = now;
+        } else if to != IndexStateKind::Building {
+            inner.current_phase = IndexPhase::Idle;
+            inner.phase_started_at = now;
+        }
+    }
+
+    fn record_phase_transition(&self, from: IndexPhase, to: IndexPhase) {
+        let now = Instant::now();
+        let mut inner = self.inner.lock();
+        let elapsed_ms = now.duration_since(inner.phase_started_at).as_millis() as u64;
+        *inner.phase_durations_ms.entry(from).or_insert(0) += elapsed_ms;
+
+        let transition = IndexPhaseTransition { from, to };
+        *inner.phase_transition_counts.entry(transition).or_insert(0) += 1;
+
+        inner.current_phase = to;
+        inner.phase_started_at = now;
+    }
+
+    fn record_early_exit(&self, record: EarlyExitRecord) {
+        let mut inner = self.inner.lock();
+        *inner.early_exit_counts.entry(record.reason).or_insert(0) += 1;
+        inner.last_early_exit = Some(record);
+    }
+
+    fn snapshot(&self) -> IndexInstrumentationSnapshot {
+        let now = Instant::now();
+        let inner = self.inner.lock();
+        let mut state_durations_ms = inner.state_durations_ms.clone();
+        let mut phase_durations_ms = inner.phase_durations_ms.clone();
+
+        // Add elapsed time for the current state/phase to the snapshot
+        let state_elapsed = now.duration_since(inner.state_started_at).as_millis() as u64;
+        *state_durations_ms.entry(inner.current_state).or_insert(0) += state_elapsed;
+
+        if inner.current_state == IndexStateKind::Building {
+            let phase_elapsed = now.duration_since(inner.phase_started_at).as_millis() as u64;
+            *phase_durations_ms.entry(inner.current_phase).or_insert(0) += phase_elapsed;
+        }
+
+        IndexInstrumentationSnapshot {
+            state_durations_ms,
+            phase_durations_ms,
+            state_transition_counts: inner.state_transition_counts.clone(),
+            phase_transition_counts: inner.phase_transition_counts.clone(),
+            early_exit_counts: inner.early_exit_counts.clone(),
+            last_early_exit: inner.last_early_exit.clone(),
+        }
+    }
+}
+
 /// Coordinates index lifecycle, state transitions, and handler queries
 ///
 /// The IndexCoordinator wraps `WorkspaceIndex` with explicit state management,
@@ -390,13 +644,15 @@ impl Default for IndexMetrics {
 ///
 /// # Architecture
 ///
-/// ```rust
-/// // LspServer
-/// //   └── IndexCoordinator
-/// //         ├── state: Arc<RwLock<IndexState>>
-/// //         ├── index: Arc<WorkspaceIndex>
-/// //         ├── limits: IndexResourceLimits
-/// //         └── metrics: IndexMetrics
+/// ```text
+/// LspServer
+///   └── IndexCoordinator
+///         ├── state: Arc<RwLock<IndexState>>
+///         ├── index: Arc<WorkspaceIndex>
+///         ├── limits: IndexResourceLimits
+///         ├── caps: IndexPerformanceCaps
+///         ├── metrics: IndexMetrics
+///         └── instrumentation: IndexInstrumentation
 /// ```
 ///
 /// # State Management
@@ -446,8 +702,14 @@ pub struct IndexCoordinator {
     /// - max_symbols_per_file: Used for per-file validation during indexing
     limits: IndexResourceLimits,
 
+    /// Performance caps for early-exit heuristics
+    caps: IndexPerformanceCaps,
+
     /// Runtime metrics for degradation detection
     metrics: IndexMetrics,
+
+    /// Instrumentation for lifecycle transitions and durations
+    instrumentation: IndexInstrumentation,
 }
 
 impl std::fmt::Debug for IndexCoordinator {
@@ -455,6 +717,7 @@ impl std::fmt::Debug for IndexCoordinator {
         f.debug_struct("IndexCoordinator")
             .field("state", &*self.state.read())
             .field("limits", &self.limits)
+            .field("caps", &self.caps)
             .finish_non_exhaustive()
     }
 }
@@ -479,13 +742,16 @@ impl IndexCoordinator {
     pub fn new() -> Self {
         Self {
             state: Arc::new(RwLock::new(IndexState::Building {
+                phase: IndexPhase::Idle,
                 indexed_count: 0,
                 total_count: 0,
                 started_at: Instant::now(),
             })),
             index: Arc::new(WorkspaceIndex::new()),
             limits: IndexResourceLimits::default(),
+            caps: IndexPerformanceCaps::default(),
             metrics: IndexMetrics::new(),
+            instrumentation: IndexInstrumentation::new(),
         }
     }
 
@@ -510,13 +776,38 @@ impl IndexCoordinator {
     pub fn with_limits(limits: IndexResourceLimits) -> Self {
         Self {
             state: Arc::new(RwLock::new(IndexState::Building {
+                phase: IndexPhase::Idle,
                 indexed_count: 0,
                 total_count: 0,
                 started_at: Instant::now(),
             })),
             index: Arc::new(WorkspaceIndex::new()),
             limits,
+            caps: IndexPerformanceCaps::default(),
             metrics: IndexMetrics::new(),
+            instrumentation: IndexInstrumentation::new(),
+        }
+    }
+
+    /// Create a coordinator with custom limits and performance caps
+    ///
+    /// # Arguments
+    ///
+    /// * `limits` - Resource limits for this workspace
+    /// * `caps` - Performance caps for indexing budgets
+    pub fn with_limits_and_caps(limits: IndexResourceLimits, caps: IndexPerformanceCaps) -> Self {
+        Self {
+            state: Arc::new(RwLock::new(IndexState::Building {
+                phase: IndexPhase::Idle,
+                indexed_count: 0,
+                total_count: 0,
+                started_at: Instant::now(),
+            })),
+            index: Arc::new(WorkspaceIndex::new()),
+            limits,
+            caps,
+            metrics: IndexMetrics::new(),
+            instrumentation: IndexInstrumentation::new(),
         }
     }
 
@@ -569,7 +860,22 @@ impl IndexCoordinator {
         &self.index
     }
 
-    /// Notify of a file change for the Index/Analyze workflow stages.
+    /// Access the configured resource limits
+    pub fn limits(&self) -> &IndexResourceLimits {
+        &self.limits
+    }
+
+    /// Access the configured performance caps
+    pub fn performance_caps(&self) -> &IndexPerformanceCaps {
+        &self.caps
+    }
+
+    /// Snapshot lifecycle instrumentation (durations, transitions, early exits)
+    pub fn instrumentation_snapshot(&self) -> IndexInstrumentationSnapshot {
+        self.instrumentation.snapshot()
+    }
+
+    /// Notify of file change (may trigger state transition)
     ///
     /// Increments the pending parse count and may transition to degraded
     /// state if a parse storm is detected.
@@ -632,7 +938,11 @@ impl IndexCoordinator {
             {
                 // Attempt recovery - transition back to Building for re-scan
                 let mut state = self.state.write();
+                let from_kind = state.kind();
+                self.instrumentation
+                    .record_state_transition(from_kind, IndexStateKind::Building);
                 *state = IndexState::Building {
+                    phase: IndexPhase::Idle,
                     indexed_count: 0,
                     total_count: 0,
                     started_at: Instant::now(),
@@ -675,6 +985,7 @@ impl IndexCoordinator {
     /// ```
     pub fn transition_to_ready(&self, file_count: usize, symbol_count: usize) {
         let mut state = self.state.write();
+        let from_kind = state.kind();
 
         // State transition guard: validate current state allows transition to Ready
         match &*state {
@@ -689,57 +1000,127 @@ impl IndexCoordinator {
                     IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
             }
         }
+        self.instrumentation.record_state_transition(from_kind, IndexStateKind::Ready);
         drop(state); // Release write lock before checking limits
 
         // Enforce resource limits after transition
         self.enforce_limits();
     }
 
-    /// Transition to Building state
+    /// Transition to Scanning phase (Idle → Scanning)
     ///
-    /// Marks the index as building/scanning. Used when starting initial scan
-    /// or when recovering from degraded state. Tracks progress via indexed_count
-    /// and total_count for LSP progress reporting.
-    ///
-    /// # State Transition Guards
-    ///
-    /// Valid transitions:
-    /// - `Degraded` → `Building` (recovery attempt)
-    /// - `Ready` → `Building` (workspace folder change, re-scan)
-    /// - `Building` → `Building` (progress update)
-    ///
-    /// # Arguments
-    ///
-    /// * `total_count` - Total number of files discovered in workspace
-    ///
-    /// # Returns
-    ///
-    /// Nothing. The coordinator state is updated in-place.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use perl_parser::workspace_index::IndexCoordinator;
-    ///
-    /// let coordinator = IndexCoordinator::new();
-    /// coordinator.transition_to_building(100); // Start scan with 100 files
-    /// ```
-    pub fn transition_to_building(&self, total_count: usize) {
+    /// Resets build counters and marks the index as scanning workspace folders.
+    pub fn transition_to_scanning(&self) {
         let mut state = self.state.write();
+        let from_kind = state.kind();
 
-        // State transition guard: validate transition is allowed
         match &*state {
-            IndexState::Degraded { .. } | IndexState::Ready { .. } => {
-                // Valid transition - start fresh scan
+            IndexState::Building { phase, indexed_count, total_count, started_at } => {
+                if *phase != IndexPhase::Scanning {
+                    self.instrumentation.record_phase_transition(*phase, IndexPhase::Scanning);
+                }
                 *state = IndexState::Building {
+                    phase: IndexPhase::Scanning,
+                    indexed_count: *indexed_count,
+                    total_count: *total_count,
+                    started_at: *started_at,
+                };
+            }
+            IndexState::Ready { .. } | IndexState::Degraded { .. } => {
+                self.instrumentation
+                    .record_state_transition(from_kind, IndexStateKind::Building);
+                self.instrumentation
+                    .record_phase_transition(IndexPhase::Idle, IndexPhase::Scanning);
+                *state = IndexState::Building {
+                    phase: IndexPhase::Scanning,
+                    indexed_count: 0,
+                    total_count: 0,
+                    started_at: Instant::now(),
+                };
+            }
+        }
+    }
+
+    /// Update scanning progress with the latest discovered file count
+    pub fn update_scan_progress(&self, total_count: usize) {
+        let mut state = self.state.write();
+        if let IndexState::Building { phase, indexed_count, started_at, .. } = &*state {
+            if *phase != IndexPhase::Scanning {
+                self.instrumentation.record_phase_transition(*phase, IndexPhase::Scanning);
+            }
+            *state = IndexState::Building {
+                phase: IndexPhase::Scanning,
+                indexed_count: *indexed_count,
+                total_count,
+                started_at: *started_at,
+            };
+        }
+    }
+
+    /// Transition to Indexing phase (Scanning → Indexing)
+    ///
+    /// Uses the discovered file count as the total index target.
+    pub fn transition_to_indexing(&self, total_count: usize) {
+        let mut state = self.state.write();
+        let from_kind = state.kind();
+
+        match &*state {
+            IndexState::Building { phase, indexed_count, started_at, .. } => {
+                if *phase != IndexPhase::Indexing {
+                    self.instrumentation.record_phase_transition(*phase, IndexPhase::Indexing);
+                }
+                *state = IndexState::Building {
+                    phase: IndexPhase::Indexing,
+                    indexed_count: *indexed_count,
+                    total_count,
+                    started_at: *started_at,
+                };
+            }
+            IndexState::Ready { .. } | IndexState::Degraded { .. } => {
+                self.instrumentation
+                    .record_state_transition(from_kind, IndexStateKind::Building);
+                self.instrumentation
+                    .record_phase_transition(IndexPhase::Idle, IndexPhase::Indexing);
+                *state = IndexState::Building {
+                    phase: IndexPhase::Indexing,
                     indexed_count: 0,
                     total_count,
                     started_at: Instant::now(),
                 };
             }
-            IndexState::Building { indexed_count, started_at, .. } => {
-                // Already building - update total count but preserve progress
+        }
+    }
+
+    /// Transition to Building state (Indexing phase)
+    ///
+    /// Marks the index as indexing with a known total file count.
+    pub fn transition_to_building(&self, total_count: usize) {
+        let mut state = self.state.write();
+        let from_kind = state.kind();
+
+        // State transition guard: validate transition is allowed
+        match &*state {
+            IndexState::Degraded { .. } | IndexState::Ready { .. } => {
+                self.instrumentation
+                    .record_state_transition(from_kind, IndexStateKind::Building);
+                self.instrumentation
+                    .record_phase_transition(IndexPhase::Idle, IndexPhase::Indexing);
                 *state = IndexState::Building {
+                    phase: IndexPhase::Indexing,
+                    indexed_count: 0,
+                    total_count,
+                    started_at: Instant::now(),
+                };
+            }
+            IndexState::Building { phase, indexed_count, started_at, .. } => {
+                let mut next_phase = *phase;
+                if *phase == IndexPhase::Idle {
+                    self.instrumentation
+                        .record_phase_transition(IndexPhase::Idle, IndexPhase::Indexing);
+                    next_phase = IndexPhase::Indexing;
+                }
+                *state = IndexState::Building {
+                    phase: next_phase,
                     indexed_count: *indexed_count,
                     total_count,
                     started_at: *started_at,
@@ -772,27 +1153,20 @@ impl IndexCoordinator {
     pub fn update_building_progress(&self, indexed_count: usize) {
         let mut state = self.state.write();
 
-        if let IndexState::Building { started_at, total_count, .. } = &*state {
+        if let IndexState::Building { phase, started_at, total_count, .. } = &*state {
             let elapsed = started_at.elapsed().as_millis() as u64;
 
             // Check for scan timeout
             if elapsed > self.limits.max_scan_duration_ms {
                 // Timeout exceeded - transition to degraded
-                let available_symbols = {
-                    let files = self.index.files.read();
-                    files.values().map(|fi| fi.symbols.len()).sum()
-                };
-
-                *state = IndexState::Degraded {
-                    reason: DegradationReason::ScanTimeout { elapsed_ms: elapsed },
-                    available_symbols,
-                    since: Instant::now(),
-                };
+                drop(state);
+                self.transition_to_degraded(DegradationReason::ScanTimeout { elapsed_ms: elapsed });
                 return;
             }
 
             // Update progress
             *state = IndexState::Building {
+                phase: *phase,
                 indexed_count,
                 total_count: *total_count,
                 started_at: *started_at,
@@ -826,6 +1200,7 @@ impl IndexCoordinator {
     /// ```
     pub fn transition_to_degraded(&self, reason: DegradationReason) {
         let mut state = self.state.write();
+        let from_kind = state.kind();
 
         // Get available symbols count from current state
         let available_symbols = match &*state {
@@ -834,6 +1209,8 @@ impl IndexCoordinator {
             IndexState::Building { .. } => 0,
         };
 
+        self.instrumentation
+            .record_state_transition(from_kind, IndexStateKind::Degraded);
         *state = IndexState::Degraded { reason, available_symbols, since: Instant::now() };
     }
 
@@ -914,6 +1291,22 @@ impl IndexCoordinator {
         if let Some(reason) = self.check_limits() {
             self.transition_to_degraded(reason);
         }
+    }
+
+    /// Record an early-exit event for indexing instrumentation
+    pub fn record_early_exit(
+        &self,
+        reason: EarlyExitReason,
+        elapsed_ms: u64,
+        indexed_files: usize,
+        total_files: usize,
+    ) {
+        self.instrumentation.record_early_exit(EarlyExitRecord {
+            reason,
+            elapsed_ms,
+            indexed_files,
+            total_files,
+        });
     }
 
     /// Query with automatic degradation handling
@@ -1551,6 +1944,18 @@ impl WorkspaceIndex {
         }
 
         symbols
+    }
+
+    /// Return the number of indexed files in the workspace
+    pub fn file_count(&self) -> usize {
+        let files = self.files.read();
+        files.len()
+    }
+
+    /// Return the total number of symbols across all indexed files
+    pub fn symbol_count(&self) -> usize {
+        let files = self.files.read();
+        files.values().map(|file_index| file_index.symbols.len()).sum()
     }
 
     /// Check if the workspace index has symbols (soft readiness check)
@@ -2723,7 +3128,39 @@ use Data::Dumper;
     #[test]
     fn test_coordinator_initial_state() {
         let coordinator = IndexCoordinator::new();
-        assert!(matches!(coordinator.state(), IndexState::Building { .. }));
+        assert!(matches!(
+            coordinator.state(),
+            IndexState::Building { phase: IndexPhase::Idle, .. }
+        ));
+    }
+
+    #[test]
+    fn test_transition_to_scanning_phase() {
+        let coordinator = IndexCoordinator::new();
+        coordinator.transition_to_scanning();
+
+        match coordinator.state() {
+            IndexState::Building { phase, .. } => {
+                assert_eq!(phase, IndexPhase::Scanning);
+            }
+            other => panic!("Expected Building state after scanning, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_transition_to_indexing_phase() {
+        let coordinator = IndexCoordinator::new();
+        coordinator.transition_to_scanning();
+        coordinator.update_scan_progress(3);
+        coordinator.transition_to_indexing(3);
+
+        match coordinator.state() {
+            IndexState::Building { phase, total_count, .. } => {
+                assert_eq!(phase, IndexPhase::Indexing);
+                assert_eq!(total_count, 3);
+            }
+            other => panic!("Expected Building state after indexing, got: {:?}", other),
+        }
     }
 
     #[test]
@@ -2808,6 +3245,35 @@ use Data::Dumper;
 
         coordinator.notify_parse_complete("file1.pm");
         assert_eq!(coordinator.metrics.pending_count(), 1);
+    }
+
+    #[test]
+    fn test_instrumentation_records_transitions() {
+        let coordinator = IndexCoordinator::new();
+        coordinator.transition_to_ready(10, 100);
+
+        let snapshot = coordinator.instrumentation_snapshot();
+        let transition = IndexStateTransition {
+            from: IndexStateKind::Building,
+            to: IndexStateKind::Ready,
+        };
+        let count = snapshot.state_transition_counts.get(&transition).copied().unwrap_or(0);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_instrumentation_records_early_exit() {
+        let coordinator = IndexCoordinator::new();
+        coordinator.record_early_exit(EarlyExitReason::InitialTimeBudget, 25, 1, 10);
+
+        let snapshot = coordinator.instrumentation_snapshot();
+        let count = snapshot
+            .early_exit_counts
+            .get(&EarlyExitReason::InitialTimeBudget)
+            .copied()
+            .unwrap_or(0);
+        assert_eq!(count, 1);
+        assert!(snapshot.last_early_exit.is_some());
     }
 
     #[test]

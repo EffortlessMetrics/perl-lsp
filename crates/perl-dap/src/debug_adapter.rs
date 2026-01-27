@@ -3,6 +3,8 @@
 //! This module provides a DAP server that integrates with Perl's built-in debugger
 //! to enable debugging support in VSCode and other DAP-compatible editors.
 
+use crate::inline_values::collect_inline_values;
+use crate::protocol::{InlineValuesArguments, InlineValuesResponseBody};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -502,6 +504,7 @@ impl DebugAdapter {
             "stepOut" => self.handle_step_out(seq, request_seq, arguments),
             "pause" => self.handle_pause(seq, request_seq, arguments),
             "evaluate" => self.handle_evaluate(seq, request_seq, arguments),
+            "inlineValues" => self.handle_inline_values(seq, request_seq, arguments),
             _ => DapMessage::Response {
                 seq,
                 request_seq,
@@ -2168,6 +2171,99 @@ impl DebugAdapter {
                 body: None,
                 message: Some("Missing arguments".to_string()),
             }
+        }
+    }
+
+    /// Handle inlineValues request (custom)
+    fn handle_inline_values(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let Some(args) = arguments else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "inlineValues".to_string(),
+                body: None,
+                message: Some("Missing arguments".to_string()),
+            };
+        };
+
+        let args: InlineValuesArguments = match serde_json::from_value(args) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "inlineValues".to_string(),
+                    body: None,
+                    message: Some(format!("Invalid arguments: {}", e)),
+                };
+            }
+        };
+
+        let Some(source_path) = args.source.path else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "inlineValues".to_string(),
+                body: None,
+                message: Some("inlineValues requires source.path".to_string()),
+            };
+        };
+
+        if args.start_line <= 0 || args.end_line <= 0 {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "inlineValues".to_string(),
+                body: None,
+                message: Some("inlineValues requires positive startLine/endLine".to_string()),
+            };
+        }
+
+        let start_line = args.start_line.min(args.end_line);
+        let end_line = args.end_line.max(args.start_line);
+        let content = match std::fs::read_to_string(&source_path) {
+            Ok(content) => content,
+            Err(e) => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "inlineValues".to_string(),
+                    body: None,
+                    message: Some(format!("Failed to read source file: {}", e)),
+                };
+            }
+        };
+
+        let inline_values = collect_inline_values(&content, start_line, end_line);
+        let body = InlineValuesResponseBody { inline_values };
+
+        match serde_json::to_value(&body) {
+            Ok(body) => DapMessage::Response {
+                seq,
+                request_seq,
+                success: true,
+                command: "inlineValues".to_string(),
+                body: Some(body),
+                message: None,
+            },
+            Err(e) => DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "inlineValues".to_string(),
+                body: None,
+                message: Some(format!("Failed to serialize inlineValues response: {}", e)),
+            },
         }
     }
 }

@@ -63,6 +63,10 @@ pub struct AdvertisedFeatures {
     pub diagnostic_provider: bool,
     /// Document color detection for hex codes and ANSI colors
     pub document_color: bool,
+    /// Notebook document sync (didOpen/didChange/didSave/didClose)
+    pub notebook_document_sync: bool,
+    /// Notebook cell execution summary tracking
+    pub notebook_cell_execution: bool,
 }
 
 /// Build-time feature flags for conditional LSP capability compilation
@@ -120,6 +124,10 @@ pub struct BuildFlags {
     pub inline_completion: bool,
     /// Inline values for debugging provider compilation flag
     pub inline_values: bool,
+    /// Notebook document sync provider compilation flag
+    pub notebook_document_sync: bool,
+    /// Notebook cell execution summary tracking compilation flag
+    pub notebook_cell_execution: bool,
     /// Stable symbol identifiers provider compilation flag
     pub moniker: bool,
     /// Document color provider compilation flag for color swatches in strings and comments
@@ -158,6 +166,8 @@ impl BuildFlags {
             type_hierarchy: self.type_hierarchy,
             diagnostic_provider: self.pull_diagnostics,
             document_color: self.document_color,
+            notebook_document_sync: self.notebook_document_sync,
+            notebook_cell_execution: self.notebook_cell_execution,
         }
     }
 
@@ -188,6 +198,8 @@ impl BuildFlags {
             linked_editing: true,    // Implemented for paired delimiters
             inline_completion: true, // Deterministic inline completions
             inline_values: true,     // Debug inline values
+            notebook_document_sync: false, // Notebook support not advertised by default
+            notebook_cell_execution: false, // Notebook execution tracking not advertised
             moniker: true,           // Stable symbol identifiers
             document_color: true,    // LSP 3.18 color detection for hex/ANSI codes
             source_organize_imports: true, // Fully implemented and tested
@@ -224,6 +236,8 @@ impl BuildFlags {
             linked_editing: true,
             inline_completion: true,
             inline_values: true,
+            notebook_document_sync: true,
+            notebook_cell_execution: true,
             moniker: true,
             document_color: true,
             source_organize_imports: true,
@@ -260,6 +274,8 @@ impl BuildFlags {
             linked_editing: false, // Not GA yet
             inline_completion: false, // New feature, not GA yet
             inline_values: false, // New feature, not GA yet
+            notebook_document_sync: false, // Not GA yet
+            notebook_cell_execution: false, // Not GA yet
             moniker: false, // New feature, not GA yet
             document_color: false, // New feature, not GA yet
             source_organize_imports: false, // Excluded from GA-lock contract

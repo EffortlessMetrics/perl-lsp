@@ -94,7 +94,7 @@ Key terms:
 ## What's Next
 
 **Now (v0.9.1 close-out)**
-- Index state machine for workspace indexing (state transitions, early-exit optimization, performance caps)
+- Verify workspace index state machine (transitions, early-exit caps, instrumentation receipts)
 - Documentation cleanup: reduce `missing_docs` violations and complete module-level docs
 
 **Next (v1.0.0 readiness)**
@@ -118,7 +118,7 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 - **Tracked test debt**: see `scripts/ignored-test-count.sh`; feature-gated ignores are by design
 - **CI Pipeline (#211)**: Blocks merge-blocking gates (#210)
 - **Docs scope**: perl-parser missing_docs is ratcheted (see `ci/check_missing_docs.sh`); workspace-wide enforcement is a separate decision
-- **Index State Machine**: Workspace indexing optimization deferred to v0.9.1
+- **Index State Machine**: Verification pending (run `just ci-gate` + targeted tests/benchmarks)
 
 ---
 

@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-01-23)**: v0.9.1 nearing completion — v1.0 preparation underway, security hardening, performance optimizations complete.
+> **Status (2026-01-27)**: v0.9.1 verification and doc alignment in progress; v1.0 preparation underway.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -47,7 +47,7 @@ If a number is not backed by a receipt, it must be labeled **UNVERIFIED** or rem
 ## Now / Next / Later (Summary)
 
 **Now (v0.9.1 close-out)**
-- Index state machine for workspace indexing (state transitions, early-exit, performance caps)
+- Verify workspace index state machine (transitions, early-exit caps, instrumentation receipts)
 - Documentation cleanup: reduce `missing_docs` violations and complete module-level docs
 
 **Next (v1.0.0)**
@@ -189,10 +189,10 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 
 **Remaining Deliverables**:
 
-1. **Index State Machine** (deferred from v0.9.0)
-   - Proper state transitions for workspace indexing
-   - Early-exit optimization for large workspaces
-   - Performance caps: <100ms initial index, <10ms incremental
+1. **Index State Machine Verification** (deferred from v0.9.0)
+   - Validate transitions and early-exit caps with receipts
+   - Confirm instrumentation output for state/phase durations
+   - Verify performance caps: <100ms initial index, <10ms incremental
 
 2. **Documentation Cleanup**
    - Address remaining violations flagged by `missing_docs`

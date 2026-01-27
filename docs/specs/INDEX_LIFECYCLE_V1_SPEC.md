@@ -20,6 +20,8 @@ Cross-file features stay correct while files churn, and never block.
 pub enum IndexState {
     /// Index is being constructed (workspace scan in progress)
     Building {
+        /// Current build phase (Idle → Scanning → Indexing)
+        phase: IndexPhase,
         /// Files indexed so far
         indexed_count: usize,
         /// Total files discovered
@@ -47,6 +49,16 @@ pub enum IndexState {
         /// When degradation occurred
         since: Instant,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum IndexPhase {
+    /// No scan has started yet
+    Idle,
+    /// Workspace file discovery is in progress
+    Scanning,
+    /// Symbol indexing is in progress
+    Indexing,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -91,6 +103,16 @@ pub enum ResourceKind {
           └─────────────────────────────────────┘
 ```
 
+### Build Phases (Building State)
+
+When the index is in `Building`, it progresses through explicit phases:
+
+```
+Idle → Scanning → Indexing → Ready
+```
+
+`Degraded` is the error state for early exits, timeouts, IO failures, and resource limits.
+
 ### Transition Triggers
 
 | From | To | Trigger |
@@ -101,6 +123,24 @@ pub enum ResourceKind {
 | `Ready` | `Degraded` | Parse storm (>10 pending), IO error |
 | `Degraded` | `Building` | Recovery attempt (manual or after cooldown) |
 | `Degraded` | `Ready` | Successful re-scan after recovery |
+
+---
+
+## Invariants
+
+- A single build attempt advances phases monotonically (`Idle` → `Scanning` → `Indexing`).
+- `indexed_count` must never exceed `total_count`; callers are responsible for keeping totals current.
+- `Ready` and `Degraded` counts are snapshots captured at transition time and should not be mutated by read-only queries.
+- State transitions are serialized by the coordinator lock; treat state reads as point-in-time snapshots.
+
+## Failure Modes and Recovery
+
+- **Parse storm**: Enter `Degraded(ParseStorm)` while updates churn; recover once pending parses drain and a re-scan succeeds.
+- **IO error**: Enter `Degraded(IoError)`; serve cached results and recover on the next successful scan.
+- **Scan timeout / budget exhaustion**: Enter `Degraded(ScanTimeout)`; partial results may be served with a warning.
+- **Resource limits exceeded**: Enter `Degraded(ResourceLimit)`; eviction can reduce pressure and allow recovery.
+
+Early-exit events should always be recorded in instrumentation with the reason and elapsed time.
 
 ---
 
@@ -138,6 +178,33 @@ impl Default for IndexResourceLimits {
     }
 }
 ```
+
+### Performance Caps (Soft Budgets)
+
+```rust
+pub struct IndexPerformanceCaps {
+    /// Initial workspace scan budget in milliseconds (default: 100ms)
+    pub initial_scan_budget_ms: u64,
+    /// Incremental update budget in milliseconds (default: 10ms)
+    pub incremental_budget_ms: u64,
+}
+```
+
+Early-exit heuristics use these budgets to stop long scans and transition to
+`Degraded` with a `ScanTimeout` reason.
+
+---
+
+## Instrumentation
+
+The coordinator tracks:
+
+- **State durations** (Building/Ready/Degraded)
+- **Phase durations** (Idle/Scanning/Indexing)
+- **Transition counts** (state and phase)
+- **Early-exit reasons** (time budget, file limit)
+
+These metrics are exposed via an instrumentation snapshot for tests and logging.
 
 ### Eviction Strategy
 

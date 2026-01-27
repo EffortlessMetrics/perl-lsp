@@ -149,6 +149,48 @@ fn test_dap_breakpoints_no_session() {
 }
 
 #[test]
+fn test_dap_inline_values() -> TestResult {
+    let dir = tempdir()?;
+    let script_path = dir.path().join("inline_values.pl");
+    write(
+        &script_path,
+        "my $x = 1;\nmy $y = $x + 2;\nmy $z = $y + 3;\n",
+    )?;
+
+    let mut adapter = DebugAdapter::new();
+    let response = adapter.handle_request(
+        1,
+        "inlineValues",
+        Some(json!({
+            "source": { "path": script_path.to_str().ok_or("path")? },
+            "startLine": 1,
+            "endLine": 3
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, body, .. } => {
+            assert!(success);
+            assert_eq!(command, "inlineValues");
+            let body = body.ok_or("missing body")?;
+            let values = body
+                .get("inlineValues")
+                .and_then(|v| v.as_array())
+                .ok_or("missing inlineValues")?;
+            assert!(values.iter().any(|v| {
+                v.get("text").and_then(|t| t.as_str()).unwrap_or("").contains("$x")
+            }));
+            assert!(values.iter().any(|v| {
+                v.get("text").and_then(|t| t.as_str()).unwrap_or("").contains("$y")
+            }));
+        }
+        _ => panic!("Expected inlineValues response"),
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_dap_breakpoints_missing_source() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
 

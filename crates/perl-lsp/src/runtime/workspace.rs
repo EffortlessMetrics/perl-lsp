@@ -12,6 +12,60 @@ use super::*;
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::workspace_symbol_cap;
+#[cfg(feature = "workspace")]
+use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind};
+#[cfg(feature = "workspace")]
+use parking_lot::Mutex;
+#[cfg(feature = "workspace")]
+use std::io::Write;
+#[cfg(feature = "workspace")]
+use std::path::Path;
+#[cfg(feature = "workspace")]
+use std::sync::Arc;
+#[cfg(feature = "workspace")]
+use std::time::Instant;
+#[cfg(feature = "workspace")]
+use url::Url;
+#[cfg(feature = "workspace")]
+use walkdir::WalkDir;
+
+#[cfg(feature = "workspace")]
+fn is_perl_source_file(path: &Path) -> bool {
+    let Some(ext) = path.extension().and_then(|s| s.to_str()) else {
+        return false;
+    };
+    matches!(ext.to_ascii_lowercase().as_str(), "pl" | "pm" | "t" | "psgi")
+}
+
+#[cfg(feature = "workspace")]
+fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
+    if !entry.file_type().is_dir() {
+        return false;
+    }
+    let name = entry.file_name().to_string_lossy();
+    matches!(
+        name.as_ref(),
+        ".git" | ".hg" | ".svn" | "target" | "node_modules" | ".cache"
+    )
+}
+
+#[cfg(feature = "workspace")]
+fn send_index_ready_notification(output: &Arc<Mutex<Box<dyn Write + Send>>>, ready: bool) {
+    let notification = json!({
+        "jsonrpc": "2.0",
+        "method": "perl-lsp/index-ready",
+        "params": { "ready": ready }
+    });
+
+    if let Ok(notification_str) = serde_json::to_string(&notification) {
+        let mut out = output.lock();
+        if write!(out, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)
+            .is_ok()
+        {
+            let _ = out.flush();
+        }
+    }
+}
 
 impl LspServer {
     /// Handle workspace/symbol request (v2 implementation with lifecycle-aware dispatch)
@@ -411,6 +465,15 @@ impl LspServer {
             return Ok(None);
         };
 
+        let total_changes = params.changes.len();
+        #[cfg(feature = "workspace")]
+        let mut processed_changes = 0usize;
+        #[cfg(feature = "workspace")]
+        let (incremental_budget_ms, budget_start) = match self.coordinator() {
+            Some(coord) => (coord.performance_caps().incremental_budget_ms, Instant::now()),
+            None => (0, Instant::now()),
+        };
+
         for change in params.changes {
             let uri = change.uri.to_string();
             let change_type = change.typ;
@@ -506,6 +569,28 @@ impl LspServer {
             #[cfg(feature = "workspace")]
             if let Some(coordinator) = self.coordinator() {
                 coordinator.notify_parse_complete(&uri);
+            }
+
+            #[cfg(feature = "workspace")]
+            {
+                processed_changes += 1;
+                if incremental_budget_ms > 0 {
+                    let elapsed_ms = budget_start.elapsed().as_millis() as u64;
+                    if elapsed_ms > incremental_budget_ms {
+                        if let Some(coordinator) = self.coordinator() {
+                            coordinator.record_early_exit(
+                                EarlyExitReason::IncrementalTimeBudget,
+                                elapsed_ms,
+                                processed_changes,
+                                total_changes,
+                            );
+                            coordinator.transition_to_degraded(DegradationReason::ScanTimeout {
+                                elapsed_ms,
+                            });
+                        }
+                        break;
+                    }
+                }
             }
         }
 
@@ -841,10 +926,133 @@ impl LspServer {
 
                 // Trigger client refresh after workspace folder changes
                 let _ = self.refresh_controller.refresh_all(self);
+
+                // Rebuild workspace index after folder changes
+                #[cfg(feature = "workspace")]
+                self.start_workspace_indexing();
             }
         }
 
         Ok(())
+    }
+
+    /// Start a background workspace indexing scan
+    #[cfg(feature = "workspace")]
+    pub(super) fn start_workspace_indexing(&self) {
+        let Some(coordinator) = self.coordinator().map(Arc::clone) else {
+            return;
+        };
+        let workspace_folders = self.workspace_folders.lock().clone();
+        if workspace_folders.is_empty() {
+            return;
+        }
+
+        let output = self.output.clone();
+        let limits = coordinator.limits().clone();
+        let caps = coordinator.performance_caps().clone();
+
+        std::thread::spawn(move || {
+            let budget_start = Instant::now();
+            coordinator.transition_to_scanning();
+
+            let mut files: Vec<std::path::PathBuf> = Vec::new();
+            let mut early_exit: Option<(EarlyExitReason, u64, usize, usize)> = None;
+
+            'scan: for folder_uri in workspace_folders {
+                let Some(root) = uri_to_fs_path(&folder_uri) else {
+                    continue;
+                };
+
+                for entry in WalkDir::new(root)
+                    .follow_links(false)
+                    .into_iter()
+                    .filter_entry(|e| !should_skip_dir(e))
+                {
+                    let entry = match entry {
+                        Ok(entry) => entry,
+                        Err(_) => continue,
+                    };
+
+                    if entry.file_type().is_file() && is_perl_source_file(entry.path()) {
+                        files.push(entry.path().to_path_buf());
+                        let total_files = files.len();
+
+                        if total_files % 64 == 0 {
+                            coordinator.update_scan_progress(total_files);
+                        }
+
+                        let elapsed_ms = budget_start.elapsed().as_millis() as u64;
+                        if total_files >= limits.max_files {
+                            early_exit =
+                                Some((EarlyExitReason::FileLimit, elapsed_ms, 0, total_files));
+                            break 'scan;
+                        }
+
+                        if elapsed_ms > caps.initial_scan_budget_ms {
+                            early_exit = Some((
+                                EarlyExitReason::InitialTimeBudget,
+                                elapsed_ms,
+                                0,
+                                total_files,
+                            ));
+                            break 'scan;
+                        }
+                    }
+                }
+            }
+
+            coordinator.update_scan_progress(files.len());
+            coordinator.transition_to_indexing(files.len());
+
+            let mut indexed_files = 0usize;
+            let total_files = files.len();
+
+            for path in files {
+                let elapsed_ms = budget_start.elapsed().as_millis() as u64;
+                if elapsed_ms > caps.initial_scan_budget_ms {
+                    early_exit = Some((
+                        EarlyExitReason::InitialTimeBudget,
+                        elapsed_ms,
+                        indexed_files,
+                        total_files,
+                    ));
+                    break;
+                }
+
+                let Ok(content) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                let Ok(url) = Url::from_file_path(&path) else {
+                    continue;
+                };
+                if coordinator.index().index_file(url, content).is_ok() {
+                    indexed_files += 1;
+                    coordinator.update_building_progress(indexed_files);
+                }
+            }
+
+            if let Some((reason, elapsed_ms, indexed_files, total_files)) = early_exit {
+                coordinator.record_early_exit(reason, elapsed_ms, indexed_files, total_files);
+                match reason {
+                    EarlyExitReason::FileLimit => {
+                        coordinator.transition_to_degraded(DegradationReason::ResourceLimit {
+                            kind: ResourceKind::MaxFiles,
+                        });
+                    }
+                    EarlyExitReason::InitialTimeBudget | EarlyExitReason::IncrementalTimeBudget => {
+                        coordinator.transition_to_degraded(DegradationReason::ScanTimeout {
+                            elapsed_ms,
+                        });
+                    }
+                }
+                send_index_ready_notification(&output, false);
+            } else {
+                let file_count = coordinator.index().file_count();
+                let symbol_count = coordinator.index().symbol_count();
+                coordinator.transition_to_ready(file_count, symbol_count);
+                send_index_ready_notification(&output, true);
+            }
+        });
     }
 
     /// Handle workspace/applyEdit request

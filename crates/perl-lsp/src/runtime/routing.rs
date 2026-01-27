@@ -46,7 +46,7 @@
 #![allow(unreachable_pub)]
 
 #[cfg(feature = "workspace")]
-use perl_parser::workspace_index::{DegradationReason, IndexCoordinator, IndexState};
+use perl_parser::workspace_index::{DegradationReason, IndexCoordinator, IndexPhase, IndexState};
 #[cfg(feature = "workspace")]
 use std::sync::Arc;
 
@@ -154,14 +154,22 @@ pub fn route_index_access(coordinator: Option<&Arc<IndexCoordinator>>) -> IndexA
         Some(coord) => {
             match coord.state() {
                 IndexState::Ready { .. } => IndexAccessMode::Full(coord),
-                IndexState::Building { indexed_count, total_count, .. } => {
+                IndexState::Building { phase, indexed_count, total_count, .. } => {
                     // Provide specific reason for building state
-                    if total_count == 0 {
-                        IndexAccessMode::Partial("index building (scanning workspace)")
-                    } else if indexed_count < total_count {
-                        IndexAccessMode::Partial("index building (indexing files)")
-                    } else {
-                        IndexAccessMode::Partial("index building")
+                    match phase {
+                        IndexPhase::Idle => IndexAccessMode::Partial("index building (idle)"),
+                        IndexPhase::Scanning => {
+                            IndexAccessMode::Partial("index building (scanning workspace)")
+                        }
+                        IndexPhase::Indexing => {
+                            if total_count == 0 {
+                                IndexAccessMode::Partial("index building (indexing files)")
+                            } else if indexed_count < total_count {
+                                IndexAccessMode::Partial("index building (indexing files)")
+                            } else {
+                                IndexAccessMode::Partial("index building")
+                            }
+                        }
                     }
                 }
                 IndexState::Degraded { reason, .. } => {

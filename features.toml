@@ -366,7 +366,7 @@ area = "notebook"
 maturity = "preview"
 advertised = false
 counts_in_coverage = false
-tests = []
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Notebook document synchronization (didOpen/didChange/didSave/didClose handlers)"
 
 [[feature]]
@@ -376,7 +376,7 @@ area = "notebook"
 maturity = "preview"
 advertised = false
 counts_in_coverage = false
-tests = []
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Notebook cell execution summary tracking (LSP does not execute cells; this tracks executionSummary metadata)"
 
 # Debug Features (DAP)
@@ -385,11 +385,11 @@ description = "Notebook cell execution summary tracking (LSP does not execute ce
 id = "dap.inline_values"
 spec = "DAP 1.0"
 area = "debug"
-maturity = "planned"
+maturity = "preview"
 advertised = false
 counts_in_coverage = false
-tests = []
-description = "Inline variable values while debugging (NOTE: DAP has no inlineValues request; use LSP textDocument/inlineValue with DAP frameId)"
+tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs"]
+description = "Inline variable values while debugging via custom inlineValues request"
 
 [[feature]]
 id = "dap.breakpoints"
@@ -398,7 +398,7 @@ area = "debug"
 maturity = "preview"
 advertised = false
 counts_in_coverage = false
-tests = []
+tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs", "crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs"]
 description = "Breakpoint support (setBreakpoints with REPLACE semantics, BreakpointStore)"
 
 # Protocol / Lifecycle Features

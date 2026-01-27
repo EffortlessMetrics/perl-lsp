@@ -366,6 +366,7 @@ pub mod platform;
 // Phase 2 modules (AC5-AC12) - IN PROGRESS
 pub mod breakpoints;
 pub mod dispatcher; // AC5: Message dispatcher
+pub mod inline_values; // Inline value extraction for debug sessions
 pub mod protocol; // AC5: DAP protocol types // AC7: Breakpoint manager
 
 // Phase 2 modules (AC5-AC12) - TODO

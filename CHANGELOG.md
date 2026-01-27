@@ -28,6 +28,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 See `docs/ROADMAP.md` for status receipts and exit criteria.
 
+### Added - Workspace Index Lifecycle v1
+
+- **Explicit build phases**: `Idle → Scanning → Indexing` tracked inside `IndexState::Building`
+- **Lifecycle instrumentation**: state/phase durations, transition counts, early-exit reasons
+- **Background workspace scan**: initial indexing with performance caps and early-exit reporting
+
+### Added - Notebook + DAP Preview
+
+- **Notebook sync coverage**: added execution summary test coverage and capability gating
+- **DAP inline values**: custom `inlineValues` request with regex-based inline value hints and tests
+
+### Changed
+
+- **Index routing**: phase-aware reasons for Building state
+
 ### Added - Semantic Analyzer Phase 2-6 Complete (PR #389)
 
 - **Complete NodeKind Coverage**: All remaining AST node handlers implemented

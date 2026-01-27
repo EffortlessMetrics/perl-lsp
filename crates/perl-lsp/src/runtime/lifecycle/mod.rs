@@ -66,9 +66,10 @@ impl LspServer {
             // Use coordinator.index() for consistency with coordinator-first approach
             if let Some(coordinator) = self.coordinator() {
                 let idx = coordinator.index();
-                let has = idx.has_symbols();
-                let files = idx.all_symbols().len();
-                (has, if has { 1 } else { 0 }, files)
+                let symbol_count = idx.symbol_count();
+                let file_count = idx.file_count();
+                let has = symbol_count > 0;
+                (has, file_count, symbol_count)
             } else {
                 (false, 0, 0)
             }

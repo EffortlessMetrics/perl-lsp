@@ -22,7 +22,7 @@ perl-lsp is a comprehensive Perl parsing + LSP/DAP ecosystem:
 ### Current Focus
 
 **Now (v0.9.1 close-out)**
-- Index state machine for workspace indexing
+- Workspace index state machine verification + receipts (phase transitions, early-exit caps)
 - Documentation cleanup (`missing_docs`)
 
 **Next (v1.0.0)**
@@ -44,6 +44,8 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 2. **[Roadmap](ROADMAP.md)** - Plans, exit criteria, and deferrals
 3. **[Milestones](MILESTONES.md)** - GitHub milestone mapping
 4. **[Docs Index](INDEX.md)** - Routes to the right doc fast
+5. **[TODO Backlog](TODO.md)** - Actionable tasks + missing features
+6. **[LSP Missing Features](LSP_MISSING_FEATURES_REPORT.md)** - Non-advertised capabilities (derived from `features.toml`)
 
 ### Development
 5. **[CLAUDE.md](../CLAUDE.md)** - Project guidance for AI assistants
@@ -53,9 +55,10 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 ## 🚨 What Needs Attention RIGHT NOW
 
 ### Now (as of 2026-01-27)
-1. 🔴 **Index state machine** - workspace indexing transitions + early-exit performance caps
+1. 🔴 **Index state machine verification** - confirm transitions, early-exit caps, and receipts
 2. 🔴 **Documentation cleanup** - reduce `missing_docs` violations + module-level docs
 3. 🟡 **v0.9.1 release notes + doc alignment** - CHANGELOG/ROADMAP/CURRENT_STATUS in sync
+4. 📌 **Expanded backlog** - see `docs/TODO.md` + `docs/LSP_MISSING_FEATURES_REPORT.md`
 
 ### Next
 1. **v1.0 readiness** - stability statement, packaging stance, benchmark receipts, upgrade notes
@@ -69,8 +72,8 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 ```
 perl-lsp/
 ├── crates/
-│   ├── perl-parser/      ⭐ Main crate - Parser + LSP logic
-│   ├── perl-lsp/          LSP server binary
+│   ├── perl-parser/      ⭐ Main crate - Parser
+│   ├── perl-lsp/          LSP server binary + LSP logic
 │   ├── perl-dap/          Debug Adapter Protocol (Phase 1 complete)
 │   ├── perl-lexer/        Context-aware tokenizer
 │   ├── perl-corpus/       Test corpus (see CURRENT_STATUS for counts)

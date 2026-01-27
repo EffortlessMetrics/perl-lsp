@@ -251,21 +251,23 @@ impl LspServer {
             }
         });
 
-        // Add notebook document sync capability (LSP 3.17)
-        capabilities["notebookDocumentSync"] = json!({
-            "notebookSelector": [
-                {
-                    "notebook": {
-                        "notebookType": "jupyter-notebook"
-                    },
-                    "cells": [
-                        {
-                            "language": "perl"
-                        }
-                    ]
-                }
-            ]
-        });
+        // Add notebook document sync capability (LSP 3.17) when enabled
+        if features.notebook_document_sync {
+            capabilities["notebookDocumentSync"] = json!({
+                "notebookSelector": [
+                    {
+                        "notebook": {
+                            "notebookType": "jupyter-notebook"
+                        },
+                        "cells": [
+                            {
+                                "language": "perl"
+                            }
+                        ]
+                    }
+                ]
+            });
+        }
 
         Ok(Some(json!({
             "capabilities": capabilities,

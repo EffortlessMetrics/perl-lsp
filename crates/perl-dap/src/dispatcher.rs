@@ -33,9 +33,11 @@
 //! - [DAP Spec - Initialization](https://microsoft.github.io/debug-adapter-protocol/specification#Requests_Initialize)
 
 use crate::breakpoints::BreakpointStore;
+use crate::inline_values::collect_inline_values;
 use crate::protocol::{
-    Breakpoint, Capabilities, Event, InitializeRequestArguments, Request, Response,
-    SetBreakpointsArguments, SetBreakpointsResponseBody,
+    Breakpoint, Capabilities, Event, InitializeRequestArguments, InlineValuesArguments,
+    InlineValuesResponseBody, Request, Response, SetBreakpointsArguments,
+    SetBreakpointsResponseBody,
 };
 use anyhow::{Context, Result};
 use serde_json::Value;
@@ -181,6 +183,7 @@ impl DapDispatcher {
             "initialize" => self.handle_initialize(request),
             "configurationDone" => self.handle_configuration_done(request),
             "setBreakpoints" => self.handle_set_breakpoints(request),
+            "inlineValues" => self.handle_inline_values(request),
             _ => {
                 // Unknown command - return error
                 anyhow::bail!("Unknown command: {}", request.command)
@@ -279,6 +282,36 @@ impl DapDispatcher {
         serde_json::to_value(&body).context("Failed to serialize setBreakpoints response")
     }
 
+    /// Handle inlineValues request
+    ///
+    /// Returns inline value text hints for scalar variables in the specified range.
+    fn handle_inline_values(&self, request: &Request) -> Result<Value> {
+        let args: InlineValuesArguments = request
+            .arguments
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Missing arguments for inlineValues"))
+            .and_then(|v| serde_json::from_value(v.clone()).context("Invalid arguments"))?;
+
+        let source_path = args
+            .source
+            .path
+            .ok_or_else(|| anyhow::anyhow!("inlineValues requires source.path"))?;
+
+        if args.start_line <= 0 || args.end_line <= 0 {
+            anyhow::bail!("inlineValues requires positive startLine/endLine");
+        }
+
+        let start_line = args.start_line.min(args.end_line);
+        let end_line = args.end_line.max(args.start_line);
+        let content = std::fs::read_to_string(&source_path)
+            .with_context(|| format!("Failed to read source file: {}", source_path))?;
+
+        let inline_values = collect_inline_values(&content, start_line, end_line);
+        let body = InlineValuesResponseBody { inline_values };
+
+        serde_json::to_value(&body).context("Failed to serialize inlineValues response")
+    }
+
     /// Create response from request and result
     fn create_response(&self, request: &Request, result: Result<Value>) -> Response {
         let mut seq = self.response_seq.lock().unwrap_or_else(|e| e.into_inner());
@@ -323,6 +356,7 @@ impl Default for DapDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::InlineValuesResponseBody;
     use perl_tdd_support::must;
     use serde_json::json;
     use std::io::Write;
@@ -548,6 +582,36 @@ print "result: $final\n";
 
         assert!(!response.success);
         assert!(response.message.is_some());
+    }
+
+    #[test]
+    fn test_handle_inline_values() -> Result<(), Box<dyn std::error::Error>> {
+        let mut file = NamedTempFile::with_suffix(".pl")?;
+        let perl_code = "my $x = 1;\nmy $y = $x + 2;\n";
+        file.write_all(perl_code.as_bytes())?;
+        file.flush()?;
+        let path = file.path().to_string_lossy().to_string();
+
+        let dispatcher = DapDispatcher::new();
+        let request = Request {
+            seq: 3,
+            msg_type: "request".to_string(),
+            command: "inlineValues".to_string(),
+            arguments: Some(json!({
+                "source": { "path": path },
+                "startLine": 1,
+                "endLine": 2
+            })),
+        };
+
+        let response = dispatcher.dispatch(&request);
+        assert!(response.success);
+
+        let body: InlineValuesResponseBody =
+            serde_json::from_value(response.body.ok_or("Expected body")?)?;
+        assert!(body.inline_values.iter().any(|v| v.text.contains("$x")));
+        assert!(body.inline_values.iter().any(|v| v.text.contains("$y")));
+        Ok(())
     }
 
     #[test]
