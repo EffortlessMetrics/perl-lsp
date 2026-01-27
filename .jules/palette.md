@@ -26,3 +26,7 @@
 ## 2026-01-27 - Transient Status Bar Feedback
 **Learning:** For long-running operations like tests where the "Output" panel is too hidden and "Notifications" are too intrusive, temporarily hijacking the Status Bar Item provides excellent, non-disruptive feedback.
 **Action:** When implementing async commands that have a corresponding Status Bar Item, use a `try...finally` block to temporarily update the item's text (e.g., `$(sync~spin) Processing...`) and restore it afterwards.
+
+## 2026-01-28 - Deep Linking Settings
+**Learning:** Users often need to tweak extension settings (like paths or flags) but digging through the generic Settings UI is high friction. Providing a direct link to the extension's filtered settings (`@ext:publisher.name`) from a context menu (like the Status Bar) is a massive quality-of-life improvement.
+**Action:** For extensions with complex configuration, add a "Configure Settings" item to the main entry point menu that triggers `workbench.action.openSettings` with the extension ID as an argument.
