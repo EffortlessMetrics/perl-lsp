@@ -168,11 +168,28 @@ pub enum RefactoringScope {
     /// Custom set of files
     FileSet(Vec<PathBuf>),
     /// Package scope within a file
-    Package { file: PathBuf, name: String },
+    Package {
+        /// File containing the package declaration.
+        file: PathBuf,
+        /// Package name to scope the operation to.
+        name: String,
+    },
     /// Function scope within a file
-    Function { file: PathBuf, name: String },
+    Function {
+        /// File containing the function definition.
+        file: PathBuf,
+        /// Function name to scope the operation to.
+        name: String,
+    },
     /// Arbitrary block scope within a file (start, end positions)
-    Block { file: PathBuf, start: (u32, u32), end: (u32, u32) },
+    Block {
+        /// File containing the block.
+        file: PathBuf,
+        /// Start position as (line, column).
+        start: (u32, u32),
+        /// End position as (line, column).
+        end: (u32, u32),
+    },
 }
 
 /// Modernization patterns for legacy code
@@ -1662,9 +1679,11 @@ mod temp_stubs {
 
     #[allow(dead_code)]
     #[derive(Debug)]
+    /// Workspace refactor stub used when the `workspace_refactor` feature is disabled.
     pub(super) struct WorkspaceRefactor;
     #[allow(dead_code)]
     impl WorkspaceRefactor {
+        /// Create a new stub workspace refactor instance.
         pub(super) fn new() -> Self {
             Self
         }
@@ -1672,13 +1691,16 @@ mod temp_stubs {
 
     #[allow(dead_code)]
     #[derive(Debug)]
+    /// Modernization engine stub used when the `modernize` feature is disabled.
     pub(super) struct ModernizeEngine;
     #[allow(dead_code)]
     impl ModernizeEngine {
+        /// Create a new stub modernizer instance.
         pub(super) fn new() -> Self {
             Self
         }
 
+        /// Placeholder modernization hook that reports no changes.
         pub(super) fn modernize_file(
             &mut self,
             _file: &Path,

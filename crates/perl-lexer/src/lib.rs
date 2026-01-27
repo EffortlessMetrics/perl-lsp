@@ -1614,10 +1614,10 @@ impl<'a> PerlLexer<'a> {
                         self.in_prototype = true;
                     }
                     // Quote operators expect a delimiter next (must be immediately adjacent)
-                    "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s" | "tr" | "y" => {
+                    op if quote_handler::is_quote_operator(op) => {
                         // For regex operators like 'm', 's', 'tr', 'y', delimiter must be immediately adjacent
                         // For quote operators like 'q', 'qq', 'qw', 'qr', 'qx', we allow whitespace
-                        let next_char = if matches!(text, "m" | "s" | "tr" | "y") {
+                        let next_char = if matches!(op, "m" | "s" | "tr" | "y") {
                             self.current_char() // Must be immediately adjacent
                         } else {
                             self.peek_nonspace() // Can skip whitespace
@@ -1627,7 +1627,7 @@ impl<'a> PerlLexer<'a> {
                             if Self::is_quote_delim(next) {
                                 self.mode = LexerMode::ExpectDelimiter;
                                 self.current_quote_op = Some(quote_handler::QuoteOperatorInfo {
-                                    operator: text.to_string(),
+                                    operator: op.to_string(),
                                     delimiter: '\0', // Will be set when we see the delimiter
                                     start_pos: start,
                                 });
