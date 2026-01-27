@@ -239,10 +239,17 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(Node::new(
-            NodeKind::Variable { sigil, name: full_name },
-            SourceLocation { start: token.start, end },
-        ))
+        if sigil == "*" {
+            Ok(Node::new(
+                NodeKind::Typeglob { name: full_name },
+                SourceLocation { start: token.start, end },
+            ))
+        } else {
+            Ok(Node::new(
+                NodeKind::Variable { sigil, name: full_name },
+                SourceLocation { start: token.start, end },
+            ))
+        }
     }
 
     /// Parse a variable when we have a sigil token first
@@ -415,6 +422,8 @@ impl<'a> Parser<'a> {
             };
 
             Ok(Node::new(NodeKind::FunctionCall { name, args }, SourceLocation { start, end }))
+        } else if sigil == "*" {
+            Ok(Node::new(NodeKind::Typeglob { name }, SourceLocation { start, end }))
         } else {
             Ok(Node::new(NodeKind::Variable { sigil, name }, SourceLocation { start, end }))
         }

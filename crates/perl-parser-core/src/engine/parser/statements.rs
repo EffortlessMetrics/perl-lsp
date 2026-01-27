@@ -95,6 +95,9 @@ impl<'a> Parser<'a> {
             TokenKind::Default => self.parse_default_statement(),
             TokenKind::Try => self.parse_try(),
 
+            // Loop control
+            TokenKind::Next | TokenKind::Last | TokenKind::Redo => self.parse_loop_control(),
+
             // Subroutines and modern OOP
             TokenKind::Sub => {
                 let sub_node = self.parse_subroutine()?;
@@ -561,6 +564,29 @@ impl<'a> Parser<'a> {
         let end = self.previous_position();
         Ok(Node::new(
             NodeKind::LabeledStatement { label, statement },
+            SourceLocation { start, end },
+        ))
+    }
+
+    /// Parse loop control statement (next, last, redo)
+    fn parse_loop_control(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        let op_token = self.consume_token()?;
+        let op = op_token.text.to_string();
+
+        self.mark_not_stmt_start();
+
+        // Check for optional label
+        let label = if let Some(TokenKind::Identifier) = self.peek_kind() {
+            let label_token = self.consume_token()?;
+            Some(label_token.text.to_string())
+        } else {
+            None
+        };
+
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::LoopControl { op, label },
             SourceLocation { start, end },
         ))
     }

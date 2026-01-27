@@ -122,6 +122,12 @@ pub enum TokenKind {
     Finally,
     /// Continue block: `continue { }`
     Continue,
+    /// Loop control: `next`
+    Next,
+    /// Loop control: `last`
+    Last,
+    /// Loop control: `redo`
+    Redo,
     /// Class declaration (5.38+): `class Foo`
     Class,
     /// Method declaration (5.38+): `method foo`

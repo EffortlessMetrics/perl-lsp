@@ -258,6 +258,9 @@ impl Node {
             NodeKind::Glob { pattern } => {
                 format!("(glob {})", pattern)
             }
+            NodeKind::Typeglob { name } => {
+                format!("(typeglob {})", name)
+            }
 
             NodeKind::Number { value } => {
                 // Format expected by bless parsing tests: (number value)
@@ -526,15 +529,35 @@ impl Node {
                 format!("(method_declaration_statement {})", parts.join(" "))
             }
 
-            NodeKind::Return { value } => {
-                if let Some(val) = value {
-                    format!("(return {})", val.to_sexp())
-                } else {
-                    "(return)".to_string()
-                }
-            }
+                        NodeKind::Return { value } => {
 
-            NodeKind::MethodCall { object, method, args } => {
+                            if let Some(val) = value {
+
+                                format!("(return {})", val.to_sexp())
+
+                            } else {
+
+                                "(return)".to_string()
+
+                            }
+
+                        }
+
+                        NodeKind::LoopControl { op, label } => {
+
+                            if let Some(l) = label {
+
+                                format!("({} {})", op, l)
+
+                            } else {
+
+                                format!("({})", op)
+
+                            }
+
+                        }
+
+                        NodeKind::MethodCall { object, method, args } => {
                 let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(method_call {} {} ({}))", object.to_sexp(), method, args_str)
             }
@@ -941,6 +964,7 @@ impl Node {
             | NodeKind::Regex { .. }
             | NodeKind::Readline { .. }
             | NodeKind::Glob { .. }
+            | NodeKind::Typeglob { .. }
             | NodeKind::Diamond
             | NodeKind::Ellipsis
             | NodeKind::Undef
@@ -949,6 +973,7 @@ impl Node {
             | NodeKind::Prototype { .. }
             | NodeKind::DataSection { .. }
             | NodeKind::Format { .. }
+            | NodeKind::LoopControl { .. }
             | NodeKind::MissingExpression
             | NodeKind::MissingStatement
             | NodeKind::MissingIdentifier
@@ -1183,6 +1208,7 @@ impl Node {
             | NodeKind::Regex { .. }
             | NodeKind::Readline { .. }
             | NodeKind::Glob { .. }
+            | NodeKind::Typeglob { .. }
             | NodeKind::Diamond
             | NodeKind::Ellipsis
             | NodeKind::Undef
@@ -1191,6 +1217,7 @@ impl Node {
             | NodeKind::Prototype { .. }
             | NodeKind::DataSection { .. }
             | NodeKind::Format { .. }
+            | NodeKind::LoopControl { .. }
             | NodeKind::MissingExpression
             | NodeKind::MissingStatement
             | NodeKind::MissingIdentifier
@@ -1364,6 +1391,14 @@ pub enum NodeKind {
     Glob {
         /// Pattern string for file matching
         pattern: String, // <*.txt>
+    },
+
+    /// Typeglob expression: `*foo` or `*main::bar`
+    ///
+    /// Provides access to all symbol table entries for a given name.
+    Typeglob {
+        /// Name of the symbol (including package qualification)
+        name: String,
     },
 
     /// Numeric literal in Perl code (integer, float, hex, octal, binary)
@@ -1636,6 +1671,14 @@ pub enum NodeKind {
         value: Option<Box<Node>>,
     },
 
+    /// Loop control statement: `next`, `last`, or `redo`
+    LoopControl {
+        /// Control keyword: "next", "last", or "redo"
+        op: String,
+        /// Optional label: `next LABEL`
+        label: Option<String>,
+    },
+
     /// Method call: `$obj->method(@args)` or `$obj->method`
     MethodCall {
         /// Object or class expression
@@ -1848,6 +1891,7 @@ impl NodeKind {
             NodeKind::Undef => "Undef",
             NodeKind::Readline { .. } => "Readline",
             NodeKind::Glob { .. } => "Glob",
+            NodeKind::Typeglob { .. } => "Typeglob",
             NodeKind::Number { .. } => "Number",
             NodeKind::String { .. } => "String",
             NodeKind::Heredoc { .. } => "Heredoc",
@@ -1877,6 +1921,7 @@ impl NodeKind {
             NodeKind::NamedParameter { .. } => "NamedParameter",
             NodeKind::Method { .. } => "Method",
             NodeKind::Return { .. } => "Return",
+            NodeKind::LoopControl { .. } => "LoopControl",
             NodeKind::MethodCall { .. } => "MethodCall",
             NodeKind::FunctionCall { .. } => "FunctionCall",
             NodeKind::IndirectCall { .. } => "IndirectCall",

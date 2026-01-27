@@ -11,7 +11,7 @@ use std::io::{self, BufRead, Write};
 ///
 /// Returns `Ok(None)` on EOF or parse error (recoverable).
 /// Returns `Err` only on I/O errors (non-recoverable).
-pub fn read_message<R: BufRead>(reader: &mut R) -> io::Result<Option<JsonRpcRequest>> {
+pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcRequest>> {
     let mut headers = HashMap::new();
 
     // Read headers

@@ -696,7 +696,7 @@ fn test_error_handling_variables_missing_reference() {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Variables without reference should fail");
             assert!(message.is_some());
-            assert!(must_some(message).contains("variablesReference"));
+            assert!(must_some(message).contains("Missing arguments"));
         }
         _ => panic!("Expected Response message"),
     }

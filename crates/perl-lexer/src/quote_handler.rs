@@ -120,7 +120,6 @@ pub struct QuoteResult {
 }
 
 /// Check if we're currently parsing a quote operator
-#[allow(dead_code)]
 pub fn is_quote_operator(word: &str) -> bool {
     matches!(word, "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s" | "tr" | "y")
 }

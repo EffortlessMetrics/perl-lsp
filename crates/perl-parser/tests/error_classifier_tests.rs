@@ -5,7 +5,12 @@ use perl_parser::{Node, NodeKind, SourceLocation};
 fn test_classify_unclosed_string_double_quote() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 0, end: 10 },
     };
 
@@ -18,7 +23,12 @@ fn test_classify_unclosed_string_double_quote() {
 fn test_classify_unclosed_string_single_quote() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 0, end: 10 },
     };
 
@@ -31,7 +41,12 @@ fn test_classify_unclosed_string_single_quote() {
 fn test_classify_unclosed_regex() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 0, end: 10 },
     };
 
@@ -44,7 +59,12 @@ fn test_classify_unclosed_regex() {
 fn test_classify_missing_semicolon() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 13, end: 14 },
     };
 
@@ -58,7 +78,12 @@ fn test_classify_missing_semicolon() {
 fn test_classify_unclosed_parenthesis() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 8, end: 9 },
     };
 
@@ -72,7 +97,12 @@ fn test_classify_unclosed_parenthesis() {
 fn test_classify_unclosed_bracket() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 10, end: 11 },
     };
 
@@ -86,7 +116,12 @@ fn test_classify_unclosed_bracket() {
 fn test_classify_unclosed_brace() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 11, end: 12 },
     };
 
@@ -99,7 +134,12 @@ fn test_classify_unclosed_brace() {
 fn test_classify_unexpected_eof() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 5, end: 5 }, // At EOF
     };
 
@@ -112,7 +152,12 @@ fn test_classify_unexpected_eof() {
 fn test_classify_invalid_syntax() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 0, end: 1 },
     };
 
@@ -149,7 +194,12 @@ fn test_boundary_conditions() {
 
     // Test with empty source
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 0, end: 0 },
     };
     let result = classifier.classify(&error_node, "");
@@ -157,7 +207,12 @@ fn test_boundary_conditions() {
 
     // Test with out-of-bounds location
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 100, end: 200 },
     };
     let result = classifier.classify(&error_node, "short");
@@ -169,7 +224,12 @@ fn test_boundary_conditions() {
 fn test_heredoc_classification() {
     let classifier = ErrorClassifier::new();
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 7, end: 8 },
     };
 
@@ -185,7 +245,12 @@ fn test_classify_with_context() {
 
     // Test missing operator between operands
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 7, end: 8 },
     };
     let source = "my $x = 5 $y";
@@ -202,7 +267,12 @@ fn test_error_classifier_default() {
 
     // Both should behave the same
     let error_node = Node {
-        kind: NodeKind::Error { message: String::new() },
+        kind: NodeKind::Error { 
+        message: String::new(),
+        expected: vec![],
+        found: None,
+        partial: None,
+    },
         location: SourceLocation { start: 0, end: 5 },
     };
 

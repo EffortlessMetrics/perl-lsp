@@ -594,31 +594,25 @@ impl ExecuteCommandProvider {
         let content = std::fs::read_to_string(file_path)
             .map_err(|e| format!("Failed to read file: {}", e))?;
 
-        let mut all_violations = Vec::new();
+        let mut all_violations: Vec<perl_lsp_providers::tooling::perl_critic::Violation> = Vec::new();
         let code_text = perl_parser::util::code_slice(&content);
         let mut parser = Parser::new(code_text);
 
-        let _ast = match parser.parse() {
-            Ok(ast) => {
-                // Successfully parsed - run comprehensive analysis
-                let analyzer = BuiltInAnalyzer::new();
-                all_violations.extend(analyzer.analyze(&ast, &content));
-                ast
-            }
-            Err(e) => {
-                // Handle parse errors with detailed location information
-                all_violations.push(self.create_syntax_error_violation(&e, &content, file_path));
-
-                // Create dummy AST for additional analysis
-                let dummy_ast = crate::ast::Node::new(
-                    crate::ast::NodeKind::Error { message: format!("{}", e) },
-                    crate::ast::SourceLocation { start: 0, end: content.len() },
-                );
-                let analyzer = BuiltInAnalyzer::new();
-                all_violations.extend(analyzer.analyze(&dummy_ast, &content));
-                dummy_ast
-            }
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => crate::ast::Node::new(
+                crate::ast::NodeKind::Error {
+                    message: format!("{}", e),
+                    expected: vec![],
+                    found: None,
+                    partial: None,
+                },
+                crate::ast::SourceLocation { start: 0, end: code_text.len() },
+            ),
         };
+
+        let analyzer = perl_lsp_providers::tooling::perl_critic::BuiltInAnalyzer::new();
+        let all_violations = analyzer.analyze(&ast, code_text);
 
         let formatted_violations: Vec<_> = all_violations
             .iter()

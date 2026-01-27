@@ -711,8 +711,12 @@ MyModule::"#
     );
 
     let items = completion_items(&response);
-    // Since package completion is TODO, this might be empty for now
-    assert!(items.is_empty() || !items.is_empty(), "Package completion handling");
+    // Package member completion should return available subroutines
+    assert!(!items.is_empty(), "Package member completion should not be empty");
+    assert!(
+        items.iter().any(|i| i["label"] == "public_method"),
+        "Should suggest public_method"
+    );
 
     Ok(())
 }

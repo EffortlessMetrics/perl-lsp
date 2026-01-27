@@ -27,9 +27,10 @@ perl-parser-core = { workspace = true }
 perl-workspace-index = { workspace = true }
 regex = "1.12.2"
 serde = { version = "1.0.228", features = ["derive"] }
+url = "2.5.4"
 
 [features]
-default = []
+default = ["workspace_refactor"]
 modernize = []
 workspace_refactor = []
 

@@ -439,8 +439,13 @@ mod tests {
         let ast = parser.parse().unwrap_or_else(|_| {
             use perl_parser_core::{Node, NodeKind, SourceLocation};
             Node::new(
-                NodeKind::Error { message: "test".to_string() },
-                SourceLocation { start: 0, end: source.len() },
+                NodeKind::Error {
+                    message: "test".to_string(),
+                    expected: vec![],
+                    found: None,
+                    partial: None,
+                },
+                SourceLocation { start: 0, end: 4 },
             )
         });
 

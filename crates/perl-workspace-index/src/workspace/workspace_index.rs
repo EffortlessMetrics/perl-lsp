@@ -1209,6 +1209,7 @@ impl WorkspaceIndex {
     /// Find the definition of a symbol
     pub fn find_definition(&self, symbol_name: &str) -> Option<Location> {
         let files = self.files.read();
+        println!("find_definition DEBUG: index has {} files, looking for {}", files.len(), symbol_name);
 
         for (_uri_key, file_index) in files.iter() {
             for symbol in &file_index.symbols {
@@ -1358,9 +1359,15 @@ impl WorkspaceIndex {
 
     /// Find the definition location for a symbol key
     pub fn find_def(&self, key: &SymbolKey) -> Option<Location> {
-        // For now, use the qualified name approach
-        let qualified_name = format!("{}::{}", key.pkg, key.name);
-        self.find_definition(&qualified_name)
+        if let Some(sigil) = key.sigil {
+            // It's a variable
+            let var_name = format!("{}{}", sigil, key.name);
+            self.find_definition(&var_name)
+        } else {
+            // It's a subroutine or package
+            let qualified_name = format!("{}::{}", key.pkg, key.name);
+            self.find_definition(&qualified_name)
+        }
     }
 
     /// Find all reference locations for a symbol key using enhanced dual indexing
@@ -1370,8 +1377,40 @@ impl WorkspaceIndex {
     /// The deduplication ensures each location appears only once even if indexed under
     /// multiple name forms.
     pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
-        let qualified_name = format!("{}::{}", key.pkg, key.name);
-        let mut all_refs = self.find_references(&qualified_name);
+        let files_locked = self.files.read();
+        println!("find_refs DEBUG: index has {} files", files_locked.len());
+        let mut all_refs = if let Some(sigil) = key.sigil {
+            // It's a variable - search through all files for this variable name
+            let var_name = format!("{}{}", sigil, key.name);
+            let mut refs = Vec::new();
+            for (_uri_key, file_index) in files_locked.iter() {
+                if let Some(var_refs) = file_index.references.get(&var_name) {
+                    for reference in var_refs {
+                        refs.push(Location { uri: reference.uri.clone(), range: reference.range });
+                    }
+                }
+            }
+            refs
+        } else {
+            // It's a subroutine or package
+            if key.pkg.as_ref() == "main" {
+                // For main package, we search for both "main::foo" and bare "foo"
+                let mut refs = self.find_references(&format!("main::{}", key.name));
+                // Add bare name references
+                for (_uri_key, file_index) in files_locked.iter() {
+                    if let Some(bare_refs) = file_index.references.get(key.name.as_ref()) {
+                        for reference in bare_refs {
+                            refs.push(Location { uri: reference.uri.clone(), range: reference.range });
+                        }
+                    }
+                }
+                refs
+            } else {
+                let qualified_name = format!("{}::{}", key.pkg, key.name);
+                self.find_references(&qualified_name)
+            }
+        };
+        drop(files_locked);
 
         // Remove the definition; the caller will include it separately if needed
         if let Some(def) = self.find_def(key) {

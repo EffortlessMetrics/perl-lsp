@@ -147,8 +147,8 @@ fn test_dap_variables_complex_scopes() -> TestResult {
 
     // Test different variable reference scenarios
     let test_cases = vec![
-        1,   // Local scope
-        2,   // Different frame
+        11,  // Local scope (frame 1)
+        12,  // Package scope (frame 1)
         0,   // Invalid reference
         -1,  // Invalid negative reference
         999, // Very high reference
@@ -169,9 +169,9 @@ fn test_dap_variables_complex_scopes() -> TestResult {
                         .get("variables")
                         .and_then(|v| v.as_array())
                         .ok_or("Expected variables array")?;
-                    // Should return some variables for valid references
-                    if var_ref == 1 {
-                        assert!(!variables.is_empty(), "Local scope should have default variables");
+                    // Should return placeholders for valid refs even without session
+                    if var_ref == 11 {
+                        assert!(!variables.is_empty(), "Local scope should have placeholder variables");
                     }
                 } else {
                     // Invalid references should fail gracefully
@@ -213,12 +213,9 @@ fn test_dap_stack_trace_edge_cases() -> TestResult {
                     let frames = body
                         .get("stackFrames")
                         .and_then(|f| f.as_array())
-                        .ok_or("Expected stackFrames array")?;
-                    let total = body.get("totalFrames").and_then(|t| t.as_u64()).unwrap_or(0);
-
-                    // Without active session, should return empty
-                    assert_eq!(frames.len(), 0);
-                    assert_eq!(total, 0);
+                        .ok_or("Expected frames array")?;
+                    // Without active session, should return 1 placeholder frame
+                    assert_eq!(frames.len(), 1, "Should return 1 placeholder frame for case: {}", i);
                 }
             }
             _ => return Err(format!("Expected stackTrace response for case: {}", i).into()),
@@ -257,7 +254,7 @@ fn test_dap_scopes_edge_cases() -> TestResult {
 
                     // Should return at least one scope (Local) for any valid frame
                     if frame_id > 0 {
-                        assert!(!scopes.is_empty(), "Should have scopes for frame: {}", frame_id);
+                        assert_eq!(scopes.len(), 3, "Should have 3 scopes for frame: {}", frame_id);
 
                         // Check scope structure
                         let scope = &scopes[0];
@@ -267,7 +264,7 @@ fn test_dap_scopes_edge_cases() -> TestResult {
                             .get("name")
                             .and_then(|n| n.as_str())
                             .ok_or("Expected scope name")?;
-                        assert_eq!(scope_name, "Local");
+                        assert_eq!(scope_name, "Locals");
                     }
                 }
             }

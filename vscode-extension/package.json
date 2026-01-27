@@ -70,6 +70,76 @@
         "configuration": "./language-configuration.json"
       }
     ],
+    "breakpoints": [
+      {
+        "language": "perl"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "perl",
+        "label": "Perl",
+        "program": "./out/extension.js",
+        "runtime": "node",
+        "configurationAttributes": {
+          "launch": {
+            "required": ["program"],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Perl script to debug",
+                "default": "${workspaceFolder}/script.pl"
+              },
+              "args": {
+                "type": "array",
+                "description": "Command line arguments passed to the script",
+                "default": [],
+                "items": {
+                  "type": "string"
+                }
+              },
+              "perlPath": {
+                "type": "string",
+                "description": "Path to the Perl executable",
+                "default": "perl"
+              },
+              "includePaths": {
+                "type": "array",
+                "description": "Additional include paths (passed as -I)",
+                "default": [],
+                "items": {
+                  "type": "string"
+                }
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Automatically stop at the first line",
+                "default": true
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Current working directory for the script",
+                "default": "${workspaceFolder}"
+              },
+              "env": {
+                "type": "object",
+                "description": "Environment variables",
+                "default": {}
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "perl",
+            "request": "launch",
+            "name": "Perl: Launch Script",
+            "program": "${workspaceFolder}/script.pl",
+            "stopOnEntry": true
+          }
+        ]
+      }
+    ],
     "configuration": {
       "title": "Perl LSP",
       "properties": {
@@ -296,6 +366,14 @@
       {
         "language": "perl",
         "path": "./snippets/perl.json"
+      },
+      {
+        "language": "json",
+        "path": "./snippets/launch.json"
+      },
+      {
+        "language": "jsonc",
+        "path": "./snippets/launch.json"
       }
     ],
     "taskDefinitions": [

@@ -502,7 +502,12 @@ mod tests {
     fn test_builtin_policies() {
         let analyzer = BuiltInAnalyzer::new();
         let ast = Node::new(
-            crate::ast::NodeKind::Error { message: "test".to_string() },
+            crate::ast::NodeKind::Error { 
+                message: "test".to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
             crate::ast::SourceLocation { start: 0, end: 10 },
         );
 

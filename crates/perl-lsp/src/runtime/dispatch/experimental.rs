@@ -48,12 +48,7 @@ impl LspServer {
                 if let Some(to) = timeout {
                     if start.elapsed() >= to {
                         eprintln!("Server-side timeout at iteration {}", i);
-                        return Ok(Some(json!({
-                            "jsonrpc": "2.0",
-                            "id": id,
-                            "result": null,
-                            "error": server_cancelled_error()
-                        })));
+                        return Err(server_cancelled_error());
                     }
                 }
             }

@@ -139,7 +139,9 @@ sub process_data {
     // For this test, we'll directly parse and check for errors
     let mut parser = Parser::new(code_with_error);
     let result = parser.parse();
-    assert!(result.is_err());
+    // With error recovery, parse() should return Ok(AST) but parser.errors() should be non-empty
+    assert!(result.is_ok());
+    assert!(!parser.errors().is_empty());
 
     // Scenario 2: Developer fixes the syntax error
     let fixed_code = r#"

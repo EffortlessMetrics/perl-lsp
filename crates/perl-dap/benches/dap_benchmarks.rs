@@ -36,6 +36,8 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use perl_dap::configuration::{AttachConfiguration, LaunchConfiguration};
+use perl_dap::debug_adapter::DebugAdapter;
+use serde_json::json;
 use perl_dap::platform::{
     format_command_args, normalize_path, resolve_perl_path, setup_environment,
 };
@@ -382,4 +384,61 @@ criterion_group!(
     benchmark_arg_formatting
 );
 
-criterion_main!(configuration_benches, platform_benches);
+// ========== Phase 2: Session Management Benchmarks (AC5.2) ==========
+
+/// Benchmark DAP initialization
+/// Target: <50ms
+fn benchmark_dap_initialization(c: &mut Criterion) {
+    let mut group = c.benchmark_group("dap_session");
+    group.measurement_time(Duration::from_secs(10));
+
+    let mut adapter = DebugAdapter::new();
+    let init_args = json!({
+        "clientId": "vscode",
+        "clientName": "Visual Studio Code",
+        "adapterId": "perl-rs",
+        "linesStartAt1": true,
+        "columnsStartAt1": true,
+        "pathFormat": "path"
+    });
+
+    group.bench_function("dap_initialize_request", |b| {
+        b.iter(|| {
+            black_box(adapter.handle_request(1, "initialize", Some(init_args.clone())));
+        })
+    });
+
+    group.finish();
+}
+
+/// Benchmark DAP request dispatching (without process spawning)
+/// Target: <100ms
+fn benchmark_dap_dispatch(c: &mut Criterion) {
+    let mut group = c.benchmark_group("dap_dispatch");
+    group.measurement_time(Duration::from_secs(10));
+
+    let mut adapter = DebugAdapter::new();
+    
+    group.bench_function("dap_threads_request", |b| {
+        b.iter(|| {
+            black_box(adapter.handle_request(1, "threads", None));
+        })
+    });
+
+    group.bench_function("dap_stacktrace_request", |b| {
+        let args = json!({ "threadId": 1 });
+        b.iter(|| {
+            black_box(adapter.handle_request(1, "stackTrace", Some(args.clone())));
+        })
+    });
+
+    group.finish();
+}
+
+criterion_group!(
+    session_benches,
+    benchmark_dap_initialization,
+    benchmark_dap_dispatch
+);
+
+criterion_main!(configuration_benches, platform_benches, session_benches);

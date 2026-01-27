@@ -44,6 +44,8 @@ pub struct HeredocContent {
     pub segments: Vec<ByteSpan>,
     /// Span from start of first segment to end of last segment (empty span if no content).
     pub full_span: ByteSpan,
+    /// Whether the heredoc was correctly terminated by its label.
+    pub terminated: bool,
 }
 
 /// Result of collecting one or more heredocs from source.
@@ -135,10 +137,10 @@ fn collect_one(src: &[u8], mut off: usize, hd: &PendingHeredoc) -> (HeredocConte
 
     if !found {
         // Unterminated; return what we have (upstream should report a syntax error)
-        return (HeredocContent { segments, full_span }, off);
+        return (HeredocContent { segments, full_span, terminated: false }, off);
     }
 
-    (HeredocContent { segments, full_span }, after_terminator_off)
+    (HeredocContent { segments, full_span, terminated: true }, after_terminator_off)
 }
 
 /// (line_start, line_end_excluding_newline, next_offset_after_newline)

@@ -243,3 +243,17 @@ mod tests;
 mod heredoc_security_tests;
 #[cfg(test)]
 mod error_recovery_tests;
+#[cfg(test)]
+mod glob_assignment_tests;
+#[cfg(test)]
+mod format_tests;
+#[cfg(test)]
+mod indirect_object_tests;
+#[cfg(test)]
+mod regex_delimiter_tests;
+#[cfg(test)]
+mod tie_tests;
+#[cfg(test)]
+mod loop_control_tests;
+#[cfg(test)]
+mod glob_tests;

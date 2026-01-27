@@ -1567,6 +1567,7 @@ dependencies = [
  "md5",
  "nix",
  "parking_lot",
+ "perl-dap",
  "perl-lexer",
  "perl-lsp-protocol",
  "perl-lsp-providers",
@@ -1745,6 +1746,7 @@ dependencies = [
  "regex",
  "serde",
  "tempfile",
+ "url",
 ]
 
 [[package]]

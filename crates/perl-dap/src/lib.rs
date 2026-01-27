@@ -61,7 +61,7 @@
 //!
 //! // Validate configuration before launching
 //! config.validate()?;
-//! # Ok::<(), anyhow::Error>(())
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! # }
 //! ```
 //!
