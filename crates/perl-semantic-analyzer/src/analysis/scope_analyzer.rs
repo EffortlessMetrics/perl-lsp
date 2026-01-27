@@ -1,4 +1,4 @@
-//! Scope analysis and variable tracking for Perl parsing workflow pipeline
+//! Scope analysis and variable tracking for Perl parsing workflows
 //!
 //! This module provides comprehensive scope analysis for Perl scripts, tracking
 //! variable declarations, usage patterns, and potential issues across different
@@ -6,12 +6,12 @@
 //!
 //! # LSP Workflow Integration
 //!
-//! Scope analysis supports Perl parsing across all LSP stages:
-//! - **Extract**: Analyze variable scope in embedded Perl scripts
-//! - **Normalize**: Track variable usage during standardization transforms
-//! - **Thread**: Analyze control flow variable dependencies
-//! - **Render**: Validate variable scope during output generation
-//! - **Index**: Extract scope information for symbol indexing
+//! Scope analysis supports semantic validation across LSP workflow stages:
+//! - **Parse**: Identify declarations and scopes during syntax analysis
+//! - **Index**: Provide scope metadata for symbol indexing
+//! - **Navigate**: Resolve references with scope-aware lookups
+//! - **Complete**: Filter completion items based on visible bindings
+//! - **Analyze**: Report unused, shadowed, and undeclared variables
 //!
 //! # Usage Examples
 //!

@@ -1,4 +1,4 @@
-//! LSP Server Capabilities Configuration for Email Script Processing
+//! LSP Server Capabilities Configuration for Perl Tooling
 //!
 //! This module provides centralized configuration for LSP server capabilities
 //! advertised to clients during Perl script development within the LSP workflow.
@@ -7,11 +7,11 @@
 //!
 //! # LSP Workflow Integration
 //!
-//! - **Extract**: Provides capabilities for parsing and syntax analysis
-//! - **Normalize**: Enables code formatting and standardization features
-//! - **Thread**: Supports workspace navigation and symbol resolution
-//! - **Render**: Facilitates syntax highlighting and code presentation
+//! - **Parse**: Provides capabilities for parsing and syntax analysis
 //! - **Index**: Powers workspace symbols and cross-file navigation
+//! - **Navigate**: Supports definition, reference, and hierarchy lookups
+//! - **Complete**: Enables completion, signature help, and inline hints
+//! - **Analyze**: Drives diagnostics, code actions, and refactoring support
 
 use lsp_types::*;
 use serde_json::Value;

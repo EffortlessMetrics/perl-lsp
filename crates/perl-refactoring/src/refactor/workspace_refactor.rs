@@ -25,7 +25,7 @@
 //!
 //! - **Safe Refactoring**: Pre-validation ensures operation safety before applying changes
 //! - **Rollback Support**: All operations can be reversed with detailed change tracking
-//! - **Cross-File Analysis**: Handles complex dependency graphs in multi-file email systems
+//! - **Cross-File Analysis**: Handles complex dependency graphs in multi-file Perl codebases
 //! - **Import Optimization**: Automatically manages import statements during refactoring
 //!
 //! # Usage Examples
