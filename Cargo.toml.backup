@@ -10,7 +10,6 @@ members = [
     "crates/perl-refactoring",
     "crates/perl-incremental-parsing",
     "crates/perl-tdd-support",
-    "crates/perl-lsp-tooling",
     "crates/perl-lsp-providers",
     "crates/perl-lsp-protocol",
     "crates/perl-lsp-transport",
@@ -35,11 +34,8 @@ exclude = [
 
 # Workspace-level package metadata
 [workspace.package]
-version = "0.8.8"
 edition = "2024"
 rust-version = "1.89"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 
 [workspace.dependencies]
 # Tier 1: Leaf crates (no internal dependencies)
