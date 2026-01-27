@@ -2,6 +2,21 @@
 //!
 //! Provides inlay hints for function parameters and type annotations to improve
 //! code readability without modifying the source.
+//!
+//! # LSP Context
+//!
+//! Implements `textDocument/inlayHint` for the Parse → Analyze stages to surface
+//! inline annotations during language server rendering.
+//!
+//! # Client capability requirements
+//!
+//! Clients must advertise the inlay hint capability (`textDocument/inlayHint`)
+//! to receive hint payloads.
+//!
+//! # Protocol compliance
+//!
+//! Follows the inlay hint protocol for range-scoped responses and stable hint
+//! ordering per the LSP specification.
 
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition as Position, WireRange as Range};

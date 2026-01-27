@@ -15,6 +15,16 @@
 //! This integration ensures code actions are contextually appropriate and maintain
 //! code correctness across the entire Perl workspace.
 //!
+//! # LSP Client Capabilities
+//!
+//! Requires client support for `textDocument/codeAction` capabilities and
+//! `workspace/workspaceEdit` to apply edits across files.
+//!
+//! # Protocol Compliance
+//!
+//! Implements LSP code action protocol semantics (LSP 3.17+) including
+//! range-based requests, diagnostic filtering, and edit application rules.
+//!
 //! # Performance Characteristics
 //!
 //! - **Action generation**: <50ms for typical code action requests
@@ -26,6 +36,11 @@
 //!
 //! This module integrates with diagnostics and import optimization modules
 //! for import-related code actions.
+//!
+//! # See also
+//!
+//! - [`DiagnosticsProvider`](crate::ide::lsp_compat::diagnostics::DiagnosticsProvider)
+//! - [`crate::ide::lsp_compat::references`]
 //!
 //! # Usage Examples
 //!

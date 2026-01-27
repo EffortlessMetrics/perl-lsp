@@ -35,6 +35,23 @@
 //!   - Generic fallback for unknown extensions
 //! - **Cross-platform**: Handles Unix and Windows path separators consistently
 //!
+//! ## LSP Client Capabilities
+//!
+//! Requires client support for `textDocument/completion` and optional completion
+//! capabilities such as `completionItem.snippetSupport` and
+//! `completionItem.resolveSupport`.
+//!
+//! ## Protocol Compliance
+//!
+//! Implements the LSP completion protocol (`textDocument/completion` and
+//! `completionItem/resolve`) with cancellation handling per the LSP 3.17+ spec.
+//!
+//! ## See also
+//!
+//! - [`CompletionContext`] for request-scoped parsing context
+//! - [`CompletionItem`] for LSP completion payloads
+//! - [`crate::ide::lsp_compat::semantic_tokens`] for shared symbol analysis
+//!
 //! ## Usage Examples
 //!
 //! ### Basic Variable Completion
@@ -124,6 +141,7 @@ impl CompletionProvider {
     /// # Ok(())
     /// # }
     /// ```
+    /// Arguments: `ast`, `workspace_index`.
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
         Self::new_with_index_and_source(ast, "", workspace_index)
     }
@@ -166,6 +184,9 @@ impl CompletionProvider {
     /// # Ok(())
     /// # }
     /// ```
+    /// Arguments: `ast`, `source`, `workspace_index`.
+    /// Returns: A configured completion provider.
+    /// Example: `CompletionProvider::new_with_index_and_source(&ast, source, None)`.
     pub fn new_with_index_and_source(
         ast: &Node,
         source: &str,
@@ -207,6 +228,8 @@ impl CompletionProvider {
     /// # Ok(())
     /// # }
     /// ```
+    /// Arguments: `ast`.
+    /// Returns: A completion provider configured for local-only symbols.
     pub fn new(ast: &Node) -> Self {
         Self::new_with_index(ast, None)
     }
@@ -250,6 +273,9 @@ impl CompletionProvider {
     ///
     /// See also [`Self::get_completions_with_path_cancellable`] for cancellation support
     /// and [`Self::get_completions`] for simple completions without filepath context.
+    /// Arguments: `source`, `position`, `filepath`.
+    /// Returns: A list of completion items for the current context.
+    /// Example: `provider.get_completions_with_path(source, pos, Some(path))`.
     pub fn get_completions_with_path(
         &self,
         source: &str,
@@ -307,6 +333,9 @@ impl CompletionProvider {
     /// # Ok(())
     /// # }
     /// ```
+    /// Arguments: `source`, `position`, `filepath`, `is_cancelled`.
+    /// Returns: A list of completion items or an empty list when cancelled.
+    /// Example: `provider.get_completions_with_path_cancellable(source, pos, None, &|| false)`.
     pub fn get_completions_with_path_cancellable(
         &self,
         source: &str,
@@ -506,6 +535,9 @@ impl CompletionProvider {
     /// ```
     ///
     /// See also [`Self::get_completions_with_path`] for enhanced context-aware completions.
+    /// Arguments: `source`, `position`.
+    /// Returns: A list of completion items for the current context.
+    /// Example: `provider.get_completions(source, pos)`.
     pub fn get_completions(&self, source: &str, position: usize) -> Vec<CompletionItem> {
         self.get_completions_with_path(source, position, None)
     }

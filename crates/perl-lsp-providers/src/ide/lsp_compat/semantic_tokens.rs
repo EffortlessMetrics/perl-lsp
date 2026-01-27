@@ -12,6 +12,16 @@
 //! - **Complete**: Primary consumer - provides syntax highlighting for code presentation
 //! - **Analyze**: Uses semantic classification for enhanced search and analysis
 //!
+//! # Client capability requirements
+//!
+//! Requires client capability support for `textDocument/semanticTokens` and
+//! `semanticTokens/legend` registration to enable semantic highlighting.
+//!
+//! # Protocol compliance
+//!
+//! Implements the semanticTokens protocol (full and delta) with LSP 3.17+
+//! data layout and delta encoding expectations.
+//!
 //! # Related Modules
 //!
 //! This module integrates with symbol indexing, semantic analysis, and code completion.
@@ -186,57 +196,24 @@ fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
     *leg.map.get(k).unwrap_or(&0)
 }
 
-/// Collect semantic tokens from parsed Perl script AST for LSP highlighting
-///
-/// Analyzes the provided AST and source text to generate semantic tokens suitable
-/// for LSP client consumption. Combines lexer-based token classification with
-/// AST-based semantic analysis to provide comprehensive syntax highlighting for
-/// Perl script content within the LSP Complete stage.
+/// Collect semantic tokens for LSP highlighting in the Complete stage.
 ///
 /// # Arguments
-///
-/// * `ast` - Parsed Perl script AST containing semantic information
-/// * `text` - Original source text of the Perl script for token extraction
-/// * `to_pos16` - Position conversion function mapping byte offsets to LSP coordinates
-///
+/// * `ast` - Parsed AST for the document.
+/// * `text` - Original source text.
+/// * `to_pos16` - Converts byte offsets to UTF-16 positions.
 /// # Returns
-///
-/// Vector of encoded semantic tokens ready for LSP transmission, sorted by
-/// position and delta-encoded according to LSP specification.
-///
-/// # Performance
-///
-/// - Time complexity: O(n) where n is the number of tokens in the Perl script
-/// - Memory usage: O(n) for token storage and classification
-/// - Optimized for large Perl scripts found in enterprise development workflows
-/// - Thread-safe operation suitable for concurrent Perl parsing
-///
+/// Encoded semantic tokens sorted for LSP transmission.
 /// # Examples
-///
 /// ```rust
 /// use perl_lsp_providers::{Parser, ide::lsp_compat::semantic_tokens::collect_semantic_tokens};
-///
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let script = "my $data_filter = qr/valid/;";
-/// let mut parser = Parser::new(script);
-/// let ast = parser.parse()?;
-///
-/// let pos_mapper = |pos| (0u32, pos as u32); // Simple line-based mapping
-/// let tokens = collect_semantic_tokens(&ast, script, &pos_mapper);
-///
+/// let code = "my $x = 1;";
+/// let mut parser = Parser::new(code);
+/// let ast = parser.parse().unwrap();
+/// let to_pos16 = |pos| (0u32, pos as u32);
+/// let tokens = collect_semantic_tokens(&ast, code, &to_pos16);
 /// assert!(!tokens.is_empty());
-/// // Tokens are delta-encoded for LSP transmission
-/// # Ok(())
-/// # }
 /// ```
-///
-/// # Email Processing Context
-///
-/// This function is particularly effective for highlighting:
-/// - Email filtering and routing logic with regular expressions
-/// - Email template processing code with variable interpolation
-/// - Configuration scripts embedded in Perl code
-/// - Message processing automation with proper keyword highlighting
 pub fn collect_semantic_tokens(
     ast: &Node,
     text: &str,

@@ -26,6 +26,7 @@ pub mod lsp_on_type_formatting;
 pub mod lsp_selection_range;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod lsp_server;
+pub mod lsp_errors;
 pub mod lsp_utils;
 pub mod on_type_formatting;
 pub mod pull_diagnostics;

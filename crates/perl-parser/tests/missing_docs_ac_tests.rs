@@ -324,34 +324,70 @@ mod doc_validation_helpers {
     /// Finds empty or trivial documentation strings
     pub fn find_empty_doc_strings(lines: &[&str]) -> Vec<String> {
         let mut empty_docs = Vec::new();
+        let mut current_block: Vec<(usize, String)> = Vec::new();
 
         for (line_num, line) in lines.iter().enumerate() {
             let doc_line = line.trim_start();
             if doc_line.starts_with("///") {
-                let content = doc_line.trim_start_matches("///").trim();
+                let content = doc_line.trim_start_matches("///").trim().to_string();
+                current_block.push((line_num, content));
+                continue;
+            }
 
-                // Empty doc comment
-                if content.is_empty() {
-                    continue; // Skip empty lines within doc blocks
-                }
-
-                // Trivial documentation patterns
-                if content.len() < 5
-                    || content == "TODO"
-                    || content == "FIXME"
-                    || content.starts_with("//")
-                    || content == "."
-                {
-                    empty_docs.push(format!(
-                        "Trivial documentation at line {}: '{}'",
-                        line_num + 1,
-                        content
-                    ));
-                }
+            if !current_block.is_empty() {
+                evaluate_doc_block(&current_block, &mut empty_docs);
+                current_block.clear();
             }
         }
 
+        if !current_block.is_empty() {
+            evaluate_doc_block(&current_block, &mut empty_docs);
+        }
+
         empty_docs
+    }
+
+    fn evaluate_doc_block(block: &[(usize, String)], empty_docs: &mut Vec<String>) {
+        let mut in_code_block = false;
+        let mut has_non_empty_text = false;
+
+        for (line_num, content) in block {
+            let trimmed = content.trim();
+
+            if trimmed.starts_with("```") {
+                in_code_block = !in_code_block;
+                continue;
+            }
+
+            if in_code_block {
+                continue;
+            }
+
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            has_non_empty_text = true;
+
+            if trimmed.len() < 5
+                || trimmed == "TODO"
+                || trimmed == "FIXME"
+                || trimmed.starts_with("//")
+                || trimmed == "."
+            {
+                empty_docs.push(format!(
+                    "Trivial documentation at line {}: '{}'",
+                    line_num + 1,
+                    trimmed
+                ));
+            }
+        }
+
+        if !has_non_empty_text {
+            if let Some((line_num, _)) = block.first() {
+                empty_docs.push(format!("Empty documentation at line {}", line_num + 1));
+            }
+        }
     }
 
     /// Finds invalid cross-references that won't resolve properly
@@ -2069,7 +2105,7 @@ pub fn parse_source(input: &str) -> Result<Ast, ParseError> {
 }
 "#,
                 expected_module_docs: true,
-                expected_violations: 1, // "```" is flagged as trivial
+                expected_violations: 0,
                 expected_cross_refs: true,
                 expected_examples: true,
             },
@@ -2097,7 +2133,7 @@ pub fn lonely_function() {}
 pub fn broken_example() {}
 "#,
                 expected_module_docs: true,
-                expected_violations: 3, // malformed doctest + 2 trivial docs
+                expected_violations: 1, // malformed doctest
                 expected_cross_refs: false,
                 expected_examples: true,
             },

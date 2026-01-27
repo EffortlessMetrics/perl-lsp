@@ -47,6 +47,12 @@
 //! - **Error resilience**: Graceful degradation for malformed documents
 //! - **UTF-16 position mapping**: Correct client position synchronization
 //!
+//! # See also
+//!
+//! - [`DiagnosticsProvider`] for generating diagnostic output
+//! - [`crate::ide::lsp_compat::code_actions`] for quick fixes powered by diagnostics
+//! - [`crate::ide::lsp_compat::references`] for cross-file navigation
+//!
 //! # Performance Characteristics
 //!
 //! - **Diagnostic generation**: <100ms for typical Perl files
@@ -134,6 +140,8 @@ impl DiagnosticsProvider {
     /// # Ok(())
     /// # }
     /// ```
+    /// Arguments: `ast`, `source`.
+    /// Returns: A diagnostics provider configured for the given source.
     pub fn new(ast: &Node, source: String) -> Self {
         let extractor = SymbolExtractor::new_with_source(&source);
         let symbol_table = extractor.extract(ast);
@@ -183,13 +191,17 @@ impl DiagnosticsProvider {
     /// }
     /// ```
     ///
-    /// # Email Processing Context
+    /// # Automation Context
     ///
     /// This analysis is particularly valuable for:
-    /// - Email filtering script validation
-    /// - Message processing automation error detection
+    /// - Batch processing script validation
+    /// - Data pipeline automation error detection
     /// - Configuration script best practice enforcement
     /// - Template processing code quality assurance
+    ///
+    /// Arguments: `ast`, `parse_errors`, `source`.
+    /// Returns: A vector of diagnostics for the provided source.
+    /// Example: `provider.get_diagnostics(&ast, &[], source)`.
     pub fn get_diagnostics(
         &self,
         ast: &Node,

@@ -1,3 +1,29 @@
+//! Type hierarchy provider for Perl inheritance and package relationships.
+//!
+//! Supplies `textDocument/typeHierarchy` data for navigating parent/child
+//! package relationships in the Parse → Index → Navigate stages of the LSP workflow.
+//!
+//! # Client capability requirements
+//!
+//! Clients must advertise the type hierarchy capability to enable
+//! `textDocument/typeHierarchy` requests and responses.
+//!
+//! # Protocol compliance
+//!
+//! Implements the type hierarchy protocol with LSP symbol kind mappings and
+//! stable item identifiers for follow-up requests.
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use perl_lsp_providers::ide::lsp_compat::type_hierarchy::TypeHierarchyProvider;
+//! use perl_parser_core::Parser;
+//!
+//! let mut parser = Parser::new("package Parent; package Child; use parent 'Parent';");
+//! let _ast = parser.parse().expect("parse");
+//! let _provider = TypeHierarchyProvider::new();
+//! ```
+
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_parser_core::PositionMapper;
 use perl_position_tracking::{WirePosition, WireRange};

@@ -48,12 +48,7 @@ pub use perl_builtins as builtins;
 /// Parser engine components and supporting utilities.
 pub mod engine;
 /// Token stream and trivia utilities for the parser.
-pub mod tokens {
-    pub use perl_tokenizer::token_stream;
-    pub use perl_tokenizer::token_wrapper;
-    pub use perl_tokenizer::trivia;
-    pub use perl_tokenizer::trivia_parser;
-}
+pub mod tokens;
 
 pub use ast_v2::{DiagnosticId, MissingKind};
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.

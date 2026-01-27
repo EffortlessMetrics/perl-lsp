@@ -11,8 +11,8 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-/// Semantic token types for syntax highlighting
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Semantic token types for syntax highlighting in the Parse/Complete workflow.
 pub enum SemanticTokenType {
     // Variables
     /// Variable reference (scalar, array, or hash)
@@ -71,7 +71,8 @@ pub enum SemanticTokenType {
     Label,
 }
 
-/// Semantic token modifiers for enhanced syntax highlighting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Semantic token modifiers for Analyze/Complete stage highlighting.
 ///
 /// Provides additional context about semantic tokens beyond their base type,
 /// enabling rich editor highlighting with detailed symbol information.
@@ -79,7 +80,6 @@ pub enum SemanticTokenType {
 /// # LSP Integration
 /// Maps to LSP `SemanticTokenModifiers` for consistent editor experience
 /// across different LSP clients with full Perl language semantics.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SemanticTokenModifier {
     /// Symbol is being declared at this location
     Declaration,
@@ -103,6 +103,7 @@ pub enum SemanticTokenModifier {
     DefaultLibrary,
 }
 
+#[derive(Debug, Clone)]
 /// A semantic token with type and modifiers for LSP syntax highlighting.
 ///
 /// Represents a single semantic unit in Perl source code with precise location
@@ -116,7 +117,6 @@ pub enum SemanticTokenModifier {
 /// # LSP Workflow Integration
 /// Core component in Parse → Index → Navigate → Complete → Analyze pipeline
 /// for real-time syntax highlighting with ≤1ms update latency.
-#[derive(Debug, Clone)]
 pub struct SemanticToken {
     /// Source location of the token
     pub location: SourceLocation,
@@ -126,10 +126,13 @@ pub struct SemanticToken {
     pub modifiers: Vec<SemanticTokenModifier>,
 }
 
+#[derive(Debug, Clone)]
 /// Hover information for symbols displayed in LSP hover requests.
 ///
 /// Provides comprehensive symbol information including signature,
 /// documentation, and contextual details for enhanced developer experience.
+///
+/// Used during Navigate/Analyze stages to answer hover queries.
 ///
 /// # Performance Characteristics
 /// - Computation: <100μs for typical symbol lookup
@@ -141,7 +144,7 @@ pub struct SemanticToken {
 /// - Package qualification and scope context
 /// - POD documentation extraction and formatting
 /// - Variable type inference and usage patterns
-#[derive(Debug, Clone)]
+/// Workflow: Navigate/Analyze hover details for LSP.
 pub struct HoverInfo {
     /// Symbol signature or declaration
     pub signature: String,
@@ -151,6 +154,7 @@ pub struct HoverInfo {
     pub details: Vec<String>,
 }
 
+#[derive(Debug)]
 /// Semantic analyzer providing comprehensive IDE features for Perl code.
 ///
 /// Central component for LSP semantic analysis, combining symbol table
@@ -177,7 +181,6 @@ pub struct HoverInfo {
 /// - Lexical scoping with `my`, `our`, `local`, `state`
 /// - Object-oriented method dispatch
 /// - Regular expression and heredoc analysis
-#[derive(Debug)]
 pub struct SemanticAnalyzer {
     /// Symbol table with scope hierarchy and definitions
     symbol_table: SymbolTable,
@@ -220,12 +223,12 @@ impl SemanticAnalyzer {
         &self.semantic_tokens
     }
 
-    /// Get hover information at a location
+    /// Get hover information at a location for Navigate/Analyze stages.
     pub fn hover_at(&self, location: SourceLocation) -> Option<&HoverInfo> {
         self.hover_info.get(&location)
     }
 
-    /// Find the symbol at a given location
+    /// Find the symbol at a given location for Navigate workflows.
     ///
     /// Returns the most specific (smallest range) symbol that contains the location.
     /// This ensures that when hovering inside a subroutine body, we return the
@@ -249,7 +252,7 @@ impl SemanticAnalyzer {
         best
     }
 
-    /// Find the definition of a symbol at a given position
+    /// Find the definition of a symbol at a given position for Navigate workflows.
     pub fn find_definition(&self, position: usize) -> Option<&Symbol> {
         // First, find if there's a reference at this position
         for refs in self.symbol_table.references.values() {
@@ -314,7 +317,7 @@ impl SemanticAnalyzer {
         }
     }
 
-    /// Find all references to a symbol at a given position
+    /// Find all references to a symbol at a given position for Navigate/Analyze workflows.
     pub fn find_all_references(
         &self,
         position: usize,
@@ -1336,6 +1339,7 @@ fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
     }
 }
 
+#[derive(Debug)]
 /// A stable, query-oriented view of semantic information over a parsed file.
 ///
 /// LSP and other consumers should use this instead of talking to `SemanticAnalyzer` directly.
@@ -1369,7 +1373,6 @@ fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug)]
 pub struct SemanticModel {
     /// Internal semantic analyzer instance
     analyzer: SemanticAnalyzer,
@@ -1409,7 +1412,7 @@ impl SemanticModel {
         self.analyzer.symbol_table()
     }
 
-    /// Get hover information for a symbol at a specific location.
+    /// Get hover information for a symbol at a specific location during Navigate/Analyze.
     ///
     /// # Parameters
     /// - `location`: Source location to query (line, column)
@@ -1421,6 +1424,7 @@ impl SemanticModel {
     /// # Performance
     /// - Lookup: <100μs for typical files
     /// - Memory: Cached hover info reused across queries
+    /// Workflow: Navigate/Analyze hover lookup.
     pub fn hover_info_at(&self, location: SourceLocation) -> Option<&HoverInfo> {
         self.analyzer.hover_at(location)
     }
