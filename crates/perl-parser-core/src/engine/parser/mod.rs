@@ -99,9 +99,9 @@ pub struct Parser<'a> {
 // Recursion limit is set conservatively to prevent stack overflow
 // before the limit triggers. The actual stack usage depends on the
 // number of function frames between recursion checks (about 20-30
-// for the precedence parsing chain). 64 * 30 = ~1920 frames which
+// for the precedence parsing chain). 128 * 30 = ~3840 frames which
 // is safe. Real Perl code rarely exceeds 20-30 nesting levels.
-const MAX_RECURSION_DEPTH: usize = 64;
+const MAX_RECURSION_DEPTH: usize = 128;
 
 impl<'a> Parser<'a> {
     /// Create a new parser for processing Perl script content within LSP workflow

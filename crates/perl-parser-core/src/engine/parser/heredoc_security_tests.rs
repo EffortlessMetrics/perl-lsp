@@ -40,9 +40,8 @@ fn test_excessive_pending_heredocs() {
     // Test that we limit the number of pending heredocs (recursion depth limit)
     // 60 heredocs on one line (limit is 50)
     let mut code = String::from("print ");
-    for _i in 0..60 {
-        code.push_str("<<EOF, ");
-    }
+    let heredocs: Vec<&str> = (0..60).map(|_| "<<EOF").collect();
+    code.push_str(&heredocs.join(", "));
     code.push_str(";\n");
     // We don't even need to provide bodies if the declaration parsing fails early
     // But let's provide them to be valid if it were allowed
@@ -59,6 +58,9 @@ fn test_excessive_pending_heredocs() {
     } else {
         let errors = parser.errors();
         let found = errors.iter().any(|e| e.to_string().contains("Heredoc depth limit exceeded"));
+        if !found {
+            println!("Errors found: {:?}", errors);
+        }
         assert!(found, "Should report Heredoc depth limit exceeded");
     }
 }
