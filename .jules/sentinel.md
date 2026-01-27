@@ -50,3 +50,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The `perl-dap` safe evaluation logic exempted variables (e.g., `$system`) from the dangerous operations blacklist, but failed to check if those variables were being used in an execution context (e.g., `&$system` or `&{$system}`). This allowed invoking blocked builtins (like `system`) indirectly via variable dereference.
 **Learning:** Allow-listing variables based on sigils alone is insufficient for languages where sigils are also used for dereference calls. Context matters: `$var` is safe, `&$var` is a function call.
 **Prevention:** When exempting identifiers from a blacklist based on syntax (like sigils), explicitly verify that the surrounding syntax does not imply execution (e.g., preceding `&` or `->`).
+
+## 2026-10-26 - Command Injection via execSync which
+**Vulnerability:** The debugger discovery logic used `execSync('which ' + command)` to locate the debug adapter. Although the command input was currently static, this pattern is inherently unsafe as `execSync` spawns a shell, allowing command injection if the input ever becomes dynamic.
+**Learning:** Utility functions that wrap shell commands (like `which`) using `exec` or `execSync` are common sources of vulnerabilities. Developers often forget that `exec` invokes a shell.
+**Prevention:** Replace shell-based utility wrappers with native Node.js implementations. For finding executables, manually iterating `process.env.PATH` is safer, more efficient, and better for cross-platform compatibility (avoiding reliance on the existence of `which` or `where`).

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 
 export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDescriptorFactory {
     createDebugAdapterDescriptor(
@@ -46,20 +47,41 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
     }
 
     private which(command: string): string | undefined {
-        try {
-            const { execSync } = require('child_process');
-            const result = execSync(`which ${command}`, { encoding: 'utf8' });
-            return result.trim();
-        } catch {
-            // Ignore errors
+        const envPath = process.env.PATH || '';
+        const envExt = process.env.PATHEXT || '';
+        const pathDirs = envPath.split(path.delimiter);
+
+        const pathExts = process.platform === 'win32'
+            ? envExt.split(path.delimiter)
+            : [''];
+
+        for (const dir of pathDirs) {
+            for (const ext of pathExts) {
+                // Check if directory exists first to avoid unnecessary work
+                if (!fs.existsSync(dir)) continue;
+
+                const fullPath = path.join(dir, command + ext);
+                if (this.fileExists(fullPath)) {
+                    return fullPath;
+                }
+            }
         }
         return undefined;
     }
 
-    private fileExists(path: string): boolean {
+    private fileExists(filePath: string): boolean {
         try {
-            const fs = require('fs');
-            return fs.existsSync(path) && fs.statSync(path).isFile();
+            if (!fs.existsSync(filePath)) return false;
+            const stat = fs.statSync(filePath);
+            if (!stat.isFile()) return false;
+
+            // Check for executable permissions on Unix
+            if (process.platform !== 'win32') {
+                 // Check if any execute bit is set (user, group, or other)
+                 // 0o111 = --x--x--x
+                 return (stat.mode & 0o111) !== 0;
+            }
+            return true;
         } catch {
             return false;
         }
