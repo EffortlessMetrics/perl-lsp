@@ -10,6 +10,9 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
+#[cfg(feature = "lsp-compat")]
+use lsp_types;
+
 /// Severity levels for Perl::Critic violations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Severity {

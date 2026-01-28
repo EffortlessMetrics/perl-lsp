@@ -35,5 +35,5 @@ pub use subprocess_runtime::OsSubprocessRuntime;
 
 #[cfg(test)]
 pub mod mock {
-    pub use subprocess_runtime::mock::*;
+    pub use crate::subprocess_runtime::mock::*;
 }
