@@ -31,6 +31,19 @@ print $config_path;
 print $temp_file;
 "#;
 
+const MANY_SUBS_SCRIPT: &str = r#"
+sub sub_0 ($a, $b) { my $x = $a + $b; return $x; }
+sub sub_1 ($a, $b) { my $x = $a + $b; return $x; }
+sub sub_2 ($a, $b) { my $x = $a + $b; return $x; }
+sub sub_3 ($a, $b) { my $x = $a + $b; return $x; }
+sub sub_4 ($a, $b) { my $x = $a + $b; return $x; }
+sub sub_5 ($a, $b) { my $x = $a + $b; return $x; }
+sub sub_6 ($a, $b) { my $x = $a + $b; return $x; }
+sub sub_7 ($a, $b) { my $x = $a + $b; return $x; }
+sub sub_8 ($a, $b) { my $x = $a + $b; return $x; }
+sub sub_9 ($a, $b) { my $x = $a + $b; return $x; }
+"#;
+
 fn benchmark_scope_analysis(c: &mut Criterion) {
     // Generate a larger script with many variable usages to stress is_builtin_global
     let mut script = String::from(MANY_VARS_SCRIPT);
@@ -46,6 +59,21 @@ fn benchmark_scope_analysis(c: &mut Criterion) {
     c.bench_function("scope_analysis_many_vars", |b| {
         b.iter(|| {
             let _ = analyzer.analyze(black_box(&ast), black_box(&script), &pragma_map);
+        });
+    });
+
+    // Generate a script with many subroutines to stress parameter handling
+    let mut script_subs = String::from(MANY_SUBS_SCRIPT);
+    for _ in 0..100 {
+        script_subs.push_str(MANY_SUBS_SCRIPT);
+    }
+
+    let mut parser_subs = Parser::new(&script_subs);
+    let ast_subs = parser_subs.parse().expect("Failed to parse subs");
+
+    c.bench_function("scope_analysis_many_subs", |b| {
+        b.iter(|| {
+            let _ = analyzer.analyze(black_box(&ast_subs), black_box(&script_subs), &pragma_map);
         });
     });
 }
