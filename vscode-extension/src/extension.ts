@@ -138,6 +138,10 @@ export async function activate(context: vscode.ExtensionContext) {
         await restartServer(context);
     });
 
+    const organizeImportsCommand = vscode.commands.registerCommand('perl-lsp.organizeImports', async () => {
+        await vscode.commands.executeCommand('editor.action.organizeImports');
+    });
+
     const runTestsCommand = vscode.commands.registerCommand('perl-lsp.runTests', async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor || editor.document.languageId !== 'perl') {
@@ -193,6 +197,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const items: MenuAction[] = [
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(refresh) Restart Server', description: 'Shift+Alt+R', detail: 'Restart the language server', command: 'perl-lsp.restart' },
+            { label: '$(organization) Organize Imports', description: 'Shift+Alt+O', detail: 'Sort and organize use statements', command: 'perl-lsp.organizeImports' },
             { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
@@ -212,7 +217,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
     
-    context.subscriptions.push(restartCommand, runTestsCommand, showVersionCommand, statusMenuCommand);
+    context.subscriptions.push(restartCommand, organizeImportsCommand, runTestsCommand, showVersionCommand, statusMenuCommand);
     
     outputChannel.appendLine('Perl Language Server started successfully');
 }
