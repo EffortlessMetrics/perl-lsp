@@ -248,6 +248,7 @@ ci-gate-low-mem:
         echo "🔍 Running clippy (single-threaded, no-deps)..." && \
         cargo clippy --workspace --lib --locked --no-deps -j1 -- -D warnings -A missing_docs && \
         cargo clippy --workspace --bins --locked --no-deps -j1 -- -D clippy::unwrap_used -D clippy::expect_used && \
+        just ci-forbid-fatal && \
         echo "🧪 Running library tests (single-threaded)..." && \
         cargo test --workspace --lib --locked -j1 -- --test-threads=1 && \
         just ci-policy && \
@@ -286,6 +287,7 @@ ci-gate:
     just ci-clippy-lib && \
     just clippy-prod-no-unwrap && \
     just clippy-no-unwrap-all && \
+    just ci-forbid-fatal && \
     just ci-test-lib && \
     just ci-policy && \
     just ci-lsp-def && \
@@ -356,6 +358,12 @@ clippy-no-unwrap-all:
     @echo "🔒 Enforcing no unwrap/expect everywhere (including tests)..."
     cargo clippy --workspace --all-targets -- -D clippy::unwrap_used -D clippy::expect_used
     @echo "✅ Production code is panic-safe (no unwrap/expect)"
+
+# Forbid fatal constructs gate - catches abort/exit/panic that Clippy misses
+ci-forbid-fatal:
+    @echo "🚫 Checking for forbidden fatal constructs..."
+    @bash scripts/forbid-fatal-constructs.sh --verbose
+    @echo "✅ No forbidden fatal constructs"
 
 # Core tests (fast, essential)
 ci-test-core:

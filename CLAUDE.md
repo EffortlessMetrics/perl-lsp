@@ -144,10 +144,15 @@ RUSTC_WRAPPER=""        # Disable rustc wrapper
 
 - Run `cargo clippy --workspace` before committing
 - Use `cargo fmt` for consistent formatting
-- **No `unwrap()` or `expect()` anywhere** - workspace enforces `clippy::unwrap_used` and `clippy::expect_used` as deny
-  - In production code: use `?`, `.ok_or_else()`, or pattern matching
+- **No fatal constructs in production code** - the following are banned:
+  - `unwrap()`, `expect()` - use `?`, `.ok_or_else()`, or pattern matching
+  - `panic!()`, `todo!()`, `unimplemented!()` - return `Result`/`Option`
+  - `std::process::abort()` - never use, not even as fallback
+  - `dbg!()` - use `tracing::debug!` instead
+  - **Exception**: One centralized `#[allow(clippy::expect_used)]` for `lsp_types::Uri` fallback (see `crates/perl-lsp/src/util/uri.rs`)
   - In tests: use `Result<()>` return types, or `perl_tdd_support::must`/`must_some` helpers
-  - **NEVER use `#[allow(clippy::unwrap_used)]`** - fix the code instead
+- **Regex init**: Use `Option<Regex>` with `.ok()` for graceful degradation
+- **Non-empty collections**: Use fixed-size arrays (`[T; N]`) for compile-time guarantees
 - Prefer `.first()` over `.get(0)`
 - Use `.push(char)` instead of `.push_str("x")` for single chars
 - Use `or_default()` instead of `or_insert_with(Vec::new)`
