@@ -13,7 +13,7 @@
 //! - Timeouts are capped at reasonable limits
 //! - Dangerous operations are blocked in safe evaluation mode
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::path::{Component, Path, PathBuf};
 
 /// Security validation errors
@@ -98,84 +98,88 @@ pub fn validate_path(path: &Path, workspace_root: &Path) -> Result<PathBuf, Secu
         }
     }
 
-    // Normalize the path relative to workspace
+    // Get canonical workspace root (must exist for validation)
+    let workspace_canonical = workspace_root.canonicalize().map_err(|e| {
+        SecurityError::PathOutsideWorkspace(format!(
+            "Workspace root not accessible: {} ({})",
+            workspace_root.display(),
+            e
+        ))
+    })?;
+
+    // Resolve the path: join relative paths with workspace, keep absolute as-is
     let resolved = if path.is_absolute() {
-        // Absolute path - must be within workspace
         path.to_path_buf()
     } else {
-        // Relative path - resolve against workspace root
         workspace_root.join(path)
     };
 
-    // Canonicalize both paths to resolve symlinks and normalize
-    // Note: canonicalize() will fail if the path doesn't exist, which is fine for security
-    // We'll check the components instead for robustness
-    let workspace_canonical = workspace_root
-        .canonicalize()
-        .or_else(|_| Ok::<_, SecurityError>(workspace_root.to_path_buf()))
-        .map_err(|_| {
-            SecurityError::PathOutsideWorkspace(format!(
-                "Workspace root not accessible: {}",
-                workspace_root.display()
-            ))
-        })?;
+    // Try to canonicalize the resolved path
+    // For existing paths, this resolves symlinks and normalizes .. and .
+    let final_path = if let Ok(canonical) = resolved.canonicalize() {
+        // Path exists - check if within workspace
+        if !canonical.starts_with(&workspace_canonical) {
+            return Err(SecurityError::PathOutsideWorkspace(format!(
+                "Path resolves outside workspace: {} (workspace: {})",
+                canonical.display(),
+                workspace_canonical.display()
+            )));
+        }
+        canonical
+    } else {
+        // Path doesn't exist - manually normalize components
+        // Process components relative to workspace
+        let mut stack: Vec<Component> = workspace_canonical.components().collect();
+        let workspace_depth = stack.len();
 
-    // Check for parent directory traversal in components
-    let mut normalized_components = Vec::new();
-    for component in resolved.components() {
-        match component {
-            Component::ParentDir => {
-                // Pop one level up
-                if normalized_components.is_empty() {
-                    // Trying to go above workspace root
+        // Process the user-provided path components
+        for component in path.components() {
+            match component {
+                Component::ParentDir => {
+                    if stack.len() <= workspace_depth {
+                        // Trying to go above workspace
+                        return Err(SecurityError::PathTraversalAttempt(format!(
+                            "Path attempts to escape workspace: {}",
+                            path.display()
+                        )));
+                    }
+                    stack.pop();
+                }
+                Component::Normal(name) => {
+                    stack.push(Component::Normal(name));
+                }
+                Component::CurDir => {
+                    // Skip current directory
+                }
+                Component::RootDir | Component::Prefix(_) => {
+                    // Relative paths shouldn't have these
                     return Err(SecurityError::PathTraversalAttempt(format!(
-                        "Path attempts to escape workspace: {}",
+                        "Invalid component in relative path: {}",
                         path.display()
                     )));
                 }
-                normalized_components.pop();
-            }
-            Component::Normal(name) => {
-                normalized_components.push(name);
-            }
-            Component::CurDir => {
-                // Skip current directory references
-            }
-            Component::RootDir | Component::Prefix(_) => {
-                // These are fine at the start
             }
         }
-    }
 
-    // Reconstruct the normalized path
-    let mut normalized_path = workspace_canonical.clone();
-    for component in normalized_components {
-        normalized_path.push(component);
-    }
+        // Reconstruct the path from the stack
+        let mut result = PathBuf::new();
+        for component in stack {
+            result.push(component);
+        }
 
-    // Verify the normalized path starts with the workspace root
-    if !normalized_path.starts_with(&workspace_canonical) {
+        result
+    };
+
+    // Final validation - ensure we're within workspace
+    if !final_path.starts_with(&workspace_canonical) {
         return Err(SecurityError::PathOutsideWorkspace(format!(
             "Path outside workspace: {} (workspace: {})",
-            normalized_path.display(),
+            final_path.display(),
             workspace_canonical.display()
         )));
     }
 
-    // If the path exists, check if it's a symlink and validate the target
-    if normalized_path.exists() && normalized_path.is_symlink() {
-        if let Ok(target) = normalized_path.canonicalize() {
-            if !target.starts_with(&workspace_canonical) {
-                return Err(SecurityError::SymlinkOutsideWorkspace(format!(
-                    "Symlink resolves outside workspace: {} -> {}",
-                    normalized_path.display(),
-                    target.display()
-                )));
-            }
-        }
-    }
-
-    Ok(normalized_path)
+    Ok(final_path)
 }
 
 /// Validate an expression for safe evaluation
@@ -287,36 +291,54 @@ mod tests {
 
     #[test]
     fn test_validate_path_within_workspace() -> Result<()> {
-        let workspace = PathBuf::from("/workspace");
-        let safe_path = PathBuf::from("src/main.pl");
+        let tempdir = tempfile::tempdir()?;
+        let workspace = tempdir.path();
 
-        let result = validate_path(&safe_path, &workspace);
+        let safe_path = PathBuf::from("src/main.pl");
+        let result = validate_path(&safe_path, workspace);
+
         assert!(result.is_ok(), "Path within workspace should be valid");
         Ok(())
     }
 
     #[test]
     fn test_validate_path_parent_traversal() {
-        let workspace = PathBuf::from("/workspace");
-        let unsafe_path = PathBuf::from("../../../etc/passwd");
+        let tempdir = tempfile::tempdir().expect("Failed to create tempdir");
+        let workspace = tempdir.path();
 
-        let result = validate_path(&unsafe_path, &workspace);
+        let unsafe_path = PathBuf::from("../../../etc/passwd");
+        let result = validate_path(&unsafe_path, workspace);
+
         assert!(result.is_err(), "Parent traversal should be rejected");
 
         match result {
-            Err(SecurityError::PathTraversalAttempt(_)) => {}
-            _ => panic!("Expected PathTraversalAttempt error"),
+            Err(SecurityError::PathTraversalAttempt(_)) | Err(SecurityError::PathOutsideWorkspace(_)) => {
+                // Either error is acceptable - both indicate the path was rejected
+            }
+            Err(e) => panic!("Expected PathTraversalAttempt or PathOutsideWorkspace error, got: {:?}", e),
+            Ok(_) => panic!("Expected error, got Ok"),
         }
     }
 
     #[test]
     fn test_validate_path_absolute_outside() {
-        // Use current directory as workspace to ensure it exists
-        let workspace = std::env::current_dir().expect("Failed to get current dir");
-        let unsafe_path = PathBuf::from("/etc/passwd");
+        // Use a specific subdirectory as workspace to ensure separation
+        let workspace = std::env::current_dir()
+            .expect("Failed to get current dir")
+            .join("test_workspace");
+
+        // Create workspace directory for the test
+        fs::create_dir_all(&workspace).ok();
+
+        // Use a path that's definitely outside the workspace
+        let unsafe_path = workspace.parent().expect("workspace should have parent").join("etc/passwd");
 
         let result = validate_path(&unsafe_path, &workspace);
-        assert!(result.is_err(), "Absolute path outside workspace should be rejected");
+
+        // Clean up
+        fs::remove_dir(&workspace).ok();
+
+        assert!(result.is_err(), "Absolute path outside workspace should be rejected: {:?}", result);
     }
 
     #[test]
@@ -392,10 +414,12 @@ mod tests {
 
     #[test]
     fn test_validate_path_current_directory() -> Result<()> {
-        let workspace = PathBuf::from("/workspace");
-        let path = PathBuf::from("./src/main.pl");
+        let tempdir = tempfile::tempdir()?;
+        let workspace = tempdir.path();
 
-        let result = validate_path(&path, &workspace)?;
+        let path = PathBuf::from("./src/main.pl");
+        let result = validate_path(&path, workspace)?;
+
         assert!(result.to_string_lossy().contains("src"));
         assert!(result.to_string_lossy().contains("main.pl"));
         Ok(())
@@ -403,10 +427,12 @@ mod tests {
 
     #[test]
     fn test_validate_path_dot_files() -> Result<()> {
-        let workspace = PathBuf::from("/workspace");
-        let path = PathBuf::from(".gitignore");
+        let tempdir = tempfile::tempdir()?;
+        let workspace = tempdir.path();
 
-        let result = validate_path(&path, &workspace);
+        let path = PathBuf::from(".gitignore");
+        let result = validate_path(&path, workspace);
+
         assert!(result.is_ok(), "Dot files within workspace should be allowed");
         Ok(())
     }
