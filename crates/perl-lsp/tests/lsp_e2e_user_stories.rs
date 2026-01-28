@@ -137,6 +137,8 @@ sub process_data {
     // The server should have published diagnostics
     // In a real implementation, we'd check the diagnostics notification
     // For this test, we'll directly parse and check for errors
+    // Note: The parser uses error recovery, so it returns Ok() even with errors.
+    // We need to check parser.errors() for collected syntax errors.
     let mut parser = Parser::new(code_with_error);
     let result = parser.parse();
     // With error recovery, parse() should return Ok(AST) but parser.errors() should be non-empty

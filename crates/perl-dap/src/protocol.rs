@@ -152,6 +152,45 @@ pub struct SetBreakpointsResponseBody {
 }
 
 // ============================================================================
+// Inline Values Request/Response Types (Custom)
+// ============================================================================
+
+/// Arguments for inlineValues request
+///
+/// This request is a lightweight, Perl-specific extension that mirrors the
+/// LSP inlineValue provider using a source file and line range.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InlineValuesArguments {
+    /// Source file reference
+    pub source: Source,
+    /// Start line (1-based, inclusive)
+    pub start_line: i64,
+    /// End line (1-based, inclusive)
+    pub end_line: i64,
+}
+
+/// Inline value hint for a single variable
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InlineValueText {
+    /// Line number (1-based)
+    pub line: i64,
+    /// Column number (1-based)
+    pub column: i64,
+    /// Rendered inline value text
+    pub text: String,
+}
+
+/// Response body for inlineValues request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InlineValuesResponseBody {
+    /// Inline values for the requested range
+    pub inline_values: Vec<InlineValueText>,
+}
+
+// ============================================================================
 // Initialize Request/Response Types (AC5)
 // ============================================================================
 

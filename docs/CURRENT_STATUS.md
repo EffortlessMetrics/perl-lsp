@@ -93,11 +93,21 @@ Key terms:
 
 ## What's Next
 
-1. **v0.9.1 Release**: Nearing completion - security hardening and performance optimizations complete
-2. **v1.0 Preparation**: Benchmarks, documentation, and code quality improvements in progress
-3. **Index State Machine**: Workspace indexing state transitions and early-exit optimization
-4. **Documentation Cleanup**: Address remaining `missing_docs` violations
-5. **Production v1.0**: #210 (merge gates), #208 (batteries-included UX), benchmark publication
+**Now (v0.9.1 close-out)**
+- Verify workspace index state machine (transitions, early-exit caps, instrumentation receipts)
+- Documentation cleanup: reduce `missing_docs` violations and complete module-level docs
+
+**Next (v1.0.0 readiness)**
+- Stability statement (GA-lock + versioning rules)
+- Packaging stance (what ships; supported platforms)
+- Benchmark publication with receipts under `benchmarks/results/`
+- Upgrade notes from v0.8.x → v1.0
+- Merge gates (#210) after CI pipeline cleanup (#211)
+
+**Later (post v1.0)**
+- Native DAP completeness (attach, variables/evaluate, safe eval)
+- Full LSP 3.18 compliance
+- Package manager distribution (Homebrew/apt/etc.)
 
 See [ROADMAP.md](ROADMAP.md) for milestone details.
 
@@ -108,7 +118,7 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 - **Tracked test debt**: see `scripts/ignored-test-count.sh`; feature-gated ignores are by design
 - **CI Pipeline (#211)**: Blocks merge-blocking gates (#210)
 - **Docs scope**: perl-parser missing_docs is ratcheted (see `ci/check_missing_docs.sh`); workspace-wide enforcement is a separate decision
-- **Index State Machine**: Workspace indexing optimization deferred to v0.9.1
+- **Index State Machine**: Verification pending (run `just ci-gate` + targeted tests/benchmarks)
 
 ---
 
@@ -134,5 +144,5 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-01-23*
+*Last Updated: 2026-01-27 (narrative sections only; run `just status-update` to refresh metrics)*
 *Canonical docs: [ROADMAP.md](ROADMAP.md), [features.toml](../features.toml)*

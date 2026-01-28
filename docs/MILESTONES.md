@@ -8,9 +8,46 @@
 
 ## Active Milestones
 
+### v0.9.1: Post-Release Optimization
+
+**Status**: Active (local; see GitHub milestones for live counts)
+**Goal**: Close out v0.9.1 hardening and documentation cleanup.
+
+**Exit Criteria**:
+- See `ROADMAP.md` v0.9.1 section (index state machine, documentation cleanup, test debt)
+
+**Constraints**:
+- CI pipeline cleanup (#211) blocks merge gates (#210)
+
+---
+
+### v1.0.0: Boring Promises
+
+**Status**: Queued (after v0.9.1)
+**Goal**: Freeze the surfaces you're willing to support.
+
+**Exit Criteria**:
+- v0.9.1 released and stable
+- Capability snapshot + docs aligned
+- Benchmarks published under benchmarks/results/
+- Upgrade notes exist from v0.8.x → v1.0
+
+**Deliverables**:
+1. Stability statement (what "GA-lock" means)
+2. Packaging stance (binaries, crates, platforms)
+3. Benchmark publication
+
+**Effort Estimate**: ~40-80 hours after v0.9.1
+
+[View all v1.0.0 issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/milestone/2)
+
+---
+
+## Released Milestones
+
 ### v0.9.0: Semantic-Ready
 
-**Status**: Active
+**Status**: Released (2026-01-18)
 **Goal**: A release that external users can try without reading internal docs.
 
 **Exit Criteria**:
@@ -21,36 +58,12 @@
 - GA-lock capability snapshot remains stable
 - Release notes match advertised capabilities
 
-**Blockers** (must resolve before release):
+**Historical blockers**:
 - [#211](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/211) - CI Pipeline Cleanup
 - [#210](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/210) - Merge-Blocking Gates
 - [#143](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/143) - unwrap() panic safety
 
-**Effort Estimate**: ~24 hours focused work (~1 week calendar time)
-
 [View all v0.9.0 issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/milestone/1)
-
----
-
-### v1.0.0: Boring Promises
-
-**Status**: Queued (after v0.9.0)
-**Goal**: Freeze the surfaces you're willing to support.
-
-**Exit Criteria**:
-- v0.9.0 released and stable
-- Capability snapshot + docs aligned
-- Benchmarks published under benchmarks/results/
-- Upgrade notes exist from v0.8.x → v1.0
-
-**Deliverables**:
-1. Stability statement (what "GA-lock" means)
-2. Packaging stance (binaries, crates, platforms)
-3. Benchmark publication
-
-**Effort Estimate**: ~40-80 hours after v0.9.0
-
-[View all v1.0.0 issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/milestone/2)
 
 ---
 
@@ -105,4 +118,4 @@ When a milestone is released:
 - [CURRENT_STATUS.md](CURRENT_STATUS.md) - Computed metrics
 - [issues/corpus/gaps/](issues/corpus/gaps/) - Corpus coverage gaps
 
-<!-- Last Updated: 2026-01-08 -->
+<!-- Last Updated: 2026-01-27 -->

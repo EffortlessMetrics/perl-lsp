@@ -1,0 +1,29 @@
+[package]
+name = "perl-lsp-formatting"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Tree-sitter Perl Contributors"]
+description = "LSP formatting provider for Perl with perltidy integration"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-formatting"
+keywords = ["perl", "lsp", "formatting", "perltidy"]
+categories = ["development-tools", "text-editors"]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-lsp-tooling = { workspace = true }
+perl-parser-core = { workspace = true }
+lsp-types = "0.97.0"
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "1.0"
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[lints]
+workspace = true

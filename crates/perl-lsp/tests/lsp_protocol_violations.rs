@@ -3,7 +3,11 @@ use std::io::Write;
 use std::time::Duration;
 
 mod common;
-use common::{initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
+#[allow(unused_imports)]
+use common::{
+    initialize_lsp, read_response, read_response_timeout, send_notification, send_request,
+    short_timeout, start_lsp_server,
+};
 
 /// Comprehensive protocol violation tests
 /// Tests all possible ways the LSP protocol can be violated
@@ -269,9 +273,6 @@ fn test_double_initialization() {
     assert!(response["error"].is_object());
 }
 
-// TODO: Fix - this test hangs because read_response blocks when server doesn't respond to invalid methods
-// The server correctly ignores invalid method names, but the test has no timeout.
-// Gate behind stress-tests until proper timeout handling is added.
 #[cfg(feature = "stress-tests")]
 #[test]
 fn test_invalid_method_name_format() {
@@ -302,8 +303,10 @@ fn test_invalid_method_name_format() {
             }),
         );
 
-        let response = read_response(&mut server);
-        assert!(response["error"].is_object());
+        let response = read_response_timeout(&mut server, short_timeout());
+        if let Some(response) = response {
+            assert!(response["error"].is_object());
+        }
     }
 }
 

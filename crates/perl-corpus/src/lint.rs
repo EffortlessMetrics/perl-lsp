@@ -280,10 +280,9 @@ pub fn lint_with_config(sections: &[Section], config: &LintConfig) -> Result<()>
 pub fn check_sections(sections: &[Section], config: &LintConfig) -> LintResult {
     let mut result = LintResult { errors: Vec::new(), warnings: Vec::new() };
 
-    // Regex for valid ID format
-    lazy_static::lazy_static! {
-        static ref ID_RE: Regex = Regex::new(r"^[a-z0-9._-]+$").unwrap_or_else(|e| panic!("Invalid ID regex: {e}"));
-    }
+    // Regex for valid ID format - pattern is a compile-time constant, so parsing cannot fail
+    static ID_RE: once_cell::sync::Lazy<Option<Regex>> =
+        once_cell::sync::Lazy::new(|| Regex::new(r"^[a-z0-9._-]+$").ok());
 
     // Track seen IDs for duplicate detection
     let mut seen_ids = BTreeSet::new();
@@ -299,7 +298,7 @@ pub fn check_sections(sections: &[Section], config: &LintConfig) -> LintResult {
         // Check ID format
         if section.id.is_empty() {
             result.errors.push(format!("Missing @id in {}: {}", section.file, section.title));
-        } else if !ID_RE.is_match(&section.id) {
+        } else if !ID_RE.as_ref().is_some_and(|re| re.is_match(&section.id)) {
             result.errors.push(format!(
                 "Invalid @id format '{}' in {}: {} (must match [a-z0-9._-]+)",
                 section.id, section.file, section.title

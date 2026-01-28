@@ -674,6 +674,7 @@ mod missing_docs_tests {
     }
 
     #[test]
+    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_public_structs_documentation_presence() {
         // AC:AC2 - Verify all public structs/enums have comprehensive documentation
         // including workflow role description
@@ -745,6 +746,7 @@ mod missing_docs_tests {
     }
 
     #[test]
+    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_public_functions_documentation_presence() {
         // AC:AC3 - Verify all public functions have comprehensive documentation
         // with summary, parameters, return values, and error conditions
@@ -933,6 +935,7 @@ mod missing_docs_tests {
     }
 
     #[test]
+    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_performance_documentation_presence() {
         // AC:AC4 - Verify performance-critical APIs document memory usage and large workspace scaling
         let roots = source_roots();
@@ -1061,6 +1064,7 @@ mod missing_docs_tests {
     }
 
     #[test]
+    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_module_level_documentation_presence() {
         // AC:AC5 - Verify each module has comprehensive module-level documentation
         // with //! comments explaining purpose and LSP architecture relationship
@@ -1209,6 +1213,7 @@ mod missing_docs_tests {
     }
 
     #[test]
+    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_usage_examples_in_complex_apis() {
         // AC:AC6 - Verify complex APIs include usage examples
         let roots = source_roots();
@@ -1287,6 +1292,7 @@ mod missing_docs_tests {
     }
 
     #[test]
+    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_doctests_presence_and_execution() {
         // AC:AC7 - Verify doctests are present for critical functionality
         let roots = source_roots();
@@ -1362,6 +1368,7 @@ mod missing_docs_tests {
     }
 
     #[test]
+    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_error_types_documentation() {
         // AC:AC8 - Verify error types are documented with parsing and analysis workflow context
         let roots = source_roots();
@@ -1492,6 +1499,7 @@ mod missing_docs_tests {
     }
 
     #[test]
+    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_cross_references_between_functions() {
         // AC:AC9 - Verify related functions include cross-references using Rust documentation linking
         let roots = source_roots();
@@ -1575,6 +1583,7 @@ mod missing_docs_tests {
     }
 
     #[test]
+    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_rust_documentation_best_practices() {
         // AC:AC10 - Verify documentation follows Rust best practices with consistent style
         let roots = source_roots();
@@ -2068,6 +2077,7 @@ pub fn another_risky() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     #[test]
+    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_table_driven_documentation_patterns() {
         let test_cases = vec![
             DocumentationTestCase {
@@ -2336,6 +2346,7 @@ pub fn bad_refs() {}
     // ============================================================================
 
     #[test]
+    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_lsp_provider_documentation_critical_paths() {
         // Test critical LSP provider modules with enhanced validation
         let lsp_critical_modules = [

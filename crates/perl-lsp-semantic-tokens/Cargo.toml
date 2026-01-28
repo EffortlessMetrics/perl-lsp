@@ -1,0 +1,31 @@
+[package]
+name = "perl-lsp-semantic-tokens"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Tree-sitter Perl Contributors"]
+description = "LSP semantic tokens provider for Perl"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-semantic-tokens"
+keywords = ["perl", "lsp", "semantic-tokens", "syntax-highlighting"]
+categories = ["development-tools", "text-editors"]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-parser-core = { workspace = true }
+perl-lexer = { workspace = true }
+perl-semantic-analyzer = { workspace = true }
+rustc-hash = "2.1.1"
+lsp-types = "0.97.0"
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[lints]
+workspace = true

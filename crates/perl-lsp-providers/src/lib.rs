@@ -59,5 +59,43 @@ pub use perl_parser_core::{Parser, ast, position};
 
 /// IDE integration helpers (LSP/DAP runtime support).
 pub mod ide;
-/// Tooling integrations and performance helpers.
-pub mod tooling;
+
+/// Re-exports from `perl_lsp_tooling` for backward compatibility.
+pub mod tooling_export {
+    pub use perl_lsp_tooling::*;
+}
+
+/// Re-exports from `perl_lsp_diagnostics` for backward compatibility.
+pub mod diagnostics {
+    pub use perl_lsp_diagnostics::*;
+}
+
+/// Re-exports from `perl_lsp_semantic_tokens` for backward compatibility.
+pub mod semantic_tokens {
+    pub use perl_lsp_semantic_tokens::*;
+}
+
+/// Re-exports from `perl_lsp_inlay_hints` for backward compatibility.
+pub mod inlay_hints {
+    pub use perl_lsp_inlay_hints::*;
+}
+
+/// Re-exports from `perl_lsp_rename` for backward compatibility.
+pub mod rename {
+    pub use perl_lsp_rename::*;
+}
+
+/// Re-exports from `perl_lsp_completion` for backward compatibility.
+pub mod completion {
+    pub use perl_lsp_completion::*;
+}
+
+/// Re-exports from `perl_lsp_code_actions` for backward compatibility.
+pub mod code_actions {
+    pub use perl_lsp_code_actions::*;
+}
+
+/// Re-exports from `perl_lsp_navigation` for backward compatibility.
+pub mod navigation {
+    pub use perl_lsp_navigation::*;
+}

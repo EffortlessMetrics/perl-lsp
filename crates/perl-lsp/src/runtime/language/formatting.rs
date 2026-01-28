@@ -5,7 +5,7 @@
 
 use super::super::*;
 use crate::convert::{WirePosition, WireRange};
-use crate::features::formatting::CodeFormatter;
+use crate::features::formatting::{CodeFormatter, FormattingOptions};
 use crate::protocol::{invalid_params, req_position, req_range, req_uri};
 
 impl LspServer {

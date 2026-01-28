@@ -1756,6 +1756,77 @@ fn test_notebook_document_3_17() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn test_notebook_execution_summary_3_17() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    // didOpen notebook with a single cell
+    harness.notify(
+        "notebookDocument/didOpen",
+        json!({
+            "notebookDocument": {
+                "uri": "file:///exec.ipynb",
+                "notebookType": "jupyter-notebook",
+                "version": 1,
+                "cells": [
+                    {
+                        "kind": 2,
+                        "document": "file:///exec.ipynb#cell1"
+                    }
+                ]
+            },
+            "cellTextDocuments": [
+                {
+                    "uri": "file:///exec.ipynb#cell1",
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $x = 1;"
+                }
+            ]
+        }),
+    );
+
+    // didChange with executionSummary update
+    harness.notify(
+        "notebookDocument/didChange",
+        json!({
+            "notebookDocument": {
+                "uri": "file:///exec.ipynb",
+                "version": 2
+            },
+            "change": {
+                "cells": {
+                    "data": [
+                        {
+                            "document": "file:///exec.ipynb#cell1",
+                            "executionSummary": {
+                                "executionOrder": 1,
+                                "success": true
+                            }
+                        }
+                    ]
+                }
+            }
+        }),
+    );
+
+    // didClose notebook
+    harness.notify(
+        "notebookDocument/didClose",
+        json!({
+            "notebookDocument": {
+                "uri": "file:///exec.ipynb"
+            },
+            "cellTextDocuments": [
+                { "uri": "file:///exec.ipynb#cell1" }
+            ]
+        }),
+    );
+
+    Ok(())
+}
+
 // ==================== PARTIAL RESULT STREAMING ====================
 
 #[test]

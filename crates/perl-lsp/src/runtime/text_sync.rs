@@ -5,7 +5,7 @@
 use super::*;
 use crate::protocol::invalid_params;
 #[cfg(feature = "workspace")]
-use perl_parser::workspace_index::IndexState;
+use perl_parser::workspace_index::{IndexPhase, IndexState};
 
 impl LspServer {
     /// Handle textDocument/didOpen notification
@@ -116,12 +116,16 @@ impl LspServer {
                         match workspace_index.index_file(url, text.to_string()) {
                             Ok(()) => {
                                 // Transition to Ready on first successful index if still Building
-                                if matches!(coordinator.state(), IndexState::Building { .. }) {
-                                    let symbols = workspace_index.all_symbols();
-                                    coordinator.transition_to_ready(1, symbols.len());
+                                if matches!(
+                                    coordinator.state(),
+                                    IndexState::Building { phase: IndexPhase::Idle, .. }
+                                ) {
+                                    let symbol_count = workspace_index.symbol_count();
+                                    let file_count = workspace_index.file_count();
+                                    coordinator.transition_to_ready(file_count, symbol_count);
                                     eprintln!(
                                         "Index transitioned to Ready after first file (symbols: {})",
-                                        symbols.len()
+                                        symbol_count
                                     );
                                 }
                             }

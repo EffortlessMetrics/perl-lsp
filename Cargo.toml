@@ -11,8 +11,17 @@ members = [
     "crates/perl-incremental-parsing",
     "crates/perl-tdd-support",
     "crates/perl-lsp-providers",
+    "crates/perl-lsp-rename",
     "crates/perl-lsp-protocol",
     "crates/perl-lsp-transport",
+    "crates/perl-lsp-tooling",
+    "crates/perl-lsp-formatting",
+    "crates/perl-lsp-diagnostics",
+    "crates/perl-lsp-semantic-tokens",
+    "crates/perl-lsp-inlay-hints",
+    "crates/perl-lsp-navigation",
+    "crates/perl-lsp-completion",
+    "crates/perl-lsp-code-actions",
     "crates/perl-diagnostics-codes",
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
@@ -21,6 +30,10 @@ members = [
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
+    "crates/perl-dap-breakpoint",
+    "crates/perl-dap-eval",
+    "crates/perl-dap-variables",
+    "crates/perl-dap-stack",
     "xtask", "crates/perl-ast", "crates/perl-token", "crates/perl-quote", "crates/perl-pragma", "crates/perl-edit", "crates/perl-builtins", "crates/perl-regex", "crates/perl-heredoc",
     "crates/perl-error", "crates/perl-tokenizer",
 ]
@@ -34,8 +47,14 @@ exclude = [
 
 # Workspace-level package metadata
 [workspace.package]
+version = "0.8.8"
 edition = "2024"
 rust-version = "1.89"
+authors = ["Tree-sitter Perl Contributors"]
+description = "Tree-sitter based Perl parser and LSP implementation"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 
 [workspace.dependencies]
 # Tier 1: Leaf crates (no internal dependencies)
@@ -57,11 +76,25 @@ perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.8.8" }
 perl-uri = { path = "crates/perl-uri", version = "0.8.8" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.8.8" }
 perl-dap = { path = "crates/perl-dap", version = "0.1.0" }
+perl-dap-breakpoint = { path = "crates/perl-dap-breakpoint", version = "0.1.0" }
+perl-dap-eval = { path = "crates/perl-dap-eval", version = "0.1.0" }
+perl-dap-variables = { path = "crates/perl-dap-variables", version = "0.1.0" }
+perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.1.0" }
 
 # Tier 2: Single-level dependencies
 perl-parser-core = { path = "crates/perl-parser-core", version = "0.8.8" }
 perl-lsp-transport = { path = "crates/perl-lsp-transport", version = "0.8.8" }
+perl-lsp-tooling = { path = "crates/perl-lsp-tooling", version = "0.8.8" }
+perl-lsp-formatting = { path = "crates/perl-lsp-formatting", version = "0.8.8" }
 perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.8.8" }
+perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.8.8" }
+perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.8.8" }
+perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.8.8" }
+perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.8.8" }
+perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.8.8" }
+perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.8.8" }
+perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.8.8" }
+perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.8.8" }
 
 # Tier 3: Two-level dependencies
 perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.8.8" }
@@ -116,6 +149,10 @@ lto = "thin"
 collapsible_if = "allow"
 unwrap_used = "deny"
 expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)', 'cfg(feature, values("slow_tests"))'] }

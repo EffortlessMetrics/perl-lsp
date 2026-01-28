@@ -309,10 +309,7 @@ impl TriviaPreservingParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn must_some<T>(opt: Option<T>) -> T {
-        opt.expect("Expected Some, got None")
-    }
+    use perl_tdd_support::must_some;
 
     #[test]
     fn test_trivia_collection() {

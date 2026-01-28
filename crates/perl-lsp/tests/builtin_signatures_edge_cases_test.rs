@@ -404,11 +404,10 @@ fn test_comprehensive_coverage() -> Result<(), Box<dyn std::error::Error>> {
     let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
-    // Should have at least 129 functions (current count)
-    // TODO: Add missing socket and deprecated functions to reach 150+
+    // Should have broad coverage across builtin categories
     assert!(
-        provider.builtin_count() >= 129,
-        "Should have at least 129 built-in functions, got {}",
+        provider.builtin_count() >= 150,
+        "Should have at least 150 built-in functions, got {}",
         provider.builtin_count()
     );
 

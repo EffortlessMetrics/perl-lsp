@@ -1,0 +1,36 @@
+[package]
+name = "perl-lsp-completion"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Tree-sitter Perl Contributors"]
+description = "LSP completion provider for Perl"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-completion"
+keywords = ["perl", "lsp", "completion", "autocomplete"]
+categories = ["development-tools", "text-editors"]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-parser-core = { workspace = true }
+perl-semantic-analyzer = { workspace = true }
+perl-workspace-index = { workspace = true }
+lsp-types = { version = "0.97.0", optional = true }
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.11"
+url = "2.5.8"
+walkdir = "2.5.0"
+
+[features]
+default = ["lsp-compat"]
+lsp-compat = ["lsp-types"]
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[lints]
+workspace = true

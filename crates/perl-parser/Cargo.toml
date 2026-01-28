@@ -33,6 +33,14 @@ perl-refactoring = { workspace = true }
 perl-incremental-parsing = { workspace = true, optional = true }
 perl-tdd-support = { workspace = true }
 perl-lsp-providers = { workspace = true }
+perl-lsp-code-actions = { workspace = true }
+perl-lsp-completion = { workspace = true }
+perl-lsp-diagnostics = { workspace = true }
+perl-lsp-inlay-hints = { workspace = true }
+perl-lsp-navigation = { workspace = true }
+perl-lsp-rename = { workspace = true }
+perl-lsp-semantic-tokens = { workspace = true }
+perl-lsp-tooling = { workspace = true }
 thiserror = "2.0.18"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"

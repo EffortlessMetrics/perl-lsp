@@ -18,9 +18,7 @@ fn debug_simple_tokens() {
         }
 
         // Safety check
-        if count > 100 {
-            panic!("Too many tokens - possible infinite loop");
-        }
+        assert!(count <= 100, "Too many tokens - possible infinite loop");
     }
 
     println!("Total tokens: {}", count);
@@ -34,15 +32,18 @@ fn test_format_termination() -> TestResult {
     lexer.enter_format_mode();
 
     let token = lexer.next_token().ok_or("Expected token")?;
-    match token.token_type {
-        TokenType::FormatBody(content) => {
-            println!("Format body: {:?}", content);
-        }
-        TokenType::Error(msg) => {
-            println!("Error: {:?}", msg);
-        }
-        _ => panic!("Unexpected token type"),
+    assert!(
+        matches!(token.token_type, TokenType::FormatBody(_) | TokenType::Error(_)),
+        "Expected FormatBody or Error, got {:?}",
+        token.token_type
+    );
+
+    if let TokenType::FormatBody(content) = token.token_type {
+        println!("Format body: {:?}", content);
+    } else if let TokenType::Error(msg) = token.token_type {
+        println!("Error: {:?}", msg);
     }
+
     Ok(())
 }
 
@@ -54,11 +55,15 @@ fn test_format_no_termination() -> TestResult {
     lexer.enter_format_mode();
 
     let token = lexer.next_token().ok_or("Expected token")?;
-    match token.token_type {
-        TokenType::Error(msg) => {
-            assert_eq!(msg.as_ref(), "Unterminated format body");
-        }
-        _ => panic!("Expected error token"),
+    assert!(
+        matches!(token.token_type, TokenType::Error(_)),
+        "Expected error token, got {:?}",
+        token.token_type
+    );
+
+    if let TokenType::Error(msg) = token.token_type {
+        assert_eq!(msg.as_ref(), "Unterminated format body");
     }
+
     Ok(())
 }

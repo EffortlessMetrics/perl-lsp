@@ -24,7 +24,7 @@ pub struct ComplexDataStructureCase {
     pub source: &'static str,
 }
 
-static EDGE_CASES: &[EdgeCase] = &[
+static EDGE_CASES: [EdgeCase; 100] = [
     EdgeCase {
         id: "heredoc.basic",
         description: "Basic quoted heredoc with multiple lines.",
@@ -1019,7 +1019,7 @@ my $counter :shared = 0;
     },
 ];
 
-static COMPLEX_DATA_STRUCTURE_CASES: &[ComplexDataStructureCase] = &[
+static COMPLEX_DATA_STRUCTURE_CASES: [ComplexDataStructureCase; 32] = [
     ComplexDataStructureCase {
         id: "nested.hash.array",
         description: "Nested hash/array structure.",
@@ -1304,12 +1304,12 @@ $counter = 1;
 
 /// Return the static edge case fixtures.
 pub fn edge_cases() -> &'static [EdgeCase] {
-    EDGE_CASES
+    &EDGE_CASES
 }
 
 /// Return the static complex data structure fixtures.
 pub fn complex_data_structure_cases() -> &'static [ComplexDataStructureCase] {
-    COMPLEX_DATA_STRUCTURE_CASES
+    &COMPLEX_DATA_STRUCTURE_CASES
 }
 
 /// Backwards-compatible accessor for complex data structure fixtures.
@@ -1368,17 +1368,13 @@ impl EdgeCaseGenerator {
 
     /// Sample a deterministic edge case by seed.
     ///
-    /// # Panics
+    /// Returns a deterministic edge case. Falls back to first case if seed produces no match.
     ///
-    /// Panics if the edge case list is empty (which should never happen as it's a static compile-time list).
+    /// # Note
+    ///
+    /// The edge case list is a fixed-size array that is never empty (compile-time enforced).
     pub fn sample(seed: u64) -> &'static EdgeCase {
-        select_by_seed(edge_cases(), seed).unwrap_or_else(|| {
-            // SAFETY: EDGE_CASES is a non-empty static list defined at compile time
-            match edge_cases().first() {
-                Some(case) => case,
-                None => panic!("BUG: edge case list is empty - this should never happen"),
-            }
-        })
+        select_by_seed(&EDGE_CASES, seed).unwrap_or(&EDGE_CASES[0])
     }
 
     /// Sample a deterministic edge case by tag.
@@ -1416,19 +1412,13 @@ pub fn find_complex_case(id: &str) -> Option<&'static ComplexDataStructureCase> 
 
 /// Sample a deterministic complex data structure fixture by seed.
 ///
-/// # Panics
+/// Returns a deterministic complex case. Falls back to first case if seed produces no match.
 ///
-/// Panics if the complex case list is empty (which should never happen as it's a static compile-time list).
+/// # Note
+///
+/// The complex case list is a fixed-size array that is never empty (compile-time enforced).
 pub fn sample_complex_case(seed: u64) -> &'static ComplexDataStructureCase {
-    select_by_seed(complex_data_structure_cases(), seed).unwrap_or_else(|| {
-        // SAFETY: COMPLEX_DATA_STRUCTURE_CASES is a non-empty static list defined at compile time
-        match complex_data_structure_cases().first() {
-            Some(case) => case,
-            None => {
-                panic!("BUG: complex case list is empty - this should never happen")
-            }
-        }
-    })
+    select_by_seed(&COMPLEX_DATA_STRUCTURE_CASES, seed).unwrap_or(&COMPLEX_DATA_STRUCTURE_CASES[0])
 }
 
 #[cfg(test)]

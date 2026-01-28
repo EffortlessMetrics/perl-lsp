@@ -1,0 +1,32 @@
+[package]
+name = "perl-lsp-tooling"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Tree-sitter Perl Contributors"]
+description = "Tooling integration for Perl LSP (perltidy, perlcritic)"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-tooling"
+keywords = ["perl", "lsp", "tooling", "perltidy", "perlcritic"]
+categories = ["development-tools", "text-editors"]
+
+[lib]
+doctest = false
+
+[features]
+default = ["lsp-compat"]
+lsp-compat = ["dep:lsp-types"]
+
+[dependencies]
+perl-tdd-support = { workspace = true }
+perl-parser-core = { workspace = true }
+lsp-types = { version = "0.97.0", optional = true }
+serde = { version = "1.0.228", features = ["derive"] }
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[lints]
+workspace = true

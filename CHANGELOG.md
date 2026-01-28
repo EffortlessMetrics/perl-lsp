@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Next release changes go here -->
 
+### Roadmap (Now / Next / Later)
+
+**Now (v0.9.1 close-out)**
+- Index state machine for workspace indexing (state transitions, early-exit, performance caps)
+- Documentation cleanup: reduce `missing_docs` violations and complete module-level docs
+
+**Next (v1.0.0)**
+- Stability statement (GA-lock + versioning rules)
+- Packaging stance (what ships; supported platforms)
+- Benchmark publication with receipts under `benchmarks/results/`
+- Upgrade notes from v0.8.x → v1.0
+
+**Later (post v1.0)**
+- Native DAP completeness (attach, variables/evaluate, safe eval)
+- Full LSP 3.18 compliance
+- Package manager distribution (Homebrew/apt/etc.)
+
+See `docs/ROADMAP.md` for status receipts and exit criteria.
+
+### Added - Workspace Index Lifecycle v1
+
+- **Explicit build phases**: `Idle → Scanning → Indexing` tracked inside `IndexState::Building`
+- **Lifecycle instrumentation**: state/phase durations, transition counts, early-exit reasons
+- **Background workspace scan**: initial indexing with performance caps and early-exit reporting
+
+### Added - Notebook + DAP Preview
+
+- **Notebook sync coverage**: added execution summary test coverage and capability gating
+- **DAP inline values**: custom `inlineValues` request with regex-based inline value hints and tests
+
+### Changed
+
+- **Index routing**: phase-aware reasons for Building state
+
 ### Added - Semantic Analyzer Phase 2-6 Complete (PR #389)
 
 - **Complete NodeKind Coverage**: All remaining AST node handlers implemented

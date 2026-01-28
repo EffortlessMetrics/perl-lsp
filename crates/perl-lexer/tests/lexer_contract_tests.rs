@@ -203,9 +203,7 @@ fn sigil_brace_with_trailing_junk_never_panics() {
         // Should tokenize without panic and terminate
         while lx.next_token().is_some() {
             count += 1;
-            if count > 10 {
-                panic!("Lexer appears to be in infinite loop for '{}'", s);
-            }
+            assert!(count <= 10, "Lexer appears to be in infinite loop for '{}'", s);
         }
     }
 }

@@ -1,0 +1,32 @@
+[package]
+name = "perl-lsp-diagnostics"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Tree-sitter Perl Contributors"]
+description = "LSP diagnostics provider for Perl"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-diagnostics"
+keywords = ["perl", "lsp", "diagnostics", "linting"]
+categories = ["development-tools", "text-editors"]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-parser-core = { workspace = true }
+perl-semantic-analyzer = { workspace = true }
+perl-workspace-index = { workspace = true }
+perl-diagnostics-codes = { workspace = true }
+perl-pragma = { workspace = true }
+lsp-types = "0.97.0"
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[lints]
+workspace = true

@@ -4,18 +4,16 @@
 //! and provides color presentation options for editors.
 
 use super::super::{byte_to_utf16_col, *};
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use perl_position_tracking::{WirePosition, WireRange};
 use regex::Regex;
 
-lazy_static! {
-    /// Regex for hex color codes: #RGB, #RRGGBB, #RRGGBBAA
-    static ref HEX_COLOR_RE: Regex = Regex::new(r"#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})\b")
-        .unwrap_or_else(|e| panic!("Invalid hex color regex: {e}"));
+/// Regex for hex color codes: #RGB, #RRGGBB, #RRGGBBAA
+static HEX_COLOR_RE: Lazy<Option<Regex>> =
+    Lazy::new(|| Regex::new(r"#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})\b").ok());
 
-    /// Regex for ANSI escape codes: \e[31m, \e[32m, etc.
-    static ref ANSI_COLOR_RE: Regex = Regex::new(r"\\e\[([0-9;]+)m").unwrap_or_else(|e| panic!("Invalid color regex: {e}"));
-}
+/// Regex for ANSI escape codes: \e[31m, \e[32m, etc.
+static ANSI_COLOR_RE: Lazy<Option<Regex>> = Lazy::new(|| Regex::new(r"\\e\[([0-9;]+)m").ok());
 
 /// Color information with range and RGBA values
 #[derive(Debug, Clone)]
@@ -50,8 +48,11 @@ pub(crate) fn detect_colors(text: &str) -> Vec<ColorInformation> {
 fn detect_hex_colors(text: &str) -> Vec<ColorInformation> {
     let mut colors = Vec::new();
 
+    let Some(re) = HEX_COLOR_RE.as_ref() else {
+        return colors;
+    };
     for (line_num, line) in text.lines().enumerate() {
-        for cap in HEX_COLOR_RE.captures_iter(line) {
+        for cap in re.captures_iter(line) {
             if let Some(mat) = cap.get(0) {
                 let hex = &cap[1];
                 let color = parse_hex_color(hex);
@@ -122,8 +123,11 @@ fn parse_hex_color(hex: &str) -> Color {
 fn detect_ansi_colors(text: &str) -> Vec<ColorInformation> {
     let mut colors = Vec::new();
 
+    let Some(re) = ANSI_COLOR_RE.as_ref() else {
+        return colors;
+    };
     for (line_num, line) in text.lines().enumerate() {
-        for cap in ANSI_COLOR_RE.captures_iter(line) {
+        for cap in re.captures_iter(line) {
             if let Some(mat) = cap.get(0) {
                 let code = &cap[1];
                 if let Some(color) = parse_ansi_color(code) {

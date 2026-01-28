@@ -1,15 +1,20 @@
 //! URI utilities for LSP
 
-use lazy_static::lazy_static;
 use lsp_types::Uri;
+use std::sync::LazyLock;
 
-lazy_static! {
-    static ref FALLBACK_URI: Uri =
-        "file:///invalid".parse().unwrap_or_else(|e| panic!("Invalid fallback URI: {e}"));
-}
+/// Fallback URI for when parsing fails.
+/// Invariant: "file:///unknown" is a valid URI per RFC 3986.
+static FALLBACK_URI: LazyLock<Uri> = LazyLock::new(|| {
+    #[allow(clippy::expect_used)]
+    "file:///unknown".parse().expect("file:///unknown must be a valid URI")
+});
 
-/// Helper function to parse a URI string into an lsp_types::Uri
-/// Falls back to a valid URI if parsing fails
+/// Helper function to parse a URI string into an lsp_types::Uri.
+/// Falls back to a valid URI if parsing fails.
 pub fn parse_uri(s: &str) -> Uri {
-    s.parse::<Uri>().unwrap_or_else(|_| FALLBACK_URI.clone())
+    match s.parse::<Uri>() {
+        Ok(uri) => uri,
+        Err(_) => FALLBACK_URI.clone(),
+    }
 }

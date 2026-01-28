@@ -39,6 +39,10 @@ impl LspServer {
             self.register_file_watchers_async();
         }
 
+        // Start workspace indexing in the background (if workspace folders exist)
+        #[cfg(feature = "workspace")]
+        self.start_workspace_indexing();
+
         // Send index-ready notification
         let _ = self.send_index_ready_notification();
 

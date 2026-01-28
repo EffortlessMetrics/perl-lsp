@@ -2,6 +2,12 @@
 mod tests {
     use crate::{PerlLexer, TokenType};
 
+    /// Test that format body parsing doesn't hang on unterminated input.
+    ///
+    /// This test verifies that the lexer returns an error token when given
+    /// format content without a proper terminator (single `.` on a line).
+    /// The test will hang if there's an infinite loop, which will be caught
+    /// by the test framework's timeout or CI job timeout.
     #[test]
     fn test_format_body_infinite_loop() {
         let input = "format body without terminator\nthis goes on forever\n";
@@ -10,19 +16,11 @@ mod tests {
         // Manually enter format mode to test
         lexer.enter_format_mode();
 
-        // Set a timeout using a different thread
-        let handle = std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            panic!("parse_format_body took >2s - probable infinite loop");
-        });
-
-        // This should complete quickly or return an error
+        // This should complete quickly and return an error token
+        // (not hang in an infinite loop)
         let token = lexer.next_token();
 
-        // Cancel the timeout if we got here
-        drop(handle);
-
-        // Should get an error token
+        // Should get an error token for unterminated format
         assert!(matches!(token, Some(t) if matches!(t.token_type, TokenType::Error(_))));
     }
 }

@@ -76,6 +76,17 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
         );
 
         signatures.insert(
+            "sysopen",
+            BuiltinSignature {
+                signatures: vec![
+                    "sysopen FILEHANDLE, FILENAME, MODE, PERMS",
+                    "sysopen FILEHANDLE, FILENAME, MODE",
+                ],
+                documentation: "Opens a file using system call semantics",
+            },
+        );
+
+        signatures.insert(
             "close",
             BuiltinSignature {
                 signatures: vec!["close FILEHANDLE", "close"],
@@ -91,6 +102,22 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
                     "read FILEHANDLE, SCALAR, LENGTH",
                 ],
                 documentation: "Reads from a filehandle into a scalar",
+            },
+        );
+
+        signatures.insert(
+            "readline",
+            BuiltinSignature {
+                signatures: vec!["readline FILEHANDLE", "readline"],
+                documentation: "Reads a line from a filehandle",
+            },
+        );
+
+        signatures.insert(
+            "readpipe",
+            BuiltinSignature {
+                signatures: vec!["readpipe EXPR", "readpipe"],
+                documentation: "Executes a command and returns its output",
             },
         );
 
@@ -489,6 +516,22 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
         );
 
         // ===== File Operations =====
+        signatures.insert(
+            "chdir",
+            BuiltinSignature {
+                signatures: vec!["chdir EXPR", "chdir"],
+                documentation: "Changes the current working directory",
+            },
+        );
+
+        signatures.insert(
+            "chroot",
+            BuiltinSignature {
+                signatures: vec!["chroot FILENAME"],
+                documentation: "Changes the root directory for the process",
+            },
+        );
+
         signatures.insert(
             "chmod",
             BuiltinSignature {
@@ -1049,6 +1092,14 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
         );
 
         signatures.insert(
+            "sockatmark",
+            BuiltinSignature {
+                signatures: vec!["sockatmark SOCKET"],
+                documentation: "Tests whether a socket is at an out-of-band mark",
+            },
+        );
+
+        signatures.insert(
             "getpeername",
             BuiltinSignature {
                 signatures: vec!["getpeername SOCKET"],
@@ -1374,6 +1425,77 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             },
         );
 
+        signatures.insert(
+            "getuid",
+            BuiltinSignature { signatures: vec!["getuid"], documentation: "Returns real user ID" },
+        );
+
+        signatures.insert(
+            "geteuid",
+            BuiltinSignature {
+                signatures: vec!["geteuid"],
+                documentation: "Returns effective user ID",
+            },
+        );
+
+        signatures.insert(
+            "getgid",
+            BuiltinSignature { signatures: vec!["getgid"], documentation: "Returns real group ID" },
+        );
+
+        signatures.insert(
+            "getegid",
+            BuiltinSignature {
+                signatures: vec!["getegid"],
+                documentation: "Returns effective group ID",
+            },
+        );
+
+        signatures.insert(
+            "getgroups",
+            BuiltinSignature {
+                signatures: vec!["getgroups"],
+                documentation: "Returns supplementary group IDs",
+            },
+        );
+
+        signatures.insert(
+            "setuid",
+            BuiltinSignature { signatures: vec!["setuid UID"], documentation: "Sets real user ID" },
+        );
+
+        signatures.insert(
+            "seteuid",
+            BuiltinSignature {
+                signatures: vec!["seteuid UID"],
+                documentation: "Sets effective user ID",
+            },
+        );
+
+        signatures.insert(
+            "setgid",
+            BuiltinSignature {
+                signatures: vec!["setgid GID"],
+                documentation: "Sets real group ID",
+            },
+        );
+
+        signatures.insert(
+            "setegid",
+            BuiltinSignature {
+                signatures: vec!["setegid GID"],
+                documentation: "Sets effective group ID",
+            },
+        );
+
+        signatures.insert(
+            "setgroups",
+            BuiltinSignature {
+                signatures: vec!["setgroups LIST"],
+                documentation: "Sets supplementary group IDs",
+            },
+        );
+
         // ===== Miscellaneous System Functions =====
         signatures.insert(
             "umask",
@@ -1412,6 +1534,14 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             BuiltinSignature {
                 signatures: vec!["getpgrp PID"],
                 documentation: "Returns process group",
+            },
+        );
+
+        signatures.insert(
+            "syscall",
+            BuiltinSignature {
+                signatures: vec!["syscall NUMBER, LIST"],
+                documentation: "Invokes a system call",
             },
         );
 

@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-01-23)**: v0.9.1 nearing completion — v1.0 preparation underway, security hardening, performance optimizations complete.
+> **Status (2026-01-27)**: v0.9.1 verification and doc alignment in progress; v1.0 preparation underway.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -28,7 +28,7 @@ If a number is not backed by a receipt, it must be labeled **UNVERIFIED** or rem
 
 ---
 
-## Current State (v0.8.8 → v0.9.0)
+## Current State (v0.9.0 → v0.9.1)
 
 | Component | Release Stance | Evidence | Notes |
 |-----------|----------------|----------|-------|
@@ -41,6 +41,25 @@ If a number is not backed by a receipt, it must be labeled **UNVERIFIED** or rem
 | **Semantic Analyzer** | Phase 2-6 Complete | `just ci-gate` | All NodeKind handlers; full semantic analysis pipeline |
 
 *Only features that pass `ci-gate` or have targeted integration tests count as "Production".*
+
+---
+
+## Now / Next / Later (Summary)
+
+**Now (v0.9.1 close-out)**
+- Verify workspace index state machine (transitions, early-exit caps, instrumentation receipts)
+- Documentation cleanup: reduce `missing_docs` violations and complete module-level docs
+
+**Next (v1.0.0)**
+- Stability statement (GA-lock + versioning rules)
+- Packaging stance (what ships; supported platforms)
+- Benchmark publication with receipts under `benchmarks/results/`
+- Upgrade notes from v0.8.x → v1.0
+
+**Later (post v1.0)**
+- Native DAP completeness (attach, variables/evaluate, safe eval)
+- Full LSP 3.18 compliance
+- Package manager distribution (Homebrew/apt/etc.)
 
 ---
 
@@ -170,10 +189,10 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 
 **Remaining Deliverables**:
 
-1. **Index State Machine** (deferred from v0.9.0)
-   - Proper state transitions for workspace indexing
-   - Early-exit optimization for large workspaces
-   - Performance caps: <100ms initial index, <10ms incremental
+1. **Index State Machine Verification** (deferred from v0.9.0)
+   - Validate transitions and early-exit caps with receipts
+   - Confirm instrumentation output for state/phase durations
+   - Verify performance caps: <100ms initial index, <10ms incremental
 
 2. **Documentation Cleanup**
    - Address remaining violations flagged by `missing_docs`
@@ -224,9 +243,9 @@ These items are explicitly deferred:
 
 ---
 
-## Known Gaps (v0.9 Hardening)
+## Known Gaps (v0.9.1 Hardening)
 
-These gaps are tracked in [`docs/issues/`](issues/) and need closure before v0.9:
+These gaps are tracked in [`docs/issues/`](issues/) and need closure before v0.9.1 close-out:
 
 ### Corpus Coverage Gaps
 - See `docs/issues/corpus/` for NodeKind reachability and GA feature alignment
@@ -238,15 +257,15 @@ These gaps are tracked in [`docs/issues/`](issues/) and need closure before v0.9
 
 ### Known Constraints
 - **CI Pipeline**: Issue #211 blocks merge-blocking gates (#210)
-- **Semantic Phase 2/3**: Advanced features deferred (closures, multi-file, imports)
+- **Native DAP completeness**: Attach/variables/evaluate deferred (see "Not Before v1.0")
 
 ---
 
-## v0.9.0 Blockers (Critical Path)
+## v0.9.0 Blockers (Historical; resolved)
 
-> **Canonical**: This is the authoritative blocker list. Same blockers tracked in [MILESTONES.md](MILESTONES.md).
+> **Historical**: These were the blockers before the v0.9.0 release (2026-01-18). For current blockers, see [MILESTONES.md](MILESTONES.md).
 
-These issues must resolve before v0.9.0 release. Listed in dependency order:
+These issues had to resolve before the v0.9.0 release. Listed in dependency order:
 
 | Order | Issue | Category | Rationale |
 | ----- | ----- | -------- | --------- |
@@ -335,4 +354,4 @@ Older targets (Q1-Q4 2025, 2026 vision) have been archived. Current focus is v0.
 - **[features.toml](../features.toml)** - Canonical capability definitions
 - **[LESSONS.md](LESSONS.md)** - What went wrong and what changed
 
-<!-- Last Updated: 2026-01-23 -->
+<!-- Last Updated: 2026-01-27 -->

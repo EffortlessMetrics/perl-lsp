@@ -53,6 +53,8 @@ pub struct HeredocContent {
 pub struct CollectionResult {
     /// Collected heredoc contents in FIFO order, aligned to pending declarations.
     pub contents: Vec<HeredocContent>,
+    /// Whether each heredoc terminator was found (aligned to `contents`).
+    pub terminators_found: Vec<bool>,
     /// Byte offset immediately after the final terminator newline.
     pub next_offset: usize,
 }
@@ -67,12 +69,14 @@ pub fn collect_all(
     mut pending: VecDeque<PendingHeredoc>,
 ) -> CollectionResult {
     let mut results = Vec::with_capacity(pending.len());
+    let mut terminators_found = Vec::with_capacity(pending.len());
     while let Some(hd) = pending.pop_front() {
-        let (content, off2) = collect_one(src, offset, &hd);
+        let (content, off2, found) = collect_one(src, offset, &hd);
         results.push(content);
+        terminators_found.push(found);
         offset = off2;
     }
-    CollectionResult { contents: results, next_offset: offset }
+    CollectionResult { contents: results, terminators_found, next_offset: offset }
 }
 
 /// Reads content lines until `label` matches after optional leading whitespace.
@@ -80,7 +84,7 @@ pub fn collect_all(
 /// and strip the longest common BYTE prefix on each content line.
 /// CRLF is normalized **only** for terminator comparison; content spans exclude
 /// CR and LF bytes by construction.
-fn collect_one(src: &[u8], mut off: usize, hd: &PendingHeredoc) -> (HeredocContent, usize) {
+fn collect_one(src: &[u8], mut off: usize, hd: &PendingHeredoc) -> (HeredocContent, usize, bool) {
     #[derive(Debug)]
     struct Line {
         start: usize,
@@ -137,10 +141,10 @@ fn collect_one(src: &[u8], mut off: usize, hd: &PendingHeredoc) -> (HeredocConte
 
     if !found {
         // Unterminated; return what we have (upstream should report a syntax error)
-        return (HeredocContent { segments, full_span, terminated: false }, off);
+        return (HeredocContent { segments, full_span, terminated: false }, off, false);
     }
 
-    (HeredocContent { segments, full_span, terminated: true }, after_terminator_off)
+    (HeredocContent { segments, full_span, terminated: true }, after_terminator_off, true)
 }
 
 /// (line_start, line_end_excluding_newline, next_offset_after_newline)
