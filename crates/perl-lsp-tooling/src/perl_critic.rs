@@ -508,7 +508,12 @@ mod tests {
     fn test_builtin_policies() {
         let analyzer = BuiltInAnalyzer::new();
         let ast = Node::new(
-            perl_parser_core::NodeKind::Error { message: "test".to_string() },
+            perl_parser_core::NodeKind::Error {
+                message: "test".to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
             perl_parser_core::SourceLocation { start: 0, end: 10 },
         );
 

@@ -391,8 +391,6 @@ pub use perl_parser_core::util;
 // pub use ide::diagnostics_catalog;
 #[cfg(not(target_arch = "wasm32"))]
 pub use ide::execute_command;
-/// Parser utilities and helpers.
-pub use perl_parser_core::util;
 
 /// Error classification and recovery strategies for parse failures.
 pub use error::classifier as error_classifier;

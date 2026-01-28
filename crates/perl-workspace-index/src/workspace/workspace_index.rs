@@ -136,6 +136,7 @@ pub enum IndexPhase {
 ///     started_at: Instant::now(),
 /// };
 /// ```
+#[derive(Clone, Debug)]
 pub enum IndexState {
     /// Index is being constructed (workspace scan in progress)
     Building {
@@ -281,6 +282,7 @@ pub struct IndexInstrumentationSnapshot {
 /// - `IoError`: Return cached results with warning message
 /// - `ScanTimeout`: Return partial results from completed scan
 /// - `ResourceLimit`: Trigger eviction and return available results
+#[derive(Clone, Debug)]
 pub enum DegradationReason {
     /// Parse storm (too many simultaneous changes)
     ParseStorm {
