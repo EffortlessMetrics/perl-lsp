@@ -164,7 +164,6 @@ sub main {
     say "Starting program...";  # Use modern 'say'
     
     # TODO: Add more functionality
-    # FIXME: Handle edge cases
     # NOTE: This is just a demo
 }
 
@@ -211,4 +210,28 @@ Example Author <author@example.com>
     println!("3. **Round-trip Editing**: Parse → Modify → Reformat without losing style");
     println!("4. **IDE Features**: Show comments in hover, preserve in quick fixes");
     println!("5. **Style Enforcement**: Detect and fix formatting issues");
+
+    println!("\n=== Known Edge Cases and Limitations ===\n");
+    println!("The trivia preservation system handles most common cases but has some known limitations:");
+    println!();
+    println!("1. **Comments at EOF without newline**: Trailing comments without a final newline");
+    println!("   may not be captured as trivia. Workaround: Ensure files end with newline.");
+    println!();
+    println!("2. **POD in middle of code**: POD sections that appear in the middle of subroutines");
+    println!("   or code blocks may not be fully preserved in all contexts.");
+    println!();
+    println!("3. **Comments in complex expressions**: Comments within multi-line expressions");
+    println!("   or heredocs may be treated as part of the expression rather than trivia.");
+    println!();
+    println!("4. **Shebang positioning**: Shebang lines (#!) are treated as line comments");
+    println!("   and attached as leading trivia to the first statement.");
+    println!();
+    println!("5. **Multiple consecutive blank lines**: Sequences of empty lines are collapsed");
+    println!("   into individual newline trivia nodes for efficiency.");
+    println!();
+    println!("6. **Unicode whitespace**: Some Unicode whitespace characters may be handled");
+    println!("   differently than ASCII space and tab.");
+    println!();
+    println!("These limitations are documented for future enhancement. Most production Perl");
+    println!("code follows conventions that avoid these edge cases.");
 }

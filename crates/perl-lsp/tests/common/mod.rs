@@ -28,6 +28,10 @@
 // Re-export test_utils for semantic tests
 pub mod test_utils;
 
+// Test reliability and timeout utilities
+pub mod test_reliability;
+pub mod timeout_scaler;
+
 // Error codes aligned with crates/perl-parser/src/lsp/protocol/errors.rs
 /// JSON-RPC reserved: Server error range is -32000 to -32099
 const ERR_TEST_TIMEOUT: i64 = -32000;

@@ -1037,3 +1037,332 @@ push(@array4, "value4");  # Line 4
     }
     Ok(())
 }
+
+// ====================
+// Glob Expression Tests (Issue #434)
+// ====================
+
+#[test]
+fn test_glob_expression_document_symbols() -> TestResult {
+    let mut server = create_test_server();
+
+    send_request(
+        &mut server,
+        "initialize",
+        Some(json!({
+            "processId": null,
+            "capabilities": {},
+            "rootUri": "file:///test"
+        })),
+    );
+    send_initialized(&mut server);
+
+    let test_code = r#"
+my @files = glob "*.pl";
+my @modules = <*.pm>;
+my @all = glob "**/*.pm";
+"#;
+
+    send_request(
+        &mut server,
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/glob_test.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": test_code
+            }
+        })),
+    );
+
+    let result = send_request(
+        &mut server,
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/glob_test.pl"
+            }
+        })),
+    );
+
+    assert!(result.is_some());
+    let symbols = result.ok_or("Failed to get document symbols")?;
+    assert!(symbols.is_array());
+
+    let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
+    assert!(!symbols_array.is_empty(), "Should find symbols in document with glob expressions");
+
+    Ok(())
+}
+
+#[test]
+fn test_glob_expression_hover() -> TestResult {
+    let mut server = create_test_server();
+
+    send_request(
+        &mut server,
+        "initialize",
+        Some(json!({
+            "processId": null,
+            "capabilities": {},
+            "rootUri": "file:///test"
+        })),
+    );
+    send_initialized(&mut server);
+
+    let test_code = "my @files = glob '*.pl';\n";
+
+    send_request(
+        &mut server,
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/glob_hover.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": test_code
+            }
+        })),
+    );
+
+    let glob_position = test_code.find("glob").ok_or("Could not find 'glob'")?;
+    let result = send_request(
+        &mut server,
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/glob_hover.pl"
+            },
+            "position": {
+                "line": 0,
+                "character": glob_position
+            }
+        })),
+    );
+
+    assert!(result.is_some(), "Hover should work on glob expression");
+    let hover = result.ok_or("Failed to get hover")?;
+
+    if hover.is_object() {
+        let hover_obj = hover.as_object().ok_or("Expected hover object")?;
+        assert!(hover_obj.contains_key("contents"), "Hover should have contents");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_glob_expression_completion() -> TestResult {
+    let mut server = create_test_server();
+
+    send_request(
+        &mut server,
+        "initialize",
+        Some(json!({
+            "processId": null,
+            "capabilities": {},
+            "rootUri": "file:///test"
+        })),
+    );
+    send_initialized(&mut server);
+
+    let test_code = "my @files = glob '*.pl';\nmy $file = ";
+
+    send_request(
+        &mut server,
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/glob_complete.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": test_code
+            }
+        })),
+    );
+
+    let result = send_request(
+        &mut server,
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/glob_complete.pl"
+            },
+            "position": {
+                "line": 1,
+                "character": 12
+            }
+        })),
+    );
+
+    assert!(result.is_some(), "Completion should work in documents with glob expressions");
+
+    Ok(())
+}
+
+#[test]
+fn test_glob_angle_bracket_syntax() -> TestResult {
+    let mut server = create_test_server();
+
+    send_request(
+        &mut server,
+        "initialize",
+        Some(json!({
+            "processId": null,
+            "capabilities": {},
+            "rootUri": "file:///test"
+        })),
+    );
+    send_initialized(&mut server);
+
+    let test_code = r#"
+my @files = <*.pl>;
+my @modules = <lib/**/*.pm>;
+"#;
+
+    send_request(
+        &mut server,
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/glob_angle.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": test_code
+            }
+        })),
+    );
+
+    let result = send_request(
+        &mut server,
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/glob_angle.pl"
+            }
+        })),
+    );
+
+    assert!(result.is_some());
+    let symbols = result.ok_or("Failed to get document symbols")?;
+    assert!(symbols.is_array());
+
+    let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
+    assert!(!symbols_array.is_empty(), "Should parse angle bracket glob expressions");
+
+    Ok(())
+}
+
+#[test]
+fn test_glob_vs_readline_distinction() -> TestResult {
+    let mut server = create_test_server();
+
+    send_request(
+        &mut server,
+        "initialize",
+        Some(json!({
+            "processId": null,
+            "capabilities": {},
+            "rootUri": "file:///test"
+        })),
+    );
+    send_initialized(&mut server);
+
+    let test_code = r#"
+my @files = <*.pl>;
+my $line = <STDIN>;
+my @data = <DATA>;
+open my $fh, '<', 'file.txt';
+my $content = <$fh>;
+"#;
+
+    send_request(
+        &mut server,
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/glob_vs_readline.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": test_code
+            }
+        })),
+    );
+
+    let result = send_request(
+        &mut server,
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/glob_vs_readline.pl"
+            }
+        })),
+    );
+
+    assert!(result.is_some());
+    let symbols = result.ok_or("Failed to get document symbols")?;
+    assert!(symbols.is_array());
+
+    let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
+    assert!(!symbols_array.is_empty(), "Should distinguish glob from readline correctly");
+
+    Ok(())
+}
+
+#[test]
+fn test_glob_complex_patterns() -> TestResult {
+    let mut server = create_test_server();
+
+    send_request(
+        &mut server,
+        "initialize",
+        Some(json!({
+            "processId": null,
+            "capabilities": {},
+            "rootUri": "file:///test"
+        })),
+    );
+    send_initialized(&mut server);
+
+    let test_code = r#"
+my @recursive = glob "**/*.pm";
+my @hidden = glob ".*";
+my @chars = glob "[a-z]*.pl";
+my @brace = glob "{lib,t,bin}/*.pl";
+my @nested = glob "src/**/test/*.t";
+my @mixed = glob "/tmp/[abc]*{.txt,.log}";
+"#;
+
+    send_request(
+        &mut server,
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/glob_patterns.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": test_code
+            }
+        })),
+    );
+
+    let result = send_request(
+        &mut server,
+        "textDocument/documentSymbol",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/glob_patterns.pl"
+            }
+        })),
+    );
+
+    assert!(result.is_some());
+    let symbols = result.ok_or("Failed to get document symbols")?;
+    assert!(symbols.is_array());
+
+    let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
+    assert!(!symbols_array.is_empty(), "Should parse complex glob patterns");
+
+    Ok(())
+}

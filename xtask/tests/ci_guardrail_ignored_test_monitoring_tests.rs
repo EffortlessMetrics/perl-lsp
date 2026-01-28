@@ -196,6 +196,7 @@ pub struct PerformanceRequirements {
 }
 
 /// Ignored test guardian for validation and monitoring
+#[allow(dead_code)]
 pub struct IgnoredTestGuardian {
     /// Baseline tracking for ignored test count
     baseline_tracker: BaselineTracker,

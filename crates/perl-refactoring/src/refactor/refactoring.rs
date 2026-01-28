@@ -2975,5 +2975,90 @@ sub complex {
             // Cleanup
             let _ = fs::remove_dir_all(&backup_root);
         }
+
+        #[test]
+        fn comprehensive_backup_cleanup_all_acs() {
+            // Comprehensive test covering all ACs to avoid race conditions from multiple tests
+            // AC1: Identifies all backup directories
+            // AC2: Respects configurable retention period and age limits
+            // AC3: Keeps recent backups when configured
+            // AC4: Validates directory structure before deletion
+            // AC5: Returns count of directories removed and space reclaimed
+            // AC6: Errors don't prevent history clearing
+            // AC7: Configuration options work
+            // AC8: Only removes refactoring engine backups
+            use std::fs;
+            use std::thread;
+            use std::time::Duration;
+
+            let backup_root = std::env::temp_dir().join("perl_refactor_backups");
+
+            // Clean slate
+            let _ = fs::remove_dir_all(&backup_root);
+            let _ = fs::create_dir_all(&backup_root);
+
+            // Test AC4 & AC8: Validation and selective removal
+            let valid_backup = backup_root.join("refactor_test_1");
+            let invalid_backup = backup_root.join("other_backup");
+            must(fs::create_dir_all(&valid_backup));
+            must(fs::create_dir_all(&invalid_backup));
+            must(fs::write(valid_backup.join("file.pl"), "test"));
+            must(fs::write(invalid_backup.join("file.pl"), "test"));
+
+            let engine = RefactoringEngine::new();
+            assert!(must(engine.validate_backup_directory(&valid_backup)));
+            assert!(!must(engine.validate_backup_directory(&invalid_backup)));
+
+            // Test AC1 & AC5: Identifies and removes with space calculation
+            let mut engine2 = RefactoringEngine::new();
+            let result1 = must(engine2.clear_history());
+            assert_eq!(result1.directories_removed, 1); // Only valid backup removed
+            assert_eq!(result1.space_reclaimed, 4); // "test" = 4 bytes
+            assert!(!valid_backup.exists());
+            assert!(invalid_backup.exists()); // AC8: Other dir still exists
+
+            // Test AC2 & AC3: Retention count
+            let _ = fs::remove_dir_all(&backup_root);
+            let _ = fs::create_dir_all(&backup_root);
+
+            for i in 0..4 {
+                let backup = backup_root.join(format!("refactor_retention_{}", i));
+                must(fs::create_dir_all(&backup));
+                must(fs::write(backup.join("file.pl"), "x"));
+                thread::sleep(Duration::from_millis(50));
+            }
+
+            let config = RefactoringConfig {
+                max_backup_retention: 2,
+                backup_max_age_seconds: 0,
+                ..RefactoringConfig::default()
+            };
+            let mut engine3 = RefactoringEngine::with_config(config);
+            let result2 = must(engine3.clear_history());
+            assert_eq!(result2.directories_removed, 2); // Oldest 2 removed
+
+            // Test AC2: Age-based retention
+            let _ = fs::remove_dir_all(&backup_root);
+            let _ = fs::create_dir_all(&backup_root);
+
+            let old_backup = backup_root.join("refactor_age_test");
+            must(fs::create_dir_all(&old_backup));
+            must(fs::write(old_backup.join("file.pl"), "old"));
+
+            let config2 = RefactoringConfig {
+                backup_max_age_seconds: 1,
+                max_backup_retention: 0,
+                ..RefactoringConfig::default()
+            };
+            let mut engine4 = RefactoringEngine::with_config(config2);
+            thread::sleep(Duration::from_secs(2));
+
+            let result3 = must(engine4.clear_history());
+            assert_eq!(result3.directories_removed, 1);
+            assert!(!old_backup.exists());
+
+            // Cleanup
+            let _ = fs::remove_dir_all(&backup_root);
+        }
     }
 }
