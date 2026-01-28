@@ -1,8 +1,19 @@
 #![allow(clippy::expect_used)]
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use perl_parser::{Parser, ScopeAnalyzer};
+use perl_parser::{Parser, ScopeAnalyzer, PragmaState};
 use std::hint::black_box;
+
+const BAREWORDS_SCRIPT: &str = r#"
+my $a = MyClass->new;
+my $b = OtherClass->new;
+my $c = Some::Package->method;
+call_func();
+my $d = bareword_func;
+my $e = AnotherClass->new;
+my $f = YetAnotherClass->new;
+my $g = OneMoreClass->new;
+"#;
 
 const MANY_VARS_SCRIPT: &str = r#"
 my $var1 = 1;
@@ -50,5 +61,32 @@ fn benchmark_scope_analysis(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, benchmark_scope_analysis);
+fn benchmark_strict_barewords(c: &mut Criterion) {
+    let mut script = String::from(BAREWORDS_SCRIPT);
+    for _ in 0..50 {
+        script.push_str(BAREWORDS_SCRIPT);
+    }
+
+    let mut parser = Parser::new(&script);
+    let ast = parser.parse().expect("Failed to parse");
+    let analyzer = ScopeAnalyzer::new();
+
+    // Enable strict subs to force is_known_function checks
+    let pragma_map = vec![
+        (0..script.len(), PragmaState {
+            strict_subs: true,
+            strict_vars: true,
+            strict_refs: true,
+            warnings: true
+        })
+    ];
+
+    c.bench_function("scope_analysis_strict_barewords", |b| {
+        b.iter(|| {
+            let _ = analyzer.analyze(black_box(&ast), black_box(&script), &pragma_map);
+        });
+    });
+}
+
+criterion_group!(benches, benchmark_scope_analysis, benchmark_strict_barewords);
 criterion_main!(benches);
