@@ -18,3 +18,7 @@ This journal tracks critical performance learnings for the `tree-sitter-perl-rs`
 **Learning:** Optimizing tree traversals vs string matches requires balancing common cases.
 A simple swap to prioritize `is_known_function` (string match) over `is_in_hash_key_context` (tree traversal) slowed down benchmarks because checking the immediate parent (O(1) pointer access) for hash keys (`$hash{key}`) is faster than matching against a large list of built-ins.
 **Action:** Use a hybrid approach: Check immediate parent (depth 1) first (fastest), then check `is_known_function` (fast), then check deeper ancestors (slow). This handles both common cases (hash keys and built-in functions) efficiently.
+
+## 2026-05-24 - [Micro-optimizations in Hot Paths]
+**Learning:** In hot paths like `is_builtin_global` (called for every variable), consolidating multiple string comparisons and length checks into single checks yields measurable gains (~3.5%). Also, iterating over `as_bytes()` avoids UTF-8 decoding overhead when checking for ASCII digits.
+**Action:** For frequently called predicates on strings, prefer byte-level checks (`as_bytes()`) and combine logical conditions to minimize branches and length checks.
