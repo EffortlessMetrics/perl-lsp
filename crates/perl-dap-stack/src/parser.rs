@@ -22,52 +22,59 @@ pub enum StackParseError {
 
 // Compiled regex patterns for stack trace parsing.
 // These patterns are extracted from the perl-dap debug_adapter.rs implementation.
+// Stored as Results to avoid panics; compile failure treated as "no match".
 
 /// Pattern for parsing context information from debugger output.
 /// Matches formats like:
 /// - `Package::func(file.pl:42):`
 /// - `main::(script.pl):42:`
-static CONTEXT_RE: Lazy<Regex> = Lazy::new(|| {
+static CONTEXT_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
         r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+)(?:\))?:(?P<line2>\d+):?)"
-    ).unwrap_or_else(|_| panic!("Failed to compile CONTEXT_RE"))
+    )
 });
 
 /// Pattern for parsing standard stack frame output.
 /// Matches formats like:
 /// - `  @ = Package::func called from file 'path/file.pl' line 42`
 /// - `  #0  main::foo at script.pl line 10`
-static STACK_FRAME_RE: Lazy<Regex> = Lazy::new(|| {
+static STACK_FRAME_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
         r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)"
-    ).unwrap_or_else(|_| panic!("Failed to compile STACK_FRAME_RE"))
+    )
 });
 
 /// Pattern for Perl debugger 'T' command output (verbose backtrace).
 /// Matches formats like:
 /// - `$ = My::Module::method(arg1, arg2) called from file `/path/file.pm' line 123`
-static VERBOSE_FRAME_RE: Lazy<Regex> = Lazy::new(|| {
+static VERBOSE_FRAME_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
         r"^\s*[\$\@\.]\s*=\s*(?P<func>[A-Za-z_][\w:]*+?)\((?P<args>.*?)\)\s+called\s+from\s+file\s+[`'](?P<file>[^'`]+)[`']\s+line\s+(?P<line>\d+)"
-    ).unwrap_or_else(|_| panic!("Failed to compile VERBOSE_FRAME_RE"))
+    )
 });
 
 /// Pattern for simple 'T' command format.
 /// Matches formats like:
 /// - `. = My::Module::method() called from '-e' line 1`
-static SIMPLE_FRAME_RE: Lazy<Regex> = Lazy::new(|| {
+static SIMPLE_FRAME_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
         r"^\s*[\$\@\.]\s*=\s*(?P<func>[A-Za-z_][\w:]*+?)\s*\(\)\s+called\s+from\s+[`'](?P<file>[^'`]+)[`']\s+line\s+(?P<line>\d+)"
-    ).unwrap_or_else(|_| panic!("Failed to compile SIMPLE_FRAME_RE"))
+    )
 });
 
 /// Pattern for eval context in stack traces.
 /// Matches formats like:
 /// - `(eval 10)[/path/file.pm:42]`
-static EVAL_CONTEXT_RE: Lazy<Regex> = Lazy::new(|| {
+static EVAL_CONTEXT_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(r"^\(eval\s+(?P<eval_num>\d+)\)\[(?P<file>[^\]:]+):(?P<line>\d+)\]")
-        .unwrap_or_else(|_| panic!("Failed to compile EVAL_CONTEXT_RE"))
 });
+
+// Accessor functions for regexes
+fn context_re() -> Option<&'static Regex> { CONTEXT_RE.as_ref().ok() }
+fn stack_frame_re() -> Option<&'static Regex> { STACK_FRAME_RE.as_ref().ok() }
+fn verbose_frame_re() -> Option<&'static Regex> { VERBOSE_FRAME_RE.as_ref().ok() }
+fn simple_frame_re() -> Option<&'static Regex> { SIMPLE_FRAME_RE.as_ref().ok() }
+fn eval_context_re() -> Option<&'static Regex> { EVAL_CONTEXT_RE.as_ref().ok() }
 
 /// Parser for Perl debugger stack trace output.
 ///
@@ -125,27 +132,27 @@ impl PerlStackParser {
         let line = line.trim();
 
         // Try verbose backtrace format first
-        if let Some(caps) = VERBOSE_FRAME_RE.captures(line) {
+        if let Some(caps) = verbose_frame_re().and_then(|re| re.captures(line)) {
             return self.build_frame_from_captures(&caps, id, true);
         }
 
         // Try simple frame format
-        if let Some(caps) = SIMPLE_FRAME_RE.captures(line) {
+        if let Some(caps) = simple_frame_re().and_then(|re| re.captures(line)) {
             return self.build_frame_from_captures(&caps, id, false);
         }
 
         // Try standard stack frame format
-        if let Some(caps) = STACK_FRAME_RE.captures(line) {
+        if let Some(caps) = stack_frame_re().and_then(|re| re.captures(line)) {
             return self.build_frame_from_captures(&caps, id, false);
         }
 
         // Try context format
-        if let Some(caps) = CONTEXT_RE.captures(line) {
+        if let Some(caps) = context_re().and_then(|re| re.captures(line)) {
             return self.build_frame_from_context(&caps, id);
         }
 
         // Try eval context
-        if let Some(caps) = EVAL_CONTEXT_RE.captures(line) {
+        if let Some(caps) = eval_context_re().and_then(|re| re.captures(line)) {
             return self.build_eval_frame(&caps, id);
         }
 
@@ -280,7 +287,7 @@ impl PerlStackParser {
     ///
     /// A tuple of (function, file, line) if parsed successfully.
     pub fn parse_context(&self, line: &str) -> Option<(String, String, i64)> {
-        if let Some(caps) = CONTEXT_RE.captures(line) {
+        if let Some(caps) = context_re().and_then(|re| re.captures(line)) {
             let func = caps.name("func").map_or("main", |m| m.as_str()).to_string();
             let file = caps.name("file").or_else(|| caps.name("file2"))?.as_str().to_string();
             let line_str = caps.name("line").or_else(|| caps.name("line2"))?.as_str();

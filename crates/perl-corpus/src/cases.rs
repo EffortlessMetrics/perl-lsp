@@ -1368,17 +1368,16 @@ impl EdgeCaseGenerator {
 
     /// Sample a deterministic edge case by seed.
     ///
-    /// # Panics
+    /// Returns a deterministic edge case. Falls back to first case if seed produces no match.
     ///
-    /// Panics if the edge case list is empty (which should never happen as it's a static compile-time list).
+    /// # Note
+    ///
+    /// The edge case list is a static compile-time list that is never empty.
+    #[allow(clippy::expect_used)] // EDGE_CASES is a compile-time non-empty static slice
     pub fn sample(seed: u64) -> &'static EdgeCase {
-        select_by_seed(edge_cases(), seed).unwrap_or_else(|| {
-            // SAFETY: EDGE_CASES is a non-empty static list defined at compile time
-            match edge_cases().first() {
-                Some(case) => case,
-                None => panic!("BUG: edge case list is empty - this should never happen"),
-            }
-        })
+        select_by_seed(edge_cases(), seed)
+            .or_else(|| edge_cases().first())
+            .expect("EDGE_CASES is a compile-time non-empty static slice")
     }
 
     /// Sample a deterministic edge case by tag.
@@ -1416,19 +1415,16 @@ pub fn find_complex_case(id: &str) -> Option<&'static ComplexDataStructureCase> 
 
 /// Sample a deterministic complex data structure fixture by seed.
 ///
-/// # Panics
+/// Returns a deterministic complex case. Falls back to first case if seed produces no match.
 ///
-/// Panics if the complex case list is empty (which should never happen as it's a static compile-time list).
+/// # Note
+///
+/// The complex case list is a static compile-time list that is never empty.
+#[allow(clippy::expect_used)] // COMPLEX_DATA_STRUCTURE_CASES is a compile-time non-empty static slice
 pub fn sample_complex_case(seed: u64) -> &'static ComplexDataStructureCase {
-    select_by_seed(complex_data_structure_cases(), seed).unwrap_or_else(|| {
-        // SAFETY: COMPLEX_DATA_STRUCTURE_CASES is a non-empty static list defined at compile time
-        match complex_data_structure_cases().first() {
-            Some(case) => case,
-            None => {
-                panic!("BUG: complex case list is empty - this should never happen")
-            }
-        }
-    })
+    select_by_seed(complex_data_structure_cases(), seed)
+        .or_else(|| complex_data_structure_cases().first())
+        .expect("COMPLEX_DATA_STRUCTURE_CASES is a compile-time non-empty static slice")
 }
 
 #[cfg(test)]

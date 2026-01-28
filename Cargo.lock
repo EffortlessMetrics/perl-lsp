@@ -1612,6 +1612,7 @@ dependencies = [
  "lsp-types",
  "md5",
  "nix",
+ "once_cell",
  "parking_lot",
  "perl-dap",
  "perl-lexer",

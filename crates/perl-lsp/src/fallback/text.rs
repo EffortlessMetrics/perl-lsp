@@ -5,16 +5,15 @@
 
 use crate::convert::{WirePosition, WireRange};
 use crate::util::byte_to_utf16_col;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json::json;
 
-lazy_static! {
-    /// Matches package declarations: `package Foo::Bar`
-    static ref PACKAGE_RE: Regex = Regex::new(r"^\s*package\s+([\w:]+)").unwrap_or_else(|e| panic!("Invariant violated: invalid package regex: {e}"));
-    /// Matches subroutine definitions: `sub foo`
-    static ref SUB_RE: Regex = Regex::new(r"^\s*sub\s+(\w+)").unwrap_or_else(|e| panic!("Invariant violated: invalid sub regex: {e}"));
-}
+/// Matches package declarations: `package Foo::Bar`
+static PACKAGE_RE: Lazy<Option<Regex>> =
+    Lazy::new(|| Regex::new(r"^\s*package\s+([\w:]+)").ok());
+/// Matches subroutine definitions: `sub foo`
+static SUB_RE: Lazy<Option<Regex>> = Lazy::new(|| Regex::new(r"^\s*sub\s+(\w+)").ok());
 
 /// Extract code lenses from text when AST parsing fails
 pub fn extract_text_based_code_lenses(
@@ -25,7 +24,7 @@ pub fn extract_text_based_code_lenses(
 
     // Find package declarations
     for (line_num, line) in text.lines().enumerate() {
-        if let Some(captures) = PACKAGE_RE.captures(line) {
+        if let Some(captures) = PACKAGE_RE.as_ref().and_then(|re| re.captures(line)) {
             if let Some(pkg_name) = captures.get(1) {
                 let name = pkg_name.as_str().to_string();
 
@@ -52,7 +51,7 @@ pub fn extract_text_based_code_lenses(
 
     // Find subroutine declarations
     for (line_num, line) in text.lines().enumerate() {
-        if let Some(captures) = SUB_RE.captures(line) {
+        if let Some(captures) = SUB_RE.as_ref().and_then(|re| re.captures(line)) {
             if let Some(sub_name) = captures.get(1) {
                 let name = sub_name.as_str().to_string();
 
@@ -95,7 +94,7 @@ pub fn extract_text_based_symbols(
 
     // Find subroutine definitions
     for (line_num, line) in text.lines().enumerate() {
-        if let Some(captures) = SUB_RE.captures(line) {
+        if let Some(captures) = SUB_RE.as_ref().and_then(|re| re.captures(line)) {
             if let Some(sub_name) = captures.get(1) {
                 let name = sub_name.as_str().to_string();
                 if name.to_lowercase().contains(&query_lower) {
@@ -124,7 +123,7 @@ pub fn extract_text_based_symbols(
 
     // Find package declarations
     for (line_num, line) in text.lines().enumerate() {
-        if let Some(captures) = PACKAGE_RE.captures(line) {
+        if let Some(captures) = PACKAGE_RE.as_ref().and_then(|re| re.captures(line)) {
             if let Some(pkg_name) = captures.get(1) {
                 let name = pkg_name.as_str().to_string();
                 if name.to_lowercase().contains(&query_lower) {

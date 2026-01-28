@@ -10,11 +10,11 @@ use regex::Regex;
 use crate::protocol::InlineValueText;
 
 /// Regex for matching Perl scalar variables.
-static SCALAR_VAR_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\$[A-Za-z_][A-Za-z0-9_]*").unwrap_or_else(|_| {
-        // Fallback to simpler pattern - this will always compile
-        Regex::new(r"\$\w+").unwrap_or_else(|_| panic!("Failed to compile fallback regex"))
-    })
+/// Stored as Option to avoid panics; if compilation fails, inline values are skipped.
+static SCALAR_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
+    Regex::new(r"\$[A-Za-z_][A-Za-z0-9_]*")
+        .or_else(|_| Regex::new(r"\$\w+"))
+        .ok()
 });
 
 /// Collect inline values for scalar variables within a line range.
@@ -32,7 +32,9 @@ pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Ve
         end_idx = lines.len() - 1;
     }
 
-    let re = &*SCALAR_VAR_RE;
+    let Some(re) = SCALAR_VAR_RE.as_ref() else {
+        return Vec::new(); // No regex available - graceful degradation
+    };
     let mut inline_values = Vec::new();
 
     for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {

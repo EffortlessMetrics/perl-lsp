@@ -1,4 +1,5 @@
-#![allow(clippy::pedantic)] // Build script - focus on core clippy lints only
+// Build script - panics are idiomatic for failing builds
+#![allow(clippy::pedantic, clippy::panic)]
 
 use std::env;
 use std::fs;

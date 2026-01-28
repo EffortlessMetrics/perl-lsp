@@ -260,12 +260,15 @@ pub use tie_interface::{
     tie_cases_by_tags_any, tie_interface_cases,
 };
 
+// Regex patterns are compile-time constants - parsing cannot fail
+#[allow(clippy::expect_used)]
 static SEC_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-    Regex::new(r"(?m)^=+\s*$").unwrap_or_else(|e| panic!("Invalid separator regex: {e}"))
+    Regex::new(r"(?m)^=+\s*$").expect("SEC_RE pattern is a valid regex")
 });
+#[allow(clippy::expect_used)]
 static META_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
     Regex::new(r"(?m)^#\s*@(?P<k>id|tags|perl|flags):\s*(?P<v>.*)$")
-        .unwrap_or_else(|e| panic!("Invalid metadata regex: {e}"))
+        .expect("META_RE pattern is a valid regex")
 });
 
 fn slugify_title(title: &str) -> String {
