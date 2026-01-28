@@ -41,9 +41,9 @@ impl DiagnosticsProvider {
     /// Generate diagnostics for the given AST
     pub fn generate_diagnostics(
         &self,
-        _ast: &perl_parser_core::ast::Program,
+        _ast: &perl_parser_core::Node,
         _source: &str,
-        _workspace_index: Option<&perl_semantic_analyzer::index::WorkspaceIndex>,
+        _workspace_index: Option<&perl_workspace_index::workspace_index::WorkspaceIndex>,
     ) -> Result<Vec<LspDiagnostic>, String> {
         Ok(Vec::new())
     }

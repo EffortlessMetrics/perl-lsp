@@ -35,10 +35,7 @@ mod walker;
 pub use diagnostics::{DiagnosticsProvider, Diagnostic, DiagnosticSeverity};
 pub use types::{DiagnosticTag, RelatedInformation};
 
-pub mod lints {
-    pub use super::lints::{
-        check_common_mistakes,
-        check_deprecated_features,
-        check_strict_warnings,
-    };
-}
+// Re-export lint checks from the lints module
+pub use lints::common_mistakes;
+pub use lints::deprecated;
+pub use lints::strict_warnings;

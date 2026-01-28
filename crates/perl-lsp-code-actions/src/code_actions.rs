@@ -65,14 +65,14 @@
 //! # }
 //! ```
 
-mod ast_utils;
-mod enhanced;
-mod quick_fixes;
-mod refactors;
-mod types;
+use crate::ast_utils;
+use crate::enhanced;
+use crate::quick_fixes;
+use crate::refactors;
+use crate::types;
 
-pub use enhanced::EnhancedCodeActionsProvider;
-pub use types::{CodeAction, CodeActionEdit, CodeActionKind};
+pub use crate::enhanced::EnhancedCodeActionsProvider;
+pub use crate::types::{CodeAction, CodeActionEdit, CodeActionKind};
 
 use perl_lsp_diagnostics::Diagnostic;
 use perl_parser_core::Node;

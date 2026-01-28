@@ -22,6 +22,13 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+mod ast_utils;
 mod code_actions;
+mod enhanced;
+mod quick_fixes;
+mod refactors;
+mod types;
 
 pub use code_actions::{CodeActionsProvider, CodeAction, CodeActionKind};
+pub use enhanced::EnhancedCodeActionsProvider;
+pub use types::CodeActionEdit;

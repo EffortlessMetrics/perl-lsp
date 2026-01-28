@@ -1,6 +1,6 @@
 //! Import management code actions
 
-use crate::ide::lsp_compat::code_actions::{CodeAction, CodeActionEdit, CodeActionKind};
+use crate::types::{CodeAction, CodeActionEdit, CodeActionKind};
 use perl_lsp_rename::TextEdit;
 use perl_parser_core::ast::{Node, SourceLocation};
 

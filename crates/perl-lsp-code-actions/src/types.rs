@@ -4,6 +4,21 @@
 
 use perl_lsp_rename::TextEdit;
 
+/// A diagnostic with byte offset range for quick fix processing
+///
+/// This is a simplified diagnostic type used internally by the quick fix
+/// system. It uses byte offsets instead of line/column positions for
+/// efficient source text manipulation.
+#[derive(Debug, Clone)]
+pub struct QuickFixDiagnostic {
+    /// The byte offset range (start, end) in the source
+    pub range: (usize, usize),
+    /// The diagnostic message
+    pub message: String,
+    /// The diagnostic code (e.g., "undefined-variable")
+    pub code: Option<String>,
+}
+
 /// A code action that can be applied to fix an issue
 ///
 /// Code actions represent automated fixes for common issues and refactoring
