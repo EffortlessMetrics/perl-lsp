@@ -22,3 +22,7 @@ A simple swap to prioritize `is_known_function` (string match) over `is_in_hash_
 ## 2026-05-24 - [Micro-optimizations in Hot Paths]
 **Learning:** In hot paths like `is_builtin_global` (called for every variable), consolidating multiple string comparisons and length checks into single checks yields measurable gains (~3.5%). Also, iterating over `as_bytes()` avoids UTF-8 decoding overhead when checking for ASCII digits.
 **Action:** For frequently called predicates on strings, prefer byte-level checks (`as_bytes()`) and combine logical conditions to minimize branches and length checks.
+
+## 2026-06-01 - [Cross-Crate Closure Inlining Regression]
+**Learning:** Replacing `node.children()` (allocates `Vec`) with `node.for_each_child(|child| recursive_fn(child))` caused a 45% regression in recursive AST traversal. This is likely due to the overhead of passing a large closure (capturing recursive state) to a non-inlined method in another crate. Adding `#[inline]` helped slightly but did not fully recover performance.
+**Action:** Use specialized helpers like `first_child()` to avoid vector allocation for simple queries, but stick to vector iteration (which is cache-friendly and well-optimized) for full traversals unless the traversal method is guaranteed to be inlined and specialized.
