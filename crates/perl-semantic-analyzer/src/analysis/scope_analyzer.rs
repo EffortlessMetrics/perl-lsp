@@ -665,16 +665,16 @@ impl ScopeAnalyzer {
                 let mut param_names = std::collections::HashSet::new();
 
                 // Extract parameters from signature if present
-                let params_to_check = if let Some(sig) = signature {
+                let params_to_check: &[Node] = if let Some(sig) = signature {
                     match &sig.kind {
-                        NodeKind::Signature { parameters } => parameters.clone(),
-                        _ => Vec::new(),
+                        NodeKind::Signature { parameters } => parameters.as_slice(),
+                        _ => &[],
                     }
                 } else {
-                    Vec::new()
+                    &[]
                 };
 
-                for param in &params_to_check {
+                for param in params_to_check {
                     let extracted = self.extract_variable_name(param);
                     if !extracted.is_empty() {
                         let full_name = extracted.as_string();
@@ -1031,30 +1031,25 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
                 // Check patterns
                 // $^[A-Z] variables
                 if name.starts_with('^') && name.len() == 2 {
-                    if let Some(ch) = name.chars().nth(1) {
-                        if ch.is_ascii_uppercase() {
-                            return true;
-                        }
+                    if name.as_bytes()[1].is_ascii_uppercase() {
+                        return true;
                     }
                 }
 
                 // Numbered capture variables ($1, $2, etc.)
                 // Note: $0-$9 are already handled in the match above, but this covers $10+
-                if !name.is_empty() && name.chars().all(|c| c.is_ascii_digit()) {
+                if !name.is_empty() && name.as_bytes().iter().all(|c| c.is_ascii_digit()) {
                     return true;
                 }
 
                 false
             }
         },
-        b'@' => match name {
-            "_" | "+" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA" => true,
-            _ => false,
-        },
-        b'%' => match name {
-            "_" | "+" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS" => true,
-            _ => false,
-        },
+        b'@' => matches!(
+            name,
+            "_" | "+" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA"
+        ),
+        b'%' => matches!(name, "_" | "+" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS"),
         _ => false,
     }
 }
