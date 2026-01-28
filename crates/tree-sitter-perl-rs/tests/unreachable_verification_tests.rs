@@ -50,8 +50,10 @@ mod verifiable_tests {
         // VERIFICATION POINT 2: Error message is descriptive
         let error = result.unwrap_err();
         assert!(
-            error.contains("my") || error.contains("our") ||
-            error.contains("local") || error.contains("state"),
+            error.contains("my")
+                || error.contains("our")
+                || error.contains("local")
+                || error.contains("state"),
             "Error must mention valid keywords. Got: {}",
             error
         );
@@ -119,18 +121,10 @@ mod verifiable_tests {
             let mut parser = SimpleParserV2::new(input);
             let result = parser.parse();
 
-            assert!(
-                result.is_err(),
-                "Must return error for {}: {}",
-                description, input
-            );
+            assert!(result.is_err(), "Must return error for {}: {}", description, input);
 
             let error = result.unwrap_err();
-            assert!(
-                !error.is_empty(),
-                "Error message must not be empty for {}",
-                description
-            );
+            assert!(!error.is_empty(), "Error message must not be empty for {}", description);
         }
     }
 
@@ -152,18 +146,10 @@ mod verifiable_tests {
             let mut parser = SimpleParser::new(input);
             let result = parser.parse();
 
-            assert!(
-                result.is_err(),
-                "Must return error for {}: {}",
-                description, input
-            );
+            assert!(result.is_err(), "Must return error for {}: {}", description, input);
 
             let error = result.unwrap_err();
-            assert!(
-                !error.is_empty(),
-                "Error message must not be empty for {}",
-                description
-            );
+            assert!(!error.is_empty(), "Error message must not be empty for {}", description);
         }
     }
 
@@ -220,25 +206,25 @@ mod verifiable_tests {
             assert!(
                 result.is_err(),
                 "SimpleParser must error for: {}. Input: {}",
-                description, input
+                description,
+                input
             );
 
             let error = result.unwrap_err();
 
             // VERIFICATION: Error is descriptive
-            assert!(
-                !error.is_empty(),
-                "Error must not be empty for: {}",
-                description
-            );
+            assert!(!error.is_empty(), "Error must not be empty for: {}", description);
 
             // VERIFICATION: Error indicates problem
             assert!(
-                error.contains("Expected") || error.contains("found") ||
-                error.contains("Unexpected") || error.contains("Invalid") ||
-                error.contains("EOF"),
+                error.contains("Expected")
+                    || error.contains("found")
+                    || error.contains("Unexpected")
+                    || error.contains("Invalid")
+                    || error.contains("EOF"),
                 "Error must indicate problem for: {}. Got: {}",
-                description, error
+                description,
+                error
             );
 
             simple_parser_pass_count += 1;
@@ -254,25 +240,25 @@ mod verifiable_tests {
             assert!(
                 result.is_err(),
                 "SimpleParserV2 must error for: {}. Input: {}",
-                description, input
+                description,
+                input
             );
 
             let error = result.unwrap_err();
 
             // VERIFICATION: Error is descriptive
-            assert!(
-                !error.is_empty(),
-                "Error must not be empty for: {}",
-                description
-            );
+            assert!(!error.is_empty(), "Error must not be empty for: {}", description);
 
             // VERIFICATION: Error indicates problem
             assert!(
-                error.contains("Expected") || error.contains("found") ||
-                error.contains("Unexpected") || error.contains("Invalid") ||
-                error.contains("EOF"),
+                error.contains("Expected")
+                    || error.contains("found")
+                    || error.contains("Unexpected")
+                    || error.contains("Invalid")
+                    || error.contains("EOF"),
                 "Error must indicate problem for: {}. Got: {}",
-                description, error
+                description,
+                error
             );
 
             simple_parser_v2_pass_count += 1;
@@ -280,9 +266,20 @@ mod verifiable_tests {
         }
 
         println!("\n=== Verification Summary ===");
-        println!("✓ SimpleParser: {} / {} test cases passed", simple_parser_pass_count, invalid_inputs.len());
-        println!("✓ SimpleParserV2: {} / {} test cases passed", simple_parser_v2_pass_count, invalid_inputs.len());
-        println!("✓ Total: {} error paths verified", simple_parser_pass_count + simple_parser_v2_pass_count);
+        println!(
+            "✓ SimpleParser: {} / {} test cases passed",
+            simple_parser_pass_count,
+            invalid_inputs.len()
+        );
+        println!(
+            "✓ SimpleParserV2: {} / {} test cases passed",
+            simple_parser_v2_pass_count,
+            invalid_inputs.len()
+        );
+        println!(
+            "✓ Total: {} error paths verified",
+            simple_parser_pass_count + simple_parser_v2_pass_count
+        );
         println!("✓ Zero panics observed");
         println!("✓ All errors contain descriptive messages");
         println!("\n=== Conclusion ===");

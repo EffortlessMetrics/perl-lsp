@@ -10,9 +10,7 @@ use perl_parser_core::Parser;
 
 fn main() {
     // Initialize tracing subscriber to capture logs
-    tracing_subscriber::fmt()
-        .with_max_level(tracing_subscriber::filter::LevelFilter::DEBUG)
-        .init();
+    tracing_subscriber::fmt().with_max_level(tracing_subscriber::filter::LevelFilter::DEBUG).init();
 
     println!("=== Demonstration of Default Value Substitution Logging ===\n");
 

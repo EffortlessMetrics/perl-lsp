@@ -212,7 +212,9 @@ Example Author <author@example.com>
     println!("5. **Style Enforcement**: Detect and fix formatting issues");
 
     println!("\n=== Known Edge Cases and Limitations ===\n");
-    println!("The trivia preservation system handles most common cases but has some known limitations:");
+    println!(
+        "The trivia preservation system handles most common cases but has some known limitations:"
+    );
     println!();
     println!("1. **Comments at EOF without newline**: Trailing comments without a final newline");
     println!("   may not be captured as trivia. Workaround: Ensure files end with newline.");

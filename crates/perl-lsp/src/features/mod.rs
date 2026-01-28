@@ -3,6 +3,7 @@
 pub mod code_actions;
 pub mod code_actions_enhanced;
 pub mod code_actions_pragmas;
+/// LSP code actions provider implementation.
 pub mod code_actions_provider;
 pub mod code_lens_provider;
 pub mod completion;
@@ -15,6 +16,7 @@ pub mod folding;
 pub mod formatting;
 pub mod implementation_provider;
 pub mod inlay_hints;
+/// LSP inlay hints provider implementation.
 pub mod inlay_hints_provider;
 pub mod inline_completions;
 pub mod linked_editing;
@@ -22,6 +24,7 @@ pub mod linked_editing;
 pub mod lsp_document_link;
 pub mod lsp_on_type_formatting;
 pub mod lsp_selection_range;
+/// Bidirectional mapping between LSP server capabilities and feature catalog IDs.
 pub mod map;
 pub mod on_type_formatting;
 pub mod references;

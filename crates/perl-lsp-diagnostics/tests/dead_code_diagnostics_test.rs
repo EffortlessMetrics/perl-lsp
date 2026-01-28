@@ -1,4 +1,4 @@
-use perl_lsp_diagnostics::{detect_dead_code, DiagnosticSeverity, DiagnosticTag};
+use perl_lsp_diagnostics::{DiagnosticSeverity, DiagnosticTag, detect_dead_code};
 use perl_parser_core::position::LineStartsCache;
 use perl_workspace_index::workspace_index::WorkspaceIndex;
 

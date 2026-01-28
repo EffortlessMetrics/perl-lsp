@@ -245,7 +245,7 @@ fn test_m_vs_bareword_disambiguation() {
     );
 
     // When followed by whitespace and then delimiter, should still work for m
-    let code2 = "m (pattern)";  // Note: for m, delimiter must be adjacent, so this might not work
+    let code2 = "m (pattern)"; // Note: for m, delimiter must be adjacent, so this might not work
     let mut lexer2 = PerlLexer::new(code2);
     let tokens2 = lexer2.collect_tokens();
     // For m operator, delimiter must be immediately adjacent, so this should be identifier + paren

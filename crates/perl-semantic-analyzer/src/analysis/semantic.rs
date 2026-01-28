@@ -1307,9 +1307,8 @@ impl SemanticAnalyzer {
                 match op.as_str() {
                     "+" | "-" | "*" | "/" | "%" | "**" => Some("number".to_string()),
                     "." | "x" => Some("string".to_string()),
-                    "==" | "!=" | "<" | ">" | "<=" | ">=" | "eq" | "ne" | "lt" | "gt" | "le" | "ge" => {
-                        Some("boolean".to_string())
-                    }
+                    "==" | "!=" | "<" | ">" | "<=" | ">=" | "eq" | "ne" | "lt" | "gt" | "le"
+                    | "ge" => Some("boolean".to_string()),
                     _ => None,
                 }
             }
@@ -2014,7 +2013,11 @@ my $concat = "a" . "b";
         // Test concatenation infers to string
         if let Some(concat_node) = find_binary_node(&ast, ".") {
             let inferred = analyzer.infer_type(concat_node);
-            assert_eq!(inferred, Some("string".to_string()), "Concatenation should infer to string");
+            assert_eq!(
+                inferred,
+                Some("string".to_string()),
+                "Concatenation should infer to string"
+            );
         }
 
         Ok(())

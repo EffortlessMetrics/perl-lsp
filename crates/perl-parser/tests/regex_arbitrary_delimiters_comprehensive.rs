@@ -18,7 +18,10 @@ fn ac2_m_operator_brace_delimiter_nested() -> Result<(), Box<dyn std::error::Err
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let s = format!("{:?}", ast);
-    assert!(s.contains("Regex") || s.contains("Match"), "AC2 Failed: m{{pattern{{nested}}}} not handled");
+    assert!(
+        s.contains("Regex") || s.contains("Match"),
+        "AC2 Failed: m{{pattern{{nested}}}} not handled"
+    );
     Ok(())
 }
 
@@ -28,7 +31,10 @@ fn ac3_s_operator_pipe_delimiter() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let s = format!("{:?}", ast);
-    assert!(s.contains("Substitution") || s.contains("Subst"), "AC3 Failed: s|old|new|g not recognized");
+    assert!(
+        s.contains("Substitution") || s.contains("Subst"),
+        "AC3 Failed: s|old|new|g not recognized"
+    );
     Ok(())
 }
 
@@ -38,7 +44,10 @@ fn ac4_modifiers_after_arbitrary_delimiters() -> Result<(), Box<dyn std::error::
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let s = format!("{:?}", ast);
-    assert!(s.contains("Regex") || s.contains("Match"), "AC4 Failed: m!pattern!i modifiers not parsed");
+    assert!(
+        s.contains("Regex") || s.contains("Match"),
+        "AC4 Failed: m!pattern!i modifiers not parsed"
+    );
 
     // Verify modifiers are captured (not leaked as separate token)
     let identifier_count = s.matches("Identifier").count();
@@ -53,7 +62,10 @@ fn ac6_backward_compatibility_slash_delimiters() -> Result<(), Box<dyn std::erro
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let s = format!("{:?}", ast);
-    assert!(s.contains("Regex") || s.contains("Match"), "AC6 Failed: /pattern/ backward compatibility broken");
+    assert!(
+        s.contains("Regex") || s.contains("Match"),
+        "AC6 Failed: /pattern/ backward compatibility broken"
+    );
     Ok(())
 }
 
@@ -80,7 +92,8 @@ fn various_delimiters_consistency() -> Result<(), Box<dyn std::error::Error>> {
                 assert!(
                     s.contains("Regex") || s.contains("Match"),
                     "Failed to parse m operator with {} delimiter: {}",
-                    delim_name, code
+                    delim_name,
+                    code
                 );
             }
             Err(e) => {
@@ -111,7 +124,8 @@ fn substitution_various_delimiters() -> Result<(), Box<dyn std::error::Error>> {
                 assert!(
                     s.contains("Substitution") || s.contains("Subst"),
                     "Failed to parse s operator with {} delimiter: {}",
-                    delim_name, code
+                    delim_name,
+                    code
                 );
             }
             Err(e) => {
@@ -139,11 +153,15 @@ fn transliteration_various_delimiters() -> Result<(), Box<dyn std::error::Error>
                 assert!(
                     s.contains("Transliteration") || s.contains("Transl"),
                     "Failed to parse tr/y operator with {} delimiter: {}",
-                    delim_name, code
+                    delim_name,
+                    code
                 );
             }
             Err(e) => {
-                panic!("Failed to parse tr/y operator with {} delimiter {}: {}", delim_name, code, e);
+                panic!(
+                    "Failed to parse tr/y operator with {} delimiter {}: {}",
+                    delim_name, code, e
+                );
             }
         }
     }
@@ -167,7 +185,8 @@ fn qr_operator_various_delimiters() -> Result<(), Box<dyn std::error::Error>> {
                 assert!(
                     s.contains("Regex"),
                     "Failed to parse qr operator with {} delimiter: {}",
-                    delim_name, code
+                    delim_name,
+                    code
                 );
             }
             Err(e) => {
@@ -194,8 +213,11 @@ fn ac7_error_messages_distinguish_malformed() -> Result<(), Box<dyn std::error::
         Err(e) => {
             let err_msg = format!("{}", e);
             // Should not say "unknown function m" or similar bareword error
-            assert!(!err_msg.to_lowercase().contains("function"),
-                "AC7 Failed: Error message suggests bareword confusion: {}", err_msg);
+            assert!(
+                !err_msg.to_lowercase().contains("function"),
+                "AC7 Failed: Error message suggests bareword confusion: {}",
+                err_msg
+            );
         }
     }
     Ok(())

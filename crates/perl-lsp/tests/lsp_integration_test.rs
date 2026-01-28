@@ -235,7 +235,8 @@ fn test_zero_content_length() {
 fn test_multiple_headers() {
     // Test that multiple headers are handled correctly
     let json_content = r#"{"jsonrpc":"2.0","id":1,"method":"test"}"#;
-    let header = format!("Content-Length: {}\r\nContent-Type: application/json\r\n\r\n", json_content.len());
+    let header =
+        format!("Content-Length: {}\r\nContent-Type: application/json\r\n\r\n", json_content.len());
     let message = [header.as_bytes(), json_content.as_bytes()].concat();
     let mut reader = BufReader::new(&message[..]);
 
@@ -295,13 +296,15 @@ fn test_concurrent_io_access() {
     let output = Arc::new(tx);
 
     // Create multiple threads that would write to output
-    let handles: Vec<_> = (0..5).map(|i| {
-        let out = output.clone();
-        thread::spawn(move || {
-            let message = format!("Message {}", i);
-            let _ = out.send(message.into_bytes());
+    let handles: Vec<_> = (0..5)
+        .map(|i| {
+            let out = output.clone();
+            thread::spawn(move || {
+                let message = format!("Message {}", i);
+                let _ = out.send(message.into_bytes());
+            })
         })
-    }).collect();
+        .collect();
 
     // Wait for all threads to complete
     for handle in handles {

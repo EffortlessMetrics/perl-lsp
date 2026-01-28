@@ -182,33 +182,38 @@ fn test_variable_type_indicators() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or("Expected variables array")?;
 
         // Arrays should have indexedVariables
-        let arrays = vars.iter().filter(|v| {
-            v.get("type").and_then(|t| t.as_str()) == Some("array")
-        }).collect::<Vec<_>>();
+        let arrays = vars
+            .iter()
+            .filter(|v| v.get("type").and_then(|t| t.as_str()) == Some("array"))
+            .collect::<Vec<_>>();
 
         for array in arrays {
-            assert!(array.get("indexedVariables").is_some(),
-                   "Array should have indexedVariables");
-            assert!(array.get("variablesReference")
-                   .and_then(|r| r.as_i64())
-                   .map(|r| r > 0)
-                   .unwrap_or(false),
-                   "Array should have non-zero variablesReference for lazy expansion");
+            assert!(array.get("indexedVariables").is_some(), "Array should have indexedVariables");
+            assert!(
+                array
+                    .get("variablesReference")
+                    .and_then(|r| r.as_i64())
+                    .map(|r| r > 0)
+                    .unwrap_or(false),
+                "Array should have non-zero variablesReference for lazy expansion"
+            );
         }
 
         // Hashes should have namedVariables
-        let hashes = vars.iter().filter(|v| {
-            v.get("type").and_then(|t| t.as_str()) == Some("hash")
-        }).collect::<Vec<_>>();
+        let hashes = vars
+            .iter()
+            .filter(|v| v.get("type").and_then(|t| t.as_str()) == Some("hash"))
+            .collect::<Vec<_>>();
 
         for hash in hashes {
-            assert!(hash.get("namedVariables").is_some(),
-                   "Hash should have namedVariables");
-            assert!(hash.get("variablesReference")
-                   .and_then(|r| r.as_i64())
-                   .map(|r| r > 0)
-                   .unwrap_or(false),
-                   "Hash should have non-zero variablesReference for lazy expansion");
+            assert!(hash.get("namedVariables").is_some(), "Hash should have namedVariables");
+            assert!(
+                hash.get("variablesReference")
+                    .and_then(|r| r.as_i64())
+                    .map(|r| r > 0)
+                    .unwrap_or(false),
+                "Hash should have non-zero variablesReference for lazy expansion"
+            );
         }
     }
     Ok(())
@@ -231,9 +236,7 @@ fn test_package_scope_variables() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or("Expected variables array")?;
 
         // Package scope should have at least VERSION
-        assert!(vars.iter().any(|v|
-            v.get("name").and_then(|n| n.as_str()) == Some("$VERSION")
-        ));
+        assert!(vars.iter().any(|v| v.get("name").and_then(|n| n.as_str()) == Some("$VERSION")));
     }
     Ok(())
 }
@@ -262,8 +265,7 @@ fn test_lazy_expansion_references() -> Result<(), Box<dyn std::error::Error>> {
 
         // Check uniqueness of non-zero references
         let unique_refs: std::collections::HashSet<_> = refs.iter().collect();
-        assert_eq!(refs.len(), unique_refs.len(),
-                  "All lazy expansion references should be unique");
+        assert_eq!(refs.len(), unique_refs.len(), "All lazy expansion references should be unique");
     }
     Ok(())
 }

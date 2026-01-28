@@ -304,11 +304,12 @@ fn test_invalid_method_name_format() {
         );
 
         // Verify the server returns METHOD_NOT_FOUND error
-        assert!(response["error"].is_object(),
-            "Expected error for method '{}'", method);
-        assert_eq!(response["error"]["code"], -32601,
+        assert!(response["error"].is_object(), "Expected error for method '{}'", method);
+        assert_eq!(
+            response["error"]["code"], -32601,
             "Expected METHOD_NOT_FOUND (-32601) for method '{}', got {:?}",
-            method, response["error"]["code"]);
+            method, response["error"]["code"]
+        );
     }
 }
 

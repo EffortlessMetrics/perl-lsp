@@ -76,11 +76,7 @@ $description
                 assert!(body.contains("^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"));
                 // Count occurrences - should have 2 picture lines with ^
                 let count = body.matches('^').count();
-                assert!(
-                    count >= 2,
-                    "Expected at least 2 multiline field markers, found {}",
-                    count
-                );
+                assert!(count >= 2, "Expected at least 2 multiline field markers, found {}", count);
             } else {
                 panic!("Expected Format node, got {:?}", stmt.kind);
             }
@@ -168,10 +164,7 @@ $test
 "#; // Missing terminating dot
         let result = parse_code(source);
         // Should still parse but body should indicate error or include all remaining text
-        assert!(
-            result.is_some(),
-            "Parser should handle unterminated format gracefully"
-        );
+        assert!(result.is_some(), "Parser should handle unterminated format gracefully");
     }
 
     #[test]
@@ -219,11 +212,7 @@ my $y = 42;
 "#;
         let ast = parse_code(source).unwrap();
         if let NodeKind::Program { statements } = &ast.kind {
-            assert_eq!(
-                statements.len(),
-                2,
-                "Expected format + variable declaration"
-            );
+            assert_eq!(statements.len(), 2, "Expected format + variable declaration");
 
             if let NodeKind::Format { name, .. } = &statements[0].kind {
                 assert_eq!(name, "TEST");
@@ -232,10 +221,7 @@ my $y = 42;
             }
 
             // Second statement should be the variable declaration
-            assert!(matches!(
-                statements[1].kind,
-                NodeKind::VariableDeclaration { .. }
-            ));
+            assert!(matches!(statements[1].kind, NodeKind::VariableDeclaration { .. }));
         }
     }
 

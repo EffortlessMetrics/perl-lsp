@@ -808,7 +808,9 @@ impl<'a> PerlLexer<'a> {
                     self.position += 1; // Skip # directly
 
                     // Use memchr to find newline quickly
-                    if let Some(newline_offset) = memchr::memchr(b'\n', &self.input_bytes[self.position..]) {
+                    if let Some(newline_offset) =
+                        memchr::memchr(b'\n', &self.input_bytes[self.position..])
+                    {
                         self.position += newline_offset;
                     } else {
                         // No newline found, skip to end

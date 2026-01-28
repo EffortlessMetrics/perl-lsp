@@ -379,7 +379,8 @@ fn test_concurrent_lsp_dap_sessions() -> Result<()> {
 
     // Both responses should arrive
     let hover_resp = read_response_matching_i64(&mut server, hover_id, Duration::from_secs(5));
-    let completion_resp = read_response_matching_i64(&mut server, completion_id, Duration::from_secs(5));
+    let completion_resp =
+        read_response_matching_i64(&mut server, completion_id, Duration::from_secs(5));
 
     assert!(hover_resp.is_some(), "Hover response should arrive in concurrent scenario");
     assert!(completion_resp.is_some(), "Completion response should arrive in concurrent scenario");
@@ -453,11 +454,7 @@ fn test_incremental_parsing_during_debugging() -> Result<()> {
 
     let response = read_response_matching_i64(&mut server, hover_id, Duration::from_secs(5));
     assert!(response.is_some(), "LSP should remain responsive after incremental edit");
-    assert!(
-        parse_time < Duration::from_secs(1),
-        "Incremental parsing too slow: {:?}",
-        parse_time
-    );
+    assert!(parse_time < Duration::from_secs(1), "Incremental parsing too slow: {:?}", parse_time);
 
     Ok(())
 }

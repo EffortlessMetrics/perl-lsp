@@ -100,11 +100,7 @@ pub fn get_adaptive_timeout() -> Duration {
     };
 
     // Apply CI multiplier if running in CI
-    if is_ci_environment() {
-        Duration::from_secs_f64(base.as_secs_f64() * 1.5)
-    } else {
-        base
-    }
+    if is_ci_environment() { Duration::from_secs_f64(base.as_secs_f64() * 1.5) } else { base }
 }
 
 /// Get timeout scaled by a factor.
@@ -153,11 +149,7 @@ pub fn get_short_timeout() -> Duration {
         _ => Duration::from_millis(500),
     };
 
-    if is_ci_environment() {
-        Duration::from_secs_f64(base.as_secs_f64() * 1.5)
-    } else {
-        base
-    }
+    if is_ci_environment() { Duration::from_secs_f64(base.as_secs_f64() * 1.5) } else { base }
 }
 
 /// Get an initialization timeout suitable for LSP server startup.

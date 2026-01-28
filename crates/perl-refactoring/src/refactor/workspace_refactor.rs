@@ -849,9 +849,9 @@ impl WorkspaceRefactor {
             RefactorError::UriConversion(format!("Failed to convert path to URI: {}", e))
         })?;
         let store = self._index.document_store();
-        let def_doc = store
-            .get(&def_uri)
-            .ok_or_else(|| RefactorError::DocumentNotIndexed(def_file_path.display().to_string()))?;
+        let def_doc = store.get(&def_uri).ok_or_else(|| {
+            RefactorError::DocumentNotIndexed(def_file_path.display().to_string())
+        })?;
 
         let def_line_idx = def_doc
             .text
@@ -888,7 +888,8 @@ impl WorkspaceRefactor {
         let mut all_locations = self._index.find_refs(&key);
 
         if let Some(def_loc) = self._index.find_def(&key) {
-            if !all_locations.iter().any(|loc| loc.uri == def_loc.uri && loc.range == def_loc.range) {
+            if !all_locations.iter().any(|loc| loc.uri == def_loc.uri && loc.range == def_loc.range)
+            {
                 all_locations.push(def_loc);
             }
         }
@@ -933,7 +934,10 @@ impl WorkspaceRefactor {
                     pos = end;
 
                     if all_locations.len() >= 1000 {
-                        warnings.push("Warning: More than 1000 occurrences found, limiting results".to_string());
+                        warnings.push(
+                            "Warning: More than 1000 occurrences found, limiting results"
+                                .to_string(),
+                        );
                         break;
                     }
                 }
@@ -956,8 +960,10 @@ impl WorkspaceRefactor {
             files_affected.insert(path.clone());
 
             if let Some(doc) = store.get(&loc.uri) {
-                let start_off = doc.line_index.position_to_offset(loc.range.start.line, loc.range.start.column);
-                let end_off = doc.line_index.position_to_offset(loc.range.end.line, loc.range.end.column);
+                let start_off =
+                    doc.line_index.position_to_offset(loc.range.start.line, loc.range.start.column);
+                let end_off =
+                    doc.line_index.position_to_offset(loc.range.end.line, loc.range.end.column);
 
                 if let (Some(start_off), Some(end_off)) = (start_off, end_off) {
                     let is_definition = doc.uri == def_uri
@@ -965,8 +971,12 @@ impl WorkspaceRefactor {
                             .contains("my ");
 
                     if is_definition {
-                        let line_start = doc.text[..start_off].rfind('\n').map(|p| p + 1).unwrap_or(0);
-                        let line_end = doc.text[end_off..].find('\n').map(|p| end_off + p + 1).unwrap_or(doc.text.len());
+                        let line_start =
+                            doc.text[..start_off].rfind('\n').map(|p| p + 1).unwrap_or(0);
+                        let line_end = doc.text[end_off..]
+                            .find('\n')
+                            .map(|p| end_off + p + 1)
+                            .unwrap_or(doc.text.len());
 
                         edits_by_file.entry(path).or_default().push(TextEdit {
                             start: line_start,
@@ -997,11 +1007,7 @@ impl WorkspaceRefactor {
             files_affected.len()
         );
 
-        Ok(RefactorResult {
-            file_edits,
-            description,
-            warnings,
-        })
+        Ok(RefactorResult { file_edits, description, warnings })
     }
 }
 
@@ -1412,9 +1418,8 @@ use JSON; # Duplicate
     #[test]
     fn inline_multi_file_validates_constant() -> Result<(), Box<dyn std::error::Error>> {
         // AC2: Inlining validates that the symbol's value is constant
-        let (_dir, index, paths) = setup_index(vec![
-            ("a.pl", "my $x = get_value();\nprint $x;\n"),
-        ])?;
+        let (_dir, index, paths) =
+            setup_index(vec![("a.pl", "my $x = get_value();\nprint $x;\n")])?;
         let refactor = WorkspaceRefactor::new(index);
 
         // Should succeed but with warnings for function calls
@@ -1444,9 +1449,7 @@ use JSON; # Duplicate
     #[test]
     fn inline_multi_file_supports_all_types() -> Result<(), Box<dyn std::error::Error>> {
         // AC4: Operation handles variable inlining ($var, @array, %hash)
-        let (_dir, index, paths) = setup_index(vec![
-            ("scalar.pl", "my $x = 42;\nprint $x;\n"),
-        ])?;
+        let (_dir, index, paths) = setup_index(vec![("scalar.pl", "my $x = 42;\nprint $x;\n")])?;
         let refactor = WorkspaceRefactor::new(index);
 
         // Test scalar inlining
@@ -1468,7 +1471,9 @@ use JSON; # Duplicate
         let result = refactor.inline_variable("$x", &paths[0], (0, 0))?;
 
         // Check description mentions occurrence count or workspace
-        assert!(result.description.contains("occurrence") || result.description.contains("workspace"));
+        assert!(
+            result.description.contains("occurrence") || result.description.contains("workspace")
+        );
         Ok(())
     }
 }

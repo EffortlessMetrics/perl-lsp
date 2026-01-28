@@ -101,11 +101,17 @@ pub struct AgentConfigValidator {
 
 impl AgentConfigValidator {
     pub fn new() -> Result<Self> {
-        let agents_dir = PathBuf::from(".claude/agents2");
-        if !agents_dir.exists() {
-            return Err(anyhow!("Agent directory not found: {}", agents_dir.display()));
+        // Try current directory first, then parent directory (for when running from xtask/)
+        let candidates =
+            vec![PathBuf::from(".claude/agents2"), PathBuf::from("../.claude/agents2")];
+
+        for agents_dir in candidates {
+            if agents_dir.exists() {
+                return Ok(Self { agents_dir });
+            }
         }
-        Ok(Self { agents_dir })
+
+        Err(anyhow!("Agent directory not found. Tried: .claude/agents2 and ../.claude/agents2"))
     }
 
     /// Find all agent markdown files
@@ -449,10 +455,7 @@ mod tests {
             for dup in &duplicates {
                 eprintln!("  - {}", dup);
             }
-            eprintln!(
-                "\nFound {} duplicate agent names across directories.",
-                duplicates.len()
-            );
+            eprintln!("\nFound {} duplicate agent names across directories.", duplicates.len());
             eprintln!("Consider making agent names unique or using directory-qualified names.");
         }
 

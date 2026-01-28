@@ -53,8 +53,11 @@ pub fn detect_dead_code(
             symbol.range.start.line,
             symbol.range.start.column,
         );
-        let end_byte =
-            line_index.position_to_offset(source_text, symbol.range.end.line, symbol.range.end.column);
+        let end_byte = line_index.position_to_offset(
+            source_text,
+            symbol.range.end.line,
+            symbol.range.end.column,
+        );
 
         diagnostics.push(Diagnostic {
             range: (start_byte, end_byte),

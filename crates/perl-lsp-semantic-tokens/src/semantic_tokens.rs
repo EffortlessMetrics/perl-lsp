@@ -592,7 +592,11 @@ mod tests {
         ];
         let result = remove_overlapping_tokens(input);
         // Zero-length token [5,5) doesn't overlap with [5,10) per < check (5 < 5+0 is false)
-        assert_eq!(result.len(), 2, "Zero-length token at same position doesn't technically overlap");
+        assert_eq!(
+            result.len(),
+            2,
+            "Zero-length token at same position doesn't technically overlap"
+        );
         assert_eq!(result[0], tok(0, 5, 0, 0, 0));
         assert_eq!(result[1], tok(0, 5, 5, 1, 0));
     }

@@ -372,11 +372,7 @@ mod tests {
 
     #[test]
     fn test_validate_timeout_excessive() {
-        assert_eq!(
-            validate_timeout(500_000),
-            MAX_TIMEOUT_MS,
-            "Excessive timeout should be capped"
-        );
+        assert_eq!(validate_timeout(500_000), MAX_TIMEOUT_MS, "Excessive timeout should be capped");
         assert_eq!(validate_timeout(1_000_000), MAX_TIMEOUT_MS);
     }
 

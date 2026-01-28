@@ -9,7 +9,7 @@
 //! AC14: Test Metadata Schema
 //! AC15: Test Quality Validator
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -385,7 +385,8 @@ impl IgnoredTestGuardian {
         };
 
         let average_count = if !recent_data.is_empty() {
-            recent_data.iter().map(|(_, count)| *count as f64).sum::<f64>() / recent_data.len() as f64
+            recent_data.iter().map(|(_, count)| *count as f64).sum::<f64>()
+                / recent_data.len() as f64
         } else {
             0.0
         };

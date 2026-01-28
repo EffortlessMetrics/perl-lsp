@@ -378,7 +378,7 @@ pub mod protocol; // AC5: DAP protocol types // AC7: Breakpoint manager
 // See #455: Implement safe evaluation (AC10)
 
 // Phase 3 modules (AC13-AC19) - Tracked in GitHub issues
-// See #358: Implement security validation (AC16)
+pub mod security; // #358: Security validation and hardening (AC16)
 
 // Re-export Phase 1 public types
 pub use bridge_adapter::BridgeAdapter;
