@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 
 [dependencies]
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 perl-ast = { workspace = true }
 perl-regex = { workspace = true }
 perl-position-tracking = { workspace = true }

@@ -20,7 +20,7 @@ unicode-ident = "1.0.22"
 memchr = "2.7.6"
 
 # For better error handling
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 perl-position-tracking = { workspace = true }
 
 [dev-dependencies]
