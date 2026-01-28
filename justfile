@@ -956,6 +956,33 @@ debt-pr-summary:
     @python3 scripts/debt-report.py --json | python3 scripts/debt-pr-summary.py
 
 # ============================================================================
+# CI Guardrail Tests (Issue #364)
+# ============================================================================
+# Tests for automated ignored test monitoring and governance.
+# Tests are in xtask/tests/ci_guardrail_ignored_test_monitoring_tests.rs
+
+# Run guardrail tests (shows ignored status)
+guardrail-tests:
+    @echo "🔍 Running CI guardrail tests (scaffolding)..."
+    cargo test -p xtask --test ci_guardrail_ignored_test_monitoring_tests
+
+# Check guardrail test status
+guardrail-status:
+    @echo "📊 CI Guardrail Test Status"
+    @echo "==========================="
+    @echo ""
+    @cargo test -p xtask --test ci_guardrail_ignored_test_monitoring_tests 2>&1 | grep -E "(test .*ignored|test result)"
+    @echo ""
+    @echo "Note: These tests are scaffolding for Issue #364"
+    @echo "They will be enabled as features are implemented (AC13-AC15)"
+
+# Try running guardrail tests (will fail until features implemented)
+guardrail-run-ignored:
+    @echo "⚠️  Attempting to run ignored guardrail tests..."
+    @echo "Note: Some tests expected to fail pending feature implementation"
+    @cargo test -p xtask --test ci_guardrail_ignored_test_monitoring_tests -- --ignored || true
+
+# ============================================================================
 # SemVer Breaking Change Detection (Issue #277)
 # ============================================================================
 # Automated semantic versioning validation to prevent accidental breaking changes.
