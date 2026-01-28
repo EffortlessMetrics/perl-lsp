@@ -228,7 +228,8 @@ fn test_extract_variable_returns_edits() -> TestResult {
                 assert!(!changes.is_null(), "Should have workspace edit changes");
 
                 // Check for edits in the file
-                let file_edits = &changes["file:///workspace/script.pl"];
+                let file_uri = workspace.uri("script.pl");
+                let file_edits = &changes[file_uri.as_str()];
                 let edits = file_edits.as_array().ok_or("Should have edits array")?;
                 assert!(!edits.is_empty(), "Should have actual text edits");
             }
