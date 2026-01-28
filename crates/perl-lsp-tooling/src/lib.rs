@@ -36,6 +36,7 @@ pub use subprocess_runtime::{SubprocessError, SubprocessOutput, SubprocessRuntim
 #[cfg(not(target_arch = "wasm32"))]
 pub use subprocess_runtime::OsSubprocessRuntime;
 
+/// Test mock implementations for subprocess runtimes.
 #[cfg(test)]
 pub mod mock {
     pub use crate::subprocess_runtime::mock::*;

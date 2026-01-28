@@ -203,7 +203,11 @@ pub struct TimeoutRisk {
 ///
 /// This function attempts to parse the given file content within the specified timeout.
 /// If parsing exceeds the timeout, it returns a Timeout outcome.
-pub fn parse_with_timeout(_path: &PathBuf, content: &str, timeout: Duration) -> ParseOutcome {
+pub fn parse_with_timeout(
+    _path: &std::path::Path,
+    content: &str,
+    timeout: Duration,
+) -> ParseOutcome {
     let start = Instant::now();
     let content_clone = content.to_string();
     let (tx, rx) = std::sync::mpsc::channel();

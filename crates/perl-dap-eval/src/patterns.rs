@@ -148,10 +148,9 @@ mod tests {
 
     #[test]
     fn test_dangerous_ops_regex() {
-        let re = DANGEROUS_OPS_RE.as_ref().ok();
-        assert!(re.is_some());
-
-        let re = re.map(|r| r.clone()).unwrap_or_else(|| panic!("regex should compile"));
+        let Some(re) = DANGEROUS_OPS_RE.as_ref().ok() else {
+            panic!("regex should compile");
+        };
 
         // Should match dangerous ops
         assert!(re.is_match("system('ls')"));
@@ -164,10 +163,9 @@ mod tests {
 
     #[test]
     fn test_regex_mutation_regex() {
-        let re = REGEX_MUTATION_RE.as_ref().ok();
-        assert!(re.is_some());
-
-        let re = re.map(|r| r.clone()).unwrap_or_else(|| panic!("regex should compile"));
+        let Some(re) = REGEX_MUTATION_RE.as_ref().ok() else {
+            panic!("regex should compile");
+        };
 
         // Should match s///, tr///, y///
         assert!(re.is_match("s/foo/bar/"));

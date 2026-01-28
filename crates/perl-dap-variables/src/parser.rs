@@ -485,8 +485,8 @@ mod tests {
     fn test_parse_number() {
         let parser = VariableParser::new();
 
-        let result = parser.parse_value("3.14", 0);
-        assert!(matches!(result, Ok(PerlValue::Number(n)) if (n - 3.14).abs() < 0.001));
+        let result = parser.parse_value("3.25", 0);
+        assert!(matches!(result, Ok(PerlValue::Number(n)) if (n - 3.25).abs() < 0.001));
 
         let result = parser.parse_value("1.5e10", 0);
         assert!(matches!(result, Ok(PerlValue::Number(_))));
