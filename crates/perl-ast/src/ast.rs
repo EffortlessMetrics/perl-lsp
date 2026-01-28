@@ -730,6 +730,7 @@ impl Node {
     ///
     /// This enables depth-first traversal for operations like heredoc content attachment.
     /// The closure receives a mutable reference to each child node.
+    #[inline]
     pub fn for_each_child_mut<F: FnMut(&mut Node)>(&mut self, mut f: F) {
         match &mut self.kind {
             NodeKind::Tie { variable, package, args } => {
@@ -974,6 +975,7 @@ impl Node {
     ///
     /// This enables depth-first traversal for read-only operations like AST analysis.
     /// The closure receives an immutable reference to each child node.
+    #[inline]
     pub fn for_each_child<'a, F: FnMut(&'a Node)>(&'a self, mut f: F) {
         match &self.kind {
             NodeKind::Tie { variable, package, args } => {
@@ -1224,10 +1226,25 @@ impl Node {
     }
 
     /// Collect direct child nodes into a vector for convenience APIs.
+    #[inline]
     pub fn children(&self) -> Vec<&Node> {
         let mut children = Vec::new();
         self.for_each_child(|child| children.push(child));
         children
+    }
+
+    /// Get the first direct child node, if any.
+    ///
+    /// Optimized to avoid allocating the children vector.
+    #[inline]
+    pub fn first_child(&self) -> Option<&Node> {
+        let mut result = None;
+        self.for_each_child(|child| {
+            if result.is_none() {
+                result = Some(child);
+            }
+        });
+        result
     }
 }
 

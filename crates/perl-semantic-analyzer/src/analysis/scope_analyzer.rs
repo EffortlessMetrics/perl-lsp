@@ -866,7 +866,7 @@ impl ScopeAnalyzer {
                 self.extract_variable_name(left)
             }
             _ => {
-                if let Some(child) = node.children().first() {
+                if let Some(child) = node.first_child() {
                     self.extract_variable_name(child)
                 } else {
                     ExtractedName::Full(String::new())
