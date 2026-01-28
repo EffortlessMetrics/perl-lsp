@@ -153,7 +153,7 @@ impl Scope {
 
         // Check if it shadows a parent scope variable
         let shadows = if let Some(ref parent) = self.parent {
-            parent.lookup_variable_parts(sigil, name).is_some()
+            parent.has_variable(sigil, name)
         } else {
             false
         };
@@ -175,6 +175,20 @@ impl Scope {
         if shadows { Some(IssueKind::VariableShadowing) } else { None }
     }
 
+    fn has_variable(&self, sigil: &str, name: &str) -> bool {
+        let idx = sigil_to_index(sigil);
+        if let Some(map) = &self.variables.borrow()[idx] {
+            if map.contains_key(name) {
+                return true;
+            }
+        }
+        if let Some(ref parent) = self.parent {
+            parent.has_variable(sigil, name)
+        } else {
+            false
+        }
+    }
+
     fn lookup_variable_parts(&self, sigil: &str, name: &str) -> Option<Rc<Variable>> {
         let idx = sigil_to_index(sigil);
         if let Some(map) = &self.variables.borrow()[idx] {
@@ -186,17 +200,32 @@ impl Scope {
     }
 
     fn use_variable_parts(&self, sigil: &str, name: &str) -> (bool, bool) {
-        if let Some(var) = self.lookup_variable_parts(sigil, name) {
-            *var.is_used.borrow_mut() = true;
-            (true, *var.is_initialized.borrow())
+        let idx = sigil_to_index(sigil);
+        if let Some(map) = &self.variables.borrow()[idx] {
+            if let Some(var) = map.get(name) {
+                *var.is_used.borrow_mut() = true;
+                return (true, *var.is_initialized.borrow());
+            }
+        }
+
+        if let Some(ref parent) = self.parent {
+            parent.use_variable_parts(sigil, name)
         } else {
             (false, false)
         }
     }
 
     fn initialize_variable_parts(&self, sigil: &str, name: &str) {
-        if let Some(var) = self.lookup_variable_parts(sigil, name) {
-            *var.is_initialized.borrow_mut() = true;
+        let idx = sigil_to_index(sigil);
+        if let Some(map) = &self.variables.borrow()[idx] {
+            if let Some(var) = map.get(name) {
+                *var.is_initialized.borrow_mut() = true;
+                return;
+            }
+        }
+
+        if let Some(ref parent) = self.parent {
+            parent.initialize_variable_parts(sigil, name);
         }
     }
 
@@ -445,13 +474,13 @@ impl ScopeAnalyzer {
                 }
             }
             NodeKind::Variable { sigil, name } => {
-                // Skip package-qualified variables
-                if name.contains("::") {
+                // Skip built-in global variables
+                if is_builtin_global(sigil, name) {
                     return;
                 }
 
-                // Skip built-in global variables
-                if is_builtin_global(sigil, name) {
+                // Skip package-qualified variables
+                if name.contains("::") {
                     return;
                 }
 
@@ -567,9 +596,7 @@ impl ScopeAnalyzer {
                         if let NodeKind::Variable { sigil, name } = &left.kind {
                             if sigil == "$" {
                                 // Only mark as used if the hash actually exists - allocation free!
-                                if scope.lookup_variable_parts("%", name).is_some() {
-                                    scope.use_variable_parts("%", name);
-                                }
+                                scope.use_variable_parts("%", name);
                             }
                         }
                         // Always process both children to ensure undefined variables are caught
@@ -583,9 +610,7 @@ impl ScopeAnalyzer {
                         if let NodeKind::Variable { sigil, name } = &left.kind {
                             if sigil == "$" {
                                 // Only mark as used if the array actually exists - allocation free!
-                                if scope.lookup_variable_parts("@", name).is_some() {
-                                    scope.use_variable_parts("@", name);
-                                }
+                                scope.use_variable_parts("@", name);
                             }
                         }
                         // Always process both children to ensure undefined variables are caught
@@ -695,7 +720,7 @@ impl ScopeAnalyzer {
                         }
 
                         // Check if parameter shadows a global or parent scope variable
-                        if scope.lookup_variable_parts(sigil, name).is_some() {
+                        if scope.has_variable(sigil, name) {
                             issues.push(ScopeIssue {
                                 kind: IssueKind::ParameterShadowsGlobal,
                                 variable_name: full_name.clone(),
@@ -994,12 +1019,16 @@ impl ScopeAnalyzer {
 /// Check if a variable is a built-in Perl global variable
 fn is_builtin_global(sigil: &str, name: &str) -> bool {
     // Fast path: most user variables start with lowercase and are not built-ins
-    // Exception: $a and $b are built-in sort variables
-    if !name.is_empty() {
-        let first = name.as_bytes()[0];
-        if first.is_ascii_lowercase() && name != "a" && name != "b" {
-            return false;
-        }
+    if name.is_empty() {
+        return false;
+    }
+
+    let first = name.as_bytes()[0];
+
+    // Check if first char is lowercase (optimization)
+    // Only $a and $b are lowercase built-in variables
+    if first.is_ascii_lowercase() {
+        return sigil == "$" && (name == "a" || name == "b");
     }
 
     let sigil_byte = match sigil.as_bytes().first() {
@@ -1040,7 +1069,7 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
 
                 // Numbered capture variables ($1, $2, etc.)
                 // Note: $0-$9 are already handled in the match above, but this covers $10+
-                if !name.is_empty() && name.chars().all(|c| c.is_ascii_digit()) {
+                if first.is_ascii_digit() && name.chars().all(|c| c.is_ascii_digit()) {
                     return true;
                 }
 
