@@ -22,7 +22,7 @@ pub fn add_workspace_symbol_completions(
 
     // Only provide workspace completions if there's a reasonable prefix
     // to avoid overwhelming the user with all workspace symbols
-    if context.prefix.is_empty() || context.prefix.len() < 2 {
+    if context.prefix.is_empty() {
         return;
     }
 

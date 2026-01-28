@@ -1246,6 +1246,77 @@ impl SemanticAnalyzer {
             }
         }
     }
+
+    /// Infer the type of a node based on its context and initialization
+    ///
+    /// Provides basic type inference for Perl expressions to enhance hover
+    /// information with derived type information. Supports common patterns:
+    /// - Literal values (numbers, strings, arrays, hashes)
+    /// - Variable references (looks up declaration)
+    /// - Function calls (basic return type hints)
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - The AST node to infer type for
+    ///
+    /// # Returns
+    ///
+    /// A string describing the inferred type, or None if type cannot be determined
+    pub fn infer_type(&self, node: &Node) -> Option<String> {
+        match &node.kind {
+            NodeKind::Number { .. } => Some("number".to_string()),
+            NodeKind::String { .. } => Some("string".to_string()),
+            NodeKind::ArrayLiteral { .. } => Some("array".to_string()),
+            NodeKind::HashLiteral { .. } => Some("hash".to_string()),
+
+            NodeKind::Variable { sigil, name } => {
+                // Look up the variable in the symbol table
+                let kind = match sigil.as_str() {
+                    "$" => SymbolKind::scalar(),
+                    "@" => SymbolKind::array(),
+                    "%" => SymbolKind::hash(),
+                    _ => return None,
+                };
+
+                let symbols = self.symbol_table.find_symbol(name, 0, kind);
+                symbols.first()?;
+
+                // Return the basic type based on sigil
+                match sigil.as_str() {
+                    "$" => Some("scalar".to_string()),
+                    "@" => Some("array".to_string()),
+                    "%" => Some("hash".to_string()),
+                    _ => None,
+                }
+            }
+
+            NodeKind::FunctionCall { name, .. } => {
+                // Basic return type inference for built-in functions
+                match name.as_str() {
+                    "scalar" => Some("scalar".to_string()),
+                    "ref" => Some("string".to_string()),
+                    "length" | "index" | "rindex" => Some("number".to_string()),
+                    "split" => Some("array".to_string()),
+                    "keys" | "values" => Some("array".to_string()),
+                    _ => None,
+                }
+            }
+
+            NodeKind::Binary { op, .. } => {
+                // Infer based on operator
+                match op.as_str() {
+                    "+" | "-" | "*" | "/" | "%" | "**" => Some("number".to_string()),
+                    "." | "x" => Some("string".to_string()),
+                    "==" | "!=" | "<" | ">" | "<=" | ">=" | "eq" | "ne" | "lt" | "gt" | "le" | "ge" => {
+                        Some("boolean".to_string())
+                    }
+                    _ => None,
+                }
+            }
+
+            _ => None,
+        }
+    }
 }
 
 /// Documentation entry for a Perl built-in function.
@@ -1861,6 +1932,91 @@ my $closure = sub {
             .any(|(loc, _)| loc.start <= sub_position && loc.end >= sub_position);
 
         assert!(hover_exists, "Should have hover info for anonymous subroutine");
+        Ok(())
+    }
+
+    #[test]
+    fn test_infer_type_for_literals() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+my $num = 42;
+my $str = "hello";
+my @arr = (1, 2, 3);
+my %hash = (a => 1);
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        // Find nodes and test type inference
+        // We need to walk the AST to find the literal nodes
+        fn find_number_node(node: &Node) -> Option<&Node> {
+            match &node.kind {
+                NodeKind::Number { .. } => Some(node),
+                NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    for stmt in statements {
+                        if let Some(found) = find_number_node(stmt) {
+                            return Some(found);
+                        }
+                    }
+                    None
+                }
+                NodeKind::VariableDeclaration { initializer, .. } => {
+                    initializer.as_ref().and_then(|init| find_number_node(init))
+                }
+                _ => None,
+            }
+        }
+
+        if let Some(num_node) = find_number_node(&ast) {
+            let inferred = analyzer.infer_type(num_node);
+            assert_eq!(inferred, Some("number".to_string()), "Should infer number type");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_infer_type_for_binary_operations() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"my $sum = 10 + 20;
+my $concat = "a" . "b";
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        // Find binary operation nodes
+        fn find_binary_node(node: &Node, op: &str) -> Option<&Node> {
+            match &node.kind {
+                NodeKind::Binary { op: node_op, .. } if node_op == op => Some(node),
+                NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    for stmt in statements {
+                        if let Some(found) = find_binary_node(stmt, op) {
+                            return Some(found);
+                        }
+                    }
+                    None
+                }
+                NodeKind::VariableDeclaration { initializer, .. } => {
+                    initializer.as_ref().and_then(|init| find_binary_node(init, op))
+                }
+                _ => None,
+            }
+        }
+
+        // Test arithmetic operation infers to number
+        if let Some(add_node) = find_binary_node(&ast, "+") {
+            let inferred = analyzer.infer_type(add_node);
+            assert_eq!(inferred, Some("number".to_string()), "Arithmetic should infer to number");
+        }
+
+        // Test concatenation infers to string
+        if let Some(concat_node) = find_binary_node(&ast, ".") {
+            let inferred = analyzer.infer_type(concat_node);
+            assert_eq!(inferred, Some("string".to_string()), "Concatenation should infer to string");
+        }
+
         Ok(())
     }
 
