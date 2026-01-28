@@ -24,7 +24,7 @@ pub struct ComplexDataStructureCase {
     pub source: &'static str,
 }
 
-static EDGE_CASES: &[EdgeCase] = &[
+static EDGE_CASES: [EdgeCase; 100] = [
     EdgeCase {
         id: "heredoc.basic",
         description: "Basic quoted heredoc with multiple lines.",
@@ -1019,7 +1019,7 @@ my $counter :shared = 0;
     },
 ];
 
-static COMPLEX_DATA_STRUCTURE_CASES: &[ComplexDataStructureCase] = &[
+static COMPLEX_DATA_STRUCTURE_CASES: [ComplexDataStructureCase; 32] = [
     ComplexDataStructureCase {
         id: "nested.hash.array",
         description: "Nested hash/array structure.",
@@ -1304,12 +1304,12 @@ $counter = 1;
 
 /// Return the static edge case fixtures.
 pub fn edge_cases() -> &'static [EdgeCase] {
-    EDGE_CASES
+    &EDGE_CASES
 }
 
 /// Return the static complex data structure fixtures.
 pub fn complex_data_structure_cases() -> &'static [ComplexDataStructureCase] {
-    COMPLEX_DATA_STRUCTURE_CASES
+    &COMPLEX_DATA_STRUCTURE_CASES
 }
 
 /// Backwards-compatible accessor for complex data structure fixtures.
@@ -1372,12 +1372,9 @@ impl EdgeCaseGenerator {
     ///
     /// # Note
     ///
-    /// The edge case list is a static compile-time list that is never empty.
+    /// The edge case list is a fixed-size array that is never empty (compile-time enforced).
     pub fn sample(seed: u64) -> &'static EdgeCase {
-        let cases = edge_cases();
-        select_by_seed(cases, seed)
-            .or_else(|| cases.first())
-            .unwrap_or_else(|| std::process::abort())
+        select_by_seed(&EDGE_CASES, seed).unwrap_or(&EDGE_CASES[0])
     }
 
     /// Sample a deterministic edge case by tag.
@@ -1419,12 +1416,9 @@ pub fn find_complex_case(id: &str) -> Option<&'static ComplexDataStructureCase> 
 ///
 /// # Note
 ///
-/// The complex case list is a static compile-time list that is never empty.
+/// The complex case list is a fixed-size array that is never empty (compile-time enforced).
 pub fn sample_complex_case(seed: u64) -> &'static ComplexDataStructureCase {
-    let cases = complex_data_structure_cases();
-    select_by_seed(cases, seed)
-        .or_else(|| cases.first())
-        .unwrap_or_else(|| std::process::abort())
+    select_by_seed(&COMPLEX_DATA_STRUCTURE_CASES, seed).unwrap_or(&COMPLEX_DATA_STRUCTURE_CASES[0])
 }
 
 #[cfg(test)]

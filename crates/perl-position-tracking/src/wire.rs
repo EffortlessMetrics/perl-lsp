@@ -83,14 +83,16 @@ impl From<WireLocation> for lsp_types::Location {
         use std::sync::LazyLock;
 
         // Fallback URI for when parsing fails.
+        // Invariant: "file:///unknown" is a valid URI per RFC 3986.
         static FALLBACK_URI: LazyLock<lsp_types::Uri> = LazyLock::new(|| {
-            ["file:///unknown", "file:", "a:"]
-                .iter()
-                .find_map(|s| s.parse().ok())
-                .unwrap_or_else(|| std::process::abort())
+            #[allow(clippy::expect_used)]
+            "file:///unknown".parse().expect("file:///unknown must be a valid URI")
         });
 
-        let uri = l.uri.parse().unwrap_or_else(|_| FALLBACK_URI.clone());
+        let uri = match l.uri.parse::<lsp_types::Uri>() {
+            Ok(u) => u,
+            Err(_) => FALLBACK_URI.clone(),
+        };
         Self { uri, range: l.range.into() }
     }
 }

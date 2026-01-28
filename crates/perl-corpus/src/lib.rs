@@ -260,14 +260,11 @@ pub use tie_interface::{
     tie_cases_by_tags_any, tie_interface_cases,
 };
 
-// Regex patterns are compile-time constants - parsing cannot fail
-static SEC_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-    Regex::new(r"(?m)^=+\s*$").unwrap_or_else(|_| std::process::abort())
-});
-static META_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-    Regex::new(r"(?m)^#\s*@(?P<k>id|tags|perl|flags):\s*(?P<v>.*)$")
-        .unwrap_or_else(|_| std::process::abort())
-});
+// Regex patterns - use Option for graceful degradation if compilation fails
+static SEC_RE: once_cell::sync::Lazy<Option<Regex>> =
+    once_cell::sync::Lazy::new(|| Regex::new(r"(?m)^=+\s*$").ok());
+static META_RE: once_cell::sync::Lazy<Option<Regex>> =
+    once_cell::sync::Lazy::new(|| Regex::new(r"(?m)^#\s*@(?P<k>id|tags|perl|flags):\s*(?P<v>.*)$").ok());
 
 fn slugify_title(title: &str) -> String {
     let mut slug = String::new();
@@ -305,9 +302,14 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
     let mut auto_ids: HashMap<String, usize> = HashMap::new();
     let mut section_index = 0usize;
 
+    // If regex compilation failed, return empty sections (graceful degradation)
+    let Some(sec_re) = SEC_RE.as_ref() else {
+        return Ok(sections);
+    };
+
     // Find all section delimiters
     let mut offs = vec![0usize];
-    for m in SEC_RE.find_iter(&text) {
+    for m in sec_re.find_iter(&text) {
         offs.push(m.start());
     }
     // Add EOF sentinel
@@ -337,13 +339,16 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
         let mut meta = HashMap::<String, String>::new();
         let mut body_start_idx = 2;
 
-        for (i, line) in lines.iter().enumerate().skip(2) {
-            if let Some(cap) = META_RE.captures(line) {
-                meta.insert(cap["k"].to_string(), cap["v"].trim().to_string());
-                body_start_idx = i + 1;
-            } else if !line.starts_with('#') || line.trim().is_empty() {
-                body_start_idx = i;
-                break;
+        // Use META_RE if available, otherwise skip metadata parsing
+        if let Some(meta_re) = META_RE.as_ref() {
+            for (i, line) in lines.iter().enumerate().skip(2) {
+                if let Some(cap) = meta_re.captures(line) {
+                    meta.insert(cap["k"].to_string(), cap["v"].trim().to_string());
+                    body_start_idx = i + 1;
+                } else if !line.starts_with('#') || line.trim().is_empty() {
+                    body_start_idx = i;
+                    break;
+                }
             }
         }
 
