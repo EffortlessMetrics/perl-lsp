@@ -460,12 +460,14 @@ mod position_utf16_conversion_tests {
     #[test]
     fn test_line_counting_edge_cases() {
         // Test files with various line ending patterns
+        // Note: Offsets point to character positions, not "after" positions
         let cases = vec![
             ("no_newline", 10, (0, 10)),         // No final newline
-            ("with_newline\n", 13, (1, 0)),      // With final newline
-            ("empty_last_line\n\n", 17, (2, 0)), // Empty final line
-            ("crlf_ending\r\n", 13, (1, 0)),     // CRLF ending
-            ("mixed\n\r\n", 7, (2, 0)),          // Mixed line endings
+            ("with_newline\n", 13, (1, 0)),      // Offset 13 = past end, after final newline
+            ("empty_last_line\n\n", 17, (2, 0)), // Offset 17 = past end, after second newline
+            ("crlf_ending\r\n", 13, (1, 0)),     // Offset 13 = past end, after CRLF
+            ("mixed\n\r\n", 8, (2, 0)),          // Offset 8 = past end (len=8), after final \n
+            ("mixed\n\r\n", 7, (1, 1)),          // Offset 7 = at the \n char, line 1 col 1
         ];
 
         for (text, offset, expected) in cases {

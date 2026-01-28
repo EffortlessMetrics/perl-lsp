@@ -697,7 +697,12 @@ print "result: $final\n";
             verified: true,
             message: None,
         };
-        store.breakpoints.lock().unwrap().insert(source_path.to_string(), vec![record]);
+        store
+            .breakpoints
+            .lock()
+            .map_err(|e| format!("lock failed: {e}"))
+            .ok()
+            .map(|mut bps| bps.insert(source_path.to_string(), vec![record]));
 
         // 1. Add 5 lines at line 5 (shift down)
         store.adjust_breakpoints_for_edit(source_path, 5, 5);
@@ -732,12 +737,18 @@ EOF
         // Line 2: # comment (Invalid)
         let (v2, m2) = validate_breakpoint_line(source, 2);
         assert!(!v2, "Line 2 should be invalid");
-        assert!(m2.unwrap().contains("comment"));
+        assert!(
+            m2.as_ref().is_some_and(|s| s.contains("comment")),
+            "Expected comment error message"
+        );
 
         // Line 4: blank line (Invalid)
         let (v4, m4) = validate_breakpoint_line(source, 4);
         assert!(!v4, "Line 4 should be invalid");
-        assert!(m4.unwrap().contains("blank"));
+        assert!(
+            m4.as_ref().is_some_and(|s| s.contains("blank")),
+            "Expected blank line error message"
+        );
 
         // Line 5: line with whitespace (Invalid)
         let (v5, _) = validate_breakpoint_line(source, 5);

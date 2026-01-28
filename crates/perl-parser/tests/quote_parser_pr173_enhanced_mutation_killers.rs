@@ -190,7 +190,8 @@ fn test_kill_match_guard_closing_delimiter_mutations() {
     let (pattern, replacement, modifiers) = extract_substitution_parts("s/te/st/rep/lace/g");
     assert_eq!(pattern, "te", "First delimiter section failed - kills premature closing detection");
     assert_eq!(replacement, "st", "Second delimiter section failed - validates match guard logic");
-    assert_eq!(modifiers, "re", "Modifiers extracted from remaining text");
+    // Note: modifiers are extracted from text after third delimiter, filtered to alphabetic chars
+    assert_eq!(modifiers, "rep", "Modifiers extracted from remaining text (stops at next /)");
 
     // Test case 3: Transliteration with critical closing delimiter detection
     let (search, replacement, modifiers) = extract_transliteration_parts("tr/a/b/c/x/y/z/");

@@ -1,10 +1,9 @@
 use perl_parser::Parser;
 use std::fs;
 
-fn main() {
-    let code = fs::read_to_string("test_parser_improvements.pl")
-        .expect("Failed to read test file");
-    
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let code = fs::read_to_string("test_parser_improvements.pl")?;
+
     let mut parser = Parser::new(&code);
     match parser.parse() {
         Ok(ast) => {
@@ -16,4 +15,6 @@ fn main() {
             eprintln!("Parse error: {:?}", e);
         }
     }
+
+    Ok(())
 }

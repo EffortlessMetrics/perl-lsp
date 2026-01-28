@@ -18,7 +18,7 @@ fn create_test_adapter() -> DebugAdapter {
 
 #[test]
 // AC:10.2
-fn test_evaluate_safe_mode_blocks_assignment() {
+fn test_evaluate_safe_mode_blocks_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = create_test_adapter();
     let args = json!({
         "expression": "$x = 42",
@@ -28,13 +28,14 @@ fn test_evaluate_safe_mode_blocks_assignment() {
 
     if let DapMessage::Response { success, message, .. } = response {
         assert!(!success);
-        assert!(message.unwrap().contains("assignment operator"));
+        assert!(message.ok_or("Expected error message")?.contains("assignment operator"));
     }
+    Ok(())
 }
 
 #[test]
 // AC:10.2
-fn test_evaluate_safe_mode_blocks_mutation() {
+fn test_evaluate_safe_mode_blocks_mutation() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = create_test_adapter();
     let args = json!({
         "expression": "push @arr, 1",
@@ -44,13 +45,16 @@ fn test_evaluate_safe_mode_blocks_mutation() {
 
     if let DapMessage::Response { success, message, .. } = response {
         assert!(!success);
-        assert!(message.unwrap().contains("potentially mutating operation"));
+        assert!(
+            message.ok_or("Expected error message")?.contains("potentially mutating operation")
+        );
     }
+    Ok(())
 }
 
 #[test]
 // AC:10.2
-fn test_evaluate_allows_side_effects_opt_in() {
+fn test_evaluate_allows_side_effects_opt_in() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = create_test_adapter();
     let args = json!({
         "expression": "$x = 42",
@@ -63,14 +67,15 @@ fn test_evaluate_allows_side_effects_opt_in() {
         // If it failed due to safety, success=false and message mentions "assignment"
         // If it passed safety, it would fail due to "No debugger session"
         if !success {
-            assert!(!message.unwrap().contains("assignment operator"));
+            assert!(!message.ok_or("Expected error message")?.contains("assignment operator"));
         }
     }
+    Ok(())
 }
 
 #[test]
 // AC:10.3
-fn test_evaluate_timeout_enforcement_parameters() {
+fn test_evaluate_timeout_enforcement_parameters() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = create_test_adapter();
     let args = json!({
         "expression": "1 + 1",
@@ -81,12 +86,17 @@ fn test_evaluate_timeout_enforcement_parameters() {
     match response {
         DapMessage::Response { body, success, .. } => {
             if success {
-                let body_val = body.unwrap();
-                let result = body_val.get("result").unwrap().as_str().unwrap();
+                let body_val = body.ok_or("Expected body in response")?;
+                let result = body_val
+                    .get("result")
+                    .ok_or("Expected result field")?
+                    .as_str()
+                    .ok_or("Expected string result")?;
                 // Should cap timeout at 30000ms
                 assert!(result.contains("30000ms"));
             }
         }
-        _ => panic!("Expected response"),
+        _ => return Err("Expected response".into()),
     }
+    Ok(())
 }

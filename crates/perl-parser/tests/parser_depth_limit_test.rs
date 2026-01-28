@@ -2,7 +2,7 @@
 //!
 //! This test verifies that the parser cleanly rejects deeply nested constructs
 //! instead of crashing with a stack overflow. The parser enforces a maximum
-//! recursion depth of 64 levels. This is set conservatively to ensure the
+//! recursion depth of 128 levels. This is set conservatively to ensure the
 //! recursion limit triggers before OS stack overflow occurs.
 
 use perl_parser::{ParseError, Parser};
@@ -12,7 +12,7 @@ use perl_tdd_support::must_err;
 #[test]
 fn parser_depth_limit_nested_blocks() {
     // Create nested blocks beyond the limit
-    let depth = 100;
+    let depth = 200;
     let mut code = String::new();
 
     // Opening braces
@@ -30,8 +30,8 @@ fn parser_depth_limit_nested_blocks() {
 
     assert!(result.is_err(), "Expected error for deeply nested blocks");
     assert!(
-        matches!(must_err(result), ParseError::RecursionLimit),
-        "Expected RecursionLimit error for deeply nested blocks"
+        matches!(must_err(result), ParseError::NestingTooDeep { .. }),
+        "Expected NestingTooDeep error for deeply nested blocks"
     );
 }
 
@@ -39,7 +39,7 @@ fn parser_depth_limit_nested_blocks() {
 #[test]
 fn parser_depth_limit_nested_parens() {
     // Create deeply nested parentheses beyond the limit
-    let depth = 100;
+    let depth = 200;
     let mut code = String::new();
 
     // Opening parens
@@ -57,8 +57,8 @@ fn parser_depth_limit_nested_parens() {
 
     assert!(result.is_err(), "Expected error for deeply nested parentheses");
     assert!(
-        matches!(must_err(result), ParseError::RecursionLimit),
-        "Expected RecursionLimit error for deeply nested parentheses"
+        matches!(must_err(result), ParseError::NestingTooDeep { .. }),
+        "Expected NestingTooDeep error for deeply nested parentheses"
     );
 }
 
@@ -66,7 +66,7 @@ fn parser_depth_limit_nested_parens() {
 #[test]
 fn parser_depth_limit_nested_arrays() {
     // Create deeply nested arrays beyond the limit
-    let depth = 100;
+    let depth = 200;
     let mut code = String::new();
 
     // Opening brackets
@@ -84,8 +84,8 @@ fn parser_depth_limit_nested_arrays() {
 
     assert!(result.is_err(), "Expected error for deeply nested arrays");
     assert!(
-        matches!(must_err(result), ParseError::RecursionLimit),
-        "Expected RecursionLimit error for deeply nested arrays"
+        matches!(must_err(result), ParseError::NestingTooDeep { .. }),
+        "Expected NestingTooDeep error for deeply nested arrays"
     );
 }
 
@@ -93,7 +93,7 @@ fn parser_depth_limit_nested_arrays() {
 #[test]
 fn parser_depth_limit_reasonable_nesting() {
     // Create nested blocks well below the limit (15 levels)
-    // With depth limit 64 and multiple increments per level,
+    // With depth limit 128 and multiple increments per level,
     // 15 levels is safely under the limit
     let depth = 15;
     let mut code = String::new();
@@ -118,9 +118,9 @@ fn parser_depth_limit_reasonable_nesting() {
 #[test]
 fn parser_depth_limit_mixed_nesting() {
     // Create a mix of blocks and expressions that exceeds the limit.
-    // Each { ( pair adds multiple depth increments, so depth=50 should
-    // quickly exceed the limit of 64 and trigger RecursionLimit.
-    let depth = 50;
+    // Each { ( pair adds multiple depth increments, so depth=100 should
+    // quickly exceed the limit of 128 and trigger RecursionLimit.
+    let depth = 100;
     let mut code = String::new();
 
     for _ in 0..depth {
@@ -138,8 +138,8 @@ fn parser_depth_limit_mixed_nesting() {
 
     assert!(result.is_err(), "Expected error for mixed deep nesting");
     assert!(
-        matches!(must_err(result), ParseError::RecursionLimit),
-        "Expected RecursionLimit error for mixed deep nesting"
+        matches!(must_err(result), ParseError::NestingTooDeep { .. }),
+        "Expected NestingTooDeep error for mixed deep nesting"
     );
 }
 
@@ -147,7 +147,7 @@ fn parser_depth_limit_mixed_nesting() {
 #[test]
 fn parser_depth_limit_nested_control_flow() {
     // Create deeply nested if statements
-    let depth = 100;
+    let depth = 200;
     let mut code = String::new();
 
     for _ in 0..depth {
@@ -165,8 +165,8 @@ fn parser_depth_limit_nested_control_flow() {
 
     assert!(result.is_err(), "Expected error for deeply nested control flow");
     assert!(
-        matches!(must_err(result), ParseError::RecursionLimit),
-        "Expected RecursionLimit error for deeply nested control flow"
+        matches!(must_err(result), ParseError::NestingTooDeep { .. }),
+        "Expected NestingTooDeep error for deeply nested control flow"
     );
 }
 
@@ -175,7 +175,7 @@ fn parser_depth_limit_nested_control_flow() {
 fn parser_depth_limit_boundary_below() {
     // Create nested parens just below the limit
     // With 15 parens and parse_expression + parse_primary both incrementing,
-    // we get about 30 depth which is under 64
+    // we get about 30 depth which is well under 128
     let depth = 15;
     let mut code = String::new();
 
@@ -197,7 +197,7 @@ fn parser_depth_limit_boundary_below() {
 #[test]
 fn parser_depth_limit_boundary_above() {
     // Create nested parens that exceed the limit (100 levels)
-    let depth = 100;
+    let depth = 200;
     let mut code = String::new();
 
     for _ in 0..depth {
@@ -213,7 +213,7 @@ fn parser_depth_limit_boundary_above() {
 
     assert!(result.is_err(), "Expected error for nesting just above limit");
     assert!(
-        matches!(must_err(result), ParseError::RecursionLimit),
-        "Expected RecursionLimit error for nesting just above limit"
+        matches!(must_err(result), ParseError::NestingTooDeep { .. }),
+        "Expected NestingTooDeep error for nesting just above limit"
     );
 }

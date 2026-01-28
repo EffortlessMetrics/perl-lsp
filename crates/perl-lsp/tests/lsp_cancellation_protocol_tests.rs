@@ -298,7 +298,8 @@ fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn 
                 assert_eq!(error["code"].as_i64(), Some(-32800));
                 let message =
                     error["message"].as_str().ok_or("Error message should be a string")?;
-                let method_name = method.split('/').next_back().unwrap_or(method);
+                let method_name =
+                    method.split('/').next_back().ok_or("Invalid method format")?.to_string();
                 assert!(
                     message.to_lowercase().contains(&method_name.to_lowercase()),
                     "Error message should reference specific provider: {}",
@@ -790,7 +791,7 @@ fn request_workspace_symbols(server: &mut LspServer, query: &str) -> Vec<Value> 
         }),
     );
 
-    response.get("result").and_then(|r| r.as_array()).cloned().unwrap_or_else(Vec::new)
+    response.get("result").and_then(|r| r.as_array()).cloned().unwrap_or_default()
 }
 
 /// Tests feature spec: LSP_CANCELLATION_INTEGRATION_SCHEMA.md#cross-file-navigation
@@ -1099,10 +1100,13 @@ fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error:
                 // Validate enhanced error message with provider context
                 let message = error["message"].as_str().ok_or("Error should have message")?;
                 assert!(
-                    message.contains(scenario_name)
-                        || message.to_lowercase().contains(
-                            &method.split('/').next_back().unwrap_or(method).to_lowercase()
-                        ),
+                    message.contains(scenario_name) || {
+                        if let Some(method_name) = method.split('/').next_back() {
+                            message.to_lowercase().contains(&method_name.to_lowercase())
+                        } else {
+                            message.to_lowercase().contains(&method.to_lowercase())
+                        }
+                    },
                     "Error message should reference provider: {}",
                     scenario_name
                 );
