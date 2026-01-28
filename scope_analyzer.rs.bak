@@ -532,7 +532,7 @@ impl ScopeAnalyzer {
                      self.mark_initialized(variable, scope);
                      self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
                 }
-                
+
                 ancestors.pop();
             }
 
@@ -878,7 +878,7 @@ impl ScopeAnalyzer {
     /// ```perl
     /// use strict;
     /// my %hash = (key1 => 'value1');        # key1 is in hash key context
-    /// my $val = $hash{bareword_key};         # bareword_key is in hash key context  
+    /// my $val = $hash{bareword_key};         # bareword_key is in hash key context
     /// my @vals = @hash{key1, key2};          # key1, key2 are in hash key context
     /// print INVALID_BAREWORD;                # NOT in hash key context - should warn
     /// ```
