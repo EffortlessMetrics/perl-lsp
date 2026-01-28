@@ -218,6 +218,18 @@ impl Scope {
         }
     }
 
+    /// Optimized method to mark a variable as initialized AND used in one lookup.
+    /// Returns true if the variable was found and updated.
+    fn initialize_and_use_variable_parts(&self, sigil: &str, name: &str) -> bool {
+        if let Some(var) = self.lookup_variable_parts(sigil, name) {
+            *var.is_used.borrow_mut() = true;
+            *var.is_initialized.borrow_mut() = true;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Iterate over unused variables that should be reported as diagnostics.
     /// Filters out underscore-prefixed variables (intentionally unused) before allocation.
     fn for_each_reportable_unused_variable<F>(&self, mut f: F)
@@ -463,13 +475,14 @@ impl ScopeAnalyzer {
                 }
             }
             NodeKind::Variable { sigil, name } => {
-                // Skip package-qualified variables
-                if name.contains("::") {
+                // Skip built-in global variables
+                // Optimization: Check built-ins first to avoid string scan for "::" on common globals
+                if is_builtin_global(sigil, name) {
                     return;
                 }
 
-                // Skip built-in global variables
-                if is_builtin_global(sigil, name) {
+                // Skip package-qualified variables
+                if name.contains("::") {
                     return;
                 }
 
@@ -542,6 +555,16 @@ impl ScopeAnalyzer {
                 // Handle assignment: LHS variable becomes initialized
                 // First analyze RHS (usages)
                 self.analyze_node(rhs, scope, ancestors, issues, code, pragma_map);
+
+                // Optimization: Handle simple scalar assignment directly to avoid double lookup
+                // (mark_initialized + analyze_node both perform lookups)
+                if let NodeKind::Variable { sigil, name } = &lhs.kind {
+                    if !name.contains("::") && !is_builtin_global(sigil, name) {
+                        if scope.initialize_and_use_variable_parts(sigil, name) {
+                            return;
+                        }
+                    }
+                }
 
                 // Then analyze LHS
                 // We need to recursively mark variables as initialized in the LHS structure
