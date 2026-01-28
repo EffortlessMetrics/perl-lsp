@@ -5,8 +5,8 @@
 
 use super::super::*;
 use crate::convert::{WirePosition, WireRange};
-use crate::features::formatting::CodeFormatter;
 use crate::protocol::{invalid_params, req_position, req_range, req_uri};
+use perl_lsp_formatting::{FormattingProvider, FormattingOptions};
 
 impl LspServer {
     /// Handle textDocument/onTypeFormatting request
@@ -61,10 +61,10 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                let formatter = CodeFormatter::new();
+                let formatter = FormattingProvider::new(self.subprocess_runtime());
                 match formatter.format_document(&doc.text, &options) {
-                    Ok(edits) => {
-                        let lsp_edits: Vec<Value> = edits
+                    Ok(doc) => {
+                        let lsp_edits: Vec<Value> = doc.edits
                             .into_iter()
                             .map(|edit| {
                                 json!({
@@ -126,10 +126,10 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                let formatter = CodeFormatter::new();
+                let formatter = FormattingProvider::new(self.subprocess_runtime());
                 match formatter.format_range(&doc.text, &range, &options) {
-                    Ok(edits) => {
-                        let lsp_edits: Vec<Value> = edits
+                    Ok(doc) => {
+                        let lsp_edits: Vec<Value> = doc.edits
                             .into_iter()
                             .map(|edit| {
                                 json!({
@@ -195,7 +195,7 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                let formatter = CodeFormatter::new();
+                let formatter = FormattingProvider::new(self.subprocess_runtime());
                 let mut all_edits = Vec::new();
 
                 // Process each range
@@ -238,8 +238,8 @@ impl LspServer {
                     );
 
                     match formatter.format_range(&doc.text, &range, &options) {
-                        Ok(edits) => {
-                            all_edits.extend(edits);
+                        Ok(doc) => {
+                            all_edits.extend(doc.edits);
                         }
                         Err(e) => {
                             eprintln!("Range formatting error for range {}: {}", idx, e);

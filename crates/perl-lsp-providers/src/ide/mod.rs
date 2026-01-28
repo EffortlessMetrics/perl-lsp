@@ -6,8 +6,6 @@
 pub mod call_hierarchy_provider;
 /// Deprecated LSP cancellation mod shim (moved to `perl-lsp`).
 pub mod cancellation;
-/// Deprecated LSP diagnostics catalog shim (moved to `perl-lsp`).
-pub mod diagnostics_catalog;
 /// Deprecated executeCommand shim for LSP/tooling integrations (moved to `perl-lsp`).
 #[cfg(not(target_arch = "wasm32"))]
 pub mod execute_command;

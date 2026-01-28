@@ -23,6 +23,7 @@ include = [
 perl-dap = { workspace = true, optional = true }
 perl-parser = { workspace = true, features = ["test-performance"] }
 perl-lsp-providers = { workspace = true, features = ["lsp-compat"] }
+perl-lsp-formatting = { workspace = true }
 perl-lsp-protocol = { workspace = true }
 perl-lsp-transport = { workspace = true }
 perl-lexer = { workspace = true }

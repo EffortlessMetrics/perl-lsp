@@ -22,7 +22,6 @@
 //! - **Memory Efficient**: Streams large files to minimize memory usage during formatting
 
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 
 /// Text edit for formatting
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,7 +62,7 @@ impl FormatRange {
             end: FormatPosition {
                 line: last_line,
                 character: lines.get(last_line as usize)
-                    .map(|l| lsp_types::Position::new(last_line, l.len()).character)
+                    .map(|l| l.len() as u32)
                     .unwrap_or(0),
             },
         }
@@ -290,7 +289,8 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
         }
 
         // Get perltidy command
-        let perltidy_cmd = self.perltidy_path.as_deref().unwrap_or(&"perltidy".to_string());
+        let default_cmd = "perltidy";
+        let perltidy_cmd = self.perltidy_path.as_deref().unwrap_or(default_cmd);
 
         // Try to run perltidy
         let output = self

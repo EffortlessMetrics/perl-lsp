@@ -576,7 +576,8 @@ impl IndexInstrumentation {
         // If we were building, also close out the active phase timer
         if from == IndexStateKind::Building {
             let phase_elapsed = now.duration_since(inner.phase_started_at).as_millis() as u64;
-            *inner.phase_durations_ms.entry(inner.current_phase).or_insert(0) += phase_elapsed;
+            let current_phase = inner.current_phase;
+            *inner.phase_durations_ms.entry(current_phase).or_insert(0) += phase_elapsed;
         }
 
         inner.current_state = to;

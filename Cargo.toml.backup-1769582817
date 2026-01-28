@@ -19,9 +19,7 @@ members = [
     "crates/perl-lsp-diagnostics",
     "crates/perl-lsp-semantic-tokens",
     "crates/perl-lsp-inlay-hints",
-    "crates/perl-lsp-navigation",
     "crates/perl-lsp-completion",
-    "crates/perl-lsp-code-actions",
     "crates/perl-diagnostics-codes",
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
@@ -82,10 +80,8 @@ perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.8.8" }
 perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.8.8" }
 perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.8.8" }
 perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.8.8" }
-perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.8.8" }
 perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.8.8" }
 perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.8.8" }
-perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.8.8" }
 perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.8.8" }
 
 # Tier 3: Two-level dependencies

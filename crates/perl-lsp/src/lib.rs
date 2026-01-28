@@ -447,11 +447,6 @@ pub(crate) mod inline_completions {
     pub use crate::features::inline_completions::*;
 }
 
-pub(crate) mod formatting {
-    #[allow(unused_imports)]
-    pub use crate::features::formatting::*;
-}
-
 pub(crate) mod type_hierarchy {
     pub use crate::features::type_hierarchy::*;
 }

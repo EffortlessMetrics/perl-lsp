@@ -32,12 +32,6 @@ perl-lexer = { workspace = true }
 perl-lsp-tooling = { workspace = true }
 perl-lsp-formatting = { workspace = true }
 perl-lsp-diagnostics = { workspace = true }
-perl-lsp-semantic-tokens = { workspace = true }
-perl-lsp-inlay-hints = { workspace = true }
-perl-lsp-rename = { workspace = true }
-perl-lsp-navigation = { workspace = true }
-perl-lsp-completion = { workspace = true }
-perl-lsp-code-actions = { workspace = true }
 perl-position-tracking = { workspace = true }
 rustc-hash = "2.1.1"
 serde = { version = "1.0.228", features = ["derive"] }

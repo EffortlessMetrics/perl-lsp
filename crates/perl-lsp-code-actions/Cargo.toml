@@ -1,15 +1,15 @@
 [package]
-name = "perl-lsp-diagnostics"
+name = "perl-lsp-code-actions"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors = ["Tree-sitter Perl Contributors"]
-description = "LSP diagnostics provider for Perl"
+description = "LSP code actions provider for Perl"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
-documentation = "https://docs.rs/perl-lsp-diagnostics"
-keywords = ["perl", "lsp", "diagnostics", "linting"]
+documentation = "https://docs.rs/perl-lsp-code-actions"
+keywords = ["perl", "lsp", "code-actions", "quick-fixes", "refactoring"]
 categories = ["development-tools", "text-editors"]
 
 [lib]
@@ -17,12 +17,13 @@ doctest = false
 
 [dependencies]
 perl-parser-core = { workspace = true }
-perl-semantic-analyzer = { workspace = true }
+perl-refactoring = { workspace = true }
 perl-workspace-index = { workspace = true }
-perl-diagnostics-codes = { workspace = true }
-lsp-types = "0.97.0"
-serde = { version = "1.0.228", features = ["derive"] }
-thiserror = "2.0.18"
+perl-semantic-analyzer = { workspace = true }
+perl-lsp-rename = { workspace = true }
+perl-lsp-diagnostics = { workspace = true }
+serde = "1.0.228"
+thiserror = "2.0.11"
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
