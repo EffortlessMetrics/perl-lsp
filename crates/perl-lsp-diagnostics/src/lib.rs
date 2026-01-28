@@ -32,8 +32,9 @@ mod scope;
 mod types;
 mod walker;
 
-pub use diagnostics::{DiagnosticsProvider, Diagnostic, DiagnosticSeverity};
-pub use types::{DiagnosticTag, RelatedInformation};
+pub use diagnostics::{
+    Diagnostic, DiagnosticSeverity, DiagnosticTag, DiagnosticsProvider, RelatedInformation,
+};
 
 // Re-export lint checks from the lints module
 pub use lints::common_mistakes;

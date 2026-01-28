@@ -23,7 +23,8 @@ pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Ve
         end_idx = lines.len() - 1;
     }
 
-    let re = Regex::new(r"\$[A-Za-z_][A-Za-z0-9_]*").unwrap_or_else(|_| Regex::new(r"\$\w+").unwrap());
+    let re =
+        Regex::new(r"\$[A-Za-z_][A-Za-z0-9_]*").unwrap_or_else(|_| Regex::new(r"\$\w+").unwrap());
     let mut inline_values = Vec::new();
 
     for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {

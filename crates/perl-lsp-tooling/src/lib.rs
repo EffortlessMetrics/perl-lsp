@@ -23,12 +23,15 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+/// Performance optimizations for large projects.
+pub mod performance;
+/// Perl::Critic integration for code quality analysis.
+pub mod perl_critic;
+/// Perltidy integration for code formatting.
+pub mod perltidy;
 mod subprocess_runtime;
-mod perltidy;
-mod perl_critic;
-mod performance;
 
-pub use subprocess_runtime::{SubprocessRuntime, SubprocessOutput, SubprocessError};
+pub use subprocess_runtime::{SubprocessError, SubprocessOutput, SubprocessRuntime};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use subprocess_runtime::OsSubprocessRuntime;

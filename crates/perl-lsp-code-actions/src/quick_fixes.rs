@@ -8,7 +8,7 @@ use perl_lsp_rename::TextEdit;
 use perl_parser_core::SourceLocation;
 
 /// Fix undefined variable by declaring it
-pub fn fix_undefined_variable(source: &str, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+pub fn fix_undefined_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
     // Extract variable name from diagnostic message
@@ -49,7 +49,7 @@ pub fn fix_undefined_variable(source: &str, diagnostic: &Diagnostic) -> Vec<Code
 }
 
 /// Fix unused variable by removing it
-pub fn fix_unused_variable(source: &str, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+pub fn fix_unused_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
     // Find the declaration line
@@ -92,7 +92,10 @@ pub fn fix_unused_variable(source: &str, diagnostic: &Diagnostic) -> Vec<CodeAct
 }
 
 /// Fix assignment in condition
-pub fn fix_assignment_in_condition(source: &str, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+pub fn fix_assignment_in_condition(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
     // Change = to ==
@@ -176,7 +179,7 @@ pub fn add_use_warnings() -> Vec<CodeAction> {
 }
 
 /// Fix deprecated 'defined @array' or 'defined %hash'
-pub fn fix_deprecated_defined(source: &str, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+pub fn fix_deprecated_defined(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
     // Extract the array/hash from the diagnostic
@@ -205,7 +208,7 @@ pub fn fix_deprecated_defined(source: &str, diagnostic: &Diagnostic) -> Vec<Code
 }
 
 /// Fix numeric comparison with undef
-pub fn fix_numeric_undef(source: &str, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+pub fn fix_numeric_undef(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
     // Add defined check
@@ -253,7 +256,7 @@ pub fn fix_numeric_undef(source: &str, diagnostic: &Diagnostic) -> Vec<CodeActio
 /// 1. Quote with single quotes - wraps bareword in single quotes
 /// 2. Quote with double quotes - wraps bareword in double quotes
 /// 3. Declare as filehandle - for uppercase barewords, adds filehandle declaration
-pub fn fix_bareword(source: &str, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+pub fn fix_bareword(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
     // Extract bareword text from the source at the diagnostic range
@@ -314,7 +317,11 @@ pub fn fix_bareword(source: &str, diagnostic: &Diagnostic) -> Vec<CodeAction> {
 }
 
 /// Fix parse errors with automated corrections
-pub fn fix_parse_error(source: &str, diagnostic: &Diagnostic, code: &str) -> Vec<CodeAction> {
+pub fn fix_parse_error(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+    code: &str,
+) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
     match code {
@@ -422,7 +429,7 @@ pub fn fix_parse_error(source: &str, diagnostic: &Diagnostic, code: &str) -> Vec
 }
 
 /// Fix unused parameter by adding underscore prefix
-pub fn fix_unused_parameter(diagnostic: &Diagnostic) -> Vec<CodeAction> {
+pub fn fix_unused_parameter(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
     if let Some(param_name) = diagnostic.message.split('\'').nth(1) {
@@ -445,7 +452,7 @@ pub fn fix_unused_parameter(diagnostic: &Diagnostic) -> Vec<CodeAction> {
 }
 
 /// Fix variable shadowing by suggesting rename
-pub fn fix_variable_shadowing(diagnostic: &Diagnostic) -> Vec<CodeAction> {
+pub fn fix_variable_shadowing(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
     if let Some(var_name) = diagnostic.message.split('\'').nth(1) {

@@ -152,10 +152,7 @@ fn test_dap_breakpoints_no_session() {
 fn test_dap_inline_values() -> TestResult {
     let dir = tempdir()?;
     let script_path = dir.path().join("inline_values.pl");
-    write(
-        &script_path,
-        "my $x = 1;\nmy $y = $x + 2;\nmy $z = $y + 3;\n",
-    )?;
+    write(&script_path, "my $x = 1;\nmy $y = $x + 2;\nmy $z = $y + 3;\n")?;
 
     let mut adapter = DebugAdapter::new();
     let response = adapter.handle_request(
@@ -177,12 +174,16 @@ fn test_dap_inline_values() -> TestResult {
                 .get("inlineValues")
                 .and_then(|v| v.as_array())
                 .ok_or("missing inlineValues")?;
-            assert!(values.iter().any(|v| {
-                v.get("text").and_then(|t| t.as_str()).unwrap_or("").contains("$x")
-            }));
-            assert!(values.iter().any(|v| {
-                v.get("text").and_then(|t| t.as_str()).unwrap_or("").contains("$y")
-            }));
+            assert!(
+                values.iter().any(|v| {
+                    v.get("text").and_then(|t| t.as_str()).unwrap_or("").contains("$x")
+                })
+            );
+            assert!(
+                values.iter().any(|v| {
+                    v.get("text").and_then(|t| t.as_str()).unwrap_or("").contains("$y")
+                })
+            );
         }
         _ => panic!("Expected inlineValues response"),
     }

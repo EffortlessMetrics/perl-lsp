@@ -385,8 +385,10 @@ pub use engine::quote_parser;
 pub use ide::call_hierarchy_provider;
 /// Enhanced LSP cancellation infrastructure.
 pub use ide::cancellation;
-/// Diagnostic catalog with stable codes for consistent error reporting.
-pub use ide::diagnostics_catalog;
+/// Parser utilities and helpers.
+pub use perl_parser_core::util;
+// NOTE: diagnostics_catalog moved to perl-lsp crate
+// pub use ide::diagnostics_catalog;
 #[cfg(not(target_arch = "wasm32"))]
 pub use ide::execute_command;
 /// Parser utilities and helpers.
@@ -424,27 +426,47 @@ pub use analysis::symbol;
 pub use analysis::type_inference;
 pub use builtins::builtin_signatures;
 pub use builtins::builtin_signatures_phf;
-pub use ide::lsp_compat::code_actions;
-pub use ide::lsp_compat::code_actions::EnhancedCodeActionsProvider;
+
+// Re-exports from extracted microcrates
+/// LSP code actions for automated refactoring and fixes.
+pub mod code_actions {
+    pub use perl_lsp_code_actions::*;
+}
 pub use ide::lsp_compat::code_actions_pragmas;
 /// LSP code actions provider for automated refactoring and fixes.
 pub use ide::lsp_compat::code_actions_provider;
 pub use ide::lsp_compat::code_lens_provider;
-pub use ide::lsp_compat::completion;
-pub use ide::lsp_compat::diagnostics;
+pub use perl_lsp_code_actions::EnhancedCodeActionsProvider;
+/// LSP completion for code suggestions.
+pub mod completion {
+    pub use perl_lsp_completion::*;
+}
+/// LSP diagnostics for error reporting.
+pub mod diagnostics {
+    pub use perl_lsp_diagnostics::*;
+}
 pub use ide::lsp_compat::document_highlight;
 /// LSP document links provider for file and URL navigation.
-pub use ide::lsp_compat::document_links;
+pub mod document_links {
+    pub use perl_lsp_navigation::*;
+}
 /// Deprecated LSP feature catalog shim (moved to `perl-lsp`).
 #[cfg(feature = "lsp-compat")]
 pub use ide::lsp_compat::features;
 pub use ide::lsp_compat::folding;
 pub use ide::lsp_compat::formatting;
-pub use ide::lsp_compat::implementation_provider;
+/// LSP implementation provider.
+pub mod implementation_provider {
+    pub use perl_lsp_navigation::*;
+}
 /// LSP inlay hints for inline type and parameter information.
-pub use ide::lsp_compat::inlay_hints;
+pub mod inlay_hints {
+    pub use perl_lsp_inlay_hints::*;
+}
 /// LSP inlay hints provider implementation.
-pub use ide::lsp_compat::inlay_hints_provider;
+pub mod inlay_hints_provider {
+    pub use perl_lsp_inlay_hints::*;
+}
 pub use ide::lsp_compat::inline_completions;
 /// LSP linked editing provider for synchronized symbol renaming.
 pub use ide::lsp_compat::linked_editing;
@@ -459,22 +481,40 @@ pub use ide::lsp_compat::lsp_utils;
 pub use ide::lsp_compat::on_type_formatting;
 pub use ide::lsp_compat::pull_diagnostics;
 /// LSP references provider for symbol usage analysis.
-pub use ide::lsp_compat::references;
-pub use ide::lsp_compat::rename;
+pub mod references {
+    pub use perl_lsp_navigation::*;
+}
+/// LSP rename for symbol renaming.
+pub mod rename {
+    pub use perl_lsp_rename::*;
+}
 /// LSP selection range provider for smart text selection.
 pub use ide::lsp_compat::selection_range;
 /// LSP semantic tokens provider for syntax highlighting.
-pub use ide::lsp_compat::semantic_tokens;
-pub use ide::lsp_compat::semantic_tokens_provider;
+pub mod semantic_tokens {
+    pub use perl_lsp_semantic_tokens::*;
+}
+/// LSP semantic tokens provider implementation.
+pub mod semantic_tokens_provider {
+    pub use perl_lsp_semantic_tokens::*;
+}
 pub use ide::lsp_compat::signature_help;
 #[cfg(feature = "lsp-compat")]
 pub use ide::lsp_compat::textdoc;
+/// LSP type definition provider.
 #[cfg(feature = "lsp-compat")]
-pub use ide::lsp_compat::type_definition;
+pub mod type_definition {
+    pub use perl_lsp_navigation::*;
+}
 /// LSP type hierarchy provider for inheritance navigation.
-pub use ide::lsp_compat::type_hierarchy;
+pub mod type_hierarchy {
+    pub use perl_lsp_navigation::*;
+}
 pub use ide::lsp_compat::uri;
-pub use ide::lsp_compat::workspace_symbols;
+/// LSP workspace symbols provider.
+pub mod workspace_symbols {
+    pub use perl_lsp_navigation::*;
+}
 
 pub use refactor::import_optimizer;
 /// Code modernization utilities for Perl best practices.

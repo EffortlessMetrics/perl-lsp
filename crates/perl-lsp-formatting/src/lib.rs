@@ -26,4 +26,7 @@
 
 mod formatting;
 
-pub use formatting::{FormattingProvider, FormattingOptions, FormattedDocument, FormattingError};
+pub use formatting::{
+    FormatPosition, FormatRange, FormatTextEdit, FormattedDocument, FormattingError,
+    FormattingOptions, FormattingProvider,
+};

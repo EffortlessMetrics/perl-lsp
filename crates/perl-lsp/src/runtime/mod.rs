@@ -337,6 +337,14 @@ impl LspServer {
         }
     }
 
+    /// Get the subprocess runtime for external tool execution (perltidy, perlcritic).
+    ///
+    /// Returns a new `OsSubprocessRuntime` for executing external processes.
+    /// This is used by formatting and linting providers.
+    pub fn subprocess_runtime(&self) -> perl_lsp_tooling::OsSubprocessRuntime {
+        perl_lsp_tooling::OsSubprocessRuntime::new()
+    }
+
     /// Send a notification to the client with proper framing
     fn notify(&self, method: &str, params: Value) -> io::Result<()> {
         let notification = json!({

@@ -940,8 +940,7 @@ impl IndexCoordinator {
                 // Attempt recovery - transition back to Building for re-scan
                 let mut state = self.state.write();
                 let from_kind = state.kind();
-                self.instrumentation
-                    .record_state_transition(from_kind, IndexStateKind::Building);
+                self.instrumentation.record_state_transition(from_kind, IndexStateKind::Building);
                 *state = IndexState::Building {
                     phase: IndexPhase::Idle,
                     indexed_count: 0,
@@ -1028,8 +1027,7 @@ impl IndexCoordinator {
                 };
             }
             IndexState::Ready { .. } | IndexState::Degraded { .. } => {
-                self.instrumentation
-                    .record_state_transition(from_kind, IndexStateKind::Building);
+                self.instrumentation.record_state_transition(from_kind, IndexStateKind::Building);
                 self.instrumentation
                     .record_phase_transition(IndexPhase::Idle, IndexPhase::Scanning);
                 *state = IndexState::Building {
@@ -1078,8 +1076,7 @@ impl IndexCoordinator {
                 };
             }
             IndexState::Ready { .. } | IndexState::Degraded { .. } => {
-                self.instrumentation
-                    .record_state_transition(from_kind, IndexStateKind::Building);
+                self.instrumentation.record_state_transition(from_kind, IndexStateKind::Building);
                 self.instrumentation
                     .record_phase_transition(IndexPhase::Idle, IndexPhase::Indexing);
                 *state = IndexState::Building {
@@ -1102,8 +1099,7 @@ impl IndexCoordinator {
         // State transition guard: validate transition is allowed
         match &*state {
             IndexState::Degraded { .. } | IndexState::Ready { .. } => {
-                self.instrumentation
-                    .record_state_transition(from_kind, IndexStateKind::Building);
+                self.instrumentation.record_state_transition(from_kind, IndexStateKind::Building);
                 self.instrumentation
                     .record_phase_transition(IndexPhase::Idle, IndexPhase::Indexing);
                 *state = IndexState::Building {
@@ -1210,8 +1206,7 @@ impl IndexCoordinator {
             IndexState::Building { .. } => 0,
         };
 
-        self.instrumentation
-            .record_state_transition(from_kind, IndexStateKind::Degraded);
+        self.instrumentation.record_state_transition(from_kind, IndexStateKind::Degraded);
         *state = IndexState::Degraded { reason, available_symbols, since: Instant::now() };
     }
 
@@ -3254,10 +3249,8 @@ use Data::Dumper;
         coordinator.transition_to_ready(10, 100);
 
         let snapshot = coordinator.instrumentation_snapshot();
-        let transition = IndexStateTransition {
-            from: IndexStateKind::Building,
-            to: IndexStateKind::Ready,
-        };
+        let transition =
+            IndexStateTransition { from: IndexStateKind::Building, to: IndexStateKind::Ready };
         let count = snapshot.state_transition_counts.get(&transition).copied().unwrap_or(0);
         assert_eq!(count, 1);
     }

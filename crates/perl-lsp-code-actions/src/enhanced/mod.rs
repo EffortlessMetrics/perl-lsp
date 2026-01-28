@@ -287,7 +287,7 @@ impl EnhancedCodeActionsProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Parser;
+    use perl_parser_core::Parser;
     use perl_tdd_support::must;
 
     #[test]

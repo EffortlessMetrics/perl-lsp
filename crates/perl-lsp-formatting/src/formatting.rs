@@ -61,9 +61,7 @@ impl FormatRange {
             start: FormatPosition { line: 0, character: 0 },
             end: FormatPosition {
                 line: last_line,
-                character: lines.get(last_line as usize)
-                    .map(|l| l.len() as u32)
-                    .unwrap_or(0),
+                character: lines.get(last_line as usize).map(|l| l.len() as u32).unwrap_or(0),
             },
         }
     }
@@ -132,10 +130,7 @@ pub struct FormattingProvider<R> {
 impl<R> FormattingProvider<R> {
     /// Create a new formatting provider with the given runtime
     pub fn new(runtime: R) -> Self {
-        Self {
-            runtime,
-            perltidy_path: None,
-        }
+        Self { runtime, perltidy_path: None }
     }
 
     /// Set a custom perltidy path
@@ -202,10 +197,7 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
 
         // If nothing changed, return empty edits
         if formatted == content {
-            return Ok(FormattedDocument {
-                text: formatted,
-                edits: vec![],
-            });
+            return Ok(FormattedDocument { text: formatted, edits: vec![] });
         }
 
         // Return a single edit that replaces the entire document
@@ -231,10 +223,7 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
         let end_line = (range.end.line as usize).min(lines.len().saturating_sub(1));
 
         if start_line >= lines.len() {
-            return Ok(FormattedDocument {
-                text: content.to_string(),
-                edits: vec![],
-            });
+            return Ok(FormattedDocument { text: content.to_string(), edits: vec![] });
         }
 
         // Get the text to format
@@ -245,10 +234,7 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
 
         // If nothing changed, return empty edits
         if formatted == text_to_format {
-            return Ok(FormattedDocument {
-                text: content.to_string(),
-                edits: vec![],
-            });
+            return Ok(FormattedDocument { text: content.to_string(), edits: vec![] });
         }
 
         // Calculate the range to replace
@@ -295,7 +281,11 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
         // Try to run perltidy
         let output = self
             .runtime
-            .run_command(perltidy_cmd, &args.iter().map(|s| s.as_str()).collect::<Vec<_>>(), Some(content.as_bytes()))
+            .run_command(
+                perltidy_cmd,
+                &args.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+                Some(content.as_bytes()),
+            )
             .map_err(|e| FormattingError::PerltidyNotFound(e.message))?;
 
         if !output.success() {

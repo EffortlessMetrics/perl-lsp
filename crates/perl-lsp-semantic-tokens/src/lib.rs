@@ -22,9 +22,7 @@
 
 mod semantic_tokens;
 
-pub use semantic_tokens::{
-    collect_semantic_tokens, legend, EncodedToken, TokensLegend,
-};
+pub use semantic_tokens::{EncodedToken, TokensLegend, collect_semantic_tokens, legend};
 
 /// Semantic tokens provider for LSP
 ///

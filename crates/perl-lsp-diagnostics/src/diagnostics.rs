@@ -2,55 +2,61 @@
 //!
 //! This module provides the core diagnostic generation functionality.
 
-use lsp_types::Diagnostic as LspDiagnostic;
-use serde::{Deserialize, Serialize};
+use perl_parser_core::Node;
+use perl_parser_core::error::ParseError;
 
-/// Diagnostic severity level
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum DiagnosticSeverity {
-    Error,
-    Warning,
-    Information,
-    Hint,
-}
-
-/// A diagnostic message
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Diagnostic {
-    /// The range at which the message applies
-    pub range: lsp_types::Range,
-    /// The diagnostic's severity
-    pub severity: DiagnosticSeverity,
-    /// The diagnostic's code
-    pub code: Option<String>,
-    /// A human-readable string describing the source of this diagnostic
-    pub source: Option<String>,
-    /// The diagnostic's message
-    pub message: String,
-}
+// Re-export types from types module
+pub use crate::types::{Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation};
 
 /// Diagnostics provider
-pub struct DiagnosticsProvider;
+///
+/// Analyzes Perl source code and generates diagnostic messages for
+/// parse errors, scope issues, and lint warnings.
+pub struct DiagnosticsProvider {
+    _ast: std::sync::Arc<Node>,
+    _source: String,
+}
 
 impl DiagnosticsProvider {
     /// Create a new diagnostics provider
-    pub fn new() -> Self {
-        Self
+    pub fn new(ast: &std::sync::Arc<Node>, source: String) -> Self {
+        Self { _ast: ast.clone(), _source: source }
     }
 
     /// Generate diagnostics for the given AST
-    pub fn generate_diagnostics(
+    ///
+    /// Analyzes the AST and parse errors to produce a list of diagnostics
+    /// including parse errors, semantic issues, and lint warnings.
+    pub fn get_diagnostics(
         &self,
-        _ast: &perl_parser_core::Node,
+        _ast: &std::sync::Arc<Node>,
+        parse_errors: &[ParseError],
         _source: &str,
-        _workspace_index: Option<&perl_workspace_index::workspace_index::WorkspaceIndex>,
-    ) -> Result<Vec<LspDiagnostic>, String> {
-        Ok(Vec::new())
-    }
-}
+    ) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
 
-impl Default for DiagnosticsProvider {
-    fn default() -> Self {
-        Self::new()
+        // Convert parse errors to diagnostics
+        for error in parse_errors {
+            let (location, message) = match error {
+                ParseError::UnexpectedToken { location, expected, found } => {
+                    (*location, format!("Expected {expected}, found {found}"))
+                }
+                ParseError::SyntaxError { location, message } => (*location, message.clone()),
+                ParseError::UnexpectedEof => (_source.len(), "Unexpected end of input".to_string()),
+                ParseError::LexerError { message } => (0, message.clone()),
+                _ => (0, error.to_string()),
+            };
+
+            diagnostics.push(Diagnostic {
+                range: (location, location.saturating_add(1)),
+                severity: DiagnosticSeverity::Error,
+                code: Some("parse-error".to_string()),
+                message,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            });
+        }
+
+        diagnostics
     }
 }

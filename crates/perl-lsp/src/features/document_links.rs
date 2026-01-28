@@ -1,3 +1,3 @@
 //! Document links provider (delegated to perl-lsp-providers).
 
-pub use perl_lsp_providers::ide::lsp_compat::document_links::*;
+pub use perl_lsp_navigation::*;

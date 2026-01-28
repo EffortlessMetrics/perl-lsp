@@ -65,17 +65,21 @@
 //! # }
 //! ```
 
-use crate::ast_utils;
-use crate::enhanced;
 use crate::quick_fixes;
 use crate::refactors;
-use crate::types;
+use crate::types::QuickFixDiagnostic;
 
-pub use crate::enhanced::EnhancedCodeActionsProvider;
-pub use crate::types::{CodeAction, CodeActionEdit, CodeActionKind};
+pub use crate::types::{CodeAction, CodeActionKind};
 
 use perl_lsp_diagnostics::Diagnostic;
 use perl_parser_core::Node;
+
+/// Convert Diagnostic to QuickFixDiagnostic
+///
+/// Since Diagnostic already uses byte offsets, this is a simple copy.
+fn to_quick_fix_diagnostic(diag: &Diagnostic) -> QuickFixDiagnostic {
+    QuickFixDiagnostic { range: diag.range, message: diag.message.clone(), code: diag.code.clone() }
+}
 
 /// Code actions provider
 ///
@@ -102,19 +106,19 @@ impl CodeActionsProvider {
 
         // Get quick fixes for diagnostics
         for diagnostic in diagnostics {
+            let qf_diag = to_quick_fix_diagnostic(diagnostic);
             if let Some(code) = &diagnostic.code {
                 match code.as_str() {
                     "undefined-variable" | "undeclared-variable" => {
-                        actions
-                            .extend(quick_fixes::fix_undefined_variable(&self.source, diagnostic));
+                        actions.extend(quick_fixes::fix_undefined_variable(&self.source, &qf_diag));
                     }
                     "unused-variable" => {
-                        actions.extend(quick_fixes::fix_unused_variable(&self.source, diagnostic));
+                        actions.extend(quick_fixes::fix_unused_variable(&self.source, &qf_diag));
                     }
                     "assignment-in-condition" => {
                         actions.extend(quick_fixes::fix_assignment_in_condition(
                             &self.source,
-                            diagnostic,
+                            &qf_diag,
                         ));
                     }
                     "missing-strict" => {
@@ -124,27 +128,22 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::add_use_warnings());
                     }
                     "deprecated-defined" => {
-                        actions
-                            .extend(quick_fixes::fix_deprecated_defined(&self.source, diagnostic));
+                        actions.extend(quick_fixes::fix_deprecated_defined(&self.source, &qf_diag));
                     }
                     "numeric-undef" => {
-                        actions.extend(quick_fixes::fix_numeric_undef(&self.source, diagnostic));
+                        actions.extend(quick_fixes::fix_numeric_undef(&self.source, &qf_diag));
                     }
                     "unquoted-bareword" => {
-                        actions.extend(quick_fixes::fix_bareword(&self.source, diagnostic));
+                        actions.extend(quick_fixes::fix_bareword(&self.source, &qf_diag));
                     }
                     code if code.starts_with("parse-error-") => {
-                        actions.extend(quick_fixes::fix_parse_error(
-                            &self.source,
-                            diagnostic,
-                            code,
-                        ));
+                        actions.extend(quick_fixes::fix_parse_error(&self.source, &qf_diag, code));
                     }
                     "unused-parameter" => {
-                        actions.extend(quick_fixes::fix_unused_parameter(diagnostic));
+                        actions.extend(quick_fixes::fix_unused_parameter(&qf_diag));
                     }
                     "variable-shadowing" => {
-                        actions.extend(quick_fixes::fix_variable_shadowing(diagnostic));
+                        actions.extend(quick_fixes::fix_variable_shadowing(&qf_diag));
                     }
                     _ => {}
                 }
@@ -161,9 +160,21 @@ impl CodeActionsProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_lsp_diagnostics::DiagnosticsProvider;
+    use perl_lsp_diagnostics::DiagnosticSeverity;
     use perl_parser_core::Parser;
     use perl_tdd_support::must;
+
+    /// Create a diagnostic with byte offsets
+    fn make_diagnostic(start: usize, end: usize, code: &str, msg: &str) -> Diagnostic {
+        Diagnostic {
+            range: (start, end),
+            severity: DiagnosticSeverity::Error,
+            code: Some(code.to_string()),
+            message: msg.to_string(),
+            related_information: Vec::new(),
+            tags: Vec::new(),
+        }
+    }
 
     #[test]
     fn test_undefined_variable_fix() {
@@ -171,17 +182,18 @@ mod tests {
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
 
-        let diag_provider = DiagnosticsProvider::new(&ast, source.to_string());
-        let diagnostics = diag_provider.get_diagnostics(&ast, &[], source);
+        // Create a synthetic diagnostic for 'undefined-variable'
+        // "$undefined" starts at byte offset 18 (after "use strict;\nprint ")
+        let diagnostics = vec![make_diagnostic(
+            18, // start of "$undefined"
+            28, // end of "$undefined"
+            "undefined-variable",
+            "Undefined variable '$undefined'",
+        )];
 
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        // Debug output
-        eprintln!("Diagnostics: {:?}", diagnostics);
-        eprintln!("Actions: {:?}", actions);
-
-        assert!(!diagnostics.is_empty(), "Expected diagnostics for undefined variable");
         assert!(
             actions.iter().any(|a| a.title.contains("Declare") || a.title.contains("my")),
             "Expected action to declare variable, got: {:?}",
@@ -195,12 +207,22 @@ mod tests {
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
 
-        let diag_provider = DiagnosticsProvider::new(&ast, source.to_string());
-        let diagnostics = diag_provider.get_diagnostics(&ast, &[], source);
+        // Create a synthetic diagnostic for 'assignment-in-condition'
+        // "$x = 5" is at bytes 4-10
+        let diagnostics = vec![make_diagnostic(
+            4,  // start of "$x = 5"
+            10, // end of "$x = 5"
+            "assignment-in-condition",
+            "Assignment in condition",
+        )];
 
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        assert!(actions.iter().any(|a| a.title.contains("==")));
+        assert!(
+            actions.iter().any(|a| a.title.contains("==")),
+            "Expected action to change to comparison, got: {:?}",
+            actions
+        );
     }
 }

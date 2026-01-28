@@ -13,9 +13,9 @@ use super::*;
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::workspace_symbol_cap;
 #[cfg(feature = "workspace")]
-use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind};
-#[cfg(feature = "workspace")]
 use parking_lot::Mutex;
+#[cfg(feature = "workspace")]
+use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind};
 #[cfg(feature = "workspace")]
 use std::io::Write;
 #[cfg(feature = "workspace")]
@@ -43,10 +43,7 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
         return false;
     }
     let name = entry.file_name().to_string_lossy();
-    matches!(
-        name.as_ref(),
-        ".git" | ".hg" | ".svn" | "target" | "node_modules" | ".cache"
-    )
+    matches!(name.as_ref(), ".git" | ".hg" | ".svn" | "target" | "node_modules" | ".cache")
 }
 
 #[cfg(feature = "workspace")]
@@ -1040,9 +1037,8 @@ impl LspServer {
                         });
                     }
                     EarlyExitReason::InitialTimeBudget | EarlyExitReason::IncrementalTimeBudget => {
-                        coordinator.transition_to_degraded(DegradationReason::ScanTimeout {
-                            elapsed_ms,
-                        });
+                        coordinator
+                            .transition_to_degraded(DegradationReason::ScanTimeout { elapsed_ms });
                     }
                 }
                 send_index_ready_notification(&output, false);

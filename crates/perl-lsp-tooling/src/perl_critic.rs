@@ -4,7 +4,10 @@
 //! and policy enforcement in Perl code.
 
 use super::subprocess_runtime::SubprocessRuntime;
-use perl_parser_core::{Node, position::{Position, Range}};
+use perl_parser_core::{
+    Node,
+    position::{Position, Range},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;

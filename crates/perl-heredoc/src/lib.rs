@@ -84,11 +84,7 @@ pub fn collect_all(
 /// and strip the longest common BYTE prefix on each content line.
 /// CRLF is normalized **only** for terminator comparison; content spans exclude
 /// CR and LF bytes by construction.
-fn collect_one(
-    src: &[u8],
-    mut off: usize,
-    hd: &PendingHeredoc,
-) -> (HeredocContent, usize, bool) {
+fn collect_one(src: &[u8], mut off: usize, hd: &PendingHeredoc) -> (HeredocContent, usize, bool) {
     #[derive(Debug)]
     struct Line {
         start: usize,

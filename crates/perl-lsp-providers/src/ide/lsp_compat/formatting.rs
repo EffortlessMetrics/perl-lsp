@@ -32,6 +32,5 @@
 
 // Re-export all public types from perl-lsp-formatting for backward compatibility
 pub use perl_lsp_formatting::{
-    FormattingProvider, FormattingOptions, FormattedDocument, FormatTextEdit,
-    FormatPosition, FormatRange, FormattingError,
+    FormattedDocument, FormattingError, FormattingOptions, FormattingProvider,
 };

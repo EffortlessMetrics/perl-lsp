@@ -29,6 +29,6 @@ mod quick_fixes;
 mod refactors;
 mod types;
 
-pub use code_actions::{CodeActionsProvider, CodeAction, CodeActionKind};
+pub use code_actions::{CodeAction, CodeActionKind, CodeActionsProvider};
 pub use enhanced::EnhancedCodeActionsProvider;
 pub use types::CodeActionEdit;

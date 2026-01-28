@@ -24,4 +24,6 @@
 
 mod inlay_hints;
 
-pub use inlay_hints::{InlayHintsProvider, InlayHint, InlayHintKind};
+pub use inlay_hints::{
+    InlayHint, InlayHintKind, InlayHintsProvider, parameter_hints, trivial_type_hints,
+};

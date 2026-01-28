@@ -11,6 +11,8 @@ pub mod document_highlight;
 pub mod document_links;
 pub mod feature_catalog;
 pub mod folding;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod formatting;
 pub mod implementation_provider;
 pub mod inlay_hints;
 pub mod inlay_hints_provider;

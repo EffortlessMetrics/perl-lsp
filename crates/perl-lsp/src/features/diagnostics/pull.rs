@@ -109,6 +109,7 @@ impl PullDiagnosticsProvider {
 
         match parser.parse() {
             Ok(ast) => {
+                let ast = std::sync::Arc::new(ast);
                 let provider = DiagnosticsProvider::new(&ast, content.to_string());
                 provider
                     .get_diagnostics(&ast, &[], content)

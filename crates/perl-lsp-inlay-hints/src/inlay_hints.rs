@@ -88,7 +88,10 @@ impl InlayHintsProvider {
                     _ => InlayHintKind::Type,
                 };
                 InlayHint {
-                    position: Position::new(pos["line"].as_u64().unwrap() as u32, pos["character"].as_u64().unwrap() as u32),
+                    position: Position::new(
+                        pos["line"].as_u64().unwrap() as u32,
+                        pos["character"].as_u64().unwrap() as u32,
+                    ),
                     label,
                     kind,
                     padding_left: v["paddingLeft"].as_bool().unwrap_or(false),
@@ -116,7 +119,10 @@ impl InlayHintsProvider {
                     _ => InlayHintKind::Type,
                 };
                 InlayHint {
-                    position: Position::new(pos["line"].as_u64().unwrap() as u32, pos["character"].as_u64().unwrap() as u32),
+                    position: Position::new(
+                        pos["line"].as_u64().unwrap() as u32,
+                        pos["character"].as_u64().unwrap() as u32,
+                    ),
                     label,
                     kind,
                     padding_left: v["paddingLeft"].as_bool().unwrap_or(false),

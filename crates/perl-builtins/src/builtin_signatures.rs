@@ -1427,10 +1427,7 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
 
         signatures.insert(
             "getuid",
-            BuiltinSignature {
-                signatures: vec!["getuid"],
-                documentation: "Returns real user ID",
-            },
+            BuiltinSignature { signatures: vec!["getuid"], documentation: "Returns real user ID" },
         );
 
         signatures.insert(
@@ -1443,10 +1440,7 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
 
         signatures.insert(
             "getgid",
-            BuiltinSignature {
-                signatures: vec!["getgid"],
-                documentation: "Returns real group ID",
-            },
+            BuiltinSignature { signatures: vec!["getgid"], documentation: "Returns real group ID" },
         );
 
         signatures.insert(
@@ -1467,10 +1461,7 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
 
         signatures.insert(
             "setuid",
-            BuiltinSignature {
-                signatures: vec!["setuid UID"],
-                documentation: "Sets real user ID",
-            },
+            BuiltinSignature { signatures: vec!["setuid UID"], documentation: "Sets real user ID" },
         );
 
         signatures.insert(

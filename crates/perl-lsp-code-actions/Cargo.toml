@@ -17,13 +17,14 @@ doctest = false
 
 [dependencies]
 perl-parser-core = { workspace = true }
+perl-position-tracking = { workspace = true }
 perl-refactoring = { workspace = true }
 perl-workspace-index = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-lsp-rename = { workspace = true }
 perl-lsp-diagnostics = { workspace = true }
 serde = "1.0.228"
-thiserror = "2.0.11"
+thiserror = "2.0.18"
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
