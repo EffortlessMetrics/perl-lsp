@@ -416,10 +416,14 @@ impl RefactoringEngine {
         #[cfg(feature = "workspace_refactor")]
         {
             let uri_str = crate::workspace_index::fs_path_to_uri(path).map_err(|e| {
-                ParseError::SyntaxError { message: format!("URI conversion failed: {}", e), location: 0 }
+                ParseError::SyntaxError {
+                    message: format!("URI conversion failed: {}", e),
+                    location: 0,
+                }
             })?;
-            let url = url::Url::parse(&uri_str).map_err(|e| {
-                ParseError::SyntaxError { message: format!("URL parsing failed: {}", e), location: 0 }
+            let url = url::Url::parse(&uri_str).map_err(|e| ParseError::SyntaxError {
+                message: format!("URL parsing failed: {}", e),
+                location: 0,
             })?;
             self.workspace_refactor._index.index_file(url, content.to_string()).map_err(|e| {
                 ParseError::SyntaxError { message: format!("Indexing failed: {}", e), location: 0 }
@@ -1057,13 +1061,13 @@ impl RefactoringEngine {
         #[cfg(feature = "workspace_refactor")]
         {
             let rename_result = match scope {
-                RefactoringScope::Workspace |
-                RefactoringScope::File(_) |
-                RefactoringScope::Directory(_) |
-                RefactoringScope::FileSet(_) |
-                RefactoringScope::Package { .. } |
-                RefactoringScope::Function { .. } |
-                RefactoringScope::Block { .. } => {
+                RefactoringScope::Workspace
+                | RefactoringScope::File(_)
+                | RefactoringScope::Directory(_)
+                | RefactoringScope::FileSet(_)
+                | RefactoringScope::Package { .. }
+                | RefactoringScope::Function { .. }
+                | RefactoringScope::Block { .. } => {
                     // For workspace scope or any other scope, we use rename_symbol
                     // The underlying WorkspaceRefactor uses the WorkspaceIndex to find all occurrences
                     // based on the symbol key (pkg + name + sigil).
@@ -1075,12 +1079,7 @@ impl RefactoringEngine {
                         _ => Path::new(""),
                     };
 
-                    self.workspace_refactor.rename_symbol(
-                        old_name,
-                        new_name,
-                        target_file,
-                        (0, 0)
-                    )
+                    self.workspace_refactor.rename_symbol(old_name, new_name, target_file, (0, 0))
                 }
             };
 
@@ -1088,8 +1087,11 @@ impl RefactoringEngine {
                 Ok(result) => {
                     let files_modified = self.apply_file_edits(&result.file_edits)?;
                     let changes_made = result.file_edits.iter().map(|e| e.edits.len()).sum();
-                    println!("perform_symbol_rename DEBUG: result.success={}, files_modified={}, changes_made={}", true, files_modified, changes_made);
-                    
+                    println!(
+                        "perform_symbol_rename DEBUG: result.success=true, files_modified={}, changes_made={}",
+                        files_modified, changes_made
+                    );
+
                     let refac_result = RefactoringResult {
                         success: true,
                         files_modified,
@@ -1101,16 +1103,14 @@ impl RefactoringEngine {
                     println!("perform_symbol_rename DEBUG: returning result: {:?}", refac_result);
                     Ok(refac_result)
                 }
-                Err(e) => {
-                    Ok(RefactoringResult {
-                        success: false,
-                        files_modified: 0,
-                        changes_made: 0,
-                        warnings: vec![],
-                        errors: vec![format!("Rename failed: {}", e)],
-                        operation_id: None,
-                    })
-                }
+                Err(e) => Ok(RefactoringResult {
+                    success: false,
+                    files_modified: 0,
+                    changes_made: 0,
+                    warnings: vec![],
+                    errors: vec![format!("Rename failed: {}", e)],
+                    operation_id: None,
+                }),
             }
         }
 
@@ -1544,7 +1544,8 @@ impl RefactoringEngine {
                                 let mod_count = self.apply_file_edits(&edits)?;
                                 if mod_count > 0 {
                                     files_modified += mod_count;
-                                    changes_made += edits.iter().map(|e| e.edits.len()).sum::<usize>();
+                                    changes_made +=
+                                        edits.iter().map(|e| e.edits.len()).sum::<usize>();
                                     applied = true;
                                     // AC1: If not all_occurrences, stop after first successful inlining
                                     if !all_occurrences {
@@ -1973,8 +1974,12 @@ sub test {
         // Lines are 0-indexed.
         // Line 5: "    print $x;\n"
         // Line 8: "    # End extraction\n"
-        let result = must(engine
-            .perform_extract_method("extracted_sub", (5, 0), (8, 0), std::slice::from_ref(&path)));
+        let result = must(engine.perform_extract_method(
+            "extracted_sub",
+            (5, 0),
+            (8, 0),
+            std::slice::from_ref(&path),
+        ));
 
         assert!(result.success);
 
@@ -2020,8 +2025,12 @@ sub existing {
         // selection should include lines 8 and 9 (0-indexed)
         // Line 8: "    print $val;\n"
         // Line 9: "    my $new_val = $val * 2;\n"
-        let result = must(engine
-            .perform_extract_method("helper", (8, 0), (10, 0), std::slice::from_ref(&path)));
+        let result = must(engine.perform_extract_method(
+            "helper",
+            (8, 0),
+            (10, 0),
+            std::slice::from_ref(&path),
+        ));
 
         assert!(result.success);
 
@@ -2063,8 +2072,12 @@ sub complex {
 
         // Line 5: "    foreach my $item (@items) {"
         // Line 10: "    # end"
-        let result = must(engine
-            .perform_extract_method("do_math", (5, 0), (10, 0), std::slice::from_ref(&path)));
+        let result = must(engine.perform_extract_method(
+            "do_math",
+            (5, 0),
+            (10, 0),
+            std::slice::from_ref(&path),
+        ));
 
         assert!(result.success);
         let new_code = must(std::fs::read_to_string(&path));
@@ -2545,14 +2558,13 @@ sub complex {
         #[test]
         fn test_fileset_scope_max_files_limit() {
             // Create temp files for the test
-            let files: Vec<tempfile::NamedTempFile> = (0..5).map(|_| must(tempfile::NamedTempFile::new())).collect();
+            let files: Vec<tempfile::NamedTempFile> =
+                (0..5).map(|_| must(tempfile::NamedTempFile::new())).collect();
             let paths: Vec<_> = files.iter().map(|f| f.path().to_path_buf()).collect();
 
             // Create engine with low max_files limit
-            let config = RefactoringConfig {
-                max_files_per_operation: 3,
-                ..RefactoringConfig::default()
-            };
+            let config =
+                RefactoringConfig { max_files_per_operation: 3, ..RefactoringConfig::default() };
             let engine = RefactoringEngine::with_config(config);
 
             let op = RefactoringType::SymbolRename {

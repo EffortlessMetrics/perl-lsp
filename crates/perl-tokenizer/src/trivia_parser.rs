@@ -3,10 +3,10 @@
 //! This module provides a parser that preserves comments and whitespace
 //! by attaching them to AST nodes as leading/trailing trivia.
 
-use perl_ast::v2::{Node, NodeIdGenerator, NodeKind};
-use perl_position_tracking::{Position, Range};
 use crate::trivia::{NodeWithTrivia, Trivia, TriviaToken};
+use perl_ast::v2::{Node, NodeIdGenerator, NodeKind};
 use perl_lexer::{PerlLexer, Token, TokenType};
+use perl_position_tracking::{Position, Range};
 use std::collections::VecDeque;
 
 /// Token with trivia information

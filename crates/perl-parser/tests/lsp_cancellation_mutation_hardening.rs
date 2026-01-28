@@ -728,7 +728,8 @@ mod cancellation_integration_tests {
             assert_eq!(state.operation_count(), 0, "Operation count should be reset");
         } else if result == "Completed all steps" {
             // Workflow completed before cancellation took effect
-            let processed = state.requests_processed.lock().map_err(|_| "Failed to acquire lock")?;
+            let processed =
+                state.requests_processed.lock().map_err(|_| "Failed to acquire lock")?;
             assert!(processed.contains(&request_id), "Should record completion");
         }
 

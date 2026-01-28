@@ -23,7 +23,7 @@
 
 use crate::{
     ast::{Node, NodeKind, SourceLocation},
-    error::{ParseError, ParseResult, ParseOutput},
+    error::{ParseError, ParseOutput, ParseResult},
     heredoc_collector::{self, HeredocContent, PendingHeredoc, collect_all},
     quote_parser,
     token_stream::{Token, TokenKind, TokenStream},
@@ -181,7 +181,7 @@ impl<'a> Parser<'a> {
                 // Return a dummy Program node with the error
                 Node::new(
                     NodeKind::Program { statements: vec![] },
-                    SourceLocation { start: 0, end: 0 }
+                    SourceLocation { start: 0, end: 0 },
                 )
             }
         };
@@ -206,28 +206,28 @@ include!("expressions/hashes.rs");
 include!("expressions/quotes.rs");
 
 #[cfg(test)]
+mod error_recovery_tests;
+#[cfg(test)]
+mod format_tests;
+#[cfg(test)]
+mod glob_assignment_tests;
+#[cfg(test)]
+mod glob_tests;
+#[cfg(test)]
 mod hash_vs_block_tests;
 #[cfg(test)]
+mod heredoc_security_tests;
+#[cfg(test)]
 mod indirect_call_tests;
+#[cfg(test)]
+mod indirect_object_tests;
+#[cfg(test)]
+mod loop_control_tests;
+#[cfg(test)]
+mod regex_delimiter_tests;
 #[cfg(test)]
 mod slash_ambiguity_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
-mod heredoc_security_tests;
-#[cfg(test)]
-mod error_recovery_tests;
-#[cfg(test)]
-mod glob_assignment_tests;
-#[cfg(test)]
-mod format_tests;
-#[cfg(test)]
-mod indirect_object_tests;
-#[cfg(test)]
-mod regex_delimiter_tests;
-#[cfg(test)]
 mod tie_tests;
-#[cfg(test)]
-mod loop_control_tests;
-#[cfg(test)]
-mod glob_tests;

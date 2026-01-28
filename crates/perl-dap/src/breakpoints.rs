@@ -380,7 +380,12 @@ impl BreakpointStore {
     /// * `source_path` - Path to the modified file
     /// * `start_line` - Line where the edit started (1-based)
     /// * `lines_delta` - Number of lines added (positive) or removed (negative)
-    pub fn adjust_breakpoints_for_edit(&self, source_path: &str, start_line: i64, lines_delta: i64) {
+    pub fn adjust_breakpoints_for_edit(
+        &self,
+        source_path: &str,
+        start_line: i64,
+        lines_delta: i64,
+    ) {
         let mut breakpoints_map = self.breakpoints.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(records) = breakpoints_map.get_mut(source_path) {
             for record in records {
@@ -743,6 +748,6 @@ EOF
         let (v8, _) = validate_breakpoint_line(source, 8);
         // If parser supports it, it should be invalid.
         // For now we just verify it doesn't panic.
-        let _ = v8; 
+        let _ = v8;
     }
 }

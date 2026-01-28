@@ -253,11 +253,7 @@ fn test_ac5_basic_forms() -> Result<(), Box<dyn std::error::Error>> {
         let result = parser.parse()?;
 
         // These should all now pass with implementation complete
-        assert!(
-            has_proper_substitution_node(&result),
-            "Failed for code: {}",
-            code
-        );
+        assert!(has_proper_substitution_node(&result), "Failed for code: {}", code);
     }
     Ok(())
 }

@@ -47,7 +47,8 @@ fn parser_hang_risk_nested_blocks_exceed_limit() -> TestResult {
     let err = result.err().ok_or("Expected error but got Ok")?;
     assert!(
         matches!(err, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }),
-        "Expected RecursionLimit or NestingTooDeep error, got different error type: {:?}", err
+        "Expected RecursionLimit or NestingTooDeep error, got different error type: {:?}",
+        err
     );
     Ok(())
 }
@@ -257,8 +258,11 @@ fn parser_hang_risk_nested_ternary_operators() {
     let result = parser.parse();
 
     if let Err(e) = result {
-         assert!(matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }), 
-            "Expected RecursionLimit/NestingTooDeep, got {:?}", e);
+        assert!(
+            matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }),
+            "Expected RecursionLimit/NestingTooDeep, got {:?}",
+            e
+        );
     }
 }
 
@@ -320,9 +324,12 @@ fn parser_hang_risk_nested_hash_deref() {
 
     // Expect error OR success (if efficient). But certainly no crash.
     if let Err(e) = result {
-         // If it fails, it must be recursion limit
-         assert!(matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }), 
-            "Expected RecursionLimit/NestingTooDeep, got {:?}", e);
+        // If it fails, it must be recursion limit
+        assert!(
+            matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }),
+            "Expected RecursionLimit/NestingTooDeep, got {:?}",
+            e
+        );
     }
 }
 
@@ -344,8 +351,11 @@ fn parser_hang_risk_nested_array_indexing() {
     let result = parser.parse();
 
     if let Err(e) = result {
-         assert!(matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }), 
-            "Expected RecursionLimit/NestingTooDeep, got {:?}", e);
+        assert!(
+            matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }),
+            "Expected RecursionLimit/NestingTooDeep, got {:?}",
+            e
+        );
     }
 }
 
@@ -426,7 +436,7 @@ fn parser_hang_risk_boundary_just_below_limit() {
 
     // Accept failure if overhead is high
     if let Err(e) = result {
-         eprintln!("Note: Boundary test failed at depth {}, likely due to overhead: {:?}", depth, e);
+        eprintln!("Note: Boundary test failed at depth {}, likely due to overhead: {:?}", depth, e);
     }
 }
 

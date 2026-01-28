@@ -266,7 +266,8 @@ fn test_capability_shapes_lsp_318_contract() -> Result<(), Box<dyn std::error::E
 
 /// Test that non-advertised features return MethodNotFound
 #[test]
-fn test_non_advertised_features_return_method_not_found() -> Result<(), Box<dyn std::error::Error>> {
+fn test_non_advertised_features_return_method_not_found() -> Result<(), Box<dyn std::error::Error>>
+{
     // This would be tested via actual LSP server instances
     // For now, we document the expected behavior
 

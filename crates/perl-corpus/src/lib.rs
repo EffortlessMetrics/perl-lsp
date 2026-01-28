@@ -269,7 +269,8 @@ static SEC_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
     Regex::new(r"(?m)^=+\s*$").unwrap_or_else(|e| panic!("Invalid separator regex: {e}"))
 });
 static META_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-    Regex::new(r"(?m)^#\s*@(?P<k>id|tags|perl|flags):\s*(?P<v>.*)$").unwrap_or_else(|e| panic!("Invalid metadata regex: {e}"))
+    Regex::new(r"(?m)^#\s*@(?P<k>id|tags|perl|flags):\s*(?P<v>.*)$")
+        .unwrap_or_else(|e| panic!("Invalid metadata regex: {e}"))
 });
 
 fn slugify_title(title: &str) -> String {
@@ -493,13 +494,8 @@ my $y = 2;
         assert!(sections.len() >= 2);
 
         // Find the sections by checking their content/ids
-        let sample_section = must_some(
-            sections
-            .iter()
-            .find(|s| s.body.contains("my $x = 1;"))
-        );
-        let tagged_section =
-            must_some(sections.iter().find(|s| s.id == "custom.id"));
+        let sample_section = must_some(sections.iter().find(|s| s.body.contains("my $x = 1;")));
+        let tagged_section = must_some(sections.iter().find(|s| s.id == "custom.id"));
 
         assert_eq!(sample_section.body, "my $x = 1;");
         assert!(!sample_section.body.contains("---"));

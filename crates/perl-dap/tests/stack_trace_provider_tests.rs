@@ -21,18 +21,18 @@ fn create_test_adapter() -> DebugAdapter {
 fn test_stack_trace_placeholder_frame() {
     let mut adapter = create_test_adapter();
     let response = adapter.handle_request(1, "stackTrace", None);
-    
+
     if let DapMessage::Response { success, body, .. } = response {
         assert!(success);
         let body_val = body.unwrap();
         let frames = body_val.get("stackFrames").unwrap().as_array().unwrap();
-        
+
         // Should have placeholder frame
         assert_eq!(frames.len(), 1);
         let frame = &frames[0];
         assert_eq!(frame.get("name").unwrap().as_str(), Some("main::hello"));
         assert_eq!(frame.get("line").unwrap().as_i64(), Some(10));
-        
+
         let source = frame.get("source").unwrap();
         assert!(source.get("path").unwrap().as_str().unwrap().contains("hello.pl"));
     }

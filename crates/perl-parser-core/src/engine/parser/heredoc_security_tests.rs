@@ -17,7 +17,7 @@ fn test_recursive_heredoc_terminator_hang() {
         Content after inner
         END
     "#;
-    
+
     let mut parser = Parser::new(code);
     let result = parser.parse();
 

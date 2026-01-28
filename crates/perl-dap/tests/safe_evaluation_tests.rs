@@ -25,7 +25,7 @@ fn test_evaluate_safe_mode_blocks_assignment() {
         "allowSideEffects": false
     });
     let response = adapter.handle_request(1, "evaluate", Some(args));
-    
+
     if let DapMessage::Response { success, message, .. } = response {
         assert!(!success);
         assert!(message.unwrap().contains("assignment operator"));
@@ -41,7 +41,7 @@ fn test_evaluate_safe_mode_blocks_mutation() {
         "allowSideEffects": false
     });
     let response = adapter.handle_request(1, "evaluate", Some(args));
-    
+
     if let DapMessage::Response { success, message, .. } = response {
         assert!(!success);
         assert!(message.unwrap().contains("potentially mutating operation"));
@@ -58,7 +58,7 @@ fn test_evaluate_allows_side_effects_opt_in() {
     });
     // Without active session, it will fail at execution, but pass safety validation
     let response = adapter.handle_request(1, "evaluate", Some(args));
-    
+
     if let DapMessage::Response { success, message, .. } = response {
         // If it failed due to safety, success=false and message mentions "assignment"
         // If it passed safety, it would fail due to "No debugger session"
@@ -77,7 +77,7 @@ fn test_evaluate_timeout_enforcement_parameters() {
         "timeout": 60000 // Above hard limit
     });
     let response = adapter.handle_request(1, "evaluate", Some(args));
-    
+
     match response {
         DapMessage::Response { body, success, .. } => {
             if success {

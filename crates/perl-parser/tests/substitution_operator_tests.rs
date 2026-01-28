@@ -697,9 +697,8 @@ fn test_kill_mutation_modifier_character_matching() -> TestResult {
 
     for (code, expected_modifiers) in valid_cases {
         let mut parser = Parser::new(code);
-        let ast = parser
-            .parse()
-            .map_err(|e| format!("Valid modifier '{}' should parse: {}", code, e))?;
+        let ast =
+            parser.parse().map_err(|e| format!("Valid modifier '{}' should parse: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind
             && let NodeKind::ExpressionStatement { expression } = &statements[0].kind

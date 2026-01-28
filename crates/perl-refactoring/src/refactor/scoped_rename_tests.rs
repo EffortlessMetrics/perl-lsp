@@ -53,10 +53,7 @@ mod tests {
             RefactoringType::SymbolRename {
                 old_name: "$foo".to_string(),
                 new_name: "$bar".to_string(),
-                scope: RefactoringScope::Package { 
-                    file: path.clone(), 
-                    name: "P".to_string() 
-                },
+                scope: RefactoringScope::Package { file: path.clone(), name: "P".to_string() },
             },
             vec![path.clone()],
         ));

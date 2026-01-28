@@ -529,35 +529,23 @@ impl Node {
                 format!("(method_declaration_statement {})", parts.join(" "))
             }
 
-                        NodeKind::Return { value } => {
+            NodeKind::Return { value } => {
+                if let Some(val) = value {
+                    format!("(return {})", val.to_sexp())
+                } else {
+                    "(return)".to_string()
+                }
+            }
 
-                            if let Some(val) = value {
+            NodeKind::LoopControl { op, label } => {
+                if let Some(l) = label {
+                    format!("({} {})", op, l)
+                } else {
+                    format!("({})", op)
+                }
+            }
 
-                                format!("(return {})", val.to_sexp())
-
-                            } else {
-
-                                "(return)".to_string()
-
-                            }
-
-                        }
-
-                        NodeKind::LoopControl { op, label } => {
-
-                            if let Some(l) = label {
-
-                                format!("({} {})", op, l)
-
-                            } else {
-
-                                format!("({})", op)
-
-                            }
-
-                        }
-
-                        NodeKind::MethodCall { object, method, args } => {
+            NodeKind::MethodCall { object, method, args } => {
                 let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(method_call {} {} ({}))", object.to_sexp(), method, args_str)
             }

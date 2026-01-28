@@ -502,7 +502,7 @@ mod tests {
     fn test_builtin_policies() {
         let analyzer = BuiltInAnalyzer::new();
         let ast = Node::new(
-            crate::ast::NodeKind::Error { 
+            crate::ast::NodeKind::Error {
                 message: "test".to_string(),
                 expected: vec![],
                 found: None,
@@ -547,10 +547,8 @@ mod tests {
         // Ensure argument separator is used for security
         assert!(invocations[0].args.contains(&"--".to_string()));
         // Ensure the separator comes before the file path
-        let sep_pos =
-            must_some(invocations[0].args.iter().position(|a| a == "--"));
-        let file_pos =
-            must_some(invocations[0].args.iter().position(|a| a == "test.pl"));
+        let sep_pos = must_some(invocations[0].args.iter().position(|a| a == "--"));
+        let file_pos = must_some(invocations[0].args.iter().position(|a| a == "test.pl"));
         assert!(sep_pos < file_pos, "-- separator must come before file path");
     }
 

@@ -43,7 +43,7 @@ impl LspServer {
             let range = if let Ok(((sl, sc), (el, ec))) = req_range(&p) {
                 Some(perl_position_tracking::WireRange::new(
                     perl_position_tracking::WirePosition::new(sl, sc),
-                    perl_position_tracking::WirePosition::new(el, ec)
+                    perl_position_tracking::WirePosition::new(el, ec),
                 ))
             } else {
                 None

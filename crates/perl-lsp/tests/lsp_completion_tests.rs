@@ -713,10 +713,7 @@ MyModule::"#
     let items = completion_items(&response);
     // Package member completion should return available subroutines
     assert!(!items.is_empty(), "Package member completion should not be empty");
-    assert!(
-        items.iter().any(|i| i["label"] == "public_method"),
-        "Should suggest public_method"
-    );
+    assert!(items.iter().any(|i| i["label"] == "public_method"), "Should suggest public_method");
 
     Ok(())
 }
@@ -844,12 +841,7 @@ $arr"#
     // Should suggest $array[...] for array element access
     let labels: Vec<String> = items
         .iter()
-        .map(|item| {
-            item["label"]
-                .as_str()
-                .ok_or("Missing label field")
-                .map(|s| s.to_string())
-        })
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
         .collect::<Result<_, _>>()?;
 
     // The provider might need enhancement to handle this case
@@ -899,12 +891,7 @@ fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
     let first_items: Vec<String> = items
         .iter()
         .take(5)
-        .map(|item| {
-            item["label"]
-                .as_str()
-                .ok_or("Missing label field")
-                .map(|s| s.to_string())
-        })
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
         .collect::<Result<_, _>>()?;
 
     // Check that special variables are prioritized
@@ -956,9 +943,8 @@ $p"#
         }),
     );
 
-    let items1 = response1["result"]["items"]
-        .as_array()
-        .ok_or("Expected items array in response")?;
+    let items1 =
+        response1["result"]["items"].as_array().ok_or("Expected items array in response")?;
     assert_eq!(items1.len(), 3, "Should have all three variables starting with 'p'");
 
     // Update document to narrow down
@@ -997,9 +983,8 @@ $pre"#
         }),
     );
 
-    let items2 = response2["result"]["items"]
-        .as_array()
-        .ok_or("Expected items array in response")?;
+    let items2 =
+        response2["result"]["items"].as_array().ok_or("Expected items array in response")?;
     assert_eq!(items2.len(), 3, "Should still have all three");
 
     // Update to be more specific
@@ -1038,19 +1023,13 @@ $prefi"#
         }),
     );
 
-    let items3 = response3["result"]["items"]
-        .as_array()
-        .ok_or("Expected items array in response")?;
+    let items3 =
+        response3["result"]["items"].as_array().ok_or("Expected items array in response")?;
     assert_eq!(items3.len(), 2, "Should have only prefix and prefixed_var");
 
     let labels3: Vec<String> = items3
         .iter()
-        .map(|item| {
-            item["label"]
-                .as_str()
-                .ok_or("Missing label field")
-                .map(|s| s.to_string())
-        })
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
         .collect::<Result<_, _>>()?;
 
     assert!(labels3.contains(&"$prefix".to_string()));

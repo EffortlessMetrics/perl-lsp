@@ -532,15 +532,15 @@ impl ScopeAnalyzer {
                 }
 
                 if let NodeKind::VariableDeclaration { .. } = variable.kind {
-                     // Must analyze declaration FIRST to declare it, then mark initialized
-                     self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
-                     self.mark_initialized(variable, scope);
+                    // Must analyze declaration FIRST to declare it, then mark initialized
+                    self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
+                    self.mark_initialized(variable, scope);
                 } else {
-                     // For existing variables, mark initialized then analyze (usage)
-                     self.mark_initialized(variable, scope);
-                     self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
+                    // For existing variables, mark initialized then analyze (usage)
+                    self.mark_initialized(variable, scope);
+                    self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
                 }
-                
+
                 ancestors.pop();
             }
 
@@ -890,12 +890,7 @@ impl ScopeAnalyzer {
     /// my @vals = @hash{key1, key2};          # key1, key2 are in hash key context
     /// print INVALID_BAREWORD;                # NOT in hash key context - should warn
     /// ```
-    fn is_in_hash_key_context(
-        &self,
-        node: &Node,
-        ancestors: &[&Node],
-        max_depth: usize,
-    ) -> bool {
+    fn is_in_hash_key_context(&self, node: &Node, ancestors: &[&Node], max_depth: usize) -> bool {
         let mut current = node;
 
         // Traverse up the AST to find hash key contexts
@@ -1012,11 +1007,13 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
 
     let sigil_byte = match sigil.as_bytes().first() {
         Some(b) => *b,
-        None => return match name {
-            // Filehandles (no sigil)
-            "STDIN" | "STDOUT" | "STDERR" | "DATA" | "ARGVOUT" => true,
-            _ => false,
-        },
+        None => {
+            return match name {
+                // Filehandles (no sigil)
+                "STDIN" | "STDOUT" | "STDERR" | "DATA" | "ARGVOUT" => true,
+                _ => false,
+            };
+        }
     };
 
     match sigil_byte {
@@ -1055,14 +1052,8 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
                 false
             }
         },
-        b'@' => match name {
-            "_" | "+" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA" => true,
-            _ => false,
-        },
-        b'%' => match name {
-            "_" | "+" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS" => true,
-            _ => false,
-        },
+        b'@' => matches!(name, "_" | "+" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA"),
+        b'%' => matches!(name, "_" | "+" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS"),
         _ => false,
     }
 }

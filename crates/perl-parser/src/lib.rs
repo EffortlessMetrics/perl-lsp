@@ -381,8 +381,6 @@ pub use engine::parser_context;
 pub use engine::pragma_tracker;
 /// Parser for Perl quote and quote-like operators.
 pub use engine::quote_parser;
-/// Parser utilities and helpers.
-pub use perl_parser_core::util;
 /// LSP call hierarchy provider for function call navigation.
 pub use ide::call_hierarchy_provider;
 /// Enhanced LSP cancellation infrastructure.
@@ -391,6 +389,8 @@ pub use ide::cancellation;
 pub use ide::diagnostics_catalog;
 #[cfg(not(target_arch = "wasm32"))]
 pub use ide::execute_command;
+/// Parser utilities and helpers.
+pub use perl_parser_core::util;
 
 /// Error classification and recovery strategies for parse failures.
 pub use error::classifier as error_classifier;

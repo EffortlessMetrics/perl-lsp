@@ -4,7 +4,9 @@ mod declaration_edge_cases_tests {
     use perl_parser::declaration::DeclarationProvider;
     use std::sync::Arc;
 
-    fn parse_and_get_provider(code: &str) -> Result<DeclarationProvider<'_>, Box<dyn std::error::Error>> {
+    fn parse_and_get_provider(
+        code: &str,
+    ) -> Result<DeclarationProvider<'_>, Box<dyn std::error::Error>> {
         let mut parser = Parser::new(code);
         let ast = parser.parse().map_err(|e| format!("Failed to parse: {:?}", e))?;
         let ast_arc = Arc::new(ast);

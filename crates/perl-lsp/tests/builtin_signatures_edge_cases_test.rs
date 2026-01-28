@@ -20,9 +20,7 @@ fn test_signature_at_various_positions() -> Result<(), Box<dyn std::error::Error
     ];
 
     for (code, position, expected_param) in test_cases {
-        let ast = Parser::new(code).parse().or_else(|_| {
-            Parser::new("").parse()
-        })?;
+        let ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
         let provider = SignatureHelpProvider::new(&ast);
 
         if let Some(help) = provider.get_signature_help(code, position) {

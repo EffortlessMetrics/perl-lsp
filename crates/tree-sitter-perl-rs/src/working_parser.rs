@@ -33,7 +33,7 @@ impl WorkingParser {
         match self.parse_program() {
             Ok(node) => node,
             Err(msg) => Node::new(
-                NodeKind::Error { 
+                NodeKind::Error {
                     message: Arc::from(msg),
                     expected: vec![],
                     found: None,

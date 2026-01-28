@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod multibyte_tests {
-    use perl_parser::position::{WirePosition as Position, PositionMapper};
+    use perl_parser::position::{PositionMapper, WirePosition as Position};
     use ropey::Rope;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;

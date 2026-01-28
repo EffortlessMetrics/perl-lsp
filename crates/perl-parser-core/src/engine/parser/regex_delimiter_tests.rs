@@ -56,7 +56,9 @@ mod tests {
             if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
                 if let NodeKind::Binary { op, right, .. } = &expression.kind {
                     assert_eq!(op, "=~");
-                    if let NodeKind::Substitution { pattern, replacement, modifiers, .. } = &right.kind {
+                    if let NodeKind::Substitution { pattern, replacement, modifiers, .. } =
+                        &right.kind
+                    {
                         assert_eq!(pattern, "old");
                         assert_eq!(replacement, "new");
                         assert!(modifiers.contains('g'));

@@ -262,14 +262,17 @@ impl WorkspaceRefactor {
         };
 
         println!("rename_symbol DEBUG: search key={:?}", key);
-        println!("rename_symbol DEBUG: all symbols in index: {:?}", self._index.all_symbols().iter().map(|s| &s.name).collect::<Vec<_>>());
+        println!(
+            "rename_symbol DEBUG: all symbols in index: {:?}",
+            self._index.all_symbols().iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
 
         let mut edits: BTreeMap<PathBuf, Vec<TextEdit>> = BTreeMap::new();
 
         // Find all references
         let mut locations = self._index.find_refs(&key);
         println!("rename_symbol DEBUG: find_refs result count: {}", locations.len());
-        
+
         // Always try to include the definition explicitly
         let def_loc = self._index.find_def(&key);
         println!("rename_symbol DEBUG: find_def result: {:?}", def_loc);
@@ -280,7 +283,7 @@ impl WorkspaceRefactor {
         }
 
         let store = self._index.document_store();
-        
+
         println!("rename_symbol DEBUG: store has {} documents", store.all_documents().len());
         for doc in store.all_documents() {
             println!("rename_symbol DEBUG: doc in store: {}", doc.uri);
@@ -288,13 +291,21 @@ impl WorkspaceRefactor {
 
         if locations.is_empty() {
             // Fallback naive search with performance optimizations
-            println!("rename_symbol DEBUG: locations empty, using fallback naive search for {}", old_name);
+            println!(
+                "rename_symbol DEBUG: locations empty, using fallback naive search for {}",
+                old_name
+            );
             // Fallback naive search with performance optimizations
             let _old_name_bytes = old_name.as_bytes();
 
             for doc in store.all_documents() {
                 // Pre-check if the document even contains the target string to avoid unnecessary work
-                println!("rename_symbol DEBUG: naive search checking doc: {}, contains {}: {}", doc.uri, old_name, doc.text.contains(old_name));
+                println!(
+                    "rename_symbol DEBUG: naive search checking doc: {}, contains {}: {}",
+                    doc.uri,
+                    old_name,
+                    doc.text.contains(old_name)
+                );
                 if !doc.text.contains(old_name) {
                     continue;
                 }
@@ -349,14 +360,22 @@ impl WorkspaceRefactor {
         }
 
         for loc in locations {
-            println!("rename_symbol DEBUG: processing location: {} at {}:{}", loc.uri, loc.range.start.line, loc.range.start.column);
+            println!(
+                "rename_symbol DEBUG: processing location: {} at {}:{}",
+                loc.uri, loc.range.start.line, loc.range.start.column
+            );
             let path = uri_to_fs_path(&loc.uri).ok_or_else(|| {
                 RefactorError::UriConversion(format!("Failed to convert URI to path: {}", loc.uri))
             })?;
             if let Some(doc) = store.get(&loc.uri) {
-                let start_off = doc.line_index.position_to_offset(loc.range.start.line, loc.range.start.column);
-                let end_off = doc.line_index.position_to_offset(loc.range.end.line, loc.range.end.column);
-                println!("rename_symbol DEBUG: offset for {}:{}: start={:?}, end={:?}", loc.range.start.line, loc.range.start.column, start_off, end_off);
+                let start_off =
+                    doc.line_index.position_to_offset(loc.range.start.line, loc.range.start.column);
+                let end_off =
+                    doc.line_index.position_to_offset(loc.range.end.line, loc.range.end.column);
+                println!(
+                    "rename_symbol DEBUG: offset for {}:{}: start={:?}, end={:?}",
+                    loc.range.start.line, loc.range.start.column, start_off, end_off
+                );
                 if let (Some(start_off), Some(end_off)) = (start_off, end_off) {
                     let replacement = match kind {
                         SymKind::Var => {
@@ -365,7 +384,10 @@ impl WorkspaceRefactor {
                         }
                         _ => new_name.to_string(),
                     };
-                    println!("rename_symbol DEBUG: replacement for {} is {}", old_name, replacement);
+                    println!(
+                        "rename_symbol DEBUG: replacement for {} is {}",
+                        old_name, replacement
+                    );
                     edits.entry(path).or_default().push(TextEdit {
                         start: start_off,
                         end: end_off,
@@ -379,12 +401,12 @@ impl WorkspaceRefactor {
             edits.into_iter().map(|(file_path, edits)| FileEdit { file_path, edits }).collect();
 
         let description = format!("Rename '{}' to '{}'", old_name, new_name);
-        println!("rename_symbol DEBUG: returning RefactorResult with {} file_edits, description: {}", file_edits.len(), description);
-        Ok(RefactorResult {
-            file_edits,
-            description,
-            warnings: vec![],
-        })
+        println!(
+            "rename_symbol DEBUG: returning RefactorResult with {} file_edits, description: {}",
+            file_edits.len(),
+            description
+        );
+        Ok(RefactorResult { file_edits, description, warnings: vec![] })
     }
 
     /// Extract selected code into a new module

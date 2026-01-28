@@ -1208,22 +1208,22 @@ impl WorkspaceIndex {
     ///
     /// Returns an error if parsing fails or the document store cannot be updated.
     ///
-/// # Examples
-///
-/// ```rust,no_run
-/// use perl_parser::workspace_index::WorkspaceIndex;
-/// use url::Url;
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    /// use url::Url;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let index = WorkspaceIndex::new();
     /// let uri = Url::parse("file:///example.pl")?;
-/// index.index_file(uri, "sub hello { return 1; }".to_string())?;
-/// # Ok(())
-/// # }
-/// ```
-///
-/// Returns: `Ok(())` when indexing succeeds, otherwise an error string.
-pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
+    /// index.index_file(uri, "sub hello { return 1; }".to_string())?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Returns: `Ok(())` when indexing succeeds, otherwise an error string.
+    pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
         let uri_str = uri.to_string();
 
         // Compute content hash for early-exit optimization
@@ -1509,7 +1509,11 @@ pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
     /// ```
     pub fn find_definition(&self, symbol_name: &str) -> Option<Location> {
         let files = self.files.read();
-        println!("find_definition DEBUG: index has {} files, looking for {}", files.len(), symbol_name);
+        println!(
+            "find_definition DEBUG: index has {} files, looking for {}",
+            files.len(),
+            symbol_name
+        );
 
         for (_uri_key, file_index) in files.iter() {
             for symbol in &file_index.symbols {
@@ -1889,7 +1893,10 @@ pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
                 for (_uri_key, file_index) in files_locked.iter() {
                     if let Some(bare_refs) = file_index.references.get(key.name.as_ref()) {
                         for reference in bare_refs {
-                            refs.push(Location { uri: reference.uri.clone(), range: reference.range });
+                            refs.push(Location {
+                                uri: reference.uri.clone(),
+                                range: reference.range,
+                            });
                         }
                     }
                 }

@@ -6,9 +6,9 @@
 //! - Byte offsets (parser)
 //! - Efficient conversions using rope data structure
 
+use crate::WirePosition as Position;
 use ropey::Rope;
 use serde_json::Value;
-use crate::WirePosition as Position;
 
 /// Centralized position mapper using rope for efficiency
 pub struct PositionMapper {

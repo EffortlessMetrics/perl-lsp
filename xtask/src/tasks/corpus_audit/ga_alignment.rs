@@ -179,7 +179,8 @@ fn content_matches_nodekind(content: &str, nodekind: &str) -> bool {
         "HashLiteral" => content.contains("%") && (content.contains('{') || content.contains('(')),
         "ArrayLiteral" => content.contains("@") && (content.contains('(') || content.contains('[')),
         "FunctionCall" => {
-            let builtins = ["map ", "grep ", "sort ", "push ", "pop ", "shift ", "print ", "say ", "sprintf "];
+            let builtins =
+                ["map ", "grep ", "sort ", "push ", "pop ", "shift ", "print ", "say ", "sprintf "];
             builtins.iter().any(|b| content.contains(b))
         }
         "Given" => content.contains("given "),
@@ -207,11 +208,7 @@ fn define_ga_features() -> Vec<GAFeature> {
             id: "control-flow-loops".to_string(),
             name: "Loop Statements".to_string(),
             priority: FeaturePriority::P0,
-            expected_nodekinds: vec![
-                "While".to_string(),
-                "For".to_string(),
-                "Foreach".to_string(),
-            ],
+            expected_nodekinds: vec!["While".to_string(), "For".to_string(), "Foreach".to_string()],
             description: "Loop control flow with while/for/foreach".to_string(),
         },
         GAFeature {
@@ -274,7 +271,11 @@ fn define_ga_features() -> Vec<GAFeature> {
             id: "match-given".to_string(),
             name: "Match/Given Statements".to_string(),
             priority: FeaturePriority::P1,
-            expected_nodekinds: vec!["Given".to_string(), "When".to_string(), "Default".to_string()],
+            expected_nodekinds: vec![
+                "Given".to_string(),
+                "When".to_string(),
+                "Default".to_string(),
+            ],
             description: "Pattern matching with match/given/when".to_string(),
         },
         GAFeature {

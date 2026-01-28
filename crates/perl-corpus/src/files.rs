@@ -190,7 +190,8 @@ mod tests {
     }
 
     #[test]
-    fn collect_files_filters_extensions_and_skips_hidden() -> Result<(), Box<dyn std::error::Error>> {
+    fn collect_files_filters_extensions_and_skips_hidden() -> Result<(), Box<dyn std::error::Error>>
+    {
         let root = temp_root("perl_corpus_files")?;
         let keep_dir = root.join("keep");
         fs::create_dir_all(&keep_dir)?;
@@ -217,7 +218,9 @@ mod tests {
         let files = collect_files(&root, TEST_EXTENSIONS);
         let mut names: Vec<_> = files
             .iter()
-            .map(|path| path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default())
+            .map(|path| {
+                path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+            })
             .collect();
         names.sort();
 

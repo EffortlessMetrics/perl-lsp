@@ -344,20 +344,20 @@ mod tests {
     fn test_classify_unclosed_string() {
         let classifier = ErrorClassifier::new();
         let source = r#"my $x = "hello"#;
-        
+
         // Manually construct error node
         // "hello is at index 9 (my  = ) is 0..8
         // m y   $ x   =   "
         // 0123456789
-        
+
         let error_node = Node::new(
-            NodeKind::Error { 
-                message: "Unclosed string".to_string(), 
+            NodeKind::Error {
+                message: "Unclosed string".to_string(),
                 expected: vec![],
                 found: None,
                 partial: None,
             },
-            SourceLocation { start: 9, end: 15 } // "hello
+            SourceLocation { start: 9, end: 15 }, // "hello
         );
 
         let kind = classifier.classify(&error_node, source);
@@ -371,8 +371,8 @@ mod tests {
 
         // Simulate an error node at the end of first line
         let error = Node::new(
-            NodeKind::Error { 
-                message: "Unexpected token".to_string(), 
+            NodeKind::Error {
+                message: "Unexpected token".to_string(),
                 expected: vec![],
                 found: None,
                 partial: None,

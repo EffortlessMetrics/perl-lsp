@@ -24,12 +24,7 @@ pub struct Token {
 impl Token {
     /// Create a new token
     pub fn new(kind: TokenKind, text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
-        Token {
-            kind,
-            text: text.into(),
-            start,
-            end,
-        }
+        Token { kind, text: text.into(), start, end }
     }
 }
 

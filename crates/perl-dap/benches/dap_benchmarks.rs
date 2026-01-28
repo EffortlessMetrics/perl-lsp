@@ -32,15 +32,13 @@
 //! cargo bench -p perl-dap -- --measurement-time 5
 //! ```
 
-
-
 use criterion::{Criterion, criterion_group, criterion_main};
 use perl_dap::configuration::{AttachConfiguration, LaunchConfiguration};
 use perl_dap::debug_adapter::DebugAdapter;
-use serde_json::json;
 use perl_dap::platform::{
     format_command_args, normalize_path, resolve_perl_path, setup_environment,
 };
+use serde_json::json;
 use std::collections::HashMap;
 use std::hint::black_box;
 use std::path::PathBuf;
@@ -418,7 +416,7 @@ fn benchmark_dap_dispatch(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(10));
 
     let mut adapter = DebugAdapter::new();
-    
+
     group.bench_function("dap_threads_request", |b| {
         b.iter(|| {
             black_box(adapter.handle_request(1, "threads", None));
@@ -435,10 +433,6 @@ fn benchmark_dap_dispatch(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(
-    session_benches,
-    benchmark_dap_initialization,
-    benchmark_dap_dispatch
-);
+criterion_group!(session_benches, benchmark_dap_initialization, benchmark_dap_dispatch);
 
 criterion_main!(configuration_benches, platform_benches, session_benches);

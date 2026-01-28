@@ -1,10 +1,11 @@
 //! URI utilities for LSP
 
-use lsp_types::Uri;
 use lazy_static::lazy_static;
+use lsp_types::Uri;
 
 lazy_static! {
-    static ref FALLBACK_URI: Uri = "file:///invalid".parse().unwrap_or_else(|e| panic!("Invalid fallback URI: {e}"));
+    static ref FALLBACK_URI: Uri =
+        "file:///invalid".parse().unwrap_or_else(|e| panic!("Invalid fallback URI: {e}"));
 }
 
 /// Helper function to parse a URI string into an lsp_types::Uri

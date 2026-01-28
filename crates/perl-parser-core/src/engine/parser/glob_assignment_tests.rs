@@ -22,7 +22,7 @@ mod tests {
                     } else {
                         panic!("Expected Typeglob on LHS, got {:?}", lhs.kind);
                     }
-                    
+
                     if let NodeKind::Typeglob { name } = &rhs.kind {
                         assert_eq!(name, "bar");
                     } else {

@@ -80,15 +80,11 @@ impl From<lsp_types::Range> for WireRange {
 #[cfg(feature = "lsp-compat")]
 impl From<WireLocation> for lsp_types::Location {
     fn from(l: WireLocation) -> Self {
-        static FALLBACK_URI: std::sync::LazyLock<lsp_types::Uri> = std::sync::LazyLock::new(|| {
-            match "file:///unknown".parse() {
+        static FALLBACK_URI: std::sync::LazyLock<lsp_types::Uri> =
+            std::sync::LazyLock::new(|| match "file:///unknown".parse() {
                 Ok(u) => u,
                 Err(e) => panic!("Invariant violated: hardcoded fallback URI must be valid: {e}"),
-            }
-        });
-        Self {
-            uri: l.uri.parse().unwrap_or_else(|_| FALLBACK_URI.clone()),
-            range: l.range.into(),
-        }
+            });
+        Self { uri: l.uri.parse().unwrap_or_else(|_| FALLBACK_URI.clone()), range: l.range.into() }
     }
 }

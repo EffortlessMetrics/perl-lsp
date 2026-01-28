@@ -11,7 +11,7 @@
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use perl_tdd_support::{must, must_some};
 use serde_json::json;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -474,8 +474,7 @@ fn test_thread_safe_sequence_numbers() {
     }
 
     // Collect all sequence numbers
-    let mut seq_numbers: Vec<i64> =
-        handles.into_iter().map(|h| must(h.join())).collect();
+    let mut seq_numbers: Vec<i64> = handles.into_iter().map(|h| must(h.join())).collect();
 
     // Verify all unique
     seq_numbers.sort_unstable();

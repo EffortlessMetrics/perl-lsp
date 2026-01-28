@@ -55,11 +55,7 @@ impl PragmaTracker {
         // then take the element before it.
         let idx = pragma_map.partition_point(|(range, _)| range.start <= offset);
 
-        if idx > 0 {
-            pragma_map[idx - 1].1.clone()
-        } else {
-            PragmaState::default()
-        }
+        if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() }
     }
 
     fn build_ranges(

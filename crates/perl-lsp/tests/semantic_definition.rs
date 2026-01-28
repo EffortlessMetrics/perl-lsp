@@ -30,11 +30,9 @@ mod semantic_definition_tests {
             .to_string();
         let range = first.get("range").ok_or("missing range field")?;
         let start = &range["start"];
-        let line = start
-            .get("line")
-            .ok_or("missing line field")?
-            .as_u64()
-            .ok_or("line is not a number")? as u32;
+        let line =
+            start.get("line").ok_or("missing line field")?.as_u64().ok_or("line is not a number")?
+                as u32;
         let character = start
             .get("character")
             .ok_or("missing character field")?

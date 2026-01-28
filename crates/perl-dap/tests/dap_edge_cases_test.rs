@@ -171,7 +171,10 @@ fn test_dap_variables_complex_scopes() -> TestResult {
                         .ok_or("Expected variables array")?;
                     // Should return placeholders for valid refs even without session
                     if var_ref == 11 {
-                        assert!(!variables.is_empty(), "Local scope should have placeholder variables");
+                        assert!(
+                            !variables.is_empty(),
+                            "Local scope should have placeholder variables"
+                        );
                     }
                 } else {
                     // Invalid references should fail gracefully
@@ -215,7 +218,12 @@ fn test_dap_stack_trace_edge_cases() -> TestResult {
                         .and_then(|f| f.as_array())
                         .ok_or("Expected frames array")?;
                     // Without active session, should return 1 placeholder frame
-                    assert_eq!(frames.len(), 1, "Should return 1 placeholder frame for case: {}", i);
+                    assert_eq!(
+                        frames.len(),
+                        1,
+                        "Should return 1 placeholder frame for case: {}",
+                        i
+                    );
                 }
             }
             _ => return Err(format!("Expected stackTrace response for case: {}", i).into()),

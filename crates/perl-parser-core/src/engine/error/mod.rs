@@ -13,10 +13,10 @@
 //! println!("Parse error: {}", err);
 //! ```
 
-/// Recovery-oriented parser utilities for error-tolerant parsing.
-pub mod recovery_parser;
 /// Implementation of ErrorRecovery trait for ParserContext.
 pub mod context_impls;
+/// Recovery-oriented parser utilities for error-tolerant parsing.
+pub mod recovery_parser;
 
 /// Error types and result aliases used by the parser engine.
 pub use perl_error::*;

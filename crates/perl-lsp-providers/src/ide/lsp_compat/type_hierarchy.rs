@@ -24,8 +24,8 @@
 //! let _provider = TypeHierarchyProvider::new();
 //! ```
 
-use perl_parser_core::ast::{Node, NodeKind};
 use perl_parser_core::PositionMapper;
+use perl_parser_core::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};

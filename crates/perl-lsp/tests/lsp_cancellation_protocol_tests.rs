@@ -133,7 +133,8 @@ fn setup_test_file(server: &mut LspServer, uri: &str, content: &str) {
 /// Tests feature spec: LSP_CANCELLATION_PROTOCOL.md#enhanced-protocol-requirements
 /// AC:1 - Enhanced $/cancelRequest notification processing with provider context awareness
 #[test]
-fn test_enhanced_cancel_request_with_provider_context_ac1() -> Result<(), Box<dyn std::error::Error>> {
+fn test_enhanced_cancel_request_with_provider_context_ac1() -> Result<(), Box<dyn std::error::Error>>
+{
     let mut fixture = CancellationTestFixture::new();
 
     // Test completion provider cancellation with enhanced context
@@ -181,8 +182,7 @@ fn test_enhanced_cancel_request_with_provider_context_ac1() -> Result<(), Box<dy
                 Some(-32800),
                 "Should return RequestCancelled error code"
             );
-            let message = error["message"].as_str()
-                .ok_or("Error message should be a string")?;
+            let message = error["message"].as_str().ok_or("Error message should be a string")?;
             assert!(
                 message.contains("completion"),
                 "Error message should reference completion provider"
@@ -210,7 +210,8 @@ fn test_enhanced_cancel_request_with_provider_context_ac1() -> Result<(), Box<dy
 /// Tests feature spec: LSP_CANCELLATION_PROTOCOL.md#provider-integration-schema
 /// AC:1 - Multiple LSP provider cancellation validation with enhanced context
 #[test]
-fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn std::error::Error>> {
+fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn std::error::Error>>
+{
     let mut fixture = CancellationTestFixture::new();
 
     let provider_scenarios = vec![
@@ -295,8 +296,8 @@ fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn 
         if let Some(resp) = response {
             if let Some(error) = resp.get("error") {
                 assert_eq!(error["code"].as_i64(), Some(-32800));
-                let message = error["message"].as_str()
-                    .ok_or("Error message should be a string")?;
+                let message =
+                    error["message"].as_str().ok_or("Error message should be a string")?;
                 let method_name = method.split('/').next_back().unwrap_or(method);
                 assert!(
                     message.to_lowercase().contains(&method_name.to_lowercase()),
@@ -490,7 +491,8 @@ fn test_atomic_cancellation_token_operations_ac2() -> Result<(), Box<dyn std::er
 /// Tests feature spec: CANCELLATION_ARCHITECTURE_GUIDE.md#cancellation-registry
 /// AC:2 - Cancellation registry thread safety with concurrent operations
 #[test]
-fn test_cancellation_registry_concurrent_operations_ac2() -> Result<(), Box<dyn std::error::Error>> {
+fn test_cancellation_registry_concurrent_operations_ac2() -> Result<(), Box<dyn std::error::Error>>
+{
     // Test scaffolding for cancellation registry thread safety
     // Will fail initially as CancellationRegistry doesn't exist
     /*
@@ -1095,8 +1097,7 @@ fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error:
                 );
 
                 // Validate enhanced error message with provider context
-                let message = error["message"].as_str()
-                    .ok_or("Error should have message")?;
+                let message = error["message"].as_str().ok_or("Error should have message")?;
                 assert!(
                     message.contains(scenario_name)
                         || message.to_lowercase().contains(
@@ -1116,8 +1117,8 @@ fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error:
 
                     // Latency tracking validation (enhanced feature)
                     if data.get("latency_ms").is_some() {
-                        let latency_ms = data["latency_ms"].as_u64()
-                            .ok_or("Latency should be numeric")?;
+                        let latency_ms =
+                            data["latency_ms"].as_u64().ok_or("Latency should be numeric")?;
                         assert!(
                             latency_ms <= cancellation_latency.as_millis() as u64,
                             "Reported latency should be reasonable: {}ms",

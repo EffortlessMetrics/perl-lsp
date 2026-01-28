@@ -117,6 +117,7 @@ pub type ScopeId = usize;
 /// - Subroutine scope: Local variables and parameters
 /// - Block scope: Lexical variables in control structures
 /// - Lexical precedence: Inner scopes shadow outer scopes
+///
 /// Workflow: Parse/Analyze scope tracking for symbol resolution.
 pub struct Scope {
     /// Unique scope identifier for reference tracking
@@ -143,6 +144,7 @@ pub struct Scope {
 /// - Subroutine: Function parameters and local variables
 /// - Block: Control structure lexical variables
 /// - Eval: Dynamic evaluation context
+///
 /// Workflow: Parse/Analyze scope classification.
 pub enum ScopeKind {
     /// Global/file scope

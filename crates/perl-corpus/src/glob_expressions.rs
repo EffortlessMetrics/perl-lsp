@@ -426,8 +426,8 @@ impl GlobExpressionGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
     use perl_tdd_support::must_some;
+    use std::collections::HashSet;
 
     #[test]
     fn glob_cases_have_ids() {

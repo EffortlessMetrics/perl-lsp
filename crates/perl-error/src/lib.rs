@@ -113,8 +113,8 @@
 //! }
 //! ```
 
-use thiserror::Error;
 use perl_position_tracking::LineIndex;
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 /// Rich error context with source line and fix suggestions
@@ -621,26 +621,29 @@ impl ParseError {
 /// Enrich a list of errors with source context
 pub fn get_error_contexts(errors: &[ParseError], source: &str) -> Vec<ErrorContext> {
     let index = LineIndex::new(source.to_string());
-    
-    errors.iter().map(|error| {
-        let loc = error.location().unwrap_or_else(|| source.len());
-        // Handle EOF/out-of-bounds safely
-        let safe_loc = std::cmp::min(loc, source.len());
-        
-        let (line_u32, col_u32) = index.offset_to_position(safe_loc);
-        let line = line_u32 as usize;
-        let col = col_u32 as usize;
-        
-        let source_line = source.lines().nth(line).unwrap_or("").to_string();
-        
-        ErrorContext {
-            error: error.clone(),
-            line,
-            column: col,
-            source_line,
-            suggestion: error.suggestion(),
-        }
-    }).collect()
+
+    errors
+        .iter()
+        .map(|error| {
+            let loc = error.location().unwrap_or(source.len());
+            // Handle EOF/out-of-bounds safely
+            let safe_loc = std::cmp::min(loc, source.len());
+
+            let (line_u32, col_u32) = index.offset_to_position(safe_loc);
+            let line = line_u32 as usize;
+            let col = col_u32 as usize;
+
+            let source_line = source.lines().nth(line).unwrap_or("").to_string();
+
+            ErrorContext {
+                error: error.clone(),
+                line,
+                column: col,
+                source_line,
+                suggestion: error.suggestion(),
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -821,10 +824,8 @@ mod tests {
     fn test_error_context_enrichment() {
         let source = "line1\nline2;\nline3";
         // 'e' of line1 is at 4. 5 is newline.
-        let errors = vec![
-            ParseError::unexpected("Semicolon", "newline", 5)
-        ];
-        
+        let errors = vec![ParseError::unexpected("Semicolon", "newline", 5)];
+
         let contexts = get_error_contexts(&errors, source);
         assert_eq!(contexts.len(), 1);
         assert_eq!(contexts[0].line, 0); // line1 is line 0

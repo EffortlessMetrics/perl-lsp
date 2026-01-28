@@ -216,7 +216,10 @@ impl<'a> DeclarationProvider<'a> {
 
             // If we exhausted the cap, we have a cycle
             if depth >= cap {
-                eprintln!("Cycle detected in ParentMap - node is its own ancestor (depth limit {})", cap);
+                eprintln!(
+                    "Cycle detected in ParentMap - node is its own ancestor (depth limit {})",
+                    cap
+                );
                 break;
             }
         }

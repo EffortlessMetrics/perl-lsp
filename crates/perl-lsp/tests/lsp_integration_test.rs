@@ -109,11 +109,7 @@ fn test_lsp_initialize() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| format!("Failed to send init request: {}", e))?;
 
     // AC4: Use in-memory mock I/O for testing LSP message exchange
-    let mock_in = MockIO {
-        input: _rx_in,
-        output: _tx_out.clone(),
-        buffer: Vec::new(),
-    };
+    let mock_in = MockIO { input: _rx_in, output: _tx_out.clone(), buffer: Vec::new() };
     let mock_out = MockIO {
         input: mpsc::channel().1, // dummy
         output: _tx_out,
@@ -121,7 +117,7 @@ fn test_lsp_initialize() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let server = LspServer::with_io(Box::new(mock_in), Box::new(mock_out));
-    
+
     // Process one message
     // In this refactor, we just verify it can be instantiated with custom IO
     assert!(!server.is_initialized());

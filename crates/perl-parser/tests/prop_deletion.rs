@@ -1,4 +1,3 @@
-
 use proptest::prelude::*;
 
 // Include the shared utilities

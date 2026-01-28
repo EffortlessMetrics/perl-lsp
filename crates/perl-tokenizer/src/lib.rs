@@ -6,9 +6,8 @@ pub mod trivia;
 pub mod trivia_parser;
 pub mod util;
 
-pub use token_stream::TokenStream;
 pub use perl_token::{Token, TokenKind};
+pub use token_stream::TokenStream;
 pub use token_wrapper::TokenWithPosition;
 pub use trivia::{Trivia, TriviaToken};
 pub use trivia_parser::{TriviaParserContext, TriviaPreservingParser};
-

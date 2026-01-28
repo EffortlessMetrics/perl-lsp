@@ -64,13 +64,11 @@ fn test_pragma_code_actions() -> Result<(), Box<dyn std::error::Error>> {
         })),
     };
 
-    let response = srv.handle_request(actions_req)
-        .ok_or("Failed to get response from code action request")?;
+    let response =
+        srv.handle_request(actions_req).ok_or("Failed to get response from code action request")?;
 
-    let result = response.result
-        .ok_or("Expected result in code action response")?;
-    let actions = result.as_array()
-        .ok_or("Expected array of actions in code action result")?;
+    let result = response.result.ok_or("Expected result in code action response")?;
+    let actions = result.as_array().ok_or("Expected array of actions in code action result")?;
 
     // Look for pragma actions
     let has_strict_action = actions.iter().any(|a| a["title"].as_str() == Some("Add use strict;"));
@@ -99,11 +97,10 @@ fn test_formatting_provider_capability() -> Result<(), Box<dyn std::error::Error
         })),
     };
 
-    let response = srv.handle_request(init_req)
-        .ok_or("Failed to get response from initialize request")?;
+    let response =
+        srv.handle_request(init_req).ok_or("Failed to get response from initialize request")?;
 
-    let result = response.result
-        .ok_or("Expected result in initialize response")?;
+    let result = response.result.ok_or("Expected result in initialize response")?;
     let has_formatting =
         result["capabilities"]["documentFormattingProvider"].as_bool().unwrap_or(false);
 

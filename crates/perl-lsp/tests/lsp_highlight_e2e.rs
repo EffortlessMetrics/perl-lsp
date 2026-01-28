@@ -22,9 +22,8 @@ fn highlights_read_and_write() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let highlights = response["result"]
-        .as_array()
-        .ok_or("documentHighlight should return an array")?;
+    let highlights =
+        response["result"].as_array().ok_or("documentHighlight should return an array")?;
 
     // Should find 3 occurrences of $x
     assert_eq!(highlights.len(), 3, "Should find all 3 occurrences of $x");
@@ -35,12 +34,10 @@ fn highlights_read_and_write() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .map(|h| -> Result<(usize, usize, i64), Box<dyn std::error::Error>> {
             let range = &h["range"];
-            let start_char = range["start"]["character"]
-                .as_u64()
-                .ok_or("Missing start character")? as usize;
-            let end_char = range["end"]["character"]
-                .as_u64()
-                .ok_or("Missing end character")? as usize;
+            let start_char =
+                range["start"]["character"].as_u64().ok_or("Missing start character")? as usize;
+            let end_char =
+                range["end"]["character"].as_u64().ok_or("Missing end character")? as usize;
             let kind = h["kind"].as_i64().unwrap_or(2);
             Ok((start_char, end_char, kind))
         })
@@ -100,9 +97,8 @@ $global++;
         "position": {"line": line, "character": col - source[..col].rfind('\n').map(|p| p + 1).unwrap_or(0)}
     }));
 
-    let highlights = response["result"]
-        .as_array()
-        .ok_or("documentHighlight should return an array")?;
+    let highlights =
+        response["result"].as_array().ok_or("documentHighlight should return an array")?;
 
     // Should find 4 occurrences of $global
     assert_eq!(highlights.len(), 4, "Should find all 4 occurrences of $global");
@@ -130,9 +126,8 @@ fn no_highlights_for_different_variables() -> Result<(), Box<dyn std::error::Err
         }),
     );
 
-    let highlights = response["result"]
-        .as_array()
-        .ok_or("documentHighlight should return an array")?;
+    let highlights =
+        response["result"].as_array().ok_or("documentHighlight should return an array")?;
 
     // Should only find $foo occurrences, not $bar
     assert_eq!(highlights.len(), 2, "Should only find $foo occurrences");
@@ -140,12 +135,9 @@ fn no_highlights_for_different_variables() -> Result<(), Box<dyn std::error::Err
     // Verify ranges don't include $bar
     for highlight in highlights {
         let range = &highlight["range"];
-        let start_char = range["start"]["character"]
-            .as_i64()
-            .ok_or("Missing start character")? as usize;
-        let end_char = range["end"]["character"]
-            .as_i64()
-            .ok_or("Missing end character")? as usize;
+        let start_char =
+            range["start"]["character"].as_i64().ok_or("Missing start character")? as usize;
+        let end_char = range["end"]["character"].as_i64().ok_or("Missing end character")? as usize;
         let text = &source[start_char..end_char];
         assert!(text.contains("foo"), "Highlight should only contain 'foo' variable");
         assert!(!text.contains("bar"), "Highlight should not contain 'bar' variable");

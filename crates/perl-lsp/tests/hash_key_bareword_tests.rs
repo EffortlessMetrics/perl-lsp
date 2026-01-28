@@ -92,8 +92,13 @@ my @values = @h{$k1, $k2};
         // ignoring this specific error to focus on the test goal (variables as keys)
         .filter(|d| !d.message.contains("'@h'"))
         .collect();
-    
-    assert_eq!(undeclared_errors.len(), 0, "Unexpected undeclared variable errors: {:?}", undeclared_errors);
+
+    assert_eq!(
+        undeclared_errors.len(),
+        0,
+        "Unexpected undeclared variable errors: {:?}",
+        undeclared_errors
+    );
 
     Ok(())
 }

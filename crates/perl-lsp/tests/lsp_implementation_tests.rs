@@ -10,10 +10,9 @@ fn test_implementation_find_subclasses() -> Result<(), Box<dyn std::error::Error
     let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 package Animal;
 sub new { bless {}, shift }
 sub speak { die "Abstract method" }
@@ -29,7 +28,7 @@ sub speak { "Meow!" }
 package main;
 my $pet = Animal->new();
 "#,
-        )?;
+    )?;
 
     // Request implementations of Animal class
     let response = harness.implementation(doc_uri, 1, 8)?;
@@ -50,10 +49,9 @@ fn test_implementation_method_overrides() -> Result<(), Box<dyn std::error::Erro
     let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 package Base;
 sub new { bless {}, shift }
 sub process { print "Base process\n" }
@@ -66,7 +64,7 @@ package AnotherDerived;
 use parent 'Base';
 sub process { print "Another process\n" }
 "#,
-        )?;
+    )?;
 
     // Request implementations of process method
     let response = harness.implementation(doc_uri, 3, 4)?;
@@ -105,10 +103,9 @@ fn test_implementation_interface_pattern() -> Result<(), Box<dyn std::error::Err
     let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 package Serializable;
 # Interface-like pattern in Perl
 sub serialize { die "Must implement serialize" }
@@ -124,7 +121,7 @@ use parent 'Serializable';
 sub serialize { return "xml" }
 sub deserialize { return "from xml" }
 "#,
-        )?;
+    )?;
 
     // Request implementations of Serializable interface
     let response = harness.implementation(doc_uri, 1, 8)?;
@@ -145,24 +142,24 @@ fn test_implementation_no_implementations() -> Result<(), Box<dyn std::error::Er
     let _init = harness.initialize(None)?;
 
     let doc_uri = "file:///test.pl";
-    harness
-        .open(
-            doc_uri,
-            r#"
+    harness.open(
+        doc_uri,
+        r#"
 package Standalone;
 sub new { bless {}, shift }
 sub method { print "Hello\n" }
 
 my $obj = Standalone->new();
 "#,
-        )?;
+    )?;
 
     // Request implementations for class with no subclasses
     let response = harness.implementation(doc_uri, 1, 8)?;
 
     // Should return empty array or null
     assert!(
-        response.is_null() || (response.is_array() && response.as_array().is_some_and(|arr| arr.is_empty())),
+        response.is_null()
+            || (response.is_array() && response.as_array().is_some_and(|arr| arr.is_empty())),
         "Should return null or empty array for no implementations"
     );
 

@@ -23,9 +23,8 @@ fn prepare_and_subtypes() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let items = prep_response["result"]
-        .as_array()
-        .ok_or("prepareTypeHierarchy should return an array")?;
+    let items =
+        prep_response["result"].as_array().ok_or("prepareTypeHierarchy should return an array")?;
 
     assert!(!items.is_empty(), "Should prepare type hierarchy item");
     let base_item = &items[0];
@@ -39,9 +38,8 @@ fn prepare_and_subtypes() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let subtypes = subtypes_response["result"]
-        .as_array()
-        .ok_or("subtypes should return an array")?;
+    let subtypes =
+        subtypes_response["result"].as_array().ok_or("subtypes should return an array")?;
 
     assert_eq!(subtypes.len(), 1, "Base should have one direct subtype");
     assert_eq!(subtypes[0]["name"], "Child", "Subtype should be Child");
@@ -56,9 +54,8 @@ fn prepare_and_subtypes() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let child_items = child_prep["result"]
-        .as_array()
-        .ok_or("prepareTypeHierarchy should return an array")?;
+    let child_items =
+        child_prep["result"].as_array().ok_or("prepareTypeHierarchy should return an array")?;
     let child_item = &child_items[0];
 
     let supertypes_response = client.request(
@@ -68,9 +65,8 @@ fn prepare_and_subtypes() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let supertypes = supertypes_response["result"]
-        .as_array()
-        .ok_or("supertypes should return an array")?;
+    let supertypes =
+        supertypes_response["result"].as_array().ok_or("supertypes should return an array")?;
 
     assert_eq!(supertypes.len(), 1, "Child should have one direct supertype");
     assert_eq!(supertypes[0]["name"], "Base", "Supertype should be Base");
@@ -108,9 +104,8 @@ use parent qw(Mixin1 Mixin2);
         }),
     );
 
-    let items = prep_response["result"]
-        .as_array()
-        .ok_or("prepareTypeHierarchy should return an array")?;
+    let items =
+        prep_response["result"].as_array().ok_or("prepareTypeHierarchy should return an array")?;
 
     assert!(!items.is_empty(), "Should prepare type hierarchy item");
     let combined_item = &items[0];
@@ -123,19 +118,15 @@ use parent qw(Mixin1 Mixin2);
         }),
     );
 
-    let supertypes = supertypes_response["result"]
-        .as_array()
-        .ok_or("supertypes should return an array")?;
+    let supertypes =
+        supertypes_response["result"].as_array().ok_or("supertypes should return an array")?;
 
     assert_eq!(supertypes.len(), 2, "Combined should have two supertypes");
 
     let names: Vec<String> = supertypes
         .iter()
         .map(|item| {
-            item["name"]
-                .as_str()
-                .ok_or("Item name should be a string")
-                .map(|s| s.to_string())
+            item["name"].as_str().ok_or("Item name should be a string").map(|s| s.to_string())
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -175,9 +166,8 @@ our @ISA = ('Parent1', 'Parent2');
         }),
     );
 
-    let items = prep_response["result"]
-        .as_array()
-        .ok_or("prepareTypeHierarchy should return an array")?;
+    let items =
+        prep_response["result"].as_array().ok_or("prepareTypeHierarchy should return an array")?;
 
     assert!(!items.is_empty(), "Should prepare type hierarchy item");
     let child_item = &items[0];
@@ -190,19 +180,15 @@ our @ISA = ('Parent1', 'Parent2');
         }),
     );
 
-    let supertypes = supertypes_response["result"]
-        .as_array()
-        .ok_or("supertypes should return an array")?;
+    let supertypes =
+        supertypes_response["result"].as_array().ok_or("supertypes should return an array")?;
 
     assert_eq!(supertypes.len(), 2, "Child should have two supertypes via @ISA");
 
     let names: Vec<String> = supertypes
         .iter()
         .map(|item| {
-            item["name"]
-                .as_str()
-                .ok_or("Item name should be a string")
-                .map(|s| s.to_string())
+            item["name"].as_str().ok_or("Item name should be a string").map(|s| s.to_string())
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -253,7 +239,8 @@ sub test {
     }
 
     // Now test that the actual package Base works
-    let package_col = source.find("package Base").ok_or("Failed to find 'package Base' in source")? + 8; // Position on "Base"
+    let package_col =
+        source.find("package Base").ok_or("Failed to find 'package Base' in source")? + 8; // Position on "Base"
     let prep_response2 = client.request(
         "textDocument/prepareTypeHierarchy",
         json!({
@@ -262,9 +249,7 @@ sub test {
         }),
     );
 
-    let items = prep_response2["result"]
-        .as_array()
-        .ok_or("Package should have type hierarchy")?;
+    let items = prep_response2["result"].as_array().ok_or("Package should have type hierarchy")?;
     assert!(!items.is_empty(), "Package Base should be found");
     assert_eq!(items[0]["name"], "Base", "Should find the Base package");
 

@@ -3,8 +3,8 @@
 //! This module provides a wrapper around lexer tokens that adds
 //! line and column information for incremental parsing support.
 
-use perl_position_tracking::Position;
 use perl_lexer::Token;
+use perl_position_tracking::Position;
 
 /// Token with full position information
 #[derive(Debug, Clone)]

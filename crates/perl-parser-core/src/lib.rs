@@ -55,20 +55,20 @@ pub use ast_v2::{DiagnosticId, MissingKind};
 pub use engine::ast;
 /// Experimental second-generation AST (work in progress).
 pub use engine::ast_v2;
-/// Edit tracking for incremental parsing.
-pub use perl_edit as edit;
-/// Heredoc content collector with FIFO ordering and indent stripping.
-pub use perl_heredoc as heredoc_collector;
 /// Parser context with error recovery support.
 pub use engine::parser_context;
 /// Pragma tracking for `use` and related directives.
 pub use engine::pragma_tracker;
 /// Parser for Perl quote and quote-like operators.
 pub use engine::quote_parser;
-/// Parser utilities and helpers.
-pub use perl_tokenizer::util;
 /// Legacy module aliases for moved engine components.
 pub use engine::{error, parser, position};
+/// Edit tracking for incremental parsing.
+pub use perl_edit as edit;
+/// Heredoc content collector with FIFO ordering and indent stripping.
+pub use perl_heredoc as heredoc_collector;
+/// Parser utilities and helpers.
+pub use perl_tokenizer::util;
 
 /// Parser entrypoint for Perl source.
 pub use engine::parser::Parser;

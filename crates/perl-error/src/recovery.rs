@@ -16,10 +16,10 @@
 //! parsing on adversarial input. When budget is exhausted, recovery returns
 //! immediately with an appropriate error node.
 
-use perl_ast::v2::Node;
 use crate::{BudgetTracker, ParseBudget};
-use perl_position_tracking::Range;
+use perl_ast::v2::Node;
 use perl_lexer::TokenType;
+use perl_position_tracking::Range;
 
 /// Error information with recovery context for comprehensive Perl parsing error handling.
 ///

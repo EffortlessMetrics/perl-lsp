@@ -369,8 +369,10 @@ fn test_dap_variables_default_scope() {
             // Should return placeholder variables (@_, $self)
             assert_eq!(variables.len(), 2);
 
-            let var_names: Vec<&str> =
-                variables.iter().map(|v| must_some(v.get("name").and_then(|n| n.as_str()))).collect();
+            let var_names: Vec<&str> = variables
+                .iter()
+                .map(|v| must_some(v.get("name").and_then(|n| n.as_str())))
+                .collect();
             assert!(var_names.contains(&"@_"));
             assert!(var_names.contains(&"$self"));
         }

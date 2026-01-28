@@ -12,12 +12,12 @@ use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
 
+use crate::breakpoints::BreakpointStore;
 #[cfg(unix)]
 use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
 use regex::Regex;
-use crate::breakpoints::BreakpointStore;
 
 /// Poison-safe mutex lock that recovers from poisoned state
 fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, ctx: &'static str) -> MutexGuard<'a, T> {
@@ -95,23 +95,99 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
             // Note: s/tr/y regex mutation operators handled separately via regex_mutation_re()
             let ops = [
                 // State mutation
-                "push", "pop", "shift", "unshift", "splice", "delete", "undef", "srand", "bless",
+                "push",
+                "pop",
+                "shift",
+                "unshift",
+                "splice",
+                "delete",
+                "undef",
+                "srand",
+                "bless",
                 "reset", // Process control
-                "system", "exec", "fork", "exit", "dump", "kill", "alarm", "sleep", "wait",
-                "waitpid", "setpgrp", "setpriority", "umask", "lock", // I/O
-                "qx", "readpipe", "syscall", "open", "close", "print", "say", "printf", "sysread",
-                "syswrite", "glob", "readline", "ioctl", "fcntl", "flock", "select", "dbmopen",
-                "dbmclose", "binmode", "opendir", "closedir", "readdir", "rewinddir", "seekdir",
-                "telldir", "seek", "sysseek", "formline", "write", "pipe", "socketpair", // Filesystem
-                "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown", "chroot",
-                "truncate", "utime", "symlink", "link", // Code loading/execution
-                "eval", "require", "do", // Tie mechanism (can execute arbitrary code)
-                "tie", "untie", // Network
-                "socket", "connect", "bind", "listen", "accept", "send", "recv", "shutdown",
+                "system",
+                "exec",
+                "fork",
+                "exit",
+                "dump",
+                "kill",
+                "alarm",
+                "sleep",
+                "wait",
+                "waitpid",
+                "setpgrp",
+                "setpriority",
+                "umask",
+                "lock", // I/O
+                "qx",
+                "readpipe",
+                "syscall",
+                "open",
+                "close",
+                "print",
+                "say",
+                "printf",
+                "sysread",
+                "syswrite",
+                "glob",
+                "readline",
+                "ioctl",
+                "fcntl",
+                "flock",
+                "select",
+                "dbmopen",
+                "dbmclose",
+                "binmode",
+                "opendir",
+                "closedir",
+                "readdir",
+                "rewinddir",
+                "seekdir",
+                "telldir",
+                "seek",
+                "sysseek",
+                "formline",
+                "write",
+                "pipe",
+                "socketpair", // Filesystem
+                "mkdir",
+                "rmdir",
+                "unlink",
+                "rename",
+                "chdir",
+                "chmod",
+                "chown",
+                "chroot",
+                "truncate",
+                "utime",
+                "symlink",
+                "link", // Code loading/execution
+                "eval",
+                "require",
+                "do", // Tie mechanism (can execute arbitrary code)
+                "tie",
+                "untie", // Network
+                "socket",
+                "connect",
+                "bind",
+                "listen",
+                "accept",
+                "send",
+                "recv",
+                "shutdown",
                 "setsockopt",
                 // IPC
-                "msgget", "msgsnd", "msgrcv", "msgctl", "semget", "semop", "semctl", "shmget",
-                "shmat", "shmdt", "shmctl",
+                "msgget",
+                "msgsnd",
+                "msgrcv",
+                "msgctl",
+                "semget",
+                "semop",
+                "semctl",
+                "shmget",
+                "shmat",
+                "shmdt",
+                "shmctl",
             ];
             // Build pattern: \b(op1|op2|...)\b
             let pattern = format!(r"\b(?:{})\b", ops.join("|"));
@@ -1163,19 +1239,20 @@ impl DebugAdapter {
             };
         };
 
-        let args: crate::protocol::SetBreakpointsArguments = match serde_json::from_value(args_value) {
-            Ok(a) => a,
-            Err(e) => {
-                return DapMessage::Response {
-                    seq,
-                    request_seq,
-                    success: false,
-                    command: "setBreakpoints".to_string(),
-                    body: None,
-                    message: Some(format!("Invalid arguments: {}", e)),
-                };
-            }
-        };
+        let args: crate::protocol::SetBreakpointsArguments =
+            match serde_json::from_value(args_value) {
+                Ok(a) => a,
+                Err(e) => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "setBreakpoints".to_string(),
+                        body: None,
+                        message: Some(format!("Invalid arguments: {}", e)),
+                    };
+                }
+            };
 
         // AC7: AST-based breakpoint validation via BreakpointStore
         let verified_breakpoints = self.breakpoints.set_breakpoints(&args);
@@ -1193,8 +1270,7 @@ impl DebugAdapter {
                 for bp in &verified_breakpoints {
                     if bp.verified {
                         // Retrieve the record to get the original condition
-                        let cmd = if let Some(record) =
-                            self.breakpoints.get_breakpoint_by_id(bp.id)
+                        let cmd = if let Some(record) = self.breakpoints.get_breakpoint_by_id(bp.id)
                             && let Some(cond) = record.condition
                         {
                             format!("b {} {}\n", bp.line, cond)
@@ -1275,11 +1351,13 @@ impl DebugAdapter {
         let stack_frames =
             if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {
                 // AC8.2.1: Filter internal frames from user-visible stack
-                session.stack_frames.iter()
+                session
+                    .stack_frames
+                    .iter()
                     .filter(|f| {
-                        !f.name.starts_with("Devel::TSPerlDAP::") && 
-                        !f.name.starts_with("DB::") &&
-                        !f.source.path.contains("perl5db.pl")
+                        !f.name.starts_with("Devel::TSPerlDAP::")
+                            && !f.name.starts_with("DB::")
+                            && !f.source.path.contains("perl5db.pl")
                     })
                     .cloned()
                     .collect::<Vec<_>>()
@@ -1340,7 +1418,7 @@ impl DebugAdapter {
                     "name": "Globals",
                     "variablesReference": globals_ref,
                     "expensive": true
-                })
+                }),
             ];
 
             DapMessage::Response {
@@ -1529,10 +1607,13 @@ impl DebugAdapter {
         }
 
         // AC9.4: Proper DAP event emission: continued
-        self.send_event("continued", Some(json!({
-            "threadId": thread_id,
-            "allThreadsContinued": true
-        })));
+        self.send_event(
+            "continued",
+            Some(json!({
+                "threadId": thread_id,
+                "allThreadsContinued": true
+            })),
+        );
 
         DapMessage::Response {
             seq,
@@ -1555,10 +1636,13 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             let t_id = session.thread_id;
-            self.send_event("continued", Some(json!({
-                "threadId": t_id,
-                "allThreadsContinued": true
-            })));
+            self.send_event(
+                "continued",
+                Some(json!({
+                    "threadId": t_id,
+                    "allThreadsContinued": true
+                })),
+            );
         }
 
         DapMessage::Response {
@@ -1580,10 +1664,13 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             let t_id = session.thread_id;
-            self.send_event("continued", Some(json!({
-                "threadId": t_id,
-                "allThreadsContinued": true
-            })));
+            self.send_event(
+                "continued",
+                Some(json!({
+                    "threadId": t_id,
+                    "allThreadsContinued": true
+                })),
+            );
         }
 
         DapMessage::Response {
@@ -1605,10 +1692,13 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             let t_id = session.thread_id;
-            self.send_event("continued", Some(json!({
-                "threadId": t_id,
-                "allThreadsContinued": true
-            })));
+            self.send_event(
+                "continued",
+                Some(json!({
+                    "threadId": t_id,
+                    "allThreadsContinued": true
+                })),
+            );
         }
 
         DapMessage::Response {
@@ -2497,11 +2587,7 @@ mod tests {
     #[test]
     fn test_safe_eval_blocks_dereference_execution() {
         // These are variables (safe to access)
-        let allowed = [
-            "$system",
-            "@exec",
-            "%fork",
-        ];
+        let allowed = ["$system", "@exec", "%fork"];
 
         for expr in allowed {
             let err = validate_safe_expression(expr);

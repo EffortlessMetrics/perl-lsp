@@ -11,10 +11,7 @@
 //! - Memory safety in concurrent AST operations
 //! - Position tracking and UTF-16 conversion edge cases
 
-use perl_parser::{
-    Parser,
-    ast::Node,
-};
+use perl_parser::{Parser, ast::Node};
 use proptest::prelude::*;
 use rstest::*;
 use std::collections::{HashMap, HashSet};

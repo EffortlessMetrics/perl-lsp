@@ -252,9 +252,7 @@ END	TAB
 
     let sexp = parse_to_sexp(input);
     assert!(
-        sexp.contains(
-            "(heredoc_interpolated \"END\\tTAB\" \"content with tab in label\")"
-        ),
+        sexp.contains("(heredoc_interpolated \"END\\tTAB\" \"content with tab in label\")"),
         "Expected label with tab and content, got: {}",
         sexp
     );
@@ -414,7 +412,11 @@ content without terminator"#;
         }
         Err(e) => {
             // If it fails fast (legacy behavior), that's also acceptable for now
-            assert!(e.to_string().contains("Unterminated") || e.to_string().contains("EOF"), "Error should relate to termination: {}", e);
+            assert!(
+                e.to_string().contains("Unterminated") || e.to_string().contains("EOF"),
+                "Error should relate to termination: {}",
+                e
+            );
         }
     }
 }

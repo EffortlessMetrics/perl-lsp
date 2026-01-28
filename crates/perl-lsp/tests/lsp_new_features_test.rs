@@ -9,7 +9,8 @@ fn test_new_features_advertised() -> Result<(), Box<dyn std::error::Error>> {
     let init_response = harness.initialize(None)?;
 
     // Check that our newly connected features are advertised
-    let caps = init_response.get("capabilities")
+    let caps = init_response
+        .get("capabilities")
         .ok_or("Missing capabilities in initialization response")?;
 
     #[allow(clippy::single_component_path_imports)]

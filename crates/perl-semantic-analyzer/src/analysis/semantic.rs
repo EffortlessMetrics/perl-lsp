@@ -144,6 +144,7 @@ pub struct SemanticToken {
 /// - Package qualification and scope context
 /// - POD documentation extraction and formatting
 /// - Variable type inference and usage patterns
+///
 /// Workflow: Navigate/Analyze hover details for LSP.
 pub struct HoverInfo {
     /// Symbol signature or declaration
@@ -1424,6 +1425,7 @@ impl SemanticModel {
     /// # Performance
     /// - Lookup: <100μs for typical files
     /// - Memory: Cached hover info reused across queries
+    ///
     /// Workflow: Navigate/Analyze hover lookup.
     pub fn hover_info_at(&self, location: SourceLocation) -> Option<&HoverInfo> {
         self.analyzer.hover_at(location)

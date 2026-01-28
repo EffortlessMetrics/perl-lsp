@@ -20,37 +20,35 @@ mod tests {
     }
 
     /// Drive initialize + didOpen + inlayHint(range) and return the result array (or empty array).
-    fn get_hints(server: &mut LspServer, uri: &str, text: &str) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
+    fn get_hints(
+        server: &mut LspServer,
+        uri: &str,
+        text: &str,
+    ) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
         // initialize (min caps; advertise pull diags so server won't publish)
-        let _ = server.handle_request(
-            serde_json::from_value(json!({
-                "jsonrpc":"2.0","id":1,"method":"initialize","params":{
-                    "capabilities":{"textDocument":{"diagnostic":{}}}
-                }
-            }))?,
-        );
-        let _ = server.handle_request(
-            serde_json::from_value(json!({"jsonrpc":"2.0","method":"initialized","params":{}}))?,
-        );
+        let _ = server.handle_request(serde_json::from_value(json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize","params":{
+                "capabilities":{"textDocument":{"diagnostic":{}}}
+            }
+        }))?);
+        let _ = server.handle_request(serde_json::from_value(
+            json!({"jsonrpc":"2.0","method":"initialized","params":{}}),
+        )?);
 
         // didOpen
-        let _ = server.handle_request(
-            serde_json::from_value(json!({
-              "jsonrpc":"2.0","method":"textDocument/didOpen","params":{
-                "textDocument":{"uri":uri,"languageId":"perl","version":1,"text":text}
-              }
-            }))?,
-        );
+        let _ = server.handle_request(serde_json::from_value(json!({
+          "jsonrpc":"2.0","method":"textDocument/didOpen","params":{
+            "textDocument":{"uri":uri,"languageId":"perl","version":1,"text":text}
+          }
+        }))?);
 
         // full-file range (0..big)
-        let res = server.handle_request(
-            serde_json::from_value(json!({
-              "jsonrpc":"2.0","id":2,"method":"textDocument/inlayHint","params":{
-                "textDocument":{"uri":uri},
-                "range":{"start":{"line":0,"character":0},"end":{"line":999,"character":0}}
-              }
-            }))?,
-        );
+        let res = server.handle_request(serde_json::from_value(json!({
+          "jsonrpc":"2.0","id":2,"method":"textDocument/inlayHint","params":{
+            "textDocument":{"uri":uri},
+            "range":{"start":{"line":0,"character":0},"end":{"line":999,"character":0}}
+          }
+        }))?);
 
         // Extract result array
         Ok(res.and_then(|r| r.result).and_then(|r| r.as_array().cloned()).unwrap_or_default())

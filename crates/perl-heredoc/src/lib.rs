@@ -3,9 +3,9 @@
 //! This module handles the logic of collecting heredoc content from source code,
 //! dealing with indentation stripping (`<<~`), and line termination.
 
+use perl_position_tracking::ByteSpan;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use perl_position_tracking::ByteSpan;
 
 pub use perl_position_tracking::ByteSpan as Span;
 

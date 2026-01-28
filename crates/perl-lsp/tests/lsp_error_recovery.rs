@@ -72,8 +72,7 @@ fn test_recover_from_parse_errors() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
     assert!(response["result"].is_array(), "Response was not an array: {}", response);
-    let symbols = response["result"].as_array()
-        .ok_or("Expected 'result' to be an array")?;
+    let symbols = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
     assert!(!symbols.is_empty());
     shutdown_and_exit(&mut server);
     Ok(())
@@ -134,8 +133,7 @@ sub another_valid {
         }),
     );
     assert!(response["result"].is_array());
-    let symbols = response["result"].as_array()
-        .ok_or("Expected 'result' to be an array")?;
+    let symbols = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
 
     // Should find at least the valid functions
     let function_names: Vec<String> =
@@ -306,8 +304,7 @@ fn test_workspace_recovery_after_error() -> Result<(), Box<dyn std::error::Error
         }),
     );
     assert!(response["result"].is_array());
-    let symbols = response["result"].as_array()
-        .ok_or("Expected 'result' to be an array")?;
+    let symbols = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
     // Note: workspace symbols requires the 'workspace' feature to be enabled
     // Without it, an empty array is returned which is valid behavior
     if !symbols.is_empty() {
@@ -374,8 +371,7 @@ print $var;  # Another valid reference
         }),
     );
     assert!(response["result"].is_array());
-    let refs = response["result"].as_array()
-        .ok_or("Expected 'result' to be an array")?;
+    let refs = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
     // When there are syntax errors, references might not be found
     // The important thing is that the server doesn't crash and returns a valid response
     eprintln!("Found {} references (may be 0 due to parse errors): {:?}", refs.len(), refs);
@@ -689,8 +685,7 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
     assert!(response["result"].is_array());
-    let symbols = response["result"].as_array()
-        .ok_or("Expected 'result' to be an array")?;
+    let symbols = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
 
     // FLAKY: Incremental document updates may not apply correctly under race conditions.
     // Root cause is unknown but could be:

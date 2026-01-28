@@ -695,10 +695,13 @@ print $text;"#;
         for i in 0..110 {
             code.push_str(&format!("my $h{} = <<EOF{};\n", i, i));
         }
-        
+
         let scanner = HeredocScanner::new(&code);
         let (_processed, declarations) = scanner.scan();
-        
-        assert!(declarations.len() <= MAX_HEREDOC_DEPTH, "Declarations should be limited to MAX_HEREDOC_DEPTH");
+
+        assert!(
+            declarations.len() <= MAX_HEREDOC_DEPTH,
+            "Declarations should be limited to MAX_HEREDOC_DEPTH"
+        );
     }
 }
