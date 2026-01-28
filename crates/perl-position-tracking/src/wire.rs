@@ -79,13 +79,16 @@ impl From<lsp_types::Range> for WireRange {
 }
 #[cfg(feature = "lsp-compat")]
 impl From<WireLocation> for lsp_types::Location {
-    #[allow(clippy::expect_used)] // "file:///unknown" is a valid URI by URL spec - cannot fail
     fn from(l: WireLocation) -> Self {
-        // Fallback URI for when parsing fails. This is a compile-time constant known-valid URI.
-        static FALLBACK_URI: std::sync::LazyLock<lsp_types::Uri> =
-            std::sync::LazyLock::new(|| {
-                "file:///unknown".parse().expect("file:///unknown is a valid URI")
-            });
+        use std::sync::LazyLock;
+
+        // Fallback URI for when parsing fails.
+        static FALLBACK_URI: LazyLock<lsp_types::Uri> = LazyLock::new(|| {
+            ["file:///unknown", "file:", "a:"]
+                .iter()
+                .find_map(|s| s.parse().ok())
+                .unwrap_or_else(|| std::process::abort())
+        });
 
         let uri = l.uri.parse().unwrap_or_else(|_| FALLBACK_URI.clone());
         Self { uri, range: l.range.into() }

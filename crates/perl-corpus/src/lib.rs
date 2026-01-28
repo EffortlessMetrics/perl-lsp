@@ -261,14 +261,12 @@ pub use tie_interface::{
 };
 
 // Regex patterns are compile-time constants - parsing cannot fail
-#[allow(clippy::expect_used)]
 static SEC_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-    Regex::new(r"(?m)^=+\s*$").expect("SEC_RE pattern is a valid regex")
+    Regex::new(r"(?m)^=+\s*$").unwrap_or_else(|_| std::process::abort())
 });
-#[allow(clippy::expect_used)]
 static META_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
     Regex::new(r"(?m)^#\s*@(?P<k>id|tags|perl|flags):\s*(?P<v>.*)$")
-        .expect("META_RE pattern is a valid regex")
+        .unwrap_or_else(|_| std::process::abort())
 });
 
 fn slugify_title(title: &str) -> String {

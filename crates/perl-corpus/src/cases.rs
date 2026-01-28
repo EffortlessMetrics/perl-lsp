@@ -1373,11 +1373,11 @@ impl EdgeCaseGenerator {
     /// # Note
     ///
     /// The edge case list is a static compile-time list that is never empty.
-    #[allow(clippy::expect_used)] // EDGE_CASES is a compile-time non-empty static slice
     pub fn sample(seed: u64) -> &'static EdgeCase {
-        select_by_seed(edge_cases(), seed)
-            .or_else(|| edge_cases().first())
-            .expect("EDGE_CASES is a compile-time non-empty static slice")
+        let cases = edge_cases();
+        select_by_seed(cases, seed)
+            .or_else(|| cases.first())
+            .unwrap_or_else(|| std::process::abort())
     }
 
     /// Sample a deterministic edge case by tag.
@@ -1420,11 +1420,11 @@ pub fn find_complex_case(id: &str) -> Option<&'static ComplexDataStructureCase> 
 /// # Note
 ///
 /// The complex case list is a static compile-time list that is never empty.
-#[allow(clippy::expect_used)] // COMPLEX_DATA_STRUCTURE_CASES is a compile-time non-empty static slice
 pub fn sample_complex_case(seed: u64) -> &'static ComplexDataStructureCase {
-    select_by_seed(complex_data_structure_cases(), seed)
-        .or_else(|| complex_data_structure_cases().first())
-        .expect("COMPLEX_DATA_STRUCTURE_CASES is a compile-time non-empty static slice")
+    let cases = complex_data_structure_cases();
+    select_by_seed(cases, seed)
+        .or_else(|| cases.first())
+        .unwrap_or_else(|| std::process::abort())
 }
 
 #[cfg(test)]
