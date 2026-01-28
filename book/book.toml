@@ -1,0 +1,50 @@
+[book]
+title = "Perl LSP Documentation"
+authors = ["perl-lsp contributors"]
+language = "en"
+multilingual = false
+src = "src"
+description = "Comprehensive documentation for the perl-lsp project - a production-ready Perl Language Server Protocol implementation"
+
+[build]
+build-dir = "book"
+
+[output.html]
+git-repository-url = "https://github.com/EffortlessMetrics/tree-sitter-perl"
+git-repository-icon = "fa-github"
+edit-url-template = "https://github.com/EffortlessMetrics/tree-sitter-perl/edit/master/docs/{path}"
+site-url = "/tree-sitter-perl/"
+cname = ""
+default-theme = "light"
+preferred-dark-theme = "navy"
+smart-punctuation = true
+mathjax-support = false
+copy-fonts = true
+no-section-label = false
+fold-enable = false
+fold-level = 0
+
+[output.html.print]
+enable = true
+
+[output.html.search]
+enable = true
+limit-results = 30
+teaser-word-count = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3
+
+[output.html.playground]
+editable = false
+copyable = true
+copy-js = true
+line-numbers = false
+
+[output.html.code]
+hidelines = {}
+
+[output.html.redirect]

@@ -73,6 +73,19 @@ just debt-report                      # Show technical debt status
 just debt-check                       # Verify debt budget compliance
 ```
 
+### Supply Chain Security
+
+```bash
+just sbom                             # Generate SBOM (both formats)
+just sbom-spdx                        # Generate SBOM in SPDX format
+just sbom-cyclonedx                   # Generate SBOM in CycloneDX format
+just sbom-verify                      # Verify SBOM generation
+just security-audit                   # Run security audit (cargo-audit)
+
+# Verify release artifact provenance
+gh attestation verify <artifact> --owner EffortlessMetrics
+```
+
 ### Code Coverage
 
 ```bash
@@ -115,6 +128,7 @@ CI is optional/opt-in. The repo is local-first by design.
 | CI gate policy | `.ci/gate-policy.yaml` |
 | Technical debt ledger | `.ci/debt-ledger.yaml` |
 | Dependabot config | `.github/dependabot.yml` |
+| Supply chain security | `deny.toml`, `docs/SUPPLY_CHAIN_SECURITY.md` |
 
 ## Architecture Patterns
 

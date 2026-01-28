@@ -956,6 +956,82 @@ debt-pr-summary:
     @python3 scripts/debt-report.py --json | python3 scripts/debt-pr-summary.py
 
 # ============================================================================
+# SemVer Breaking Change Detection (Issue #277)
+# ============================================================================
+# Automated semantic versioning validation to prevent accidental breaking changes.
+# Uses cargo-semver-checks to compare against baseline (last release tag).
+
+# Check for breaking changes against last release
+semver-check:
+    @echo "🔍 Checking for SemVer breaking changes..."
+    @just _semver-check-install
+    @just _semver-check-run
+
+# Check specific package for breaking changes
+semver-check-package package:
+    @echo "🔍 Checking {{package}} for SemVer breaking changes..."
+    @just _semver-check-install
+    @cargo semver-checks check-release -p {{package}} --baseline-rev $(just _semver-baseline-tag)
+
+# Check all published packages
+semver-check-all:
+    @echo "🔍 Checking all published packages for SemVer breaking changes..."
+    @just _semver-check-install
+    @just semver-check-package perl-parser
+    @just semver-check-package perl-lexer
+    @just semver-check-package perl-parser-core
+    @just semver-check-package perl-lsp
+
+# Generate breaking changes report
+semver-report:
+    @echo "📊 Generating SemVer breaking changes report..."
+    @just _semver-check-install
+    @mkdir -p target/semver-reports
+    @cargo semver-checks check-release --workspace --baseline-rev $(just _semver-baseline-tag) \
+        --output-format json > target/semver-reports/breaking-changes.json || true
+    @echo "Report saved to: target/semver-reports/breaking-changes.json"
+
+# List all available baseline tags
+semver-list-baselines:
+    @echo "📋 Available baseline tags:"
+    @git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -10
+
+# Show what changed in public API since last release
+semver-diff package='perl-parser':
+    @echo "📝 Public API changes in {{package}} since last release:"
+    @just _semver-check-install
+    @cargo semver-checks check-release -p {{package}} --baseline-rev $(just _semver-baseline-tag) || true
+
+# Private helper: install cargo-semver-checks if missing
+[private]
+_semver-check-install:
+    @if ! command -v cargo-semver-checks >/dev/null 2>&1; then \
+        echo "📦 Installing cargo-semver-checks..."; \
+        cargo install cargo-semver-checks --locked; \
+    fi
+
+# Private helper: run semver checks on core packages
+[private]
+_semver-check-run:
+    @BASELINE=$(just _semver-baseline-tag); \
+    echo "Using baseline: $$BASELINE"; \
+    echo ""; \
+    echo "Checking perl-parser..."; \
+    cargo semver-checks check-release -p perl-parser --baseline-rev "$$BASELINE" || EXIT_CODE=1; \
+    echo ""; \
+    echo "Checking perl-lexer..."; \
+    cargo semver-checks check-release -p perl-lexer --baseline-rev "$$BASELINE" || EXIT_CODE=1; \
+    echo ""; \
+    echo "Checking perl-parser-core..."; \
+    cargo semver-checks check-release -p perl-parser-core --baseline-rev "$$BASELINE" || EXIT_CODE=1; \
+    exit $${EXIT_CODE:-0}
+
+# Private helper: get baseline tag for comparison
+[private]
+_semver-baseline-tag:
+    @git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
+
+# ============================================================================
 # Fuzzing (cargo-fuzz integration)
 # ============================================================================
 
@@ -1053,3 +1129,95 @@ docs-clean:
     rm -rf book/src/process
     rm -rf book/src/resources
     @echo "✅ Documentation artifacts cleaned"
+
+# ============================================================================
+# Changelog Generation (Issue #280)
+# ============================================================================
+# Automated changelog generation using git-cliff.
+# See cliff.toml for configuration.
+
+# Generate full changelog (overwrites CHANGELOG.md)
+changelog:
+    @echo "📝 Generating changelog..."
+    @if command -v git-cliff >/dev/null 2>&1; then \
+        git-cliff --output CHANGELOG.md; \
+        echo "✅ Changelog generated: CHANGELOG.md"; \
+    else \
+        echo "ERROR: git-cliff not installed."; \
+        echo "  Install via: cargo install git-cliff"; \
+        echo "  Or: brew install git-cliff (macOS)"; \
+        echo "  Or: nix-shell -p git-cliff (Nix)"; \
+        exit 1; \
+    fi
+
+# Generate changelog for unreleased changes only (preview mode)
+changelog-preview:
+    @echo "📋 Previewing unreleased changes..."
+    @if command -v git-cliff >/dev/null 2>&1; then \
+        git-cliff --unreleased; \
+    else \
+        echo "ERROR: git-cliff not installed. Run: cargo install git-cliff"; \
+        exit 1; \
+    fi
+
+# Generate changelog for a specific version range
+changelog-range from to:
+    @echo "📋 Generating changelog from {{from}} to {{to}}..."
+    @if command -v git-cliff >/dev/null 2>&1; then \
+        git-cliff {{from}}..{{to}}; \
+    else \
+        echo "ERROR: git-cliff not installed. Run: cargo install git-cliff"; \
+        exit 1; \
+    fi
+
+# Generate changelog for latest tag only
+changelog-latest:
+    @echo "📋 Generating changelog for latest tag..."
+    @if command -v git-cliff >/dev/null 2>&1; then \
+        git-cliff --latest; \
+    else \
+        echo "ERROR: git-cliff not installed. Run: cargo install git-cliff"; \
+        exit 1; \
+    fi
+
+# Append unreleased changes to existing CHANGELOG.md (for releases)
+changelog-append:
+    @echo "📝 Appending unreleased changes to CHANGELOG.md..."
+    @if command -v git-cliff >/dev/null 2>&1; then \
+        git-cliff --unreleased --prepend CHANGELOG.md; \
+        echo "✅ Changelog updated with unreleased changes"; \
+    else \
+        echo "ERROR: git-cliff not installed. Run: cargo install git-cliff"; \
+        exit 1; \
+    fi
+
+# ============================================================================
+# Dead Code Detection (Issue #284)
+# ============================================================================
+# Detect unused dependencies, dead code, and unused imports/variables.
+# Uses cargo-udeps and clippy dead_code lints.
+
+# Run dead code detection (local check)
+dead-code:
+    @echo "🔍 Running dead code detection..."
+    @bash scripts/dead-code-check.sh check
+
+# Generate dead code baseline
+dead-code-baseline:
+    @echo "📝 Generating dead code baseline..."
+    @bash scripts/dead-code-check.sh baseline
+
+# Generate dead code report (JSON)
+dead-code-report:
+    @echo "📊 Generating dead code report..."
+    @bash scripts/dead-code-check.sh report
+
+# Run dead code detection in strict mode (fail on any increase)
+dead-code-strict:
+    @echo "🔍 Running dead code detection (strict mode)..."
+    @DEAD_CODE_STRICT=true bash scripts/dead-code-check.sh check
+
+# CI gate: fail if dead code exceeds baseline
+ci-dead-code:
+    @echo "🔍 Checking dead code baseline..."
+    @bash scripts/dead-code-check.sh check
