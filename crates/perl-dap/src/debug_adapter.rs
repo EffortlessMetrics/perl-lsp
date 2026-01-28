@@ -2934,17 +2934,13 @@ mod tests {
         let bypasses = [
             "&{'sys'.'tem'}('ls')", // Dynamic function name via concatenation
             "& { 'sys' . 'tem' }",  // Dynamic function name with spaces
-            "<*.txt>",               // Glob operator for filesystem access
+            "<*.txt>",              // Glob operator for filesystem access
             "CORE::print",          // Explicitly blocked by dangerous ops regex
         ];
 
         for expr in bypasses {
             let err = validate_safe_expression(expr);
-            assert!(
-                err.is_some(),
-                "Expression '{}' should be blocked but was allowed",
-                expr
-            );
+            assert!(err.is_some(), "Expression '{}' should be blocked but was allowed", expr);
         }
     }
 

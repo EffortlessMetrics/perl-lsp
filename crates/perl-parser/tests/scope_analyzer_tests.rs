@@ -688,8 +688,13 @@ my %h = ();
 print $h; # Should NOT resolve to %h, because it is a scalar usage
 "#;
     let issues = analyze_code(code);
-    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && i.variable_name == "$h"),
-        "Expected UndeclaredVariable for $h, but got: {:?}", issues);
+    assert!(
+        issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && i.variable_name == "$h"),
+        "Expected UndeclaredVariable for $h, but got: {:?}",
+        issues
+    );
 }
 
 #[test]
@@ -700,8 +705,13 @@ my @arr = ();
 print $arr; # Should NOT resolve to @arr
 "#;
     let issues = analyze_code(code);
-    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && i.variable_name == "$arr"),
-        "Expected UndeclaredVariable for $arr, but got: {:?}", issues);
+    assert!(
+        issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && i.variable_name == "$arr"),
+        "Expected UndeclaredVariable for $arr, but got: {:?}",
+        issues
+    );
 }
 
 #[test]
@@ -713,8 +723,11 @@ my $v = $h{k}; # Should resolve to %h
 print($h{k}); # Should also resolve (FunctionCall -> Binary)
 "#;
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)),
-        "Unexpected undeclared variable error for $h{{k}}: {:?}", issues);
+    assert!(
+        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)),
+        "Unexpected undeclared variable error for $h{{k}}: {:?}",
+        issues
+    );
 }
 
 #[test]
@@ -725,6 +738,9 @@ my @a = ();
 print($a[0]); # Should resolve to @a
 "#;
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)),
-        "Unexpected undeclared variable error for $a[0]: {:?}", issues);
+    assert!(
+        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)),
+        "Unexpected undeclared variable error for $a[0]: {:?}",
+        issues
+    );
 }

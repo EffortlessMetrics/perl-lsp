@@ -1,7 +1,7 @@
 #![allow(clippy::expect_used)]
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use perl_parser::{Parser, ScopeAnalyzer, PragmaState};
+use perl_parser::{Parser, PragmaState, ScopeAnalyzer};
 use std::hint::black_box;
 
 const BAREWORDS_SCRIPT: &str = r#"
@@ -72,14 +72,10 @@ fn benchmark_strict_barewords(c: &mut Criterion) {
     let analyzer = ScopeAnalyzer::new();
 
     // Enable strict subs to force is_known_function checks
-    let pragma_map = vec![
-        (0..script.len(), PragmaState {
-            strict_subs: true,
-            strict_vars: true,
-            strict_refs: true,
-            warnings: true
-        })
-    ];
+    let pragma_map = vec![(
+        0..script.len(),
+        PragmaState { strict_subs: true, strict_vars: true, strict_refs: true, warnings: true },
+    )];
 
     c.bench_function("scope_analysis_strict_barewords", |b| {
         b.iter(|| {
