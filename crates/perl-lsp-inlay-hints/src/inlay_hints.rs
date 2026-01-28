@@ -79,24 +79,23 @@ impl InlayHintsProvider {
     ) -> Vec<InlayHint> {
         parameter_hints(ast, to_pos16, range)
             .into_iter()
-            .map(|v| {
+            .filter_map(|v| {
                 let pos = v["position"].clone();
-                let label = v["label"].as_str().unwrap().to_string();
-                let kind = match v["kind"].as_u64().unwrap() {
-                    1 => InlayHintKind::Type,
+                let label = v["label"].as_str()?.to_string();
+                let kind = match v["kind"].as_u64().unwrap_or(1) {
                     2 => InlayHintKind::Parameter,
                     _ => InlayHintKind::Type,
                 };
-                InlayHint {
+                Some(InlayHint {
                     position: Position::new(
-                        pos["line"].as_u64().unwrap() as u32,
-                        pos["character"].as_u64().unwrap() as u32,
+                        pos["line"].as_u64()? as u32,
+                        pos["character"].as_u64()? as u32,
                     ),
                     label,
                     kind,
                     padding_left: v["paddingLeft"].as_bool().unwrap_or(false),
                     padding_right: v["paddingRight"].as_bool().unwrap_or(false),
-                }
+                })
             })
             .collect()
     }
@@ -110,24 +109,23 @@ impl InlayHintsProvider {
     ) -> Vec<InlayHint> {
         trivial_type_hints(ast, to_pos16, range)
             .into_iter()
-            .map(|v| {
+            .filter_map(|v| {
                 let pos = v["position"].clone();
-                let label = v["label"].as_str().unwrap().to_string();
-                let kind = match v["kind"].as_u64().unwrap() {
-                    1 => InlayHintKind::Type,
+                let label = v["label"].as_str()?.to_string();
+                let kind = match v["kind"].as_u64().unwrap_or(1) {
                     2 => InlayHintKind::Parameter,
                     _ => InlayHintKind::Type,
                 };
-                InlayHint {
+                Some(InlayHint {
                     position: Position::new(
-                        pos["line"].as_u64().unwrap() as u32,
-                        pos["character"].as_u64().unwrap() as u32,
+                        pos["line"].as_u64()? as u32,
+                        pos["character"].as_u64()? as u32,
                     ),
                     label,
                     kind,
                     padding_left: v["paddingLeft"].as_bool().unwrap_or(false),
                     padding_right: v["paddingRight"].as_bool().unwrap_or(false),
-                }
+                })
             })
             .collect()
     }

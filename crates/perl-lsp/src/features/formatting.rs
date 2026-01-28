@@ -21,9 +21,7 @@ pub struct CodeFormatter {
 impl CodeFormatter {
     /// Create a new code formatter with the default OS subprocess runtime
     pub fn new() -> Self {
-        Self {
-            inner: FormattingProvider::new(OsSubprocessRuntime::new()),
-        }
+        Self { inner: FormattingProvider::new(OsSubprocessRuntime::new()) }
     }
 
     /// Format an entire document, returning just the edits for backwards compatibility
@@ -47,14 +45,8 @@ impl CodeFormatter {
     ) -> Result<Vec<FormatTextEdit>, FormattingError> {
         // Convert WireRange to FormatRange
         let format_range = FormatRange {
-            start: FormatPosition {
-                line: range.start.line,
-                character: range.start.character,
-            },
-            end: FormatPosition {
-                line: range.end.line,
-                character: range.end.character,
-            },
+            start: FormatPosition { line: range.start.line, character: range.start.character },
+            end: FormatPosition { line: range.end.line, character: range.end.character },
         };
         let doc = self.inner.format_range(content, &format_range, options)?;
         Ok(doc.edits)

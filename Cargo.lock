@@ -1478,6 +1478,7 @@ dependencies = [
  "criterion",
  "lsp-types",
  "nix",
+ "once_cell",
  "perl-parser",
  "perl-tdd-support",
  "proptest",
