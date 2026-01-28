@@ -1758,6 +1758,67 @@ impl DebugAdapter {
             message: if !success { Some("Failed to pause debugger".to_string()) } else { None },
         }
     }
+
+    /// Parse stack trace output from Perl debugger "T" command
+    ///
+    /// AC8.2: Parse caller() + %DB::sub data from Perl debugger
+    ///
+    /// The Perl debugger "T" command outputs stack traces in formats like:
+    /// ```text
+    /// $ = main::compute_sum() called from file /app/main.pl line 15
+    /// $ = main::process_data() called from file /app/main.pl line 10
+    /// ```
+    ///
+    /// Or with frame numbers:
+    /// ```text
+    /// # 0 main::helper at /app/script.pl line 20
+    /// # 1 Foo::bar called at /app/lib/Foo.pm line 15
+    /// # 2 main::start at /app/script.pl line 5
+    /// ```
+    ///
+    /// Returns a vector of StackFrame structs with accurate line numbers,
+    /// source paths, and package-qualified function names.
+    fn parse_stack_trace(output: &str) -> Vec<StackFrame> {
+        let mut frames = Vec::new();
+        let mut frame_id = 1;
+
+        for line in output.lines() {
+            // Try to match stack frame format
+            if let Some(re) = stack_frame_re() {
+                if let Some(caps) = re.captures(line) {
+                    let func = caps.name("func").map(|m| m.as_str()).unwrap_or("main");
+                    let file = caps.name("file").map(|m| m.as_str()).unwrap_or("<unknown>");
+                    let line_num = caps.name("line")
+                        .and_then(|m| m.as_str().parse::<i32>().ok())
+                        .unwrap_or(1);
+
+                    // Extract file name from path for display
+                    let file_name = file
+                        .split(['/', '\\'].as_ref())
+                        .last()
+                        .unwrap_or(file);
+
+                    frames.push(StackFrame {
+                        id: frame_id,
+                        name: func.to_string(),
+                        source: Source {
+                            name: Some(file_name.to_string()),
+                            path: file.to_string(),
+                            source_reference: None,
+                        },
+                        line: line_num,
+                        column: 1, // Perl debugger doesn't provide column info by default
+                        end_line: None,
+                        end_column: None,
+                    });
+
+                    frame_id += 1;
+                }
+            }
+        }
+
+        frames
+    }
 }
 
 /// Check if a position in a string is inside single quotes
@@ -2926,6 +2987,161 @@ mod tests {
         let frames: Vec<StackFrame> = vec![];
         let filtered = filter_internal_frames(frames);
         assert!(filtered.is_empty());
+    }
+
+    // AC8.2.4: Stack trace parsing tests for simple call chains (A → B → C)
+    #[test]
+    fn test_parse_stack_trace_simple_call_chain() {
+        let output = r#"# 0 main::compute_sum at /app/script.pl line 20
+# 1 Foo::process called at /app/lib/Foo.pm line 15
+# 2 main::start at /app/script.pl line 5"#;
+
+        let frames = DebugAdapter::parse_stack_trace(output);
+
+        assert_eq!(frames.len(), 3);
+
+        // Frame 0: main::compute_sum
+        assert_eq!(frames[0].id, 1);
+        assert_eq!(frames[0].name, "main::compute_sum");
+        assert_eq!(frames[0].source.path, "/app/script.pl");
+        assert_eq!(frames[0].line, 20);
+        assert_eq!(frames[0].source.name, Some("script.pl".to_string()));
+
+        // Frame 1: Foo::process
+        assert_eq!(frames[1].id, 2);
+        assert_eq!(frames[1].name, "Foo::process");
+        assert_eq!(frames[1].source.path, "/app/lib/Foo.pm");
+        assert_eq!(frames[1].line, 15);
+
+        // Frame 2: main::start
+        assert_eq!(frames[2].id, 3);
+        assert_eq!(frames[2].name, "main::start");
+        assert_eq!(frames[2].source.path, "/app/script.pl");
+        assert_eq!(frames[2].line, 5);
+    }
+
+    // AC8.2.4: Stack trace parsing for multi-file call stacks across packages
+    #[test]
+    fn test_parse_stack_trace_multi_file_packages() {
+        let output = r#"# 0 Utils::Helper::validate at /app/lib/Utils/Helper.pm line 42
+# 1 Data::Processor::transform called at /app/lib/Data/Processor.pm line 120
+# 2 Controller::API::handle_request at /app/controller/API.pm line 78
+# 3 main::dispatch called at /app/app.pl line 10"#;
+
+        let frames = DebugAdapter::parse_stack_trace(output);
+
+        assert_eq!(frames.len(), 4);
+        assert_eq!(frames[0].name, "Utils::Helper::validate");
+        assert_eq!(frames[1].name, "Data::Processor::transform");
+        assert_eq!(frames[2].name, "Controller::API::handle_request");
+        assert_eq!(frames[3].name, "main::dispatch");
+
+        // Verify cross-file navigation info is present
+        assert!(frames[0].source.path.contains("Utils/Helper.pm"));
+        assert!(frames[1].source.path.contains("Data/Processor.pm"));
+        assert!(frames[2].source.path.contains("controller/API.pm"));
+        assert!(frames[3].source.path.contains("app.pl"));
+    }
+
+    // AC8.2.4: Stack trace parsing for recursive calls with depth
+    #[test]
+    fn test_parse_stack_trace_recursive_calls() {
+        let output = r#"# 0 main::factorial at /app/math.pl line 5
+# 1 main::factorial called at /app/math.pl line 6
+# 2 main::factorial called at /app/math.pl line 6
+# 3 main::factorial called at /app/math.pl line 6
+# 4 main::compute at /app/math.pl line 10"#;
+
+        let frames = DebugAdapter::parse_stack_trace(output);
+
+        assert_eq!(frames.len(), 5);
+
+        // Verify recursive frames are all parsed correctly
+        assert_eq!(frames[0].name, "main::factorial");
+        assert_eq!(frames[1].name, "main::factorial");
+        assert_eq!(frames[2].name, "main::factorial");
+        assert_eq!(frames[3].name, "main::factorial");
+        assert_eq!(frames[4].name, "main::compute");
+
+        // Verify frame IDs are sequential
+        assert_eq!(frames[0].id, 1);
+        assert_eq!(frames[1].id, 2);
+        assert_eq!(frames[2].id, 3);
+        assert_eq!(frames[3].id, 4);
+        assert_eq!(frames[4].id, 5);
+    }
+
+    // AC8.2.4: Stack trace parsing for anonymous subroutines
+    #[test]
+    fn test_parse_stack_trace_anonymous_subs() {
+        let output = r#"# 0 main::__ANON__ at /app/callback.pl line 15
+# 1 Utils::map called at /app/lib/Utils.pm line 42
+# 2 main::process_items at /app/callback.pl line 10"#;
+
+        let frames = DebugAdapter::parse_stack_trace(output);
+
+        assert_eq!(frames.len(), 3);
+
+        // Verify anonymous sub is parsed (Perl uses __ANON__ for anonymous subs)
+        assert_eq!(frames[0].name, "main::__ANON__");
+        assert_eq!(frames[1].name, "Utils::map");
+        assert_eq!(frames[2].name, "main::process_items");
+    }
+
+    // AC8.2: Stack trace parsing with Windows paths
+    #[test]
+    fn test_parse_stack_trace_windows_paths() {
+        let output = r#"# 0 main::test at C:\workspace\script.pl line 10
+# 1 Foo::bar called at C:\workspace\lib\Foo.pm line 25"#;
+
+        let frames = DebugAdapter::parse_stack_trace(output);
+
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].source.path, r"C:\workspace\script.pl");
+        assert_eq!(frames[0].source.name, Some("script.pl".to_string()));
+        assert_eq!(frames[1].source.path, r"C:\workspace\lib\Foo.pm");
+        assert_eq!(frames[1].source.name, Some("Foo.pm".to_string()));
+    }
+
+    // AC8.2: Stack trace parsing with empty output
+    #[test]
+    fn test_parse_stack_trace_empty_output() {
+        let output = "";
+        let frames = DebugAdapter::parse_stack_trace(output);
+        assert!(frames.is_empty());
+    }
+
+    // AC8.2: Stack trace parsing with malformed output
+    #[test]
+    fn test_parse_stack_trace_malformed_output() {
+        let output = r#"Random output that doesn't match
+Some error message
+DB<1>"#;
+
+        let frames = DebugAdapter::parse_stack_trace(output);
+        assert!(frames.is_empty());
+    }
+
+    // AC8.2.1: Integration test - parse and filter combined
+    #[test]
+    fn test_parse_and_filter_stack_trace() {
+        let output = r#"# 0 main::user_func at /app/script.pl line 10
+# 1 DB::DB called at /usr/share/perl/5.34/perl5db.pl line 100
+# 2 Foo::process at /app/lib/Foo.pm line 25
+# 3 Devel::TSPerlDAP::handle_break called at /shim/TSPerlDAP.pm line 50
+# 4 main::start at /app/script.pl line 5"#;
+
+        let frames = DebugAdapter::parse_stack_trace(output);
+        assert_eq!(frames.len(), 5);
+
+        // Apply filtering
+        let filtered = filter_internal_frames(frames);
+
+        // Should only have user frames after filtering
+        assert_eq!(filtered.len(), 3);
+        assert_eq!(filtered[0].name, "main::user_func");
+        assert_eq!(filtered[1].name, "Foo::process");
+        assert_eq!(filtered[2].name, "main::start");
     }
 
     #[test]

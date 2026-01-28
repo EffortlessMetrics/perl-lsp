@@ -1986,7 +1986,7 @@ my $concat = "a" . "b";
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         // Find binary operation nodes
-        fn find_binary_node(node: &Node, op: &str) -> Option<&Node> {
+        fn find_binary_node<'a>(node: &'a Node, op: &str) -> Option<&'a Node> {
             match &node.kind {
                 NodeKind::Binary { op: node_op, .. } if node_op == op => Some(node),
                 NodeKind::Program { statements } | NodeKind::Block { statements } => {

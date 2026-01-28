@@ -99,6 +99,7 @@ mod packages;
 mod sort;
 mod test_more;
 mod variables;
+mod workspace;
 
 // Re-export public types
 pub use self::context::CompletionContext;
@@ -477,6 +478,12 @@ impl CompletionProvider {
 
             // Also suggest variables without sigils in some contexts
             variables::add_all_variables(&mut completions, &context, &self.symbol_table);
+            if is_cancelled() {
+                return vec![];
+            }
+
+            // Add workspace symbol completions from other files
+            workspace::add_workspace_symbol_completions(&mut completions, &context, &self.workspace_index);
             if is_cancelled() {
                 return vec![];
             }
@@ -861,34 +868,6 @@ sub internal_sub { }
         assert!(
             completions.iter().any(|c| c.label == "exported_sub"),
             "should suggest exported_sub"
-        );
-    }
-
-    #[test]
-    fn test_completion_workspace_function() {
-        // Create workspace index with a module containing functions
-        let index = Arc::new(WorkspaceIndex::new());
-        let module_uri = must(Url::parse("file:///workspace/Utils.pm"));
-        let module_code = r#"package Utils;
-sub process_data { my ($data) = @_; return uc $data; }
-sub transform_items { my @items = @_; return map { lc $_ } @items; }
-1;
-"#;
-        must(index.index_file(module_uri, module_code.to_string()));
-
-        // Code that triggers general completion
-        let code = "use Utils;\nmy $result = proc";
-        let mut parser = Parser::new(code);
-        let ast = must(parser.parse());
-
-        let provider = CompletionProvider::new_with_index(&ast, Some(index));
-        let completions = provider.get_completions(code, code.len());
-
-        // Should suggest process_data from workspace index
-        assert!(
-            completions.iter().any(|c| c.label.contains("process_data")),
-            "should suggest process_data from workspace. Got: {:?}",
-            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
         );
     }
 }

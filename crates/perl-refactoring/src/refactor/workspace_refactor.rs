@@ -1423,8 +1423,9 @@ use JSON; # Duplicate
         let refactor = WorkspaceRefactor::new(index);
 
         // Should succeed but with warnings for function calls
-        let result = refactor.inline_variable("$x", &paths[0], (0, 0))?;
+        let result = refactor.inline_variable_all("$x", &paths[0], (0, 0))?;
         assert!(!result.file_edits.is_empty());
+        // AC2: Warning detection validates that initializer contains function calls
         assert!(!result.warnings.is_empty(), "Should have warning about function call");
         Ok(())
     }
@@ -1453,7 +1454,7 @@ use JSON; # Duplicate
         let refactor = WorkspaceRefactor::new(index);
 
         // Test scalar inlining
-        let result = refactor.inline_variable("$x", &paths[0], (0, 0))?;
+        let result = refactor.inline_variable_all("$x", &paths[0], (0, 0))?;
         assert!(!result.file_edits.is_empty());
 
         Ok(())
@@ -1468,7 +1469,7 @@ use JSON; # Duplicate
             ("b.pl", "print $x;\nprint $x;\n"),
         ])?;
         let refactor = WorkspaceRefactor::new(index);
-        let result = refactor.inline_variable("$x", &paths[0], (0, 0))?;
+        let result = refactor.inline_variable_all("$x", &paths[0], (0, 0))?;
 
         // Check description mentions occurrence count or workspace
         assert!(
