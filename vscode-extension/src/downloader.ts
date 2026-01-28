@@ -7,6 +7,8 @@ import * as crypto from 'crypto';
 import * as os from 'os';
 import { promisify } from 'util';
 import * as child_process from 'child_process';
+import * as tar from 'tar';
+import AdmZip from 'adm-zip';
 
 const execFile = promisify(child_process.execFile);
 
@@ -48,8 +50,10 @@ export class BinaryDownloader {
         }
         
         // Show status bar while downloading
-        const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+        const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
         statusBar.text = '$(sync~spin) Perl LSP: downloading binary...';
+        statusBar.tooltip = 'Downloading Perl Language Server... Click to show logs';
+        statusBar.command = 'perl-lsp.showOutput';
         statusBar.show();
         
         // Download binary
@@ -163,53 +167,60 @@ export class BinaryDownloader {
                     throw new Error('Download cancelled');
                 }
                 
-                // Download and verify checksum if available
-                if (checksumAsset) {
-                    progress.report({ increment: 40, message: 'Verifying checksum...' });
-                    const checksumPath = path.join(tempDir, 'SHA256SUMS');
-                    await this.downloadFile(checksumAsset.browser_download_url, checksumPath);
-                    
-                    // Find the checksum line for our file
-                    const checksums = fs.readFileSync(checksumPath, 'utf8');
-                    const lines = checksums.split('\n');
-                    const checksumLine = lines.find(line => line.includes(assetName));
-                    
-                    if (checksumLine) {
-                        const expectedChecksum = checksumLine.split(/\s+/)[0].toLowerCase();
-                        const actualChecksum = await this.calculateSHA256(archivePath);
-                        
-                        if (expectedChecksum !== actualChecksum) {
-                            throw new Error('Checksum verification failed');
-                        }
-                        this.outputChannel.appendLine('Checksum verified successfully');
-                    } else {
-                        this.outputChannel.appendLine('Warning: Could not find checksum for file');
-                    }
+                // Download and verify checksum (required for security)
+                if (!checksumAsset) {
+                    throw new Error('Security check failed: No SHA256SUMS file found in release assets.');
                 }
+
+                progress.report({ increment: 40, message: 'Verifying checksum...' });
+                const checksumPath = path.join(tempDir, 'SHA256SUMS');
+                await this.downloadFile(checksumAsset.browser_download_url, checksumPath);
+
+                // Find the checksum line for our file
+                const checksums = fs.readFileSync(checksumPath, 'utf8');
+                const lines = checksums.split('\n');
+                const checksumLine = lines.find(line => line.includes(assetName!));
+
+                if (!checksumLine) {
+                    throw new Error(`Security check failed: Checksum for ${assetName} not found in SHA256SUMS file.`);
+                }
+
+                const expectedChecksum = checksumLine.split(/\s+/)[0].toLowerCase();
+                const actualChecksum = await this.calculateSHA256(archivePath);
+
+                if (expectedChecksum !== actualChecksum) {
+                    throw new Error('Security check failed: Checksum verification failed (file may be corrupted or tampered with).');
+                }
+                this.outputChannel.appendLine('Checksum verified successfully');
                 
                 // Extract archive
                 progress.report({ increment: 30, message: 'Extracting binary...' });
                 const extractDir = path.join(tempDir, 'extracted');
                 fs.mkdirSync(extractDir);
                 
-                // Choose extraction command based on file extension
-                let cmd: string;
-                let args: string[];
-
-                if (assetName.endsWith('.tar.xz')) {
-                    cmd = 'tar';
-                    args = ['-xJf', archivePath, '-C', extractDir];
-                } else if (assetName.endsWith('.tar.gz')) {
-                    cmd = 'tar';
-                    args = ['-xzf', archivePath, '-C', extractDir];
+                // Choose extraction method based on file extension
+                if (assetName.endsWith('.tar.gz')) {
+                    await tar.x({
+                        file: archivePath,
+                        cwd: extractDir
+                    });
                 } else if (assetName.endsWith('.zip')) {
-                    cmd = 'unzip';
-                    args = ['-q', archivePath, '-d', extractDir];
+                    await new Promise<void>((resolve, reject) => {
+                        const zip = new AdmZip(archivePath);
+                        zip.extractAllToAsync(extractDir, true, true, (error) => {
+                            if (error) {
+                                reject(error);
+                            } else {
+                                resolve();
+                            }
+                        });
+                    });
+                } else if (assetName.endsWith('.tar.xz')) {
+                    // Fallback to system tar for .tar.xz (node-tar doesn't support xz)
+                    await execFile('tar', ['-xJf', archivePath, '-C', extractDir]);
                 } else {
                     throw new Error(`Unsupported archive format: ${assetName}`);
                 }
-                
-                await execFile(cmd, args);
                 
                 // Find the binary
                 const binaryName = process.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp';

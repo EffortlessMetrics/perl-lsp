@@ -194,9 +194,19 @@ impl Scope {
     }
 
     fn use_variable_parts(&self, sigil: &str, name: &str) -> (bool, bool) {
-        if let Some(var) = self.lookup_variable_parts(sigil, name) {
-            *var.is_used.borrow_mut() = true;
-            (true, *var.is_initialized.borrow())
+        let idx = sigil_to_index(sigil);
+        {
+            let vars = self.variables.borrow();
+            if let Some(map) = &vars[idx] {
+                if let Some(var) = map.get(name) {
+                    *var.is_used.borrow_mut() = true;
+                    return (true, *var.is_initialized.borrow());
+                }
+            }
+        }
+
+        if let Some(ref parent) = self.parent {
+            parent.use_variable_parts(sigil, name)
         } else {
             (false, false)
         }
@@ -205,6 +215,18 @@ impl Scope {
     fn initialize_variable_parts(&self, sigil: &str, name: &str) {
         if let Some(var) = self.lookup_variable_parts(sigil, name) {
             *var.is_initialized.borrow_mut() = true;
+        }
+    }
+
+    /// Optimized method to mark a variable as initialized AND used in one lookup.
+    /// Returns true if the variable was found and updated.
+    fn initialize_and_use_variable_parts(&self, sigil: &str, name: &str) -> bool {
+        if let Some(var) = self.lookup_variable_parts(sigil, name) {
+            *var.is_used.borrow_mut() = true;
+            *var.is_initialized.borrow_mut() = true;
+            true
+        } else {
+            false
         }
     }
 
@@ -453,13 +475,14 @@ impl ScopeAnalyzer {
                 }
             }
             NodeKind::Variable { sigil, name } => {
-                // Skip package-qualified variables
-                if name.contains("::") {
+                // Skip built-in global variables
+                // Optimization: Check built-ins first to avoid string scan for "::" on common globals
+                if is_builtin_global(sigil, name) {
                     return;
                 }
 
-                // Skip built-in global variables
-                if is_builtin_global(sigil, name) {
+                // Skip package-qualified variables
+                if name.contains("::") {
                     return;
                 }
 
@@ -467,14 +490,34 @@ impl ScopeAnalyzer {
                 let (mut variable_used, mut is_initialized) = scope.use_variable_parts(sigil, name);
 
                 // If not found as simple variable, check if this is part of a hash/array access pattern
-                if !variable_used && sigil == "$" {
-                    // Check if the corresponding hash or array exists - allocation free!
-                    let (hash_used, hash_init) = scope.use_variable_parts("%", name);
-                    let (array_used, array_init) = scope.use_variable_parts("@", name);
-
-                    if hash_used || array_used {
-                        variable_used = true;
-                        is_initialized = hash_init || array_init;
+                if !variable_used && (sigil == "$" || sigil == "@") {
+                    // Check parent for hash/array access context
+                    if let Some(parent) = ancestors.last() {
+                        match &parent.kind {
+                            NodeKind::Binary { op, left, .. } => {
+                                // Only check if this node is the LEFT side of the access
+                                if std::ptr::eq(left.as_ref(), node) {
+                                    if op == "{}" {
+                                        // Check if the corresponding hash exists
+                                        let (hash_used, hash_init) =
+                                            scope.use_variable_parts("%", name);
+                                        if hash_used {
+                                            variable_used = true;
+                                            is_initialized = hash_init;
+                                        }
+                                    } else if op == "[]" {
+                                        // Check if the corresponding array exists
+                                        let (array_used, array_init) =
+                                            scope.use_variable_parts("@", name);
+                                        if array_used {
+                                            variable_used = true;
+                                            is_initialized = array_init;
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                 }
 
@@ -512,6 +555,16 @@ impl ScopeAnalyzer {
                 // Handle assignment: LHS variable becomes initialized
                 // First analyze RHS (usages)
                 self.analyze_node(rhs, scope, ancestors, issues, code, pragma_map);
+
+                // Optimization: Handle simple scalar assignment directly to avoid double lookup
+                // (mark_initialized + analyze_node both perform lookups)
+                if let NodeKind::Variable { sigil, name } = &lhs.kind {
+                    if !name.contains("::") && !is_builtin_global(sigil, name) {
+                        if scope.initialize_and_use_variable_parts(sigil, name) {
+                            return;
+                        }
+                    }
+                }
 
                 // Then analyze LHS
                 // We need to recursively mark variables as initialized in the LHS structure
@@ -568,48 +621,14 @@ impl ScopeAnalyzer {
                 }
             }
 
-            NodeKind::Binary { op, left, right } => {
-                match op.as_str() {
-                    "{}" => {
-                        // Hash access: $hash{key} -> mark %hash as used if it exists
-                        if let NodeKind::Variable { sigil, name } = &left.kind {
-                            if sigil == "$" {
-                                // Only mark as used if the hash actually exists - allocation free!
-                                if scope.lookup_variable_parts("%", name).is_some() {
-                                    scope.use_variable_parts("%", name);
-                                }
-                            }
-                        }
-                        // Always process both children to ensure undefined variables are caught
-                        ancestors.push(node);
-                        self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                        self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
-                        ancestors.pop();
-                    }
-                    "[]" => {
-                        // Array access: $array[index] -> mark @array as used if it exists
-                        if let NodeKind::Variable { sigil, name } = &left.kind {
-                            if sigil == "$" {
-                                // Only mark as used if the array actually exists - allocation free!
-                                if scope.lookup_variable_parts("@", name).is_some() {
-                                    scope.use_variable_parts("@", name);
-                                }
-                            }
-                        }
-                        // Always process both children to ensure undefined variables are caught
-                        ancestors.push(node);
-                        self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                        self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
-                        ancestors.pop();
-                    }
-                    _ => {
-                        // Other binary operations
-                        ancestors.push(node);
-                        self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                        self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
-                        ancestors.pop();
-                    }
-                }
+            NodeKind::Binary { op: _, left, right } => {
+                // All binary operations (including {} and [])
+                // We don't need special handling for {} and [] here because NodeKind::Variable
+                // will handle the context-sensitive lookup (checking ancestors).
+                ancestors.push(node);
+                self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
+                ancestors.pop();
             }
 
             NodeKind::ArrayLiteral { elements } => {
@@ -815,12 +834,16 @@ impl ScopeAnalyzer {
         scope.for_each_reportable_unused_variable(|var_name, offset| {
             let start = offset.min(code.len());
             let end = (start + var_name.len()).min(code.len());
+
+            // Optimization: Generate description using the string reference before moving it
+            let description = format!("Variable '{}' is declared but never used", var_name);
+
             issues.push(ScopeIssue {
                 kind: IssueKind::UnusedVariable,
-                variable_name: var_name.clone(),
+                variable_name: var_name, // Move: Avoids cloning the string
                 line: self.get_line_number(code, offset),
                 range: (start, end),
-                description: format!("Variable '{}' is declared but never used", var_name),
+                description,
             });
         });
     }
@@ -906,6 +929,19 @@ impl ScopeAnalyzer {
             let parent = ancestors[i];
 
             match &parent.kind {
+                // Method call: Class->method (Class is bareword)
+                NodeKind::Binary { op, left, right: _ } if op == "->" => {
+                    // Check if current node is the class name (left side of the -> operation)
+                    if std::ptr::eq(left.as_ref(), current) {
+                        return true;
+                    }
+                }
+                NodeKind::MethodCall { object, .. } => {
+                    // Check if current node is the class name (object)
+                    if std::ptr::eq(object.as_ref(), current) {
+                        return true;
+                    }
+                }
                 // Hash subscript: $hash{key} or %hash{key}
                 NodeKind::Binary { op, left: _, right } if op == "{}" => {
                     // Check if current node is the key (right side of the {} operation)
@@ -1000,8 +1036,11 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
     // Exception: $a and $b are built-in sort variables
     if !name.is_empty() {
         let first = name.as_bytes()[0];
-        if first.is_ascii_lowercase() && name != "a" && name != "b" {
-            return false;
+        if first.is_ascii_lowercase() {
+            // Optimization: Combine length and byte check to avoid multiple comparisons
+            if name.len() > 1 || (first != b'a' && first != b'b') {
+                return false;
+            }
         }
     }
 
@@ -1036,16 +1075,17 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
                 // Check patterns
                 // $^[A-Z] variables
                 if name.starts_with('^') && name.len() == 2 {
-                    if let Some(ch) = name.chars().nth(1) {
-                        if ch.is_ascii_uppercase() {
-                            return true;
-                        }
+                    // Optimization: access byte directly since we know len is 2 and it's ASCII range
+                    let second = name.as_bytes()[1];
+                    if second.is_ascii_uppercase() {
+                        return true;
                     }
                 }
 
                 // Numbered capture variables ($1, $2, etc.)
                 // Note: $0-$9 are already handled in the match above, but this covers $10+
-                if !name.is_empty() && name.chars().all(|c| c.is_ascii_digit()) {
+                // Optimization: use byte check to avoid utf-8 decoding
+                if !name.is_empty() && name.as_bytes().iter().all(|c| c.is_ascii_digit()) {
                     return true;
                 }
 
@@ -1060,6 +1100,14 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
 
 /// Check if an identifier is a known Perl built-in function
 fn is_known_function(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    // Optimization: All known functions are lowercase or start with non-uppercase chars
+    if name.as_bytes()[0].is_ascii_uppercase() {
+        return false;
+    }
+
     match name {
         // I/O functions
         "print" | "printf" | "say" | "open" | "close" | "read" | "write" | "seek" | "tell"

@@ -18,6 +18,12 @@ let testAdapter: PerlTestAdapter | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
+
+    // Register showOutput command early so it's available during binary download and initialization
+    const showOutputCommand = vscode.commands.registerCommand('perl-lsp.showOutput', () => {
+        outputChannel.show();
+    });
+    context.subscriptions.push(showOutputCommand);
     
     // Get the path to perl-lsp
     const serverPath = await getServerPath(context);
@@ -167,10 +173,6 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
     
-    const showOutputCommand = vscode.commands.registerCommand('perl-lsp.showOutput', () => {
-        outputChannel.show();
-    });
-    
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
         const { execFile } = require('child_process');
         execFile(serverPath, ['--version'], (error: any, stdout: string, stderr: string) => {
@@ -184,26 +186,33 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const statusMenuCommand = vscode.commands.registerCommand('perl-lsp.showStatusMenu', async () => {
         interface MenuAction extends vscode.QuickPickItem {
-            command: string;
+            command?: string;
+            args?: any[];
         }
 
         const items: MenuAction[] = [
+            { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(refresh) Restart Server', description: 'Restart the language server', command: 'perl-lsp.restart' },
             { label: '$(beaker) Run Tests in Current File', description: 'Run tests for the active file', command: 'perl-lsp.runTests' },
+
+            { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', description: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
-            { label: '$(info) Show Version', description: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' }
+            { label: '$(info) Show Version', description: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
+
+            { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
+            { label: '$(gear) Configure Settings', description: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:effortlesssteven.perl-lsp'] }
         ];
 
         const selection = await vscode.window.showQuickPick(items, {
             placeHolder: 'Perl Language Server Actions'
         });
 
-        if (selection) {
-            vscode.commands.executeCommand(selection.command);
+        if (selection && selection.command) {
+            vscode.commands.executeCommand(selection.command, ...(selection.args || []));
         }
     });
     
-    context.subscriptions.push(restartCommand, runTestsCommand, showOutputCommand, showVersionCommand, statusMenuCommand);
+    context.subscriptions.push(restartCommand, runTestsCommand, showVersionCommand, statusMenuCommand);
     
     outputChannel.appendLine('Perl Language Server started successfully');
 }
