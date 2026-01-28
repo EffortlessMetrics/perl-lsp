@@ -2,9 +2,8 @@
 //!
 //! Provides automated fixes for common Perl issues driven by diagnostic codes.
 
-use super::ast_utils::{find_declaration_position, get_indent_at};
-use super::types::{CodeAction, CodeActionEdit, CodeActionKind};
-use perl_lsp_diagnostics::Diagnostic;
+use crate::ast_utils::{find_declaration_position, get_indent_at};
+use crate::types::{CodeAction, CodeActionEdit, CodeActionKind, QuickFixDiagnostic};
 use perl_lsp_rename::TextEdit;
 use perl_parser_core::SourceLocation;
 
