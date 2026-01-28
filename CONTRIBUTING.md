@@ -220,6 +220,34 @@ cargo test --test determinism_test
 - **Complex functions** should include examples in doc comments
 - Run `cargo doc --no-deps --open` to view generated docs
 
+## Dependency Management
+
+The project uses **Dependabot** for automated dependency updates. Dependabot PRs are created weekly and should be reviewed according to the update type:
+
+- **Patch updates (x.y.Z)** - Can be merged quickly if CI passes
+- **Minor updates (x.Y.0)** - Require changelog review and testing
+- **Major updates (X.0.0)** - Require deep review, migration planning, and comprehensive testing
+
+For handling Dependabot PRs:
+
+```bash
+# View all dependency PRs
+gh pr list --label "dependencies"
+
+# Merge passing patch updates
+gh pr list --author "app/dependabot" --search "status:success" --json number --jq '.[].number' | \
+  xargs -I {} gh pr merge {} --auto --squash
+```
+
+See **[Dependency Management Guide](./docs/DEPENDENCY_MANAGEMENT.md)** for complete details on:
+- Update strategy and grouping
+- Review process by update type
+- Auto-merge configuration
+- Security update handling
+- Troubleshooting common issues
+
+For quick reference, see **[Dependency Quick Reference](./docs/DEPENDENCY_QUICK_REFERENCE.md)**.
+
 ## Getting Help
 
 - **Issues:** Browse existing issues or create a new one

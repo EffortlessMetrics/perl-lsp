@@ -106,6 +106,7 @@ CI is optional/opt-in. The repo is local-first by design.
 | Features catalog | `features.toml` |
 | CI gate policy | `.ci/gate-policy.yaml` |
 | Technical debt ledger | `.ci/debt-ledger.yaml` |
+| Dependabot config | `.github/dependabot.yml` |
 
 ## Architecture Patterns
 
@@ -138,6 +139,8 @@ RUSTC_WRAPPER=""        # Disable rustc wrapper
 - **[COMMANDS_REFERENCE.md](docs/COMMANDS_REFERENCE.md)** - Full command catalog
 - **[LSP_IMPLEMENTATION_GUIDE.md](docs/LSP_IMPLEMENTATION_GUIDE.md)** - Server architecture
 - **[DEBT_TRACKING.md](docs/DEBT_TRACKING.md)** - Technical debt and flaky test tracking
+- **[DEPENDENCY_MANAGEMENT.md](docs/DEPENDENCY_MANAGEMENT.md)** - Automated dependency updates with Dependabot
+- **[DEPENDENCY_QUICK_REFERENCE.md](docs/DEPENDENCY_QUICK_REFERENCE.md)** - Quick commands for dependency management
 - **[features.toml](features.toml)** - Canonical LSP capability definitions
 
 ## Coding Standards
