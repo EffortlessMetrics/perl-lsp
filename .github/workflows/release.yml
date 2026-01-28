@@ -200,7 +200,7 @@ jobs:
           ls -la *.tar.gz *.zip sbom-*.json SHA256SUMS
 
       - name: Attest build provenance (SLSA)
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
             *.tar.gz
