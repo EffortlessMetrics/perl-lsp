@@ -381,6 +381,11 @@ export class BinaryDownloader {
                     file.destroy();
                     const newUrl = response.headers.location;
                     if (newUrl) {
+                        // Security check: Prevent downgrade from HTTPS to HTTP
+                        if (isHttps && newUrl.toLowerCase().startsWith('http:') && !newUrl.toLowerCase().startsWith('https:')) {
+                            reject(new Error('Security violation: Redirect from HTTPS to HTTP prevented'));
+                            return;
+                        }
                         this.downloadFile(newUrl, dest, timeoutMs).then(resolve).catch(reject);
                         return;
                     }
