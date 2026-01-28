@@ -50,3 +50,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The `perl-dap` safe evaluation logic exempted variables (e.g., `$system`) from the dangerous operations blacklist, but failed to check if those variables were being used in an execution context (e.g., `&$system` or `&{$system}`). This allowed invoking blocked builtins (like `system`) indirectly via variable dereference.
 **Learning:** Allow-listing variables based on sigils alone is insufficient for languages where sigils are also used for dereference calls. Context matters: `$var` is safe, `&$var` is a function call.
 **Prevention:** When exempting identifiers from a blacklist based on syntax (like sigils), explicitly verify that the surrounding syntax does not imply execution (e.g., preceding `&` or `->`).
+
+## 2027-02-23 - Insecure Path Lookup via Shell
+**Vulnerability:** `perl-dap` discovery relied on `execSync('which perl-dap')`, which spawns a shell. While the input was currently static, this pattern is inherently risky (Command Injection) if reused with dynamic input, and fails on Windows (missing `which`).
+**Learning:** Avoiding shell execution for simple tasks like finding binaries improves both security (reducing attack surface) and portability.
+**Prevention:** Implement manual `PATH` walking in Node.js instead of relying on shell utilities like `which` or `where`.

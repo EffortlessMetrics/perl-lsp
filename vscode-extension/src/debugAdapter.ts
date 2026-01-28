@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 
 export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDescriptorFactory {
     createDebugAdapterDescriptor(
@@ -23,7 +24,7 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
 
     private findDebugAdapter(): string | undefined {
         // First, try to find perl-dap in PATH
-        const pathDap = this.which('perl-dap');
+        const pathDap = this.findInPath('perl-dap');
         if (pathDap) {
             return pathDap;
         }
@@ -45,20 +46,24 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
         return undefined;
     }
 
-    private which(command: string): string | undefined {
-        try {
-            const { execSync } = require('child_process');
-            const result = execSync(`which ${command}`, { encoding: 'utf8' });
-            return result.trim();
-        } catch {
-            // Ignore errors
+    private findInPath(command: string): string | undefined {
+        const pathDirs = process.env.PATH?.split(path.delimiter) || [];
+        const isWindows = process.platform === 'win32';
+        const extensions = isWindows ? ['.exe', '.cmd', '.bat', ''] : [''];
+
+        for (const dir of pathDirs) {
+            for (const ext of extensions) {
+                const fullPath = path.join(dir, command + ext);
+                if (this.fileExists(fullPath)) {
+                    return fullPath;
+                }
+            }
         }
         return undefined;
     }
 
     private fileExists(path: string): boolean {
         try {
-            const fs = require('fs');
             return fs.existsSync(path) && fs.statSync(path).isFile();
         } catch {
             return false;
