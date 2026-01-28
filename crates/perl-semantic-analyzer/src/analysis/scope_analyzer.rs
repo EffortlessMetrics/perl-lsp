@@ -467,14 +467,34 @@ impl ScopeAnalyzer {
                 let (mut variable_used, mut is_initialized) = scope.use_variable_parts(sigil, name);
 
                 // If not found as simple variable, check if this is part of a hash/array access pattern
-                if !variable_used && sigil == "$" {
-                    // Check if the corresponding hash or array exists - allocation free!
-                    let (hash_used, hash_init) = scope.use_variable_parts("%", name);
-                    let (array_used, array_init) = scope.use_variable_parts("@", name);
-
-                    if hash_used || array_used {
-                        variable_used = true;
-                        is_initialized = hash_init || array_init;
+                if !variable_used && (sigil == "$" || sigil == "@") {
+                    // Check parent for hash/array access context
+                    if let Some(parent) = ancestors.last() {
+                        match &parent.kind {
+                            NodeKind::Binary { op, left, .. } => {
+                                // Only check if this node is the LEFT side of the access
+                                if std::ptr::eq(left.as_ref(), node) {
+                                    if op == "{}" {
+                                        // Check if the corresponding hash exists
+                                        let (hash_used, hash_init) =
+                                            scope.use_variable_parts("%", name);
+                                        if hash_used {
+                                            variable_used = true;
+                                            is_initialized = hash_init;
+                                        }
+                                    } else if op == "[]" {
+                                        // Check if the corresponding array exists
+                                        let (array_used, array_init) =
+                                            scope.use_variable_parts("@", name);
+                                        if array_used {
+                                            variable_used = true;
+                                            is_initialized = array_init;
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                 }
 
@@ -568,48 +588,14 @@ impl ScopeAnalyzer {
                 }
             }
 
-            NodeKind::Binary { op, left, right } => {
-                match op.as_str() {
-                    "{}" => {
-                        // Hash access: $hash{key} -> mark %hash as used if it exists
-                        if let NodeKind::Variable { sigil, name } = &left.kind {
-                            if sigil == "$" {
-                                // Only mark as used if the hash actually exists - allocation free!
-                                if scope.lookup_variable_parts("%", name).is_some() {
-                                    scope.use_variable_parts("%", name);
-                                }
-                            }
-                        }
-                        // Always process both children to ensure undefined variables are caught
-                        ancestors.push(node);
-                        self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                        self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
-                        ancestors.pop();
-                    }
-                    "[]" => {
-                        // Array access: $array[index] -> mark @array as used if it exists
-                        if let NodeKind::Variable { sigil, name } = &left.kind {
-                            if sigil == "$" {
-                                // Only mark as used if the array actually exists - allocation free!
-                                if scope.lookup_variable_parts("@", name).is_some() {
-                                    scope.use_variable_parts("@", name);
-                                }
-                            }
-                        }
-                        // Always process both children to ensure undefined variables are caught
-                        ancestors.push(node);
-                        self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                        self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
-                        ancestors.pop();
-                    }
-                    _ => {
-                        // Other binary operations
-                        ancestors.push(node);
-                        self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                        self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
-                        ancestors.pop();
-                    }
-                }
+            NodeKind::Binary { op: _, left, right } => {
+                // All binary operations (including {} and [])
+                // We don't need special handling for {} and [] here because NodeKind::Variable
+                // will handle the context-sensitive lookup (checking ancestors).
+                ancestors.push(node);
+                self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
+                ancestors.pop();
             }
 
             NodeKind::ArrayLiteral { elements } => {

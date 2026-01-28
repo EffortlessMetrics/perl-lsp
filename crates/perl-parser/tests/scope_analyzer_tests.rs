@@ -394,7 +394,7 @@ fn test_hash_access_variable_resolution() {
     let code = r#"
 use strict;
 my %config = (path => '/usr/bin', debug => 1);
-print $config{path};  # Should resolve $config{path} -> %config
+my $v = $config{path};  # Should resolve $config{path} -> %config
 "#;
 
     let issues = analyze_code(code);
@@ -410,8 +410,8 @@ fn test_array_access_variable_resolution() {
     let code = r#"
 use strict;
 my @items = (1, 2, 3, 4);
-print $items[0];  # Should resolve $items[0] -> @items
-print $items[1];  # Should resolve $items[1] -> @items
+my $v1 = $items[0];  # Should resolve $items[0] -> @items
+my $v2 = $items[1];  # Should resolve $items[1] -> @items
 "#;
 
     let issues = analyze_code(code);
@@ -427,8 +427,8 @@ fn test_nested_hash_access_resolution() {
     let code = r#"
 use strict;
 my %data = (user => { name => 'John', age => 30 });
-print $data{user};      # Should resolve to %data
-print $data{settings};  # Should resolve to %data
+my $v1 = $data{user};      # Should resolve to %data
+my $v2 = $data{settings};  # Should resolve to %data
 "#;
 
     let issues = analyze_code(code);
@@ -444,8 +444,8 @@ fn test_mixed_array_hash_access() {
 use strict;
 my @users = ({name => 'Alice'}, {name => 'Bob'});
 my %lookup = (alice => 0, bob => 1);
-print $users[0];        # Should resolve to @users
-print $lookup{alice};   # Should resolve to %lookup
+my $v1 = $users[0];        # Should resolve to @users
+my $v2 = $lookup{alice};   # Should resolve to %lookup
 "#;
 
     let issues = analyze_code(code);
@@ -462,9 +462,9 @@ my @servers = ('web1', 'web2', 'db1');
 my $index = 0;
 
 # Complex patterns that should resolve
-print $config{db};      # %config access
-print $servers[0];      # @servers access  
-print $servers[$index]; # @servers access (dynamic index)
+my $v1 = $config{db};      # %config access
+my $v2 = $servers[0];      # @servers access
+my $v3 = $servers[$index]; # @servers access (dynamic index)
 "#;
 
     let issues = analyze_code(code);
@@ -476,8 +476,8 @@ print $servers[$index]; # @servers access (dynamic index)
 fn test_variable_resolution_with_undeclared_base() {
     let code = r#"
 use strict;
-print $undeclared_hash{key};    # Should trigger undefined for hash access
-print $undeclared_array[0];     # Should trigger undefined for array access
+my $v1 = $undeclared_hash{key};    # Should trigger undefined for hash access
+my $v2 = $undeclared_array[0];     # Should trigger undefined for array access
 "#;
 
     let issues = analyze_code(code);
@@ -509,7 +509,7 @@ fn test_array_slice_variable_resolution() {
 use strict;
 my @colors = ('red', 'green', 'blue');
 my @subset = @colors[0, 2];  # Should resolve @colors[0,2] -> @colors
-print @subset;
+my @v = @subset;
 "#;
 
     let issues = analyze_code(code);
@@ -529,7 +529,7 @@ fn test_hash_slice_variable_resolution() {
 use strict;
 my %settings = (debug => 1, verbose => 0, level => 2);
 my @values = @settings{qw(debug verbose)};  # Should resolve to %settings
-print @values;
+my @v = @values;
 "#;
 
     let issues = analyze_code(code);
@@ -548,9 +548,9 @@ my %data = ();
 my @list = ();
 
 # Edge cases for enhanced resolution
-print $list[0];         # Zero index
-print $data{key};       # Simple hash key
-print $list[-1];        # Negative array index (if supported)
+my $v1 = $list[0];         # Zero index
+my $v2 = $data{key};       # Simple hash key
+my $v3 = $list[-1];        # Negative array index (if supported)
 "#;
 
     let issues = analyze_code(code);
@@ -567,9 +567,9 @@ my %hash_var = (a => 1);
 my @array_var = (1, 2, 3);
 
 # Test sigil conversion: $hash{key} should resolve to %hash, not $hash
-print $hash_var{key};
+my $v1 = $hash_var{key};
 # Test sigil conversion: $array[idx] should resolve to @array, not $array  
-print $array_var[0];
+my $v2 = $array_var[0];
 "#;
 
     let issues = analyze_code(code);
@@ -585,8 +585,8 @@ my $obj = bless {}, 'MyClass';
 my @methods = ('get', 'set');
 
 # Variable access patterns in method context (should not affect resolution)
-print $obj;             # Simple variable access
-print @methods;         # Simple array access
+my $v1 = $obj;             # Simple variable access
+my @v2 = @methods;         # Simple array access
 "#;
 
     let issues = analyze_code(code);
@@ -602,7 +602,7 @@ use strict;
 my %outer = (inner => {deep => 'value'});
 
 # Test that enhanced resolution handles recursive patterns
-print $outer{inner};    # Should resolve to %outer
+my $v = $outer{inner};    # Should resolve to %outer
 "#;
 
     let issues = analyze_code(code);
@@ -620,7 +620,7 @@ use strict;
 my $simple_var = 42;
 
 # Simple variable access should still work (fallback case)
-print $simple_var;
+my $v = $simple_var;
 "#;
 
     let issues = analyze_code(code);
@@ -678,4 +678,53 @@ print INVALID_BAREWORD;
     // Only INVALID_BAREWORD should be flagged - hash keys should be ignored
     assert_eq!(bareword_issues.len(), 1);
     assert_eq!(bareword_issues[0].variable_name, "INVALID_BAREWORD");
+}
+
+#[test]
+fn test_scalar_usage_with_only_hash_declared() {
+    let code = r#"
+use strict;
+my %h = ();
+print $h; # Should NOT resolve to %h, because it is a scalar usage
+"#;
+    let issues = analyze_code(code);
+    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && i.variable_name == "$h"),
+        "Expected UndeclaredVariable for $h, but got: {:?}", issues);
+}
+
+#[test]
+fn test_scalar_usage_with_only_array_declared() {
+    let code = r#"
+use strict;
+my @arr = ();
+print $arr; # Should NOT resolve to @arr
+"#;
+    let issues = analyze_code(code);
+    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && i.variable_name == "$arr"),
+        "Expected UndeclaredVariable for $arr, but got: {:?}", issues);
+}
+
+#[test]
+fn test_hash_element_access_correctness() {
+    let code = r#"
+use strict;
+my %h = ();
+my $v = $h{k}; # Should resolve to %h
+print($h{k}); # Should also resolve (FunctionCall -> Binary)
+"#;
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)),
+        "Unexpected undeclared variable error for $h{{k}}: {:?}", issues);
+}
+
+#[test]
+fn test_array_element_access_correctness() {
+    let code = r#"
+use strict;
+my @a = ();
+print($a[0]); # Should resolve to @a
+"#;
+    let issues = analyze_code(code);
+    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)),
+        "Unexpected undeclared variable error for $a[0]: {:?}", issues);
 }
