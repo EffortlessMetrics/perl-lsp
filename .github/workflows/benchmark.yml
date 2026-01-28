@@ -124,7 +124,7 @@ jobs:
           }
 
     - name: Upload benchmark artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: benchmark-results-${{ github.sha }}
         path: |
@@ -182,7 +182,7 @@ jobs:
         echo '```' >> parser_results.md
 
     - name: Upload parser results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: parser-benchmark-results
         path: parser_results.md
@@ -221,7 +221,7 @@ jobs:
         echo '```' >> lexer_results.md
 
     - name: Upload lexer results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: lexer-benchmark-results
         path: lexer_results.md
@@ -260,7 +260,7 @@ jobs:
         echo '```' >> lsp_results.md
 
     - name: Upload LSP results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: lsp-benchmark-results
         path: lsp_results.md
@@ -299,7 +299,7 @@ jobs:
         echo '```' >> index_results.md
 
     - name: Upload index results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: index-benchmark-results
         path: index_results.md
@@ -377,7 +377,7 @@ jobs:
         fi
 
     - name: Upload memory profile
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: memory-profile
         path: |
@@ -422,7 +422,7 @@ jobs:
         fi
 
     - name: Upload summary
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: benchmark-summary
         path: summary.md

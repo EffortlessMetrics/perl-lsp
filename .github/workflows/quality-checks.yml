@@ -179,7 +179,7 @@ jobs:
 
       - name: Upload breaking changes report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: semver-breaking-changes-report
           path: target/semver-reports/breaking-changes.json
@@ -405,7 +405,7 @@ jobs:
           cat test_metrics.md
       
       - name: Upload metrics
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-metrics
           path: test_metrics.md

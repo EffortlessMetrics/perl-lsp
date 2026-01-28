@@ -59,7 +59,7 @@ jobs:
 
       - name: Upload dead code report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dead-code-report
           path: |
@@ -193,7 +193,7 @@ jobs:
 
       - name: Upload clippy output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: clippy-dead-code-output
           path: clippy-dead-code.txt
