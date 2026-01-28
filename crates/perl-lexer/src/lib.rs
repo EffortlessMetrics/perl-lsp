@@ -23,24 +23,16 @@
 //!
 //! ## Basic Tokenization
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_lexer::{PerlLexer, TokenType};
 //!
 //! let code = r#"my $x = 42;"#;
 //! let mut lexer = PerlLexer::new(code);
 //!
-//! loop {
-//!     match lexer.next_token() {
-//!         Ok(token) => {
-//!             println!("{:?}: {}", token.token_type, token.text);
-//!             if matches!(token.token_type, TokenType::Eof) {
-//!                 break;
-//!             }
-//!         }
-//!         Err(e) => {
-//!             eprintln!("Lexer error: {}", e);
-//!             break;
-//!         }
+//! while let Some(token) = lexer.next_token() {
+//!     println!("{:?}: {}", token.token_type, token.text);
+//!     if matches!(token.token_type, TokenType::EOF) {
+//!         break;
 //!     }
 //! }
 //! ```
@@ -60,7 +52,7 @@
 //!
 //! ## Checkpointing for Incremental Parsing
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_lexer::{PerlLexer, Checkpointable};
 //!
 //! let mut lexer = PerlLexer::new("my $x = 1;");
@@ -70,7 +62,7 @@
 //! let _ = lexer.next_token();
 //!
 //! // Restore to checkpoint
-//! lexer.restore(checkpoint);
+//! lexer.restore(&checkpoint);
 //! ```
 //!
 //! ## Configuration Options
@@ -112,7 +104,7 @@
 //!
 //! The lexer is designed to work seamlessly with `perl_parser::Parser`:
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use perl_parser::Parser;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {

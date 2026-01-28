@@ -1954,6 +1954,7 @@ dependencies = [
  "perl-error",
  "perl-lexer",
  "perl-position-tracking",
+ "perl-tdd-support",
  "perl-token",
 ]
 

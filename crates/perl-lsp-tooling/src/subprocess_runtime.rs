@@ -130,12 +130,12 @@ impl SubprocessRuntime for OsSubprocessRuntime {
             .map_err(|e| SubprocessError::new(format!("Failed to start {}: {}", program, e)))?;
 
         // Write to stdin if provided
-        if let Some(input) = stdin {
-            if let Some(mut child_stdin) = child.stdin.take() {
-                child_stdin.write_all(input).map_err(|e| {
-                    SubprocessError::new(format!("Failed to write to {} stdin: {}", program, e))
-                })?;
-            }
+        if let Some(input) = stdin
+            && let Some(mut child_stdin) = child.stdin.take()
+        {
+            child_stdin.write_all(input).map_err(|e| {
+                SubprocessError::new(format!("Failed to write to {} stdin: {}", program, e))
+            })?;
         }
 
         // Wait for completion

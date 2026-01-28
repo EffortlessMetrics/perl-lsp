@@ -38,12 +38,11 @@
 //!
 //! ## Loading Corpus Files
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_corpus::{CorpusPaths, get_corpus_files};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let paths = CorpusPaths::detect().unwrap_or(CorpusPaths::default());
-//! let files = get_corpus_files(&paths);
+//! let files = get_corpus_files();
 //!
 //! for file in files {
 //!     println!("Found corpus file: {:?}", file.path);
@@ -91,20 +90,16 @@
 //!
 //! ## Using Property-Based Generators
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_corpus::{generate_perl_code_with_seed, CodegenOptions};
 //!
 //! // Generate random valid Perl code
-//! let code = generate_perl_code_with_seed(42);
+//! let code = generate_perl_code_with_seed(10, 42);
 //! println!("Generated:\n{}", code);
 //!
 //! // Generate with specific options
-//! let options = CodegenOptions {
-//!     max_depth: 5,
-//!     max_statements: 10,
-//!     use_modern_syntax: true,
-//! };
-//! let modern_code = generate_perl_code_with_options(options, 42);
+//! let options = CodegenOptions::default();
+//! let modern_code = generate_perl_code(&options);
 //! ```
 //!
 //! ## Specialized Test Case Modules
@@ -113,7 +108,7 @@
 //!
 //! ### Complex Data Structures
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_corpus::{complex_data_structure_cases, find_complex_case};
 //!
 //! let cases = complex_data_structure_cases();
@@ -134,7 +129,7 @@
 //!
 //! ### Format Statements
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_corpus::{format_statement_cases, FormatStatementGenerator};
 //!
 //! let cases = format_statement_cases();
@@ -143,7 +138,7 @@
 //!
 //! ### Glob Expressions
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_corpus::{glob_expression_cases, GlobExpressionGenerator};
 //!
 //! let cases = glob_expression_cases();

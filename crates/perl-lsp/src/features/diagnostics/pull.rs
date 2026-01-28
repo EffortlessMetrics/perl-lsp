@@ -109,10 +109,12 @@ impl PullDiagnosticsProvider {
 
         match parser.parse() {
             Ok(ast) => {
+                // Retrieve any collected parse errors from error recovery
+                let parse_errors: Vec<ParseError> = parser.errors().to_vec();
                 let ast = std::sync::Arc::new(ast);
                 let provider = DiagnosticsProvider::new(&ast, content.to_string());
                 provider
-                    .get_diagnostics(&ast, &[], content)
+                    .get_diagnostics(&ast, &parse_errors, content)
                     .into_iter()
                     .map(|d| self.to_lsp_diagnostic(uri, content, d))
                     .collect()
