@@ -55,3 +55,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The binary downloader for the VS Code extension allowed installation of unverified binaries if the `SHA256SUMS` file was missing from the release assets or if the specific file entry was absent. It treated checksum verification as optional ("if available") and only logged a warning on failure to find the checksum.
 **Learning:** Security controls like checksum verification must be mandatory ("fail-secure"), not optional ("fail-open"). Relying on the presence of a security artifact (like a checksum file) without enforcing it allows attackers to bypass the check by simply omitting the artifact.
 **Prevention:** Always enforce strict verification. If a security check cannot be performed (e.g., missing checksum file), the operation must fail, not proceed with a warning.
+
+## 2026-10-25 - HTTPS Downgrade Vulnerability in Binary Downloader
+**Vulnerability:** The `BinaryDownloader` implemented custom redirect handling that re-evaluated the protocol for the new URL. If an HTTPS URL redirected to an HTTP URL, the downloader would silently downgrade the connection, exposing the download to MITM attacks.
+**Learning:** Manual redirect handling often misses standard security checks (like "Same Protocol" or "Upgrade Only"). Blindly following redirects to any protocol breaks the security promise of the initial HTTPS connection.
+**Prevention:** When handling redirects manually, explicitly check that the new URL's protocol is at least as secure as the original. Reject downgrades from HTTPS to HTTP.
